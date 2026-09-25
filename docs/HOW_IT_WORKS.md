@@ -34,6 +34,9 @@ version of it.
      ├──► generate.py  write stories / chat
      │
      ▼
+ make_chat_data.py ── data/chat.jsonl            (chat examples)
+     │
+     ▼
  finetune.py ───────── checkpoints/dev/chat.pt     (learns the chat format)
      │
      ▼
@@ -54,6 +57,7 @@ version of it.
 | `prepare_data.py` | script | `encode_split`, `encode_story`, `init_worker` | how the dataset is built |
 | `train.py` | script | `get_batch`, `get_lr`, `estimate_loss`, main loop | how the model learns |
 | `generate.py` | script | `run`, chat loop | how the model writes text |
+| `make_chat_data.py` | script | `story_to_examples`, `build_examples`, `BASICS` | how chat training examples are made |
 | `finetune.py` | script | `make_batch`, loss mask | how the model learns to chat |
 | `export_hf.py` | script | `export_tokenizer`, `export_model`, `bytes_to_unicode` | how files are converted to the standard format |
 | `to_gguf.py` | script | patch of `get_vocab_base_pre` | how the phone file is made |

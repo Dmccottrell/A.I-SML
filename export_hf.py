@@ -24,6 +24,16 @@ from stage import CKPT_DIR, EXPORT_DIR
 from tokenizer import BPETokenizer
 
 
+# <|user|>question<|assistant|>answer<|endoftext|> ... then <|assistant|> for the new reply
+CHAT_TEMPLATE = (
+    "{% for message in messages %}"
+    "{% if message['role'] == 'user' %}<|user|>{{ message['content'] }}"
+    "{% elif message['role'] == 'assistant' %}<|assistant|>{{ message['content'] }}<|endoftext|>"
+    "{% endif %}{% endfor %}"
+    "{% if add_generation_prompt %}<|assistant|>{% endif %}"
+)
+
+
 def bytes_to_unicode():
     """GPT-2's byte -> printable character table (standard for byte-level BPE).
 
@@ -48,7 +58,7 @@ def export_tokenizer(tok, out):
     """Convert our BPETokenizer into Hugging Face tokenizer files in folder `out`.
 
     Writes tokenizer.json (vocab + merges + special tokens) and
-    tokenizer_config.json. The result produces exactly the same token IDs as
+    tokenizer_config.json (including the chat template). The result produces exactly the same token IDs as
     our own tokenizer.
 
     Args:
@@ -72,7 +82,11 @@ def export_tokenizer(tok, out):
     with open(os.path.join(out, "tokenizer_config.json"), "w") as f:
         json.dump({"tokenizer_class": "PreTrainedTokenizerFast",
                    "bos_token": "<|endoftext|>", "eos_token": "<|endoftext|>",
-                   "model_max_length": 512}, f, indent=2)
+                   "model_max_length": 512,
+                   # Chat template (Jinja): tells phone apps how to wrap messages
+                   # exactly the way finetune.py trained the model, so they pick
+                   # up <|user|> / <|assistant|> / <|endoftext|> automatically.
+                   "chat_template": CHAT_TEMPLATE}, f, indent=2)
     return hf
 
 

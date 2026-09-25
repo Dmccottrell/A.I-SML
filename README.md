@@ -19,6 +19,7 @@ finished model (~32MB as Q8_0 GGUF) runs on your PC and fully offline on your ph
 | `prepare_data.py` | 4 | Downloads TinyStories, trains the tokenizer, writes `data/train.bin` / `val.bin` |
 | `train.py` | 5 | Pretraining loop (run overnight on your GPU) |
 | `generate.py` | 6 | Generate text or chat with your model |
+| `make_chat_data.py` | 7 | Builds `data/chat.jsonl` fine-tuning examples automatically |
 | `finetune.py` | 7 | Teach it a chat format using `data/chat.jsonl` |
 | `export_hf.py` | 8 | Save in standard Llama layout (safetensors + tokenizer.json) |
 | `to_gguf.py` | 8 | Convert to GGUF with llama.cpp for phone apps |
@@ -57,21 +58,49 @@ python generate.py --prompt "Once upon a time"
 
 Checkpoints land in `checkpoints/dev/`.
 
-## Fine-tuning and phone (Phases 7-8)
+## Fine-tuning (Phase 7)
 
-```bash
-copy examples\chat_sample.jsonl data\chat.jsonl     # then add a few thousand of your own examples
-python finetune.py
+```powershell
+python make_chat_data.py        # builds data/chat.jsonl (~5,000 examples) from TinyStories
+python finetune.py              # ~5-10 min -> checkpoints/dev/chat.pt
 python generate.py --ckpt checkpoints/dev/chat.pt --chat
-python export_hf.py                 # checkpoints/dev/chat.pt -> export/dev/my-ai
-git clone https://github.com/ggml-org/llama.cpp ../llama.cpp
-pip install ../llama.cpp/gguf-py sentencepiece
-python to_gguf.py --llama_cpp ../llama.cpp   # -> export/dev/my-ai-f16.gguf
-llama-quantize export/dev/my-ai-f16.gguf export/dev/my-ai-q8_0.gguf Q8_0
 ```
 
-In your phone app (e.g. PocketPal AI), set the chat template to `<|user|>` before your
-message and `<|assistant|>` before the reply, with `<|endoftext|>` as the stop token.
+`make_chat_data.py` turns stories into requests like *"Tell me a story about Lily."* and adds
+greetings and "who are you?" answers (edit `BASICS` in the file to change its personality).
+Add your own examples to `data/my_examples.jsonl` (same format as
+`examples/chat_sample.jsonl`); they are included 3 times so they count more.
+
+## Putting it on your phone (Phase 8)
+
+**1. Export and convert (once per model version):**
+```powershell
+python export_hf.py                          # checkpoints/dev/chat.pt -> export/dev/my-ai
+git clone https://github.com/ggml-org/llama.cpp ..\llama.cpp
+pip install ..\llama.cpp\gguf-py sentencepiece
+python to_gguf.py --llama_cpp ..\llama.cpp   # -> export/dev/my-ai-f16.gguf (~60MB)
+```
+
+**2. Shrink it (quantize):** download the latest Windows build from
+<https://github.com/ggml-org/llama.cpp/releases> (the `llama-...-bin-win-cpu-x64.zip` file),
+unzip it, then:
+```powershell
+<unzipped folder>\llama-quantize.exe export\dev\my-ai-f16.gguf export\dev\my-ai-q8_0.gguf Q8_0
+```
+
+**3. Copy `export\dev\my-ai-q8_0.gguf` (~32MB) to your phone:** USB cable, Google Drive,
+OneDrive or emailing it to yourself all work.
+
+**4. Load it in a GGUF app** such as PocketPal AI (iPhone and Android): add a model from local
+files, pick the `.gguf`, then in its settings:
+- **Context size: 512** (the model was trained on 512 tokens; larger values give garbage)
+- The chat template is built into the file, so the app should pick up `<|user|>` /
+  `<|assistant|>` automatically. If replies look wrong, set it by hand: `<|user|>` before your
+  message, `<|assistant|>` before the reply, `<|endoftext|>` as the stop word.
+- Temperature around 0.7-0.8.
+
+**5. Test it in airplane mode.** When you're happy with it, copy the `.gguf` to
+`checkpoints/production/`.
 
 ## Dev → Staging → Production
 
