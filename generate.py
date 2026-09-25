@@ -9,10 +9,11 @@ import argparse
 import torch
 
 from model import TinyLM, ModelConfig
+from stage import CKPT_DIR
 from tokenizer import BPETokenizer
 
 p = argparse.ArgumentParser()
-p.add_argument("--ckpt", default="checkpoints/dev/ckpt.pt")
+p.add_argument("--ckpt", default=f"{CKPT_DIR}/ckpt.pt")
 p.add_argument("--tokenizer", default="data/tokenizer.json")
 p.add_argument("--prompt", default="Once upon a time")
 p.add_argument("--tokens", type=int, default=200)

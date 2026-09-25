@@ -4,10 +4,15 @@ A ~30M-parameter Llama-style language model built completely from scratch: your 
 tokenizer, your own transformer, your own training run. No pretrained weights. The
 finished model (~32MB as Q8_0 GGUF) runs on your PC and fully offline on your phone.
 
+> **Current stage: DEVELOPMENT.** Every script reads and writes only `checkpoints/dev/`
+> and `export/dev/` (set in `stage.py`). Nothing touches staging or production until you
+> promote it by hand.
+
 ## Files
 
 | File | Phase | What it does |
 |---|---|---|
+| `stage.py` | all | Sets the working stage (`dev`) and its folders |
 | `bigram.py` | 1 | Warm-up: tiny character model that learns from `input.txt` |
 | `tokenizer.py` | 2 | Byte-level BPE tokenizer written from scratch |
 | `model.py` | 3 | The transformer (RMSNorm, RoPE, attention, SwiGLU) |
@@ -48,7 +53,7 @@ python train.py
 python generate.py --prompt "Once upon a time"
 ```
 
-Then promote a good checkpoint: copy `checkpoints/dev/ckpt.pt` to `checkpoints/staging/`.
+Checkpoints land in `checkpoints/dev/`.
 
 ## Fine-tuning and phone (Phases 7-8)
 
@@ -56,12 +61,11 @@ Then promote a good checkpoint: copy `checkpoints/dev/ckpt.pt` to `checkpoints/s
 copy examples\chat_sample.jsonl data\chat.jsonl     # then add a few thousand of your own examples
 python finetune.py
 python generate.py --ckpt checkpoints/dev/chat.pt --chat
-# copy chat.pt to checkpoints/staging/, then:
-python export_hf.py --ckpt checkpoints/staging/chat.pt --out export/my-ai
+python export_hf.py                 # checkpoints/dev/chat.pt -> export/dev/my-ai
 git clone https://github.com/ggml-org/llama.cpp ../llama.cpp
 pip install ../llama.cpp/gguf-py sentencepiece
-python to_gguf.py --llama_cpp ../llama.cpp --model export/my-ai --out my-ai-f16.gguf
-llama-quantize my-ai-f16.gguf my-ai-q8_0.gguf Q8_0
+python to_gguf.py --llama_cpp ../llama.cpp   # -> export/dev/my-ai-f16.gguf
+llama-quantize export/dev/my-ai-f16.gguf export/dev/my-ai-q8_0.gguf Q8_0
 ```
 
 In your phone app (e.g. PocketPal AI), set the chat template to `<|user|>` before your
@@ -69,9 +73,10 @@ message and `<|assistant|>` before the reply, with `<|endoftext|>` as the stop t
 
 ## Dev → Staging → Production
 
-Training always writes to `checkpoints/dev/`. Copy checkpoints you've tested and like to
-`checkpoints/staging/`. Export only from staging, and put the `.gguf` that works well on
-your phone in `checkpoints/production/`. `data/`, `checkpoints/` and `export/` are
+The project is currently in **development**: training, fine-tuning, generation and export
+all use `checkpoints/dev/` and `export/dev/`. When a checkpoint passes your tests, copy it
+to `checkpoints/staging/`; when a `.gguf` works well on your phone, copy it to
+`checkpoints/production/`. To work from another stage later, change `STAGE` in `stage.py`. `data/`, `checkpoints/` and `export/` are
 git-ignored because they're large.
 
 ## Troubleshooting

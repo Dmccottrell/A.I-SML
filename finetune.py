@@ -12,10 +12,11 @@ import json, random
 import torch
 
 from model import TinyLM, ModelConfig
+from stage import CKPT_DIR
 from tokenizer import BPETokenizer
 
-BASE_CKPT = "checkpoints/dev/ckpt.pt"
-OUT_CKPT = "checkpoints/dev/chat.pt"
+BASE_CKPT = f"{CKPT_DIR}/ckpt.pt"
+OUT_CKPT = f"{CKPT_DIR}/chat.pt"
 DATA = "data/chat.jsonl"
 epochs, batch_size, lr = 3, 16, 5e-5
 

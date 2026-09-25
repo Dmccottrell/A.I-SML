@@ -5,15 +5,17 @@ llama.cpp identifies tokenizers by a fingerprint. Yours is brand new (you made
 it!), so it isn't on llama.cpp's list. It uses the same text-splitting rules as
 GPT-2, so we tell the converter to treat it as "gpt-2".
 
-Usage:  python to_gguf.py --llama_cpp ../llama.cpp --model export/my-ai --out my-ai-f16.gguf
+Usage:  python to_gguf.py --llama_cpp ../llama.cpp   (writes export/dev/my-ai-f16.gguf)
 """
 import argparse, runpy, sys
 from pathlib import Path
 
+from stage import EXPORT_DIR
+
 p = argparse.ArgumentParser()
 p.add_argument("--llama_cpp", default="../llama.cpp")
-p.add_argument("--model", default="export/my-ai")
-p.add_argument("--out", default="my-ai-f16.gguf")
+p.add_argument("--model", default=f"{EXPORT_DIR}/my-ai")
+p.add_argument("--out", default=f"{EXPORT_DIR}/my-ai-f16.gguf")
 a = p.parse_args()
 
 root = Path(a.llama_cpp).resolve()

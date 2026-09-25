@@ -3,7 +3,7 @@ train.py - Pretrain the model on data/train.bin.
 
 Usage:  python train.py
 
-Watch the val loss go down. Checkpoints are saved to checkpoints/dev/.
+Watch the val loss go down. Checkpoints are saved to checkpoints/dev/ (see stage.py).
 """
 import os, math, time
 
@@ -11,11 +11,12 @@ import numpy as np
 import torch
 
 from model import TinyLM, ModelConfig
+from stage import CKPT_DIR
 from tokenizer import BPETokenizer
 
 # ---------------- settings (sized for an 8GB NVIDIA GPU) ----------------
 DATA_DIR = "data"
-OUT_DIR = "checkpoints/dev"
+OUT_DIR = CKPT_DIR
 batch_size = 32           # sequences per step (lower if you run out of memory)
 grad_accum = 4            # effective batch = 32 * 4 = 128 sequences
 max_iters = 20_000

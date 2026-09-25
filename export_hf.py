@@ -3,7 +3,7 @@ export_hf.py - Save your trained model in the standard Llama folder layout
 (config.json + model.safetensors + tokenizer.json) so llama.cpp can convert it
 to GGUF for phones. Your weights are still 100% yours - this only renames them.
 
-Usage:  python export_hf.py --ckpt checkpoints/staging/chat.pt --out export/my-ai
+Usage:  python export_hf.py      (reads checkpoints/dev/chat.pt, writes export/dev/my-ai)
 """
 import argparse, json, os
 
@@ -11,6 +11,7 @@ import torch
 from safetensors.torch import save_file
 from tokenizers import Tokenizer, models, pre_tokenizers, decoders, AddedToken
 
+from stage import CKPT_DIR, EXPORT_DIR
 from tokenizer import BPETokenizer
 
 
@@ -79,9 +80,9 @@ def export_model(ckpt, out, eot_id):
 
 if __name__ == "__main__":
     p = argparse.ArgumentParser()
-    p.add_argument("--ckpt", default="checkpoints/staging/chat.pt")
+    p.add_argument("--ckpt", default=f"{CKPT_DIR}/chat.pt")
     p.add_argument("--tokenizer", default="data/tokenizer.json")
-    p.add_argument("--out", default="export/my-ai")
+    p.add_argument("--out", default=f"{EXPORT_DIR}/my-ai")
     a = p.parse_args()
     os.makedirs(a.out, exist_ok=True)
     tok = BPETokenizer.load(a.tokenizer)
