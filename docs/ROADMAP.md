@@ -106,13 +106,21 @@ it. Build one only if you want your own name, look or features.
 |---|---|---|---|
 | **PocketPal AI** (current) | Phone | ❌ No | Load the `.gguf`, set the context size. Works today for v1 and v2 |
 | **llama.cpp web chat** | PC browser | ❌ No | `llama-server.exe -m model.gguf -c 1024`, then open http://localhost:8080. It comes in the same llama.cpp download used for quantizing |
-| **Your own web app** | PC/phone browser on your network | ✅ Small | A simple chat page (Python backend + HTML), with your AI's name and look. A good first app project |
+| **Your own web app (home)** | PC/phone browser on your network | ✅ Small | A simple chat page (Python backend + HTML), with your AI's name and look. A good first app project |
+| **Public website, AI runs in the visitor's browser** | Any browser, anywhere | ✅ Medium | The page downloads the `.gguf` (~94MB for v2) and runs it on the visitor's device with llama.cpp compiled to WebAssembly. Free static hosting (e.g. Vercel, GitHub Pages), private, no server bills. Best fit for small models |
+| **Public website, AI runs on a server** | Any browser, anywhere | ✅ Medium | Like Claude.ai: a server runs the model. ~$5–20/month for a small CPU server, or a free tier such as Hugging Face Spaces. Needed for bigger models (3B) |
 | **Your own Android app** | Phone | ✅ Medium | Based on llama.cpp's Android example (Android Studio, Kotlin). Free to install on your own phone |
 | **Your own iPhone app** | Phone | ✅ Medium–hard | Needs a Mac + Xcode. Free for your own phone (re-sign weekly), or $99/year Apple developer account to keep it installed or publish |
 
-Recommended order: **PocketPal (now) → llama.cpp web chat (instant PC version) → your own web
-app (v4) → your own phone app (v4 or later)**. Building the app is a separate skill from
+Recommended order: **PocketPal (now) → llama.cpp web chat (instant PC version) → your own
+website, AI running in the browser (v4) → your own phone app (v4 or later) → server-hosted
+website for bigger models (v5)**. Building the app is a separate skill from
 training the model, and it only makes sense once the model is worth using every day.
+
+**Before going public:** show a clear "small experimental AI, it makes mistakes" notice, expect
+people to try misusing it (v3 preference training should include declining harmful requests;
+consider a simple content filter), and prefer in-browser models so popularity can't create a
+server bill.
 
 **Updating models in an app:** whichever app you use, a new version is just a new `.gguf` file
 copied over. Train → export → quantize → promote to `checkpoints/production` → load it in the app.
