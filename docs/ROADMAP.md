@@ -10,10 +10,13 @@ version's test-sheet results decide what the next one focuses on.
 | **v1** ✅ | Learn the pipeline | 30M | Tells children's stories; runs offline on the phone | RTX 4070, 4 hours | $0 |
 | **v2** 🛠️ | Knowledge | 88M | General Q&A, explanations, multi-turn chat | RTX 4070, ~20 hours | $0 |
 | **v3** | Accuracy | ~300M | Looks things up (RAG), says "I don't know", preference training | RTX 4070, ~1 week | $0 |
-| **v4** | Abilities | ~300M, upgraded | Specialist skill packs + router, tools, voice, own app | RTX 4070 | $0 |
+| **v3.5** | Scale at home | **1B** | Same features as v3 on a much bigger brain | RTX 4070, ~3–4 months (pausable) | ~$100–120 electricity |
+| **v4** | Abilities | Best base so far (1B) | Specialist skill packs + router, tools, voice, own app | RTX 4070 | $0 |
 | **v5** | Scale | 3B | Genuinely capable assistant | Cloud (from scratch) **or** RTX 4070 (fine-tune an open 3B) | ~$1,500+ **or** $0 |
 
 Guiding rules:
+- **Cheapest over fastest.** Time isn't a constraint, so everything that fits on the RTX 4070
+  trains there (electricity is far cheaper than cloud rental). Only 3B needs the cloud.
 - **Grow about 3× per step, with pilot runs.** Before each long run, train 5–10% of the steps
   first to catch problems cheaply.
 - **Better data beats a bigger model.** Most quality gains come from what the model reads.
@@ -50,6 +53,34 @@ Also: a `--pilot` option in `train.py` to run a slice of the steps before the fu
 
 ---
 
+## v3.5: 1B on the RTX 4070
+
+Goal: the biggest brain that can realistically be trained at home, as cheaply as possible.
+(700M was considered and skipped: 1B costs more time but not more money.)
+
+| | |
+|---|---|
+| Size | ~1B parameters (e.g. dim 2048, 20–22 layers, grouped-query attention) |
+| Reading | ~20B tokens (a larger FineWeb-Edu slice + Wikipedia + code + stories), ~40GB on disk |
+| Time | ~3–4 months of GPU time; pause with Ctrl+C for gaming, resume anytime |
+| Cost | ~$100–120 electricity (less with a GPU power limit of ~80%) |
+| Features | Everything from v3 (lookups, "I don't know", preference training) |
+
+**Code needed** (added when we get there):
+- **8-bit optimizer** (bitsandbytes): cuts optimizer memory ~75%, so 1B fits in 12GB
+- **Gradient checkpointing**: saves working memory for ~30% more time
+- **Micro-batches of 1–2 sequences** with more gradient accumulation (same results)
+- **Bigger data prep**: the same resumable streaming, with a larger token budget
+- **Mandatory pilot run**: ~1–2 days first, to confirm memory, speed and falling loss
+
+**While it trains:** the GPU is busy, so this is the time to *write* v4's code (the coding
+harness, router, website) and test it on small models, then train the skill packs afterwards.
+
+**Checkpoints:** keep `latest.pt` backed up (e.g. copy it to another drive weekly). A three-month
+run is worth protecting.
+
+---
+
 ## v4: Abilities
 
 Goal: turn the model into a **personal assistant** with specialist skills.
@@ -63,7 +94,7 @@ You ─► Router ─► Base ──┼─► Story writer    (the v1 skill)
                         └─► Fact checker    (looks things up, cites sources)
 ```
 
-- **One base model** (v3) holds general language and knowledge.
+- **One base model** (v3.5's 1B, or v3 until it's ready) holds general language and knowledge.
 - **Skill packs (LoRA adapters):** small add-ons of a few MB each, trained in under an hour
   each. Adding one never breaks the others. llama.cpp supports them.
 - **Router:** a small classifier that picks the right skill pack for each question.
@@ -86,7 +117,8 @@ Two routes:
 
 | Route | How | Time | Cost |
 |---|---|---|---|
-| **From scratch** | Rent cloud GPUs (~8 × H100). Do a **1B** run first (~$200–300) to test multi-GPU training and data streaming, then the 3B run | ~4 days | ~$1,500–2,500 |
+| **From scratch** | Rent cloud GPUs. The cheapest route: Vast.ai (or similar) interruptible GPUs, since `train.py` already resumes after interruptions. v3.5's 1B run at home is the rehearsal | ~1–2 weeks of rental | ~$800–2,500 depending on GPU and pricing |
+| **Free (if approved)** | Apply to Google's TPU Research Cloud for free TPU time (the code would need porting to JAX or PyTorch/XLA) | Varies | $0 |
 | **Fine-tune an open 3B model** | QLoRA on the RTX 4070, then add everything from v3/v4 (lookups, skill packs, personality, tools) | Hours | ~$0 |
 
 Code changes needed for from-scratch: multi-GPU training (FSDP), streaming data straight from
