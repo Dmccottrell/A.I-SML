@@ -32,6 +32,7 @@ add_version_arg(p)
 p.add_argument("--ckpt", default=None, help="default: chat.pt of the chosen version")
 p.add_argument("--prompts", default="eval/prompts.jsonl")
 p.add_argument("--tokens", type=int, default=150)
+p.add_argument("--repetition_penalty", type=float, default=1.15)
 args = p.parse_args()
 V = get_version(args.version)
 ckpt_path = args.ckpt or os.path.join(V.ckpt_dir, "chat.pt")
@@ -50,7 +51,8 @@ def answer(question):
     torch.manual_seed(0)
     ids = build_prompt(tok, [{"role": "user", "content": question}], model.cfg.max_seq_len - args.tokens)
     idx = torch.tensor([ids], device=device)
-    out = model.generate(idx, args.tokens, temperature=0.5, top_k=40, stop_id=eot)
+    out = model.generate(idx, args.tokens, temperature=0.5, top_k=40, stop_id=eot,
+                         repetition_penalty=args.repetition_penalty)
     return tok.decode(out[0, idx.size(1):].tolist()).replace("<|endoftext|>", "").strip()
 
 

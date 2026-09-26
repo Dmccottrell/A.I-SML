@@ -19,6 +19,8 @@ Options:
     --tokens       max new tokens to write (default 200)
     --temperature  0.5 = safer/more repetitive, 1.0 = more creative (default 0.8)
     --top_k        only pick from the k most likely tokens (default 50)
+    --repetition_penalty  discourage repeating recent words: 1.0 = off,
+                   1.1-1.3 = gentle (default 1.15), higher = stronger
 """
 import argparse, os
 
@@ -37,6 +39,7 @@ p.add_argument("--prompt", default="Once upon a time")
 p.add_argument("--tokens", type=int, default=200)
 p.add_argument("--temperature", type=float, default=0.8)
 p.add_argument("--top_k", type=int, default=50)
+p.add_argument("--repetition_penalty", type=float, default=1.15)
 p.add_argument("--chat", action="store_true")
 args = p.parse_args()
 V = get_version(args.version)
@@ -52,7 +55,8 @@ _, _, eot = special_ids(tok)   # generation stops when the model writes <|endoft
 def continue_ids(ids):
     """Let the model continue a list of token IDs; return ONLY the new text."""
     idx = torch.tensor([ids], device=device)   # shape (1, T)
-    out = model.generate(idx, args.tokens, args.temperature, args.top_k, stop_id=eot)
+    out = model.generate(idx, args.tokens, args.temperature, args.top_k, stop_id=eot,
+                         repetition_penalty=args.repetition_penalty)
     # out[0, idx.size(1):] = everything after the prompt
     return tok.decode(out[0, idx.size(1):].tolist()).replace("<|endoftext|>", "")
 

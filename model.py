@@ -308,7 +308,8 @@ class TinyLM(nn.Module):
         return logits, loss
 
     @torch.no_grad()   # no gradients needed when generating: faster, less memory
-    def generate(self, idx, max_new_tokens, temperature=0.8, top_k=50, stop_id=None):
+    def generate(self, idx, max_new_tokens, temperature=0.8, top_k=50, stop_id=None,
+                 repetition_penalty=1.0, repeat_window=64):
         """Write new tokens one at a time, appending each to the input.
 
         Loop:
@@ -316,6 +317,9 @@ class TinyLM(nn.Module):
                max_seq_len tokens), after that on just the newest token,
                reusing everything else from the KV cache
             2. take the scores for the LAST position only
+            2b. repetition penalty: lower the scores of tokens used in the
+               last `repeat_window` tokens, so the model is less likely to
+               get stuck saying "the cell wall and the cell wall..."
             3. temperature: divide scores (<1 = safer, >1 = more random)
             4. top-k: keep only the k best scores, drop the rest
             5. softmax -> probabilities -> draw one token at random
@@ -323,6 +327,9 @@ class TinyLM(nn.Module):
 
         Args:
             idx: (1, T) prompt token IDs
+            repetition_penalty: 1.0 = off. 1.1-1.3 = gently discourage
+                repeats. Too high (1.5+) makes it avoid normal words like "the".
+            repeat_window: how many recent tokens count as "already used"
         Returns:
             (1, T + new) prompt plus generated token IDs
         """
@@ -339,7 +346,11 @@ class TinyLM(nn.Module):
                 # Only the newest token; earlier ones come from the cache
                 logits, _ = self(idx[:, -1:], caches=caches, start_pos=pos)
                 pos += 1
-            logits = logits[:, -1, :] / max(temperature, 1e-5)
+            logits = logits[:, -1, :]
+            if repetition_penalty != 1.0:
+                logits = self._penalize_repeats(logits, idx[:, -repeat_window:],
+                                                repetition_penalty, stop_id)
+            logits = logits / max(temperature, 1e-5)
             if top_k:
                 v, _ = torch.topk(logits, min(top_k, logits.size(-1)))
                 logits[logits < v[:, [-1]]] = -float("inf")   # -inf -> probability 0
@@ -351,6 +362,26 @@ class TinyLM(nn.Module):
             if pos >= max_len:
                 caches = None   # context is full: next step re-reads the last max_len tokens
         return idx
+
+    @staticmethod
+    def _penalize_repeats(logits, recent, penalty, stop_id=None):
+        """Make recently used tokens less likely (the standard "CTRL" penalty).
+
+        A token's score can be positive (likely) or negative (unlikely), so:
+            positive score -> divide by penalty    (e.g. 4.0 -> 3.3)
+            negative score -> multiply by penalty  (e.g. -2.0 -> -2.4)
+        Either way the token becomes less likely. The stop token
+        (<|endoftext|>) is never penalized, so the model can still end its
+        answer even though earlier answers in the chat also ended with it.
+
+        logits: (B, vocab) scores for the next token
+        recent: (B, n) IDs of recently used tokens
+        """
+        scores = logits.gather(1, recent)
+        scores = torch.where(scores > 0, scores / penalty, scores * penalty)
+        if stop_id is not None:
+            scores = torch.where(recent == stop_id, logits.gather(1, recent), scores)
+        return logits.scatter(1, recent, scores)
 
     def num_params(self):
         """Count every learnable number in the model (~29.5M with default settings)."""
