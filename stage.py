@@ -9,9 +9,14 @@ Promote to staging/production by copying files by hand once they pass your tests
 #     from stage import CKPT_DIR
 #     torch.save(..., f"{CKPT_DIR}/ckpt.pt")
 
+import multiprocessing
+
 STAGE = "dev"                       # dev -> staging -> production
 
 CKPT_DIR = f"checkpoints/{STAGE}"   # training and fine-tuning checkpoints
 EXPORT_DIR = f"export/{STAGE}"      # exported model folders and GGUF files
 
-print(f"[stage: {STAGE}]")
+# Show the stage once, from the main program only (not from every helper
+# process that prepare_data scripts start).
+if multiprocessing.parent_process() is None:
+    print(f"[stage: {STAGE}]")
