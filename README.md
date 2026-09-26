@@ -1,8 +1,16 @@
 # A.I-SML — Build Your Own Small Language Model
 
-A ~30M-parameter Llama-style language model built completely from scratch: your own
-tokenizer, your own transformer, your own training run. No pretrained weights. The
-finished model (~32MB as Q8_0 GGUF) runs on your PC and fully offline on your phone.
+Llama-style language models built completely from scratch: your own tokenizer, your own
+transformer, your own training run. No pretrained weights. The finished models run on your
+PC and fully offline on your phone.
+
+| Version | What it is | Status |
+|---|---|---|
+| **v1** | 30M story-teller trained on TinyStories (~32MB on the phone) | ✅ Done: runs offline on the phone |
+| **v2** | 88M mini assistant: web text + Wikipedia + multi-turn chat (~94MB on the phone) | 🛠️ Ready to train: see **[docs/V2.md](docs/V2.md)** |
+
+Every script takes `--version v1` (the default) or `--version v2`. Settings for each version
+live in `config.py`.
 
 > **Current stage: DEVELOPMENT.** Every script reads and writes only `checkpoints/dev/`
 > and `export/dev/` (set in `stage.py`). Nothing touches staging or production until you
@@ -13,14 +21,19 @@ finished model (~32MB as Q8_0 GGUF) runs on your PC and fully offline on your ph
 | File | Phase | What it does |
 |---|---|---|
 | `stage.py` | all | Sets the working stage (`dev`) and its folders |
+| `config.py` | all | Settings for each version (model size, folders, training) |
+| `chat.py` | 6–8 | The chat format, shared by fine-tuning, chat and export |
 | `bigram.py` | 1 | Warm-up: tiny character model that learns from `input.txt` |
 | `tokenizer.py` | 2 | Byte-level BPE tokenizer written from scratch |
 | `model.py` | 3 | The transformer (RMSNorm, RoPE, attention, SwiGLU) |
-| `prepare_data.py` | 4 | Downloads TinyStories, trains the tokenizer, writes `data/train.bin` / `val.bin` |
-| `train.py` | 5 | Pretraining loop (run overnight on your GPU) |
+| `prepare_data.py` | 4 | v1 data: downloads TinyStories, trains the tokenizer, writes `data/train.bin` / `val.bin` |
+| `prepare_data_v2.py` | 4 | v2 data: streams FineWeb-Edu + Wikipedia + TinyStories into `data/v2/` (resumable) |
+| `train.py` | 5 | Pretraining loop. Ctrl+C pauses; run again to resume |
 | `generate.py` | 6 | Generate text or chat with your model |
-| `make_chat_data.py` | 7 | Builds `data/chat.jsonl` fine-tuning examples automatically |
-| `finetune.py` | 7 | Teach it a chat format using `data/chat.jsonl` |
+| `make_chat_data.py` | 7 | v1: builds `data/chat.jsonl` fine-tuning examples automatically |
+| `make_chat_data_v2.py` | 7 | v2: builds `data/v2/chat.jsonl` (multi-turn conversations) |
+| `finetune.py` | 7 | Teach it a chat format using the version's `chat.jsonl` |
+| `evaluate.py` + `eval/prompts.jsonl` | 6–7 | 20-question test sheet that scores a model |
 | `export_hf.py` | 8 | Save in standard Llama layout (safetensors + tokenizer.json) |
 | `to_gguf.py` | 8 | Convert to GGUF with llama.cpp for phone apps |
 | `examples/chat_sample.jsonl` | 7 | Example fine-tuning data format |

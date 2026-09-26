@@ -10,9 +10,10 @@ WHAT THIS FILE DOES
       1. converts our tokenizer into a Hugging Face tokenizer.json
       2. renames every weight and saves them as model.safetensors
       3. writes config.json describing the model's size
-    Output folder: export/dev/my-ai/
+    Output folder: <export_dir>/my-ai/ (see config.py)
 
-Usage:  python export_hf.py      (reads checkpoints/dev/chat.pt, writes export/dev/my-ai)
+Usage:  python export_hf.py                 (v1: checkpoints/dev/chat.pt -> export/dev/my-ai)
+        python export_hf.py --version v2    (v2: checkpoints/dev/v2/chat.pt -> export/dev/v2/my-ai)
 """
 import argparse, json, os
 
@@ -20,18 +21,9 @@ import torch
 from safetensors.torch import save_file
 from tokenizers import Tokenizer, models, pre_tokenizers, decoders, AddedToken
 
-from stage import CKPT_DIR, EXPORT_DIR
+from chat import CHAT_TEMPLATE
+from config import add_version_arg, get_version
 from tokenizer import BPETokenizer
-
-
-# <|user|>question<|assistant|>answer<|endoftext|> ... then <|assistant|> for the new reply
-CHAT_TEMPLATE = (
-    "{% for message in messages %}"
-    "{% if message['role'] == 'user' %}<|user|>{{ message['content'] }}"
-    "{% elif message['role'] == 'assistant' %}<|assistant|>{{ message['content'] }}<|endoftext|>"
-    "{% endif %}{% endfor %}"
-    "{% if add_generation_prompt %}<|assistant|>{% endif %}"
-)
 
 
 def bytes_to_unicode():
@@ -54,7 +46,7 @@ def bytes_to_unicode():
     return dict(zip(bs, map(chr, cs)))
 
 
-def export_tokenizer(tok, out):
+def export_tokenizer(tok, out, max_len=512):
     """Convert our BPETokenizer into Hugging Face tokenizer files in folder `out`.
 
     Writes tokenizer.json (vocab + merges + special tokens) and
@@ -64,6 +56,7 @@ def export_tokenizer(tok, out):
     Args:
         tok: a loaded BPETokenizer
         out: output folder path
+        max_len: the model's context length (max_seq_len)
     Returns:
         the Hugging Face Tokenizer object
     """
@@ -82,7 +75,7 @@ def export_tokenizer(tok, out):
     with open(os.path.join(out, "tokenizer_config.json"), "w") as f:
         json.dump({"tokenizer_class": "PreTrainedTokenizerFast",
                    "bos_token": "<|endoftext|>", "eos_token": "<|endoftext|>",
-                   "model_max_length": 512,
+                   "model_max_length": max_len,
                    # Chat template (Jinja): tells phone apps how to wrap messages
                    # exactly the way finetune.py trained the model, so they pick
                    # up <|user|> / <|assistant|> / <|endoftext|> automatically.
@@ -128,7 +121,7 @@ def export_model(ckpt, out, eot_id):
             "architectures": ["LlamaForCausalLM"], "model_type": "llama",
             "vocab_size": cfg["vocab_size"], "hidden_size": cfg["dim"],
             "intermediate_size": cfg["hidden_dim"], "num_hidden_layers": cfg["n_layers"],
-            "num_attention_heads": cfg["n_heads"], "num_key_value_heads": cfg["n_heads"],
+            "num_attention_heads": cfg["n_heads"], "num_key_value_heads": cfg.get("n_kv_heads") or cfg["n_heads"],
             "max_position_embeddings": cfg["max_seq_len"], "rms_norm_eps": cfg["norm_eps"],
             "rope_theta": cfg["rope_theta"], "hidden_act": "silu",
             "tie_word_embeddings": True, "bos_token_id": eot_id, "eos_token_id": eot_id,
@@ -138,12 +131,16 @@ def export_model(ckpt, out, eot_id):
 if __name__ == "__main__":
     # Command-line entry point: load tokenizer + checkpoint, write the export folder
     p = argparse.ArgumentParser()
-    p.add_argument("--ckpt", default=f"{CKPT_DIR}/chat.pt")
-    p.add_argument("--tokenizer", default="data/tokenizer.json")
-    p.add_argument("--out", default=f"{EXPORT_DIR}/my-ai")
+    add_version_arg(p)
+    p.add_argument("--ckpt", default=None, help="default: chat.pt of the chosen version")
+    p.add_argument("--out", default=None, help="default: <export_dir>/my-ai of the chosen version")
     a = p.parse_args()
-    os.makedirs(a.out, exist_ok=True)
-    tok = BPETokenizer.load(a.tokenizer)
-    export_tokenizer(tok, a.out)
-    export_model(torch.load(a.ckpt, map_location="cpu"), a.out, tok.special["<|endoftext|>"])
-    print("exported to", a.out)
+    V = get_version(a.version)
+    ckpt_path = a.ckpt or os.path.join(V.ckpt_dir, "chat.pt")
+    out = a.out or os.path.join(V.export_dir, "my-ai")
+    os.makedirs(out, exist_ok=True)
+    tok = BPETokenizer.load(os.path.join(V.data_dir, "tokenizer.json"))
+    ckpt = torch.load(ckpt_path, map_location="cpu")
+    export_tokenizer(tok, out, ckpt["config"]["max_seq_len"])
+    export_model(ckpt, out, tok.special["<|endoftext|>"])
+    print("exported to", out)

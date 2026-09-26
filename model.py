@@ -25,6 +25,7 @@ initial loss is about 9.0 (random guessing over 8192 tokens = ln(8192) = 9.01).
 """
 import math
 from dataclasses import dataclass
+from typing import Optional
 
 import torch
 import torch.nn as nn
@@ -42,6 +43,11 @@ class ModelConfig:
     dim: int = 512          # size of each token's vector
     n_layers: int = 8       # number of transformer blocks
     n_heads: int = 8        # attention heads per block
+    # Grouped-query attention (GQA): how many key/value heads to use.
+    # None = same as n_heads (normal attention, used by v1). A smaller number
+    # (e.g. 4 for 12 query heads) shares each key/value head between several
+    # query heads: fewer parameters and a smaller KV cache, so faster on phones.
+    n_kv_heads: Optional[int] = None
     hidden_dim: int = 1376  # feed-forward inner size (about 8/3 * dim)
     max_seq_len: int = 512  # longest context the model sees
     rope_theta: float = 10000.0   # base for RoPE rotation speeds (Llama default)
@@ -128,31 +134,58 @@ class Attention(nn.Module):
 
     The 512-dim vectors are split into 8 heads of 64 dims. Each head can learn
     a different kind of relationship (who "she" refers to, grammar, etc.).
+
+    Grouped-query attention: with n_kv_heads < n_heads, keys and values have
+    fewer heads, and each one is shared by n_heads / n_kv_heads query heads.
+
+    KV cache: when generating, the keys and values of earlier tokens never
+    change, so we keep them in `cache` and only compute the NEW token's.
+    That turns "re-read the whole text for every new word" into "read one word".
     """
 
     def __init__(self, cfg: ModelConfig):
         super().__init__()
         self.n_heads = cfg.n_heads
+        self.n_kv_heads = cfg.n_kv_heads or cfg.n_heads            # None -> same as n_heads
         self.head_dim = cfg.dim // cfg.n_heads                    # 512 / 8 = 64
+        kv_dim = self.n_kv_heads * self.head_dim
         self.q_proj = nn.Linear(cfg.dim, cfg.dim, bias=False)     # makes queries
-        self.k_proj = nn.Linear(cfg.dim, cfg.dim, bias=False)     # makes keys
-        self.v_proj = nn.Linear(cfg.dim, cfg.dim, bias=False)     # makes values
+        self.k_proj = nn.Linear(cfg.dim, kv_dim, bias=False)      # makes keys
+        self.v_proj = nn.Linear(cfg.dim, kv_dim, bias=False)      # makes values
         self.o_proj = nn.Linear(cfg.dim, cfg.dim, bias=False)     # mixes the heads' outputs
         self.dropout = cfg.dropout
 
-    def forward(self, x, cos, sin):
-        """x: (B, T, C) -> returns (B, T, C), same shape."""
+    def forward(self, x, cos, sin, cache=None):
+        """x: (B, T, C) -> returns (B, T, C), same shape.
+
+        cache: None while training. While generating, a dict that holds this
+               layer's keys/values from earlier calls ({} on the first call).
+        """
         B, T, C = x.shape
         # Project, then reshape (B, T, C) -> (B, heads, T, head_dim) so each head works separately
         q = self.q_proj(x).view(B, T, self.n_heads, self.head_dim).transpose(1, 2)
-        k = self.k_proj(x).view(B, T, self.n_heads, self.head_dim).transpose(1, 2)
-        v = self.v_proj(x).view(B, T, self.n_heads, self.head_dim).transpose(1, 2)
+        k = self.k_proj(x).view(B, T, self.n_kv_heads, self.head_dim).transpose(1, 2)
+        v = self.v_proj(x).view(B, T, self.n_kv_heads, self.head_dim).transpose(1, 2)
         # Add position information to queries and keys (values don't need it)
         q, k = apply_rope(q, cos, sin), apply_rope(k, cos, sin)
+        if cache is not None:
+            # Append this call's keys/values to the ones from earlier tokens
+            if "k" in cache:
+                k = torch.cat([cache["k"], k], dim=2)
+                v = torch.cat([cache["v"], v], dim=2)
+            cache["k"], cache["v"] = k, v
+        if self.n_kv_heads != self.n_heads:
+            # GQA: repeat each key/value head so every query head has a partner
+            rep = self.n_heads // self.n_kv_heads
+            k = k.repeat_interleave(rep, dim=1)
+            v = v.repeat_interleave(rep, dim=1)
         # Causal attention: each token only looks at itself and earlier tokens.
+        # With a cache we feed one new token at a time, and it may look at ALL
+        # cached tokens, so no causal mask is needed then.
+        assert T == 1 or k.size(2) == T, "multi-token input is only supported on an empty cache"
         # PyTorch's fused version computes softmax(q @ k^T / sqrt(64)) @ v efficiently.
         out = F.scaled_dot_product_attention(
-            q, k, v, is_causal=True, dropout_p=self.dropout if self.training else 0.0)
+            q, k, v, is_causal=(T > 1), dropout_p=self.dropout if self.training else 0.0)
         # Put the heads back together: (B, heads, T, head_dim) -> (B, T, C)
         out = out.transpose(1, 2).contiguous().view(B, T, C)
         return self.o_proj(out)
@@ -191,8 +224,8 @@ class Block(nn.Module):
         self.ffn_norm = RMSNorm(cfg.dim, cfg.norm_eps)
         self.ffn = FeedForward(cfg)
 
-    def forward(self, x, cos, sin):
-        x = x + self.attn(self.attn_norm(x), cos, sin)   # residual connection
+    def forward(self, x, cos, sin, cache=None):
+        x = x + self.attn(self.attn_norm(x), cos, sin, cache)   # residual connection
         x = x + self.ffn(self.ffn_norm(x))
         return x
 
@@ -235,7 +268,7 @@ class TinyLM(nn.Module):
         if isinstance(m, (nn.Linear, nn.Embedding)):
             nn.init.normal_(m.weight, mean=0.0, std=0.02)
 
-    def forward(self, idx, targets=None, loss_mask=None):
+    def forward(self, idx, targets=None, loss_mask=None, caches=None, start_pos=0):
         """Run the model.
 
         Args:
@@ -244,16 +277,20 @@ class TinyLM(nn.Module):
             loss_mask: (B, T) 1 = count this position in the loss, 0 = ignore.
                        finetune.py uses it so the model only learns from the
                        answer, not from the user's question.
+            caches:    generation only: one dict per layer for the KV cache
+            start_pos: generation only: position of idx[:, 0] in the whole text
+                       (needed so RoPE gives cached tokens the right positions)
         Returns:
             logits: (B, T, vocab_size) scores for the next token at every position
             loss:   a single number (cross-entropy), or None if no targets were given
         """
         B, T = idx.shape
-        assert T <= self.cfg.max_seq_len, "sequence longer than max_seq_len"
+        assert start_pos + T <= self.cfg.max_seq_len, "sequence longer than max_seq_len"
         x = self.embed(idx)
-        cos, sin = self.rope_cos[:T].to(x.dtype), self.rope_sin[:T].to(x.dtype)
-        for block in self.blocks:
-            x = block(x, cos, sin)
+        cos = self.rope_cos[start_pos:start_pos + T].to(x.dtype)
+        sin = self.rope_sin[start_pos:start_pos + T].to(x.dtype)
+        for i, block in enumerate(self.blocks):
+            x = block(x, cos, sin, None if caches is None else caches[i])
         logits = self.lm_head(self.norm(x))
 
         if targets is None:
@@ -275,7 +312,9 @@ class TinyLM(nn.Module):
         """Write new tokens one at a time, appending each to the input.
 
         Loop:
-            1. run the model on the text so far (last max_seq_len tokens)
+            1. run the model: the first time on the whole prompt (last
+               max_seq_len tokens), after that on just the newest token,
+               reusing everything else from the KV cache
             2. take the scores for the LAST position only
             3. temperature: divide scores (<1 = safer, >1 = more random)
             4. top-k: keep only the k best scores, drop the rest
@@ -287,9 +326,19 @@ class TinyLM(nn.Module):
         Returns:
             (1, T + new) prompt plus generated token IDs
         """
+        max_len = self.cfg.max_seq_len
+        caches, pos = None, 0
         for _ in range(max_new_tokens):
-            idx_cond = idx[:, -self.cfg.max_seq_len:]        # the model can only see 512 tokens
-            logits, _ = self(idx_cond)
+            if caches is None:
+                # Read the whole prompt once (the model can only see max_len tokens)
+                idx_cond = idx[:, -max_len:]
+                caches = [{} for _ in self.blocks]
+                logits, _ = self(idx_cond, caches=caches, start_pos=0)
+                pos = idx_cond.size(1)
+            else:
+                # Only the newest token; earlier ones come from the cache
+                logits, _ = self(idx[:, -1:], caches=caches, start_pos=pos)
+                pos += 1
             logits = logits[:, -1, :] / max(temperature, 1e-5)
             if top_k:
                 v, _ = torch.topk(logits, min(top_k, logits.size(-1)))
@@ -299,11 +348,28 @@ class TinyLM(nn.Module):
             idx = torch.cat([idx, next_id], dim=1)
             if stop_id is not None and next_id.item() == stop_id:
                 break
+            if pos >= max_len:
+                caches = None   # context is full: next step re-reads the last max_len tokens
         return idx
 
     def num_params(self):
         """Count every learnable number in the model (~29.5M with default settings)."""
         return sum(p.numel() for p in self.parameters())
+
+
+def load_checkpoint(path, device="cpu"):
+    """Rebuild a model from a checkpoint file and load its weights.
+
+    Works for any version, because every checkpoint stores its own ModelConfig.
+
+    Returns:
+        (model in eval mode, the raw checkpoint dict)
+    """
+    ckpt = torch.load(path, map_location=device)
+    model = TinyLM(ModelConfig(**ckpt["config"])).to(device)
+    model.load_state_dict(ckpt["model"])
+    model.eval()
+    return model, ckpt
 
 
 if __name__ == "__main__":

@@ -23,8 +23,9 @@ USED BY
 
 Run `python tokenizer.py` for a quick self-test that prints "tokenizer OK".
 """
+import heapq
 import json
-from collections import Counter
+from collections import Counter, defaultdict
 
 import regex as re   # the third-party "regex" module; it supports \p{L} (any letter)
 
@@ -97,12 +98,15 @@ class BPETokenizer:
             special: {"<|endoftext|>": id, ...} for the special tokens.
             pattern: compiled SPLIT_PATTERN regex used to chunk text.
             _cache:  {chunk_text: [ids]} so repeated words are only encoded once.
+                     Cleared when it reaches max_cache entries, so encoding
+                     billions of tokens of web text can't use up all your RAM.
         """
         self.merges = {}                                   # (id, id) -> new id, in rank order
         self.vocab = {i: bytes([i]) for i in range(256)}   # id -> bytes
         self.special = {}                                  # "<|x|>" -> id
         self.pattern = re.compile(SPLIT_PATTERN)
         self._cache = {}
+        self.max_cache = 500_000
 
     # ---------------------------------------------------------------- training
     def train(self, text, vocab_size, verbose=True):
@@ -158,6 +162,88 @@ class BPETokenizer:
             self.vocab[next_id + i] = tok.encode("utf-8")
         self._cache = {}
 
+    def train_fast(self, text, vocab_size, verbose=True):
+        """Same result as train(), but fast enough for large, varied text (v2+).
+
+        train() recounts EVERY pair after EVERY merge. That's fine for simple
+        children's stories, but web text has hundreds of thousands of distinct
+        words, and recounting them 16,000 times would take days.
+
+        train_fast() keeps the counts up to date instead:
+            * pair_counts: {pair: how often it appears}, built once
+            * where:       {pair: set of chunks that contain it}
+            * heap:        finds the most frequent pair quickly
+        After a merge, only the chunks that contained the merged pair are
+        updated. Each merge touches a few chunks instead of all of them.
+
+        When several pairs tie for most frequent, the smallest pair wins
+        (train() picks the first one it counted), so on ties the two methods
+        can choose differently. Both produce a valid tokenizer.
+        """
+        assert vocab_size > 256 + len(SPECIAL_TOKENS)
+        num_merges = vocab_size - 256 - len(SPECIAL_TOKENS)
+
+        chunk_counts = Counter(self.pattern.findall(text))
+        chunks = [list(c.encode("utf-8")) for c in chunk_counts]
+        freqs = list(chunk_counts.values())
+        if verbose:
+            print(f"{len(chunks):,} distinct chunks")
+
+        # Count every pair once, and remember which chunks contain it
+        pair_counts = Counter()
+        where = defaultdict(set)
+        for ci, (ids, f) in enumerate(zip(chunks, freqs)):
+            for pair in zip(ids, ids[1:]):
+                pair_counts[pair] += f
+                where[pair].add(ci)
+        # Max-heap via negative counts. Entries go stale when counts change;
+        # a stale entry is skipped when popped (its count no longer matches).
+        heap = [(-c, p) for p, c in pair_counts.items()]
+        heapq.heapify(heap)
+
+        for m in range(num_merges):
+            # Pop until we find an entry whose count is still current
+            while heap:
+                neg, best = heapq.heappop(heap)
+                if pair_counts.get(best, 0) == -neg and -neg > 0:
+                    break
+            else:
+                break                      # nothing left to merge
+            count = -neg
+            new_id = 256 + m
+            touched = set()                # pairs whose count changed
+            for ci in list(where[best]):
+                ids, f = chunks[ci], freqs[ci]
+                # Remove this chunk's old pairs, merge, then add its new pairs
+                for pair in zip(ids, ids[1:]):
+                    pair_counts[pair] -= f
+                    touched.add(pair)
+                    where[pair].discard(ci)
+                ids = merge_ids(ids, best, new_id)
+                chunks[ci] = ids
+                for pair in zip(ids, ids[1:]):
+                    pair_counts[pair] += f
+                    touched.add(pair)
+                    where[pair].add(ci)
+            for pair in touched:
+                c = pair_counts[pair]
+                if c > 0:
+                    heapq.heappush(heap, (-c, pair))
+                else:
+                    del pair_counts[pair]
+            del where[best]
+
+            self.merges[best] = new_id
+            self.vocab[new_id] = self.vocab[best[0]] + self.vocab[best[1]]
+            if verbose and (m % 500 == 0 or m == num_merges - 1):
+                print(f"merge {m+1}/{num_merges}: {self.vocab[new_id]!r} ({count} uses)")
+
+        next_id = 256 + len(self.merges)
+        for i, tok in enumerate(SPECIAL_TOKENS):
+            self.special[tok] = next_id + i
+            self.vocab[next_id + i] = tok.encode("utf-8")
+        self._cache = {}
+
     # ---------------------------------------------------------------- encoding
     def _encode_chunk(self, chunk):
         """Encode ONE chunk (usually one word) into token IDs.
@@ -179,6 +265,8 @@ class BPETokenizer:
             if pair not in self.merges:
                 break                      # no learned merge applies anymore
             ids = merge_ids(ids, pair, self.merges[pair])
+        if len(self._cache) >= self.max_cache:
+            self._cache.clear()            # keep memory bounded on huge datasets
         self._cache[chunk] = ids
         return ids
 

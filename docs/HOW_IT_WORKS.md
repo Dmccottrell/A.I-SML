@@ -51,13 +51,18 @@ version of it.
 | File | Type | Key pieces | Read it when you want to understand... |
 |---|---|---|---|
 | `stage.py` | settings | `STAGE`, `CKPT_DIR`, `EXPORT_DIR` | where files are saved (dev / staging / production) |
+| `config.py` | settings | `VERSIONS`, `Version`, `TrainSettings`, `FinetuneSettings`, `get_version` | how v1 and v2 differ (size, folders, training) |
+| `chat.py` | library | `encode_conversation`, `build_prompt`, `normalize`, `CHAT_TEMPLATE` | the chat format (one place for training, chat and phone) |
 | `bigram.py` | script | one table `W` | the training loop in its simplest form |
-| `tokenizer.py` | library | `BPETokenizer.train/encode/decode/save/load`, `merge_ids` | how text becomes numbers |
-| `model.py` | library | `TinyLM`, `Block`, `Attention`, `FeedForward`, `RMSNorm`, RoPE helpers | the neural network itself |
-| `prepare_data.py` | script | `encode_split`, `encode_story`, `init_worker` | how the dataset is built |
-| `train.py` | script | `get_batch`, `get_lr`, `estimate_loss`, main loop | how the model learns |
-| `generate.py` | script | `run`, chat loop | how the model writes text |
-| `make_chat_data.py` | script | `story_to_examples`, `build_examples`, `BASICS` | how chat training examples are made |
+| `tokenizer.py` | library | `BPETokenizer.train/train_fast/encode/decode/save/load`, `merge_ids` | how text becomes numbers |
+| `model.py` | library | `TinyLM`, `Block`, `Attention` (with GQA + KV cache), `FeedForward`, `RMSNorm`, RoPE helpers, `load_checkpoint` | the neural network itself |
+| `prepare_data.py` | script | `encode_split`, `encode_story`, `init_worker` | how the v1 dataset is built |
+| `prepare_data_v2.py` | script | `SOURCES`, `train_tokenizer`, `encode_source`, `join_files` | how the v2 dataset is streamed, mixed and resumed |
+| `train.py` | script | `get_batch`, `get_lr`, `estimate_loss`, `save_latest`, main loop | how the model learns (and pauses/resumes) |
+| `generate.py` | script | `continue_ids`, chat loop with memory | how the model writes text |
+| `make_chat_data.py` | script | `story_to_examples`, `build_examples`, `BASICS` | how v1 chat examples are made |
+| `make_chat_data_v2.py` | script | `build`, `identity_conversations`, `IDENTITY` | how v2 multi-turn chat examples are made |
+| `evaluate.py` | script | `answer`, keyword scoring | how versions are compared |
 | `finetune.py` | script | `make_batch`, loss mask | how the model learns to chat |
 | `export_hf.py` | script | `export_tokenizer`, `export_model`, `bytes_to_unicode` | how files are converted to the standard format |
 | `to_gguf.py` | script | patch of `get_vocab_base_pre` | how the phone file is made |
