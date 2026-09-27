@@ -115,13 +115,35 @@ See [Using your AI](#using-your-ai-apps) below.
 
 ## v5: Scale (3B)
 
-Two routes:
+Three routes:
 
 | Route | How | Time | Cost |
 |---|---|---|---|
 | **From scratch** | Rent cloud GPUs. The cheapest route: Vast.ai (or similar) interruptible GPUs, since `train.py` already resumes after interruptions. v3.5's 1B run at home is the rehearsal | ~4–7 days on 8 rented GPUs (longer on fewer) | ~$800–2,500 depending on GPU and pricing |
 | **Free (if approved)** | Apply to Google's TPU Research Cloud for free TPU time (the code would need porting to JAX or PyTorch/XLA) | Varies | $0 |
 | **Fine-tune an open 3B model** | QLoRA on the RTX 4070, then add everything from v3/v4 (lookups, skill packs, personality, tools) | Hours | ~$0 |
+
+**PC + cloud: the cheapest from-scratch plan**
+
+The RTX 4070 can't share the 3B **pretraining** run the way v2/v3 can move `latest.pt` between
+machines: training 3B needs ~40–50 GB of GPU memory (the card has 12 GB), and even if it fit, the
+run would take well over a year at home. So the split is by **job**, not by time:
+
+| Job | Where | Why |
+|---|---|---|
+| Write and test the multi-GPU code on small models | 🏠 PC | Debugging on rented GPUs is where money gets wasted |
+| Data prep (~60B tokens, ~120 GB) | 🏠 PC | CPU work that takes days, free at home. Upload the files when done (a few hours to overnight) |
+| Pilot run (a shortened 3B, a few hundred steps) | 🏠 PC | Catches bugs before any money is spent |
+| **Pretraining** | ☁️ Cloud | ~4–7 days on 8 GPUs: the only part you pay for |
+| Chat fine-tuning, "I don't know" data, DPO, skill packs | 🏠 PC | These use LoRA (small add-ons), which fits a 3B model in 12 GB |
+| Testing, export to GGUF, quantizing | 🏠 PC | Free |
+
+About 95% of the steps happen at home; the cloud is one rental.
+
+**The rental can be split over time too.** Rent 1–2 days, save `latest.pt`, stop paying, and
+resume later (`train.py` already does this). The catch: a 3B checkpoint is ~35–40 GB with the
+optimizer, so between rentals you either pay a little for cloud storage or download it (a few
+hours).
 
 Code changes needed for from-scratch: multi-GPU training (FSDP), streaming data straight from
 disk shards, a larger tokenizer. v2's pause/resume and resumable data prep already carry over.

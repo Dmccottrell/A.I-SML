@@ -98,7 +98,7 @@ v5 is the first **genuinely capable** assistant: a 3B brain, about 3× v3.5, rea
   better-organized answers. Skill packs, tools and lookups from v3–v4 all carry over and work
   better on a bigger brain.
 - **Still runs on a phone.** ~1.8 GB as Q4, which modern phones handle (slower than v2–v4).
-- **Needs the cloud to train.** 3B doesn't fit in the RTX 4070's 12 GB for training. Two routes:
+- **Needs the cloud to train.** 3B doesn't fit in the RTX 4070's 12 GB for training. Three routes:
 
 | Route | How | Time | Cost |
 |---|---|---|---|
@@ -108,6 +108,28 @@ v5 is the first **genuinely capable** assistant: a 3B brain, about 3× v3.5, rea
 
 The fine-tune route gets a smart 3B cheaply, but its brain isn't trained by you. The from-scratch
 route keeps the project's rule of "100% trained by you".
+
+### PC + cloud: the cheapest from-scratch plan
+
+The RTX 4070 can't share the 3B **pretraining** run the way v2/v3 can move `latest.pt` between
+machines: training 3B needs ~40–50 GB of GPU memory (the card has 12 GB), and even if it fit, the
+run would take well over a year at home. So the split is by **job**, not by time:
+
+| Job | Where | Why |
+|---|---|---|
+| Write and test the multi-GPU code on small models | 🏠 PC | Debugging on rented GPUs is where money gets wasted |
+| Data prep (~60B tokens, ~120 GB) | 🏠 PC | CPU work that takes days, free at home. Upload the files when done (a few hours to overnight) |
+| Pilot run (a shortened 3B, a few hundred steps) | 🏠 PC | Catches bugs before any money is spent |
+| **Pretraining** | ☁️ Cloud | ~4–7 days on 8 GPUs: the only part you pay for |
+| Chat fine-tuning, "I don't know" data, DPO, skill packs | 🏠 PC | These use LoRA (small add-ons), which fits a 3B model in 12 GB |
+| Testing, export to GGUF, quantizing | 🏠 PC | Free |
+
+About 95% of the steps happen at home; the cloud is one rental.
+
+**The rental can be split over time too.** Rent 1–2 days, save `latest.pt`, stop paying, and
+resume later (`train.py` already does this). The catch: a 3B checkpoint is ~35–40 GB with the
+optimizer, so between rentals you either pay a little for cloud storage or download it (a few
+hours).
 
 What v5 **still won't** be: Claude or ChatGPT. Those are hundreds of times bigger. A 3B model is
 a capable personal assistant, not a replacement for them.
