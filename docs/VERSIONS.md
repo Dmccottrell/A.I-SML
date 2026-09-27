@@ -52,7 +52,8 @@ real GSM8K questions (a well-known math test) are kept for testing only, never f
 |---|---|---|---|---|---|---|
 | Final val loss | **1.279** | **2.929** (best), 2.984 at the last step | Measured when trained | Measured when trained | Same base as v3.5 | Measured when trained |
 | Phone file | 32 MB | ~94 MB | ~420 MB (Q8) or **~240 MB (Q4)** | ~1.1 GB (Q8) or **~600 MB (Q4)** | v3.5's file + a few MB per skill pack | ~3.2 GB (Q8) or **~1.8 GB (Q4)** |
-| Test sheet (`evaluate.py`, /20) | Only identity and story questions | Baseline (after fine-tuning) | Goal: clearly beat v2 | Goal: beat v3 | Goal: beat v3.5, plus new tests for tools and skills | Goal: beat v4, plus harder reasoning and coding tests |
+| Test sheet (`evaluate.py`, /20) | Only identity and story questions | **18/20** (baseline) | Goal: clearly beat v2 | Goal: beat v3 | Goal: beat v3.5, plus new tests for tools and skills |
+| HellaSwag (`exam.py`, random = 25%) | — | **28.4%** (baseline) | Goal: ~33–38% | Goal: higher than v3 | Same base as v3.5 | Goal: beat v4, plus harder reasoning and coding tests |
 
 **Val losses can't be compared across versions.** Each uses a different tokenizer and different
 data, and kids' stories are far easier to predict than Wikipedia and code. The test sheet
@@ -235,7 +236,7 @@ Fill in real numbers as each version finishes:
 | Version | Final val loss | Test sheet | Notes |
 |---|---|---|---|
 | v1 | 1.279 | — | Runs on the phone (PocketPal, 32 MB) |
-| v2 | 2.929 best, 2.984 final | After fine-tuning | Pretraining done: 20,000 steps, ~3.5 s/step on the RTX 4070 |
+| v2 | 2.929 best, 2.984 final | 18/20 (identity 2/2, facts 7/8, explain 5/5, advice 2/2, writing 1/1, stories 1/2) | HellaSwag 28.4% (ckpt.pt), about GPT-2 (124M) level. 20,000 steps at ~3.5 s/step on the RTX 4070; chat fine-tuning ~1.5 hours. The test sheet checks key words, so answers can pass with wrong details |
 | v3 | | | |
 | v3.5 | | | |
 | v4 | — (same base as v3.5) | | |
