@@ -7,7 +7,7 @@ PC and fully offline on your phone.
 | Version | What it is | Status |
 |---|---|---|
 | **v1** | 30M story-teller trained on TinyStories (~32MB on the phone) | ✅ Done: runs offline on the phone |
-| **v2** | 88M mini assistant: web text + Wikipedia + multi-turn chat (~94MB on the phone) | 🛠️ Training: see **[docs/V2.md](docs/V2.md)** |
+| **v2** | 88M mini assistant: web text + Wikipedia + multi-turn chat (~94MB on the phone) | 🛠️ Pretrained (val loss 2.93), chat fine-tuning now: see **[docs/V2.md](docs/V2.md)** |
 | **v3** | 394M accuracy-focused assistant: + code and math, 2,048-token memory (~240MB on the phone as Q4) | 🧱 Groundwork built: see **[docs/V3.md](docs/V3.md)** |
 
 Every script takes `--version v1` (the default) or `--version v2`. Settings for each version
@@ -16,6 +16,31 @@ live in `config.py`.
 > **Current stage: DEVELOPMENT.** Every script reads and writes only `checkpoints/dev/`
 > and `export/dev/` (set in `stage.py`). Nothing touches staging or production until you
 > promote it by hand.
+
+## Pretrained weights policy
+
+**Every model in this project (v1 to v6.5) is trained from scratch.** Each one starts as random
+numbers and learns only from the text we give it. No one else's pretrained weights are ever
+loaded into, merged with, or used to start one of these models.
+
+Other people's open models may be used as **helpers beside the model, never inside it**:
+
+| Helper | What it does | Inside our model? |
+|---|---|---|
+| **Teacher model** (an open ~7B, from v3) | Writes practice chat examples and grades our model's answers for DPO. Only its written text is used, like a tutor's worksheets | ❌ No |
+| **Search model** (optional, from v3) | Finds Wikipedia passages by meaning for lookups. Keyword search needs no model at all | ❌ No, runs beside it |
+| **Whisper and Piper** (v4) | Speech-to-text and text-to-speech for voice | ❌ No, separate programs |
+| **A fine-tuned open model** (optional) | A smarter daily assistant in the app while our own models grow | ❌ No, a separate model, always labeled as not ours |
+
+Rules for helpers:
+- Only models and datasets whose licenses allow this use. Check each license before using it.
+- Never use the ChatGPT, Claude or Gemini APIs to write training data; their terms restrict
+  using outputs to build competing models.
+- Some training data (for example the smol-smoltalk conversations) was written by other AIs. It
+  shapes the chat *style*, but the model's weights are still trained 100% here.
+
+This keeps every result honest: when a version improves, it's because of this project's own
+data, code and training.
 
 ## Files
 
