@@ -192,7 +192,10 @@ if os.path.exists(LATEST_PATH) and not args.fresh:
     state = torch.load(LATEST_PATH, map_location=device)
     model.load_state_dict(state["model"])
     optimizer.load_state_dict(state["optimizer"])
-    scaler.load_state_dict(state["scaler"])
+    if state["scaler"]:
+        # Only float16 GPUs use the scaler. A run saved on a bfloat16 GPU (RTX 30/40/50)
+        # has an empty one, so a float16 GPU (e.g. Kaggle's T4) just starts it fresh.
+        scaler.load_state_dict(state["scaler"])
     torch.set_rng_state(state["rng"].cpu())
     start_iter, best_val = state["iter"], state["best_val"]
     if start_iter > S.max_iters:
