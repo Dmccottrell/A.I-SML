@@ -17,6 +17,7 @@ WHAT THIS FILE DOES
       instruction      exact counts and formats ("List 3...")      10 items when asked for 3
       unknowable       personal/live/made-up questions -> honest   inventing answers about anything
       identity         a different answer for each question        same paragraph for "What can you do?"
+      small_talk       casual greetings and chit-chat              "Whats up" -> it invented its own question
       story            tell stories (keeps v1's skill)             -
 
     lookup/dont_know/correction/stand_firm/memory_doubt come from the teacher's
@@ -68,6 +69,32 @@ IDENTITY_QA = [
 ]
 GREETINGS = ["Hi", "Hello", "Hey", "Hi there", "Good morning", "Hey, how's it going?"]
 GREETING_REPLY = "Hi! I'm a small AI assistant. What would you like to talk about?"
+
+# Casual messages, each with a few friendly replies. Typed variations (lowercase,
+# no punctuation: "whats up") are added automatically.
+SMALL_TALK = [
+    (["What's up?", "Sup?", "Yo", "Hey, what's up?", "What's going on?"],
+     ["Not much! I'm here and ready to help. What's on your mind?",
+      "Hey! Just waiting for a question. What would you like to talk about?"]),
+    (["How are you?", "How are you doing?", "How's it going?", "You good?"],
+     ["I'm doing well, thanks for asking! How about you?",
+      "I'm good! I'm an AI, so I don't have feelings like people do, but I'm ready to help. How are you?"]),
+    (["Good night", "Goodnight!", "I'm going to bed"],
+     ["Good night! Sleep well.", "Good night! Come back anytime."]),
+    (["Thanks", "Thank you!", "Thanks a lot", "ty"],
+     ["You're welcome!", "Happy to help! Anything else?"]),
+    (["Bye", "See you later", "Goodbye!", "Talk to you later"],
+     ["Bye! Have a great day.", "See you later!"]),
+    (["lol", "haha", "That's funny"],
+     ["Glad that made you smile! Anything else I can help with?"]),
+    (["I'm bored", "I'm so bored"],
+     ["Want a fun fact, a short story, or a riddle? Just pick one!",
+      "How about a short story? Tell me a topic and I'll write one."]),
+    (["Good morning!", "Morning"],
+     ["Good morning! What can I help you with today?"]),
+    (["ok", "Okay", "Cool", "Nice"],
+     ["Great! Let me know if you have another question."]),
+]
 
 # ------------------------------------------------------------------ honest answers
 CORRECTIONS = ["That's wrong.", "That's incorrect.", "No, that's not right.",
@@ -266,6 +293,28 @@ def unknowable_conversations(rng, n):
     return out
 
 
+def casual_variant(text, rng):
+    """How people often type it: sometimes lowercase, without punctuation or apostrophes."""
+    if rng.random() < 0.5:
+        text = text.lower()
+    if rng.random() < 0.5:
+        text = text.replace("'", "").rstrip("?!.")
+    return text
+
+
+def small_talk_conversations(rng, n):
+    """Casual greetings and chit-chat, sometimes followed by a real question."""
+    out = []
+    for _ in range(n):
+        messages, replies = rng.choice(SMALL_TALK)
+        convo = [user(casual_variant(rng.choice(messages), rng)), assistant(rng.choice(replies))]
+        if rng.random() < 0.3:
+            questions, reply = rng.choice(IDENTITY_QA)
+            convo += [user(rng.choice(questions)), assistant(reply)]
+        out.append(convo)
+    return out
+
+
 def identity_conversations(rng, n):
     out = []
     for _ in range(n):
@@ -288,6 +337,7 @@ def build(general, stories, lookup_records, instruction_records, wiki, a, seed=1
     parts["instruction"] = instruction_conversations(instruction_records, exchanges, rng)
     parts["unknowable"] = unknowable_conversations(rng, a.unknowable)
     parts["identity"] = identity_conversations(rng, a.identity)
+    parts["small_talk"] = small_talk_conversations(rng, a.small_talk)
     if stories:
         from make_chat_data_v2 import story_conversations
         rng.shuffle(stories)
@@ -320,6 +370,7 @@ if __name__ == "__main__":
     p.add_argument("--topic_switch", type=int, default=12_000)
     p.add_argument("--unknowable", type=int, default=2_500)
     p.add_argument("--identity", type=int, default=1_000)
+    p.add_argument("--small_talk", type=int, default=1_500)
     p.add_argument("--stories", type=int, default=4_000)
     p.add_argument("--db", default=os.path.join("data", "wiki", "wiki.db"))
     a = p.parse_args()

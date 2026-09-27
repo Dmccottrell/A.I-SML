@@ -53,7 +53,7 @@ real GSM8K questions (a well-known math test) are kept for testing only, never f
 | Final val loss | **1.279** | **2.929** (best), 2.984 at the last step | Measured when trained | Measured when trained | Same base as v3.5 | Measured when trained |
 | Phone file | 32 MB | **89 MB** | ~420 MB (Q8) or **~240 MB (Q4)** | ~1.1 GB (Q8) or **~600 MB (Q4)** | v3.5's file + a few MB per skill pack | ~3.2 GB (Q8) or **~1.8 GB (Q4)** |
 | Test sheet (`evaluate.py`, /20) | Only identity and story questions | **18/20** (baseline) | Goal: clearly beat v2 | Goal: beat v3 | Goal: beat v3.5, plus new tests for tools and skills |
-| v3 test sheet (`prompts_v3.jsonl`, /39) | — | Run to set the baseline* | Goal: clearly beat v2, most of all on facts_hard, instructions, topic_switch, honesty, correction |  |  |  |
+| v3 test sheet (`prompts_v3.jsonl`, /41) | — | Run to set the baseline* | Goal: clearly beat v2, most of all on facts_hard, instructions, topic_switch, honesty, correction |  |  |  |
 | Phone speed (PocketPal, Q8_0) | — | **~210–245 tokens/s**, first word in <0.1 s | Slower (4.5× bigger); measured when done |  |  |  |
 | HellaSwag (`exam.py`, random = 25%) | — | **28.4%** (baseline) | Goal: ~33–38% | Goal: higher than v3 | Same base as v3.5 | Goal: beat v4, plus harder reasoning and coding tests |
 

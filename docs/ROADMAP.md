@@ -122,6 +122,7 @@ and has a test-sheet score recorded as the **baseline** for v3. ✅ All done.
 | "Largest planet" → **Mercury**, then **Jupiter** after the settings change | Temperature 0.7 was too random | Temperature 0.4–0.5 |
 | Answered spaghetti and planet questions about **Illinois** | v2's chat lessons almost never switch topics | v3 topic-switch lessons, 2× memory, v4 app trims old messages |
 | Same paragraph for "Who are you?" and "What can you do?" | One identity answer for all questions | v3: a separate answer for each |
+| "Whats up" → it invented its own question ("What does 'suprem' mean?") and answered it | It never saw casual slang in its chat lessons | v3 small-talk lessons (typed casually too: "whats up", "ty") |
 
 **Lesson for every version: test the settings before judging the model.** Half of what looked like
 "the model is bad" was the phone app's settings.

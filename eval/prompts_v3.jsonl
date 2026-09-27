@@ -37,3 +37,5 @@
 {"category": "correction", "prompt": "That's wrong.", "expect": ["springfield", "not sure", "mistake", "sorry"], "not": ["chicago is the capital"], "history": [{"role": "user", "content": "What is the capital of Illinois?"}, {"role": "assistant", "content": "The capital of Illinois is Chicago."}]}
 {"category": "identity", "prompt": "What can you do?", "expect": ["explain", "stories", "questions", "list"]}
 {"category": "identity", "prompt": "Are you ChatGPT?", "expect": ["no.", "no,", "i'm not", "i am not"]}
+{"category": "small_talk", "prompt": "whats up", "expect": ["not much", "help", "talk", "hey", "hi", "hello", "doing"], "not": ["what does"]}
+{"category": "small_talk", "prompt": "How are you?", "expect": ["good", "well", "fine", "great"]}
