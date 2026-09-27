@@ -49,7 +49,7 @@ real GSM8K questions (a well-known math test) are kept for testing only, never f
 
 | | **v1** | **v2** | **v3** | **v3.5** | **v4** | **v5** |
 |---|---|---|---|---|---|---|
-| Final val loss | **1.279** | ~2.8–3.0 expected | Measured when trained | Measured when trained | Same base as v3.5 | Measured when trained |
+| Final val loss | **1.279** | **2.929** (best), 2.984 at the last step | Measured when trained | Measured when trained | Same base as v3.5 | Measured when trained |
 | Phone file | 32 MB | ~94 MB | ~420 MB (Q8) or **~240 MB (Q4)** | ~1.1 GB (Q8) or **~600 MB (Q4)** | v3.5's file + a few MB per skill pack | ~3.2 GB (Q8) or **~1.8 GB (Q4)** |
 | Test sheet (`evaluate.py`, /20) | Only identity and story questions | Baseline (after fine-tuning) | Goal: clearly beat v2 | Goal: beat v3 | Goal: beat v3.5, plus new tests for tools and skills | Goal: beat v4, plus harder reasoning and coding tests |
 
@@ -211,7 +211,7 @@ Fill in real numbers as each version finishes:
 | Version | Final val loss | Test sheet | Notes |
 |---|---|---|---|
 | v1 | 1.279 | — | Runs on the phone (PocketPal, 32 MB) |
-| v2 | | | |
+| v2 | 2.929 best, 2.984 final | After fine-tuning | Pretraining done: 20,000 steps, ~3.5 s/step on the RTX 4070 |
 | v3 | | | |
 | v3.5 | | | |
 | v4 | — (same base as v3.5) | | |
