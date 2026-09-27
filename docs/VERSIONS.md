@@ -24,7 +24,7 @@ v5 goes back to a bigger brain (3B), and it's the first version that needs the c
 | | **v1** | **v2** | **v3** | **v3.5** | **v4** | **v5** |
 |---|---|---|---|---|---|---|
 | **Data to prepare** | 467M tokens (TinyStories) | 2.8B tokens | **12B tokens** | **~20B tokens** | Skill datasets: a few thousand examples per skill | **~60B tokens** |
-| Data mix | 100% children's stories | 80% web, 15% Wikipedia, 5% stories | 72% web, 15% Wikipedia, 10% Python, 3% stories | Like v3, bigger slice | Study, stories, IT help, fact checking, coding, tool use | Like v3.5, much bigger slice (plus more code and math) |
+| Data mix | 100% children's stories | 80% web, 15% Wikipedia, 5% stories | 67% web, 15% Wikipedia, 10% Python, 5% math, 3% stories | Like v3, bigger slice | Study, stories, IT help, fact checking, coding, tool use | Like v3.5, much bigger slice (plus more code and math) |
 | Disk space | ~1 GB | ~6 GB | ~24 GB | ~40 GB | < 1 GB | ~120 GB |
 | Batch per step | 65,536 tokens | 131,072 tokens | 262,144 tokens | 262,144 tokens | Small (fine-tuning) | ~1M tokens (across several GPUs) |
 | **Steps** | 20,000 | 20,000 | **45,000** | **~76,000** | ~1–2k per skill pack | **~60,000** |
@@ -63,7 +63,7 @@ data, and kids' stories are far easier to predict than Wikipedia and code. The t
 | Conversations | One message at a time | ✅ Remembers the chat | ✅ Longer conversations (2× memory) | ✅ Stays on topic longer | ✅ Remembers you between chats | ✅ Longer chats (4,096 tokens) |
 | Code | ❌ | ❌ | ⚠️ Basic Python autocomplete | ⚠️ Small functions | ✅ Coding helper: reads files, suggests fixes, runs tests | ✅ Real coding help: multi-file changes, explains code |
 | Answer quality and style | Basic | Basic | ✅ Improved by preference training | ✅ | ✅ Picks the right specialist per question | ✅ Clearly better |
-| Math | ❌ | ❌ | ⚠️ Still weak | ⚠️ Simple arithmetic | ✅ **Exact**, using a calculator tool | ✅ Exact with tools, word problems work |
+| Math | ❌ | ❌ | ⚠️ Some step-by-step math (5% math reading), still error-prone | ⚠️ Better, still error-prone | ✅ **Exact**, using a calculator tool | ✅ Exact with tools, word problems work |
 | Reasoning | ❌ | ❌ | ⚠️ Still weak | ⚠️ Better | ⚠️ Multi-step tasks in agent mode (still limited by 1B) | ✅ Decent multi-step reasoning for its size |
 | Tools (calculator, date, your files, reminders) | ❌ | ❌ | ❌ | ❌ | ✅ | ✅ Uses tools more reliably |
 | Voice (talk and listen) | ❌ | ❌ | ❌ | ❌ | ✅ With small speech models alongside | ✅ |

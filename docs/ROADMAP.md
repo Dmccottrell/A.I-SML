@@ -48,6 +48,7 @@ Goal: **accurate when it answers, honest when it doesn't.** No AI is completely 
 | **Preference training (DPO)** | Pairs of answers ("this one is better"); the model learns to prefer accurate, honest, helpful ones | The same idea the big labs use to make assistants helpful |
 | **Bigger brain (~400M)** | 394M: 1024 wide × 32 layers, 2,048-token memory, 32k vocabulary | More room for language and knowledge |
 | **Code in the training mix** | 10% Python (codeparrot-clean) | Basic code autocomplete and better structure/logic |
+| **Math in the training mix** | 5% FineMath (web pages that explain math step by step) | Better with numbers, word problems and step-by-step thinking |
 | **Bigger test sheet** | More questions, plus scoring for "admitted uncertainty correctly" | Proves accuracy actually improved |
 
 Also: a `--pilot` option in `train.py` (speed, memory and finish-time report before the long run)
@@ -104,6 +105,11 @@ You ─► Router ─► Base ──┼─► Story writer    (the v1 skill)
 ### Tools, voice, memory
 - **Tools:** calculator (exact math), date/time, search your files, reminders. The model decides
   when to call a tool, and our code runs it.
+- **Web search (optional online mode):** our code searches the web (e.g. the free Wikipedia API
+  or a search API's free tier), puts the top results in front of the model, and it answers from
+  them with the source named. The same idea as v3's offline lookups, pointed at the internet for
+  up-to-date facts. Off by default, so the AI stays private and offline unless you switch it on.
+  Prefer trusted sites: a small model believes whatever it reads.
 - **Agent mode:** multi-step tasks ("read my notes, summarize them, make a to-do list").
 - **Voice:** speech-to-text in, text-to-speech out, using small speech models alongside the AI.
 - **Personal memory:** saved notes about you that it looks up in later chats.

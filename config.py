@@ -113,12 +113,13 @@ VERSIONS = {
     ),
     "v3": Version(
         name="v3",
-        description="~400M accuracy-focused assistant: web + Wikipedia + code + stories, 2048-token memory",
+        description="~400M accuracy-focused assistant: web + Wikipedia + code + math + stories, 2048-token memory",
         data_dir="data/v3",
         ckpt_dir=f"{CKPT_DIR}/v3",
         export_dir=f"{EXPORT_DIR}/v3",
         vocab_size=32768,        # bigger vocabulary: better for code and varied text
-        data_mix=(("fineweb", 0.72), ("wikipedia", 0.15), ("code", 0.10), ("tinystories", 0.03)),
+        data_mix=(("fineweb", 0.67), ("wikipedia", 0.15), ("code", 0.10), ("math", 0.05),
+                  ("tinystories", 0.03)),
         data_tokens=12_000_000_000,   # a little more than the 11.8B the steps below read
         tokenizer_sample_mb=40,
         model=ModelConfig(

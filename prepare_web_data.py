@@ -8,10 +8,11 @@ WHAT THIS FILE DOES (run it once per version; it takes a while)
          fineweb    - FineWeb-Edu: educational web pages
          wikipedia  - English Wikipedia
          code       - Python source code (codeparrot-clean)          (v3+)
+         math       - FineMath: web pages with step-by-step math      (v3+)
          tinystories- the v1 stories (already on your PC)
        How much of each is set per version in config.py (data_mix):
          v2: 80% fineweb, 15% wikipedia, 5% stories          ~2.8B tokens
-         v3: 72% fineweb, 15% wikipedia, 10% code, 3% stories ~12B tokens
+         v3: 67% fineweb, 15% wikipedia, 10% code, 5% math, 3% stories  ~12B tokens
     2. Trains the version's tokenizer on a sample of all sources
        -> <data_dir>/tokenizer.json
     3. Encodes the text into token IDs with all CPU cores, source by source,
@@ -81,11 +82,24 @@ def load_code():
             yield row["content"]
 
 
+def load_math():
+    """FineMath (4+ quality): web pages that explain math step by step.
+
+    Worked examples, lessons and solved problems, from arithmetic up to
+    calculus. Only pages rated 4 or 5 (out of 5) for educational quality.
+    """
+    from datasets import load_dataset
+    ds = load_dataset("HuggingFaceTB/finemath", "finemath-4plus", split="train", streaming=True)
+    for row in ds:
+        yield row["text"]
+
+
 # Source name (as used in config.py's data_mix) -> loader
 LOADERS = {
     "fineweb": load_fineweb,
     "wikipedia": load_wikipedia,
     "code": load_code,
+    "math": load_math,
     "tinystories": load_tinystories,
 }
 
