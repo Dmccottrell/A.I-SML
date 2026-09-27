@@ -43,20 +43,22 @@ def _read_jsonl(path):
 def load_hellaswag(cache_dir=CACHE_DIR):
     """HellaSwag validation set as a list of {"ctx", "endings", "label"} dicts.
 
-    Tries the original GitHub file first, then the Hugging Face copy.
+    Uses the Hugging Face copy (the original GitHub file is no longer
+    available), with the GitHub URL as a fallback.
     """
     path = os.path.join(cache_dir, "hellaswag_val.jsonl")
     if not os.path.exists(path):
         try:
-            _download(HELLASWAG_URL, path)
-        except Exception:
-            from datasets import load_dataset   # fallback: the Hugging Face copy
+            from datasets import load_dataset
             ds = load_dataset("Rowan/hellaswag", split="validation")
             os.makedirs(cache_dir, exist_ok=True)
-            with open(path, "w", encoding="utf-8") as f:
+            with open(path + ".tmp", "w", encoding="utf-8") as f:
                 for row in ds:
                     f.write(json.dumps({"ctx": row["ctx"], "endings": row["endings"],
                                         "label": int(row["label"])}) + "\n")
+            os.replace(path + ".tmp", path)
+        except Exception:
+            _download(HELLASWAG_URL, path)
     return [{"ctx": r["ctx"], "endings": r["endings"], "label": int(r["label"])}
             for r in _read_jsonl(path)]
 
