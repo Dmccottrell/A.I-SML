@@ -126,8 +126,18 @@ that writes the lookup and "I don't know" examples and grades answers for DPO, s
 (lm-evaluation-harness), TensorBoard graphs, and optionally the 8-bit optimizer. See
 [Tools by version](#tools-by-version).
 
-Also: a `--pilot` option in `train.py` (speed, memory and finish-time report before the long run)
-and optional gradient checkpointing. Details and commands: [V3.md](V3.md).
+**Built into v3's pretraining (ready):**
+- **Reserved special tokens** for lookups, tools, system prompts and 20 spares, so the tokenizer never changes later
+- **Decontamination:** training documents containing HellaSwag or GSM8K test questions are skipped
+- **"Study the best material last":** a steady learning rate, then a fade over the last 10% of steps
+  while reading a higher-quality anneal set (top-rated web pages, Wikipedia, math)
+- **Longer-memory ready:** RoPE setting 500,000, so stretching to 8k tokens later is easier
+- **Mini-exam** (HellaSwag, 500 questions) every 2,000 steps, plus `exam.py` for the full test
+- **metrics.csv + TensorBoard graphs**, **torch.compile** speed-up (automatic fallback), and
+  **`--backup_dir`** copies of `latest.pt`
+- A `--pilot` option (speed, memory and finish-time report) and optional gradient checkpointing
+
+Details and commands: [V3.md](V3.md).
 
 ---
 

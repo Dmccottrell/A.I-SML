@@ -60,7 +60,9 @@ data, code and training.
 | `make_chat_data.py` | 7 | v1: builds `data/chat.jsonl` fine-tuning examples automatically |
 | `make_chat_data_v2.py` | 7 | v2: builds `data/v2/chat.jsonl` (multi-turn conversations) |
 | `finetune.py` | 7 | Teach it a chat format using the version's `chat.jsonl`. Ctrl+C pauses; run again to resume |
-| `evaluate.py` + `eval/prompts.jsonl` | 6–7 | 20-question test sheet that scores a model |
+| `evaluate.py` + `eval/prompts.jsonl` | 6–7 | 20-question test sheet that scores a chat model |
+| `exam.py` | 6 | HellaSwag, a public common-sense test (works on pretrained models; compare versions) |
+| `benchmarks.py` | 4–6 | Downloads the public test sets (HellaSwag, GSM8K), used by `exam.py` and to keep them out of training data |
 | `export_hf.py` | 8 | Save in standard Llama layout (safetensors + tokenizer.json) |
 | `to_gguf.py` | 8 | Convert to GGUF with llama.cpp for phone apps |
 | `examples/chat_sample.jsonl` | 7 | Example fine-tuning data format |
