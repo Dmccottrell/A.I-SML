@@ -1,0 +1,12 @@
+# Large files: datasets, checkpoints and exported models stay on your PC
+data/
+checkpoints/
+export/
+*.gguf
+*.bin
+*.pt
+
+# Python
+.venv/
+__pycache__/
+*.pyc
