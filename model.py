@@ -24,6 +24,7 @@ Run `python model.py` to check the parameter count (~29.5M) and that the
 initial loss is about 9.0 (random guessing over 8192 tokens = ln(8192) = 9.01).
 """
 import math
+import os
 from dataclasses import dataclass
 from typing import Optional
 
@@ -407,6 +408,13 @@ def load_checkpoint(path, device="cpu"):
     Returns:
         (model in eval mode, the raw checkpoint dict)
     """
+    if not os.path.exists(path):
+        name = os.path.basename(path)
+        made_by = {"chat.pt": "finetune.py (after pretraining has finished)",
+                   "ckpt.pt": "train.py", "latest.pt": "train.py", "final.pt": "train.py (when a run finishes)"}
+        raise SystemExit(f"checkpoint not found: {path}\n{name} is created by "
+                         f"{made_by.get(name, 'train.py or finetune.py')}. "
+                         "Use --ckpt to choose another checkpoint.")
     ckpt = torch.load(path, map_location=device)
     model = TinyLM(ModelConfig(**ckpt["config"])).to(device)
     model.load_state_dict(ckpt["model"])
