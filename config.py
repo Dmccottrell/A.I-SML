@@ -118,8 +118,10 @@ VERSIONS = {
         ckpt_dir=f"{CKPT_DIR}/v3",
         export_dir=f"{EXPORT_DIR}/v3",
         vocab_size=32768,        # bigger vocabulary: better for code and varied text
-        data_mix=(("fineweb", 0.67), ("wikipedia", 0.15), ("code", 0.10), ("math", 0.05),
-                  ("tinystories", 0.03)),
+        # Wikipedia at 20% (up from v2's 15%): the densest facts per token. 2.4B tokens
+        # still reads each article at most once.
+        data_mix=(("fineweb", 0.63), ("wikipedia", 0.20), ("code", 0.10), ("math", 0.05),
+                  ("tinystories", 0.02)),
         data_tokens=12_000_000_000,   # a little more than the 11.8B the steps below read
         tokenizer_sample_mb=40,
         model=ModelConfig(
