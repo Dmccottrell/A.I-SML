@@ -114,6 +114,8 @@ Goal: **accurate when it answers, honest when it doesn't.** No AI is completely 
 |---|---|---|
 | **Look things up (RAG)** | Searches a local library (Wikipedia, your own documents) and answers from what it finds, naming the source | The biggest accuracy win: the model reads facts instead of trying to remember them |
 | **"I don't know" training** | Chat examples where the correct answer is admitting uncertainty | Fewer confident wrong answers |
+| **Handling corrections** | Examples where the user says "that's wrong" and the AI rechecks its notes, fixes the answer, or admits it's unsure | v2 repeats its mistake when corrected (e.g. "the capital of Illinois is Paris", three times) |
+| **Better identity answers** | Separate answers for "Who are you?", "What can you do?" and "Are you ChatGPT?" | v2 gives the same identity paragraph to all of them |
 | **Preference training (DPO)** | Pairs of answers ("this one is better"); the model learns to prefer accurate, honest, helpful ones | The same idea the big labs use to make assistants helpful |
 | **Bigger brain (~400M)** | 394M: 1024 wide × 32 layers, 2,048-token memory, 32k vocabulary | More room for language and knowledge |
 | **Code in the training mix** | 10% Python (codeparrot-clean) | Basic code autocomplete and better structure/logic |
