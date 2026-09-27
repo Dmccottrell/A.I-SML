@@ -136,7 +136,7 @@ Goal: the biggest brain that can realistically be trained at home, as cheaply as
 | | |
 |---|---|
 | Size | ~1B parameters (e.g. dim 2048, 20–22 layers, grouped-query attention) |
-| Reading | ~20B tokens (a larger FineWeb-Edu slice + Wikipedia + code + stories), ~40GB on disk |
+| Reading | ~20B tokens (a larger FineWeb-Edu slice + Wikipedia + code + math + stories), ~40GB on disk |
 | Time | ~3–4 months of GPU time; pause with Ctrl+C for gaming, resume anytime |
 | Cost | ~$100–120 electricity (less with a GPU power limit of ~80%) |
 | Features | Everything from v3 (lookups, "I don't know", preference training) |
@@ -145,7 +145,12 @@ Goal: the biggest brain that can realistically be trained at home, as cheaply as
 - **8-bit optimizer** (bitsandbytes): cuts optimizer memory ~75%, so 1B fits in 12GB
 - **Gradient checkpointing**: saves working memory for ~30% more time
 - **Micro-batches of 1–2 sequences** with more gradient accumulation (same results)
-- **Bigger data prep**: the same resumable streaming, with a larger token budget
+- **Bigger data prep**: the same resumable streaming, with a larger token budget. **Switch FineWeb-Edu
+  to its `sample-100BT` slice:** v3.5's web share (~12.6B tokens at 63%) is more than the 10B
+  in `sample-10BT`, and reading the same pages twice helps less than fresh ones. Wikipedia at 20%
+  (~4B tokens) is about one full read of English Wikipedia, so it doesn't repeat; stay near 20%.
+- **Step-by-step math in the chat data**: the teacher model writes worked word problems (GSM8K
+  style) for fine-tuning. Keep the real GSM8K questions for testing only, so the test stays fair.
 - **Mandatory pilot run**: ~1–2 days first, to confirm memory, speed and falling loss
 
 **While it trains:** the GPU is busy, so this is the time to *write* v4's code (the coding
