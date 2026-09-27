@@ -13,8 +13,9 @@ WHAT THIS FILE DOES
 FOLDERS (all inside the current stage, see stage.py)
     v1:  data/        checkpoints/dev/       export/dev/
     v2:  data/v2/     checkpoints/dev/v2/    export/dev/v2/
+    v3:  data/v3/     checkpoints/dev/v3/    export/dev/v3/
 
-To add a v3 later, copy the v2 entry in VERSIONS and change what you need.
+To add another version, copy the latest entry in VERSIONS and change what you need.
 """
 from dataclasses import dataclass, field
 
@@ -35,6 +36,7 @@ class TrainSettings:
     eval_every: int = 500       # measure train/val loss every N steps
     eval_iters: int = 50        # batches averaged per measurement
     save_every: int = 250       # write latest.pt (for pause/resume) every N steps
+    grad_checkpoint: bool = False   # trade ~30% speed for much less GPU memory (needed for big models)
 
 
 @dataclass
@@ -58,6 +60,10 @@ class Version:
     finetune: FinetuneSettings
     chat_memory: bool           # does chat mode remember earlier turns?
     vocab_size: int = 8192      # tokenizer size (prepare_data scripts use this)
+    # Web-data versions (v2+), used by prepare_web_data.py:
+    data_mix: tuple = ()        # (source name, share of tokens) pairs
+    data_tokens: int = 0        # total training tokens to prepare
+    tokenizer_sample_mb: float = 30   # text sample used to train the tokenizer
 
 
 VERSIONS = {
@@ -79,6 +85,9 @@ VERSIONS = {
         ckpt_dir=f"{CKPT_DIR}/v2",
         export_dir=f"{EXPORT_DIR}/v2",
         vocab_size=16384,
+        data_mix=(("fineweb", 0.80), ("wikipedia", 0.15), ("tinystories", 0.05)),
+        data_tokens=2_800_000_000,
+        tokenizer_sample_mb=30,
         model=ModelConfig(
             vocab_size=16384,
             dim=768,
@@ -100,6 +109,40 @@ VERSIONS = {
             save_every=200,      # about every 15-20 minutes on an RTX 4070
         ),
         finetune=FinetuneSettings(epochs=2, batch_size=8, lr=1e-4),
+        chat_memory=True,
+    ),
+    "v3": Version(
+        name="v3",
+        description="~400M accuracy-focused assistant: web + Wikipedia + code + stories, 2048-token memory",
+        data_dir="data/v3",
+        ckpt_dir=f"{CKPT_DIR}/v3",
+        export_dir=f"{EXPORT_DIR}/v3",
+        vocab_size=32768,        # bigger vocabulary: better for code and varied text
+        data_mix=(("fineweb", 0.72), ("wikipedia", 0.15), ("code", 0.10), ("tinystories", 0.03)),
+        data_tokens=8_600_000_000,
+        tokenizer_sample_mb=40,
+        model=ModelConfig(
+            vocab_size=32768,
+            dim=1024,
+            n_layers=32,         # deeper than v2 (12): ~394M parameters in total
+            n_heads=16,          # 64 dims per head
+            n_kv_heads=4,        # 4 query heads share each key/value head
+            hidden_dim=2816,     # 11 x 256, so phones can use the smaller Q4_K format
+            max_seq_len=2048,    # twice v2's memory
+        ),
+        train=TrainSettings(
+            batch_size=1,        # 1 x 2048 tokens per micro-batch (check memory with --pilot)
+            grad_accum=128,      # effective batch = 128 sequences = ~262k tokens per step
+            max_iters=32_000,    # 32k steps x 262k tokens = ~8.4 billion tokens (~21 per parameter)
+            warmup_iters=1_000,
+            lr_max=4e-4,         # a bit lower than v2: bigger models prefer gentler steps
+            lr_min=4e-5,
+            eval_every=500,
+            eval_iters=40,
+            save_every=100,      # about every 15-20 minutes
+            grad_checkpoint=False,   # turn on if --pilot runs out of memory
+        ),
+        finetune=FinetuneSettings(epochs=2, batch_size=4, lr=5e-5),
         chat_memory=True,
     ),
 }

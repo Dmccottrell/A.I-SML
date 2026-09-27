@@ -7,7 +7,8 @@ PC and fully offline on your phone.
 | Version | What it is | Status |
 |---|---|---|
 | **v1** | 30M story-teller trained on TinyStories (~32MB on the phone) | ✅ Done: runs offline on the phone |
-| **v2** | 88M mini assistant: web text + Wikipedia + multi-turn chat (~94MB on the phone) | 🛠️ Ready to train: see **[docs/V2.md](docs/V2.md)** |
+| **v2** | 88M mini assistant: web text + Wikipedia + multi-turn chat (~94MB on the phone) | 🛠️ Training: see **[docs/V2.md](docs/V2.md)** |
+| **v3** | 394M accuracy-focused assistant: + code, 2,048-token memory (~240MB on the phone as Q4) | 🧱 Groundwork built: see **[docs/V3.md](docs/V3.md)** |
 
 Every script takes `--version v1` (the default) or `--version v2`. Settings for each version
 live in `config.py`.
@@ -27,7 +28,8 @@ live in `config.py`.
 | `tokenizer.py` | 2 | Byte-level BPE tokenizer written from scratch |
 | `model.py` | 3 | The transformer (RMSNorm, RoPE, attention, SwiGLU) |
 | `prepare_data.py` | 4 | v1 data: downloads TinyStories, trains the tokenizer, writes `data/train.bin` / `val.bin` |
-| `prepare_data_v2.py` | 4 | v2 data: streams FineWeb-Edu + Wikipedia + TinyStories into `data/v2/` (resumable) |
+| `prepare_web_data.py` | 4 | v2+ data: streams FineWeb-Edu + Wikipedia (+ code for v3) + TinyStories into `data/<version>/` (resumable) |
+| `prepare_data_v2.py` | 4 | Shortcut for `prepare_web_data.py --version v2` |
 | `train.py` | 5 | Pretraining loop. Ctrl+C pauses; run again to resume |
 | `generate.py` | 6 | Generate text or chat with your model |
 | `make_chat_data.py` | 7 | v1: builds `data/chat.jsonl` fine-tuning examples automatically |

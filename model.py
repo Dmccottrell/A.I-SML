@@ -30,6 +30,7 @@ from typing import Optional
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+from torch.utils.checkpoint import checkpoint
 
 
 @dataclass
@@ -257,6 +258,13 @@ class TinyLM(nn.Module):
         self.register_buffer("rope_cos", cos, persistent=False)
         self.register_buffer("rope_sin", sin, persistent=False)
 
+        # Gradient checkpointing (off by default; train.py turns it on from config).
+        # Normally training keeps every layer's in-between results in GPU memory
+        # for the backward pass. With checkpointing it keeps only each block's
+        # input and recomputes the rest during backward: much less memory,
+        # ~30% more compute. Needed to fit big models (1B) on a 12GB card.
+        self.grad_checkpoint = False
+
         self.apply(self._init_weights)   # calls _init_weights on every sub-layer
         # Scale down the residual output layers (helps deep nets train stably)
         for name, p in self.named_parameters():
@@ -290,7 +298,10 @@ class TinyLM(nn.Module):
         cos = self.rope_cos[start_pos:start_pos + T].to(x.dtype)
         sin = self.rope_sin[start_pos:start_pos + T].to(x.dtype)
         for i, block in enumerate(self.blocks):
-            x = block(x, cos, sin, None if caches is None else caches[i])
+            if self.grad_checkpoint and self.training and caches is None:
+                x = checkpoint(block, x, cos, sin, use_reentrant=False)
+            else:
+                x = block(x, cos, sin, None if caches is None else caches[i])
         logits = self.lm_head(self.norm(x))
 
         if targets is None:

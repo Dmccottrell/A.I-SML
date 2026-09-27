@@ -57,7 +57,7 @@ version of it.
 | `tokenizer.py` | library | `BPETokenizer.train/train_fast/encode/decode/save/load`, `merge_ids` | how text becomes numbers |
 | `model.py` | library | `TinyLM`, `Block`, `Attention` (with GQA + KV cache), `FeedForward`, `RMSNorm`, RoPE helpers, `load_checkpoint` | the neural network itself |
 | `prepare_data.py` | script | `encode_split`, `encode_story`, `init_worker` | how the v1 dataset is built |
-| `prepare_data_v2.py` | script | `SOURCES`, `train_tokenizer`, `encode_source`, `join_files` | how the v2 dataset is streamed, mixed and resumed |
+| `prepare_web_data.py` | script | `LOADERS`, `sources_for`, `train_tokenizer`, `encode_source`, `join_files` | how the v2/v3 datasets are streamed, mixed and resumed |
 | `train.py` | script | `get_batch`, `get_lr`, `estimate_loss`, `save_latest`, main loop | how the model learns (and pauses/resumes) |
 | `generate.py` | script | `continue_ids`, chat loop with memory | how the model writes text |
 | `make_chat_data.py` | script | `story_to_examples`, `build_examples`, `BASICS` | how v1 chat examples are made |

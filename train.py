@@ -22,9 +22,16 @@ PAUSE AND RESUME
     crash, restart or power cut (you lose at most `save_every` steps).
     Use --fresh to ignore latest.pt and start over.
 
+PILOT RUN (do this before any long run)
+    --pilot trains just a few dozen steps into a separate folder and reports
+    speed, GPU memory and the projected time for the full run. If it runs
+    out of memory, lower batch_size (and raise grad_accum) or turn on
+    grad_checkpoint in config.py, then pilot again. Nothing is saved.
+
 Usage:  python train.py                    (v1: checkpoints/dev/)
         python train.py --version v2       (v2: checkpoints/dev/v2/)
         python train.py --version v2 --fresh
+        python train.py --version v3 --pilot        (~60 steps, then a report)
 
 READING THE OUTPUT
     iter 100: loss 5.454  lr 6.06e-05  748ms/iter   <- every 50 iterations
@@ -44,6 +51,8 @@ from tokenizer import BPETokenizer
 p = argparse.ArgumentParser()
 add_version_arg(p)
 p.add_argument("--fresh", action="store_true", help="ignore latest.pt and start from scratch")
+p.add_argument("--pilot", type=int, nargs="?", const=60, default=0,
+               help="trial run of N steps (default 60) that reports speed, memory and full-run time")
 args = p.parse_args()
 V = get_version(args.version)
 S = V.train                      # training settings for this version
@@ -51,6 +60,9 @@ S = V.train                      # training settings for this version
 # ---------------- settings ----------------
 DATA_DIR = V.data_dir
 OUT_DIR = V.ckpt_dir
+if args.pilot:
+    OUT_DIR = os.path.join(V.ckpt_dir, "pilot")   # never touches the real checkpoints
+    args.fresh = True
 BEST_PATH = os.path.join(OUT_DIR, "ckpt.pt")      # best val loss so far (use this one)
 LATEST_PATH = os.path.join(OUT_DIR, "latest.pt")  # most recent state (for resuming)
 
@@ -113,7 +125,9 @@ def get_lr(it):
 
 
 model = TinyLM(cfg).to(device)
-print(f"{V.name}: {model.num_params()/1e6:.1f}M parameters on {device}")
+model.grad_checkpoint = S.grad_checkpoint
+print(f"{V.name}: {model.num_params()/1e6:.1f}M parameters on {device}"
+      + ("  (gradient checkpointing on)" if S.grad_checkpoint else ""))
 
 # Weight decay on matrices only (not norms)
 decay = [p for n, p in model.named_parameters() if p.dim() >= 2]
@@ -188,10 +202,11 @@ if os.path.exists(LATEST_PATH) and not args.fresh:
 # ============================== main training loop ==============================
 t0 = time.time()
 it = start_iter
+pilot_times = []                 # seconds per iteration, for the pilot report
 try:
     for it in range(start_iter, S.max_iters + 1):
         # Save a resume point regularly (the state BEFORE doing iteration `it`)
-        if it > start_iter and it % S.save_every == 0:
+        if it > start_iter and it % S.save_every == 0 and not args.pilot:
             save_latest(it)
 
         # Set this iteration's learning rate
@@ -202,7 +217,7 @@ try:
         if it % S.eval_every == 0:
             losses = estimate_loss()
             print(f"step {it}: train {losses['train']:.3f}  val {losses['val']:.3f}")
-            if losses["val"] < best_val:
+            if losses["val"] < best_val and not args.pilot:
                 best_val = losses["val"]
                 save_atomic({"model": model.state_dict(), "config": cfg.__dict__,
                              "iter": it, "val_loss": best_val}, BEST_PATH)
@@ -210,11 +225,14 @@ try:
         # Gradient accumulation: run several small batches and add up their
         # gradients before one optimizer step. Acts like one big batch
         # without needing the memory for it.
+        t_iter = time.time()
         for micro in range(S.grad_accum):
             x, y = get_batch("train")
             with autocast:
                 _, loss = model(x, y)
             scaler.scale(loss / S.grad_accum).backward()   # gradients ADD UP across micro-batches
+        if args.pilot and it == start_iter:
+            pilot_first_loss = loss.item()
         scaler.unscale_(optimizer)
         # Gradient clipping: cap the total gradient size at 1.0 so one bad batch
         # can't throw the weights far off course.
@@ -223,14 +241,45 @@ try:
         scaler.update()
         optimizer.zero_grad(set_to_none=True)   # clear gradients for the next step
 
-        if it % 50 == 0:
+        if args.pilot:
+            if device == "cuda":
+                torch.cuda.synchronize()
+            pilot_times.append(time.time() - t_iter)
+            if it % 10 == 0:
+                print(f"pilot iter {it}: loss {loss.item():.3f}  {pilot_times[-1]*1000:.0f}ms/iter")
+            if it + 1 >= args.pilot:
+                break
+        elif it % 50 == 0:
             dt = time.time() - t0; t0 = time.time()
             print(f"iter {it}: loss {loss.item():.3f}  lr {get_lr(it):.2e}  {dt*1000/50:.0f}ms/iter")
 except KeyboardInterrupt:
+    if args.pilot:
+        sys.exit("\npilot stopped")
     # Ctrl+C: iteration `it` didn't finish, so resume will redo it
     optimizer.zero_grad(set_to_none=True)
     save_latest(it)
     print(f"\npaused at iteration {it}. Run the same command again to resume.")
+    sys.exit(0)
+except torch.cuda.OutOfMemoryError:
+    sys.exit(f"\nOUT OF GPU MEMORY at iteration {it}. In config.py ({V.name}): halve batch_size and "
+             "double grad_accum, or set grad_checkpoint=True, then try --pilot again.")
+
+if args.pilot:
+    steady = pilot_times[5:] or pilot_times       # skip the slow first few steps
+    sec = sum(steady) / len(steady)
+    tokens = S.batch_size * S.grad_accum * cfg.max_seq_len
+    evals = (S.max_iters // S.eval_every + 1) * 2 * S.eval_iters * sec / S.grad_accum
+    total_h = (sec * S.max_iters + evals) / 3600
+    print("\n==================== PILOT REPORT ====================")
+    print(f"model:          {V.name}, {model.num_params()/1e6:.1f}M parameters, "
+          f"grad_checkpoint={S.grad_checkpoint}")
+    print(f"speed:          {sec:.2f} s/iter = {tokens/sec/1e3:.1f}k tokens/s")
+    if device == "cuda":
+        print(f"GPU memory:     {torch.cuda.max_memory_reserved()/2**30:.1f} GB peak "
+              f"of {torch.cuda.get_device_properties(0).total_memory/2**30:.1f} GB")
+    print(f"loss:           {pilot_first_loss:.3f} -> {loss.item():.3f} (should be going down)")
+    print(f"full run:       {S.max_iters:,} iters ~ {total_h:.0f} hours ({total_h/24:.1f} days)")
+    print("=======================================================")
     sys.exit(0)
 
 save_latest(S.max_iters + 1)   # marks training as finished

@@ -9,7 +9,7 @@ version's test-sheet results decide what the next one focuses on.
 |---|---|---|---|---|---|
 | **v1** ✅ | Learn the pipeline | 30M | Tells children's stories; runs offline on the phone | RTX 4070, 4 hours | $0 |
 | **v2** 🛠️ | Knowledge | 88M | General Q&A, explanations, multi-turn chat | RTX 4070, ~20 hours | $0 |
-| **v3** | Accuracy | ~300M | Looks things up (RAG), says "I don't know", preference training | RTX 4070, ~1 week | $0 |
+| **v3** | Accuracy | ~400M | Looks things up (RAG), says "I don't know", preference training, basic code | RTX 4070, ~2–2.5 weeks | ~$15 electricity |
 | **v3.5** | Scale at home | **1B** | Same features as v3 on a much bigger brain | RTX 4070, ~3–4 months (pausable) | ~$100–120 electricity |
 | **v4** | Abilities | Best base so far (1B) | Specialist skill packs + router, tools, voice, own app | RTX 4070 | $0 |
 | **v5** | Scale | 3B | Genuinely capable assistant | Cloud (from scratch) **or** RTX 4070 (fine-tune an open 3B) | ~$1,500+ **or** $0 |
@@ -46,10 +46,12 @@ Goal: **accurate when it answers, honest when it doesn't.** No AI is completely 
 | **Look things up (RAG)** | Searches a local library (Wikipedia, your own documents) and answers from what it finds, naming the source | The biggest accuracy win: the model reads facts instead of trying to remember them |
 | **"I don't know" training** | Chat examples where the correct answer is admitting uncertainty | Fewer confident wrong answers |
 | **Preference training (DPO)** | Pairs of answers ("this one is better"); the model learns to prefer accurate, honest, helpful ones | The same idea the big labs use to make assistants helpful |
-| **Bigger brain (~300M)** | 3–4× v2 | More room for language and knowledge |
+| **Bigger brain (~400M)** | 394M: 1024 wide × 32 layers, 2,048-token memory, 32k vocabulary | More room for language and knowledge |
+| **Code in the training mix** | 10% Python (codeparrot-clean) | Basic code autocomplete and better structure/logic |
 | **Bigger test sheet** | More questions, plus scoring for "admitted uncertainty correctly" | Proves accuracy actually improved |
 
-Also: a `--pilot` option in `train.py` to run a slice of the steps before the full week-long run.
+Also: a `--pilot` option in `train.py` (speed, memory and finish-time report before the long run)
+and optional gradient checkpointing. Details and commands: [V3.md](V3.md).
 
 ---
 
