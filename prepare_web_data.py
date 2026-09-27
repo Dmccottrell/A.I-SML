@@ -11,7 +11,7 @@ WHAT THIS FILE DOES (run it once per version; it takes a while)
          tinystories- the v1 stories (already on your PC)
        How much of each is set per version in config.py (data_mix):
          v2: 80% fineweb, 15% wikipedia, 5% stories          ~2.8B tokens
-         v3: 72% fineweb, 15% wikipedia, 10% code, 3% stories ~8.6B tokens
+         v3: 72% fineweb, 15% wikipedia, 10% code, 3% stories ~12B tokens
     2. Trains the version's tokenizer on a sample of all sources
        -> <data_dir>/tokenizer.json
     3. Encodes the text into token IDs with all CPU cores, source by source,

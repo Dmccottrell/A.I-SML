@@ -119,7 +119,7 @@ VERSIONS = {
         export_dir=f"{EXPORT_DIR}/v3",
         vocab_size=32768,        # bigger vocabulary: better for code and varied text
         data_mix=(("fineweb", 0.72), ("wikipedia", 0.15), ("code", 0.10), ("tinystories", 0.03)),
-        data_tokens=8_600_000_000,
+        data_tokens=12_000_000_000,   # a little more than the 11.8B the steps below read
         tokenizer_sample_mb=40,
         model=ModelConfig(
             vocab_size=32768,
@@ -133,7 +133,8 @@ VERSIONS = {
         train=TrainSettings(
             batch_size=1,        # 1 x 2048 tokens per micro-batch (check memory with --pilot)
             grad_accum=128,      # effective batch = 128 sequences = ~262k tokens per step
-            max_iters=32_000,    # 32k steps x 262k tokens = ~8.4 billion tokens (~21 per parameter)
+            max_iters=45_000,    # 45k steps x 262k tokens = ~11.8 billion tokens (~30 per parameter):
+                                 # longer than "compute-optimal" (~21) for a better everyday model
             warmup_iters=1_000,
             lr_max=4e-4,         # a bit lower than v2: bigger models prefer gentler steps
             lr_min=4e-5,
