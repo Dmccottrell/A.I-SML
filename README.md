@@ -40,7 +40,7 @@ live in `config.py`.
 | `to_gguf.py` | 8 | Convert to GGUF with llama.cpp for phone apps |
 | `examples/chat_sample.jsonl` | 7 | Example fine-tuning data format |
 
-Where the project is heading: [`docs/ROADMAP.md`](docs/ROADMAP.md).
+Version side-by-side: [`docs/VERSIONS.md`](docs/VERSIONS.md). Where the project is heading: [`docs/ROADMAP.md`](docs/ROADMAP.md).
 
 New to the code? Start with [`docs/HOW_IT_WORKS.md`](docs/HOW_IT_WORKS.md). Every function also has a docstring explaining what it does.
 
