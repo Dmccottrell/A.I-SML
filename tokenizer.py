@@ -45,6 +45,18 @@ SPLIT_PATTERN = r"""'s|'t|'re|'ve|'m|'ll|'d| ?\p{L}+| ?\p{N}+| ?[^\s\p{L}\p{N}]+
 #   <|assistant|>  marks the start of the AI's reply (chat fine-tuning)
 SPECIAL_TOKENS = ["<|endoftext|>", "<|user|>", "<|assistant|>"]
 
+# v3+ also reserve tokens for planned features, so the tokenizer never has to
+# change later (changing it would mean retraining the model from scratch):
+#   <|system|>                          instructions ("You are a study helper", v4)
+#   <|notes|> ... <|end_notes|>         looked-up Wikipedia passages (v3 lookups)
+#   <|tool_call|> ... <|end_tool_call|> the model asking for a tool (v4)
+#   <|tool_result|> ... <|end_tool_result|>  what the tool answered (v4)
+#   <|reserved_0|> ... <|reserved_19|>  spare slots for features not planned yet
+EXTENDED_SPECIAL_TOKENS = SPECIAL_TOKENS + [
+    "<|system|>", "<|notes|>", "<|end_notes|>",
+    "<|tool_call|>", "<|end_tool_call|>", "<|tool_result|>", "<|end_tool_result|>",
+] + [f"<|reserved_{i}|>" for i in range(20)]
+
 
 def merge_ids(ids, pair, new_id):
     """Replace every occurrence of `pair` in `ids` with `new_id`.
@@ -109,7 +121,7 @@ class BPETokenizer:
         self.max_cache = 500_000
 
     # ---------------------------------------------------------------- training
-    def train(self, text, vocab_size, verbose=True):
+    def train(self, text, vocab_size, verbose=True, special_tokens=None):
         """Learn merges from `text` until the vocabulary has `vocab_size` tokens.
 
         Steps:
@@ -126,9 +138,11 @@ class BPETokenizer:
             text:       training text (one big string)
             vocab_size: final number of tokens, including 256 bytes + specials
             verbose:    print progress every 100 merges
+            special_tokens: list of special tokens (default: SPECIAL_TOKENS)
         """
-        assert vocab_size > 256 + len(SPECIAL_TOKENS)
-        num_merges = vocab_size - 256 - len(SPECIAL_TOKENS)
+        special_tokens = special_tokens or SPECIAL_TOKENS
+        assert vocab_size > 256 + len(special_tokens)
+        num_merges = vocab_size - 256 - len(special_tokens)
 
         # Count each distinct chunk once; this makes training much faster.
         chunk_counts = Counter(self.pattern.findall(text))
@@ -157,12 +171,12 @@ class BPETokenizer:
 
         # Special tokens take the IDs right after the last learned merge
         next_id = 256 + len(self.merges)
-        for i, tok in enumerate(SPECIAL_TOKENS):
+        for i, tok in enumerate(special_tokens):
             self.special[tok] = next_id + i
             self.vocab[next_id + i] = tok.encode("utf-8")
         self._cache = {}
 
-    def train_fast(self, text, vocab_size, verbose=True):
+    def train_fast(self, text, vocab_size, verbose=True, special_tokens=None):
         """Same result as train(), but fast enough for large, varied text (v2+).
 
         train() recounts EVERY pair after EVERY merge. That's fine for simple
@@ -179,9 +193,12 @@ class BPETokenizer:
         When several pairs tie for most frequent, the smallest pair wins
         (train() picks the first one it counted), so on ties the two methods
         can choose differently. Both produce a valid tokenizer.
+
+        special_tokens: list of special tokens (default: SPECIAL_TOKENS)
         """
-        assert vocab_size > 256 + len(SPECIAL_TOKENS)
-        num_merges = vocab_size - 256 - len(SPECIAL_TOKENS)
+        special_tokens = special_tokens or SPECIAL_TOKENS
+        assert vocab_size > 256 + len(special_tokens)
+        num_merges = vocab_size - 256 - len(special_tokens)
 
         chunk_counts = Counter(self.pattern.findall(text))
         chunks = [list(c.encode("utf-8")) for c in chunk_counts]
@@ -239,7 +256,7 @@ class BPETokenizer:
                 print(f"merge {m+1}/{num_merges}: {self.vocab[new_id]!r} ({count} uses)")
 
         next_id = 256 + len(self.merges)
-        for i, tok in enumerate(SPECIAL_TOKENS):
+        for i, tok in enumerate(special_tokens):
             self.special[tok] = next_id + i
             self.vocab[next_id + i] = tok.encode("utf-8")
         self._cache = {}

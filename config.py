@@ -20,6 +20,7 @@ To add another version, copy the latest entry in VERSIONS and change what you ne
 from dataclasses import dataclass, field
 
 from model import ModelConfig
+from tokenizer import EXTENDED_SPECIAL_TOKENS, SPECIAL_TOKENS
 from stage import CKPT_DIR, EXPORT_DIR
 
 
@@ -37,6 +38,14 @@ class TrainSettings:
     eval_iters: int = 50        # batches averaged per measurement
     save_every: int = 250       # write latest.pt (for pause/resume) every N steps
     grad_checkpoint: bool = False   # trade ~30% speed for much less GPU memory (needed for big models)
+    # Learning-rate schedule:
+    #   "cosine": warm up, then fade slowly for the whole run (v1, v2)
+    #   "wsd":    warm up, hold steady, then fade over the last `decay_frac`
+    #             of steps while reading the higher-quality "anneal" data (v3+)
+    schedule: str = "cosine"
+    decay_frac: float = 0.1
+    exam_every: int = 0         # mini-exam (500 HellaSwag questions) every N steps; 0 = off
+    compile: bool = False       # try torch.compile for speed (falls back automatically if unavailable)
 
 
 @dataclass
@@ -64,6 +73,12 @@ class Version:
     data_mix: tuple = ()        # (source name, share of tokens) pairs
     data_tokens: int = 0        # total training tokens to prepare
     tokenizer_sample_mb: float = 30   # text sample used to train the tokenizer
+    special_tokens: tuple = tuple(SPECIAL_TOKENS)   # the tokenizer's special tokens (see tokenizer.py)
+    decontaminate: bool = False  # skip training documents that contain test questions (benchmarks.py)
+    # "Study the best material last" (used with schedule="wsd"): a separate,
+    # higher-quality mix read while the learning rate fades at the end.
+    anneal_mix: tuple = ()
+    anneal_tokens: int = 0
 
 
 VERSIONS = {
@@ -124,6 +139,15 @@ VERSIONS = {
                   ("tinystories", 0.02)),
         data_tokens=12_000_000_000,   # a little more than the 11.8B the steps below read
         tokenizer_sample_mb=40,
+        # Reserve tokens for lookups, tools and system prompts now (see tokenizer.py)
+        special_tokens=tuple(EXTENDED_SPECIAL_TOKENS),
+        decontaminate=True,
+        # The last 10% of steps (~1.2B tokens) read this mix: top-rated web pages
+        # (FineWeb-Edu score 4-5), more Wikipedia and math. A second read of the
+        # best material, like reviewing the best textbooks right before an exam.
+        anneal_mix=(("fineweb_hq", 0.40), ("wikipedia", 0.30), ("math", 0.15), ("code", 0.10),
+                    ("tinystories", 0.05)),
+        anneal_tokens=1_300_000_000,
         model=ModelConfig(
             vocab_size=32768,
             dim=1024,
@@ -132,6 +156,7 @@ VERSIONS = {
             n_kv_heads=4,        # 4 query heads share each key/value head
             hidden_dim=2816,     # 11 x 256, so phones can use the smaller Q4_K format
             max_seq_len=2048,    # twice v2's memory
+            rope_theta=500_000.0,   # makes stretching the memory to 8k tokens easier later
         ),
         train=TrainSettings(
             batch_size=1,        # 1 x 2048 tokens per micro-batch (check memory with --pilot)
@@ -145,6 +170,10 @@ VERSIONS = {
             eval_iters=40,
             save_every=100,      # about every 15-20 minutes
             grad_checkpoint=False,   # turn on if --pilot runs out of memory
+            schedule="wsd",      # steady, then fade over the last 10% on the anneal data
+            decay_frac=0.1,
+            exam_every=2000,     # HellaSwag mini-exam: is it really getting smarter?
+            compile=True,        # tested by --pilot; turns itself off if it doesn't work
         ),
         finetune=FinetuneSettings(epochs=2, batch_size=4, lr=5e-5),
         chat_memory=True,

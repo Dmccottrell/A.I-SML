@@ -17,6 +17,10 @@ WHAT THIS FILE DOES (run it once per version; it takes a while)
        -> <data_dir>/tokenizer.json
     3. Encodes the text into token IDs with all CPU cores, source by source,
        and finally joins them into <data_dir>/train.bin and val.bin.
+    4. (v3+) Skips any document that contains a public test question
+       (HellaSwag, GSM8K), so test scores stay fair ("decontamination").
+    5. (v3+) Builds a separate, higher-quality "anneal" set in
+       <data_dir>/anneal/train.bin, read during the last 10% of training.
 
 IT CAN BE STOPPED AND RESTARTED
     Progress is saved after every batch (<data_dir>/<source>.progress.json).
@@ -31,7 +35,7 @@ Usage:
 
 Note: this downloads public *datasets* (text and code), not pretrained models.
 """
-import argparse, itertools, json, os, sys, time
+import argparse, hashlib, itertools, json, os, re, sys, time
 from multiprocessing import Pool
 
 import numpy as np
@@ -42,6 +46,8 @@ from tokenizer import BPETokenizer
 # Each worker process gets its own tokenizer (processes don't share memory).
 tok = None
 EOT = None
+TEST_NGRAMS = None   # set of hashed 13-word phrases from test questions (decontamination)
+NGRAM = 13
 
 
 # ------------------------------------------------------------------ sources
@@ -82,6 +88,24 @@ def load_code():
             yield row["content"]
 
 
+def load_fineweb_hq():
+    """FineWeb-Edu pages rated 4 or 5 (out of 5) for educational quality.
+
+    The best ~10% of the web pages, used for the "anneal" set that is read
+    while the learning rate fades at the end of training.
+    """
+    for text, score in _fineweb_rows():
+        if score >= 4:
+            yield text
+
+
+def _fineweb_rows():
+    from datasets import load_dataset
+    ds = load_dataset("HuggingFaceFW/fineweb-edu", name="sample-10BT", split="train", streaming=True)
+    for row in ds:
+        yield row["text"], row["int_score"]
+
+
 def load_math():
     """FineMath (4+ quality): web pages that explain math step by step.
 
@@ -100,21 +124,57 @@ LOADERS = {
     "wikipedia": load_wikipedia,
     "code": load_code,
     "math": load_math,
+    "fineweb_hq": load_fineweb_hq,
     "tinystories": load_tinystories,
 }
 
 
-def sources_for(V):
+def sources_for(V, mix=None):
     """[(name, loader, share), ...] for a version, from its data_mix in config.py."""
-    return [(name, LOADERS[name], share) for name, share in V.data_mix]
+    return [(name, LOADERS[name], share) for name, share in (mix or V.data_mix)]
+
+
+# ------------------------------------------------------------------ decontamination
+def _phrases(text):
+    """Yield every 13-word phrase in `text` as a number.
+
+    Words are lowercased letters/digits only, so punctuation and spacing
+    differences don't matter. A stable hash (blake2b) is used because
+    Python's built-in hash() differs between worker processes.
+    """
+    words = re.findall(r"[a-z0-9]+", text.lower())
+    for i in range(len(words) - NGRAM + 1):
+        digest = hashlib.blake2b(" ".join(words[i:i + NGRAM]).encode(), digest_size=8).digest()
+        yield int.from_bytes(digest, "little")
+
+
+def contains_test_question(text):
+    """True if the document shares any 13-word phrase with a test question."""
+    return any(h in TEST_NGRAMS for h in _phrases(text))
+
+
+def load_test_ngrams():
+    """Hashed 13-word phrases from HellaSwag and GSM8K (downloaded once, see benchmarks.py)."""
+    from benchmarks import test_texts
+    try:
+        texts = test_texts()
+    except Exception as e:
+        raise SystemExit(f"could not download the test sets for decontamination ({e}).\n"
+                         "Check your internet connection, or run with --no_decontam to skip this step.")
+    ngrams = set()
+    for t in texts:
+        ngrams.update(_phrases(t))
+    print(f"decontamination: {len(texts):,} test questions -> {len(ngrams):,} phrases to avoid")
+    return ngrams
 
 
 # ------------------------------------------------------------------ workers
-def init_worker(tok_path):
+def init_worker(tok_path, test_ngrams=None):
     """Runs once inside each worker process: load the tokenizer from disk."""
-    global tok, EOT
+    global tok, EOT, TEST_NGRAMS
     tok = BPETokenizer.load(tok_path)
     EOT = tok.special["<|endoftext|>"]
+    TEST_NGRAMS = test_ngrams
 
 
 def encode_doc(text):
@@ -122,12 +182,15 @@ def encode_doc(text):
 
     allow_special=False: web pages sometimes contain the literal text
     "<|endoftext|>"; it must NOT become the real control token.
+    Returns [] (skip it) if the document contains a test question.
     """
+    if TEST_NGRAMS and contains_test_question(text):
+        return []
     return tok.encode(text.strip(), allow_special=False) + [EOT]
 
 
 # ------------------------------------------------------------------ steps
-def train_tokenizer(out_dir, sample_chars, sources, vocab_size):
+def train_tokenizer(out_dir, sample_chars, sources, vocab_size, special_tokens=None):
     """Train the tokenizer on a sample mixed from all sources (by share)."""
     path = os.path.join(out_dir, "tokenizer.json")
     if os.path.exists(path):
@@ -143,13 +206,14 @@ def train_tokenizer(out_dir, sample_chars, sources, vocab_size):
                 break
         print(f"tokenizer sample: {name} {got/1e6:.1f}M characters")
     t = BPETokenizer()
-    t.train_fast("\n".join(parts), vocab_size)
+    t.train_fast("\n".join(parts), vocab_size, special_tokens=list(special_tokens or []) or None)
     t.save(path)
     print(f"saved {path}")
     return path
 
 
-def encode_source(name, loader, train_budget, val_budget, out_dir, tok_path, pool_size, batch_docs):
+def encode_source(name, loader, train_budget, val_budget, out_dir, tok_path, pool_size, batch_docs,
+                  test_ngrams=None):
     """Encode one source into <name>_train.bin / <name>_val.bin, resumably.
 
     The first documents fill the val file (val_budget tokens), the rest fill
@@ -163,7 +227,7 @@ def encode_source(name, loader, train_budget, val_budget, out_dir, tok_path, poo
     prog_path = os.path.join(out_dir, f"{name}.progress.json")
     train_path = os.path.join(out_dir, f"{name}_train.bin")
     val_path = os.path.join(out_dir, f"{name}_val.bin")
-    prog = {"docs": 0, "train_bytes": 0, "val_bytes": 0}
+    prog = {"docs": 0, "train_bytes": 0, "val_bytes": 0, "skipped": 0}
     if os.path.exists(prog_path):
         with open(prog_path) as f:
             prog = json.load(f)
@@ -177,13 +241,17 @@ def encode_source(name, loader, train_budget, val_budget, out_dir, tok_path, poo
 
     docs = itertools.islice(loader(), prog["docs"], None)   # skip what we already did
     t0, start_tokens = time.time(), n_train + n_val
-    with Pool(pool_size, initializer=init_worker, initargs=(tok_path,)) as pool:
+    prog.setdefault("skipped", 0)   # progress files from before decontamination existed
+    with Pool(pool_size, initializer=init_worker, initargs=(tok_path, test_ngrams)) as pool:
         while n_train < train_budget:
             batch = list(itertools.islice(docs, batch_docs))
             if not batch:
                 print(f"{name}: source ran out of text at {n_train:,} tokens")
                 break
             for ids in pool.map(encode_doc, batch, chunksize=64):
+                if not ids:
+                    prog["skipped"] += 1           # contained a test question
+                    continue
                 arr = np.array(ids, dtype=np.uint16)
                 if n_val < val_budget:
                     arr.tofile(fval); n_val += len(arr)
@@ -200,7 +268,8 @@ def encode_source(name, loader, train_budget, val_budget, out_dir, tok_path, poo
                   f"({rate/1e3:.0f}k tokens/s, ~{eta_h:.1f}h left)")
     ftrain.close(); fval.close()
     open(done_path, "w").close()
-    print(f"{name}: done ({n_train:,} train + {n_val:,} val tokens)")
+    skipped = f", {prog['skipped']:,} documents skipped (test questions)" if prog["skipped"] else ""
+    print(f"{name}: done ({n_train:,} train + {n_val:,} val tokens{skipped})")
 
 
 def join_files(out_dir, split, names):
@@ -231,26 +300,44 @@ def main(argv=None):
     p.add_argument("--sample_mb", type=float, default=None, help="tokenizer sample size (default: config.py)")
     p.add_argument("--workers", type=int, default=os.cpu_count())
     p.add_argument("--batch_docs", type=int, default=4000, help="documents per batch (progress is saved after each)")
+    p.add_argument("--no_decontam", action="store_true", help="don't skip documents containing test questions")
     a = p.parse_args(argv)
     V = get_version(a.version)
     sources = sources_for(V)
     a.total_tokens = a.total_tokens or V.data_tokens
     a.sample_mb = a.sample_mb or V.tokenizer_sample_mb
 
+    anneal_tokens = V.anneal_tokens
     out_dir = V.data_dir
     if a.test:
         out_dir = V.data_dir.rstrip("/") + "-test"
         a.total_tokens, a.val_tokens, a.sample_mb = 20_000_000, 1_000_000, 5
+        anneal_tokens = 2_000_000 if V.anneal_mix else 0
     os.makedirs(out_dir, exist_ok=True)
     print(f"building {a.total_tokens:,} tokens into {out_dir}/ with {a.workers} CPU workers")
 
-    tok_path = train_tokenizer(out_dir, int(a.sample_mb * 1e6), sources, V.vocab_size)
+    test_ngrams = load_test_ngrams() if V.decontaminate and not a.no_decontam else None
+    tok_path = train_tokenizer(out_dir, int(a.sample_mb * 1e6), sources, V.vocab_size, V.special_tokens)
     for name, loader, share in sources:
         encode_source(name, loader, int(a.total_tokens * share), int(a.val_tokens * share),
-                      out_dir, tok_path, a.workers, a.batch_docs)
+                      out_dir, tok_path, a.workers, a.batch_docs, test_ngrams)
     names = [name for name, _, _ in sources]
     join_files(out_dir, "val", names)
     join_files(out_dir, "train", names)
+
+    if V.anneal_mix:
+        # The "study the best material last" set: same tokenizer, its own folder
+        anneal_dir = os.path.join(out_dir, "anneal")
+        os.makedirs(anneal_dir, exist_ok=True)
+        print(f"building the anneal set: {anneal_tokens:,} tokens into {anneal_dir}/")
+        anneal_sources = sources_for(V, V.anneal_mix)
+        for name, loader, share in anneal_sources:
+            encode_source(name, loader, int(anneal_tokens * share), 0,
+                          anneal_dir, tok_path, a.workers, a.batch_docs, test_ngrams)
+            val_part = os.path.join(anneal_dir, f"{name}_val.bin")
+            if os.path.exists(val_part):
+                os.remove(val_part)           # the anneal set has no val split
+        join_files(anneal_dir, "train", [name for name, _, _ in anneal_sources])
     print("all done!")
 
 
