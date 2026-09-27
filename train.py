@@ -286,4 +286,9 @@ if args.pilot:
     sys.exit(0)
 
 save_latest(S.max_iters + 1)   # marks training as finished
-print(f"done. best val loss {best_val:.3f}, saved in {BEST_PATH}")
+# The FINAL weights: usually the best model, since the learning rate ends small.
+# (ckpt.pt keeps the best val score, but val scores are noisy by about +-0.05.)
+FINAL_PATH = os.path.join(OUT_DIR, "final.pt")
+save_atomic({"model": model.state_dict(), "config": cfg.__dict__,
+             "iter": S.max_iters, "val_loss": best_val}, FINAL_PATH)
+print(f"done. best val loss {best_val:.3f} (ckpt.pt); final weights saved in {FINAL_PATH}")

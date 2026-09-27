@@ -32,11 +32,33 @@ from tokenizer import BPETokenizer
 
 p = argparse.ArgumentParser()
 add_version_arg(p)
+p.add_argument("--base", default=None,
+               help="pretrained checkpoint to start from (default: the finished run's final weights)")
 args = p.parse_args()
 V = get_version(args.version)
 S = V.finetune
 
-BASE_CKPT = os.path.join(V.ckpt_dir, "ckpt.pt")   # the pretrained model to start from
+def pick_base():
+    """The pretrained checkpoint to fine-tune from.
+
+    Prefers the FINAL weights of a finished run over ckpt.pt (the best val
+    score): val scores are noisy, and the last steps (with the smallest
+    learning rate) usually give the best model even if val didn't show it.
+      1. final.pt (written by train.py when a run finishes)
+      2. latest.pt, if its run finished (older train.py didn't write final.pt)
+      3. ckpt.pt
+    """
+    final = os.path.join(V.ckpt_dir, "final.pt")
+    if os.path.exists(final):
+        return final
+    latest = os.path.join(V.ckpt_dir, "latest.pt")
+    if os.path.exists(latest) and torch.load(latest, map_location="cpu")["iter"] > V.train.max_iters:
+        return latest
+    return os.path.join(V.ckpt_dir, "ckpt.pt")
+
+
+BASE_CKPT = args.base or pick_base()   # the pretrained model to start from
+print(f"fine-tuning from {BASE_CKPT}")
 OUT_CKPT = os.path.join(V.ckpt_dir, "chat.pt")    # where the chat model is saved
 DATA = os.path.join(V.data_dir, "chat.jsonl")
 
