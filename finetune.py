@@ -4,8 +4,8 @@ finetune.py - Teach the pretrained model to answer in a chat format.
 WHAT THIS FILE DOES
     Pretraining (train.py) teaches the model language. Fine-tuning teaches it
     a FORMAT: when it sees <|user|> question <|assistant|>, write an answer and
-    then <|endoftext|>. It starts from ckpt.pt and saves chat.pt in the same
-    folder (see config.py).
+    then <|endoftext|>. It starts from the finished pretraining run's final
+    weights and saves chat.pt in the same folder (see config.py).
 
 Data: chat.jsonl in the version's data folder, one example per line, in
 either format (see chat.py):
@@ -18,10 +18,23 @@ A two-turn conversation becomes:
     mask:      0     0      0          1          1          0     0       0           1          1
 (mask 1 = "learn to write this", mask 0 = "just context, don't learn it")
 
+PAUSE AND RESUME
+    Press Ctrl+C to pause: it saves chat_latest.pt and stops. Run the same
+    command again to continue where it stopped. It also saves automatically
+    every ~10 minutes, so a crash or power cut loses at most a few minutes.
+    Use --fresh to ignore chat_latest.pt and start over.
+    (If chat.jsonl changes, the old resume point no longer matches: use --fresh.)
+
 Usage:  python finetune.py                 (v1: data/chat.jsonl)
         python finetune.py --version v2    (v2: data/v2/chat.jsonl)
+        python finetune.py --version v2 --fresh
+
+READING THE OUTPUT
+    epoch 0 step 5240/13162: loss 1.166  182ms/step  ~2.1h left
+    Lower loss is better. It jumps around between lines because every batch
+    of chats is different; watch the overall trend.
 """
-import argparse, json, os, random
+import argparse, json, os, random, sys, time
 
 import torch
 
@@ -34,6 +47,7 @@ p = argparse.ArgumentParser()
 add_version_arg(p)
 p.add_argument("--base", default=None,
                help="pretrained checkpoint to start from (default: the finished run's final weights)")
+p.add_argument("--fresh", action="store_true", help="ignore chat_latest.pt and start over")
 args = p.parse_args()
 V = get_version(args.version)
 S = V.finetune
@@ -57,9 +71,16 @@ def pick_base():
     return os.path.join(V.ckpt_dir, "ckpt.pt")
 
 
-BASE_CKPT = args.base or pick_base()   # the pretrained model to start from
-print(f"fine-tuning from {BASE_CKPT}")
-OUT_CKPT = os.path.join(V.ckpt_dir, "chat.pt")    # where the chat model is saved
+OUT_CKPT = os.path.join(V.ckpt_dir, "chat.pt")            # where the chat model is saved
+LATEST_PATH = os.path.join(V.ckpt_dir, "chat_latest.pt")  # resume point while fine-tuning
+SAVE_EVERY_SECONDS = 10 * 60                               # autosave interval
+resuming = os.path.exists(LATEST_PATH) and not args.fresh
+if resuming:
+    BASE_CKPT = LATEST_PATH
+    print(f"resuming fine-tuning from {LATEST_PATH}")
+else:
+    BASE_CKPT = args.base or pick_base()   # the pretrained model to start from
+    print(f"fine-tuning from {BASE_CKPT}")
 DATA = os.path.join(V.data_dir, "chat.jsonl")
 
 device = "cuda" if torch.cuda.is_available() else "cpu"
@@ -68,7 +89,7 @@ autocast = torch.autocast(device_type=device, dtype=dtype, enabled=(device == "c
 tok = BPETokenizer.load(os.path.join(V.data_dir, "tokenizer.json"))
 _, _, EOT = special_ids(tok)
 
-# Load the pretrained model
+# Load the pretrained model (or, when resuming, the half-finished chat model)
 model, ckpt = load_checkpoint(BASE_CKPT, device)
 cfg = model.cfg
 
@@ -109,24 +130,90 @@ def make_batch(batch):
     return x.to(device), y.to(device), m.to(device)
 
 
+def save_atomic(obj, path):
+    """torch.save to a temporary file, then rename it into place.
+
+    If the PC loses power mid-save, the previous file is still intact.
+    """
+    tmp = path + ".tmp"
+    torch.save(obj, tmp)
+    os.replace(tmp, path)
+
+
+def save_latest(epoch, step):
+    """Save everything needed to resume at batch `step` of `epoch`."""
+    save_atomic({"model": model.state_dict(), "optimizer": optimizer.state_dict(),
+                 "config": cfg.__dict__, "epoch": epoch, "step": step,
+                 "num_examples": len(examples), "base": BASE_CKPT}, LATEST_PATH)
+
+
+def epoch_order(epoch):
+    """The shuffled order of examples for one epoch.
+
+    Seeded by the epoch number, so a resumed run sees exactly the same order
+    and can skip the batches it already did.
+    """
+    order = list(range(len(examples)))
+    random.Random(1234 + epoch).shuffle(order)
+    return order
+
+
 # ---- training loop: same idea as train.py, but over the chat examples ----
 # Small learning rate so the model learns the chat format without
 # forgetting the language it already knows.
 optimizer = torch.optim.AdamW(model.parameters(), lr=S.lr, weight_decay=0.0)
-model.train()
 steps_per_epoch = (len(examples) + S.batch_size - 1) // S.batch_size
-for epoch in range(S.epochs):              # one epoch = one pass over all examples
-    random.shuffle(examples)
-    for step in range(0, len(examples), S.batch_size):
-        x, y, m = make_batch(examples[step:step + S.batch_size])
-        with autocast:
-            _, loss = model(x, y, loss_mask=m)
-        loss.backward()
-        torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
-        optimizer.step()
-        optimizer.zero_grad(set_to_none=True)
-        if (step // S.batch_size) % 20 == 0:
-            print(f"epoch {epoch} step {step // S.batch_size}/{steps_per_epoch}: loss {loss.item():.3f}")
+start_epoch, start_step = 0, 0
+if resuming:
+    if ckpt.get("num_examples") != len(examples):
+        sys.exit(f"{DATA} has changed since this fine-tuning run started "
+                 f"({ckpt.get('num_examples')} examples then, {len(examples)} now).\n"
+                 "Use --fresh to start over with the new data.")
+    optimizer.load_state_dict(ckpt["optimizer"])
+    start_epoch, start_step = ckpt["epoch"], ckpt["step"]
+    print(f"continuing at epoch {start_epoch} step {start_step}/{steps_per_epoch}")
+del ckpt                                   # free memory: the weights are in the model now
 
-torch.save({"model": model.state_dict(), "config": cfg.__dict__}, OUT_CKPT)
+model.train()
+total_steps = S.epochs * steps_per_epoch
+done_steps = start_epoch * steps_per_epoch + start_step
+# The resume point: the next (epoch, step) that hasn't been done yet
+next_epoch, next_step = start_epoch, start_step
+t_last_save = t_log = time.time()
+steps_since_log = 0
+try:
+    for epoch in range(start_epoch, S.epochs):   # one epoch = one pass over all examples
+        order = epoch_order(epoch)
+        first = start_step if epoch == start_epoch else 0
+        for step in range(first, steps_per_epoch):
+            if time.time() - t_last_save > SAVE_EVERY_SECONDS:
+                save_latest(epoch, step)            # the state BEFORE doing this step
+                t_last_save = time.time()
+            idx = order[step * S.batch_size:(step + 1) * S.batch_size]
+            x, y, m = make_batch([examples[i] for i in idx])
+            with autocast:
+                _, loss = model(x, y, loss_mask=m)
+            loss.backward()
+            torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
+            optimizer.step()
+            optimizer.zero_grad(set_to_none=True)
+            next_epoch, next_step = (epoch, step + 1) if step + 1 < steps_per_epoch else (epoch + 1, 0)
+            done_steps += 1
+            steps_since_log += 1
+            if step % 20 == 0:
+                ms = (time.time() - t_log) * 1000 / steps_since_log
+                t_log, steps_since_log = time.time(), 0
+                hours_left = ms * (total_steps - done_steps) / 3.6e6
+                print(f"epoch {epoch} step {step}/{steps_per_epoch}: loss {loss.item():.3f}  "
+                      f"{ms:.0f}ms/step  ~{hours_left:.1f}h left")
+except KeyboardInterrupt:
+    # Ctrl+C: save the first step that hasn't finished; resume redoes it
+    optimizer.zero_grad(set_to_none=True)
+    save_latest(next_epoch, next_step)
+    print(f"\npaused at epoch {next_epoch} step {next_step}. Run the same command again to resume.")
+    sys.exit(0)
+
+save_atomic({"model": model.state_dict(), "config": cfg.__dict__}, OUT_CKPT)
+if os.path.exists(LATEST_PATH):
+    os.remove(LATEST_PATH)                 # finished: the next run starts fresh
 print("saved", OUT_CKPT)
