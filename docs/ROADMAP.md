@@ -8,7 +8,7 @@ version's test-sheet results decide what the next one focuses on.
 | Version | Theme | Brain | Main new abilities | Where it trains | Cost |
 |---|---|---|---|---|---|
 | **v1** ✅ | Learn the pipeline | 30M | Tells children's stories; runs offline on the phone | RTX 4070, 4 hours | $0 |
-| **v2** 🛠️ | Knowledge | 88M | General Q&A, explanations, multi-turn chat | RTX 4070, ~20 hours | $0 |
+| **v2** ✅ | Knowledge | 88M | General Q&A, explanations, multi-turn chat | RTX 4070, ~20 hours | $0 |
 | **v3** | Accuracy | ~400M | Looks things up (RAG), says "I don't know", preference training, basic code | RTX 4070, ~2.5–3 weeks | ~$20 electricity |
 | **v3.5** | Scale at home | **1B** | Same features as v3 on a much bigger brain | RTX 4070, ~3–4 months (pausable) | ~$100–120 electricity |
 | **v4** | Abilities | Best base so far (1B) | Specialist skill packs + router, tools, voice, own app | RTX 4070 | $0 |
@@ -95,7 +95,7 @@ questions.jsonl ─► teacher (7B open model, llama.cpp on the 4070) ─► ans
 
 ---
 
-## v2: Knowledge (in progress)
+## v2: Knowledge ✅
 
 88M-parameter model trained on ~2.8B tokens (80% FineWeb-Edu, 15% Wikipedia, 5% TinyStories),
 fine-tuned on ~105k multi-turn conversations. Details: [V2.md](V2.md).
