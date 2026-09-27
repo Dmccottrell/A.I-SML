@@ -33,7 +33,9 @@ v5 goes back to a bigger brain (3B), and it's the first version that needs the c
 | **Training time (RTX 4070)** | **~4 hours** | **~20 hours** | **~18 days** (~23 with gradient checkpointing) | **~3–4 months** (pausable) | **< 1 hour per skill pack** + writing the app code | Doesn't fit in 12 GB: **cloud, ~4–7 days on 8 rented GPUs** |
 | Cost | < $1 | ~$1 | ~$20 | ~$100–120 | < $5 | **~$800–2,500** cloud rental (or $0, see below) |
 | Chat fine-tuning | 5k single messages, ~10 min | ~105k multi-turn chats, ~1–2 hrs | Multi-turn + lookup + "I don't know" data | Same as v3 | Skill packs (LoRA) + router + tool-use examples | Everything from v3–v4, redone on the 3B brain |
-| New code needed | — | Pause/resume, KV cache | Pilot runs, gradient checkpointing | 8-bit optimizer | Router, tools, voice, coding harness, app/website | Multi-GPU training (FSDP), streaming data shards |
+| Teacher model (a bigger open AI helping) | — | — (its chat data was partly written by bigger AIs) | **Yes:** a ~7B open model on the 4070 writes lookup and "I don't know" examples and grades answers for DPO | Same, more data | Writes skill-pack and tool-use examples | Same, bigger teacher possible in the cloud |
+| Main tools added | PyTorch, CUDA, llama.cpp | Hugging Face `datasets` | Keyword search (SQLite FTS5), FAISS (optional), lm-evaluation-harness, TensorBoard, 8-bit optimizer (optional) | bitsandbytes (8-bit optimizer) | LoRA, tool calling, web search, Whisper + Piper (voice) | FSDP (multi-GPU) |
+| New code needed | — | Pause/resume, KV cache | Pilot runs, gradient checkpointing, lookup index, teacher script, DPO | 8-bit optimizer | Router, tools, voice, coding harness, app/website | Multi-GPU training (FSDP), streaming data shards |
 
 v1 read its small dataset about **2.8 times over**; v2 and v3 read their data about once, which is
 better for learning general knowledge.
@@ -68,6 +70,55 @@ data, and kids' stories are far easier to predict than Wikipedia and code. The t
 | Tools (calculator, date, your files, reminders) | ❌ | ❌ | ❌ | ❌ | ✅ | ✅ Uses tools more reliably |
 | Voice (talk and listen) | ❌ | ❌ | ❌ | ❌ | ✅ With small speech models alongside | ✅ |
 | Where you use it | PocketPal | PocketPal | PocketPal | PocketPal | ✅ **Your own website and app** | Phone (Q4) + server-hosted website |
+
+## v3 up close: lookups and the teacher
+
+v3 phase 2 turns the model into a **system**: our code finds facts, and the model learns to answer
+from them. Planned, not built yet (after v2 is finished).
+
+### What a chat will look like
+
+```
+You:  When did the Titanic sink?
+
+      (our code searches the saved Wikipedia copy and finds:
+       "RMS Titanic ... sank in the early hours of 15 April 1912 after striking an iceberg...")
+
+AI:   The Titanic sank on 15 April 1912, a few hours after hitting an iceberg in the
+      North Atlantic. (Source: Wikipedia, "RMS Titanic")
+```
+
+And when the notes don't have the answer:
+
+```
+You:  What did I have for breakfast?
+AI:   I don't know. That isn't something I can look up, and I don't have any notes about it.
+```
+
+### How it works
+
+```
+question ─► search the Wikipedia index ─► top 3 passages ("notes")
+                                                │
+            <|user|> Notes: ... Question: ... <|assistant|>  ─► model answers from the notes
+```
+
+The model is trained on examples in exactly that shape, so it learns to **read the notes first**,
+use them, name the source, and say "I don't know" when the notes don't cover the question.
+
+### Where the training examples come from (the teacher)
+
+| Step | What happens | Where | Time and cost |
+|---|---|---|---|
+| 1. Build the index | Wikipedia split into passages, stored in a SQLite keyword-search index | PC | A few hours, free |
+| 2. Pick questions | Thousands of questions, from smol-smoltalk and generated from Wikipedia titles | PC | Minutes |
+| 3. Teacher answers | A ~7B open model (llama.cpp) reads the notes and writes the answer. Some notes are swapped for unrelated ones, so the right answer is "I don't know" | PC (4070) | ~1–2 days for ~50,000 answers, a few dollars of power |
+| 4. Filter | Drop answers that are wrong, too long, or don't use the notes | PC | Minutes |
+| 5. Fine-tune | The new examples join v3's chat data | PC | A few hours |
+| 6. DPO (phase 3) | v3 answers each question twice; the teacher picks the better one; v3 learns from the pairs | PC | ~1–2 days |
+
+**On the phone:** the full Wikipedia index is ~20+ GB, so the phone gets a smaller one (the opening
+sections of the most-read articles, ~1–2 GB). The PC version uses the full index.
 
 ## The v4 jump: what you should see
 
