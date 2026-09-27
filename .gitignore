@@ -2,6 +2,7 @@
 data/
 checkpoints/
 export/
+models/
 *.gguf
 *.bin
 *.pt

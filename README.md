@@ -62,6 +62,9 @@ data, code and training.
 | `finetune.py` | 7 | Teach it a chat format using the version's `chat.jsonl`. Ctrl+C pauses; run again to resume |
 | `evaluate.py` + `eval/prompts.jsonl` | 6–7 | 20-question test sheet that scores a chat model |
 | `exam.py` | 6 | HellaSwag, a public common-sense test (works on pretrained models; compare versions) |
+| `wiki_index.py` | v3 | Searchable copy of Wikipedia for lookups (build + search) |
+| `make_teacher_data.py` | v3 | The teacher model (Qwen2.5-7B via llama.cpp) writes practice examples |
+| `make_chat_data_v3.py` | 7 | v3: chat lessons that fix v2's mistakes (lookups, "I don't know", corrections, instructions, topic switches) |
 | `benchmarks.py` | 4–6 | Downloads the public test sets (HellaSwag, GSM8K), used by `exam.py` and to keep them out of training data |
 | `export_hf.py` | 8 | Save in standard Llama layout (safetensors + tokenizer.json) |
 | `to_gguf.py` | 8 | Convert to GGUF with llama.cpp for phone apps |
