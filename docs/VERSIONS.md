@@ -24,7 +24,7 @@ v5 goes back to a bigger brain (3B), and it's the first version that needs the c
 | | **v1** | **v2** | **v3** | **v3.5** | **v4** | **v5** |
 |---|---|---|---|---|---|---|
 | **Data to prepare** | 467M tokens (TinyStories) | 2.8B tokens | **12B tokens** | **~20B tokens** | Skill datasets: a few thousand examples per skill | **~60B tokens** |
-| Data mix | 100% children's stories | 80% web, 15% Wikipedia, 5% stories | 63% web, 20% Wikipedia, 10% Python, 5% math, 2% stories | Like v3, bigger slice | Study, stories, IT help, fact checking, coding, tool use | Like v3.5, much bigger slice (plus more code and math) |
+| Data mix | 100% children's stories | 80% web, 15% Wikipedia, 5% stories | 63% web, 20% Wikipedia, 10% Python, 5% math, 2% stories | Same mix as v3; web from FineWeb-Edu's bigger `sample-100BT` slice so nothing repeats | Study, stories, IT help, fact checking, coding, tool use | Like v3.5, much bigger slice (plus more code and math) |
 | Disk space | ~1 GB | ~6 GB | ~24 GB | ~40 GB | < 1 GB | ~120 GB |
 | Batch per step | 65,536 tokens | 131,072 tokens | 262,144 tokens | 262,144 tokens | Small (fine-tuning) | ~1M tokens (across several GPUs) |
 | **Steps** | 20,000 | 20,000 | **45,000** | **~76,000** | ~1–2k per skill pack | **~60,000** |
@@ -33,12 +33,17 @@ v5 goes back to a bigger brain (3B), and it's the first version that needs the c
 | **Training time (RTX 4070)** | **~4 hours** | **~20 hours** | **~18 days** (~23 with gradient checkpointing) | **~3–4 months** (pausable) | **< 1 hour per skill pack** + writing the app code | Doesn't fit in 12 GB: **cloud, ~4–7 days on 8 rented GPUs** |
 | Cost | < $1 | ~$1 | ~$20 | ~$100–120 | < $5 | **~$800–2,500** cloud rental (or $0, see below) |
 | Chat fine-tuning | 5k single messages, ~10 min | ~105k multi-turn chats, ~1–2 hrs | Multi-turn + lookup + "I don't know" data | Same as v3 | Skill packs (LoRA) + router + tool-use examples | Everything from v3–v4, redone on the 3B brain |
-| Teacher model (a bigger open AI helping) | — | — (its chat data was partly written by bigger AIs) | **Yes:** a ~7B open model on the 4070 writes lookup and "I don't know" examples and grades answers for DPO | Same, more data | Writes skill-pack and tool-use examples | Same, bigger teacher possible in the cloud |
+| Teacher model (a bigger open AI helping) | — | — (its chat data was partly written by bigger AIs) | **Yes:** a ~7B open model on the 4070 writes lookup and "I don't know" examples and grades answers for DPO | Same, plus worked step-by-step math problems for the chat lessons | Writes skill-pack and tool-use examples | Same, bigger teacher possible in the cloud |
 | Main tools added | PyTorch, CUDA, llama.cpp | Hugging Face `datasets` | Keyword search (SQLite FTS5), FAISS (optional), lm-evaluation-harness, TensorBoard, 8-bit optimizer (optional) | bitsandbytes (8-bit optimizer) | LoRA, tool calling, web search, Whisper + Piper (voice) | FSDP (multi-GPU) |
 | New code needed | — | Pause/resume, KV cache | Pilot runs, gradient checkpointing, lookup index, teacher script, DPO | 8-bit optimizer | Router, tools, voice, coding harness, app/website | Multi-GPU training (FSDP), streaming data shards |
 
-v1 read its small dataset about **2.8 times over**; v2 and v3 read their data about once, which is
-better for learning general knowledge.
+v1 read its small dataset about **2.8 times over**; v2, v3 and v3.5 read their data about once, which is
+better for learning general knowledge. v3.5 needs ~12.6B tokens of web text, more than the 10B in
+the FineWeb-Edu slice v2 and v3 use, so it switches to the bigger `sample-100BT` slice. Its 20%
+Wikipedia share (~4B tokens) is about one full read of English Wikipedia.
+
+**Fair testing:** worked math problems for the chat lessons are written by the teacher model. The
+real GSM8K questions (a well-known math test) are kept for testing only, never for training.
 
 ## Results
 
@@ -65,7 +70,7 @@ data, and kids' stories are far easier to predict than Wikipedia and code. The t
 | Conversations | One message at a time | ✅ Remembers the chat | ✅ Longer conversations (2× memory) | ✅ Stays on topic longer | ✅ Remembers you between chats | ✅ Longer chats (4,096 tokens) |
 | Code | ❌ | ❌ | ⚠️ Basic Python autocomplete | ⚠️ Small functions | ✅ Coding helper: reads files, suggests fixes, runs tests | ✅ Real coding help: multi-file changes, explains code |
 | Answer quality and style | Basic | Basic | ✅ Improved by preference training | ✅ | ✅ Picks the right specialist per question | ✅ Clearly better |
-| Math | ❌ | ❌ | ⚠️ Some step-by-step math (5% math reading), still error-prone | ⚠️ Better, still error-prone | ✅ **Exact**, using a calculator tool | ✅ Exact with tools, word problems work |
+| Math | ❌ | ❌ | ⚠️ Some step-by-step math (5% math reading), still error-prone | ⚠️ Better: also learns from worked math problems, still error-prone | ✅ **Exact**, using a calculator tool | ✅ Exact with tools, word problems work |
 | Reasoning | ❌ | ❌ | ⚠️ Still weak | ⚠️ Better | ⚠️ Multi-step tasks in agent mode (still limited by 1B) | ✅ Decent multi-step reasoning for its size |
 | Tools (calculator, date, your files, reminders) | ❌ | ❌ | ❌ | ❌ | ✅ | ✅ Uses tools more reliably |
 | Voice (talk and listen) | ❌ | ❌ | ❌ | ❌ | ✅ With small speech models alongside | ✅ |
