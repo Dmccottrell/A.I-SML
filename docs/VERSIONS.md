@@ -1,13 +1,14 @@
 # Version Comparison
 
-All versions side by side. v1 is finished, v2 is training, and v3's groundwork is built.
-v3.5, v4 and v5 are planned: their numbers are estimates and will change once v3's results are in.
+All versions side by side. v1 is finished, v2's pretraining is finished, and v3's groundwork is built.
+v3.5, v4, v5, v6 and v6.5 are planned: their numbers are estimates and will change once v3's results are in.
 Details: [V2.md](V2.md), [V3.md](V3.md), [ROADMAP.md](ROADMAP.md). Settings live in `config.py`.
 
 **Two kinds of jumps:** v1 → v2 → v3 → v3.5 each give the model a **bigger brain and more to
 read**. v4 is different: it keeps v3.5's 1B brain and adds **abilities around it** (specialist
 skill packs, tools, voice, your own app). It's the jump from "a model" to "an assistant".
 v5 goes back to a bigger brain (3B), and it's the first version that needs the cloud.
+v6 (5B) and v6.5 (7B) keep growing toward medium size, mainly for the PC and online mode.
 
 ## Size and design
 
@@ -193,6 +194,27 @@ hours).
 What v5 **still won't** be: Claude or ChatGPT. Those are hundreds of times bigger. A 3B model is
 a capable personal assistant, not a replacement for them.
 
+## Beyond v5: v6 and v6.5 (future)
+
+Planned later, after v5. The phone keeps a small model for offline use; these power the PC and
+the app's online mode. Details: [ROADMAP.md](ROADMAP.md#v6-and-v65-bigger-small-5b--7b).
+
+| | **v5** | **v6** | **v6.5** |
+|---|---|---|---|
+| Class | Small | Bigger small | Borderline medium |
+| Brain | ~3B | **~5B** | **~7B** |
+| Shape | ~3072 wide × 28 layers | ~3584 wide × 36 layers | 4096 wide × 32 layers |
+| Memory (context) | 4,096 tokens | 8,192 tokens | 8,192 tokens |
+| Vocabulary | 65,536 | 65,536 (same, so it can grow from v5) | 65,536 |
+| Reading (minimum) | ~60B tokens | ~100B tokens | ~140B tokens |
+| Disk space | ~120 GB | ~200 GB | ~280 GB |
+| Training (cloud) | ~4–7 days on 8 GPUs | ~11 days on 8 GPUs | ~3 weeks on 8 GPUs |
+| Cost | ~$800–2,500 | ~$4,000–6,000 | ~$8,000–12,000 |
+| Cheaper routes | PC + cloud split, TPU grant, or fine-tune an open 3B | Grow from v5, grant, or fine-tune an open 5–8B | Grow from v6, grant, or fine-tune an open 7–8B |
+| Phone file (Q4) | ~1.8 GB | ~3 GB (high-end phones, slowly) | ~4–4.5 GB (mainly PC and server) |
+| Main role | Phone + PC | Best offline model for high-end phones; PC; online mode | PC and the app's online brain |
+| What you should see | Genuinely capable assistant | Clearly stronger reasoning, writing and coding; longer documents | The strongest version: closest to a "mini Claude" for everyday tasks, still far smaller than the real ones |
+
 ## In one line each
 
 - **v1:** a children's story-teller that runs on your phone
@@ -203,6 +225,8 @@ a capable personal assistant, not a replacement for them.
 - **v4:** a **personal assistant**: specialist skills, exact math with tools, coding help, voice,
   and your own app
 - **v5:** a **genuinely capable** 3B assistant: the first version trained in the cloud
+- **v6:** a **5B bigger small** model: stronger reasoning and coding, powering the PC and online mode
+- **v6.5:** a **7B borderline medium** model: the strongest version and the app's online brain
 
 ## Update log
 
@@ -216,3 +240,5 @@ Fill in real numbers as each version finishes:
 | v3.5 | | | |
 | v4 | — (same base as v3.5) | | |
 | v5 | | | |
+| v6 | | | |
+| v6.5 | | | |

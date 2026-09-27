@@ -13,6 +13,8 @@ version's test-sheet results decide what the next one focuses on.
 | **v3.5** | Scale at home | **1B** | Same features as v3 on a much bigger brain | RTX 4070, ~3–4 months (pausable) | ~$100–120 electricity |
 | **v4** | Abilities | Best base so far (1B) | Specialist skill packs + router, tools, voice, own app | RTX 4070 | $0 |
 | **v5** | Scale | 3B | Genuinely capable assistant | Cloud (from scratch) **or** RTX 4070 (fine-tune an open 3B) | ~$1,500+ **or** $0 |
+| **v6** | Bigger small | **5B** | Stronger reasoning, coding and knowledge; 8k memory; powers online mode | Cloud (or grown from v5) | ~$4,000–6,000 (less with growth or a grant) |
+| **v6.5** | Borderline medium | **7B** | The best model for PC and server; the app's online brain | Cloud (or grown from v6) | ~$8,000–12,000 (less with growth or a grant) |
 
 Guiding rules:
 - **Cheapest over fastest.** Time isn't a constraint, so everything that fits on the RTX 4070
@@ -47,7 +49,8 @@ Meta use). Each one is added when a version actually needs it, and several can s
 | **Tool calling (MCP-style)** | The model asks for a tool, our code runs it | v3 (lookups) → **v4** | v3's "look it up" is the first tool; v4 adds calculator, clock, files, web search |
 | **Whisper** (OpenAI, open source) | Speech-to-text | **v4** (can try any time) | Independent of the brain, so it can be tested early |
 | **Text-to-speech** (e.g. Piper) | Speaks the answers | **v4** | Small, offline, open source |
-| **FSDP** (inside PyTorch) | Splits training across many GPUs | Written during v3.5 → **v5** | Needed for 3B in the cloud |
+| **FSDP** (inside PyTorch) | Splits training across many GPUs | Written during v3.5 → **v5** | Needed for 3B in the cloud, and for v6/v6.5 |
+| **vLLM / llama.cpp server** | Serves a big model to many users at once | **v6** | The online mode's server |
 
 ---
 
@@ -236,6 +239,46 @@ disk shards, a larger tokenizer. v2's pause/resume and resumable data prep alrea
 
 **Hardware note:** past ~300–500M parameters, the 12GB RTX 4070 is the bottleneck. If an upgrade
 ever makes sense, VRAM matters most; a used RTX 3090 (24GB) is the best value.
+
+---
+
+## v6 and v6.5: Bigger small (5B → 7B)
+
+Goal: the step from "small" toward "medium". The **phone keeps a small model for offline use**,
+and these bigger models power the PC and the **online mode** of your app and website (the way
+Gemini runs a small model on phones and a big one in the cloud).
+
+| | **v6** | **v6.5** |
+|---|---|---|
+| Brain | **~5B** (~3584 wide × 36 layers) | **~7B** (4096 wide × 32 layers) |
+| Memory (context) | 8,192 tokens | 8,192 tokens |
+| Vocabulary | 65,536 (same as v5, so it can grow from v5) | 65,536 |
+| Reading (minimum, ~20 per parameter) | ~100B tokens (~200 GB of data) | ~140B tokens (~280 GB) |
+| Training | Cloud: ~2,000 H100-hours (~11 days on 8 GPUs) | Cloud: ~4,000 H100-hours (~3 weeks on 8 GPUs) |
+| Cost | **~$4,000–6,000** (less if grown from v5 or with a grant) | **~$8,000–12,000** (less if grown from v6 or with a grant) |
+| Phone file (Q4) | ~3 GB: high-end phones only, slowly | ~4–4.5 GB: mainly PC and server |
+| Runs on the RTX 4070 | ✅ Yes (Q4/Q8) | ✅ Yes (Q4/Q8) |
+| Chat fine-tuning at home | ✅ QLoRA fits in 12 GB | ✅ QLoRA fits in 12 GB |
+
+**Ways to keep the cost down:**
+- **Grow instead of starting over:** start v6 from v5's weights (copy and stack its layers,
+  "depth up-scaling"), and v6.5 from v6. This is why they share v5's tokenizer.
+- **Free compute grants:** Google's TPU Research Cloud and similar programs. A documented
+  project with results from v1–v5 is a strong application.
+- **The same PC + cloud split as v5:** data prep, pilots, chat training, DPO, skill packs,
+  testing and export at home; only pretraining is rented.
+- **The open-model route:** fine-tune an open 7–8B with QLoRA on the 4070 for ~$0, then add
+  your lookups, tools and app. Much smarter for the money, but the brain isn't trained by you.
+
+**Reading more makes them smarter.** The minimums above work, but open 7B models read ~1T+
+tokens. Reading 1T tokens would cost roughly 7–10× more, so it only makes sense with a grant.
+
+**Code needed:** everything from v5 (FSDP, streaming shards), plus model growth (up-scaling),
+longer-context training (8,192 tokens), and a server setup (llama.cpp server or vLLM) for the
+app's online mode.
+
+**Hardware note:** a used RTX 3090 (24 GB) would run v6.5 comfortably at Q8 and fine-tune it
+more easily, but the 4070 can already run both at Q4.
 
 ---
 
