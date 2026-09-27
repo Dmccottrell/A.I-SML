@@ -192,8 +192,10 @@ You ─► Router ─► Base ──┼─► Story writer    (the v1 skill)
   open source and offline, and run alongside the AI.
 - **Personal memory:** saved notes about you that it looks up in later chats.
 
-### Your own app
-See [Using your AI](#using-your-ai-apps) below.
+### Your own app (offline + online)
+One app and one website that work offline and online. See
+[Offline and online](#offline-and-online-the-goal-for-the-app-and-website) and
+[Using your AI](#using-your-ai-apps) below.
 
 ---
 
@@ -251,6 +253,26 @@ it. Build one only if you want your own name, look or features.
 | **Public website, AI runs on a server** | Any browser, anywhere | ✅ Medium | Like Claude.ai: a server runs the model. ~$5–20/month for a small CPU server, or a free tier such as Hugging Face Spaces. Needed for bigger models (3B) |
 | **Your own Android app** | Phone | ✅ Medium | Based on llama.cpp's Android example (Android Studio, Kotlin). Free to install on your own phone |
 | **Your own iPhone app** | Phone | ✅ Medium–hard | Needs a Mac + Xcode. Free for your own phone (re-sign weekly), or $99/year Apple developer account to keep it installed or publish |
+
+### Offline and online (the goal for the app and website)
+
+The finished app and website should work **both offline and online**, switching automatically:
+
+| | **Offline mode** (default) | **Online mode** (when connected and switched on) |
+|---|---|---|
+| Where the AI runs | On your device: the phone app, or in the browser on the website | Same device model, or a bigger model on a server (v5's 3B) |
+| Facts | Saved Wikipedia slice + your own notes | Plus **live web search** for news and anything recent |
+| Privacy | Nothing leaves the device | Search questions go to the search service; chats go to your server if it's used |
+| Works in airplane mode | ✅ Yes | ❌ Falls back to offline mode automatically |
+| Cost | $0 | Free tiers for search; ~$5–20/month if a server runs the bigger model |
+
+Design rule: **offline first.** Everything works without internet, and online mode only adds
+fresh facts and (later) a bigger brain. The app shows which mode it's in, and online mode is a
+switch the user controls.
+
+Built in steps: v3 gives offline lookups, v4 adds the web search tool and the online/offline
+switch in your own app and website, and v5 can add the server-hosted 3B for online mode while
+the phone keeps a Q4 copy for offline.
 
 Recommended order: **PocketPal (now) → llama.cpp web chat (instant PC version) → your own
 website, AI running in the browser (v4) → your own phone app (v4 or later) → server-hosted

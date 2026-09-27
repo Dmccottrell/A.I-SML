@@ -75,6 +75,7 @@ data, and kids' stories are far easier to predict than Wikipedia and code. The t
 | Tools (calculator, date, your files, reminders) | ❌ | ❌ | ❌ | ❌ | ✅ | ✅ Uses tools more reliably |
 | Voice (talk and listen) | ❌ | ❌ | ❌ | ❌ | ✅ With small speech models alongside | ✅ |
 | Where you use it | PocketPal | PocketPal | PocketPal | PocketPal | ✅ **Your own website and app** | Phone (Q4) + server-hosted website |
+| Offline / online | Offline | Offline | Offline (lookups from a saved Wikipedia copy) | Offline | ✅ **Both:** offline by default, online adds live web search; switches automatically | ✅ Both: offline on the phone (Q4), online can use the 3B on a server |
 
 ## v3 up close: lookups and the teacher
 
@@ -140,6 +141,8 @@ v3.5 → v4 won't feel like "smarter" the way v2 → v3 does. It will feel like 
   in later chats.
 - **Voice.** Speak to it and hear the answer. The speech parts are small separate models (open
   speech-to-text and text-to-speech), not your model.
+- **Offline and online.** Works fully offline by default. When connected and switched on, it adds
+  live web search, and falls back to offline automatically when the connection drops.
 - **Your own app.** A website that runs the model in the visitor's browser (free hosting), then an
   Android app, with your AI's name and look.
 
