@@ -26,6 +26,72 @@ Guiding rules:
 
 ---
 
+## Tools by version
+
+Free, open-source tools the wider AI world uses (PyTorch is the same core library OpenAI and
+Meta use). Each one is added when a version actually needs it, and several can start in v3.
+
+| Tool | What it does | Starts in | Notes |
+|---|---|---|---|
+| **PyTorch + CUDA** | The math engine and the GPU layer | ✅ v1 | Already the core of the project |
+| **Hugging Face `datasets`** | Streams huge public datasets | ✅ v2 | Already used by the data scripts |
+| **llama.cpp / GGUF** | Runs the model on phones and PCs | ✅ v1 | Already used for the phone file |
+| **Keyword search** (SQLite FTS5 / BM25) | Finds the right Wikipedia passage by its words | **v3** | No extra AI model needed, tiny, works offline on a phone. The simplest start for lookups |
+| **FAISS + sentence-transformers** | Finds passages by *meaning* ("heart pump" finds "cardiac muscle") | **v3** (upgrade) | Uses a small pretrained search model (~22M), only for searching; the brain stays yours |
+| **A local teacher model** (llama.cpp) | A bigger open model that writes practice data and grades answers | **v3** | See [Learning from a bigger AI](#learning-from-a-bigger-ai-distillation) |
+| **lm-evaluation-harness** | Standard AI exams (HellaSwag, ARC, GSM8K...) | **v3** | Works with `export_hf.py`'s output. Scores v2 and v3 on the same public tests |
+| **TensorBoard** | Live graphs of loss and speed while training | **v3** | Local and free. Handy for an 18-day run |
+| **bitsandbytes** (8-bit optimizer) | Cuts optimizer memory ~75% | v3 (optional) → **v3.5** (needed) | In v3 it could replace gradient checkpointing if the pilot runs out of memory, and it's a rehearsal for 1B |
+| **TRL-style DPO** | "Which answer is better" training | **v3** | Small enough to write ourselves, like the rest of the training code |
+| **PEFT / LoRA** | Small add-on skill packs | Try on v3 → **v4** | A first skill pack can be tested cheaply on v2/v3 |
+| **Tool calling (MCP-style)** | The model asks for a tool, our code runs it | v3 (lookups) → **v4** | v3's "look it up" is the first tool; v4 adds calculator, clock, files, web search |
+| **Whisper** (OpenAI, open source) | Speech-to-text | **v4** (can try any time) | Independent of the brain, so it can be tested early |
+| **Text-to-speech** (e.g. Piper) | Speaks the answers | **v4** | Small, offline, open source |
+| **FSDP** (inside PyTorch) | Splits training across many GPUs | Written during v3.5 → **v5** | Needed for 3B in the cloud |
+
+---
+
+## Learning from a bigger AI (distillation)
+
+A bigger AI (the **teacher**) helps train ours (the **student**). The student's brain is still
+trained from scratch by us; the teacher supplies better practice material. It's one of the
+biggest boosts for small models, and the teacher can run **on the RTX 4070** with llama.cpp, so
+it costs only electricity.
+
+### Three ways to learn from a teacher
+
+| Way | How it works | Fits this project? |
+|---|---|---|
+| **1. Teacher writes the practice** | We give the teacher thousands of questions; its answers become chat training data. It can also write "read these notes, then answer" and "I don't know" examples | ✅ **Yes, from v3.** v2 already learns partly this way: smol-smoltalk was written by bigger AIs |
+| **2. Teacher grades the answers** | Our model answers each question twice; the teacher picks the better answer. Those pairs feed DPO | ✅ **Yes, v3 phase 3** |
+| **3. Student copies the teacher's guesses** | During training, the student learns the teacher's full list of next-word guesses ("Paris 72%, Lyon 2%...") instead of only the right word | ❌ Not for now. It needs the same tokenizer as the teacher, and running both models at once |
+
+Way 3 is the classic form, but ways 1 and 2 get most of the benefit for much less work.
+
+### What it looks like in practice
+
+```
+questions.jsonl ─► teacher (7B open model, llama.cpp on the 4070) ─► answers
+                                                                       │
+                                  filter: drop wrong, too long or unsafe answers
+                                                                       │
+                                                                       ▼
+                                             chat.jsonl ─► finetune.py ─► student
+```
+
+- **Teacher size:** a ~7B open model as a Q4 GGUF fits in 12 GB and writes roughly 40–60 words a
+  second. With several answers in parallel, ~50,000 answers takes about a day or two, and costs a
+  few dollars of electricity.
+- **Pick a teacher whose license allows training on its outputs.** Good candidates use permissive
+  licenses such as Apache 2.0 (for example OLMo, Mistral 7B, Qwen2.5-7B, or OpenAI's gpt-oss).
+  Check each license before using it.
+- **Don't use the ChatGPT, Claude or Gemini APIs as teachers.** Their terms restrict using outputs
+  to build competing models.
+- **The student can't beat the teacher at what it copies**, and it copies the teacher's mistakes,
+  so filter the answers and keep lookups (RAG) for facts.
+
+---
+
 ## v2: Knowledge (in progress)
 
 88M-parameter model trained on ~2.8B tokens (80% FineWeb-Edu, 15% Wikipedia, 5% TinyStories),
@@ -50,6 +116,11 @@ Goal: **accurate when it answers, honest when it doesn't.** No AI is completely 
 | **Code in the training mix** | 10% Python (codeparrot-clean) | Basic code autocomplete and better structure/logic |
 | **Math in the training mix** | 5% FineMath (web pages that explain math step by step) | Better with numbers, word problems and step-by-step thinking |
 | **Bigger test sheet** | More questions, plus scoring for "admitted uncertainty correctly" | Proves accuracy actually improved |
+
+**Tools starting in v3:** keyword search for lookups (FAISS as an upgrade), a local teacher model
+that writes the lookup and "I don't know" examples and grades answers for DPO, standard AI exams
+(lm-evaluation-harness), TensorBoard graphs, and optionally the 8-bit optimizer. See
+[Tools by version](#tools-by-version).
 
 Also: a `--pilot` option in `train.py` (speed, memory and finish-time report before the long run)
 and optional gradient checkpointing. Details and commands: [V3.md](V3.md).
@@ -111,7 +182,8 @@ You ─► Router ─► Base ──┼─► Story writer    (the v1 skill)
   up-to-date facts. Off by default, so the AI stays private and offline unless you switch it on.
   Prefer trusted sites: a small model believes whatever it reads.
 - **Agent mode:** multi-step tasks ("read my notes, summarize them, make a to-do list").
-- **Voice:** speech-to-text in, text-to-speech out, using small speech models alongside the AI.
+- **Voice:** Whisper turns your voice into text and Piper reads the answer aloud. Both are small,
+  open source and offline, and run alongside the AI.
 - **Personal memory:** saved notes about you that it looks up in later chats.
 
 ### Your own app
