@@ -244,6 +244,14 @@ many thinly). With 1B parameters there's room for more:
 - **Data:** a permissively licensed multi-language code dataset (e.g. The Stack or StarCoder data).
   These require accepting their terms on Hugging Face and logging in with a token.
 
+**Built so far (tested on CPU with a tiny model; the real memory and speed need the RTX 4070 pilot):**
+- `v3.5` entry in `config.py` (1.036B parameters, 115,000 steps, `python train.py --version v3.5 --pilot`)
+- `offload_optim.py`: optimizer in system RAM (`optimizer="adamw_cpu"`); gives the same numbers as normal AdamW and resumes correctly
+- `checkpoint_every` setting: protect every block (1) or every 2nd block (2) with gradient checkpointing
+- `optimizer="adamw8bit"` (bitsandbytes) as a fallback (untested here)
+
+**Still to build:** multi-language code data, the bigger FineWeb-Edu slice, the new tokenizer, and the pilot runs.
+
 **Code needed** (added when we get there):
 - **CPU offload for the optimizer** (and the 8-bit optimizer, bitsandbytes, as a fallback), **plus gradient checkpointing** (all layers, or every other layer for about half the time cost): together they bring GPU memory to ~10–11 GB
 - **Gradient checkpointing**: saves working memory for ~30% more time

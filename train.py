@@ -186,18 +186,29 @@ def get_lr(it):
 
 model = TinyLM(cfg).to(device)
 model.grad_checkpoint = S.grad_checkpoint
+model.checkpoint_every = S.checkpoint_every
 print(f"{V.name}: {model.num_params()/1e6:.1f}M parameters on {device}"
-      + ("  (gradient checkpointing on)" if S.grad_checkpoint else ""))
+      + (f"  (gradient checkpointing on, every {S.checkpoint_every} block)" if S.grad_checkpoint else ""))
 
 # Weight decay on matrices only (not norms)
 decay = [p for n, p in model.named_parameters() if p.dim() >= 2]
 no_decay = [p for n, p in model.named_parameters() if p.dim() < 2]
 # AdamW: the optimizer (the rule for nudging weights). It keeps a running
 # average of each weight's gradients so updates are smooth and well-scaled.
-optimizer = torch.optim.AdamW(
-    [{"params": decay, "weight_decay": S.weight_decay},
-     {"params": no_decay, "weight_decay": 0.0}],
-    lr=S.lr_max, betas=(0.9, 0.95), fused=(device == "cuda"))
+groups = [{"params": decay, "weight_decay": S.weight_decay},
+          {"params": no_decay, "weight_decay": 0.0}]
+if S.optimizer == "adamw_cpu":
+    # Its memory lives in system RAM (see offload_optim.py): for models too big for the GPU
+    from offload_optim import CPUOffloadAdamW
+    optimizer = CPUOffloadAdamW(groups, lr=S.lr_max, betas=(0.9, 0.95))
+elif S.optimizer == "adamw8bit":
+    try:
+        import bitsandbytes as bnb
+    except ImportError:
+        sys.exit("optimizer 'adamw8bit' needs:  pip install bitsandbytes")
+    optimizer = bnb.optim.AdamW8bit(groups, lr=S.lr_max, betas=(0.9, 0.95))
+else:
+    optimizer = torch.optim.AdamW(groups, lr=S.lr_max, betas=(0.9, 0.95), fused=(device == "cuda"))
 # GradScaler only matters for float16 (stops tiny gradients rounding to zero);
 # it is switched off automatically with bfloat16.
 scaler = torch.amp.GradScaler(enabled=(dtype == torch.float16))
@@ -433,7 +444,7 @@ if args.pilot:
     total_h = (sec * S.max_iters + evals) / 3600
     print("\n==================== PILOT REPORT ====================")
     print(f"model:          {V.name}, {model.num_params()/1e6:.1f}M parameters, "
-          f"grad_checkpoint={S.grad_checkpoint}, compile={'on' if train_model is not model else 'off'}")
+          f"grad_checkpoint={S.grad_checkpoint}, optimizer={S.optimizer}, compile={'on' if train_model is not model else 'off'}")
     print(f"speed:          {sec:.2f} s/iter = {tokens/sec/1e3:.1f}k tokens/s")
     if device == "cuda":
         print(f"GPU memory:     {torch.cuda.max_memory_reserved()/2**30:.1f} GB peak "

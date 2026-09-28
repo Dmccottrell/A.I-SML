@@ -57,6 +57,7 @@ data, code and training.
 | `prepare_data_v2.py` | 4 | Shortcut for `prepare_web_data.py --version v2` |
 | `train.py` | 5 | Pretraining loop. Ctrl+C pauses; run again to resume |
 | `run_training.py` | 5 | Runs `train.py` and restarts it automatically after a crash (for long runs) |
+| `offload_optim.py` | 5 | AdamW that keeps its memory in system RAM, so a 1B model fits on a 12 GB GPU (v3.5) |
 | `docs/CLOUD.md` | - | How to rent a GPU and train there when your PC is off (or for big runs) |
 | `generate.py` | 6 | Generate text or chat with your model |
 | `make_chat_data.py` | 7 | v1: builds `data/chat.jsonl` fine-tuning examples automatically |

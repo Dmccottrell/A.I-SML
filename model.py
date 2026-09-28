@@ -264,7 +264,10 @@ class TinyLM(nn.Module):
         # for the backward pass. With checkpointing it keeps only each block's
         # input and recomputes the rest during backward: much less memory,
         # ~30% more compute. Needed to fit big models (1B) on a 12GB card.
+        # checkpoint_every=2 protects only every 2nd block: about half the memory
+        # saving for about half the extra time (1 = every block).
         self.grad_checkpoint = False
+        self.checkpoint_every = 1
 
         self.apply(self._init_weights)   # calls _init_weights on every sub-layer
         # Scale down the residual output layers (helps deep nets train stably)
@@ -299,7 +302,8 @@ class TinyLM(nn.Module):
         cos = self.rope_cos[start_pos:start_pos + T].to(x.dtype)
         sin = self.rope_sin[start_pos:start_pos + T].to(x.dtype)
         for i, block in enumerate(self.blocks):
-            if self.grad_checkpoint and self.training and caches is None:
+            if (self.grad_checkpoint and self.training and caches is None
+                    and i % self.checkpoint_every == 0):
                 x = checkpoint(block, x, cos, sin, use_reentrant=False)
             else:
                 x = block(x, cos, sin, None if caches is None else caches[i])
