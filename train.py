@@ -80,6 +80,8 @@ p.add_argument("--pilot", type=int, nargs="?", const=60, default=0,
 p.add_argument("--no_compile", action="store_true", help="don't try torch.compile")
 p.add_argument("--backup_dir", default=None, help="also copy latest.pt to this folder (e.g. another drive)")
 p.add_argument("--backup_every_hours", type=float, default=24)
+p.add_argument("--stop_at", type=float, default=0,
+               help="(used by run_training.py --window) save and stop after the step that ends past this time")
 args = p.parse_args()
 if args.backup_dir and not args.pilot:
     # Check the backup folder NOW, so a typo or a missing drive stops the run in seconds,
@@ -424,6 +426,12 @@ try:
             print(f"iter {it}: loss {loss.item():.3f}  lr {get_lr(it):.2e}  {dt*1000/50:.0f}ms/iter")
             log_metric(it, "loss", loss.item())
             log_metric(it, "lr", get_lr(it))
+
+        if args.stop_at and time.time() >= args.stop_at and it < S.max_iters:
+            # The run window is over: iteration `it` is done, so save and stop (resume starts at it + 1)
+            save_latest(it + 1)
+            print(f"\nrun window over: saved at iteration {it + 1}. Training resumes at the next window.")
+            sys.exit(75)                          # 75 = "paused on schedule" (run_training.py waits, then restarts)
 except KeyboardInterrupt:
     if args.pilot:
         sys.exit("\npilot stopped")
