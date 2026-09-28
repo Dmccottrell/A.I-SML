@@ -59,6 +59,7 @@ data, code and training.
 | `run_training.py` | 5 | Runs `train.py` and restarts it automatically after a crash (for long runs) |
 | `offload_optim.py` | 5 | AdamW that keeps its memory in system RAM, so a 1B model fits on a 12 GB GPU (v3.5) |
 | `docs/CLOUD.md` | - | How to rent a GPU and train there when your PC is off (or for big runs) |
+| `handoff.py` | 5 | Moves a training run between your PC and a rented cloud GPU (one command each way) |
 | `generate.py` | 6 | Generate text or chat with your model |
 | `make_chat_data.py` | 7 | v1: builds `data/chat.jsonl` fine-tuning examples automatically |
 | `make_chat_data_v2.py` | 7 | v2: builds `data/v2/chat.jsonl` (multi-turn conversations) |
