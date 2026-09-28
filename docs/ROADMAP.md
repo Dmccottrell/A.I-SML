@@ -556,6 +556,45 @@ planned yet.
 
 ---
 
+## One app for phone and PC (the plan for the website and app)
+
+Goal: the same AI, with the same name, chats and notes, on the phone and the PC, offline or online.
+
+**The trick: build the app once.** Write the chat screen and the "brain around the model" (chat
+format, lookups, notes, tools, effort levels) in **one web codebase (TypeScript/JavaScript)**, then
+package it several ways:
+
+| Where | How it's packaged | Model runs with |
+|---|---|---|
+| Website (any browser) | The site itself. Also **installable as an app** (a "PWA": works offline once the model file is cached) | wllama (llama.cpp in the browser) for small models; a server for bigger ones |
+| Android | Wrapped with **Capacitor** (same web code in an app shell) | llama.cpp through a native plugin |
+| Windows / Mac PC | Wrapped with **Tauri** (small) or Electron | llama.cpp (`llama-server`) or wllama |
+| iPhone | Same Capacitor wrapper; needs a Mac + Xcode ($99/year to keep installed) | llama.cpp |
+
+**Same files everywhere:** one `.gguf` per model size, exactly what `to_gguf.py` already makes. The
+chat format and prompts live in one shared file, so a chat behaves the same on every device.
+
+**Things that differ between phone and PC (decide early):**
+- **Wikipedia lookups:** the full index is ~10 GB, too big for a phone. Plan: the PC keeps the full
+  index; the phone gets a small one (the most-read few hundred thousand articles, ~1-2 GB) or, when
+  online, asks the PC/server to search. The "notes" format is the same either way.
+- **Model size per device:** the app picks the tier by device (Lite on phones, Standard/Pro on PCs), or
+  the router picks per question when online.
+- **Saved notes about you** are a plain text file, so syncing is simple: first **export/import**, then
+  optional sync through a small server or your own cloud storage. Everything stays yours; no accounts
+  are needed for offline use.
+- **Online mode:** a hard question can go to a bigger model on the PC (at home) or a server; the app
+  says so on screen ("answered by the big model"), so nothing happens silently.
+
+**Build order (cheapest first):**
+1. A chat page on the local llama.cpp web server (works today with v2/v3)
+2. The same page as a website with the model running in the browser, and as an installable PWA
+3. Wrap it for Android (Capacitor) and PC (Tauri)
+4. Notes sync + online mode + lookups against the small phone index
+5. iPhone build, if wanted
+
+---
+
 ## Using your AI (apps)
 
 "Production" means **the version you rely on day to day**. You don't have to build an app to use
