@@ -193,13 +193,13 @@ VERSIONS = {
         vocab_size=32768,
         # The bigger slice of educational web pages means no page is read twice. Wikipedia is
         # ~one full read of English Wikipedia (~4.5B tokens). Code covers several languages.
-        data_mix=(("fineweb", 0.63), ("wikipedia", 0.15), ("code", 0.13), ("math", 0.075),
+        data_mix=(("fineweb_100bt", 0.63), ("wikipedia", 0.15), ("code_multi", 0.13), ("math", 0.075),
                   ("tinystories", 0.015)),
         data_tokens=30_000_000_000,
         tokenizer_sample_mb=60,      # includes every code language
         special_tokens=tuple(EXTENDED_SPECIAL_TOKENS),
         decontaminate=True,
-        anneal_mix=(("fineweb_hq", 0.40), ("wikipedia", 0.25), ("math", 0.15), ("code", 0.15),
+        anneal_mix=(("fineweb_hq_100bt", 0.40), ("wikipedia", 0.25), ("math", 0.15), ("code_multi", 0.15),
                     ("tinystories", 0.05)),
         anneal_tokens=3_000_000_000,
         model=ModelConfig(
