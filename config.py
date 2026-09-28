@@ -38,6 +38,12 @@ class TrainSettings:
     eval_iters: int = 50        # batches averaged per measurement
     save_every: int = 250       # write latest.pt (for pause/resume) every N steps
     grad_checkpoint: bool = False   # trade ~30% speed for much less GPU memory (needed for big models)
+    checkpoint_every: int = 1       # with grad_checkpoint: protect every Nth block (2 = half the saving, half the extra time)
+    # Which optimizer holds AdamW's extra numbers:
+    #   "adamw":      on the GPU (fastest; v1-v3)
+    #   "adamw_cpu":  in system RAM (offload_optim.py): frees ~8 GB of GPU memory at 1B, needs ~17 GB of RAM
+    #   "adamw8bit":  on the GPU in 8-bit (bitsandbytes): a quarter of the memory, slightly different maths
+    optimizer: str = "adamw"
     # Learning-rate schedule:
     #   "cosine": warm up, then fade slowly for the whole run (v1, v2)
     #   "wsd":    warm up, hold steady, then fade over the last `decay_frac`
@@ -176,6 +182,55 @@ VERSIONS = {
             compile=True,        # tested by --pilot; turns itself off if it doesn't work
         ),
         finetune=FinetuneSettings(epochs=2, batch_size=4, lr=5e-5),
+        chat_memory=True,
+    ),
+    "v3.5": Version(
+        name="v3.5",
+        description="~1.05B assistant: v3's features on a bigger brain; reads 30B tokens incl. several code languages",
+        data_dir="data/v3.5",
+        ckpt_dir=f"{CKPT_DIR}/v3.5",
+        export_dir=f"{EXPORT_DIR}/v3.5",
+        vocab_size=32768,
+        # The bigger slice of educational web pages means no page is read twice. Wikipedia is
+        # ~one full read of English Wikipedia (~4.5B tokens). Code covers several languages.
+        data_mix=(("fineweb", 0.63), ("wikipedia", 0.15), ("code", 0.13), ("math", 0.075),
+                  ("tinystories", 0.015)),
+        data_tokens=30_000_000_000,
+        tokenizer_sample_mb=60,      # includes every code language
+        special_tokens=tuple(EXTENDED_SPECIAL_TOKENS),
+        decontaminate=True,
+        anneal_mix=(("fineweb_hq", 0.40), ("wikipedia", 0.25), ("math", 0.15), ("code", 0.15),
+                    ("tinystories", 0.05)),
+        anneal_tokens=3_000_000_000,
+        model=ModelConfig(
+            vocab_size=32768,
+            dim=2048,
+            n_layers=22,
+            n_heads=32,          # 64 dims per head
+            n_kv_heads=4,        # 8 query heads share each key/value head
+            hidden_dim=5632,     # 22 x 256, so phones can use the smaller Q4_K format
+            max_seq_len=2048,
+            rope_theta=500_000.0,
+        ),
+        train=TrainSettings(
+            batch_size=1,
+            grad_accum=128,      # 128 x 2048 = ~262k tokens per step
+            max_iters=115_000,   # 115k steps x 262k tokens = ~30 billion tokens
+            warmup_iters=2_000,
+            lr_max=3e-4,         # bigger model, gentler steps
+            lr_min=3e-5,
+            eval_every=1000,
+            eval_iters=40,
+            save_every=50,       # ~70-95 s per step, so about every 1-1.5 hours
+            grad_checkpoint=True,    # needed at 1B on a 12 GB card (see docs/ROADMAP.md)
+            checkpoint_every=1,      # the pilot decides: 2 is faster if memory allows
+            optimizer="adamw_cpu",   # optimizer memory lives in system RAM
+            schedule="wsd",
+            decay_frac=0.1,
+            exam_every=5000,
+            compile=True,
+        ),
+        finetune=FinetuneSettings(epochs=2, batch_size=2, lr=3e-5),
         chat_memory=True,
     ),
 }
