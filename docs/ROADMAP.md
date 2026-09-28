@@ -8,7 +8,7 @@ version's test-sheet results decide what the next one focuses on.
 | Version | Theme | Brain | Main new abilities | Where it trains | Cost |
 |---|---|---|---|---|---|
 | **v1** ✅ | Learn the pipeline | 30M | Tells children's stories; runs offline on the phone | RTX 4070, 4 hours | $0 |
-| **v2** ✅ | Knowledge | 88M | General Q&A, explanations, multi-turn chat | RTX 4070, ~20 hours | $0 |
+| **v2** ✅ | Knowledge | 88M | General Q&A, explanations, multi-turn chat | RTX 4070, ~18 hours | $0 |
 | **v3** 🛠️ | Accuracy | ~400M | Looks things up (RAG), says "I don't know", handles corrections, exact instructions, preference training, basic code | RTX 4070, ~2.5–3 weeks | ~$20 electricity |
 | **v3.5** | Scale at home | **1B** | Same features as v3 on a much bigger brain | RTX 4070, ~3–4 months (pausable) | ~$100–120 electricity |
 | **v4** | Abilities | Best base so far (1B) | Specialist skill packs + router, tools, voice, own app | RTX 4070 | $0 |
@@ -107,7 +107,7 @@ and has a test-sheet score recorded as the **baseline** for v3. ✅ All done.
 
 | Measure | Result |
 |---|---|
-| Val loss (pretraining) | 2.929 best, 2.984 final (20,000 steps, ~20 hours) |
+| Val loss (pretraining) | 2.929 best, 2.984 final (20,000 steps, ~17.5–18 hours; data prep ~30 minutes) |
 | Test sheet (`evaluate.py`) | **18/20** (identity 2/2, facts 7/8, explain 5/5, advice 2/2, writing 1/1, stories 1/2) |
 | HellaSwag (`exam.py`) | **28.4%** (random 25%, GPT-2 124M ~29–31%) |
 | Phone | 89 MB (Q8_0), ~210–245 tokens/second in PocketPal, fully offline |

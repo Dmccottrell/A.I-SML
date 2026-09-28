@@ -31,7 +31,7 @@ v6 (5B) and v6.5 (7B) keep growing toward medium size, mainly for the PC and onl
 | **Steps** | 20,000 | 20,000 | **45,000** | **~76,000** | ~1–2k per skill pack | **~60,000** |
 | Total reading | 1.3B tokens | 2.6B tokens | 11.8B tokens | ~20B tokens | No new pretraining | ~60B tokens |
 | Reading per parameter | ~44 | ~30 | ~30 | ~20 | — | ~20 |
-| **Training time (RTX 4070)** | **~4 hours** | **~20 hours** | **~18 days** (~23 with gradient checkpointing) | **~3–4 months** (pausable) | **< 1 hour per skill pack** + writing the app code | Doesn't fit in 12 GB: **cloud, ~4–7 days on 8 rented GPUs** |
+| **Training time (RTX 4070)** | **~4 hours** | **~17.5–18 hours** (measured; data prep ~30 min) | **~15–18 days** (estimated from v2: ~20× the work; the pilot run gives the exact time) | **~3–4 months** (pausable) | **< 1 hour per skill pack** + writing the app code | Doesn't fit in 12 GB: **cloud, ~4–7 days on 8 rented GPUs** |
 | Cost | < $1 | ~$1 | ~$20 | ~$100–120 | < $5 | **~$800–2,500** cloud rental (or $0, see below) |
 | Chat fine-tuning | 5k single messages, ~10 min | ~105k multi-turn chats, ~1–2 hrs | Multi-turn + lookup + "I don't know" data | Same as v3 | Skill packs (LoRA) + router + tool-use examples | Everything from v3–v4, redone on the 3B brain |
 | Teacher model (a bigger open AI helping) | — | — (its chat data was partly written by bigger AIs) | **Yes:** a ~7B open model on the 4070 writes lookup and "I don't know" examples and grades answers for DPO | Same, plus worked step-by-step math problems for the chat lessons | Writes skill-pack and tool-use examples | Same, bigger teacher possible in the cloud |
