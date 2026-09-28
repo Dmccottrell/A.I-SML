@@ -12,31 +12,31 @@ v6 (5B) and v6.5 (7B) keep growing toward medium size, mainly for the PC and onl
 
 ## Size and design
 
-| | **v1** ✅ | **v2** ✅ | **v3** 🧱 | **v3.5** (planned) | **v4** (planned) | **v5** (planned) |
-|---|---|---|---|---|---|---|
-| Parameters | 29.5M | 88M | 394M | **~1.05B** | ~1.05B base + skill packs (a few MB each) | **~3B** |
-| Shape | 512 wide × 8 layers | 768 wide × 12 layers | 1024 wide × 32 layers | 2048 wide × 22 layers | Same as v3.5 | ~3072 wide × 28 layers |
-| Memory (context) | 512 tokens | 1,024 tokens | 2,048 tokens | 2,048 tokens | 2,048 tokens + saved notes about you | 4,096 tokens |
-| Vocabulary | 8,192 | 16,384 | 32,768 | 32,768 | 32,768 | 65,536 |
-| Attention | Standard | Grouped-query (faster on phones) | Grouped-query | Grouped-query | Grouped-query | Grouped-query |
+|  | **v1** ✅ | **v2** ✅ | **v3** 🧱 | **v3.5** (planned) | **v4** (planned) | **v5** (planned) | **v6** (planned) | **v6.5** (planned) |
+|---|---|---|---|---|---|---|---|---|
+| Parameters | 29.5M | 88M | 394M | **~1.05B** | ~1.05B base + skill packs (a few MB each) | **~3B** | **~5B** | **~7B** |
+| Shape | 512 wide × 8 layers | 768 wide × 12 layers | 1024 wide × 32 layers | 2048 wide × 22 layers | Same as v3.5 | ~3072 wide × 28 layers | ~3584 wide × 36 layers | 4096 wide × 32 layers |
+| Memory (context) | 512 tokens | 1,024 tokens | 2,048 tokens | 2,048 tokens | 2,048 tokens + saved notes about you | 4,096 tokens | 8,192 tokens | 8,192 tokens |
+| Vocabulary | 8,192 | 16,384 | 32,768 | 32,768 | 32,768 | 65,536 | 65,536 | 65,536 |
+| Attention | Standard | Grouped-query (faster on phones) | Grouped-query | Grouped-query | Grouped-query | Grouped-query | Grouped-query | Grouped-query |
 
 ## Training
 
-| | **v1** | **v2** | **v3** | **v3.5** | **v4** | **v5** |
-|---|---|---|---|---|---|---|
-| **Data to prepare** | 467M tokens (TinyStories) | 2.8B tokens | **12B + 1.3B anneal** (done in 1h26m) | **30B + 3B anneal** (~3.5–5 hours) | Skill datasets: a few thousand examples per skill | **~60B tokens** |
-| Data mix | 100% children's stories | 80% web, 15% Wikipedia, 5% stories | 63% web, 20% Wikipedia, 10% Python, 5% math, 2% stories | 63% web, 15% Wikipedia, 13% code in **several languages** (Python, JavaScript, HTML/CSS, SQL, shell, C#/Java), 7.5% math, 1.5% stories; web from FineWeb-Edu's bigger `sample-100BT` slice so nothing repeats | Study, stories, IT help, fact checking, coding, tool use | Like v3.5, much bigger slice (plus more code and math) |
-| Disk space | ~1 GB | ~6 GB | ~27 GB | ~66 GB | < 1 GB | ~120 GB |
-| Batch per step | 65,536 tokens | 131,072 tokens | 262,144 tokens | 262,144 tokens | Small (fine-tuning) | ~1M tokens (across several GPUs) |
-| **Steps** | 20,000 | 20,000 | **45,000** | **~115,000** | ~1–2k per skill pack | **~60,000** |
-| Total reading | 1.3B tokens | 2.6B tokens | 11.8B tokens | 30B tokens | No new pretraining | ~60B tokens |
-| Reading per parameter | ~44 | ~30 | ~30 | ~29 | — | ~20 |
-| **Training time (RTX 4070)** | **~4 hours** | **~17.5–18 hours** (measured; data prep ~30 min) | **~15–18 days** (estimated from v2: ~20× the work; the pilot run gives the exact time) | **~4.5–5.5 months** (pausable) | **< 1 hour per skill pack** + writing the app code | Doesn't fit in 12 GB: **cloud, ~4–7 days on 8 rented GPUs** |
-| Cost | < $1 | ~$1 | ~$20 | ~$150–180 | < $5 | **~$800–2,500** cloud rental (or $0, see below) |
-| Chat fine-tuning | 5k single messages, ~10 min | ~105k multi-turn chats, ~1–2 hrs | Multi-turn + lookup + "I don't know" data | Same as v3 | Skill packs (LoRA) + router + tool-use examples | Everything from v3–v4, redone on the 3B brain |
-| Teacher model (a bigger open AI helping) | — | — (its chat data was partly written by bigger AIs) | **Yes:** a ~7B open model on the 4070 writes lookup and "I don't know" examples and grades answers for DPO | Same, plus worked step-by-step math problems for the chat lessons | Writes skill-pack and tool-use examples | Same, bigger teacher possible in the cloud |
-| Main tools added | PyTorch, CUDA, llama.cpp | Hugging Face `datasets` | Keyword search (SQLite FTS5), FAISS (optional), lm-evaluation-harness, TensorBoard, 8-bit optimizer (optional) | CPU offload for the optimizer (bitsandbytes as a fallback) | LoRA, tool calling, web search, Whisper + Piper (voice) | FSDP (multi-GPU) |
-| New code needed | — | Pause/resume, KV cache | Pilot runs, gradient checkpointing, lookup index, teacher script, DPO | CPU offload for the optimizer, multi-language code data | Router, tools, voice, coding harness, app/website | Multi-GPU training (FSDP), streaming data shards |
+|  | **v1** | **v2** | **v3** | **v3.5** | **v4** | **v5** | **v6** | **v6.5** |
+|---|---|---|---|---|---|---|---|---|
+| **Data to prepare** | 467M tokens (TinyStories) | 2.8B tokens | **12B + 1.3B anneal** (done in 1h26m) | **30B + 3B anneal** (~3.5–5 hours) | Skill datasets: a few thousand examples per skill | **~60B tokens** | **~100B tokens** (minimum) | **~140B tokens** (minimum) |
+| Data mix | 100% children's stories | 80% web, 15% Wikipedia, 5% stories | 63% web, 20% Wikipedia, 10% Python, 5% math, 2% stories | 63% web, 15% Wikipedia, 13% code in **several languages** (Python, JavaScript, HTML/CSS, SQL, shell, C#/Java), 7.5% math, 1.5% stories; web from FineWeb-Edu's bigger `sample-100BT` slice so nothing repeats | Study, stories, IT help, fact checking, coding, tool use | Like v3.5, much bigger slice (plus more code and math) | Like v5 (web, Wikipedia, multi-language code, math), bigger slice | Same as v6, bigger slice |
+| Disk space | ~1 GB | ~6 GB | ~27 GB | ~66 GB | < 1 GB | ~120 GB | ~200 GB | ~280 GB |
+| Batch per step | 65,536 tokens | 131,072 tokens | 262,144 tokens | 262,144 tokens | Small (fine-tuning) | ~1M tokens (across several GPUs) | ~1M tokens (across several GPUs) | ~1M tokens (across several GPUs) |
+| **Steps** | 20,000 | 20,000 | **45,000** | **~115,000** | ~1–2k per skill pack | **~60,000** | **~100,000** | **~140,000** |
+| Total reading | 1.3B tokens | 2.6B tokens | 11.8B tokens | 30B tokens | No new pretraining | ~60B tokens | ~100B tokens | ~140B tokens |
+| Reading per parameter | ~44 | ~30 | ~30 | ~29 | — | ~20 | ~20 | ~20 |
+| **Training time (RTX 4070)** | **~4 hours** | **~17.5–18 hours** (measured; data prep ~30 min) | **~15–18 days** (estimated from v2: ~20× the work; the pilot run gives the exact time) | **~4.5–5.5 months** (pausable) | **< 1 hour per skill pack** + writing the app code | Doesn't fit in 12 GB: **cloud, ~4–7 days on 8 rented GPUs** | Cloud: **~11 days on 8 GPUs** (~2,000 GPU-hours) | Cloud: **~3 weeks on 8 GPUs** (~4,000 GPU-hours) |
+| Cost | < $1 | ~$1 | ~$20 | ~$150–180 | < $5 | **~$800–2,500** cloud rental (or $0, see below) | **~$4,000–6,000** (less if grown from v5 or with a grant) | **~$8,000–12,000** (less if grown from v6 or with a grant) |
+| Chat fine-tuning | 5k single messages, ~10 min | ~105k multi-turn chats, ~1–2 hrs | Multi-turn + lookup + "I don't know" data | Same as v3 | Skill packs (LoRA) + router + tool-use examples | Everything from v3–v4, redone on the 3B brain | Same lessons; QLoRA fits on the 4070 | Same lessons; QLoRA fits on the 4070 |
+| Teacher model (a bigger open AI helping) | — | — (its chat data was partly written by bigger AIs) | **Yes:** a ~7B open model on the 4070 writes lookup and "I don't know" examples and grades answers for DPO | Same, plus worked step-by-step math problems for the chat lessons | Writes skill-pack and tool-use examples | Same, bigger teacher possible in the cloud | Same; the bigger tiers teach the smaller ones | Same |
+| Main tools added | PyTorch, CUDA, llama.cpp | Hugging Face `datasets` | Keyword search (SQLite FTS5), FAISS (optional), lm-evaluation-harness, TensorBoard, 8-bit optimizer (optional) | CPU offload for the optimizer (bitsandbytes as a fallback) | LoRA, tool calling, web search, Whisper + Piper (voice) | FSDP (multi-GPU) | vLLM or llama.cpp server (online mode) | Same as v6 |
+| New code needed | — | Pause/resume, KV cache | Pilot runs, gradient checkpointing, lookup index, teacher script, DPO | CPU offload for the optimizer, multi-language code data | Router, tools, voice, coding harness, app/website | Multi-GPU training (FSDP), streaming data shards | Model growth (up-scaling from v5), 8k-token training, server setup | Growth from v6 |
 
 v1 read its small dataset about **2.8 times over**; v2, v3 and v3.5 read their data about once, which is
 better for learning general knowledge. v3.5 needs ~18.9B tokens of web text, more than the 10B in
@@ -50,14 +50,14 @@ real GSM8K questions (a well-known math test) are kept for testing only, never f
 
 ## Results
 
-| | **v1** | **v2** | **v3** | **v3.5** | **v4** | **v5** |
-|---|---|---|---|---|---|---|
-| Final val loss | **1.279** | **2.929** (best), 2.984 at the last step | Measured when trained | Measured when trained | Same base as v3.5 | Measured when trained |
-| Phone file | 32 MB | **89 MB** | ~420 MB (Q8) or **~240 MB (Q4)** | ~1.1 GB (Q8) or **~650 MB (Q4)** | v3.5's file + a few MB per skill pack | ~3.2 GB (Q8) or **~1.8 GB (Q4)** |
-| Test sheet (`evaluate.py`, /20) | Only identity and story questions | **18/20** (baseline) | Goal: clearly beat v2 | Goal: beat v3 | Goal: beat v3.5, plus new tests for tools and skills |
-| v3 test sheet (`prompts_v3.jsonl`, /41) | — | Run to set the baseline* | Goal: clearly beat v2, most of all on facts_hard, instructions, topic_switch, honesty, correction |  |  |  |
-| Phone speed (PocketPal, Q8_0) | — | **~210–245 tokens/s**, first word in <0.1 s | Slower (4.5× bigger); measured when done |  |  |  |
-| HellaSwag (`exam.py`, random = 25%) | — | **28.4%** (baseline) | Goal: ~33–38% | Goal: higher than v3 | Same base as v3.5 | Goal: beat v4, plus harder reasoning and coding tests |
+|  | **v1** | **v2** | **v3** | **v3.5** | **v4** | **v5** | **v6** | **v6.5** |
+|---|---|---|---|---|---|---|---|---|
+| Final val loss | **1.279** | **2.929** (best), 2.984 at the last step | Measured when trained | Measured when trained | Same base as v3.5 | Measured when trained | Measured when trained | Measured when trained |
+| Phone file | 32 MB | **89 MB** | ~420 MB (Q8) or **~240 MB (Q4)** | ~1.1 GB (Q8) or **~650 MB (Q4)** | v3.5's file + a few MB per skill pack | ~3.2 GB (Q8) or **~1.8 GB (Q4)** | ~3 GB (Q4): high-end phones only | ~4–4.5 GB (Q4): mainly PC and server |
+| Test sheet (`evaluate.py`, /20) | Only identity and story questions | **18/20** (baseline) | Goal: clearly beat v2 | Goal: beat v3 | Goal: beat v3.5, plus new tests for tools and skills |  | Goal: beat v5 | Goal: beat v6 |
+| v3 test sheet (`prompts_v3.jsonl`, /41) | — | Run to set the baseline* | Goal: clearly beat v2, most of all on facts_hard, instructions, topic_switch, honesty, correction |  |  |  |  |  |
+| Phone speed (PocketPal, Q8_0) | — | **~210–245 tokens/s**, first word in <0.1 s | Slower (4.5× bigger); measured when done |  |  |  | Slow on phones; fast on PC | PC and server |
+| HellaSwag (`exam.py`, random = 25%) | — | **28.4%** (baseline) | Goal: ~33–38% | Goal: higher than v3 | Same base as v3.5 | Goal: beat v4, plus harder reasoning and coding tests | Goal: beat v5 | Goal: beat v6 |
 
 **Val losses can't be compared across versions.** Each uses a different tokenizer and different
 data, and kids' stories are far easier to predict than Wikipedia and code. The test sheet
@@ -82,23 +82,23 @@ It adds the mistakes found on the phone, so v2 is expected to score low on the n
 
 ## What each version achieves
 
-| Ability | **v1** | **v2** (expected) | **v3** (goal) | **v3.5** (goal) | **v4** (goal) | **v5** (goal) |
-|---|---|---|---|---|---|---|
-| Children's stories | ✅ Good | ✅ Good | ✅ Good | ✅ Good | ✅ Story-writer skill pack | ✅ Richer, longer stories |
-| Grammar and fluency | Simple | Good | Better | ✅ Natural | ✅ Natural | ✅ Natural |
-| General knowledge (from memory) | ❌ None | ⚠️ Basic, often wrong | ✅ Better, still imperfect | ✅ Noticeably better | ✅ Same as v3.5 | ✅ Much broader |
-| Accurate facts (with lookups) | ❌ | ❌ | ✅ Reads the answer from Wikipedia and cites it | ✅ Better at using what it reads | ✅ Fact-checker skill pack | ✅ Combines several sources |
-| Says "I don't know" | ❌ | ❌ | ✅ Trained to admit uncertainty | ✅ | ✅ | ✅ |
-| Explaining things | ❌ | ⚠️ Simple explanations | ✅ Clearer explanations | ✅ Multi-step explanations | ✅ Study-helper skill pack | ✅ Detailed, well-organized |
-| Conversations | One message at a time | ✅ Remembers the chat | ✅ Longer conversations (2× memory) | ✅ Stays on topic longer | ✅ Remembers you between chats | ✅ Longer chats (4,096 tokens) |
-| Code | ❌ | ❌ | ⚠️ Basic Python autocomplete | ⚠️ Small functions, several languages | ✅ Coding helper: reads files, suggests fixes, runs tests | ✅ Real coding help: multi-file changes, explains code |
-| Answer quality and style | Basic | Basic | ✅ Improved by preference training | ✅ | ✅ Picks the right specialist per question | ✅ Clearly better |
-| Math | ❌ | ❌ | ⚠️ Some step-by-step math (5% math reading), still error-prone | ⚠️ Better: also learns from worked math problems, still error-prone | ✅ **Exact**, using a calculator tool | ✅ Exact with tools, word problems work |
-| Reasoning | ❌ | ❌ | ⚠️ Still weak | ⚠️ Better | ⚠️ Multi-step tasks in agent mode (still limited by 1B) | ✅ Decent multi-step reasoning for its size |
-| Tools (calculator, date, your files, reminders) | ❌ | ❌ | ❌ | ❌ | ✅ | ✅ Uses tools more reliably |
-| Voice (talk and listen) | ❌ | ❌ | ❌ | ❌ | ✅ With small speech models alongside | ✅ |
-| Where you use it | PocketPal | PocketPal | PocketPal | PocketPal | ✅ **Your own website and app** | Phone (Q4) + server-hosted website |
-| Offline / online | Offline | Offline | Offline (lookups from a saved Wikipedia copy) | Offline | ✅ **Both:** offline by default, online adds live web search; switches automatically | ✅ Both: offline on the phone (Q4), online can use the 3B on a server |
+| Ability | **v1** | **v2** (expected) | **v3** (goal) | **v3.5** (goal) | **v4** (goal) | **v5** (goal) | **v6** (goal) | **v6.5** (goal) |
+|---|---|---|---|---|---|---|---|---|
+| Children's stories | ✅ Good | ✅ Good | ✅ Good | ✅ Good | ✅ Story-writer skill pack | ✅ Richer, longer stories | ✅ Long, well-written stories | ✅ Long, well-written stories |
+| Grammar and fluency | Simple | Good | Better | ✅ Natural | ✅ Natural | ✅ Natural | ✅ Natural | ✅ Natural |
+| General knowledge (from memory) | ❌ None | ⚠️ Basic, often wrong | ✅ Better, still imperfect | ✅ Noticeably better | ✅ Same as v3.5 | ✅ Much broader | ✅ Broad | ✅ Broadest of all versions |
+| Accurate facts (with lookups) | ❌ | ❌ | ✅ Reads the answer from Wikipedia and cites it | ✅ Better at using what it reads | ✅ Fact-checker skill pack | ✅ Combines several sources | ✅ Combines sources, handles long documents | ✅ Combines sources, handles long documents |
+| Says "I don't know" | ❌ | ❌ | ✅ Trained to admit uncertainty | ✅ | ✅ | ✅ | ✅ | ✅ |
+| Explaining things | ❌ | ⚠️ Simple explanations | ✅ Clearer explanations | ✅ Multi-step explanations | ✅ Study-helper skill pack | ✅ Detailed, well-organized | ✅ Handles harder topics | ✅ Handles harder topics |
+| Conversations | One message at a time | ✅ Remembers the chat | ✅ Longer conversations (2× memory) | ✅ Stays on topic longer | ✅ Remembers you between chats | ✅ Longer chats (4,096 tokens) | ✅ Long chats (8,192 tokens) | ✅ Long chats (8,192 tokens) |
+| Code | ❌ | ❌ | ⚠️ Basic Python autocomplete | ⚠️ Small functions, several languages | ✅ Coding helper: reads files, suggests fixes, runs tests | ✅ Real coding help: multi-file changes, explains code | ✅ Stronger coding help across languages | ✅ Best coding help of all versions |
+| Answer quality and style | Basic | Basic | ✅ Improved by preference training | ✅ | ✅ Picks the right specialist per question | ✅ Clearly better | ✅ Clearly better | ✅ Best |
+| Math | ❌ | ❌ | ⚠️ Some step-by-step math (5% math reading), still error-prone | ⚠️ Better: also learns from worked math problems, still error-prone | ✅ **Exact**, using a calculator tool | ✅ Exact with tools, word problems work | ✅ Exact with tools, harder word problems | ✅ Exact with tools, harder word problems |
+| Reasoning | ❌ | ❌ | ⚠️ Still weak | ⚠️ Better | ⚠️ Multi-step tasks in agent mode (still limited by 1B) | ✅ Decent multi-step reasoning for its size | ✅ Stronger multi-step reasoning | ✅ Strongest: closest to a mini Claude for everyday tasks |
+| Tools (calculator, date, your files, reminders) | ❌ | ❌ | ❌ | ❌ | ✅ | ✅ Uses tools more reliably | ✅ | ✅ |
+| Voice (talk and listen) | ❌ | ❌ | ❌ | ❌ | ✅ With small speech models alongside | ✅ | ✅ | ✅ |
+| Where you use it | PocketPal | PocketPal | PocketPal | PocketPal | ✅ **Your own website and app** | Phone (Q4) + server-hosted website | PC, high-end phones, the app's online mode | PC and server (the app's online brain) |
+| Offline / online | Offline | Offline | Offline (lookups from a saved Wikipedia copy) | Offline | ✅ **Both:** offline by default, online adds live web search; switches automatically | ✅ Both: offline on the phone (Q4), online can use the 3B on a server | ✅ Both: offline on high-end phones and PCs, online as the server model | ✅ Both: mainly the online brain on a server; offline on the PC |
 
 ## v3 up close: lookups and the teacher
 
@@ -219,8 +219,8 @@ a capable personal assistant, not a replacement for them.
 
 ## Beyond v5: v6 and v6.5 (future)
 
-Planned later, after v5. The phone keeps a small model for offline use; these power the PC and
-the app's online mode. Details: [ROADMAP.md](ROADMAP.md#v6-and-v65-bigger-small-5b--7b).
+Planned later, after v5 (they're also in the main tables above). The phone keeps a small model for
+offline use; these power the PC and the app's online mode. Details: [ROADMAP.md](ROADMAP.md#v6-and-v65-bigger-small-5b--7b).
 
 | | **v5** | **v6** | **v6.5** |
 |---|---|---|---|
