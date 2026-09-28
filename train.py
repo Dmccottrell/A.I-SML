@@ -81,6 +81,14 @@ p.add_argument("--no_compile", action="store_true", help="don't try torch.compil
 p.add_argument("--backup_dir", default=None, help="also copy latest.pt to this folder (e.g. another drive)")
 p.add_argument("--backup_every_hours", type=float, default=24)
 args = p.parse_args()
+if args.backup_dir and not args.pilot:
+    # Check the backup folder NOW, so a typo or a missing drive stops the run in seconds,
+    # not after 24 hours of training.
+    try:
+        os.makedirs(args.backup_dir, exist_ok=True)
+    except OSError as e:
+        sys.exit(f"can't use --backup_dir {args.backup_dir!r}: {e}\n"
+                 "Pick a folder on a drive that exists (e.g. C:\\ai-backups), or leave --backup_dir out.")
 V = get_version(args.version)
 S = V.train                      # training settings for this version
 
@@ -224,12 +232,15 @@ def maybe_backup():
     global last_backup
     if not args.backup_dir or time.time() - last_backup < args.backup_every_hours * 3600:
         return
-    os.makedirs(args.backup_dir, exist_ok=True)
-    dest = os.path.join(args.backup_dir, f"{V.name}_latest.pt")
-    shutil.copyfile(LATEST_PATH, dest + ".tmp")
-    os.replace(dest + ".tmp", dest)
-    last_backup = time.time()
-    print(f"backed up latest.pt to {dest}")
+    last_backup = time.time()          # on failure, try again at the next interval
+    try:
+        os.makedirs(args.backup_dir, exist_ok=True)
+        dest = os.path.join(args.backup_dir, f"{V.name}_latest.pt")
+        shutil.copyfile(LATEST_PATH, dest + ".tmp")
+        os.replace(dest + ".tmp", dest)
+        print(f"backed up latest.pt to {dest}")
+    except OSError as e:               # never let a backup problem stop the training
+        print(f"WARNING: backup to {args.backup_dir} failed ({e}). Training continues.")
 
 
 # ---- progress log: metrics.csv always, TensorBoard graphs if it's installed ----
@@ -439,6 +450,9 @@ FINAL_PATH = os.path.join(OUT_DIR, "final.pt")
 save_atomic({"model": model.state_dict(), "config": cfg.__dict__,
              "iter": S.max_iters, "val_loss": best_val}, FINAL_PATH)
 if args.backup_dir:
-    os.makedirs(args.backup_dir, exist_ok=True)
-    shutil.copyfile(FINAL_PATH, os.path.join(args.backup_dir, f"{V.name}_final.pt"))
+    try:
+        os.makedirs(args.backup_dir, exist_ok=True)
+        shutil.copyfile(FINAL_PATH, os.path.join(args.backup_dir, f"{V.name}_final.pt"))
+    except OSError as e:
+        print(f"WARNING: couldn't copy final.pt to {args.backup_dir} ({e}). It is safe in {FINAL_PATH}.")
 print(f"done. best val loss {best_val:.3f} (ckpt.pt); final weights saved in {FINAL_PATH}")
