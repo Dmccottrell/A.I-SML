@@ -21,6 +21,8 @@ stopped. Set a spending limit or low balance so it can't run up a bill.
 
 ## 2. Set it up (about 15 minutes)
 
+**Shortcut:** after cloning, `bash cloud_setup.sh v3` does steps 2-4 below in one go (checks the GPU, installs packages, builds the data, runs the pilot, then tells you the run command). The manual steps follow for reference.
+
 Open the machine's terminal (Jupyter terminal or SSH), then:
 
 ```bash
