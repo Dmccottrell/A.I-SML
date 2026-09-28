@@ -257,7 +257,7 @@ Fill in real numbers as each version finishes:
 |---|---|---|---|
 | v1 | 1.279 | — | Runs on the phone (PocketPal, 32 MB) |
 | v2 | 2.929 best, 2.984 final | 18/20 (identity 2/2, facts 7/8, explain 5/5, advice 2/2, writing 1/1, stories 1/2) | HellaSwag 28.4% (ckpt.pt), about GPT-2 (124M) level. 20,000 steps at ~3.5 s/step on the RTX 4070; chat fine-tuning ~1.5 hours. Phone: 89 MB, ~210–245 tokens/s. The test sheet checks key words, so answers can pass with wrong details. Phone tests found wrong rare facts (Illinois), no self-correction, topic stickiness and settings problems (see above) |
-| v3 | | | |
+| v3 | | | Data ready: 12.0B training tokens + 1.3B anneal tokens + 10M val; 222 documents with test questions removed (193 web, 14 math, 10 top-rated web, 5 anneal math); prepared in a few hours at ~2–3M tokens/s |
 | v3.5 | | | |
 | v4 | — (same base as v3.5) | | |
 | v5 | | | |
