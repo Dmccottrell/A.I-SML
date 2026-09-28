@@ -39,6 +39,11 @@ RUN WINDOWS (so the PC is yours the rest of the time)
     mon-fri Friday's window runs until Saturday 14:00. It stops within one
     step (~30 seconds) of the end time.
 
+    --exit_after_window: exit at the end of the window instead of waiting. On a rented cloud
+    machine, run something after it that switches the machine off, so you stop paying, e.g.:
+
+        python run_training.py --version v3 --window 21:30-13:30 --exit_after_window && <stop the machine>
+
     Every start, crash and restart is written to
     <checkpoint folder>/supervisor.log, so you can see what happened while
     you were away.
@@ -160,7 +165,7 @@ def run_once(command):
 
 
 def supervise(train_args, ckpt_dir, script="train.py", first_wait=30.0,
-              max_stalled=3, max_restarts=50, window=None, days=None):
+              max_stalled=3, max_restarts=50, window=None, days=None, exit_after_window=False):
     """Run `script` with `train_args`, restarting after crashes. Returns the exit code to use."""
     os.makedirs(ckpt_dir, exist_ok=True)
     log_path = os.path.join(ckpt_dir, "supervisor.log")
@@ -191,6 +196,9 @@ def supervise(train_args, ckpt_dir, script="train.py", first_wait=30.0,
         code, interrupted = run_once([sys.executable, script] + launch)
         args = [a for a in args if a != "--fresh"]   # restarts must RESUME, never start over
         if code == PAUSED_ON_SCHEDULE and not interrupted:
+            if exit_after_window:
+                log("run window over: training saved. Exiting (--exit_after_window).", log_path)
+                return 0
             log("run window over: training saved and paused until the next window.", log_path)
             stalled = 0
             continue
@@ -232,6 +240,9 @@ def main():
     p.add_argument("--wait_seconds", type=float, default=30.0, help=argparse.SUPPRESS)
     p.add_argument("--max_restarts", type=int, default=50, help="give up after this many restarts")
     p.add_argument("--window", default=None, help="only train inside this daily window, e.g. 21:00-14:00")
+    p.add_argument("--exit_after_window", action="store_true",
+                   help="with --window: exit at the end of the window instead of waiting for the next one "
+                        "(for rented machines, so a command after it can switch the machine off)")
     p.add_argument("--days", default="all", help="days a window starts on: mon-fri, all, mon,wed,sat (default all)")
     args, rest = p.parse_known_args()
     V = get_version(args.version)
@@ -242,7 +253,8 @@ def main():
     if window:
         print(f"Run window: {args.window} on {args.days} (days a window starts).", flush=True)
     sys.exit(supervise(["--version", args.version] + rest, V.ckpt_dir, args.script,
-                       args.wait_seconds, max_restarts=args.max_restarts, window=window, days=days))
+                       args.wait_seconds, max_restarts=args.max_restarts, window=window, days=days,
+                       exit_after_window=args.exit_after_window))
 
 
 if __name__ == "__main__":
