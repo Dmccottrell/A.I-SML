@@ -91,7 +91,7 @@ It adds the mistakes found on the phone, so v2 is expected to score low on the n
 | Says "I don't know" | ❌ | ❌ | ✅ Trained to admit uncertainty | ✅ | ✅ | ✅ | ✅ | ✅ |
 | Explaining things | ❌ | ⚠️ Simple explanations | ✅ Clearer explanations | ✅ Multi-step explanations | ✅ Study-helper skill pack | ✅ Detailed, well-organized | ✅ Handles harder topics | ✅ Handles harder topics |
 | Conversations | One message at a time | ✅ Remembers the chat | ✅ Longer conversations (2× memory) | ✅ Stays on topic longer | ✅ Remembers you between chats | ✅ Longer chats (4,096 tokens) | ✅ Long chats (8,192 tokens) | ✅ Long chats (8,192 tokens) |
-| Code | ❌ | ❌ | ⚠️ Basic Python autocomplete | ⚠️ Small functions, several languages | ✅ Coding helper: reads files, suggests fixes, runs tests | ✅ Real coding help: multi-file changes, explains code | ✅ Stronger coding help across languages | ✅ Best coding help of all versions |
+| Code | ❌ | ❌ | ⚠️ Basic Python autocomplete | ⚠️ Small functions, several languages | ✅ Coding helper (agentic, small tasks): reads files, suggests fixes, runs tests in a loop inside a sandbox | ✅ Real coding help: multi-file changes, explains code | ✅ Stronger coding help across languages | ✅ Best coding help of all versions |
 | Answer quality and style | Basic | Basic | ✅ Improved by preference training | ✅ | ✅ Picks the right specialist per question | ✅ Clearly better | ✅ Clearly better | ✅ Best |
 | Math | ❌ | ❌ | ⚠️ Some step-by-step math (5% math reading), still error-prone | ⚠️ Better: also learns from worked math problems, still error-prone | ✅ **Exact**, using a calculator tool | ✅ Exact with tools, word problems work | ✅ Exact with tools, harder word problems | ✅ Exact with tools, harder word problems |
 | Reasoning | ❌ | ❌ | ⚠️ Still weak | ⚠️ Better | ⚠️ Multi-step tasks in agent mode (still limited by 1B) | ✅ Decent multi-step reasoning for its size | ✅ Stronger multi-step reasoning | ✅ Strongest: closest to a mini Claude for everyday tasks |
@@ -159,8 +159,10 @@ v3.5 → v4 won't feel like "smarter" the way v2 → v3 does. It will feel like 
 - **Specialists.** A router reads your question and switches on the right skill pack: study help,
   stories, IT troubleshooting, fact checking or coding. Each pack is trained separately (under an
   hour), so adding one never breaks the others.
-- **Coding help.** A small harness lets it read a file, propose a change and run the tests, in the
-  same spirit as Claude Code, but for small, simple tasks.
+- **Coding help.** A small harness lets it work in a loop: read a file, propose a change, run the
+  tests, see the result and try again, inside a safe sandbox. It's in the same spirit as Claude Code,
+  but only for small, simple tasks (a ~1B model can't do the big benchmark tasks). Its memory is the
+  limit: 2,048 tokens fills up after about two small files. Details: [ROADMAP.md](ROADMAP.md#agentic-coding-a-coding-helper-that-works-in-a-loop).
 - **It remembers you.** Saved notes ("my printer is an HP", "I'm studying biology") get looked up
   in later chats.
 - **Voice.** Speak to it and hear the answer. The speech parts are small separate models (open

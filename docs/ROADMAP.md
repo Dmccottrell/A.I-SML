@@ -284,9 +284,49 @@ You ─► Router ─► Base ──┼─► Story writer    (the v1 skill)
   up-to-date facts. Off by default, so the AI stays private and offline unless you switch it on.
   Prefer trusted sites: a small model believes whatever it reads.
 - **Agent mode:** multi-step tasks ("read my notes, summarize them, make a to-do list").
+- **Coding helper:** the same loop for code (see [Agentic coding](#agentic-coding-a-coding-helper-that-works-in-a-loop)).
 - **Voice:** Whisper turns your voice into text and Piper reads the answer aloud. Both are small,
   open source and offline, and run alongside the AI.
 - **Personal memory:** saved notes about you that it looks up in later chats.
+
+### Agentic coding (a coding helper that works in a loop)
+
+Instead of answering once, the model works in a loop, like Claude Code but for small tasks:
+
+```
+task -> model asks to read a file -> our code reads it -> model proposes an edit
+     -> our code applies it and runs the tests -> model sees the failure -> tries again ...
+```
+
+The loop, file access and safe place to run code are ordinary code we write (the **harness**). The
+model only learns to ask for tools in the right format and to use what comes back. The tokens for
+this (`<|tool_call|>`, `<|tool_result|>`) are already reserved in v3's tokenizer.
+
+| Step | What | When |
+|---|---|---|
+| 1 | **Harness:** read file, edit file, run command, run tests, all inside a **sandbox** (a temporary folder, no internet, time and memory limits, nothing outside it can be touched) | While v3.5 trains (CPU work) |
+| 2 | **Training data:** a coding-focused open teacher (e.g. Qwen2.5-Coder-7B, license to be checked) works through small coding tasks in the harness. Keep only runs where the **tests really pass** (checked by running them) | After v3.5 |
+| 3 | **Fine-tune** a "coding" skill pack (LoRA) on those runs | v4 |
+| 4 | **Measure** on a small test set of real tasks (fix this bug, add this function) | v4 |
+
+**What to expect at each size:**
+
+| Model | What it can do |
+|---|---|
+| v3 (394M) | Autocomplete only, no agent work |
+| v3.5 / v4 (~1.05B) | Small, simple tasks: fix an obvious bug in one short file, write a small function, run a command and read the result |
+| v5 (3B) | Small multi-step jobs: a few files, a couple of retries |
+| v6.5 (7B) | Real everyday scripting help |
+
+Public agentic-coding benchmarks (like Terminal-Bench) are far beyond a ~1B model.
+
+**The real bottleneck is memory, not skill.** A task needs the file, the error output and the
+model's own edits in context at once. v3.5's 2,048 tokens fills up after about two small files, so
+longer context (8,192 tokens at v6, or extending v3.5 with extra training: v3 uses RoPE 500,000 for
+this reason) matters more for agent work than extra brain size.
+
+**Safety first:** model-written code only runs inside the sandbox, and the harness is built and
+tested before any model is allowed to use it.
 
 ### Your own app (offline + online)
 One app and one website that work offline and online. See
