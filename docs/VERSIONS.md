@@ -19,6 +19,8 @@ v6 (5B) and v6.5 (7B) keep growing toward medium size, mainly for the PC and onl
 | Memory (context length) | 512 tokens | 1,024 tokens | 2,048 tokens | 2,048 tokens | 2,048 tokens + saved notes about you | 4,096 tokens | 8,192 tokens | 8,192 tokens |
 | Vocabulary | 8,192 | 16,384 | 32,768 | 32,768 | 32,768 | 65,536 | 65,536 | 65,536 |
 | Attention | Standard | Grouped-query (faster on phones) | Grouped-query | Grouped-query | Grouped-query | Grouped-query | Grouped-query | Grouped-query |
+| Download size (Q4) | ~20 MB | 89 MB | ~240 MB | ~650 MB | ~650 MB + packs | ~1.8 GB | ~3 GB | ~4 GB |
+| Runs on (estimate) | Phone, PC | Phone, PC, browser | Phone, PC, browser, Raspberry Pi 5 | Phone, PC, Pi 5 (slow) | Phone, PC, Pi 5 (slow) | PC, Mac, high-end phone | PC or Mac with 8 GB+ RAM | PC or Mac with 8 GB+ RAM |
 
 Key: ✅ finished · 🛠️ in progress · (planned) not started. "Memory (context length)" is how much text the model can read at once, counted in tokens (a token is roughly three-quarters of a word).
 

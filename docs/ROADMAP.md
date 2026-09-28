@@ -529,6 +529,33 @@ The first real tiers (Lite + Standard) come right after v3.5; the full three-tie
 
 ---
 
+## Where the models can run (beyond phones)
+
+Every model is exported as a **GGUF** file (`to_gguf.py`). That one format already works with
+**llama.cpp, Ollama, LM Studio, llamafile** (one double-clickable file) and, in a browser, **wllama**
+(llama.cpp compiled to WebAssembly). So nothing extra needs building per platform. We are *not*
+planning an ONNX/WebLLM version: it would mean a second conversion path for little gain.
+
+| Size | Realistic targets | Not realistic |
+|---|---|---|
+| v1-v2 (30-88M) | Phones, PCs, browsers | Microcontrollers (an ESP32 has ~0.5 MB of RAM, the file alone is 20+ MB) and smartwatches |
+| v3-v4 (0.4-1.05B) | Phones, PCs, browsers, Raspberry Pi 5 (a few words per second), old laptops | Pi Zero / Pico |
+| v5-v6.5 (3-7B) | PCs with a GPU or 8 GB+ RAM, Apple Silicon Macs, servers; high-end phones for 3B | Older phones |
+
+Downloads are quantized (Q4 by default), not 16-bit: a 7B model is ~4 GB in Q4 but ~14 GB in 16-bit.
+
+**Longer memory later:** v5-v6.5 are planned at 4,096-8,192 tokens. They can be stretched to
+16-32k with a short extra training run on long documents (RoPE stretching), but the cost is real: the
+"notebook" of past text (KV cache) for a 7B model at 64k tokens is ~8 GB *on top of* the model, more
+than most home PCs have to spare. So longer memory is added when a use needs it (long documents,
+agentic coding), not as a headline number.
+
+**Sharing state between devices** (the phone hands a task to the PC) is a v4+ app feature: the saved
+notes about you are plain text, so syncing them is easy; running one chat across two models is not
+planned yet.
+
+---
+
 ## Using your AI (apps)
 
 "Production" means **the version you rely on day to day**. You don't have to build an app to use
