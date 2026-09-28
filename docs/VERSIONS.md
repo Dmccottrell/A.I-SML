@@ -14,11 +14,13 @@ v6 (5B) and v6.5 (7B) keep growing toward medium size, mainly for the PC and onl
 
 |  | **v1** ✅ | **v2** ✅ | **v3** 🛠️ | **v3.5** (planned) | **v4** (planned) | **v5** (planned) | **v6** (planned) | **v6.5** (planned) |
 |---|---|---|---|---|---|---|---|---|
-| Parameters | 29.5M | 88M | 394M | **~1.05B** | ~1.05B base + skill packs (a few MB each) | **~3B** | **~5B** | **~7B** |
+| Parameters | 29.5M | 88M | 394M | **~1.04B** | ~1.04B base + LoRA skill packs (small add-on weights, a few MB each, switched by a router) | **~3B** | **~5B** | **~7B** |
 | Shape | 512 wide × 8 layers | 768 wide × 12 layers | 1024 wide × 32 layers | 2048 wide × 22 layers | Same as v3.5 | ~3072 wide × 28 layers | ~3584 wide × 36 layers | 4096 wide × 32 layers |
-| Memory (context) | 512 tokens | 1,024 tokens | 2,048 tokens | 2,048 tokens | 2,048 tokens + saved notes about you | 4,096 tokens | 8,192 tokens | 8,192 tokens |
+| Memory (context length) | 512 tokens | 1,024 tokens | 2,048 tokens | 2,048 tokens | 2,048 tokens + saved notes about you | 4,096 tokens | 8,192 tokens | 8,192 tokens |
 | Vocabulary | 8,192 | 16,384 | 32,768 | 32,768 | 32,768 | 65,536 | 65,536 | 65,536 |
 | Attention | Standard | Grouped-query (faster on phones) | Grouped-query | Grouped-query | Grouped-query | Grouped-query | Grouped-query | Grouped-query |
+
+Key: ✅ finished · 🛠️ in progress · (planned) not started. "Memory (context length)" is how much text the model can read at once, counted in tokens (a token is roughly three-quarters of a word).
 
 ## Training
 
@@ -243,7 +245,7 @@ offline use; these power the PC and the app's online mode. Details: [ROADMAP.md]
 | Class | Small | Bigger small | Borderline medium |
 | Brain | ~3B | **~5B** | **~7B** |
 | Shape | ~3072 wide × 28 layers | ~3584 wide × 36 layers | 4096 wide × 32 layers |
-| Memory (context) | 4,096 tokens | 8,192 tokens | 8,192 tokens |
+| Memory (context length) | 4,096 tokens | 8,192 tokens | 8,192 tokens |
 | Vocabulary | 65,536 | 65,536 (same, so it can grow from v5) | 65,536 |
 | Reading (minimum) | ~60B tokens | ~100B tokens | ~140B tokens |
 | Disk space | ~120 GB | ~200 GB | ~280 GB |
