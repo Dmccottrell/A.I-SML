@@ -256,7 +256,7 @@ many thinly). With 1B parameters there's room for more:
   share so the tokenizer sees every language, and skipping minified/generated files. Tested end to end
   with fake sources (Hugging Face isn't reachable from where I build); **not** tested against the real
   datasets. The Stack needs a free Hugging Face account: accept its terms once and run
-  `huggingface-cli login`.
+  `hf auth login` (older versions: `huggingface-cli login`).
 
 **Still to build:** the pilot runs on your PC, and checking the real dataset names and speeds on the first
 `--test` run (`python prepare_web_data.py --version v3.5 --test`, 20M tokens, minutes).
