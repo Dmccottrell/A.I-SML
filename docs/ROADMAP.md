@@ -236,6 +236,7 @@ You ─► Router ─► Base ──┼─► Story writer    (the v1 skill)
 - **Skill packs (LoRA adapters):** small add-ons of a few MB each, trained in under an hour
   each. Adding one never breaks the others. llama.cpp supports them.
 - **Router:** a small classifier that picks the right skill pack for each question.
+- **Tiers:** the router also picks the model size: Lite for easy messages, Standard for harder ones. See [Model tiers](#model-tiers-lite-standard-pro).
 
 ### Tools, voice, memory
 - **Tools:** calculator (exact math), date/time, search your files, reminders. The model decides
@@ -334,6 +335,36 @@ app's online mode.
 
 **Hardware note:** a used RTX 3090 (24 GB) would run v6.5 comfortably at Q8 and fine-tune it
 more easily, but the 4070 can already run both at Q4.
+
+---
+
+## Model tiers (Lite, Standard, Pro)
+
+Like the big labs' model families, tiers are **the same family at different sizes**: the same
+reading mix, chat lessons, personality and features, but different sizes, so you can pick
+speed or smarts.
+
+| Tier | Size | Runs on | Good for | Arrives |
+|---|---|---|---|---|
+| **Lite** | ~400M (v3-size) | Any phone, offline, very fast | Quick questions, small talk, simple lookups | With v3.5 |
+| **Standard** | ~1B (v3.5) | Phones and PCs | Everyday use: lookups, explanations, advice | v3.5 |
+| **Pro** | 3B–7B (v5–v6.5) | PC or a server (the app's online mode) | Harder questions, coding, long writing | v5+ |
+
+The names are placeholders; pick your own.
+
+**How they're made:**
+- **Same recipe for every tier:** same tokenizer, data mix and chat lessons, so they behave alike
+  and differ mainly in how much they know and how well they reason.
+- **The big tier teaches the small ones:** once v3.5's 1B exists, it becomes the teacher for Lite
+  (instead of Qwen). Small models trained this way get noticeably smarter for their size, and there
+  are no license questions because every model is yours.
+- **Automatic choice (v4):** the router sends easy messages ("hi", "list 3 fruits") to Lite and hard
+  ones to Standard or Pro, like an "auto" mode.
+- **Offline + online:** Lite and Standard run on the phone offline; Pro runs on the PC or a server
+  when online mode is on.
+
+**Timeline:** v2 and v3 are two sizes but different *generations*, so they aren't tiers of one family.
+The first real tiers (Lite + Standard) come right after v3.5; the full three-tier lineup with v5–v6.5.
 
 ---
 
