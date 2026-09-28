@@ -60,7 +60,9 @@ def split_passages(text, max_words=PASSAGE_WORDS):
     passages, current = [], []
     for para in (p.strip() for p in text.split("\n")):
         words = para.split()
-        if len(words) < 4:                     # headings and empty lines
+        # Skip empty lines and section headings ("History", "Early life and education"):
+        # short lines that don't end like a sentence
+        if len(words) < 4 or (len(words) < 10 and not para.endswith((".", "!", "?", ":", '"', ")"))):
             continue
         if len(words) > max_words:             # split long paragraphs by sentence
             sentences = re.split(r"(?<=[.!?])\s+", para)
@@ -182,16 +184,25 @@ class WikiIndex:
         """The k passages that best match `question` (a list of {"id", "title", "text"}).
 
         First tries passages containing ALL the question's keywords (precise
-        and fast); if that finds fewer than k, any keyword may match.
+        and fast); if that finds fewer than k, any keyword may match. Then
+        the main article about the question's subject goes first: for "Who
+        was Abraham Lincoln?", "Abraham Lincoln" beats "Abraham Lincoln (captain)".
         """
         words = keywords(question)
         if not words:
             return []
         quoted = [f'"{w}"' for w in words]
-        results = self._query(" AND ".join(quoted), k)
+        results = self._query(" AND ".join(quoted), k * 3)
         if len(results) < k and len(words) > 1:
             seen = {r["id"] for r in results}
-            results += [r for r in self._query(" OR ".join(quoted), k * 2) if r["id"] not in seen]
+            results += [r for r in self._query(" OR ".join(quoted), k * 3) if r["id"] not in seen]
+        q = " ".join(re.findall(r"[a-z0-9]+", question.lower()))
+
+        def subject_rank(r):
+            base = re.sub(r"\s*\(.*\)$", "", r["title"]).lower()     # "Abraham Lincoln (captain)" -> "abraham lincoln"
+            named = " ".join(re.findall(r"[a-z0-9]+", base)) in q
+            return 0 if named and base == r["title"].lower() else 1 if named else 2
+        results.sort(key=subject_rank)            # stable: keeps the search order within each group
         return results[:k]
 
     def random_passages(self, n, rng, lead_only=True):
