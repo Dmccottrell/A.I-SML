@@ -179,10 +179,25 @@ Goal: the biggest brain that can realistically be trained at home, as cheaply as
 | | |
 |---|---|
 | Size | ~1B parameters (e.g. dim 2048, 20–22 layers, grouped-query attention) |
-| Reading | ~20B tokens (a larger FineWeb-Edu slice + Wikipedia + code + math + stories), ~40GB on disk |
+| Reading | ~20B tokens (a larger FineWeb-Edu slice + Wikipedia + multi-language code + math + stories), ~40GB on disk |
 | Time | ~3–4 months of GPU time; pause with Ctrl+C for gaming, resume anytime |
 | Cost | ~$100–120 electricity (less with a GPU power limit of ~80%) |
 | Features | Everything from v3 (lookups, "I don't know", preference training) |
+| **Code** | **Several languages** instead of Python only (see below) |
+
+**Multi-language code.** v3 reads only Python (a small brain learns one language well rather than many thinly). With 1B parameters there's room for more:
+
+| Language | Why |
+|---|---|
+| Python | Still the largest share: readable, and the v4 coding helper's main language |
+| JavaScript, HTML/CSS | Websites, including your own app's website (v4) |
+| SQL | Databases and data questions |
+| Shell / PowerShell | Everyday computer tasks and scripts (IT help) |
+| C# or Java | Common in apps and at work |
+
+- **Data:** a permissively licensed multi-language code dataset (e.g. The Stack or StarCoder data). These require accepting their terms on Hugging Face and logging in with a token.
+- **Tokenizer:** v3.5's tokenizer sample will include every language, so each gets efficient word pieces.
+- **Code share:** probably ~12–15% of the reading, still mostly Python.
 
 **Code needed** (added when we get there):
 - **8-bit optimizer** (bitsandbytes): cuts optimizer memory ~75%, so 1B fits in 12GB

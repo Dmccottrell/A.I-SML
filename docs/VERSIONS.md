@@ -25,7 +25,7 @@ v6 (5B) and v6.5 (7B) keep growing toward medium size, mainly for the PC and onl
 | | **v1** | **v2** | **v3** | **v3.5** | **v4** | **v5** |
 |---|---|---|---|---|---|---|
 | **Data to prepare** | 467M tokens (TinyStories) | 2.8B tokens | **12B tokens** | **~20B tokens** | Skill datasets: a few thousand examples per skill | **~60B tokens** |
-| Data mix | 100% children's stories | 80% web, 15% Wikipedia, 5% stories | 63% web, 20% Wikipedia, 10% Python, 5% math, 2% stories | Same mix as v3; web from FineWeb-Edu's bigger `sample-100BT` slice so nothing repeats | Study, stories, IT help, fact checking, coding, tool use | Like v3.5, much bigger slice (plus more code and math) |
+| Data mix | 100% children's stories | 80% web, 15% Wikipedia, 5% stories | 63% web, 20% Wikipedia, 10% Python, 5% math, 2% stories | Like v3, but **code in several languages** (Python, JavaScript, HTML/CSS, SQL, shell); web from FineWeb-Edu's bigger `sample-100BT` slice so nothing repeats | Study, stories, IT help, fact checking, coding, tool use | Like v3.5, much bigger slice (plus more code and math) |
 | Disk space | ~1 GB | ~6 GB | ~24 GB | ~40 GB | < 1 GB | ~120 GB |
 | Batch per step | 65,536 tokens | 131,072 tokens | 262,144 tokens | 262,144 tokens | Small (fine-tuning) | ~1M tokens (across several GPUs) |
 | **Steps** | 20,000 | 20,000 | **45,000** | **~76,000** | ~1–2k per skill pack | **~60,000** |
@@ -89,7 +89,7 @@ It adds the mistakes found on the phone, so v2 is expected to score low on the n
 | Says "I don't know" | ❌ | ❌ | ✅ Trained to admit uncertainty | ✅ | ✅ | ✅ |
 | Explaining things | ❌ | ⚠️ Simple explanations | ✅ Clearer explanations | ✅ Multi-step explanations | ✅ Study-helper skill pack | ✅ Detailed, well-organized |
 | Conversations | One message at a time | ✅ Remembers the chat | ✅ Longer conversations (2× memory) | ✅ Stays on topic longer | ✅ Remembers you between chats | ✅ Longer chats (4,096 tokens) |
-| Code | ❌ | ❌ | ⚠️ Basic Python autocomplete | ⚠️ Small functions | ✅ Coding helper: reads files, suggests fixes, runs tests | ✅ Real coding help: multi-file changes, explains code |
+| Code | ❌ | ❌ | ⚠️ Basic Python autocomplete | ⚠️ Small functions, several languages | ✅ Coding helper: reads files, suggests fixes, runs tests | ✅ Real coding help: multi-file changes, explains code |
 | Answer quality and style | Basic | Basic | ✅ Improved by preference training | ✅ | ✅ Picks the right specialist per question | ✅ Clearly better |
 | Math | ❌ | ❌ | ⚠️ Some step-by-step math (5% math reading), still error-prone | ⚠️ Better: also learns from worked math problems, still error-prone | ✅ **Exact**, using a calculator tool | ✅ Exact with tools, word problems work |
 | Reasoning | ❌ | ❌ | ⚠️ Still weak | ⚠️ Better | ⚠️ Multi-step tasks in agent mode (still limited by 1B) | ✅ Decent multi-step reasoning for its size |
