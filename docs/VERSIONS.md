@@ -1,6 +1,6 @@
 # Version Comparison
 
-All versions side by side. v1 is finished, v2's pretraining is finished, and v3's groundwork is built.
+All versions side by side. v1 and v2 are finished and run on the phone, and v3's phase 1 and 2 code is built and tested.
 v3.5, v4, v5, v6 and v6.5 are planned: their numbers are estimates and will change once v3's results are in.
 Details: [V2.md](V2.md), [V3.md](V3.md), [ROADMAP.md](ROADMAP.md). Settings live in `config.py`.
 
@@ -12,7 +12,7 @@ v6 (5B) and v6.5 (7B) keep growing toward medium size, mainly for the PC and onl
 
 ## Size and design
 
-| | **v1** ✅ | **v2** 🛠️ | **v3** 🧱 | **v3.5** (planned) | **v4** (planned) | **v5** (planned) |
+| | **v1** ✅ | **v2** ✅ | **v3** 🧱 | **v3.5** (planned) | **v4** (planned) | **v5** (planned) |
 |---|---|---|---|---|---|---|
 | Parameters | 29.5M | 88M | 394M | **~1B** | ~1B base + skill packs (a few MB each) | **~3B** |
 | Shape | 512 wide × 8 layers | 768 wide × 12 layers | 1024 wide × 32 layers | ~2048 wide × 22 layers | Same as v3.5 | ~3072 wide × 28 layers |
@@ -51,12 +51,32 @@ real GSM8K questions (a well-known math test) are kept for testing only, never f
 | | **v1** | **v2** | **v3** | **v3.5** | **v4** | **v5** |
 |---|---|---|---|---|---|---|
 | Final val loss | **1.279** | **2.929** (best), 2.984 at the last step | Measured when trained | Measured when trained | Same base as v3.5 | Measured when trained |
-| Phone file | 32 MB | ~94 MB | ~420 MB (Q8) or **~240 MB (Q4)** | ~1.1 GB (Q8) or **~600 MB (Q4)** | v3.5's file + a few MB per skill pack | ~3.2 GB (Q8) or **~1.8 GB (Q4)** |
-| Test sheet (`evaluate.py`, /20) | Only identity and story questions | Baseline (after fine-tuning) | Goal: clearly beat v2 | Goal: beat v3 | Goal: beat v3.5, plus new tests for tools and skills | Goal: beat v4, plus harder reasoning and coding tests |
+| Phone file | 32 MB | **89 MB** | ~420 MB (Q8) or **~240 MB (Q4)** | ~1.1 GB (Q8) or **~600 MB (Q4)** | v3.5's file + a few MB per skill pack | ~3.2 GB (Q8) or **~1.8 GB (Q4)** |
+| Test sheet (`evaluate.py`, /20) | Only identity and story questions | **18/20** (baseline) | Goal: clearly beat v2 | Goal: beat v3 | Goal: beat v3.5, plus new tests for tools and skills |
+| v3 test sheet (`prompts_v3.jsonl`, /41) | — | Run to set the baseline* | Goal: clearly beat v2, most of all on facts_hard, instructions, topic_switch, honesty, correction |  |  |  |
+| Phone speed (PocketPal, Q8_0) | — | **~210–245 tokens/s**, first word in <0.1 s | Slower (4.5× bigger); measured when done |  |  |  |
+| HellaSwag (`exam.py`, random = 25%) | — | **28.4%** (baseline) | Goal: ~33–38% | Goal: higher than v3 | Same base as v3.5 | Goal: beat v4, plus harder reasoning and coding tests |
 
 **Val losses can't be compared across versions.** Each uses a different tokenizer and different
 data, and kids' stories are far easier to predict than Wikipedia and code. The test sheet
 (`eval/prompts.jsonl`) is the fair comparison.
+
+\* v2 on v3's bigger test sheet: `python evaluate.py --version v2 --prompts eval/prompts_v3.jsonl`.
+It adds the mistakes found on the phone, so v2 is expected to score low on the new categories.
+
+## v2 on the phone: what testing taught us
+
+| Test | v2's answer | Fixed by |
+|---|---|---|
+| "What is the capital of Illinois?" | **Paris**, then **Chicago** after better settings (it's Springfield) | v3 lookups |
+| "That's wrong." (after Paris) | Repeated Paris three times | v3 correction and "I don't know" lessons |
+| "List 3 fruits" | 10 looping items → **exactly 3** after setting repeat penalty 1.25 | Settings + v3 exact-instruction lessons |
+| "What is the largest planet?" | **Mercury** → **Jupiter** at temperature 0.4–0.5 | Settings |
+| Spaghetti question after Illinois | Answered about Illinois again | v3 topic-switch lessons + 2× memory |
+| "What can you do?" | Same paragraph as "Who are you?" | v3 separate identity answers |
+
+**Half of the problems were the phone app's settings, not the model.** The tested settings are in
+[V2.md](V2.md): temperature 0.4–0.5, repeat penalty 1.25, max tokens 256, a new chat per topic.
 
 ## What each version achieves
 
@@ -81,7 +101,8 @@ data, and kids' stories are far easier to predict than Wikipedia and code. The t
 ## v3 up close: lookups and the teacher
 
 v3 phase 2 turns the model into a **system**: our code finds facts, and the model learns to answer
-from them. Planned, not built yet (after v2 is finished).
+from them. **Built and tested** (`wiki_index.py`, `make_teacher_data.py` with Qwen2.5-7B-Instruct as
+the teacher, `make_chat_data_v3.py`); it runs on your PC before and after pretraining (see [V3.md](V3.md)).
 
 ### What a chat will look like
 
@@ -235,7 +256,7 @@ Fill in real numbers as each version finishes:
 | Version | Final val loss | Test sheet | Notes |
 |---|---|---|---|
 | v1 | 1.279 | — | Runs on the phone (PocketPal, 32 MB) |
-| v2 | 2.929 best, 2.984 final | After fine-tuning | Pretraining done: 20,000 steps, ~3.5 s/step on the RTX 4070 |
+| v2 | 2.929 best, 2.984 final | 18/20 (identity 2/2, facts 7/8, explain 5/5, advice 2/2, writing 1/1, stories 1/2) | HellaSwag 28.4% (ckpt.pt), about GPT-2 (124M) level. 20,000 steps at ~3.5 s/step on the RTX 4070; chat fine-tuning ~1.5 hours. Phone: 89 MB, ~210–245 tokens/s. The test sheet checks key words, so answers can pass with wrong details. Phone tests found wrong rare facts (Illinois), no self-correction, topic stickiness and settings problems (see above) |
 | v3 | | | |
 | v3.5 | | | |
 | v4 | — (same base as v3.5) | | |

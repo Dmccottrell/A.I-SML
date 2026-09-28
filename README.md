@@ -7,7 +7,7 @@ PC and fully offline on your phone.
 | Version | What it is | Status |
 |---|---|---|
 | **v1** | 30M story-teller trained on TinyStories (~32MB on the phone) | ✅ Done: runs offline on the phone |
-| **v2** | 88M mini assistant: web text + Wikipedia + multi-turn chat (~94MB on the phone) | 🛠️ Pretrained (val loss 2.93), chat fine-tuning now: see **[docs/V2.md](docs/V2.md)** |
+| **v2** | 88M mini assistant: web text + Wikipedia + multi-turn chat (89MB on the phone) | ✅ Done: 18/20 test sheet, HellaSwag 28.4%, runs offline on the phone. See **[docs/V2.md](docs/V2.md)** |
 | **v3** | 394M accuracy-focused assistant: + code and math, 2,048-token memory (~240MB on the phone as Q4) | 🧱 Groundwork built: see **[docs/V3.md](docs/V3.md)** |
 
 Every script takes `--version v1` (the default) or `--version v2`. Settings for each version
@@ -62,6 +62,9 @@ data, code and training.
 | `finetune.py` | 7 | Teach it a chat format using the version's `chat.jsonl`. Ctrl+C pauses; run again to resume |
 | `evaluate.py` + `eval/prompts.jsonl` | 6–7 | 20-question test sheet that scores a chat model |
 | `exam.py` | 6 | HellaSwag, a public common-sense test (works on pretrained models; compare versions) |
+| `wiki_index.py` | v3 | Searchable copy of Wikipedia for lookups (build + search) |
+| `make_teacher_data.py` | v3 | The teacher model (Qwen2.5-7B via llama.cpp) writes practice examples |
+| `make_chat_data_v3.py` | 7 | v3: chat lessons that fix v2's mistakes (lookups, "I don't know", corrections, instructions, topic switches) |
 | `benchmarks.py` | 4–6 | Downloads the public test sets (HellaSwag, GSM8K), used by `exam.py` and to keep them out of training data |
 | `export_hf.py` | 8 | Save in standard Llama layout (safetensors + tokenizer.json) |
 | `to_gguf.py` | 8 | Convert to GGUF with llama.cpp for phone apps |

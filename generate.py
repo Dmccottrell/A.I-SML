@@ -13,6 +13,7 @@ WHAT THIS FILE DOES
 Usage:  python generate.py --prompt "Once upon a time"
         python generate.py --chat                    (v1, uses chat.pt)
         python generate.py --version v2 --chat
+        python generate.py --version v3 --chat --lookup   (v3+: looks things up in Wikipedia first)
 
 Options:
     --ckpt         checkpoint to load (default: ckpt.pt, or chat.pt with --chat)
@@ -21,6 +22,8 @@ Options:
     --top_k        only pick from the k most likely tokens (default 50)
     --repetition_penalty  discourage repeating recent words: 1.0 = off,
                    1.1-1.3 = gentle (default 1.15), higher = stronger
+    --lookup       chat mode: search the Wikipedia index (wiki_index.py) for each
+                   message and give the best passages to the model as notes
 """
 import argparse, os
 
@@ -41,6 +44,8 @@ p.add_argument("--temperature", type=float, default=0.8)
 p.add_argument("--top_k", type=int, default=50)
 p.add_argument("--repetition_penalty", type=float, default=1.15)
 p.add_argument("--chat", action="store_true")
+p.add_argument("--lookup", action="store_true", help="chat: look each message up in Wikipedia first")
+p.add_argument("--db", default=os.path.join("data", "wiki", "wiki.db"))
 args = p.parse_args()
 V = get_version(args.version)
 ckpt_path = args.ckpt or os.path.join(V.ckpt_dir, "chat.pt" if args.chat else "ckpt.pt")
@@ -66,6 +71,10 @@ if args.chat:
     history = []
     # Leave room in the context for the reply
     max_prompt = max(64, model.cfg.max_seq_len - args.tokens)
+    wiki = None
+    if args.lookup:
+        from wiki_index import WikiIndex
+        wiki = WikiIndex(args.db)
     while True:
         try:
             msg = input("\nYou: ").strip()
@@ -79,7 +88,13 @@ if args.chat:
             continue
         if not V.chat_memory:
             history = []                       # v1: every message on its own
-        history.append({"role": "user", "content": msg})
+        message = {"role": "user", "content": msg}
+        if wiki:
+            notes = wiki.search(msg, 3)
+            if notes:
+                message["notes"] = [{"title": n["title"], "text": n["text"]} for n in notes]
+                print("(looked up: " + "; ".join(n["title"] for n in notes) + ")")
+        history.append(message)
         reply = continue_ids(build_prompt(tok, history, max_prompt)).strip()
         history.append({"role": "assistant", "content": reply})
         print("AI:", reply)

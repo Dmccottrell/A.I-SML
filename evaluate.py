@@ -8,16 +8,26 @@ WHAT THIS FILE DOES
     It prints a score per category and saves every answer to a report, so
     you can compare versions and checkpoints side by side.
 
+    v3+ use a bigger sheet, eval/prompts_v3.jsonl: the original 20 questions
+    plus the mistakes found by testing v2 on a phone. Extra fields a test can have:
+      "not":     words that make the answer WRONG ("chicago" for Illinois's capital)
+      "history": earlier messages in the chat (topic switches, corrections)
+      "count":   the answer must be a list of exactly this many items
+      "sentences": the answer must have exactly this many sentences
+    --lookup gives the model Wikipedia notes for each question (v3+).
+
     Keyword checks are rough: a right answer worded differently can be
     marked wrong, and a lucky word can be marked right. Read the report too!
 
 Usage:  python evaluate.py                        (v1 chat model)
         python evaluate.py --version v2
         python evaluate.py --version v2 --ckpt checkpoints/dev/v2/ckpt.pt
+        python evaluate.py --version v3 --lookup
+        python evaluate.py --version v2 --prompts eval/prompts_v3.jsonl   (v2 on v3's sheet)
 
 The report is saved next to the checkpoint: eval_<checkpoint name>.md
 """
-import argparse, json, os
+import argparse, json, os, re
 from collections import defaultdict
 
 import torch
@@ -30,12 +40,20 @@ from tokenizer import BPETokenizer
 p = argparse.ArgumentParser()
 add_version_arg(p)
 p.add_argument("--ckpt", default=None, help="default: chat.pt of the chosen version")
-p.add_argument("--prompts", default="eval/prompts.jsonl")
+p.add_argument("--prompts", default=None, help="default: prompts.jsonl (v1, v2), prompts_v3.jsonl (v3+)")
+p.add_argument("--lookup", action="store_true", help="give the model Wikipedia notes (v3+)")
+p.add_argument("--db", default=os.path.join("data", "wiki", "wiki.db"))
 p.add_argument("--tokens", type=int, default=150)
 p.add_argument("--repetition_penalty", type=float, default=1.15)
 args = p.parse_args()
 V = get_version(args.version)
 ckpt_path = args.ckpt or os.path.join(V.ckpt_dir, "chat.pt")
+if args.prompts is None:
+    args.prompts = "eval/prompts.jsonl" if V.name in ("v1", "v2") else "eval/prompts_v3.jsonl"
+wiki = None
+if args.lookup:
+    from wiki_index import WikiIndex
+    wiki = WikiIndex(args.db)
 
 device = "cuda" if torch.cuda.is_available() else "cpu"
 model, _ = load_checkpoint(ckpt_path, device)
@@ -46,10 +64,18 @@ with open(args.prompts, encoding="utf-8") as f:
     tests = [json.loads(line) for line in f if line.strip()]
 
 
-def answer(question):
-    """Ask one question in a fresh conversation. Fixed seed + low temperature = repeatable."""
+def answer(question, history=()):
+    """Ask one question in a fresh conversation (after `history`, if any).
+
+    Fixed seed + low temperature = repeatable.
+    """
     torch.manual_seed(0)
-    ids = build_prompt(tok, [{"role": "user", "content": question}], model.cfg.max_seq_len - args.tokens)
+    message = {"role": "user", "content": question}
+    if wiki:
+        notes = wiki.search(question, 3)
+        if notes:
+            message["notes"] = [{"title": n["title"], "text": n["text"]} for n in notes]
+    ids = build_prompt(tok, list(history) + [message], model.cfg.max_seq_len - args.tokens)
     idx = torch.tensor([ids], device=device)
     out = model.generate(idx, args.tokens, temperature=0.5, top_k=40, stop_id=eot,
                          repetition_penalty=args.repetition_penalty)
@@ -59,9 +85,23 @@ def answer(question):
 passed = defaultdict(int)
 total = defaultdict(int)
 lines = [f"# Evaluation: {ckpt_path}\n"]
+def check(t, reply):
+    """True if `reply` passes test `t` (see the extra fields at the top of this file)."""
+    low = reply.lower()
+    ok = not t.get("expect") or any(k.lower() in low for k in t["expect"])
+    ok = ok and not any(k.lower() in low for k in t.get("not", []))
+    if "count" in t:
+        lines = [l.strip() for l in reply.splitlines() if l.strip()]
+        items = [l for l in lines if re.match(r"^(\d+[.)]|[-*•])\s", l)]
+        ok = ok and len(items) == t["count"]
+    if "sentences" in t:
+        ok = ok and len(re.findall(r"[.!?](\s|$)", reply.strip())) == t["sentences"]
+    return ok
+
+
 for t in tests:
-    reply = answer(t["prompt"])
-    ok = any(k.lower() in reply.lower() for k in t["expect"])
+    reply = answer(t["prompt"], t.get("history", []))
+    ok = check(t, reply)
     passed[t["category"]] += ok
     total[t["category"]] += 1
     mark = "PASS" if ok else "FAIL"

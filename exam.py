@@ -33,6 +33,22 @@ import torch
 import torch.nn.functional as F
 
 
+def final_weights(V):
+    """The finished pretraining run's final weights (same choice as finetune.py).
+
+      1. final.pt
+      2. latest.pt, if its run finished (runs from before final.pt existed)
+      3. ckpt.pt (the best val score)
+    """
+    final = os.path.join(V.ckpt_dir, "final.pt")
+    if os.path.exists(final):
+        return final
+    latest = os.path.join(V.ckpt_dir, "latest.pt")
+    if os.path.exists(latest) and torch.load(latest, map_location="cpu")["iter"] > V.train.max_iters:
+        return latest
+    return os.path.join(V.ckpt_dir, "ckpt.pt")
+
+
 @torch.no_grad()
 def hellaswag_accuracy(model, tok, examples, device, autocast=None):
     """Fraction of `examples` where the model prefers the correct ending.
@@ -86,14 +102,12 @@ def main():
 
     p = argparse.ArgumentParser()
     add_version_arg(p)
-    p.add_argument("--ckpt", default=None, help="default: final.pt, else ckpt.pt")
+    p.add_argument("--ckpt", default=None,
+                   help="default: the finished run's final weights (final.pt or a finished latest.pt), else ckpt.pt")
     p.add_argument("--n", type=int, default=0, help="only the first N questions (default: all)")
     a = p.parse_args()
     V = get_version(a.version)
-    ckpt = a.ckpt
-    if ckpt is None:
-        final = os.path.join(V.ckpt_dir, "final.pt")
-        ckpt = final if os.path.exists(final) else os.path.join(V.ckpt_dir, "ckpt.pt")
+    ckpt = a.ckpt or final_weights(V)
 
     device = "cuda" if torch.cuda.is_available() else "cpu"
     dtype = torch.bfloat16 if device == "cuda" and torch.cuda.is_bf16_supported() else torch.float16

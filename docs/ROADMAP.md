@@ -8,8 +8,8 @@ version's test-sheet results decide what the next one focuses on.
 | Version | Theme | Brain | Main new abilities | Where it trains | Cost |
 |---|---|---|---|---|---|
 | **v1** ✅ | Learn the pipeline | 30M | Tells children's stories; runs offline on the phone | RTX 4070, 4 hours | $0 |
-| **v2** 🛠️ | Knowledge | 88M | General Q&A, explanations, multi-turn chat | RTX 4070, ~20 hours | $0 |
-| **v3** | Accuracy | ~400M | Looks things up (RAG), says "I don't know", preference training, basic code | RTX 4070, ~2.5–3 weeks | ~$20 electricity |
+| **v2** ✅ | Knowledge | 88M | General Q&A, explanations, multi-turn chat | RTX 4070, ~20 hours | $0 |
+| **v3** 🛠️ | Accuracy | ~400M | Looks things up (RAG), says "I don't know", handles corrections, exact instructions, preference training, basic code | RTX 4070, ~2.5–3 weeks | ~$20 electricity |
 | **v3.5** | Scale at home | **1B** | Same features as v3 on a much bigger brain | RTX 4070, ~3–4 months (pausable) | ~$100–120 electricity |
 | **v4** | Abilities | Best base so far (1B) | Specialist skill packs + router, tools, voice, own app | RTX 4070 | $0 |
 | **v5** | Scale | 3B | Genuinely capable assistant | Cloud (from scratch) **or** RTX 4070 (fine-tune an open 3B) | ~$1,500+ **or** $0 |
@@ -95,17 +95,45 @@ questions.jsonl ─► teacher (7B open model, llama.cpp on the 4070) ─► ans
 
 ---
 
-## v2: Knowledge (in progress)
+## v2: Knowledge ✅
 
 88M-parameter model trained on ~2.8B tokens (80% FineWeb-Edu, 15% Wikipedia, 5% TinyStories),
 fine-tuned on ~105k multi-turn conversations. Details: [V2.md](V2.md).
 
 **Done when:** it answers simple general questions, holds a conversation, runs on the phone,
-and has a test-sheet score recorded as the **baseline** for v3.
+and has a test-sheet score recorded as the **baseline** for v3. ✅ All done.
+
+### v2 results
+
+| Measure | Result |
+|---|---|
+| Val loss (pretraining) | 2.929 best, 2.984 final (20,000 steps, ~20 hours) |
+| Test sheet (`evaluate.py`) | **18/20** (identity 2/2, facts 7/8, explain 5/5, advice 2/2, writing 1/1, stories 1/2) |
+| HellaSwag (`exam.py`) | **28.4%** (random 25%, GPT-2 124M ~29–31%) |
+| Phone | 89 MB (Q8_0), ~210–245 tokens/second in PocketPal, fully offline |
+
+### What testing on the phone taught us
+
+| What happened | Why | Fix |
+|---|---|---|
+| "The capital of Illinois is **Paris**", then **Chicago** with better settings | 88M can't store rarer facts; it picks the most common pattern | v3 lookups (Wikipedia notes) |
+| Repeated "Paris" three times when told it was wrong | Its own mistake stays in the chat, and it never practiced being corrected | v3 correction and "I don't know" lessons |
+| "List 3 fruits" → 10 looping items, then **exactly 3** after changing settings | Repeat penalty was off (1.0) and answers had no length limit | Settings (repeat penalty 1.25, max 256 tokens) + v3 exact-instruction lessons |
+| "Largest planet" → **Mercury**, then **Jupiter** after the settings change | Temperature 0.7 was too random | Temperature 0.4–0.5 |
+| Answered spaghetti and planet questions about **Illinois** | v2's chat lessons almost never switch topics | v3 topic-switch lessons, 2× memory, v4 app trims old messages |
+| Same paragraph for "Who are you?" and "What can you do?" | One identity answer for all questions | v3: a separate answer for each |
+| "Whats up" → it invented its own question ("What does 'suprem' mean?") and answered it | It never saw casual slang in its chat lessons | v3 small-talk lessons (typed casually too: "whats up", "ty") |
+
+**Lesson for every version: test the settings before judging the model.** Half of what looked like
+"the model is bad" was the phone app's settings.
 
 ---
 
-## v3: Accuracy
+## v3: Accuracy (in progress)
+
+**Status:** phase 1 (pretraining upgrades) and phase 2 (Wikipedia lookups, teacher script, chat
+lessons for every v2 phone mistake, 39-question test sheet) are built and tested. Next: data prep,
+the teacher run, then pretraining. Phase 3 (DPO) comes after the chat model exists.
 
 Goal: **accurate when it answers, honest when it doesn't.** No AI is completely accurate
 (not even the largest ones), but small models can get much more reliable with the right design.
@@ -114,6 +142,8 @@ Goal: **accurate when it answers, honest when it doesn't.** No AI is completely 
 |---|---|---|
 | **Look things up (RAG)** | Searches a local library (Wikipedia, your own documents) and answers from what it finds, naming the source | The biggest accuracy win: the model reads facts instead of trying to remember them |
 | **"I don't know" training** | Chat examples where the correct answer is admitting uncertainty | Fewer confident wrong answers |
+| **Handling corrections** | Examples where the user says "that's wrong" and the AI rechecks its notes, fixes the answer, or admits it's unsure | v2 repeats its mistake when corrected (e.g. "the capital of Illinois is Paris", three times) |
+| **Better identity answers** | Separate answers for "Who are you?", "What can you do?" and "Are you ChatGPT?" | v2 gives the same identity paragraph to all of them |
 | **Preference training (DPO)** | Pairs of answers ("this one is better"); the model learns to prefer accurate, honest, helpful ones | The same idea the big labs use to make assistants helpful |
 | **Bigger brain (~400M)** | 394M: 1024 wide × 32 layers, 2,048-token memory, 32k vocabulary | More room for language and knowledge |
 | **Code in the training mix** | 10% Python (codeparrot-clean) | Basic code autocomplete and better structure/logic |

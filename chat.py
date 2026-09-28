@@ -19,6 +19,19 @@ WHAT THIS FILE DOES
     Keeping all three together guarantees training, chatting on the PC and
     chatting on the phone use exactly the same format.
 
+LOOKUP NOTES (v3+)
+    A user message can carry looked-up passages (see wiki_index.py):
+        {"role": "user", "content": "What is the capital of Illinois?",
+         "notes": [{"title": "Illinois", "text": "Springfield is the capital..."}]}
+    They go in front of the question, between the reserved tokens:
+        <|user|><|notes|>[1] Illinois: Springfield is the capital...<|end_notes|>What is the capital of Illinois?<|assistant|>
+    (A tokenizer without those tokens, like v2's, gets them as plain text.)
+
+MESSAGES THE MODEL SHOULD SEE BUT NOT LEARN
+    "train": false on an assistant message keeps it as context but doesn't
+    teach it. Used for correction lessons: the model sees a wrong answer and
+    the user saying "that's wrong", and learns only the corrected reply.
+
 USED BY
     finetune.py, generate.py, evaluate.py, export_hf.py
 """
@@ -46,8 +59,8 @@ def normalize(example):
     v1 format:  {"prompt": "...", "response": "..."}
     v2 format:  {"messages": [{"role": ..., "content": ...}, ...]}
 
-    There is no <|system|> token, so a "system" message is attached to the
-    start of the next user message instead.
+    A "system" message is attached to the start of the next user message.
+    Extra fields ("notes", "train") are kept.
     """
     if "messages" in example:
         messages = example["messages"]
@@ -59,11 +72,16 @@ def normalize(example):
         if m["role"] == "system":
             system = m["content"]
         elif m["role"] == "user" and system:
-            out.append({"role": "user", "content": system + "\n\n" + m["content"]})
+            out.append({**m, "content": system + "\n\n" + m["content"]})
             system = ""
         elif m["role"] in ("user", "assistant"):
-            out.append({"role": m["role"], "content": m["content"]})
+            out.append(dict(m))
     return out
+
+
+def format_notes(notes):
+    """Looked-up passages as numbered text: "[1] Title: text\n[2] ..." """
+    return "\n".join(f"[{i}] {n['title']}: {n['text']}" for i, n in enumerate(notes, 1))
 
 
 def _encode_message(tok, message):
@@ -71,8 +89,17 @@ def _encode_message(tok, message):
     U, A, EOT = special_ids(tok)
     text = tok.encode(message["content"], allow_special=False)   # user text can't inject control tokens
     if message["role"] == "user":
+        notes = message.get("notes")
+        if notes:
+            body = tok.encode(format_notes(notes), allow_special=False)
+            if "<|notes|>" in tok.special:
+                text = [tok.special["<|notes|>"]] + body + [tok.special["<|end_notes|>"]] + text
+            else:                         # older tokenizers: plain-text notes
+                text = tok.encode("Notes:\n" + format_notes(notes) + "\n\nQuestion: "
+                                  + message["content"], allow_special=False)
         return [U] + text + [A], 0        # the question: context only (mask 0)
-    return text + [EOT], 1                # the answer: learn it (mask 1)
+    learn = 0 if message.get("train") is False else 1
+    return text + [EOT], learn            # the answer: learn it (mask 1)
 
 
 def encode_conversation(tok, messages, max_tokens):
