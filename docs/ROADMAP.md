@@ -544,6 +544,34 @@ lot more training, so it isn't planned.
 
 ---
 
+## Tiers, versions and effort: three different things
+
+| Word | Means | Example |
+|---|---|---|
+| **Tier** | *Which model*: its size class (small and fast, balanced, most capable, top) | "the small tier" |
+| **Version** | *Which generation*: a better recipe, more data, new abilities. Each generation can come in several tiers | v3.5, v4, v5 |
+| **Effort** | *How long the model thinks* before answering, for a more detailed or complex answer or solution. It does not change the model. Any tier can use any effort level | Low / Medium / High / Max |
+
+Effort is independent of tier: a small model on High effort and a large model on Low effort are both
+valid. The router (and the user) choose the tier and the effort separately. Effort costs time and
+battery, not a bigger download.
+
+**How the versions line up with tiers** (like a lab's small, mid and large model families):
+
+| Tier class | Size | Versions |
+|---|---|---|
+| Small and fast | ~400M-1B | v3 (400M, phone-only "lite"), **v3.5** (1B), then **v4 = "v3.5 2.0"**: the same size, now with skill packs, the router, tools, thinking, effort levels and the app |
+| Balanced | ~3B | v5 (needs cloud training) |
+| Most capable | 5-7B | v6, v6.5 |
+| Top | 13-30B | v7, v8 (see [Beyond v6.5](#beyond-v65-v7-v8-and-max)) |
+
+So v4 is a new *generation* of the small tier, not a bigger model. It keeps v3.5's brain (no cloud cost).
+Optional, if time allows: a short "skill-aware" extra reading round on v3.5's weights (a few billion
+tokens with tool calls, thinking steps and code-with-tests mixed in) so the skill packs start from a base
+that already knows those formats.
+
+For a product, give the tiers **your own names** (not another company's model names).
+
 ## Model tiers (Lite, Standard, Pro, Max)
 
 Like the big labs' model families, tiers are **the same family at different sizes**: the same
