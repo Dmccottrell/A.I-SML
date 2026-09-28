@@ -26,6 +26,23 @@ BEFORE RUNNING
     2. Start the teacher in a second window (see docs/V3.md), e.g.:
          llama-server.exe -m models\\qwen\\qwen2.5-7b-instruct-q4_k_m-00001-of-00002.gguf -ngl 99 -c 16384 -np 4 --port 8080
 
+HOSTED TEACHER (optional: no GPU needed, so it can run while your GPU trains)
+    The same open model (Qwen2.5-Instruct) can be rented per token from a hosting service that
+    speaks the OpenAI-style API (Together, Fireworks, DeepInfra, Groq, ...). Only the teacher's
+    written text is used, exactly as with the local one. Check the provider's terms, and that
+    the model is an open one (see the README's pretrained weights policy).
+
+        set the key first (PowerShell):   $env:TEACHER_API_KEY = "paste-your-key"
+        python make_teacher_data.py --task lookup --n 20 \\
+            --api_base https://api.together.xyz/v1 --model <the provider's name for Qwen2.5-7B-Instruct> \\
+            --parallel 8 --price_per_million 0.3 --max_dollars 5
+
+    The key is read from an environment variable, never from the command line (which is saved in
+    your shell history). --price_per_million is what YOU read on the provider's pricing page
+    (input + output blended); with --max_dollars the run stops cleanly when the estimate
+    reaches it, and running the same command again continues. Rate limits (HTTP 429) and
+    temporary server errors are retried automatically.
+
 Usage:
     python make_teacher_data.py --task lookup --n 30000
     python make_teacher_data.py --task instructions --n 8000
@@ -36,7 +53,9 @@ import json
 import os
 import random
 import re
+import threading
 import time
+import urllib.error
 import urllib.request
 from concurrent.futures import ThreadPoolExecutor
 
@@ -46,14 +65,43 @@ OUT_DIR = os.path.join(get_version("v3").data_dir, "teacher")
 
 
 # ------------------------------------------------------------------ talking to the teacher
-def ask_teacher(server, messages, temperature=0.7, max_tokens=400):
-    """Send a chat to llama.cpp's server (OpenAI-style API) and return the reply text."""
-    body = json.dumps({"messages": messages, "temperature": temperature,
-                       "max_tokens": max_tokens}).encode()
-    req = urllib.request.Request(server.rstrip("/") + "/v1/chat/completions", data=body,
-                                 headers={"Content-Type": "application/json"})
-    with urllib.request.urlopen(req, timeout=300) as r:
-        return json.loads(r.read())["choices"][0]["message"]["content"].strip()
+# Settings for a hosted teacher; main() fills them in. Left alone, everything goes to the local llama-server.
+TEACHER = {"api_base": None, "model": None, "key": None, "tokens": 0}
+_token_lock = threading.Lock()
+RETRY_CODES = {408, 425, 429, 500, 502, 503, 504}
+
+
+def ask_teacher(server, messages, temperature=0.7, max_tokens=400, retries=6):
+    """Send a chat to an OpenAI-style API (llama.cpp's server, or a hosted one) and return the reply text."""
+    payload = {"messages": messages, "temperature": temperature, "max_tokens": max_tokens}
+    if TEACHER["model"]:
+        payload["model"] = TEACHER["model"]
+    body = json.dumps(payload).encode()
+    base = TEACHER["api_base"].rstrip("/") if TEACHER["api_base"] else server.rstrip("/") + "/v1"
+    headers = {"Content-Type": "application/json"}
+    if TEACHER["key"]:
+        headers["Authorization"] = "Bearer " + TEACHER["key"]
+    for attempt in range(retries + 1):
+        try:
+            req = urllib.request.Request(base + "/chat/completions", data=body, headers=headers)
+            with urllib.request.urlopen(req, timeout=300) as r:
+                data = json.loads(r.read())
+            break
+        except urllib.error.HTTPError as e:
+            if e.code not in RETRY_CODES or attempt == retries:
+                detail = e.read().decode("utf-8", "replace")[:300]
+                raise OSError(f"HTTP {e.code} from the teacher: {detail}") from None
+            wait = float(e.headers.get("Retry-After") or 0) or min(2 ** (attempt + 1), 60)
+        except (urllib.error.URLError, TimeoutError, ConnectionError) as e:
+            if attempt == retries:
+                raise OSError(str(e)) from None
+            wait = min(2 ** (attempt + 1), 60)
+        time.sleep(wait)
+    usage = data.get("usage") or {}
+    used = usage.get("total_tokens") or (len(body) + len(str(data))) // 4     # rough guess if not reported
+    with _token_lock:
+        TEACHER["tokens"] += used
+    return data["choices"][0]["message"]["content"].strip()
 
 
 def extract_json(text):
@@ -178,7 +226,7 @@ TASKS = {"lookup": make_lookup, "instructions": make_instruction}
 
 
 # ------------------------------------------------------------------ running a task
-def run(task, n, server, db_path, parallel=4, seed=1234, out_dir=OUT_DIR):
+def run(task, n, server, db_path, parallel=4, seed=1234, out_dir=OUT_DIR, price_per_million=0.0, max_dollars=0.0):
     """Make examples 0..n-1 for `task`, skipping ones already in the output file."""
     os.makedirs(out_dir, exist_ok=True)
     out_path = os.path.join(out_dir, f"{task}.jsonl")
@@ -207,19 +255,29 @@ def run(task, n, server, db_path, parallel=4, seed=1234, out_dir=OUT_DIR):
             open(tried_path, "a") as tried_f:
         for done, (i, result) in enumerate(pool.map(work, todo), 1):
             if isinstance(result, Exception):
-                raise SystemExit(f"can't reach the teacher at {server} ({result}).\n"
-                                 "Is llama-server running? See docs/V3.md. Run again to continue.")
+                where = TEACHER["api_base"] or server
+                raise SystemExit(f"the teacher at {where} failed ({result}).\n"
+                                 "Local: is llama-server running? (docs/V3.md). Hosted: check --api_base, --model and "
+                                 "that TEACHER_API_KEY is set. Run the same command again to continue.")
             if result is None:
                 rejected += 1
             else:
                 out.write(json.dumps(result, ensure_ascii=False) + "\n")
                 kept += 1
             tried_f.write(f"{i}\n")
-            if done % 50 == 0 or done == len(todo):
+            spent = TEACHER["tokens"] / 1e6 * price_per_million
+            over_budget = bool(max_dollars) and spent >= max_dollars
+            if done % 50 == 0 or done == len(todo) or over_budget:
                 out.flush(); tried_f.flush()
                 rate = done / max(time.time() - t0, 1e-9)
+                cost = f", ~${spent:.2f} spent" if price_per_million else ""
                 print(f"  {done:,}/{len(todo):,}  kept {kept:,}, thrown away {rejected:,}  "
-                      f"({rate:.1f}/s, ~{(len(todo) - done) / max(rate, 1e-9) / 3600:.1f}h left)")
+                      f"({rate:.1f}/s, ~{(len(todo) - done) / max(rate, 1e-9) / 3600:.1f}h left{cost})")
+            if over_budget:
+                pool.shutdown(wait=False, cancel_futures=True)
+                print(f"budget reached (~${spent:.2f} of ${max_dollars:.2f}). Saved so far; run the same command "
+                      "with a higher --max_dollars to continue.")
+                return
     print(f"{task}: done. kept {kept:,} new examples in {out_path}")
 
 
@@ -229,9 +287,23 @@ def main():
     p.add_argument("--n", type=int, required=True, help="how many examples to attempt")
     p.add_argument("--server", default="http://127.0.0.1:8080")
     p.add_argument("--db", default=os.path.join("data", "wiki", "wiki.db"))
-    p.add_argument("--parallel", type=int, default=4, help="requests at once (match llama-server -np)")
+    p.add_argument("--parallel", type=int, default=4, help="requests at once (match llama-server -np; 8-16 is fine for a hosted API)")
+    p.add_argument("--api_base", default=None, help="a hosted OpenAI-style API, e.g. https://api.together.xyz/v1 (instead of --server)")
+    p.add_argument("--model", default=None, help="the hosted provider's name for the teacher model")
+    p.add_argument("--api_key_env", default="TEACHER_API_KEY", help="environment variable that holds the API key")
+    p.add_argument("--price_per_million", type=float, default=0.0, help="dollars per million tokens (from the provider's price page), to estimate spending")
+    p.add_argument("--max_dollars", type=float, default=0.0, help="stop when the estimated spending reaches this (needs --price_per_million)")
     a = p.parse_args()
-    run(a.task, a.n, a.server, a.db, a.parallel)
+    if a.max_dollars and not a.price_per_million:
+        p.error("--max_dollars needs --price_per_million")
+    if a.api_base:
+        key = os.environ.get(a.api_key_env)
+        if not key:
+            p.error(f"set your API key first, e.g. in PowerShell:  $env:{a.api_key_env} = \"paste-your-key\"")
+        if not a.model:
+            p.error("--model is required with --api_base (the provider's name for the teacher model)")
+        TEACHER.update(api_base=a.api_base, model=a.model, key=key)
+    run(a.task, a.n, a.server, a.db, a.parallel, price_per_million=a.price_per_million, max_dollars=a.max_dollars)
 
 
 if __name__ == "__main__":
