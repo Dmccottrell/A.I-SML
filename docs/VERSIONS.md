@@ -98,6 +98,10 @@ It adds the mistakes found on the phone, so v2 is expected to score low on the n
 | Tools (calculator, date, your files, reminders) | ❌ | ❌ | ❌ | ❌ | ✅ | ✅ Uses tools more reliably | ✅ | ✅ |
 | Voice (talk and listen) | ❌ | ❌ | ❌ | ❌ | ✅ With small speech models alongside | ✅ | ✅ | ✅ |
 | Where you use it | PocketPal | PocketPal | PocketPal | PocketPal | ✅ **Your own website and app** | Phone (Q4) + server-hosted website | PC, high-end phones, the app's online mode | PC and server (the app's online brain) |
+| Thinking (adaptive and extended) | ❌ | ❌ | ⚠️ Trial: short step-by-step math (a fine-tune, no retraining) | ⚠️ Short thinking on math and multi-step questions | ✅ Adaptive thinking | ✅ Longer thinking (4,096-token memory) | ✅ Extended thinking | ✅ Extended thinking (best) |
+| Effort levels (Quick / Balanced / Deep) | ❌ | ❌ | ❌ | ❌ | ✅ You choose, or Auto picks | ✅ | ✅ | ✅ |
+| Documents (summaries, rewrites, drafts) | ❌ | ❌ | ⚠️ Short texts | ✅ Short documents | ✅ Document helper skill pack | ✅ Longer documents | ✅ Long documents (8,192 tokens) | ✅ Long documents |
+| Images (charts, screenshots) | ❌ | ❌ | ❌ | ❌ | ❌ | ⚠️ Through a vision helper (image to text) | ⚠️ Same, better | ⚠️ Same, best |
 | Offline / online | Offline | Offline | Offline (lookups from a saved Wikipedia copy) | Offline | ✅ **Both:** offline by default, online adds live web search; switches automatically | ✅ Both: offline on the phone (Q4), online can use the 3B on a server | ✅ Both: offline on high-end phones and PCs, online as the server model | ✅ Both: mainly the online brain on a server; offline on the PC |
 
 ## v3 up close: lookups and the teacher
@@ -163,6 +167,12 @@ v3.5 → v4 won't feel like "smarter" the way v2 → v3 does. It will feel like 
   tests, see the result and try again, inside a safe sandbox. It's in the same spirit as Claude Code,
   but only for small, simple tasks (a ~1B model can't do the big benchmark tasks). Its memory is the
   limit: 2,048 tokens fills up after about two small files. Details: [ROADMAP.md](ROADMAP.md#agentic-coding-a-coding-helper-that-works-in-a-loop).
+- **It thinks before hard questions.** For math and multi-step problems it writes out its reasoning
+  first. You choose **Quick, Balanced or Deep**, or leave it on Auto and the router decides. Easy
+  questions stay fast. It uses the same steps the big models use (plan, look up or calculate, check,
+  answer), and it's slower on Deep. Memory is the limit: thinking eats into 2,048 tokens.
+- **Documents.** A document helper skill pack summarizes, rewrites, drafts and turns notes into
+  to-do lists (short documents at first).
 - **It remembers you.** Saved notes ("my printer is an HP", "I'm studying biology") get looked up
   in later chats.
 - **Voice.** Speak to it and hear the answer. The speech parts are small separate models (open
@@ -183,6 +193,8 @@ v5 is the first **genuinely capable** assistant: a 3B brain, about 3× v3.5, rea
   better-organized answers. Skill packs, tools and lookups from v3–v4 all carry over and work
   better on a bigger brain.
 - **Still runs on a phone.** ~1.8 GB as Q4, which modern phones handle (slower than v2–v4).
+- **It can "see" through a helper.** A small open image-to-text model beside ours describes photos,
+  screenshots and charts, and our model reads the description. Our own vision model isn't planned.
 - **Needs the cloud to train.** 3B doesn't fit in the RTX 4070's 12 GB for training. Three routes:
 
 | Route | How | Time | Cost |

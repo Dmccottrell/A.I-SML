@@ -41,7 +41,7 @@ Meta use). Each one is added when a version actually needs it, and several can s
 | **Keyword search** (SQLite FTS5 / BM25) | Finds the right Wikipedia passage by its words | **v3** | No extra AI model needed, tiny, works offline on a phone. The simplest start for lookups |
 | **FAISS + sentence-transformers** | Finds passages by *meaning* ("heart pump" finds "cardiac muscle") | **v3** (upgrade) | Uses a small pretrained search model (~22M), only for searching; the brain stays yours |
 | **A local teacher model** (llama.cpp) | A bigger open model that writes practice data and grades answers | **v3** | See [Learning from a bigger AI](#learning-from-a-bigger-ai-distillation) |
-| **lm-evaluation-harness** | Standard AI exams (HellaSwag, ARC, GSM8K...) | **v3** | Works with `export_hf.py`'s output. Scores v2 and v3 on the same public tests |
+| **lm-evaluation-harness** | Standard AI exams (HellaSwag, ARC, MMLU, GSM8K...) | **v3** | Works with `export_hf.py`'s output. Scores v2 and v3 on the same public tests |
 | **TensorBoard** | Live graphs of loss and speed while training | **v3** | Local and free. Handy for an 18-day run |
 | **bitsandbytes** (8-bit optimizer) | Cuts optimizer memory ~75% | v3 (optional) → **v3.5** (needed) | In v3 it could replace gradient checkpointing if the pilot runs out of memory, and it's a rehearsal for 1B |
 | **TRL-style DPO** | "Which answer is better" training | **v3** | Small enough to write ourselves, like the rest of the training code |
@@ -167,6 +167,10 @@ that writes the lookup and "I don't know" examples and grades answers for DPO, s
   **`--backup_dir`** copies of `latest.pt`
 - A `--pilot` option (speed, memory and finish-time report) and optional gradient checkpointing
 
+**Ready for later features without retraining:** the 20 spare special tokens are planned for thinking
+(start and end) and the three effort levels, so v3 can learn to think in a fine-tune. See
+[Thinking, effort levels and analytical steps](#thinking-effort-levels-and-analytical-steps).
+
 Details and commands: [V3.md](V3.md).
 
 ---
@@ -264,9 +268,11 @@ Goal: turn the model into a **personal assistant** with specialist skills.
 
 ```
                         ┌─► Study helper    (explains school topics)
-You ─► Router ─► Base ──┼─► Story writer    (the v1 skill)
-      (picks)   model   ├─► IT helper       (printers, networks, troubleshooting)
-                        └─► Fact checker    (looks things up, cites sources)
+                        ├─► Story writer    (the v1 skill)
+You ─► Router ─► Base ──┼─► IT helper       (printers, networks, troubleshooting)
+      (picks)   model   ├─► Fact checker    (looks things up, cites sources)
+                        ├─► Document helper (summarizes, rewrites, drafts, makes to-do lists)
+                        └─► Coding helper   (works in a loop, small tasks)
 ```
 
 - **One base model** (v3.5's 1B, or v3 until it's ready) holds general language and knowledge.
@@ -328,6 +334,52 @@ this reason) matters more for agent work than extra brain size.
 **Safety first:** model-written code only runs inside the sandbox, and the harness is built and
 tested before any model is allowed to use it.
 
+### Thinking, effort levels and analytical steps
+
+How the model handles hard questions. It's built from four pieces:
+
+```
+question -> router picks effort (Quick / Balanced / Deep) + size (Lite / Standard / Pro) + skill pack
+         -> thinking, with a budget (none / short / long)
+         -> tool loop (lookup, calculator, files, code sandbox), with error recovery
+         -> check (recompute, or vote across a few tries)
+         -> answer
+```
+
+| Piece | How it works | Needs training? | When |
+|---|---|---|---|
+| **Adaptive and extended thinking** | The model writes its reasoning between two special tokens before it answers. They come from the 20 spare tokens already reserved in v3's tokenizer (planned: `<|reserved_0|>` = start of thinking, `<|reserved_1|>` = end), so nothing about v3's pretraining changes | **Yes, a fine-tune.** The teacher writes step-by-step solutions, and we keep only the ones whose final answer is *verified* correct (math answers, code tests) | Trial on v3, real at v3.5/v4, longer at v5+ |
+| **Dynamic effort allocation** | A Quick / Balanced / Deep switch in the app, and the v4 router choosing automatically. A **thinking budget** cuts thinking off at a limit and forces an answer. Effort tokens: `<|reserved_2|>` to `<|reserved_4|>` | Mostly code, plus examples with short thinking for easy questions and longer for hard ones | v4 |
+| **Multi-step analytical framework** | Plan, split into sub-questions, look up or calculate each one, check, then combine. Our harness runs the steps; the model does each one. Checking can be a recalculation, or a vote across a few tries (self-consistency), which costs time, not training | Little: format examples | v4 |
+| **Agency and tool integration** | A tool registry with a fixed call format, error recovery, confirmation before risky actions, and the sandbox. Extends the calculator, files, web search and coding loop | **Yes**, on verified tool-use runs | v4, expanding at v5+ |
+
+**Effort levels (starting values, tuned by testing):**
+
+| Level | Thinking | Tier | Use for |
+|---|---|---|---|
+| **Quick** | None | Lite | Small talk, simple facts, quick lists |
+| **Balanced** | Up to ~150 tokens | Standard | Everyday questions, explanations |
+| **Deep** | Up to ~500 tokens (more once memory grows) | Standard or Pro | Math, multi-step problems, analysis |
+| **Auto** | The router decides | The router decides | The default |
+
+**The cheapest first experiment (thinking-lite, on v3):** after v3's chat fine-tuning, a small
+fine-tune where the teacher (Qwen) solves math problems that come with known answers, keeping only
+correct solutions. Then score v3 on the held-out test. If it helps at 394M, scale it up at v3.5.
+The real GSM8K *test* questions stay out of training. Nothing about pretraining changes.
+
+**Later improvement (v5+):** sample several answers, keep the verified-correct ones, fine-tune on
+those, and repeat. This is a cheap, home-friendly version of how big labs train reasoning.
+
+**Honest limits:**
+- Thinking helps math, logic and multi-step questions, and does little for plain facts (those need lookups).
+- Small models can ramble or loop in long thinking, so we cap the budget and keep it short at ~1B.
+- Thinking uses memory: at 2,048 tokens, Deep mode leaves less room. Longer context (v6) matters here.
+- It's slower, which is why effort levels exist.
+- Humanity's Last Exam-style questions stay out of reach at our sizes. The machinery is the same as the
+  big models', but I can't promise how big the gains are until we measure them.
+- Some phone apps already understand thinking sections (PocketPal's settings have an "Include thinking
+  in context" toggle). We'll check which tags they recognize and match them.
+
 ### Your own app (offline + online)
 One app and one website that work offline and online. See
 [Offline and online](#offline-and-online-the-goal-for-the-app-and-website) and
@@ -369,6 +421,11 @@ hours).
 
 Code changes needed for from-scratch: multi-GPU training (FSDP), streaming data straight from
 disk shards, a larger tokenizer. v2's pause/resume and resumable data prep already carry over.
+
+**Vision helper (new in v5):** a small open image-to-text model runs beside ours to describe photos,
+screenshots and charts, and our model reads the description. It's a helper, not part of our weights
+(see the README's pretrained weights policy). This covers chart and screenshot questions without
+training a vision model.
 
 **Hardware note:** past ~300–500M parameters, the 12GB RTX 4070 is the bottleneck. If an upgrade
 ever makes sense, VRAM matters most; a used RTX 3090 (24GB) is the best value.
@@ -412,6 +469,25 @@ app's online mode.
 
 **Hardware note:** a used RTX 3090 (24 GB) would run v6.5 comfortably at Q8 and fine-tune it
 more easily, but the 4070 can already run both at Q4.
+
+---
+
+## How big-model benchmarks map to ours
+
+Public benchmarks such as Terminal-Bench, GDPval, Humanity's Last Exam, OSWorld and Chartography
+are built for the largest models; ours would score near zero on most, which tells us nothing. Each
+skill is still in the plan, measured with yardsticks that fit our size.
+
+| Skill (big-model benchmark) | In the plan? | Realistic for our models | Our yardstick |
+|---|---|---|---|
+| **Agentic coding** (Terminal-Bench, FrontierCode, CursorBench) | ✅ v4 coding helper | Small, simple tasks at ~1B | A small set of real tasks (fix this bug, add this function) and the agent test set |
+| **Knowledge work** (GDPval, Briefcase) | ✅ Document helper skill pack (v4), lookups, tools | Short summaries, rewrites, drafts, to-do lists. Longer documents need the 8k memory (v6) | Summaries and rewrites judged against the teacher's answers |
+| **Multidisciplinary reasoning** (Humanity's Last Exam, with tools) | ⚠️ Thinking, effort levels, calculator and lookups (v3.5/v4) | Near zero on that exam; real gains on grade-school math and multi-step questions | GSM8K-style math, ARC and MMLU through lm-evaluation-harness |
+| **Computer use** (OSWorld) | ⚠️ Not screen-based. Tool calls for phone and PC actions (set a reminder, open a file, run a command) in v4 agent mode | Simple actions through tools | "Did it call the right tool and finish the task?" |
+| **Visual chart recognition** (Chartography) | ⚠️ **Vision helper** (v5): a small open image-to-text model beside ours describes a picture or chart, and our model reads the text. It follows the pretrained weights policy (a helper beside the model, never inside it) | Basic chart and screenshot questions | A small chart and screenshot set |
+
+Training our own vision model from scratch is possible later (v6+) but needs image datasets and a
+lot more training, so it isn't planned.
 
 ---
 
