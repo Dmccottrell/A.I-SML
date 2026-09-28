@@ -22,6 +22,7 @@ Usage:
     python wiki_index.py build                     full index -> data/wiki/wiki.db (~10 GB, several hours)
     python wiki_index.py build --test              20,000 articles -> data/wiki-test/wiki.db (minutes)
     python wiki_index.py search "What is the capital of Illinois?"
+    (before the full index exists, search uses the test index automatically)
 """
 import argparse
 import itertools
@@ -226,6 +227,10 @@ def main():
             a.out, a.max_articles = os.path.join("data", "wiki-test", "wiki.db"), 20_000
         build(a.out, load_articles(), a.passages_per_article, a.max_articles)
     else:
+        test_db = os.path.join("data", "wiki-test", "wiki.db")
+        if a.db == DEFAULT_DB and not os.path.exists(DEFAULT_DB) and os.path.exists(test_db):
+            print(f"(no full index yet; searching the test index {test_db})\n")
+            a.db = test_db
         for i, r in enumerate(WikiIndex(a.db).search(a.question, a.k), 1):
             print(f"[{i}] {r['title']}: {r['text'][:300]}\n")
 
