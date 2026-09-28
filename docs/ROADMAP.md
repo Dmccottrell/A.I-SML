@@ -9,7 +9,7 @@ version's test-sheet results decide what the next one focuses on.
 |---|---|---|---|---|---|
 | **v1** ✅ | Learn the pipeline | 30M | Tells children's stories; runs offline on the phone | RTX 4070, 4 hours | $0 |
 | **v2** ✅ | Knowledge | 88M | General Q&A, explanations, multi-turn chat | RTX 4070, ~18 hours | $0 |
-| **v3** 🛠️ | Accuracy | ~400M | Looks things up (RAG), says "I don't know", handles corrections, exact instructions, preference training, basic code | RTX 4070, ~2.5–3 weeks | ~$20 electricity |
+| **v3** 🛠️ | Accuracy | ~400M | Looks things up (RAG), says "I don't know", handles corrections, exact instructions, preference training, basic code | RTX 4070, ~13–14 days (pilot: ~25 s/step with `torch.compile`) | ~$15–20 electricity |
 | **v3.5** | Scale at home | **~1.05B** | Same features as v3 on a much bigger brain; reads 30B tokens | RTX 4070, ~4.5–5.5 months (pausable) | ~$150–180 electricity |
 | **v4** | Abilities | Best base so far (1B) | Specialist skill packs + router, tools, voice, own app | RTX 4070 | $0 |
 | **v5** | Scale | 3B | Genuinely capable assistant | Cloud (from scratch) **or** RTX 4070 (fine-tune an open 3B) | ~$1,500+ **or** $0 |
