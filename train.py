@@ -298,6 +298,14 @@ if S.compile and not args.no_compile and device == "cuda":
         optimizer.zero_grad(set_to_none=True)
         print(f"torch.compile: off ({type(e).__name__}). Training without it; "
               "on Windows, `pip install triton-windows` can enable it.")
+        why = " ".join(str(e).split())[:500]          # the reason, on one line
+        print(f"  reason: {why}")
+        low = why.lower()
+        if "triton" in low:
+            print("  hint: pip install -U triton-windows")
+        if "cl.exe" in low or "compiler" in low or "visual studio" in low:
+            print("  hint: install Visual Studio Build Tools (Desktop development with C++), then run "
+                  "from the 'x64 Native Tools Command Prompt for VS'")
 
 # ---- resume from latest.pt if there is one ----
 start_iter, best_val = 0, float("inf")
