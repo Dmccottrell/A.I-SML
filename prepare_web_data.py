@@ -35,7 +35,7 @@ IT CAN BE STOPPED AND RESTARTED
 
 v3.5's code data (code_multi) comes from bigcode/the-stack-dedup, which needs a free
 Hugging Face account: open https://huggingface.co/datasets/bigcode/the-stack-dedup, accept
-the terms, then run `huggingface-cli login` once. Without that, use v3's Python-only
+the terms, then run `hf auth login` (older versions: `huggingface-cli login`) once. Without that, use v3's Python-only
 "code" source instead.
 
 Usage:
@@ -137,7 +137,7 @@ def _stack_language(lang):
                                 "RepositoryNotFoundError", "HTTPError", "DataFilesNotFoundError"):
             raise SystemExit(f"can't read The Stack ({lang}): {e}\n"
                              "Open https://huggingface.co/datasets/bigcode/the-stack-dedup, accept the terms, "
-                             "then run `huggingface-cli login`. Or use the Python-only 'code' source in config.py.")
+                             "then run `hf auth login` (older versions: `huggingface-cli login`). Or use the Python-only 'code' source in config.py.")
         raise
 
 
