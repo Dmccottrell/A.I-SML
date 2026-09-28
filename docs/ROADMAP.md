@@ -9,8 +9,8 @@ version's test-sheet results decide what the next one focuses on.
 |---|---|---|---|---|---|
 | **v1** ✅ | Learn the pipeline | 30M | Tells children's stories; runs offline on the phone | RTX 4070, 4 hours | $0 |
 | **v2** ✅ | Knowledge | 88M | General Q&A, explanations, multi-turn chat | RTX 4070, ~18 hours | $0 |
-| **v3** 🛠️ | Accuracy | ~400M | Looks things up (RAG), says "I don't know", handles corrections, exact instructions, preference training, basic code | RTX 4070, ~13–14 days (pilot: ~25 s/step with `torch.compile`) | ~$15–20 electricity |
-| **v3.5** | Scale at home | **~1.05B** | Same features as v3 on a much bigger brain; reads 30B tokens | RTX 4070, ~3.5–4.5 months (pausable) | ~$80–180 electricity |
+| **v3** 🛠️ | Accuracy | ~400M | Looks things up (RAG), says "I don't know", handles corrections, exact instructions, preference training, basic code | RTX 4070, ~13–14 days nonstop (pilot: ~25 s/step with `torch.compile`) | ~$15–20 electricity |
+| **v3.5** | Scale at home | **~1.05B** | Same features as v3 on a much bigger brain; reads 30B tokens | RTX 4070, ~3.5–4.5 months nonstop (pausable) | ~$110–270 electricity |
 | **v4** | Abilities | Best base so far (1B) | Specialist skill packs + router, tools, voice, own app | RTX 4070 | $0 |
 | **v5** | Scale | 3B | Genuinely capable assistant | Cloud (from scratch) **or** RTX 4070 (fine-tune an open 3B) | ~$1,500+ **or** $0 |
 | **v6** | Bigger small | **5B** | Stronger reasoning, coding and knowledge; 8k memory; powers online mode | Cloud (or grown from v5) | ~$4,000–6,000 (less with growth or a grant) |
@@ -185,8 +185,8 @@ Goal: the biggest brain that can realistically be trained at home, as cheaply as
 | Size | **~1.05B** parameters: 2048 wide × 22 layers, feed-forward 5,632, grouped-query attention (4 key/value heads), 32k vocabulary. All sizes are multiples of 256, so the phone's Q4 format works |
 | Reading | **30B tokens** (~29 per parameter) + a 3B-token anneal set; ~66 GB on disk |
 | Steps | ~115,000 at 262,144 tokens each |
-| Time | **~3.5–4.5 months** of GPU time (estimated from v3's measured 26.5 s/step: ~70 s/step by scaling, ~84–96 s with the memory tricks below); pause with Ctrl+C for gaming, resume anytime |
-| Cost | **~$80–180** electricity, depending on your rate (less with a GPU power limit of ~80%) |
+| Time | **~3.5–4.5 months running 24/7** (estimated from v3's measured 26.5 s/step: ~70 s/step by scaling, ~84–96 s with the memory tricks below). At 16 hours a day: ~5–6.5 months; 12 hours: ~7–9 months. Pause with Ctrl+C for gaming, resume anytime; only the hours the GPU trains count |
+| Cost | **~$110–270** electricity (~$140–180 at $0.20/kWh): about 700–900 kWh at ~270 W for the whole PC (GPU ~165 W plus the rest), so multiply by your own rate. Less with a GPU power limit of ~80% |
 | Memory | Needs **both CPU offload** (the optimizer lives in system RAM; ~16 GB free RAM) **and gradient checkpointing** on part or all of the layers. v3's measured 10.2 GB shows offload alone isn't enough: fp32 weights + gradients alone are ~8.4 GB at 1.04B parameters, and activations grow ~1.4× |
 | Phone file | ~650 MB (Q4) or ~1.1 GB (Q8) |
 | Features | Everything from v3 (lookups, "I don't know", corrections, preference training) |
