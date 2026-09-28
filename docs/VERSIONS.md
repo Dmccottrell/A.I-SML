@@ -5,7 +5,7 @@ v3.5, v4, v5, v6 and v6.5 are planned: their numbers are estimates and will chan
 Details: [V2.md](V2.md), [V3.md](V3.md), [ROADMAP.md](ROADMAP.md). Settings live in `config.py`.
 
 **Two kinds of jumps:** v1 → v2 → v3 → v3.5 each give the model a **bigger brain and more to
-read**. v4 is different: it keeps v3.5's 1B brain and adds **abilities around it** (specialist
+read**. v4 is different: it keeps v3.5's ~1.05B brain and adds **abilities around it** (specialist
 skill packs, tools, voice, your own app). It's the jump from "a model" to "an assistant".
 v5 goes back to a bigger brain (3B), and it's the first version that needs the cloud.
 v6 (5B) and v6.5 (7B) keep growing toward medium size, mainly for the PC and online mode.
@@ -14,8 +14,8 @@ v6 (5B) and v6.5 (7B) keep growing toward medium size, mainly for the PC and onl
 
 | | **v1** ✅ | **v2** ✅ | **v3** 🧱 | **v3.5** (planned) | **v4** (planned) | **v5** (planned) |
 |---|---|---|---|---|---|---|
-| Parameters | 29.5M | 88M | 394M | **~1B** | ~1B base + skill packs (a few MB each) | **~3B** |
-| Shape | 512 wide × 8 layers | 768 wide × 12 layers | 1024 wide × 32 layers | ~2048 wide × 22 layers | Same as v3.5 | ~3072 wide × 28 layers |
+| Parameters | 29.5M | 88M | 394M | **~1.05B** | ~1.05B base + skill packs (a few MB each) | **~3B** |
+| Shape | 512 wide × 8 layers | 768 wide × 12 layers | 1024 wide × 32 layers | 2048 wide × 22 layers | Same as v3.5 | ~3072 wide × 28 layers |
 | Memory (context) | 512 tokens | 1,024 tokens | 2,048 tokens | 2,048 tokens | 2,048 tokens + saved notes about you | 4,096 tokens |
 | Vocabulary | 8,192 | 16,384 | 32,768 | 32,768 | 32,768 | 65,536 |
 | Attention | Standard | Grouped-query (faster on phones) | Grouped-query | Grouped-query | Grouped-query | Grouped-query |
@@ -24,24 +24,26 @@ v6 (5B) and v6.5 (7B) keep growing toward medium size, mainly for the PC and onl
 
 | | **v1** | **v2** | **v3** | **v3.5** | **v4** | **v5** |
 |---|---|---|---|---|---|---|
-| **Data to prepare** | 467M tokens (TinyStories) | 2.8B tokens | **12B tokens** | **~20B tokens** | Skill datasets: a few thousand examples per skill | **~60B tokens** |
-| Data mix | 100% children's stories | 80% web, 15% Wikipedia, 5% stories | 63% web, 20% Wikipedia, 10% Python, 5% math, 2% stories | Like v3, but **code in several languages** (Python, JavaScript, HTML/CSS, SQL, shell); web from FineWeb-Edu's bigger `sample-100BT` slice so nothing repeats | Study, stories, IT help, fact checking, coding, tool use | Like v3.5, much bigger slice (plus more code and math) |
-| Disk space | ~1 GB | ~6 GB | ~24 GB | ~40 GB | < 1 GB | ~120 GB |
+| **Data to prepare** | 467M tokens (TinyStories) | 2.8B tokens | **12B + 1.3B anneal** (done in 1h26m) | **30B + 3B anneal** (~3.5–5 hours) | Skill datasets: a few thousand examples per skill | **~60B tokens** |
+| Data mix | 100% children's stories | 80% web, 15% Wikipedia, 5% stories | 63% web, 20% Wikipedia, 10% Python, 5% math, 2% stories | 63% web, 15% Wikipedia, 13% code in **several languages** (Python, JavaScript, HTML/CSS, SQL, shell, C#/Java), 7.5% math, 1.5% stories; web from FineWeb-Edu's bigger `sample-100BT` slice so nothing repeats | Study, stories, IT help, fact checking, coding, tool use | Like v3.5, much bigger slice (plus more code and math) |
+| Disk space | ~1 GB | ~6 GB | ~27 GB | ~66 GB | < 1 GB | ~120 GB |
 | Batch per step | 65,536 tokens | 131,072 tokens | 262,144 tokens | 262,144 tokens | Small (fine-tuning) | ~1M tokens (across several GPUs) |
-| **Steps** | 20,000 | 20,000 | **45,000** | **~76,000** | ~1–2k per skill pack | **~60,000** |
-| Total reading | 1.3B tokens | 2.6B tokens | 11.8B tokens | ~20B tokens | No new pretraining | ~60B tokens |
-| Reading per parameter | ~44 | ~30 | ~30 | ~20 | — | ~20 |
-| **Training time (RTX 4070)** | **~4 hours** | **~17.5–18 hours** (measured; data prep ~30 min) | **~15–18 days** (estimated from v2: ~20× the work; the pilot run gives the exact time) | **~3–4 months** (pausable) | **< 1 hour per skill pack** + writing the app code | Doesn't fit in 12 GB: **cloud, ~4–7 days on 8 rented GPUs** |
-| Cost | < $1 | ~$1 | ~$20 | ~$100–120 | < $5 | **~$800–2,500** cloud rental (or $0, see below) |
+| **Steps** | 20,000 | 20,000 | **45,000** | **~115,000** | ~1–2k per skill pack | **~60,000** |
+| Total reading | 1.3B tokens | 2.6B tokens | 11.8B tokens | 30B tokens | No new pretraining | ~60B tokens |
+| Reading per parameter | ~44 | ~30 | ~30 | ~29 | — | ~20 |
+| **Training time (RTX 4070)** | **~4 hours** | **~17.5–18 hours** (measured; data prep ~30 min) | **~15–18 days** (estimated from v2: ~20× the work; the pilot run gives the exact time) | **~4.5–5.5 months** (pausable) | **< 1 hour per skill pack** + writing the app code | Doesn't fit in 12 GB: **cloud, ~4–7 days on 8 rented GPUs** |
+| Cost | < $1 | ~$1 | ~$20 | ~$150–180 | < $5 | **~$800–2,500** cloud rental (or $0, see below) |
 | Chat fine-tuning | 5k single messages, ~10 min | ~105k multi-turn chats, ~1–2 hrs | Multi-turn + lookup + "I don't know" data | Same as v3 | Skill packs (LoRA) + router + tool-use examples | Everything from v3–v4, redone on the 3B brain |
 | Teacher model (a bigger open AI helping) | — | — (its chat data was partly written by bigger AIs) | **Yes:** a ~7B open model on the 4070 writes lookup and "I don't know" examples and grades answers for DPO | Same, plus worked step-by-step math problems for the chat lessons | Writes skill-pack and tool-use examples | Same, bigger teacher possible in the cloud |
-| Main tools added | PyTorch, CUDA, llama.cpp | Hugging Face `datasets` | Keyword search (SQLite FTS5), FAISS (optional), lm-evaluation-harness, TensorBoard, 8-bit optimizer (optional) | bitsandbytes (8-bit optimizer) | LoRA, tool calling, web search, Whisper + Piper (voice) | FSDP (multi-GPU) |
-| New code needed | — | Pause/resume, KV cache | Pilot runs, gradient checkpointing, lookup index, teacher script, DPO | 8-bit optimizer | Router, tools, voice, coding harness, app/website | Multi-GPU training (FSDP), streaming data shards |
+| Main tools added | PyTorch, CUDA, llama.cpp | Hugging Face `datasets` | Keyword search (SQLite FTS5), FAISS (optional), lm-evaluation-harness, TensorBoard, 8-bit optimizer (optional) | CPU offload for the optimizer (bitsandbytes as a fallback) | LoRA, tool calling, web search, Whisper + Piper (voice) | FSDP (multi-GPU) |
+| New code needed | — | Pause/resume, KV cache | Pilot runs, gradient checkpointing, lookup index, teacher script, DPO | CPU offload for the optimizer, multi-language code data | Router, tools, voice, coding harness, app/website | Multi-GPU training (FSDP), streaming data shards |
 
 v1 read its small dataset about **2.8 times over**; v2, v3 and v3.5 read their data about once, which is
-better for learning general knowledge. v3.5 needs ~12.6B tokens of web text, more than the 10B in
-the FineWeb-Edu slice v2 and v3 use, so it switches to the bigger `sample-100BT` slice. Its 20%
-Wikipedia share (~4B tokens) is about one full read of English Wikipedia.
+better for learning general knowledge. v3.5 needs ~18.9B tokens of web text, more than the 10B in
+the FineWeb-Edu slice v2 and v3 use, so it switches to the bigger `sample-100BT` slice. Its 15%
+Wikipedia share (~4.5B tokens) is about one full read of English Wikipedia. v3.5 reads 30B tokens
+(~29 per parameter) rather than the "efficient" 20B: a better model at the same size and phone speed.
+Full breakdown: [ROADMAP.md](ROADMAP.md#v35s-data-33b-tokens-to-prepare).
 
 **Fair testing:** worked math problems for the chat lessons are written by the teacher model. The
 real GSM8K questions (a well-known math test) are kept for testing only, never for training.
@@ -51,7 +53,7 @@ real GSM8K questions (a well-known math test) are kept for testing only, never f
 | | **v1** | **v2** | **v3** | **v3.5** | **v4** | **v5** |
 |---|---|---|---|---|---|---|
 | Final val loss | **1.279** | **2.929** (best), 2.984 at the last step | Measured when trained | Measured when trained | Same base as v3.5 | Measured when trained |
-| Phone file | 32 MB | **89 MB** | ~420 MB (Q8) or **~240 MB (Q4)** | ~1.1 GB (Q8) or **~600 MB (Q4)** | v3.5's file + a few MB per skill pack | ~3.2 GB (Q8) or **~1.8 GB (Q4)** |
+| Phone file | 32 MB | **89 MB** | ~420 MB (Q8) or **~240 MB (Q4)** | ~1.1 GB (Q8) or **~650 MB (Q4)** | v3.5's file + a few MB per skill pack | ~3.2 GB (Q8) or **~1.8 GB (Q4)** |
 | Test sheet (`evaluate.py`, /20) | Only identity and story questions | **18/20** (baseline) | Goal: clearly beat v2 | Goal: beat v3 | Goal: beat v3.5, plus new tests for tools and skills |
 | v3 test sheet (`prompts_v3.jsonl`, /41) | — | Run to set the baseline* | Goal: clearly beat v2, most of all on facts_hard, instructions, topic_switch, honesty, correction |  |  |  |
 | Phone speed (PocketPal, Q8_0) | — | **~210–245 tokens/s**, first word in <0.1 s | Slower (4.5× bigger); measured when done |  |  |  |
@@ -242,7 +244,7 @@ the app's online mode. Details: [ROADMAP.md](ROADMAP.md#v6-and-v65-bigger-small-
 - **v2:** a mini assistant with basic general knowledge and real conversations
 - **v3:** an **accurate, honest** assistant that looks facts up, admits when it doesn't know, and
   handles basic code
-- **v3.5:** v3's features on a **1B brain**: the biggest model trained at home
+- **v3.5:** v3's features on a **~1.05B brain** that reads 30B tokens: the biggest model trained at home
 - **v4:** a **personal assistant**: specialist skills, exact math with tools, coding help, voice,
   and your own app
 - **v5:** a **genuinely capable** 3B assistant: the first version trained in the cloud
