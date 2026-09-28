@@ -1,5 +1,7 @@
 # Training in the cloud (rent a GPU instead of using your PC)
 
+**First time on Vast.ai?** Start with [VAST_FIRST_TIME.md](VAST_FIRST_TIME.md): a step-by-step walkthrough from account to running.
+
 Use this when your PC needs to be off, or for the big runs (v3.5 and later) that would take months
 at home. **It costs money.** For v3 it is cheaper to run at home (about $30-50 of electricity vs
 roughly $50-100 to rent a 4090; these are estimates, not measured). Nothing here changes the code:

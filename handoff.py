@@ -32,6 +32,7 @@ import sys
 from config import add_version_arg, get_version
 
 FILES = ["latest.pt", "pre_decay.pt"]
+DOWN_ONLY = ["final.pt"]      # exists once training has finished; only worth fetching, never sending
 
 
 # ---- the three things that touch the network (replaced by simple versions in tests) ----
@@ -110,7 +111,7 @@ def down(a, V):
         raise SystemExit("the cloud machine is still training (tmux session 'train'). Wait for its window to "
                          "end, or press Ctrl+C once in `tmux attach -t train`, then run this again.")
     os.makedirs(local_dir, exist_ok=True)
-    for name in FILES:
+    for name in FILES + DOWN_ONLY:
         rfile = f"{remote_dir}/{name}"
         if remote_stat(a.host, a.port, rfile)[0] == 0:
             continue
