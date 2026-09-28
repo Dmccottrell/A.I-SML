@@ -250,7 +250,16 @@ many thinly). With 1B parameters there's room for more:
 - `checkpoint_every` setting: protect every block (1) or every 2nd block (2) with gradient checkpointing
 - `optimizer="adamw8bit"` (bitsandbytes) as a fallback (untested here)
 
-**Still to build:** multi-language code data, the bigger FineWeb-Edu slice, the new tokenizer, and the pilot runs.
+- **Data prep for v3.5** (`python prepare_web_data.py --version v3.5`): the bigger FineWeb-Edu slice
+  (`sample-100BT`, main and score 4-5 anneal versions) and `code_multi`: Python 49%, JavaScript 14%,
+  HTML 5%, CSS 4%, Java 7%, C# 6%, SQL 8%, shell 5%, PowerShell 2% from The Stack, mixed by character
+  share so the tokenizer sees every language, and skipping minified/generated files. Tested end to end
+  with fake sources (Hugging Face isn't reachable from where I build); **not** tested against the real
+  datasets. The Stack needs a free Hugging Face account: accept its terms once and run
+  `huggingface-cli login`.
+
+**Still to build:** the pilot runs on your PC, and checking the real dataset names and speeds on the first
+`--test` run (`python prepare_web_data.py --version v3.5 --test`, 20M tokens, minutes).
 
 **Code needed** (added when we get there):
 - **CPU offload for the optimizer** (and the 8-bit optimizer, bitsandbytes, as a fallback), **plus gradient checkpointing** (all layers, or every other layer for about half the time cost): together they bring GPU memory to ~10–11 GB

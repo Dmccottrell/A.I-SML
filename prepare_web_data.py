@@ -7,7 +7,10 @@ WHAT THIS FILE DOES (run it once per version; it takes a while)
        only about as much disk as the finished data:
          fineweb    - FineWeb-Edu: educational web pages
          wikipedia  - English Wikipedia
-         code       - Python source code (codeparrot-clean)          (v3+)
+         code       - Python source code (codeparrot-clean)          (v3)
+         code_multi - Python, JavaScript, HTML, CSS, Java, C#, SQL, shell and
+                      PowerShell (The Stack, license-filtered)          (v3.5)
+         fineweb_100bt / fineweb_hq_100bt - the bigger FineWeb-Edu slice (v3.5)
          math       - FineMath: web pages with step-by-step math      (v3+)
          tinystories- the v1 stories (already on your PC)
        How much of each is set per version in config.py (data_mix):
@@ -26,7 +29,14 @@ IT CAN BE STOPPED AND RESTARTED
     Progress is saved after every batch (<data_dir>/<source>.progress.json).
     If it crashes, loses internet, or you press Ctrl+C, just run it again:
     finished sources are skipped and an unfinished one continues where it
-    stopped.
+    stopped. (A restart re-reads the stream up to where it stopped without
+    encoding it, which needs the internet again: a restart late in a 30B-token
+    v3.5 run re-downloads a lot, so avoid Ctrl+C on that one unless you must.)
+
+v3.5's code data (code_multi) comes from bigcode/the-stack-dedup, which needs a free
+Hugging Face account: open https://huggingface.co/datasets/bigcode/the-stack-dedup, accept
+the terms, then run `huggingface-cli login` once. Without that, use v3's Python-only
+"code" source instead.
 
 Usage:
     python prepare_web_data.py --version v3 --test   quick check: 20M tokens into data/v3-test
@@ -61,6 +71,14 @@ def load_fineweb():
         yield row["text"]
 
 
+def load_fineweb_100bt():
+    """The 10x bigger FineWeb-Edu slice (v3.5 reads ~19B tokens, so a 10B slice would repeat pages)."""
+    from datasets import load_dataset
+    ds = load_dataset("HuggingFaceFW/fineweb-edu", name="sample-100BT", split="train", streaming=True)
+    for row in ds:
+        yield row["text"]
+
+
 def load_wikipedia():
     """English Wikipedia. The title is added on top so facts are tied to their subject."""
     from datasets import load_dataset
@@ -88,6 +106,67 @@ def load_code():
             yield row["content"]
 
 
+# ---- v3.5: several programming languages ----
+# Language folder in The Stack -> share of the code characters. Python stays the biggest
+# (the v4 coding helper's main language); JavaScript/HTML/CSS for websites; SQL for data;
+# shell/PowerShell for everyday computer tasks; Java and C# are common at work.
+CODE_LANGUAGES = {"python": 0.49, "javascript": 0.14, "html": 0.05, "css": 0.04, "java": 0.07,
+                  "c-sharp": 0.06, "sql": 0.08, "shell": 0.05, "powershell": 0.02}
+
+
+def looks_like_real_code(text):
+    """Skip generated or minified files and data dumps: very long lines, or mostly symbols/digits."""
+    if not text or len(text) > 50_000:
+        return False
+    lines = text.split("\n")
+    if max(map(len, lines)) > 1000 or len(text) / len(lines) > 100:
+        return False
+    return sum(c.isalpha() for c in text) / len(text) >= 0.25
+
+
+def _stack_language(lang):
+    """Files of one language from The Stack (license-filtered, deduplicated)."""
+    from datasets import load_dataset
+    try:
+        ds = load_dataset("bigcode/the-stack-dedup", data_dir=f"data/{lang}", split="train", streaming=True)
+        for row in ds:
+            if looks_like_real_code(row["content"]):
+                yield row["content"]
+    except Exception as e:                       # usually: terms not accepted / not logged in
+        if type(e).__name__ in ("GatedRepoError", "DatasetNotFoundError", "HfHubHTTPError",
+                                "RepositoryNotFoundError", "HTTPError", "DataFilesNotFoundError"):
+            raise SystemExit(f"can't read The Stack ({lang}): {e}\n"
+                             "Open https://huggingface.co/datasets/bigcode/the-stack-dedup, accept the terms, "
+                             "then run `huggingface-cli login`. Or use the Python-only 'code' source in config.py.")
+        raise
+
+
+def interleave(streams, weights):
+    """Yield texts from several streams so each gets its share (`weights`) of the CHARACTERS.
+
+    Always takes the next text from the stream that is furthest behind its share. There is no
+    randomness, so a restarted run sees exactly the same order. A stream that runs out drops
+    out and the others share its part.
+    """
+    streams = dict(streams)
+    weights = {k: weights[k] for k in streams}
+    sent = {k: 0 for k in streams}
+    while streams:
+        k = min(streams, key=lambda name: sent[name] / weights[name])
+        try:
+            text = next(streams[k])
+        except StopIteration:
+            del streams[k]
+            continue
+        sent[k] += len(text)
+        yield text
+
+
+def load_code_multi():
+    """Code in several languages, mixed by CODE_LANGUAGES (so the tokenizer also sees all of them)."""
+    yield from interleave({lang: _stack_language(lang) for lang in CODE_LANGUAGES}, CODE_LANGUAGES)
+
+
 def load_fineweb_hq():
     """FineWeb-Edu pages rated 4 or 5 (out of 5) for educational quality.
 
@@ -99,11 +178,19 @@ def load_fineweb_hq():
             yield text
 
 
-def _fineweb_rows():
+def _fineweb_rows(name="sample-10BT"):
     from datasets import load_dataset
-    ds = load_dataset("HuggingFaceFW/fineweb-edu", name="sample-10BT", split="train", streaming=True)
+    ds = load_dataset("HuggingFaceFW/fineweb-edu", name=name, split="train", streaming=True)
     for row in ds:
         yield row["text"], row["int_score"]
+
+
+def load_fineweb_hq_100bt():
+    """Score 4-5 pages from the big slice: v3.5's anneal set needs ~1.2B tokens of them,
+    more than the ~1B a 10B-token slice holds."""
+    for text, score in _fineweb_rows("sample-100BT"):
+        if score >= 4:
+            yield text
 
 
 def load_math():
@@ -125,6 +212,9 @@ LOADERS = {
     "code": load_code,
     "math": load_math,
     "fineweb_hq": load_fineweb_hq,
+    "fineweb_100bt": load_fineweb_100bt,
+    "fineweb_hq_100bt": load_fineweb_hq_100bt,
+    "code_multi": load_code_multi,
     "tinystories": load_tinystories,
 }
 
