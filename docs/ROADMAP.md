@@ -327,7 +327,7 @@ this (`<|tool_call|>`, `<|tool_result|>`) are already reserved in v3's tokenizer
 
 | Step | What | When |
 |---|---|---|
-| 1 | **Harness:** read file, edit file, run command, run tests, all inside a **sandbox** (a temporary folder, no internet, time and memory limits, nothing outside it can be touched) | While v3.5 trains (CPU work) |
+| 1 | ✅ **Built and tested (`harness.py`):** read file, edit file, run command, run tests, all inside a **sandbox** (a temporary folder, no internet, time and memory limits, nothing outside it can be touched) | While v3.5 trains (CPU work) |
 | 2 | **Training data:** a coding-focused open teacher (e.g. Qwen2.5-Coder-7B, license to be checked) works through small coding tasks in the harness. Keep only runs where the **tests really pass** (checked by running them) | After v3.5 |
 | 3 | **Fine-tune** a "coding" skill pack (LoRA) on those runs | v4 |
 | 4 | **Measure** on a small test set of real tasks (fix this bug, add this function) | v4 |
