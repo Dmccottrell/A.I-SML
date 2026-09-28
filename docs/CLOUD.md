@@ -82,10 +82,33 @@ same folders on your PC. `final.pt`/`ckpt.pt` are all you need for chatting and 
 
 ## 7. Switching between home and cloud (optional)
 
-Training resumes from `checkpoints/<version>/latest.pt` and the data files, so you *can* move a run:
-copy `latest.pt`, `pre_decay.pt` (if it exists) and `data/<version>/` to the other machine and run the
-same command. `latest.pt` is several GB for v3 (more for v3.5), so this is slow on a home
-connection; do it rarely.
+You can stop the cloud any time (Ctrl+C once, wait for "paused at iteration N") and carry on at home,
+or the other way round. Training resumes from `checkpoints/<version>/latest.pt`, so a switch means
+copying that one file. For v3 it is ~4.7 GB (weights 1.6 GB + the optimizer's memory 3.1 GB).
+
+**One-time setup: the SAME tokenizer on both machines.** A checkpoint only makes sense with the
+tokenizer it was trained with. Before running `prepare_web_data.py` in the cloud, copy your home
+`data/v3/tokenizer.json` (small) into `data/v3/` on the cloud machine. The data script skips
+training a new tokenizer when that file exists. (The 27 GB of data does *not* need copying: the cloud
+builds its own copy, in ~2-4 hours, about $1.)
+
+**Each switch:**
+1. On the machine that is training: Ctrl+C **once**. Wait for `paused at iteration N`.
+2. Copy `latest.pt` to the other machine, into the same folder (`checkpoints/dev/v3/` at home,
+   `checkpoints/v3/` in the cloud; `pre_decay.pt` too, once it exists). From home to cloud use
+   `scp -P <port> latest.pt root@<ip>:~/A.I-SML/checkpoints/v3/` (the provider shows the port and IP);
+   from cloud to home swap the two paths, or use the provider's cloud-sync (Google Drive, Dropbox).
+   A home upload of 4.7 GB takes ~10-30 minutes on a typical connection.
+3. Start with the same command; check the first line says `resuming from iteration N` with the N you
+   just paused at.
+
+**Golden rules:** only ONE machine trains at a time; always copy the newest `latest.pt`. If both ran,
+keep the one with the higher iteration number and the other's work is lost.
+
+**Does a schedule save money?** No. You pay per hour the GPU is on, so the same run costs about the
+same however it is split; a schedule only changes how many days it takes. Also, on Vast.ai a *stopped*
+instance can be rented by someone else and may not restart for a while, so either leave it running
+(idle GPU costs ~$0.17/hr) or expect to set up again.
 
 ## 8. Do not forget
 
