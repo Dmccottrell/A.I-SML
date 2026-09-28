@@ -8,9 +8,9 @@ version's test-sheet results decide what the next one focuses on.
 | Version | Theme | Brain | Main new abilities | Where it trains | Cost |
 |---|---|---|---|---|---|
 | **v1** ✅ | Learn the pipeline | 30M | Tells children's stories; runs offline on the phone | RTX 4070, 4 hours | $0 |
-| **v2** ✅ | Knowledge | 88M | General Q&A, explanations, multi-turn chat | RTX 4070, ~20 hours | $0 |
+| **v2** ✅ | Knowledge | 88M | General Q&A, explanations, multi-turn chat | RTX 4070, ~18 hours | $0 |
 | **v3** 🛠️ | Accuracy | ~400M | Looks things up (RAG), says "I don't know", handles corrections, exact instructions, preference training, basic code | RTX 4070, ~2.5–3 weeks | ~$20 electricity |
-| **v3.5** | Scale at home | **1B** | Same features as v3 on a much bigger brain | RTX 4070, ~3–4 months (pausable) | ~$100–120 electricity |
+| **v3.5** | Scale at home | **~1.05B** | Same features as v3 on a much bigger brain; reads 30B tokens | RTX 4070, ~4.5–5.5 months (pausable) | ~$150–180 electricity |
 | **v4** | Abilities | Best base so far (1B) | Specialist skill packs + router, tools, voice, own app | RTX 4070 | $0 |
 | **v5** | Scale | 3B | Genuinely capable assistant | Cloud (from scratch) **or** RTX 4070 (fine-tune an open 3B) | ~$1,500+ **or** $0 |
 | **v6** | Bigger small | **5B** | Stronger reasoning, coding and knowledge; 8k memory; powers online mode | Cloud (or grown from v5) | ~$4,000–6,000 (less with growth or a grant) |
@@ -107,7 +107,7 @@ and has a test-sheet score recorded as the **baseline** for v3. ✅ All done.
 
 | Measure | Result |
 |---|---|
-| Val loss (pretraining) | 2.929 best, 2.984 final (20,000 steps, ~20 hours) |
+| Val loss (pretraining) | 2.929 best, 2.984 final (20,000 steps, ~17.5–18 hours; data prep ~30 minutes) |
 | Test sheet (`evaluate.py`) | **18/20** (identity 2/2, facts 7/8, explain 5/5, advice 2/2, writing 1/1, stories 1/2) |
 | HellaSwag (`exam.py`) | **28.4%** (random 25%, GPT-2 124M ~29–31%) |
 | Phone | 89 MB (Q8_0), ~210–245 tokens/second in PocketPal, fully offline |
@@ -171,21 +171,63 @@ Details and commands: [V3.md](V3.md).
 
 ---
 
-## v3.5: 1B on the RTX 4070
+## v3.5: ~1.05B on the RTX 4070
 
 Goal: the biggest brain that can realistically be trained at home, as cheaply as possible.
 (700M was considered and skipped: 1B costs more time but not more money.)
 
 | | |
 |---|---|
-| Size | ~1B parameters (e.g. dim 2048, 20–22 layers, grouped-query attention) |
-| Reading | ~20B tokens (a larger FineWeb-Edu slice + Wikipedia + multi-language code + math + stories), ~40GB on disk |
-| Time | ~3–4 months of GPU time; pause with Ctrl+C for gaming, resume anytime |
-| Cost | ~$100–120 electricity (less with a GPU power limit of ~80%) |
-| Features | Everything from v3 (lookups, "I don't know", preference training) |
+| Size | **~1.05B** parameters: 2048 wide × 22 layers, feed-forward 5,632, grouped-query attention (4 key/value heads), 32k vocabulary. All sizes are multiples of 256, so the phone's Q4 format works |
+| Reading | **30B tokens** (~29 per parameter) + a 3B-token anneal set; ~66 GB on disk |
+| Steps | ~115,000 at 262,144 tokens each |
+| Time | **~4.5–5.5 months** of GPU time; pause with Ctrl+C for gaming, resume anytime |
+| Cost | **~$150–180** electricity (less with a GPU power limit of ~80%) |
+| Memory | ~9.5–10 GB on the GPU with **CPU offload** (the optimizer lives in system RAM; needs ~16 GB free RAM) |
+| Phone file | ~650 MB (Q4) or ~1.1 GB (Q8) |
+| Features | Everything from v3 (lookups, "I don't know", corrections, preference training) |
 | **Code** | **Several languages** instead of Python only (see below) |
 
-**Multi-language code.** v3 reads only Python (a small brain learns one language well rather than many thinly). With 1B parameters there's room for more:
+**Why 30B tokens instead of 20B:** ~20 tokens per parameter is the most *efficient* use of
+training time, but models keep improving with more reading. 30B gives a model roughly as good as a
+~1.3–1.5B one trained the standard way, while staying 1B-sized on the phone (same speed and file
+size). The extra ~1.5 months and ~$50 are paid once. If more is wanted later, the run can continue
+from `pre_decay.pt` (e.g. to 40B) instead of starting over.
+
+**Why ~1.05B and not 1.15B or 1.3B:** training needs the weights, gradients and optimizer on a 12 GB
+card at once. ~1.05B fits with CPU offload; 1.15B is tighter (+1–2 test points, +15% time); 1.3B
+needs 16-bit-only training (+3–4 points, +30% time). The v3.5 pilot runs confirm memory and speed;
+if there's clear headroom, 1.15B can still be chosen then.
+
+### v3.5's data (~33B tokens to prepare)
+
+**Main reading: 30B tokens**
+
+| Share | Tokens | Source | Notes |
+|---|---|---|---|
+| 63% | 18.9B | Educational web pages (FineWeb-Edu `sample-100BT`) | The bigger slice, so no page is read twice (v3 used `sample-10BT`) |
+| 15% | 4.5B | Wikipedia | About one full read of English Wikipedia (it's only ~4–5B tokens), so its share drops from v3's 20% |
+| 13% | 3.9B | Code, several languages | Python ~1.9B, JavaScript/HTML/CSS ~0.9B, C# or Java ~0.5B, SQL ~0.3B, shell/PowerShell ~0.3B |
+| 7.5% | 2.25B | Math (FineMath) | Up from 5%: helps step-by-step reasoning |
+| 1.5% | 0.45B | Stories (TinyStories) | Nearly all of TinyStories |
+
+**Anneal set: 3B tokens** (read during the last 10% of steps)
+
+| Share | Tokens | Source |
+|---|---|---|
+| 40% | 1.2B | Top-rated web pages (FineWeb-Edu score 4–5) |
+| 25% | 0.75B | Wikipedia |
+| 15% | 0.45B | Math |
+| 15% | 0.45B | Code |
+| 5% | 0.15B | Stories |
+
+**Preparing it:** ~33B tokens, ~66 GB, about **3.5–5 hours** at the ~2.6M tokens/second measured for
+v3 (the code dataset may be slower). Test questions are removed as in v3. A new 32k tokenizer is
+trained on a sample that includes every code language. **Disk tip:** v3's 27 GB of data can be
+deleted once v3 has finished training.
+
+**Multi-language code.** v3 reads only Python (a small brain learns one language well rather than
+many thinly). With 1B parameters there's room for more:
 
 | Language | Why |
 |---|---|
@@ -195,28 +237,23 @@ Goal: the biggest brain that can realistically be trained at home, as cheaply as
 | Shell / PowerShell | Everyday computer tasks and scripts (IT help) |
 | C# or Java | Common in apps and at work |
 
-- **Data:** a permissively licensed multi-language code dataset (e.g. The Stack or StarCoder data). These require accepting their terms on Hugging Face and logging in with a token.
-- **Tokenizer:** v3.5's tokenizer sample will include every language, so each gets efficient word pieces.
-- **Code share:** probably ~12–15% of the reading, still mostly Python.
+- **Data:** a permissively licensed multi-language code dataset (e.g. The Stack or StarCoder data).
+  These require accepting their terms on Hugging Face and logging in with a token.
 
 **Code needed** (added when we get there):
-- **8-bit optimizer** (bitsandbytes): cuts optimizer memory ~75%, so 1B fits in 12GB
+- **CPU offload for the optimizer** (and the 8-bit optimizer, bitsandbytes, as a fallback): keeps GPU memory at ~10 GB
 - **Gradient checkpointing**: saves working memory for ~30% more time
 - **Micro-batches of 1–2 sequences** with more gradient accumulation (same results)
-- **Bigger data prep**: the same resumable streaming, with a larger token budget. **Switch FineWeb-Edu
-  to its `sample-100BT` slice:** v3.5's web share (~12.6B tokens at 63%) is more than the 10B
-  in `sample-10BT`, and reading the same pages twice helps less than fresh ones. Wikipedia at 20%
-  (~4B tokens) is about one full read of English Wikipedia, so it doesn't repeat; stay near 20%.
+- **Bigger data prep**: the same resumable streaming with the bigger FineWeb-Edu slice and the
+  multi-language code source
 - **Step-by-step math in the chat data**: the teacher model writes worked word problems (GSM8K
   style) for fine-tuning. Keep the real GSM8K questions for testing only, so the test stays fair.
-- **Mandatory pilot run**: ~1–2 days first, to confirm memory, speed and falling loss
+- **Mandatory pilot runs**: ~1.05B (and 1.15B if memory allows), to confirm memory, speed and falling loss
 
 **While it trains:** the GPU is busy, so this is the time to *write* v4's code (the coding
 harness, router, website) and test it on small models, then train the skill packs afterwards.
 
-**Checkpoints:** keep `latest.pt` backed up (e.g. copy it to another drive weekly). A three-month
-run is worth protecting.
-
+**Checkpoints:** keep `latest.pt` backed up (`--backup_dir`). A five-month run is worth protecting.
 ---
 
 ## v4: Abilities
