@@ -10,7 +10,7 @@ version's test-sheet results decide what the next one focuses on.
 | **v1** ✅ | Learn the pipeline | 30M | Tells children's stories; runs offline on the phone | RTX 4070, 4 hours | $0 |
 | **v2** ✅ | Knowledge | 88M | General Q&A, explanations, multi-turn chat | RTX 4070, ~18 hours | $0 |
 | **v3** 🛠️ | Accuracy | ~400M | Looks things up (RAG), says "I don't know", handles corrections, exact instructions, preference training, basic code | RTX 4070, ~13–14 days (pilot: ~25 s/step with `torch.compile`) | ~$15–20 electricity |
-| **v3.5** | Scale at home | **~1.05B** | Same features as v3 on a much bigger brain; reads 30B tokens | RTX 4070, ~4.5–5.5 months (pausable) | ~$150–180 electricity |
+| **v3.5** | Scale at home | **~1.05B** | Same features as v3 on a much bigger brain; reads 30B tokens | RTX 4070, ~3.5–4.5 months (pausable) | ~$80–180 electricity |
 | **v4** | Abilities | Best base so far (1B) | Specialist skill packs + router, tools, voice, own app | RTX 4070 | $0 |
 | **v5** | Scale | 3B | Genuinely capable assistant | Cloud (from scratch) **or** RTX 4070 (fine-tune an open 3B) | ~$1,500+ **or** $0 |
 | **v6** | Bigger small | **5B** | Stronger reasoning, coding and knowledge; 8k memory; powers online mode | Cloud (or grown from v5) | ~$4,000–6,000 (less with growth or a grant) |
@@ -185,9 +185,9 @@ Goal: the biggest brain that can realistically be trained at home, as cheaply as
 | Size | **~1.05B** parameters: 2048 wide × 22 layers, feed-forward 5,632, grouped-query attention (4 key/value heads), 32k vocabulary. All sizes are multiples of 256, so the phone's Q4 format works |
 | Reading | **30B tokens** (~29 per parameter) + a 3B-token anneal set; ~66 GB on disk |
 | Steps | ~115,000 at 262,144 tokens each |
-| Time | **~4.5–5.5 months** of GPU time; pause with Ctrl+C for gaming, resume anytime |
-| Cost | **~$150–180** electricity (less with a GPU power limit of ~80%) |
-| Memory | ~9.5–10 GB on the GPU with **CPU offload** (the optimizer lives in system RAM; needs ~16 GB free RAM) |
+| Time | **~3.5–4.5 months** of GPU time (estimated from v3's measured 26.5 s/step: ~70 s/step by scaling, ~84–96 s with the memory tricks below); pause with Ctrl+C for gaming, resume anytime |
+| Cost | **~$80–180** electricity, depending on your rate (less with a GPU power limit of ~80%) |
+| Memory | Needs **both CPU offload** (the optimizer lives in system RAM; ~16 GB free RAM) **and gradient checkpointing** on part or all of the layers. v3's measured 10.2 GB shows offload alone isn't enough: fp32 weights + gradients alone are ~8.4 GB at 1.04B parameters, and activations grow ~1.4× |
 | Phone file | ~650 MB (Q4) or ~1.1 GB (Q8) |
 | Features | Everything from v3 (lookups, "I don't know", corrections, preference training) |
 | **Code** | **Several languages** instead of Python only (see below) |
@@ -199,7 +199,7 @@ size). The extra ~1.5 months and ~$50 are paid once. If more is wanted later, th
 from `pre_decay.pt` (e.g. to 40B) instead of starting over.
 
 **Why ~1.05B and not 1.15B or 1.3B:** training needs the weights, gradients and optimizer on a 12 GB
-card at once. ~1.05B fits with CPU offload; 1.15B is tighter (+1–2 test points, +15% time); 1.3B
+card at once. ~1.05B fits with CPU offload plus gradient checkpointing; 1.15B is tighter (+1–2 test points, +15% time); 1.3B
 needs 16-bit-only training (+3–4 points, +30% time). The v3.5 pilot runs confirm memory and speed;
 if there's clear headroom, 1.15B can still be chosen then.
 
@@ -245,7 +245,7 @@ many thinly). With 1B parameters there's room for more:
   These require accepting their terms on Hugging Face and logging in with a token.
 
 **Code needed** (added when we get there):
-- **CPU offload for the optimizer** (and the 8-bit optimizer, bitsandbytes, as a fallback): keeps GPU memory at ~10 GB
+- **CPU offload for the optimizer** (and the 8-bit optimizer, bitsandbytes, as a fallback), **plus gradient checkpointing** (all layers, or every other layer for about half the time cost): together they bring GPU memory to ~10–11 GB
 - **Gradient checkpointing**: saves working memory for ~30% more time
 - **Micro-batches of 1–2 sequences** with more gradient accumulation (same results)
 - **Bigger data prep**: the same resumable streaming with the bigger FineWeb-Edu slice and the
