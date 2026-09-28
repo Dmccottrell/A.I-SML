@@ -54,6 +54,17 @@ READING THE OUTPUT
 """
 import argparse, csv, os, math, shutil, sys, time
 
+# Windows only: torch.compile keeps its cache in a long folder path under %TEMP%, and file paths
+# over 260 characters fail there ("FileNotFoundError ... triton ... .json"). A short folder avoids it.
+if os.name == "nt" and "TORCHINDUCTOR_CACHE_DIR" not in os.environ:
+    for _base in (os.environ.get("SystemDrive", "C:") + os.sep, os.path.expanduser("~")):
+        try:
+            os.makedirs(os.path.join(_base, "ti"), exist_ok=True)
+            os.environ["TORCHINDUCTOR_CACHE_DIR"] = os.path.join(_base, "ti")
+            break
+        except OSError:
+            continue
+
 import numpy as np
 import torch
 
