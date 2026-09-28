@@ -296,7 +296,7 @@ You ─► Router ─► Base ──┼─► IT helper       (printers, network
 - **Skill packs (LoRA adapters):** small add-ons of a few MB each, trained in under an hour
   each. Adding one never breaks the others. llama.cpp supports them.
 - **Router:** a small classifier that picks the right skill pack for each question.
-- **Tiers:** the router also picks the model size: Lite for easy messages, Standard for harder ones. See [Model tiers](#model-tiers-lite-standard-pro).
+- **Tiers:** the router also picks the model size: Lite for easy messages, Standard for harder ones. See [Model tiers](#model-tiers-lite-standard-pro-max).
 
 ### Tools, voice, memory
 - **Tools:** calculator (exact math), date/time, search your files, reminders. The model decides
@@ -489,6 +489,42 @@ more easily, but the 4070 can already run both at Q4.
 
 ---
 
+## Beyond v6.5: v7, v8 and Max
+
+The plan is to keep scaling, and the top of the lineup is the **Max** tier. Nothing here is committed:
+each step happens only if the one before it shows a clear gain **and** the money is there.
+
+| Step | Size | Tokens read | Rough cost | Runs on |
+|---|---|---|---|---|
+| v6.5 | 7B | ~210B | ~$8-18k | PC, server |
+| **v7: "upper small" (Max preview)** | ~13B | ~390B | ~$40-65k | Server; PC with a 24 GB GPU (Q4 ~7.5 GB) |
+| **v8: "medium" (Max)** | ~30B | ~900B | ~$230-340k | Server (Q4 ~17 GB) |
+
+*Estimates from compute = 6 x parameters x tokens on rented H100s at $2-3/hour. Real prices swing.*
+
+**Max is online-only at first** (the app's online mode, or your own PC). Phones keep Lite and
+Standard offline. Each query costs real server money, so a hosted Max needs a budget, per-user
+limits, or a paid plan. That is a product decision for later.
+
+**Where "drastic improvements" come from (size is only part of it):**
+- **Better data:** cleaner, more targeted, more code/math/reasoning.
+- **After-training:** teaching from a bigger model (distillation), preference training (DPO), and
+  reinforcement with answers that can be *verified* (tests, calculators, math answers).
+- **Mixture-of-experts:** more capacity for the same compute (worth testing at v7).
+- **Thinking, tools, lookups and the coding harness**, all already planned.
+
+**The payoff loop:** Max teaches Pro, Standard and Lite. Every step up makes the whole family
+better without training the small ones from scratch. The Qwen teacher stays until Max replaces it.
+
+**Engineering changes at this size:** many-GPU and multi-machine training with automatic recovery
+from failures, terabyte-scale data pipelines, a broader test suite (MMLU, GSM8K, coding tasks, safety
+checks), and sturdier server hosting (vLLM).
+
+**Money:** compute grants (Google's TPU Research Cloud, academic and startup credits), sponsors, or
+paying users. A documented project with results from v1-v6.5 is a strong application.
+
+---
+
 ## How big-model benchmarks map to ours
 
 Public benchmarks such as Terminal-Bench, GDPval, Humanity's Last Exam, OSWorld and Chartography
@@ -508,7 +544,7 @@ lot more training, so it isn't planned.
 
 ---
 
-## Model tiers (Lite, Standard, Pro)
+## Model tiers (Lite, Standard, Pro, Max)
 
 Like the big labs' model families, tiers are **the same family at different sizes**: the same
 reading mix, chat lessons, personality and features, but different sizes, so you can pick
@@ -519,6 +555,7 @@ speed or smarts.
 | **Lite** | ~400M (v3-size) | Any phone, offline, very fast | Quick questions, small talk, simple lookups | With v3.5 |
 | **Standard** | ~1B (v3.5) | Phones and PCs | Everyday use: lookups, explanations, advice | v3.5 |
 | **Pro** | 3B–7B (v5–v6.5) | PC or a server (the app's online mode) | Harder questions, coding, long writing | v5+ |
+| **Max** | 13B, later ~30B ("upper small", then "medium"; see [Beyond v6.5](#beyond-v65-v7-v8-and-max)) | A server, or a PC with a 24 GB GPU for 13B; online mode | The hardest questions: deep reasoning, real coding help, long documents. Also the teacher for every smaller tier | After v6.5, if funded |
 
 The names are placeholders; pick your own.
 
@@ -534,7 +571,8 @@ The names are placeholders; pick your own.
   when online mode is on.
 
 **Timeline:** v2 and v3 are two sizes but different *generations*, so they aren't tiers of one family.
-The first real tiers (Lite + Standard) come right after v3.5; the full three-tier lineup with v5–v6.5.
+The first real tiers (Lite + Standard) come right after v3.5; the three-tier lineup with v5–v6.5;
+Max after that, when money and results allow.
 
 ---
 
