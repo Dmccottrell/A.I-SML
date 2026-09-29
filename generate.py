@@ -28,6 +28,8 @@ Options:
     --lookup       chat mode: search the Wikipedia index (wiki_index.py) for each
                    message and give the best passages to the model as notes. Only the
                    newest question keeps its notes (older ones are dropped to save room)
+    --suggest      chat mode: after each reply, suggest what you might ask next; press Enter on an
+                   empty line to send it (needs a v3+ chat model, trained with user follow-ups)
     --memory       chat mode: remember earlier chats and facts you save ("remember: ..."), on this
                    computer only (see chat_memory.py). --private: this chat isn't saved
     --notes        with --lookup: passages per question (default 3; 2 leaves more room)
@@ -36,7 +38,8 @@ import argparse, os
 
 import torch
 
-from chat import build_prompt, context_report, format_meter, format_window_view, special_ids, split_memory_calls
+from chat import (build_prompt, clean_suggestion, context_report, format_meter, format_window_view, special_ids,
+                  split_memory_calls, suggest_prompt)
 from config import add_version_arg, get_version
 from model import load_checkpoint
 from tokenizer import BPETokenizer
@@ -54,6 +57,7 @@ p.add_argument("--chat", action="store_true")
 p.add_argument("--context", action="store_true", help="chat: show the context meter after every reply")
 p.add_argument("--lookup", action="store_true", help="chat: look each message up in Wikipedia first")
 p.add_argument("--notes", type=int, default=3, help="chat --lookup: passages per question (fewer = more room)")
+p.add_argument("--suggest", action="store_true", help="chat: suggest a likely next message after each reply")
 p.add_argument("--memory", action="store_true", help="chat: remember earlier chats and saved facts (chat_memory.py)")
 p.add_argument("--private", action="store_true", help="with --memory: don't save this chat")
 p.add_argument("--no_meaning", action="store_true", help="with --memory: keyword search only (no embedding model)")
@@ -67,7 +71,7 @@ ckpt_path = args.ckpt or os.path.join(V.ckpt_dir, "chat.pt" if args.chat else "c
 device = "cuda" if torch.cuda.is_available() else "cpu"
 model, _ = load_checkpoint(ckpt_path, device)
 tok = BPETokenizer.load(os.path.join(V.data_dir, "tokenizer.json"))
-_, _, eot = special_ids(tok)   # generation stops when the model writes <|endoftext|>
+_, assistant_id, eot = special_ids(tok)   # generation stops at <|endoftext|> (a suggestion stops at <|assistant|>)
 
 
 def continue_ids(ids):
@@ -77,6 +81,14 @@ def continue_ids(ids):
                          repetition_penalty=args.repetition_penalty)
     # out[0, idx.size(1):] = everything after the prompt
     return tok.decode(out[0, idx.size(1):].tolist()).replace("<|endoftext|>", "")
+
+
+def suggest(history):
+    """A likely next message from the user, or "" (never sent without you pressing Enter)."""
+    ids = suggest_prompt(tok, history, max(64, model.cfg.max_seq_len - 32))
+    idx = torch.tensor([ids], device=device)
+    out = model.generate(idx, 32, 0.7, 40, stop_id=assistant_id, repetition_penalty=args.repetition_penalty)
+    return clean_suggestion(tok.decode(out[0, idx.size(1):].tolist()))
 
 
 if args.chat:
@@ -96,11 +108,18 @@ if args.chat:
         chat_id = None if args.private else mem.start_chat()
         print("(memory on" + (", private: this chat won't be saved" if args.private else "") +
               ". 'remember: <fact>', 'memories', 'forget <n>')")
+    suggestion = ""
     while True:
         try:
             msg = input("\nYou: ").strip()
         except EOFError:
             break                              # input ended (e.g. piped text)
+        if not msg:
+            if not suggestion:
+                continue
+            msg = suggestion                   # Enter on an empty line sends the suggestion
+            print(f"You: {msg}")
+        suggestion = ""
         if msg == "quit":
             break
         if mem:
@@ -149,5 +168,9 @@ if args.chat:
             mem.add_exchange(chat_id, msg, reply)
         if args.context:
             print(format_meter(context_report(tok, history, model.cfg.max_seq_len, args.tokens)))
+        if args.suggest and V.chat_memory:
+            suggestion = suggest(history)
+            if suggestion:
+                print(f"(suggestion: {suggestion}   - press Enter to send it)")
 else:
     print(args.prompt + continue_ids(tok.encode(args.prompt)))

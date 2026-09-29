@@ -7,7 +7,9 @@ WHAT THIS FILE DOES
 
       kind             teaches                                     v2 problem it fixes
       ---------------  ------------------------------------------  ---------------------------------
-      general          everyday chat (smol-smoltalk)               -
+      general          everyday chat (smol-smoltalk); the user's   -
+                       follow-ups are learned too (weight 0.3) so
+                       it can suggest what you might ask next
       topic_switch     answer the NEWEST question, not old ones    stuck on Illinois when asked about planets
       lookup           answer from the notes, name the source      "the capital of Illinois is Paris"
       dont_know        notes don't have it -> say "I don't know"   confident made-up answers
@@ -210,11 +212,27 @@ def unrelated_notes(record, others, wiki, rng, k=3):
 
 
 # ------------------------------------------------------------------ builders
+SUGGEST_WEIGHT = 0.3     # how much the user's follow-up messages count, next to the AI's replies (1.0)
+
+
+def with_user_followups(messages, weight=SUGGEST_WEIGHT):
+    """Learn the user's follow-up messages (not the first one: nothing comes before it) at a lower
+    weight, so the model can suggest what you might ask next (see chat.suggest_prompt)."""
+    out, seen_reply = [], False
+    for m in messages:
+        m = dict(m)
+        if m["role"] == "user" and seen_reply and not m.get("notes"):
+            m["learn_weight"] = weight
+        seen_reply |= m["role"] == "assistant"
+        out.append(m)
+    return out
+
+
 def general_conversations(convs, n):
     out = []
     for messages in convs:
         if total_chars(messages) <= MAX_CHARS and any(m["role"] == "assistant" for m in messages):
-            out.append(messages)
+            out.append(with_user_followups(messages))
             if len(out) >= n:
                 break
     return out
