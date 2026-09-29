@@ -86,8 +86,10 @@ the default, it runs the same tests as the version before and must:
 - keep every older skill (memory, suggestions, "I don't know", corrections): no row of the
   comparison may get worse by more than a small margin.
 If it doesn't, it isn't released yet: we find out why (data, training length, settings) and fix
-that first. A `compare.py` that runs all of this on two versions and prints one side-by-side
-scoreboard is the next tool to build for this.
+that first. `python compare.py --old v3 --new v3.5` runs all of this on both versions and prints
+one side-by-side scoreboard with the verdict (HellaSwag, the test sheet by category, skill checks for
+notes / "I don't know" / memory / secrets / suggestions, and `--long` for the long-context check).
+Scores are saved next to each checkpoint, so the old version isn't re-tested every time.
 
 ## Learning from a bigger AI (distillation)
 
