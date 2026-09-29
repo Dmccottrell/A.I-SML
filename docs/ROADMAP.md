@@ -54,6 +54,41 @@ Meta use). Each one is added when a version actually needs it, and several can s
 
 ---
 
+## Every version builds on the last
+The rule for every new version: **keep everything the last one could do, then do it better.** In
+practice that means three things.
+
+**1. Nothing is left behind.** Every feature, lesson and test is written once and reused by every
+later version (the scripts take `--version`):
+
+| Built once | Used by every later version |
+|---|---|
+| Chat lessons (`make_chat_data_v3.py --version ...`): lookups, "I don't know", corrections, instructions, memory, reply suggestions | v3.5, v3-long, v4, v5 ... reuse them in their own folder, with longer conversations when their context is longer; v3's teacher examples are reused, and each version adds its own |
+| Lookups (`wiki_index.py`), memory (`chat_memory.py`), the context meter, notes dropped from old turns | the same code for every model |
+| Long-context stretch (`v3-long-*` settings, `prepare_long_data.py`, `eval_long.py`) | rehearsed on v3, then the same recipe for v3.5 and later |
+| Tests: HellaSwag (`exam.py`), the test sheet (`evaluate.py`), the long-context tests, the unit tests | every version runs all of them |
+
+**2. Each version grows every ability.**
+
+| Ability | v3 | v3.5 | v4 | v5 | v6 / v6.5 |
+|---|---|---|---|---|---|
+| Context | 2K, stretched to 8K–32K | 32K, goal 75K–100K | same as v3.5 | 128K goal, a model designed for long text (local + global attention, smaller memory per token) | 256K → 500K goals |
+| Memory of you | saves facts itself, finds past chats by meaning | better judgement about what to save | memory screen, model-driven saving through tools | summarizes old chats into memories | the same, larger |
+| Reply suggestions | simple, from real follow-ups | sharper (bigger model) | greyed-out in the app; teacher-written follow-ups if plain | better | best |
+| Facts | Wikipedia lookups | uses what it reads better | + live web search (online mode) | combines several sources | long documents |
+| Thinking | trial on math | short thinking | adaptive + effort levels | longer | extended |
+| Tools / coding | – | – | calculator, files, coding loop | more reliable | strongest |
+
+**3. It has to prove it's better before it replaces the last one.** Before a new version becomes
+the default, it runs the same tests as the version before and must:
+- score higher on HellaSwag and the test sheet (more right answers, fewer made-up ones),
+- pass the long-context tests at every length it claims,
+- keep every older skill (memory, suggestions, "I don't know", corrections): no row of the
+  comparison may get worse by more than a small margin.
+If it doesn't, it isn't released yet: we find out why (data, training length, settings) and fix
+that first. A `compare.py` that runs all of this on two versions and prints one side-by-side
+scoreboard is the next tool to build for this.
+
 ## Learning from a bigger AI (distillation)
 
 A bigger AI (the **teacher**) helps train ours (the **student**). The student's brain is still

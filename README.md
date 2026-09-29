@@ -8,9 +8,15 @@ PC and fully offline on your phone.
 |---|---|---|
 | **v1** | 30M story-teller trained on TinyStories (~32MB on the phone) | ✅ Done: runs offline on the phone |
 | **v2** | 88M mini assistant: web text + Wikipedia + multi-turn chat (89MB on the phone) | ✅ Done: 18/20 test sheet, HellaSwag 28.4%, runs offline on the phone. See **[docs/V2.md](docs/V2.md)** |
-| **v3** | 394M accuracy-focused assistant: + code and math, 2,048-token memory (~240MB on the phone as Q4) | 🧱 Groundwork built: see **[docs/V3.md](docs/V3.md)** |
+| **v3** | 394M accuracy-focused assistant: + code and math, 2,048-token memory (~240MB on the phone as Q4), lookups, remembers you, reply suggestions | 🛠️ Pretraining (step ~1,500 of 45,000, val 3.457): PC afternoons + rented RTX 3090 overnight. See **[docs/V3.md](docs/V3.md)** |
+| **v3-long** | v3 stretched to 8K → 16K → 32K tokens after it finishes (the rehearsal for v3.5's 75K–100K) | Code ready, tested on small models: see **[docs/LONG_CONTEXT.md](docs/LONG_CONTEXT.md)** |
+| **v3.5** | ~1.04B, then stretched to 32K+ (goal 75K–100K) | Code ready: see **[docs/V3_5.md](docs/V3_5.md)** |
 
-Every script takes `--version v1` (the default) or `--version v2`. Settings for each version
+**Every version builds on the last:** each new one keeps everything the previous could do (the
+lessons, memory, suggestions, lookups and tests are shared code) and must score better on the same
+tests before it replaces it. See [Every version builds on the last](docs/ROADMAP.md#every-version-builds-on-the-last).
+
+Every script takes `--version` (`v1` is the default; `v2`, `v3`, `v3.5`, `v3-long-8k` ...). Settings for each version
 live in `config.py`.
 
 > **Current stage: DEVELOPMENT.** Every script reads and writes only `checkpoints/dev/`
@@ -69,7 +75,7 @@ data, code and training.
 | `notify.py` | 5 | Push messages to your phone about training progress, crashes and finish (free, via ntfy.sh); see `docs/PHONE.md` |
 | `harness.py` | 6 | v4 coding helper: safe file/command tools and the tool-calling loop (no model needed; tests in `tests/`) |
 | `grow.py`, `growth_test.py` | 6 | Grow a trained model into a deeper one, and an experiment that measures how much training compute that saves (run when the GPU is free) |
-| `generate.py` | 6 | Generate text or chat with your model |
+| `generate.py` | 6 | Generate text or chat with your model. Chat options: `--lookup` (Wikipedia notes), `--memory` (remembers you), `--suggest` (reply suggestions), `--context` (memory meter) |
 | `make_chat_data.py` | 7 | v1: builds `data/chat.jsonl` fine-tuning examples automatically |
 | `make_chat_data_v2.py` | 7 | v2: builds `data/v2/chat.jsonl` (multi-turn conversations) |
 | `finetune.py` | 7 | Teach it a chat format using the version's `chat.jsonl`. Ctrl+C pauses; run again to resume |
@@ -77,7 +83,10 @@ data, code and training.
 | `exam.py` | 6 | HellaSwag, a public common-sense test (works on pretrained models; compare versions) |
 | `wiki_index.py` | v3 | Searchable copy of Wikipedia for lookups (build + search) |
 | `make_teacher_data.py` | v3 | The teacher model (Qwen2.5-7B via llama.cpp, or rented per token from a hosting API) writes practice examples |
-| `make_chat_data_v3.py` | 7 | v3: chat lessons that fix v2's mistakes (lookups, "I don't know", corrections, instructions, topic switches) |
+| `make_chat_data_v3.py` | 7 | v3 and every later version (`--version`): chat lessons that fix v2's mistakes (lookups, "I don't know", corrections, instructions, topic switches), remembering you, and reply suggestions |
+| `chat_memory.py` | 7 | Remembers earlier chats and facts about you, on your computer only (`generate.py --chat --memory`); search by keywords and by meaning |
+| `eval_long.py` | 6 | Long-context tests (needle in a haystack, multi-fact, code recall, loss by position) with pass/fail rules |
+| `prepare_long_data.py` | 4 | Long-document data (books, long articles, code by repository, recall practice) for stretching the context |
 | `benchmarks.py` | 4–6 | Downloads the public test sets (HellaSwag, GSM8K), used by `exam.py` and to keep them out of training data |
 | `export_hf.py` | 8 | Save in standard Llama layout (safetensors + tokenizer.json) |
 | `to_gguf.py` | 8 | Convert to GGUF with llama.cpp for phone apps |

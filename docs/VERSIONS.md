@@ -21,13 +21,14 @@ v6 (5B) and v6.5 (7B) keep growing toward medium size, mainly for the PC and onl
 | Working name | – | – | Rune | Skald | Skald 2 | Saga | Edda | Edda (extended) |
 | Parameters | 29.5M | 88M | 394M | **~1.04B** | ~1.04B base + LoRA skill packs (small add-on weights, a few MB each, switched by a router) | **~3B** | **~5B** | **~7B** |
 | Shape | 512 wide × 8 layers | 768 wide × 12 layers | 1024 wide × 32 layers | 2048 wide × 22 layers | Same as v3.5 | ~3072 wide × 28 layers | ~3584 wide × 36 layers | 4096 wide × 32 layers |
-| Memory (context length) | 512 tokens | 1,024 tokens | 2,048 tokens | 2,048 tokens | 2,048 tokens + saved notes about you | 4,096 tokens | 8,192 tokens | 8,192 tokens |
+| Memory (context length) | 512 tokens | 1,024 tokens | 2,048 tokens; **v3-long: 8K → 16K → 32K** (stretched after training, if the tests pass) | 2,048, then stretched to **32K, goal 75K–100K** | Same as v3.5's stretched length + saved notes about you | **Goal 128K** (built for long text from the start) | **Goal 256K** | **Goal 500K** |
 | Vocabulary | 8,192 | 16,384 | 32,768 | 32,768 | 32,768 | 65,536 | 65,536 | 65,536 |
 | Attention | Standard | Grouped-query (faster on phones) | Grouped-query | Grouped-query | Grouped-query | Grouped-query | Grouped-query | Grouped-query |
 | Download size (Q4) | ~20 MB | 89 MB | ~240 MB | ~650 MB | ~650 MB + packs | ~1.8 GB | ~3 GB | ~4 GB |
 | Runs on (estimate) | Phone, PC | Phone, PC, browser | Phone, PC, browser, Raspberry Pi 5 | Phone, PC, Pi 5 (slow) | Phone, PC, Pi 5 (slow) | PC, Mac, high-end phone | PC or Mac with 8 GB+ RAM | PC or Mac with 8 GB+ RAM |
 
-Key: ✅ finished · 🛠️ in progress · (planned) not started. "Memory (context length)" is how much text the model can read at once, counted in tokens (a token is roughly three-quarters of a word).
+Key: ✅ finished · 🛠️ in progress · (planned) not started. Context goals beyond 2,048 tokens only count once
+the long-context tests pass at that length (docs/LONG_CONTEXT.md). "Memory (context length)" is how much text the model can read at once, counted in tokens (a token is roughly three-quarters of a word).
 
 ## Training
 
@@ -101,7 +102,10 @@ It adds the mistakes found on the phone, so v2 is expected to score low on the n
 | Accurate facts (with lookups) | ❌ | ❌ | ✅ Reads the answer from Wikipedia and cites it | ✅ Better at using what it reads | ✅ Fact-checker skill pack | ✅ Combines several sources | ✅ Combines sources, handles long documents | ✅ Combines sources, handles long documents |
 | Says "I don't know" | ❌ | ❌ | ✅ Trained to admit uncertainty | ✅ | ✅ | ✅ | ✅ | ✅ |
 | Explaining things | ❌ | ⚠️ Simple explanations | ✅ Clearer explanations | ✅ Multi-step explanations | ✅ Study-helper skill pack | ✅ Detailed, well-organized | ✅ Handles harder topics | ✅ Handles harder topics |
-| Conversations | One message at a time | ✅ Remembers the chat | ✅ Longer conversations (2× memory) | ✅ Stays on topic longer | ✅ Remembers you between chats | ✅ Longer chats (4,096 tokens) | ✅ Long chats (8,192 tokens) | ✅ Long chats (8,192 tokens) |
+| Conversations | One message at a time | ✅ Remembers the chat | ✅ ~7–12 turns with lookups (old notes dropped); v3-long: 35–130+ | ✅ Hundreds of turns once stretched | ✅ Same, plus remembers you between chats | ✅ Very long chats (128K goal) | ✅ Longer still | ✅ Longest |
+| Remembers you (saved facts, earlier chats) | ❌ | ❌ | ✅ Saves facts itself ("my name is ..."), finds earlier chats by meaning, never saves passwords | ✅ Better judgement about what to save | ✅ Memory screen in the app | ✅ Summarizes old chats into memories | ✅ | ✅ |
+| Reply suggestions | ❌ | ❌ | ✅ Suggests what you might ask next (simple) | ✅ Sharper suggestions | ✅ Greyed-out in the app; teacher-written follow-ups if needed | ✅ | ✅ | ✅ |
+| Shows what it remembers (context meter) | ❌ | ❌ | ✅ `context` / `window` in the chat | ✅ | ✅ A meter in the app | ✅ | ✅ | ✅ |
 | Code | ❌ | ❌ | ⚠️ Basic Python autocomplete | ⚠️ Small functions, several languages | ✅ Coding helper (agentic, small tasks): reads files, suggests fixes, runs tests in a loop inside a sandbox | ✅ Real coding help: multi-file changes, explains code | ✅ Stronger coding help across languages | ✅ Best coding help of all versions |
 | Answer quality and style | Basic | Basic | ✅ Improved by preference training | ✅ | ✅ Picks the right specialist per question | ✅ Clearly better | ✅ Clearly better | ✅ Best |
 | Math | ❌ | ❌ | ⚠️ Some step-by-step math (5% math reading), still error-prone | ⚠️ Better: also learns from worked math problems, still error-prone | ✅ **Exact**, using a calculator tool | ✅ Exact with tools, word problems work | ✅ Exact with tools, harder word problems | ✅ Exact with tools, harder word problems |
@@ -286,7 +290,7 @@ Fill in real numbers as each version finishes:
 |---|---|---|---|
 | v1 | 1.279 | — | Runs on the phone (PocketPal, 32 MB) |
 | v2 | 2.929 best, 2.984 final | 18/20 (identity 2/2, facts 7/8, explain 5/5, advice 2/2, writing 1/1, stories 1/2) | HellaSwag 28.4% (ckpt.pt), about GPT-2 (124M) level. 20,000 steps at ~3.5 s/step on the RTX 4070; chat fine-tuning ~1.5 hours. Phone: 89 MB, ~210–245 tokens/s. The test sheet checks key words, so answers can pass with wrong details. Phone tests found wrong rare facts (Illinois), no self-correction, topic stickiness and settings problems (see above) |
-| v3 | | Pending: run after training | Data ready: 12.0B training tokens + 1.3B anneal tokens + 10M val; 222 documents with test questions removed (193 web, 14 math, 10 top-rated web, 5 anneal math); prepared in 1 hour 26 minutes (~2.6M tokens/s on average). Pilot (RTX 4070, 394.3M parameters): `torch.compile` works once its cache folder is short (Windows 260-character path limit); ~25 s/step compiled vs ~30–38 s without, identical loss, GPU memory ~10.2 GB vs ~11.1 GB; so the full run is ~13–14 days. Next: pretraining (see the checklist in V3.md) |
+| v3 | | Pending: run after training | Data ready: 12.0B training tokens + 1.3B anneal tokens + 10M val; 222 documents with test questions removed (193 web, 14 math, 10 top-rated web, 5 anneal math); prepared in 1 hour 26 minutes (~2.6M tokens/s on average). Pilot (RTX 4070, 394.3M parameters): `torch.compile` works once its cache folder is short (Windows 260-character path limit); ~25 s/step compiled vs ~30–38 s without, identical loss, GPU memory ~10.2 GB vs ~11.1 GB; so the full run is ~13–14 days. Cloud pilot (rented RTX 3090): 17.5 s/step, 10.1 GB. Pretraining started; resumed on the cloud at step 1,383; step 1,000 val 3.755, step 1,500 val 3.457. Added while it trains: reply suggestions, remembering you (saved facts, earlier chats, search by meaning), the context meter, old lookup notes dropped (7–12 turns instead of 2–3), and the long-context tools for v3-long |
 | v3.5 | | | |
 | v4 | — (same base as v3.5) | | |
 | v5 | | | |
