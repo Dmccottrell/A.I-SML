@@ -67,6 +67,7 @@ data, code and training.
 | `docs/CLOUD.md` | - | How to rent a GPU and train there when your PC is off (or for big runs) |
 | `handoff.py` | 5 | Moves a training run between your PC and a rented cloud GPU (one command each way) |
 | `harness.py` | 6 | v4 coding helper: safe file/command tools and the tool-calling loop (no model needed; tests in `tests/`) |
+| `grow.py`, `growth_test.py` | 6 | Grow a trained model into a deeper one, and an experiment that measures how much training compute that saves (run when the GPU is free) |
 | `generate.py` | 6 | Generate text or chat with your model |
 | `make_chat_data.py` | 7 | v1: builds `data/chat.jsonl` fine-tuning examples automatically |
 | `make_chat_data_v2.py` | 7 | v2: builds `data/v2/chat.jsonl` (multi-turn conversations) |
