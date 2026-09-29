@@ -96,7 +96,8 @@ def up(a, V):
             datetime.datetime.now().astimezone().utcoffset().total_seconds() / 3600
         run = (f"cd {a.repo} && python run_training.py --version {a.version} --window {a.cloud_window} "
                f"--utc_offset {offset:g} --exit_after_window --backup_dir ~/backups"
-               + (f" --gpus {a.cloud_gpus}" if a.cloud_gpus > 1 else "") + f"; {a.stop_command}")
+               + (f" --gpus {a.cloud_gpus}" if a.cloud_gpus > 1 else "")
+               + (f" --notify {shlex.quote(a.notify)}" if a.notify else "") + f"; {a.stop_command}")
         ssh_out(a.host, a.port, f"tmux kill-session -t train 2>/dev/null; tmux new -d -s train {shlex.quote(run)}")
         print(f"started training on the cloud machine (window {a.cloud_window}). "
               "Look at it any time: ssh in, then `tmux attach -t train`.")
@@ -136,6 +137,7 @@ def main():
     p.add_argument("--repo", default="~/A.I-SML", help="where the project is on the cloud machine")
     p.add_argument("--start", action="store_true", help="up: also start training on the cloud machine")
     p.add_argument("--cloud_window", default="21:30-13:00", help="run window used with --start")
+    p.add_argument("--notify", default=None, help="ntfy.sh topic for phone messages from the cloud run (see notify.py)")
     p.add_argument("--cloud_gpus", type=int, default=1, help="GPUs in the cloud machine (2 or more uses DDP; see docs/CLOUD.md)")
     p.add_argument("--cloud_utc_offset", type=float, default=None,
                    help="hours from UTC that --cloud_window is written in (default: this PC's current offset)")

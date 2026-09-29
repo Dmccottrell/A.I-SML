@@ -66,6 +66,7 @@ data, code and training.
 | `offload_optim.py` | 5 | AdamW that keeps its memory in system RAM, so a 1B model fits on a 12 GB GPU (v3.5) |
 | `docs/CLOUD.md` | - | How to rent a GPU and train there when your PC is off (or for big runs) |
 | `handoff.py` | 5 | Moves a training run between your PC and a rented cloud GPU (one command each way) |
+| `notify.py` | 5 | Push messages to your phone about training progress, crashes and finish (free, via ntfy.sh); see `docs/PHONE.md` |
 | `harness.py` | 6 | v4 coding helper: safe file/command tools and the tool-calling loop (no model needed; tests in `tests/`) |
 | `grow.py`, `growth_test.py` | 6 | Grow a trained model into a deeper one, and an experiment that measures how much training compute that saves (run when the GPU is free) |
 | `generate.py` | 6 | Generate text or chat with your model |

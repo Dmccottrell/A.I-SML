@@ -94,6 +94,9 @@ p.add_argument("--pilot", type=int, nargs="?", const=60, default=0,
 p.add_argument("--no_compile", action="store_true", help="don't try torch.compile")
 p.add_argument("--backup_dir", default=None, help="also copy latest.pt to this folder (e.g. another drive)")
 p.add_argument("--backup_every_hours", type=float, default=24)
+p.add_argument("--notify", default=os.environ.get("NTFY_TOPIC"),
+               help="ntfy.sh topic: send progress messages to your phone (see notify.py)")
+p.add_argument("--notify_every", type=int, default=250, help="steps between progress messages")
 p.add_argument("--stop_at", type=float, default=0,
                help="(used by run_training.py --window) save and stop after the step that ends past this time")
 args = p.parse_args()
@@ -140,6 +143,13 @@ if DIST:
         def _stop(*_):
             raise KeyboardInterrupt
         signal.signal(signal.SIGTERM, _stop)
+
+
+def phone(text, title="v3"):
+    """Push a short message to the phone (only from the first process; never stops training)."""
+    if IS_MAIN and args.notify and not args.pilot:
+        from notify import send
+        send(args.notify, text, title=f"{title} {V.name}")
 
 
 def mprint(*a, **k):
@@ -424,6 +434,7 @@ if os.path.exists(LATEST_PATH) and not args.fresh:
     if device == "cuda":
         torch.cuda.empty_cache()
     mprint(f"resuming from iteration {start_iter} (best val so far {best_val:.3f})")
+    phone(f"resumed at step {start_iter:,} of {S.max_iters:,}", "resumed")
 
 # ============================== main training loop ==============================
 t0 = time.time()
@@ -448,6 +459,7 @@ try:
         if it % S.eval_every == 0 and IS_MAIN:
             losses = estimate_loss()
             print(f"step {it}: train {losses['train']:.3f}  val {losses['val']:.3f}")
+            phone(f"step {it:,}: train {losses['train']:.3f}, val {losses['val']:.3f}", "val")
             log_metric(it, "train_loss", losses["train"])
             log_metric(it, "val_loss", losses["val"])
             if losses["val"] < best_val and not args.pilot:
@@ -459,6 +471,7 @@ try:
             from exam import hellaswag_accuracy
             acc = hellaswag_accuracy(model, exam_tok, exam_questions, device, autocast)
             print(f"exam {it}: HellaSwag {acc*100:.1f}% (random = 25%)")
+            phone(f"step {it:,}: HellaSwag {acc*100:.1f}% (random is 25%)", "exam")
             log_metric(it, "hellaswag_500", acc)
 
         # Gradient accumulation: run several small batches and add up their
@@ -496,6 +509,10 @@ try:
             mprint(f"iter {it}: loss {loss.item():.3f}  lr {get_lr(it):.2e}  {dt*1000/50:.0f}ms/iter")
             log_metric(it, "loss", loss.item())
             log_metric(it, "lr", get_lr(it))
+            if it > start_iter and it % args.notify_every == 0:
+                left_h = (S.max_iters - it) * dt / 50 / 3600
+                phone(f"step {it:,}/{S.max_iters:,} ({100 * it / S.max_iters:.1f}%)  loss {loss.item():.2f}  "
+                      f"{dt / 50:.1f} s/step  ~{left_h / 24:.1f} days left", "progress")
 
         if args.stop_at and it < S.max_iters:
             stop = time.time() >= args.stop_at
@@ -508,6 +525,7 @@ try:
                 save_latest(it + 1)
                 if IS_MAIN:
                     print(f"\nrun window over: saved at iteration {it + 1}. Training resumes at the next window.")
+                    phone(f"window over: saved at step {it + 1:,}", "paused")
                     open(PAUSE_MARKER, "w").close()     # torchrun can't pass on an exit code, so leave a note
                 if DIST:
                     dist.barrier()                # let the first GPU finish saving before anyone exits
@@ -519,6 +537,7 @@ except KeyboardInterrupt:
     optimizer.zero_grad(set_to_none=True)
     save_latest(it)
     mprint(f"\npaused at iteration {it}. Run the same command again to resume.")
+    phone(f"paused at step {it:,} (stopped by you)", "paused")
     sys.exit(0)
 except torch.cuda.OutOfMemoryError:
     sys.exit(f"\nOUT OF GPU MEMORY at iteration {it}. In config.py ({V.name}): halve batch_size and "
@@ -569,6 +588,7 @@ if IS_MAIN:
         except OSError as e:
             print(f"WARNING: couldn't copy final.pt to {args.backup_dir} ({e}). It is safe in {FINAL_PATH}.")
     print(f"done. best val loss {best_val:.3f} (ckpt.pt); final weights saved in {FINAL_PATH}")
+    phone(f"FINISHED. best val loss {best_val:.3f}. final weights saved.", "done")
 if DIST:
     dist.barrier()
     dist.destroy_process_group()
