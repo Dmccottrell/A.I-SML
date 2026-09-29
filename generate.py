@@ -8,7 +8,8 @@ WHAT THIS FILE DOES
         (see chat.py) so a fine-tuned model (finetune.py) answers them.
         v2 remembers the conversation; v1 treats every message separately
         (it was only trained on single messages). Type 'reset' to forget
-        the conversation, 'quit' to exit.
+        the conversation, 'quit' to exit. 'context' shows the memory meter and
+        'window' lists what the model can still see (see below).
 
 Usage:  python generate.py --prompt "Once upon a time"
         python generate.py --chat                    (v1, uses chat.pt)
@@ -22,6 +23,8 @@ Options:
     --top_k        only pick from the k most likely tokens (default 50)
     --repetition_penalty  discourage repeating recent words: 1.0 = off,
                    1.1-1.3 = gentle (default 1.15), higher = stronger
+    --context      chat mode: show the context meter after every reply (how full the
+                   model's memory is, and what it has forgotten)
     --lookup       chat mode: search the Wikipedia index (wiki_index.py) for each
                    message and give the best passages to the model as notes
 """
@@ -29,7 +32,7 @@ import argparse, os
 
 import torch
 
-from chat import build_prompt, special_ids
+from chat import build_prompt, context_report, format_meter, format_window_view, special_ids
 from config import add_version_arg, get_version
 from model import load_checkpoint
 from tokenizer import BPETokenizer
@@ -44,6 +47,7 @@ p.add_argument("--temperature", type=float, default=0.8)
 p.add_argument("--top_k", type=int, default=50)
 p.add_argument("--repetition_penalty", type=float, default=1.15)
 p.add_argument("--chat", action="store_true")
+p.add_argument("--context", action="store_true", help="chat: show the context meter after every reply")
 p.add_argument("--lookup", action="store_true", help="chat: look each message up in Wikipedia first")
 p.add_argument("--db", default=os.path.join("data", "wiki", "wiki.db"))
 args = p.parse_args()
@@ -67,7 +71,8 @@ def continue_ids(ids):
 
 
 if args.chat:
-    print(f"Chat mode ({V.name}, {ckpt_path}) - type 'reset' to start over, 'quit' to exit")
+    print(f"Chat mode ({V.name}, {ckpt_path}) - type 'reset' to start over, 'quit' to exit, "
+          f"'context' for the memory meter, 'window' to see what the model can still see")
     history = []
     # Leave room in the context for the reply
     max_prompt = max(64, model.cfg.max_seq_len - args.tokens)
@@ -86,6 +91,15 @@ if args.chat:
             history = []
             print("(conversation cleared)")
             continue
+        if msg in ("context", "window"):
+            report = context_report(tok, history, model.cfg.max_seq_len, args.tokens) if history else None
+            if report is None:
+                print("(nothing in the window yet)")
+            else:
+                print(format_meter(report))
+                if msg == "window":
+                    print(format_window_view(report))
+            continue
         if not V.chat_memory:
             history = []                       # v1: every message on its own
         message = {"role": "user", "content": msg}
@@ -98,5 +112,7 @@ if args.chat:
         reply = continue_ids(build_prompt(tok, history, max_prompt)).strip()
         history.append({"role": "assistant", "content": reply})
         print("AI:", reply)
+        if args.context:
+            print(format_meter(context_report(tok, history, model.cfg.max_seq_len, args.tokens)))
 else:
     print(args.prompt + continue_ids(tok.encode(args.prompt)))
