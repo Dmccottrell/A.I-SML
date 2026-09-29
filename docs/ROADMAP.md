@@ -413,6 +413,12 @@ One app and one website that work offline and online. See
 [Offline and online](#offline-and-online-the-goal-for-the-app-and-website) and
 [Using your AI](#using-your-ai-apps) below.
 
+**Reply suggestions (already in v3's chat lessons):** after each answer, the model guesses what you
+might ask next and the app shows it greyed out in the message box (Tab or Enter to use it; never sent
+on its own). v3 learns it from the user's follow-ups in everyday chats (weight 0.3), and
+`generate.py --chat --suggest` shows it in the terminal. If v3's suggestions are too plain, v3.5/v4
+can add teacher-written follow-up questions.
+
 ---
 
 ## v5: Scale (3B)

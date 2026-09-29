@@ -34,6 +34,11 @@ SAVING TO MEMORY (v3+)
         <|assistant|><|tool_call|>{"name": "remember", "args": {"fact": "The user's name is Sam."}}<|end_tool_call|>Nice to meet you, Sam!<|endoftext|>
     split_memory_calls() takes them back out of what the model writes, so the chat can save them.
 
+REPLY SUGGESTIONS (v3+)
+    In everyday chats, the user's follow-up messages are learned too, at a lower weight
+    ("learn_weight"), so after answering, the model can guess what you might ask next:
+    suggest_prompt() ends the conversation with <|user|> and the model writes the rest.
+
 MESSAGES THE MODEL SHOULD SEE BUT NOT LEARN
     "train": false on an assistant message keeps it as context but doesn't
     teach it. Used for correction lessons: the model sees a wrong answer and
@@ -146,6 +151,8 @@ def encode_conversation(tok, messages, max_tokens):
 
     mask[i] = 1 for tokens the AI should learn to write (its answers,
     including the <|endoftext|> that ends each one), 0 for everything else.
+    A user message with "learn_weight": 0.3 is learned too, at that weight
+    (for reply suggestions; see suggest_prompt).
 
     Returns:
         (ids, mask), both cut to at most max_tokens
@@ -154,7 +161,13 @@ def encode_conversation(tok, messages, max_tokens):
     for message in messages:
         part, learn = _encode_message(tok, message)
         ids += part
-        mask += [learn] * len(part)
+        weight = message.get("learn_weight", 0) if message["role"] == "user" and not message.get("notes") else 0
+        if weight:
+            # Also learn what the USER wrote (at a lower weight), so the model can suggest a likely
+            # next message after its reply (see suggest_prompt). The <|user|> marker itself isn't learned.
+            mask += [0] + [weight] * (len(part) - 1)
+        else:
+            mask += [learn] * len(part)
     return ids[:max_tokens], mask[:max_tokens]
 
 
@@ -197,6 +210,28 @@ def build_prompt(tok, history, max_tokens, keep_notes=1):
     parts = [_encode_message(tok, m)[0] for m in history]
     ids = [t for p in parts[_first_kept(parts, max_tokens):] for t in p]
     return ids[-max_tokens:]
+
+
+def suggest_prompt(tok, history, max_tokens, keep_notes=1):
+    """Tokens that make the model write a likely NEXT USER MESSAGE (a reply suggestion).
+
+    history: the conversation so far, ending with the AI's reply. The prompt is the same
+    conversation followed by <|user|>; the model continues it until it writes <|assistant|>
+    (stop there). Works on models whose chat training learned user messages (learn_weight).
+    """
+    U, _, _ = special_ids(tok)
+    history = drop_old_notes(history, keep_notes)
+    parts = [_encode_message(tok, m)[0] for m in history]
+    ids = [t for p in parts[_first_kept(parts, max_tokens - 1):] for t in p]
+    return ids[-(max_tokens - 1):] + [U]
+
+
+def clean_suggestion(text, max_chars=200):
+    """The suggestion as one tidy line, or "" if it isn't usable."""
+    text = " ".join(text.replace("<|assistant|>", " ").split())
+    if not text or len(text) > max_chars or "<|" in text:
+        return ""
+    return text
 
 
 def context_report(tok, history, window, reserve=0, keep_notes=1):
