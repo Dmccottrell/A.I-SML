@@ -22,6 +22,18 @@ THE TEST (defaults: v2's 88M, 12 layers, grown to 24 layers)
 RUN IT (about 20 hours on an RTX 4070; pausable: Ctrl+C, then run the same command again)
         python growth_test.py                       both runs, then the report
         python growth_test.py --report_only         just print the report again
+
+TEST WITH v3 (the size that matters for v3.5): use a SNAPSHOT of v3 taken during its training.
+    While v3 trains, the backup folder gets v3_latest.pt about once a day. Copy it to a name
+    that won't be overwritten, e.g. C:\\ai-backups\\v3_growth_base.pt (a copy doesn't disturb
+    the training). Later, with the GPU free:
+
+        python growth_test.py --base_version v3 --from_ckpt C:\\ai-backups\\v3_growth_base.pt --new_layers 48 --batch_size 1 --grad_accum 32 --grad_checkpoint --warmup 500 --grown_steps 4000 --eval_iters 100
+
+    v3 has 32 layers, so 48 is 1.5x deeper (~575M parameters). A mid-training snapshot is the
+    right thing to grow from (the learning rate is still high, as in real growth). The step counter
+    inside the snapshot tells the script how much reading it had done. About 2-3 days on the 4070
+    for a snapshot from day one (estimate).
     Results: growth_test/<name>/grown.csv, scratch.csv (and the report).
     Do it when the GPU is free (not while v3 is training).
 
@@ -171,6 +183,13 @@ def train_arm(name, model, cfg, data, a, total_steps, base_units, out_dir, devic
         sys.exit(0)
 
 
+def base_tokens_from(ckpt, V, seq_len):
+    """Tokens a base checkpoint has read, from its step counter ("iter") and its version's batch settings."""
+    if "iter" not in ckpt:
+        return None
+    return float(ckpt["iter"] * V.train.batch_size * V.train.grad_accum * seq_len)
+
+
 # ------------------------------------------------------------------ report
 def report(out_dir, base_units, base_loss=None):
     grown, scratch = read_log(os.path.join(out_dir, "grown.csv")), read_log(os.path.join(out_dir, "scratch.csv"))
@@ -228,6 +247,8 @@ def main():
     p.add_argument("--save_every", type=int, default=500)
     p.add_argument("--base_tokens", type=float, default=None, help="tokens the base model read (default: from its config)")
     p.add_argument("--out", default=None, help="results folder (default: growth_test/<base>-<style>-<layers>)")
+    p.add_argument("--grad_checkpoint", action="store_true",
+                   help="save GPU memory (30%% slower); needed for v3-size models on a 12 GB card")
     p.add_argument("--report_only", action="store_true")
     p.add_argument("--halt_after", type=int, default=0, help=argparse.SUPPRESS)      # for testing
     a = p.parse_args()
@@ -250,7 +271,8 @@ def main():
     ckpt = torch.load(ckpt_path, map_location="cpu")
     base_cfg = ckpt["config"]
     base_layers = base_cfg["n_layers"]
-    base_tokens = a.base_tokens or float(V.train.batch_size * V.train.grad_accum * base_cfg["max_seq_len"] * V.train.max_iters)
+    base_tokens = a.base_tokens or base_tokens_from(ckpt, V, base_cfg["max_seq_len"]) \
+        or float(V.train.batch_size * V.train.grad_accum * base_cfg["max_seq_len"] * V.train.max_iters)
     base_units = base_tokens * base_layers
     cfg = ModelConfig(**dict(base_cfg, n_layers=a.new_layers))
     tokens_per_step = a.batch_size * a.grad_accum * cfg.max_seq_len
@@ -280,12 +302,14 @@ def main():
     new_state, new_cfg = grow_state_dict(ckpt["model"], base_cfg, a.new_layers, a.style)
     grown = TinyLM(ModelConfig(**new_cfg)).to(device)
     grown.load_state_dict(new_state)
+    grown.grad_checkpoint = a.grad_checkpoint
     torch.manual_seed(1)
     train_arm("grown", grown, cfg, data, a, a.grown_steps, base_units, out_dir, device, autocast)
     del grown
     # --- run 2: from scratch, same total compute
     torch.manual_seed(2)
     scratch = TinyLM(cfg).to(device)
+    scratch.grad_checkpoint = a.grad_checkpoint
     train_arm("scratch", scratch, cfg, data, a, scratch_steps, 0, out_dir, device, autocast)
     report(out_dir, base_units, base_loss)
 
