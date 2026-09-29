@@ -36,7 +36,7 @@ import argparse, os
 
 import torch
 
-from chat import build_prompt, context_report, format_meter, format_window_view, special_ids
+from chat import build_prompt, context_report, format_meter, format_window_view, special_ids, split_memory_calls
 from config import add_version_arg, get_version
 from model import load_checkpoint
 from tokenizer import BPETokenizer
@@ -56,6 +56,7 @@ p.add_argument("--lookup", action="store_true", help="chat: look each message up
 p.add_argument("--notes", type=int, default=3, help="chat --lookup: passages per question (fewer = more room)")
 p.add_argument("--memory", action="store_true", help="chat: remember earlier chats and saved facts (chat_memory.py)")
 p.add_argument("--private", action="store_true", help="with --memory: don't save this chat")
+p.add_argument("--no_meaning", action="store_true", help="with --memory: keyword search only (no embedding model)")
 p.add_argument("--memory_db", default=os.path.join("data", "memory", "memory.db"))
 p.add_argument("--db", default=os.path.join("data", "wiki", "wiki.db"))
 args = p.parse_args()
@@ -90,8 +91,8 @@ if args.chat:
         wiki = WikiIndex(args.db)
     mem = chat_id = None
     if args.memory:
-        from chat_memory import ChatMemory, handle_command
-        mem = ChatMemory(args.memory_db)
+        from chat_memory import ChatMemory, handle_command, load_embedder
+        mem = ChatMemory(args.memory_db, None if args.no_meaning else load_embedder())
         chat_id = None if args.private else mem.start_chat()
         print("(memory on" + (", private: this chat won't be saved" if args.private else "") +
               ". 'remember: <fact>', 'memories', 'forget <n>')")
@@ -134,9 +135,16 @@ if args.chat:
             message["notes"] = found
             print("(looked up: " + "; ".join(n["title"] for n in found) + ")")
         history.append(message)
-        reply = continue_ids(build_prompt(tok, history, max_prompt)).strip()
-        history.append({"role": "assistant", "content": reply})
+        reply, facts = split_memory_calls(continue_ids(build_prompt(tok, history, max_prompt)))
+        history.append({"role": "assistant", "content": reply, **({"memory": facts} if facts else {})})
         print("AI:", reply)
+        for fact in facts:                     # the AI decided to remember something about you
+            if mem and chat_id is not None:
+                mem.remember(fact)
+                print(f"(saved to memory: {fact}  - 'memories' to see, 'forget <n>' to delete)")
+            else:
+                print(f"(it wanted to remember: {fact} - not saved, memory is " +
+                      ("private for this chat)" if mem else "off; use --memory)"))
         if mem and chat_id is not None:
             mem.add_exchange(chat_id, msg, reply)
         if args.context:

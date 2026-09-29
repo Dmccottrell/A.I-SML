@@ -310,7 +310,7 @@ class BPETokenizer:
         else:
             parts = [text]
         for part in parts:
-            if part in self.special:
+            if allow_special and part in self.special:
                 ids.append(self.special[part])           # special token -> one ID
             elif part:
                 for chunk in self.pattern.findall(part):  # normal text -> chunks -> IDs

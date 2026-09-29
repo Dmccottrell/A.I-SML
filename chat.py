@@ -27,6 +27,13 @@ LOOKUP NOTES (v3+)
         <|user|><|notes|>[1] Illinois: Springfield is the capital...<|end_notes|>What is the capital of Illinois?<|assistant|>
     (A tokenizer without those tokens, like v2's, gets them as plain text.)
 
+SAVING TO MEMORY (v3+)
+    An assistant message can carry facts the AI decided to remember (see chat_memory.py):
+        {"role": "assistant", "content": "Nice to meet you, Sam!", "memory": ["The user's name is Sam."]}
+    They are written before the reply as a tool call:
+        <|assistant|><|tool_call|>{"name": "remember", "args": {"fact": "The user's name is Sam."}}<|end_tool_call|>Nice to meet you, Sam!<|endoftext|>
+    split_memory_calls() takes them back out of what the model writes, so the chat can save them.
+
 MESSAGES THE MODEL SHOULD SEE BUT NOT LEARN
     "train": false on an assistant message keeps it as context but doesn't
     teach it. Used for correction lessons: the model sees a wrong answer and
@@ -35,6 +42,8 @@ MESSAGES THE MODEL SHOULD SEE BUT NOT LEARN
 USED BY
     finetune.py, generate.py, evaluate.py, export_hf.py
 """
+import json
+import re
 
 # The same format as a Jinja template, stored in the exported model so phone
 # apps (PocketPal, llama.cpp) wrap messages exactly like finetune.py does:
@@ -99,7 +108,37 @@ def _encode_message(tok, message):
                                   + message["content"], allow_special=False)
         return [U] + text + [A], 0        # the question: context only (mask 0)
     learn = 0 if message.get("train") is False else 1
-    return text + [EOT], learn            # the answer: learn it (mask 1)
+    calls = []
+    if message.get("memory") and "<|tool_call|>" in tok.special:
+        # "Save this to memory": written BEFORE the reply, as a tool call (the same format v4's tools use)
+        for fact in message["memory"]:
+            call = json.dumps({"name": "remember", "args": {"fact": fact}}, ensure_ascii=False)
+            calls += [tok.special["<|tool_call|>"]] + tok.encode(call, allow_special=False) + \
+                     [tok.special["<|end_tool_call|>"]]
+    return calls + text + [EOT], learn    # the answer: learn it (mask 1)
+
+
+MEMORY_CALL = re.compile(r"<\|tool_call\|>(.*?)<\|end_tool_call\|>", re.S)
+
+
+def split_memory_calls(reply):
+    """Pull the AI's "save this to memory" calls out of a reply it wrote.
+
+    Returns (the reply without them, [facts]). A call that isn't valid JSON or isn't "remember" is
+    dropped from the text and ignored (a small model sometimes writes a broken one).
+    """
+    facts = []
+    for body in MEMORY_CALL.findall(reply):
+        try:
+            call = json.loads(body)
+            fact = call["args"]["fact"] if call.get("name") == "remember" else None
+        except (ValueError, KeyError, TypeError, AttributeError):
+            fact = None
+        if isinstance(fact, str) and fact.strip():
+            facts.append(" ".join(fact.split()))
+    text = MEMORY_CALL.sub("", reply)
+    text = re.sub(r"<\|(end_)?tool_call\|>", "", text)      # an unfinished call
+    return text.strip(), facts
 
 
 def encode_conversation(tok, messages, max_tokens):

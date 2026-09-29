@@ -9,8 +9,18 @@ WHAT THIS FILE DOES
                       When you ask something, the best-matching earlier exchanges are found (the
                       same keyword search as the Wikipedia lookup) and given to the model as notes:
                           [1] Earlier chat (Sep 29): User: my dog is called Biscuit ... AI: ...
-      2. Saved memories.  Short facts you ask it to keep ("remember: I prefer Python"). They are
-                      given as notes when they match what you ask, and you can list or delete them.
+      2. Saved memories.  Short facts about you. You can save one yourself ("remember: I prefer
+                      Python"), and v3+ saves them on its own when you tell it something worth
+                      keeping ("my name is Sam"): it writes a "remember" tool call, which the chat
+                      saves and shows you as "(saved to memory: ...)". It is trained NOT to save
+                      passwords, card numbers, moods or facts about other people. Saved facts are
+                      given as notes when they match what you ask; list or delete them any time.
+
+    SEARCH BY MEANING: with a small embedding model (all-MiniLM-L6-v2, Apache-2.0, ~90 MB, runs on
+    the CPU) each saved exchange and fact also gets a list of numbers describing its MEANING, so "my
+    pet" finds "my cat is called Pixel" even though no word matches. Results from both searches are
+    combined (keywords are best for exact names and numbers). It needs `pip install
+    sentence-transformers` once; without it, keyword search alone is used.
 
     The notes use the same format as the Wikipedia notes v3 is trained on (see chat.py), so the model
     reads them the same way: no extra training is needed to start. Nothing leaves this computer.
@@ -34,10 +44,37 @@ import sqlite3
 import sys
 import time
 
+import numpy as np
+
 from wiki_index import keywords
 
 DEFAULT_DB = os.path.join("data", "memory", "memory.db")
 NOTE_WORDS = 120          # an earlier exchange is cut to about this many words (like a Wikipedia passage)
+EMBED_MODEL = "sentence-transformers/all-MiniLM-L6-v2"
+MIN_SIMILARITY = 0.35     # meaning matches weaker than this are ignored (0 = unrelated, 1 = same meaning)
+RRF_K = 60                # how keyword and meaning rankings are combined (reciprocal rank fusion)
+
+
+class Embedder:
+    """Turns texts into meaning vectors with a small open model (downloaded once, then offline)."""
+
+    def __init__(self, name=EMBED_MODEL):
+        from sentence_transformers import SentenceTransformer
+        self.model = SentenceTransformer(name, device="cpu")
+
+    def __call__(self, texts):
+        return np.asarray(self.model.encode(list(texts), normalize_embeddings=True), dtype=np.float32)
+
+
+def load_embedder(quiet=False):
+    """The embedding model, or None (keyword search only) if it isn't installed or can't load."""
+    try:
+        return Embedder()
+    except Exception as e:                 # not installed, or no internet for the first download
+        if not quiet:
+            print(f"(memory: search by meaning is off ({type(e).__name__}); keyword search only. "
+                  "To turn it on: pip install sentence-transformers)")
+        return None
 
 
 def shorten(text, words=NOTE_WORDS):
@@ -50,7 +87,7 @@ def day(timestamp):
 
 
 class ChatMemory:
-    """Saved chats and facts, with keyword search. Example:
+    """Saved chats and facts, with keyword search (plus search by meaning if given an embedder). Example:
 
         mem = ChatMemory()
         chat = mem.start_chat()
@@ -59,7 +96,11 @@ class ChatMemory:
             -> [{"title": "Earlier chat (Sep 29)", "text": "User: my dog is called Biscuit AI: What a lovely name!"}]
     """
 
-    def __init__(self, path=DEFAULT_DB):
+    def __init__(self, path=DEFAULT_DB, embedder=None):
+        """embedder: turns texts into meaning vectors (Embedder, or any function with the same
+        behaviour). None = keyword search only."""
+        self.embedder = embedder
+        self._cache = {}                   # kind -> (ids, matrix of vectors), rebuilt after changes
         os.makedirs(os.path.dirname(path) or ".", exist_ok=True)
         self.db = sqlite3.connect(path)
         try:
@@ -77,6 +118,36 @@ class ChatMemory:
             self.db.execute("CREATE TABLE IF NOT EXISTS exchanges (id INTEGER PRIMARY KEY, chat INTEGER, "
                             "time REAL, user TEXT, ai TEXT, text TEXT)")
             self.db.execute("CREATE TABLE IF NOT EXISTS facts (id INTEGER PRIMARY KEY, time REAL, text TEXT)")
+            self.db.execute("CREATE TABLE IF NOT EXISTS vectors (kind TEXT, id INTEGER, vec BLOB, PRIMARY KEY (kind, id))")
+        if self.embedder:
+            self.embed_missing()
+
+    # ---- meaning vectors ----
+    def _store_vectors(self, kind, rows):
+        """rows: [(id, text)]. Computes and saves their vectors."""
+        if not rows or not self.embedder:
+            return
+        vecs = self.embedder([shorten(t) for _, t in rows])
+        with self.db:
+            self.db.executemany("INSERT OR REPLACE INTO vectors VALUES (?, ?, ?)",
+                                [(kind, i, v.astype(np.float32).tobytes()) for (i, _), v in zip(rows, vecs)])
+        self._cache.pop(kind, None)
+
+    def embed_missing(self):
+        """Give a vector to everything saved before search by meaning was turned on."""
+        for kind in ("exchanges", "facts"):
+            rows = self.db.execute(f"SELECT id, text FROM {kind} WHERE id NOT IN "
+                                   "(SELECT id FROM vectors WHERE kind = ?)", (kind,)).fetchall()
+            for i in range(0, len(rows), 256):
+                self._store_vectors(kind, rows[i:i + 256])
+
+    def _vectors(self, kind):
+        if kind not in self._cache:
+            rows = self.db.execute("SELECT id, vec FROM vectors WHERE kind = ?", (kind,)).fetchall()
+            ids = [i for i, _ in rows]
+            mat = np.stack([np.frombuffer(v, dtype=np.float32) for _, v in rows]) if rows else None
+            self._cache[kind] = (ids, mat)
+        return self._cache[kind]
 
     # ---- saving ----
     def start_chat(self):
@@ -90,32 +161,67 @@ class ChatMemory:
             i = self.db.execute("INSERT INTO exchanges (chat, time, user, ai, text) VALUES (?, ?, ?, ?, ?)",
                                 (chat, when or time.time(), user, ai, text)).lastrowid
             self.db.execute("INSERT INTO exchanges_fts (rowid, text) VALUES (?, ?)", (i, text))
+        self._store_vectors("exchanges", [(i, text)])
         return i
 
     def remember(self, fact):
         fact = " ".join(fact.split())
         if not fact:
             raise ValueError("nothing to remember")
+        same = self.db.execute("SELECT id FROM facts WHERE lower(text) = lower(?)", (fact,)).fetchone()
+        if same:
+            return same[0]                 # already saved: don't keep duplicates
         with self.db:
             i = self.db.execute("INSERT INTO facts (time, text) VALUES (?, ?)", (time.time(), fact)).lastrowid
             self.db.execute("INSERT INTO facts_fts (rowid, text) VALUES (?, ?)", (i, fact))
+        self._store_vectors("facts", [(i, fact)])
         return i
 
     # ---- looking things up ----
-    def _search(self, table, question, k, extra_where="", params=()):
+    def _keyword_ids(self, table, question, n):
+        """Ids of the best keyword matches (BM25), best first."""
         words = keywords(question)
         if not words:
             return []
         match = " OR ".join(f'"{w}"' for w in words)
-        sql = (f"SELECT t.* FROM {table}_fts f JOIN {table} t ON t.id = f.rowid "
-               f"WHERE {table}_fts MATCH ? {extra_where} ORDER BY bm25({table}_fts), t.time DESC LIMIT ?")
-        cur = self.db.execute(sql, (match, *params, k))
-        cols = [c[0] for c in cur.description]
-        return [dict(zip(cols, row)) for row in cur]
+        sql = (f"SELECT t.id FROM {table}_fts f JOIN {table} t ON t.id = f.rowid "
+               f"WHERE {table}_fts MATCH ? ORDER BY bm25({table}_fts), t.time DESC LIMIT ?")
+        return [r[0] for r in self.db.execute(sql, (match, n))]
+
+    def _meaning_ids(self, table, question, n):
+        """Ids of the closest meanings (cosine similarity above MIN_SIMILARITY), best first."""
+        if not self.embedder:
+            return []
+        ids, mat = self._vectors(table)
+        if mat is None:
+            return []
+        sims = mat @ self.embedder([question])[0]
+        order = np.argsort(-sims)[:n]
+        return [ids[j] for j in order if sims[j] >= MIN_SIMILARITY]
+
+    def _search(self, table, question, k, exclude_chat=None):
+        """Keyword and meaning results combined (reciprocal rank fusion), as row dicts."""
+        n = max(k * 5, 20)
+        score = {}
+        for ranking in (self._keyword_ids(table, question, n), self._meaning_ids(table, question, n)):
+            for rank, i in enumerate(ranking):
+                score[i] = score.get(i, 0.0) + 1.0 / (RRF_K + rank)
+        out = []
+        for i in sorted(score, key=lambda i: -score[i]):
+            cur = self.db.execute(f"SELECT * FROM {table} WHERE id = ?", (i,))
+            row = cur.fetchone()
+            if row is None:
+                continue
+            row = dict(zip([c[0] for c in cur.description], row))
+            if exclude_chat is not None and row.get("chat") == exclude_chat:
+                continue                   # the current chat: the model can already see it
+            out.append(row)
+            if len(out) == k:
+                break
+        return out
 
     def search_exchanges(self, question, k=2, exclude_chat=None):
-        where, params = ("AND t.chat != ?", (exclude_chat,)) if exclude_chat is not None else ("", ())
-        return self._search("exchanges", question, k, where, params)
+        return self._search("exchanges", question, k, exclude_chat)
 
     def search_facts(self, question, k=2):
         return self._search("facts", question, k)
@@ -143,6 +249,8 @@ class ChatMemory:
         with self.db:
             self.db.execute("INSERT INTO facts_fts (facts_fts, rowid, text) VALUES ('delete', ?, ?)", (fact_id, row[0]))
             self.db.execute("DELETE FROM facts WHERE id = ?", (fact_id,))
+            self.db.execute("DELETE FROM vectors WHERE kind = 'facts' AND id = ?", (fact_id,))
+        self._cache.pop("facts", None)
         return True
 
     def chats(self):
@@ -153,10 +261,11 @@ class ChatMemory:
     def clear(self):
         """Delete every saved chat and fact."""
         with self.db:
-            for t in ("exchanges", "facts", "chats"):
+            for t in ("exchanges", "facts", "chats", "vectors"):
                 self.db.execute(f"DELETE FROM {t}")
             self.db.execute("INSERT INTO exchanges_fts (exchanges_fts) VALUES ('rebuild')")
             self.db.execute("INSERT INTO facts_fts (facts_fts) VALUES ('rebuild')")
+        self._cache.clear()
 
     def close(self):
         self.db.close()
@@ -190,8 +299,9 @@ def main():
     p.add_argument("command", choices=["memories", "remember", "forget", "search", "chats", "clear"])
     p.add_argument("text", nargs="?", default="")
     p.add_argument("--db", default=DEFAULT_DB)
+    p.add_argument("--no_meaning", action="store_true", help="keyword search only")
     a = p.parse_args()
-    mem = ChatMemory(a.db)
+    mem = ChatMemory(a.db, None if a.no_meaning or a.command != "search" else load_embedder())
     if a.command == "memories":
         print(handle_command(mem, "memories"))
     elif a.command == "remember":

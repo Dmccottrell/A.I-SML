@@ -19,6 +19,10 @@ WHAT THIS FILE DOES
       identity         a different answer for each question        same paragraph for "What can you do?"
       small_talk       casual greetings and chit-chat              "Whats up" -> it invented its own question
       story            tell stories (keeps v1's skill)             -
+      memory_save      "my name is Sam" -> save it (a tool call)   (new: remembering you, chat_memory.py)
+      memory_skip      passwords, moods, other people -> don't     saving things it shouldn't
+      memory_recall    answer from "Saved memory" / earlier-chat   "I don't know your name" when it does
+                       notes, or say it doesn't know yet
 
     lookup/dont_know/correction/stand_firm/memory_doubt come from the teacher's
     lookup examples, and instruction from its instruction examples
@@ -155,10 +159,12 @@ def user(content, notes=None):
     return m
 
 
-def assistant(content, train=True):
+def assistant(content, train=True, memory=None):
     m = {"role": "assistant", "content": content}
     if not train:
         m["train"] = False
+    if memory:
+        m["memory"] = list(memory)       # facts to save, written as a tool call (see chat.py)
     return m
 
 
@@ -269,6 +275,119 @@ def lookup_conversations(records, wiki, rng):
     return out
 
 
+# ------------------------------------------------------------------ remembering you (chat_memory.py)
+PEOPLE = ["Sam", "Maria", "Jamal", "Priya", "Liam", "Aisha", "Chen", "Sofia", "Diego", "Emma", "Kwame",
+          "Hana", "Noah", "Zara", "Mateo", "Olivia", "Ravi", "Grace", "Tariq", "Mei", "Lucas", "Amara"]
+CITIES = ["Chicago", "Houston", "Toronto", "Denver", "Atlanta", "Seattle", "Phoenix", "Dublin", "Lagos",
+          "Manila", "Austin", "Nashville", "Melbourne", "Detroit", "Miami", "Glasgow"]
+JOBS = ["nurse", "teacher", "electrician", "software developer", "truck driver", "chef", "accountant",
+        "IT technician", "student", "mechanic", "graphic designer", "pharmacist", "carpenter", "barber"]
+PETS = [("dog", ["Biscuit", "Max", "Luna", "Rocky", "Bella"]), ("cat", ["Pixel", "Milo", "Cleo", "Oreo"]),
+        ("parrot", ["Kiwi", "Sunny"]), ("hamster", ["Peanut", "Nibbles"])]
+FAVORITES = [("color", ["green", "blue", "purple", "orange", "black"]), ("food", ["pizza", "tacos", "sushi", "jollof rice", "pasta"]),
+             ("sport", ["basketball", "soccer", "tennis", "football"]), ("music", ["jazz", "hip hop", "country", "rock"])]
+SKILLS = ["Python", "Spanish", "guitar", "photography", "JavaScript", "chess", "cooking", "drawing"]
+MONTHS = ["January", "February", "March", "April", "May", "June", "July", "August", "September",
+          "October", "November", "December"]
+
+
+def personal_fact(rng):
+    """(what the user says, the fact to save, a friendly reply, a question about it, the answer)."""
+    kind = rng.randrange(7)
+    if kind == 0:
+        n = rng.choice(PEOPLE)
+        said = rng.choice([f"My name is {n}.", f"I'm {n}.", f"Call me {n}.", f"you can call me {n}", f"hi, I'm {n}"])
+        return (said, f"The user's name is {n}.", rng.choice([f"Nice to meet you, {n}!", f"Hi {n}! I'll remember your name."]),
+                rng.choice(["What's my name?", "Do you remember my name?", "who am i"]), f"Your name is {n}.")
+    if kind == 1:
+        c = rng.choice(CITIES)
+        return (rng.choice([f"I live in {c}.", f"I'm from {c}.", f"i live in {c.lower()}"]), f"The user lives in {c}.",
+                f"{c}, nice! I'll remember that.", rng.choice(["Where do I live?", "What city am I in?"]), f"You live in {c}.")
+    if kind == 2:
+        j = rng.choice(JOBS)
+        a = "an" if j[0] in "aeiou" else "a"
+        return (rng.choice([f"I work as {a} {j}.", f"I'm {a} {j}.", f"My job is {j}."]), f"The user works as {a} {j}.",
+                f"Thanks for telling me! I'll remember that you're {a} {j}.", "What do I do for work?",
+                f"You work as {a} {j}.")
+    if kind == 3:
+        animal, names = rng.choice(PETS)
+        n = rng.choice(names)
+        return (rng.choice([f"I have a {animal} named {n}.", f"My {animal}'s name is {n}."]),
+                f"The user has a {animal} named {n}.", f"{n} is a great name for a {animal}!",
+                rng.choice([f"What's my {animal} called?", "What's my pet's name?"]), f"Your {animal} is called {n}.")
+    if kind == 4:
+        what, options = rng.choice(FAVORITES)
+        x = rng.choice(options)
+        return (rng.choice([f"My favorite {what} is {x}.", f"Remember that my favorite {what} is {x}."]),
+                f"The user's favorite {what} is {x}.", f"Got it, {x}! I'll remember that.",
+                f"What's my favorite {what}?", f"Your favorite {what} is {x}.")
+    if kind == 5:
+        k = rng.choice(SKILLS)
+        return (rng.choice([f"I'm learning {k}.", f"I've started learning {k}."]), f"The user is learning {k}.",
+                f"That's great! Good luck with {k}. I'll remember you're learning it.",
+                "What am I learning?", f"You're learning {k}.")
+    m, d = rng.choice(MONTHS), rng.randint(1, 28)
+    return (rng.choice([f"My birthday is {m} {d}.", f"my birthday is on {m.lower()} {d}"]), f"The user's birthday is {m} {d}.",
+            f"Thanks! I'll remember that your birthday is {m} {d}.", "When is my birthday?", f"Your birthday is {m} {d}.")
+
+
+DONT_SAVE = [   # (what the user says, the reply): moods, other people, and anything secret
+    ("I'm tired today.", "Sorry to hear that. Try to get some rest when you can."),
+    ("I'm so hungry right now", "Maybe it's time for a snack!"),
+    ("I'm bored", "Want a fun fact, a short story, or a riddle?"),
+    ("My friend thinks the moon landing was fake.", "The Moon landings really happened: there's strong evidence, including rock samples and equipment left on the Moon."),
+    ("It's raining here.", "Sounds like a good day to stay inside!"),
+    ("My password is hunter2", "Please don't share passwords with me. I won't save it, and it's safest to keep it private. If this is a real password, consider changing it."),
+    ("My credit card number is 4111 1111 1111 1111", "I won't save card numbers or other payment details. Please keep them private."),
+    ("My social security number is 123-45-6789", "I won't save that. Numbers like that should stay private, so please don't share them in chats."),
+    ("Remember my bank PIN is 4821", "I won't save PINs or passwords. Keep them private, even from me."),
+]
+NO_MEMORY_YET = {   # the question with no notes about it: be honest, and invite them to tell you
+    "name": "I don't know your name yet. If you tell me, I can remember it.",
+    "other": "I don't know that yet. If you tell me, I can remember it for next time.",
+}
+
+
+def fact_kind(fact):
+    """What a saved fact is about: "The user's favorite food is pizza." -> "the user's favorite food"."""
+    words = fact.lower().split()
+    return " ".join(words[:4] if words[2] == "favorite" else words[:3])
+
+
+def memory_conversations(rng, n):
+    """Lessons for remembering you: when to save (and when not), and answering from saved memories."""
+    out = {"memory_save": [], "memory_skip": [], "memory_recall": []}
+    for _ in range(n):
+        said, fact, reply, question, answer = personal_fact(rng)
+        r = rng.random()
+        if r < 0.30:            # save it
+            out["memory_save"].append([user(said), assistant(reply, memory=[fact])])
+        elif r < 0.40:          # save it, then use it later in the same chat
+            q2, a2 = rng.choice(SMALL_TALK)[0][0], "Doing well, thanks for asking!"
+            out["memory_save"].append([user(said), assistant(reply, memory=[fact]), user(q2), assistant(a2),
+                                       user(question), assistant(answer)])
+        elif r < 0.50:          # don't save
+            s, a = rng.choice(DONT_SAVE)
+            out["memory_skip"].append([user(s), assistant(a)])
+        elif r < 0.80:          # a new chat: the memory comes back as a note
+            title = "Saved memory" if rng.random() < 0.6 else f"Earlier chat ({rng.choice(MONTHS)[:3]} {rng.randint(1, 28)})"
+            text = fact if title == "Saved memory" else f"User: {said} AI: {reply}"
+            notes = [{"title": title, "text": text}]
+            other = personal_fact(rng)[1]
+            if rng.random() < 0.4 and fact_kind(other) != fact_kind(fact):  # plus an unrelated memory to ignore
+                notes.append({"title": "Saved memory", "text": other})
+                rng.shuffle(notes)
+            out["memory_recall"].append([user(question, notes), assistant(answer)])
+        else:                   # asked, but nothing saved about it (or only unrelated memories)
+            other = personal_fact(rng)[1]
+            notes = [{"title": "Saved memory", "text": other}] if rng.random() < 0.5 else None
+            if notes and fact_kind(other) == fact_kind(fact):
+                continue        # that memory would answer the question: not an "I don't know" case
+            key = "name" if "name" in question.lower() and "pet" not in question.lower() and "called" not in question.lower() else "other"
+            out["memory_recall"].append([user(question, notes), assistant(NO_MEMORY_YET[key])])
+    return out
+
+
 def instruction_conversations(records, exchanges, rng):
     """Exact-instruction lessons; ~30% come after an unrelated earlier question."""
     out = []
@@ -338,6 +457,7 @@ def build(general, stories, lookup_records, instruction_records, wiki, a, seed=1
     parts["unknowable"] = unknowable_conversations(rng, a.unknowable)
     parts["identity"] = identity_conversations(rng, a.identity)
     parts["small_talk"] = small_talk_conversations(rng, a.small_talk)
+    parts.update(memory_conversations(rng, getattr(a, "memory", 0)))
     if stories:
         from make_chat_data_v2 import story_conversations
         rng.shuffle(stories)
@@ -372,6 +492,7 @@ if __name__ == "__main__":
     p.add_argument("--identity", type=int, default=1_000)
     p.add_argument("--small_talk", type=int, default=1_500)
     p.add_argument("--stories", type=int, default=4_000)
+    p.add_argument("--memory", type=int, default=3_000, help="remembering-you lessons (save / don't / recall)")
     p.add_argument("--db", default=os.path.join("data", "wiki", "wiki.db"))
     a = p.parse_args()
 

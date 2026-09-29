@@ -314,8 +314,14 @@ You ─► Router ─► Base ──┼─► IT helper       (printers, network
   early (`chat_memory.py`, `generate.py --chat --memory`):** past chats and facts you save
   (`remember: ...`) are kept on your computer and searched like the Wikipedia lookup; the best
   matches reach the model as notes ("Earlier chat (Sep 29)", "Saved memory"), a format v3 is already
-  trained on. `memories` / `forget <n>` / `forget everything` / `--private`. Still to do: saving facts
-  automatically ("my name is ..."), meaning-based search instead of keywords, and the app's memory screen.
+  trained on. `memories` / `forget <n>` / `forget everything` / `--private`.
+  **Saving on its own (in v3's chat lessons):** when you say something worth keeping ("my name is
+  Sam"), the model writes a `remember` tool call before its reply; the chat saves it and shows
+  "(saved to memory: ...)". It is taught not to save passwords, card numbers, moods or other people's
+  business, and to answer "what's my name?" from saved memories or say it doesn't know yet.
+  **Search by meaning:** a small embedding model (all-MiniLM-L6-v2, Apache-2.0, CPU) finds "my cat"
+  when you ask about "my pet"; combined with keyword search. `pip install sentence-transformers`
+  to turn it on. Still to do: the app's memory screen (v4).
 
 ### Agentic coding (a coding helper that works in a loop)
 
