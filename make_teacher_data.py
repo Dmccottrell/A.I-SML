@@ -293,7 +293,9 @@ def main():
     p.add_argument("--api_key_env", default="TEACHER_API_KEY", help="environment variable that holds the API key")
     p.add_argument("--price_per_million", type=float, default=0.0, help="dollars per million tokens (from the provider's price page), to estimate spending")
     p.add_argument("--max_dollars", type=float, default=0.0, help="stop when the estimated spending reaches this (needs --price_per_million)")
+    p.add_argument("--version", default="v3", help="whose teacher folder to fill (v3's examples are reused by later versions)")
     a = p.parse_args()
+    out_dir = os.path.join(get_version(a.version).data_dir, "teacher")
     if a.max_dollars and not a.price_per_million:
         p.error("--max_dollars needs --price_per_million")
     if a.api_base:
@@ -303,7 +305,8 @@ def main():
         if not a.model:
             p.error("--model is required with --api_base (the provider's name for the teacher model)")
         TEACHER.update(api_base=a.api_base, model=a.model, key=key)
-    run(a.task, a.n, a.server, a.db, a.parallel, price_per_million=a.price_per_million, max_dollars=a.max_dollars)
+    run(a.task, a.n, a.server, a.db, a.parallel, out_dir=out_dir, price_per_million=a.price_per_million,
+        max_dollars=a.max_dollars)
 
 
 if __name__ == "__main__":

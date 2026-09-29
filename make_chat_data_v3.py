@@ -35,6 +35,7 @@ WHAT THIS FILE DOES
 
 Usage:  python make_chat_data_v3.py
         python make_chat_data_v3.py --general 40000
+        python make_chat_data_v3.py --version v3.5     (later versions reuse and extend the same lessons)
 """
 import argparse, json, os, random
 
@@ -45,6 +46,24 @@ OUT_PATH = os.path.join(V.data_dir, "chat.jsonl")
 TEACHER_DIR = os.path.join(V.data_dir, "teacher")
 MY_EXAMPLES = os.path.join(V.data_dir, "my_examples.jsonl")
 MAX_CHARS = 6000        # ~1,500 tokens: fits v3's 2,048-token memory with room to spare
+
+
+def set_version(name):
+    """Build the lessons for `name` (v3 or later). Everything v3 learns carries forward: a later
+    version gets the same lessons (memory, suggestions, lookups, corrections, ...) in its own folder,
+    with longer conversations allowed when its memory (context) is longer. Teacher examples are plain
+    text, so v3's are reused when the version has none of its own."""
+    global V, OUT_PATH, TEACHER_DIR, MY_EXAMPLES, MAX_CHARS
+    V = get_version(name)
+    if "<|notes|>" not in V.special_tokens:
+        raise SystemExit(f"{name} is older than v3 (no lookup/tool tokens); use make_chat_data_v2.py for it")
+    OUT_PATH = os.path.join(V.data_dir, "chat.jsonl")
+    own = os.path.join(V.data_dir, "teacher")
+    TEACHER_DIR = own if os.path.isdir(own) else os.path.join(get_version("v3").data_dir, "teacher")
+    MY_EXAMPLES = os.path.join(V.data_dir, "my_examples.jsonl")
+    MAX_CHARS = 6000 * V.model.max_seq_len // 2048
+    print(f"{name}: lessons -> {OUT_PATH} (teacher examples from {TEACHER_DIR}, conversations up to "
+          f"{MAX_CHARS:,} characters)")
 
 # ------------------------------------------------------------------ identity
 # Edit these to give your AI its own name and personality!
@@ -512,7 +531,10 @@ if __name__ == "__main__":
     p.add_argument("--stories", type=int, default=4_000)
     p.add_argument("--memory", type=int, default=3_000, help="remembering-you lessons (save / don't / recall)")
     p.add_argument("--db", default=os.path.join("data", "wiki", "wiki.db"))
+    p.add_argument("--version", default="v3", help="v3 or any later version (v3.5, v3-long-8k, ...): "
+                   "every later version reuses these lessons, and adds its own on top")
     a = p.parse_args()
+    set_version(a.version)
 
     from make_chat_data_v2 import load_smoltalk, load_story_texts
     wiki = None
