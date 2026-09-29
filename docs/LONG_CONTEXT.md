@@ -47,6 +47,28 @@ the home 4070 (12 GB) is limited to about 8K-16K. Whichever machine is not pretr
 the stretch. The v3 stretch also has to wait for v3's chat-tuning decision: stretch the pretrained
 `final.pt`, then chat-tune (with some long examples), not the other way around.
 
+## Running the v3 stretch (once v3 has finished)
+Each step is its own "version", so everything you know already works the same (pause with Ctrl+C,
+resume, `run_training.py`, `handoff.py`, `--notify`, backups):
+
+| Version | Context | RoPE base | Steps (~262k tokens each) | Starts from |
+|---|---|---|---|---|
+| `v3-long-8k` | 8,192 | 2,000,000 | 2,000 (~0.52B tokens) | `checkpoints/dev/v3/final.pt` |
+| `v3-long-16k` | 16,384 | 4,000,000 | 1,500 (~0.39B) | `v3-long-8k/final.pt` |
+| `v3-long-32k` | 32,768 | 8,000,000 | 1,500 (~0.39B) | `v3-long-16k/final.pt` |
+
+```
+python eval_long.py --version v3                       # baseline (the 2K model)
+python train.py --version v3-long-8k --pilot           # speed + memory at 8K
+python run_training.py --version v3-long-8k            # the stretch
+python eval_long.py --version v3-long-8k               # the gate: go on only if it passes
+python exam.py --version v3-long-8k                    # "nothing got worse"
+```
+then the same with `16k`, then `32k`. The learning rate (6e-5, gentle), RoPE bases and step counts
+are starting guesses that the 8K step tests. Until the long-document builder exists these read v3's
+own data, which teaches the mechanics but little long-range skill, so the real quality run waits
+for it.
+
 ## How the stretch works (three settings, no new architecture)
 * **Raise the RoPE base** (`rope_theta`) at each step (for example 500K -> 2M -> 8M). RoPE tells
   the model where each token is; a bigger base means the rotation for far-apart tokens stays
@@ -109,7 +131,9 @@ What a failure means:
 1. Context meter: **done** (`chat.py`, `generate.py --context`).
 2. `eval_long.py`, the needle / multi-fact / code / position tests with the thresholds above: **done
    and unit-tested** on stand-in readers and tiny models. Not yet run on a real v3 checkpoint.
-3. Chunked loss and a sequence-length option in `train.py` so a long step can run at all.
+3. Chunked loss and the stretch settings: **done** (`config.py` versions `v3-long-8k`, `v3-long-16k`,
+   `v3-long-32k`; `train.py` starts each from the previous one's `final.pt`). Tested on tiny models on
+   a CPU; not yet run on a GPU.
 4. Long-document data builder (books, long articles, repositories, made-up recall tasks).
 5. RoPE base / YaRN override when loading a checkpoint for extension (`eval_long.py` already has
    `--seq_len` and `--rope_theta` to test a stretched checkpoint).

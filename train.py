@@ -56,6 +56,7 @@ Usage:  python train.py                    (v1: checkpoints/dev/)
         python train.py --version v2 --fresh
         python train.py --version v3 --pilot        (~60 steps, then a report)
         python train.py --version v3 --backup_dir D:\ai-backups
+        python train.py --version v3-long-8k --pilot   (after v3 finishes: the first stretch, docs/LONG_CONTEXT.md)
 
 READING THE OUTPUT
     iter 100: loss 5.454  lr 6.06e-05  748ms/iter   <- every 50 iterations
@@ -247,9 +248,30 @@ def get_lr(it):
 model = TinyLM(cfg).to(device)
 model.grad_checkpoint = S.grad_checkpoint
 model.checkpoint_every = S.checkpoint_every
+model.loss_chunk = S.loss_chunk
+if S.init_from and (args.fresh or not os.path.exists(LATEST_PATH)):
+    # Long-context stretching: start from a trained model's weights (not its optimizer or step count).
+    # Its context length and RoPE base may differ from cfg; everything else must match.
+    if not os.path.exists(S.init_from):
+        if not args.pilot:
+            sys.exit(f"{V.name} starts from {S.init_from}, which doesn't exist yet. Finish that run first "
+                     "(or copy its final.pt there).")
+        mprint(f"(pilot: {S.init_from} not found, so the pilot uses random weights; speed and memory are the same)")
+    else:
+        src = torch.load(S.init_from, map_location="cpu")
+        mine = {k: v for k, v in cfg.__dict__.items() if k not in ("max_seq_len", "rope_theta", "dropout")}
+        theirs = {k: src["config"].get(k) for k in mine}
+        if mine != theirs:
+            sys.exit(f"{S.init_from} is a different model: " + ", ".join(
+                f"{k} {theirs[k]} vs {mine[k]}" for k in mine if mine[k] != theirs[k]))
+        model.load_state_dict(src["model"])
+        mprint(f"starting from {S.init_from} (context {src['config']['max_seq_len']:,} -> {cfg.max_seq_len:,}, "
+               f"RoPE base {src['config']['rope_theta']:,.0f} -> {cfg.rope_theta:,.0f})")
+        del src
 mprint(f"{V.name}: {model.num_params()/1e6:.1f}M parameters on {device}"
        + (f" x {WORLD} GPUs (DDP)" if DIST else "")
-       + (f"  (gradient checkpointing on, every {S.checkpoint_every} block)" if S.grad_checkpoint else ""))
+       + (f"  (gradient checkpointing on, every {S.checkpoint_every} block)" if S.grad_checkpoint else "")
+       + (f"  (context {cfg.max_seq_len:,}, loss in chunks of {S.loss_chunk:,})" if S.loss_chunk else ""))
 # With several GPUs the model is wrapped so gradients are averaged across them. `model` stays the plain
 # model (for saving, loading and evaluating); `wrapped` is what training runs through.
 wrapped = model
