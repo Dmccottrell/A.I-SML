@@ -59,6 +59,7 @@ import sys
 import time
 
 from config import add_version_arg, get_version
+from notify import send as phone_send
 
 
 def log(message, log_path=None):
@@ -167,13 +168,17 @@ def run_once(command):
 
 
 def supervise(train_args, ckpt_dir, script="train.py", first_wait=30.0,
-              max_stalled=3, max_restarts=50, window=None, days=None, exit_after_window=False, tz=None, gpus=1):
+              max_stalled=3, max_restarts=50, window=None, days=None, exit_after_window=False, tz=None, gpus=1,
+              notify=None):
     """Run `script` with `train_args`, restarting after crashes. Returns the exit code to use."""
     os.makedirs(ckpt_dir, exist_ok=True)
     log_path = os.path.join(ckpt_dir, "supervisor.log")
     latest = os.path.join(ckpt_dir, "latest.pt")
     args = list(train_args)
     marker = os.path.join(ckpt_dir, "paused_on_schedule")
+
+    def tell(message, title):
+        phone_send(notify, message, title=title)
 
     def command(extra):
         """python train.py ...  or, with several GPUs, torchrun starting one copy per GPU"""
@@ -234,12 +239,14 @@ def supervise(train_args, ckpt_dir, script="train.py", first_wait=30.0,
         if stalled >= max_stalled:
             log(f"giving up: {stalled} failures in a row without saving anything. That's a real "
                 "problem, not bad luck: read the error above (out of memory? missing data?).", log_path)
+            tell(f"GAVE UP after {stalled} failed starts in a row. Needs you.", "training stopped")
             return 1
         restarts += 1
         if restarts > max_restarts:
             log(f"giving up after {max_restarts} restarts.", log_path)
             return 1
         log(f"restarting in {wait:.0f} s (restart {restarts}). Ctrl+C now to stop.", log_path)
+        tell(f"crashed (exit code {code}), restarting in {wait:.0f} s (restart {restarts})", "crash")
         try:
             time.sleep(wait)
         except KeyboardInterrupt:
@@ -257,6 +264,8 @@ def main():
     p.add_argument("--exit_after_window", action="store_true",
                    help="with --window: exit at the end of the window instead of waiting for the next one "
                         "(for rented machines, so a command after it can switch the machine off)")
+    p.add_argument("--notify", default=os.environ.get("NTFY_TOPIC"),
+                   help="ntfy.sh topic: push progress, crashes and finish messages to your phone (see notify.py)")
     p.add_argument("--gpus", type=int, default=1,
                    help="train on this many GPUs of one machine (uses torchrun; see train.py)")
     p.add_argument("--utc_offset", type=float, default=None,
@@ -272,9 +281,11 @@ def main():
     days = parse_days(args.days)
     if window:
         print(f"Run window: {args.window} on {args.days} (days a window starts).", flush=True)
-    sys.exit(supervise(["--version", args.version] + rest, V.ckpt_dir, args.script,
+    train_args = ["--version", args.version] + rest + (["--notify", args.notify] if args.notify else [])
+    sys.exit(supervise(train_args, V.ckpt_dir, args.script,
                        args.wait_seconds, max_restarts=args.max_restarts, window=window, days=days,
-                       exit_after_window=args.exit_after_window, tz=tz, gpus=args.gpus))
+                       exit_after_window=args.exit_after_window, tz=tz, gpus=args.gpus,
+                       notify=args.notify))
 
 
 if __name__ == "__main__":
