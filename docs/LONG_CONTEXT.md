@@ -55,17 +55,37 @@ length. So we do the opposite of "train long from the start":
   The first reply after pasting 100K tokens takes a while (it must read everything once).
 
 ## The tests that decide each step
-1. **Needle in a haystack:** hide a fact at a random spot in a long document, ask for it back.
-   Must be >95% at every position, not just the ends ("lost in the middle" shows up here).
-2. **Multi-fact recall:** two or three facts in different places, one question that needs all of them.
-3. **Long-code task:** answer a question about a function defined 50K tokens earlier.
-4. **Nothing got worse:** re-run the normal exam (HellaSwag, the chat sheet) after each step.
-   If short-text scores drop more than a small margin, we mix in more short data and retry.
-5. **Loss by position:** plot the loss against how far into the document the token is. It should
-   keep falling with more context; if it goes flat after 20K, the model isn't using the rest.
+**When they run:** never during the main 2K pretraining (nothing to test yet). They run at three points:
 
-If a step fails, we stop at the last length that passed and say so plainly. A model that passes at
-32K and fails at 100K is still a 32K model.
+1. **Before stretching (baseline).** On the finished 2K model: the normal exam (HellaSwag and the
+   chat sheet), so "nothing got worse" has a number to compare with, and the needle test at 2K, to
+   prove the test works on a model that should pass.
+2. **During a stretch (quick check).** At each save point of a stretch run, only the cheap ones:
+   loss by position, and a small needle test (5 tries per depth). This catches a run that isn't
+   working early instead of after days of rented GPU time.
+3. **After each stretch (the real gate).** The full set below. Pass every line to move to the next
+   length. Also run the needle test on the un-stretched model at the new length once: it should
+   FAIL, which proves the test can tell the difference.
+
+| Test | Pass | Fail |
+|---|---|---|
+| **Needle in a haystack** (a fact hidden at 10%, 25%, 50%, 75%, 90% of the way in; 20+ tries each) | >=95% correct at every depth, and no depth below 90% | Any depth under 90%, especially the middle |
+| **Multi-fact** (2-3 facts in different places; one question needs all of them) | >=80% at the tested length | Under 70%, or a big drop from the previous length |
+| **Long-code** (a question about a function defined far earlier) | >=70% at that length | Under 60% |
+| **Nothing got worse** (HellaSwag and the chat sheet, same as the baseline) | HellaSwag within 1 point, chat sheet within 1 answer | HellaSwag down 2+ points, or clearly worse chat answers |
+| **Loss by position** (loss on early vs. late tokens of a long document) | Loss keeps falling or stays flat as position increases, up to the tested length | Loss rises again, or is flat from about 20% of the length onward (it is ignoring the rest) |
+
+What a failure means:
+* **Any failure stops the ladder.** We keep the last length that passed and go no further with that
+  model. A model that passes at 32K and fails at 100K is described as a 32K model.
+* **Needle fails only in the middle** ("lost in the middle"): first try more long-document training
+  data; if it still fails, stop.
+* **"Nothing got worse" fails:** don't stop. Add more short data to that step and redo it; the long
+  training pushed out short-text skill.
+* **The numbers are proposals**, chosen from how similar tests are usually scored, not measured on
+  our model. After the 8K step we have real results and should check whether they are too strict or
+  too loose. The multi-fact and long-code lines are the softest: small models score much lower on
+  those tasks.
 
 ## What to build (in this order)
 1. Context meter (done: `chat.py`, `generate.py --context`): see what fills the window.
