@@ -144,6 +144,25 @@ same however it is split; a schedule only changes how many days it takes. Also, 
 instance can be rented by someone else and may not restart for a while, so either leave it running
 (idle GPU costs ~$0.17/hr) or expect to set up again.
 
+## More than one GPU (2 x RTX 3090 and so on)
+
+A rented machine with 2 or more GPUs trains almost that many times faster. Every GPU keeps a full
+copy of the model and reads different text, and their gradients are averaged once per step (this is
+"DDP"). Because we add up 128 small batches before each step, the sharing costs almost nothing.
+
+- **Rent:** on Vast, use the 2X (or 4X) filter: the GPUs must be in the SAME machine. Each must be able
+  to hold the whole model + optimizer (v3: 10 GB, v3.5: ~17 GB plus working memory, so 24 GB cards are fine
+  with gradient checkpointing on). 3B (v5) does not fit this way; that needs one 96 GB card or sharding.
+- **Set up and run:** `bash cloud_setup.sh v3 2` (the 2 is the GPU count), then
+  `python run_training.py --version v3 --gpus 2 --backup_dir ~/backups`. With `handoff.py up --start` add `--cloud_gpus 2`.
+- **Same settings:** `grad_accum` in `config.py` is the TOTAL per step and is split between the GPUs
+  (it must divide evenly: 128 works for 1, 2, 4 or 8 GPUs). Every step is the same size as on one GPU.
+- **Checkpoints move freely:** a save from 1 GPU resumes on 2 GPUs and back. So your home run can carry on in the cloud.
+- **Expect** about 1.8-1.9x for 2 GPUs (my estimate; the pilot report prints the real speed).
+- **Debug check:** `DDP_SELFCHECK=1` makes it print, at the end of a run, whether all GPUs ended with identical weights.
+- **v3.5 memory:** use `optimizer="adamw"` (not `adamw_cpu`) on multi-GPU machines, otherwise each GPU needs its own ~17 GB of RAM.
+- **Tested** on a CPU with two processes (identical weights, pause and resume, window stop, Ctrl+C); **not yet on real GPUs**.
+
 ## 8. Do not forget
 
 - **Shut the machine down (or delete it) when finished.** Billing continues while it is on, even idle.

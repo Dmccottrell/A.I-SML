@@ -3,12 +3,14 @@
 #
 #   git clone https://github.com/Dmccottrell/A.I-SML.git && cd A.I-SML
 #   bash cloud_setup.sh v3          # or v3.5
+#   bash cloud_setup.sh v3 2        # a machine with 2 GPUs (see docs/CLOUD.md, "More than one GPU")
 #
 # It checks the GPU, installs the packages, builds the data (resumable: run it again if it stops),
 # runs the pilot, then prints the command that starts the real run. Run it inside tmux
 # (tmux new -s train) so it survives a dropped connection.
 set -e
 VERSION="${1:-v3}"
+GPUS="${2:-1}"        # bash cloud_setup.sh v3 2   for a machine with 2 GPUs
 
 echo "== 1/4 checking the GPU"
 nvidia-smi --query-gpu=name,memory.total --format=csv,noheader || { echo "No NVIDIA GPU found. Pick a GPU machine."; exit 1; }
@@ -22,9 +24,14 @@ echo "== 3/4 building the data for $VERSION (skips work already done; several ho
 python prepare_web_data.py --version "$VERSION"
 
 echo "== 4/4 pilot run (about 60 steps: checks speed and memory)"
-python train.py --version "$VERSION" --pilot
+if [ "$GPUS" -gt 1 ]; then
+  torchrun --standalone --nproc_per_node="$GPUS" train.py --version "$VERSION" --pilot
+else
+  python train.py --version "$VERSION" --pilot
+fi
 
 echo
 echo "Ready. If the PILOT REPORT above looks right, start the real run with:"
-echo "    python run_training.py --version $VERSION --backup_dir ~/backups"
+if [ "$GPUS" -gt 1 ]; then GP="--gpus $GPUS "; else GP=""; fi
+echo "    python run_training.py --version $VERSION ${GP}--backup_dir ~/backups"
 echo "(Ctrl+B then D leaves tmux and keeps it running. Ctrl+C once pauses it safely.)"
