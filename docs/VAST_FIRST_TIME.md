@@ -101,7 +101,7 @@ and wait for `paused at iteration N`. Then follow the daily routine in [CLOUD.md
 python run_training.py --version v3 --window 14:00-21:00 --exit_after_window --backup_dir C:\ai-backups
 ```
 
-At 9pm it saves and stops. Start the cloud machine if it's stopped (check the port again), then:
+At 9pm it saves and stops. (Times are yours: `handoff.py --start` tells the cloud machine your time zone, because its own clock is usually UTC.) Start the cloud machine if it's stopped (check the port again), then:
 
 ```
 python handoff.py up --host root@<ip> --port <port> --start

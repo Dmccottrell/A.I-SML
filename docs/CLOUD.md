@@ -116,6 +116,8 @@ python handoff.py down --host root@<ip> --port <port>             # cloud -> PC
 | 9:00pm | PC | It saves and exits. Start the cloud machine on the site, then `python handoff.py up ... --start` |
 | 9:30pm-1pm | cloud | Trains by itself, then stops itself |
 
+**Time zones:** a rented machine's clock is usually UTC, so the cloud window must be told your time zone. `handoff.py up --start` does it for you: it passes this PC's current UTC offset (`--utc_offset`, e.g. -5), so "21:30-13:00" means *your* 9:30pm to 1pm, and it re-reads your offset each evening, so daylight saving is handled. If you start the cloud run by hand, add `--utc_offset -5` (your offset) to `run_training.py`.
+
 At home you can chain it into one line (PowerShell): `python handoff.py down ...; python run_training.py ...; python handoff.py up ... --start`.
 Copying 4.7 GB takes ~10-30 min each way on home internet, and the cloud downloads faster than your
 PC uploads, so the 9-9:30pm gap is for the upload. Use `--stop_command true` if you'd rather stop the
