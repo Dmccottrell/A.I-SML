@@ -17,7 +17,7 @@ FOLDERS (all inside the current stage, see stage.py)
 
 To add another version, copy the latest entry in VERSIONS and change what you need.
 """
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 
 from model import ModelConfig
 from tokenizer import EXTENDED_SPECIAL_TOKENS, SPECIAL_TOKENS
@@ -52,6 +52,9 @@ class TrainSettings:
     decay_frac: float = 0.1
     exam_every: int = 0         # mini-exam (500 HellaSwag questions) every N steps; 0 = off
     compile: bool = False       # try torch.compile for speed (falls back automatically if unavailable)
+    # Long-context stretching (docs/LONG_CONTEXT.md). Both off for normal pretraining.
+    init_from: str = ""         # a fresh run starts from these weights (e.g. v3's final.pt) instead of random ones
+    loss_chunk: int = 0         # make the output scores this many positions at a time (0 = all at once)
 
 
 @dataclass
@@ -234,6 +237,46 @@ VERSIONS = {
         chat_memory=True,
     ),
 }
+
+
+
+# ---- v3-long: stretching v3's memory (context) in steps, after v3 finishes (docs/LONG_CONTEXT.md) ----
+# Each step starts from the one before it (init_from) with a longer context and a bigger RoPE base, and
+# trains briefly at a gentle learning rate. Every step keeps ~262k tokens per step, like v3.
+# The RoPE bases, step counts and learning rate are starting guesses: the 8K step tests them, and
+# eval_long.py decides whether to go on. The data is v3's own until the long-document builder exists.
+def _v3_long(length, rope_theta, iters, init_from):
+    v3 = VERSIONS["v3"]
+    name = f"v3-long-{length // 1024}k"
+    return name, replace(
+        v3, name=name,
+        description=f"v3 stretched to a {length:,}-token memory",
+        ckpt_dir=f"{CKPT_DIR}/{name}",
+        export_dir=f"{EXPORT_DIR}/{name}",
+        model=replace(v3.model, max_seq_len=length, rope_theta=rope_theta),
+        train=replace(
+            v3.train,
+            grad_accum=262_144 // length,   # 1 sequence per micro-batch; ~262k tokens per step
+            max_iters=iters,
+            warmup_iters=100,
+            lr_max=6e-5,           # gentle: teach it to use distance without undoing what it knows
+            lr_min=6e-6,
+            schedule="cosine",
+            eval_every=250,
+            eval_iters=10,         # each batch is long, so fewer are needed
+            save_every=25,
+            exam_every=500,        # HellaSwag: "nothing got worse" as it goes
+            grad_checkpoint=True,  # the pilot decides whether it can be turned off
+            loss_chunk=2048,
+            init_from=init_from,
+        ))
+
+
+for _args in ((8192, 2_000_000.0, 2000, f"{CKPT_DIR}/v3/final.pt"),        # ~0.52B tokens
+              (16384, 4_000_000.0, 1500, f"{CKPT_DIR}/v3-long-8k/final.pt"),  # ~0.39B tokens
+              (32768, 8_000_000.0, 1500, f"{CKPT_DIR}/v3-long-16k/final.pt")):  # ~0.39B tokens
+    _name, _version = _v3_long(*_args)
+    VERSIONS[_name] = _version
 
 
 def get_version(name):

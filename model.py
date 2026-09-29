@@ -268,6 +268,12 @@ class TinyLM(nn.Module):
         # saving for about half the extra time (1 = every block).
         self.grad_checkpoint = False
         self.checkpoint_every = 1
+        # Chunked loss (off = 0; train.py turns it on from config for long-context training).
+        # The output layer makes one score per vocabulary word per position: at 32,768 words x
+        # 32,768 positions that is ~4 GB in float32, plus the same again for its gradient. With
+        # loss_chunk=N the scores are made N positions at a time and re-made during backward, so
+        # only one chunk's worth exists at once. Same loss and gradients, a little more compute.
+        self.loss_chunk = 0
 
         self.apply(self._init_weights)   # calls _init_weights on every sub-layer
         # Scale down the residual output layers (helps deep nets train stably)
@@ -307,6 +313,8 @@ class TinyLM(nn.Module):
                 x = checkpoint(block, x, cos, sin, use_reentrant=False)
             else:
                 x = block(x, cos, sin, None if caches is None else caches[i])
+        if targets is not None and self.loss_chunk and T > self.loss_chunk:
+            return None, self._chunked_loss(self.norm(x), targets, loss_mask)
         logits = self.lm_head(self.norm(x))
 
         if targets is None:
@@ -322,6 +330,29 @@ class TinyLM(nn.Module):
         else:
             loss = loss.mean()
         return logits, loss
+
+    def _loss_sum(self, h, targets, mask):
+        """Sum of the losses for one chunk of positions (see loss_chunk)."""
+        loss = F.cross_entropy(self.lm_head(h).float(), targets, reduction="none")
+        return (loss * mask).sum() if mask is not None else loss.sum()
+
+    def _chunked_loss(self, h, targets, loss_mask):
+        """The same average loss as forward() normally computes, made loss_chunk positions at a time.
+
+        Returns only the loss (forward returns None for the logits in this mode): training never
+        uses the logits, and keeping them is exactly the memory this avoids.
+        """
+        h = h.reshape(-1, h.size(-1))
+        targets = targets.reshape(-1)
+        mask = loss_mask.reshape(-1).float() if loss_mask is not None else None
+        total = 0.0
+        for i in range(0, h.size(0), self.loss_chunk):
+            j = i + self.loss_chunk
+            part_mask = mask[i:j] if mask is not None else None
+            # checkpoint: don't keep this chunk's scores for backward; make them again then
+            total = total + checkpoint(self._loss_sum, h[i:j], targets[i:j], part_mask, use_reentrant=False)
+        count = mask.sum().clamp(min=1) if mask is not None else h.size(0)
+        return total / count
 
     @torch.no_grad()   # no gradients needed when generating: faster, less memory
     def generate(self, idx, max_new_tokens, temperature=0.8, top_k=50, stop_id=None,
