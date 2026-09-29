@@ -17,6 +17,12 @@ live in `config.py`.
 > and `export/dev/` (set in `stage.py`). Nothing touches staging or production until you
 > promote it by hand.
 
+## Model family names (working names)
+
+Norse storytelling words, since these are language models: **Rune** (phone-lite, ~400M), **Skald**
+(small, ~1B: v3.5, and v4 as "Skald 2"), **Saga** (~3B), **Edda** (5-7B) and **Norn** (top, 13B+). They are
+placeholders: no trademark check has been done yet. See `docs/ROADMAP.md`.
+
 ## Pretrained weights policy
 
 **Every model in this project (v1 to v6.5) is trained from scratch.** Each one starts as random
