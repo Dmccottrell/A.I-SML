@@ -54,9 +54,20 @@ def scp_down(host, port, remote, local):
 # -------------------------------------------------------------------------------------------
 
 
+def rq(path):
+    """Quote a cloud path for the cloud's shell, keeping a leading ~/ working.
+
+    shlex.quote("~/A.I-SML/x") gives '~/A.I-SML/x', and inside quotes the shell does NOT turn ~ into
+    the home folder, so commands looked for a folder literally named "~". "$HOME" does work.
+    """
+    if path == "~" or path.startswith("~/"):
+        return '"$HOME"' + (shlex.quote(path[1:]) if len(path) > 1 else "")
+    return shlex.quote(path)
+
+
 def remote_stat(host, port, path):
     """(modified time, size) of a file on the cloud machine, or (0, 0) if it isn't there."""
-    out = ssh_out(host, port, f"stat -c '%Y %s' {shlex.quote(path)} 2>/dev/null || echo '0 0'")
+    out = ssh_out(host, port, f"stat -c '%Y %s' {rq(path)} 2>/dev/null || echo '0 0'")
     mtime, size = out.split()[:2]
     return float(mtime), int(size)
 
@@ -70,7 +81,7 @@ def up(a, V):
     if a.with_tokenizer:
         tok = os.path.join(V.data_dir, "tokenizer.json")
         rdata = f"{a.repo}/{V.data_dir}".replace("\\", "/")
-        ssh_out(a.host, a.port, f"mkdir -p {shlex.quote(rdata)}")
+        ssh_out(a.host, a.port, f"mkdir -p {rq(rdata)}")
         scp_up(a.host, a.port, tok, f"{rdata}/tokenizer.json")
         print("sent tokenizer.json")
     r_time, _ = remote_stat(a.host, a.port, f"{remote_dir}/latest.pt")
@@ -78,14 +89,14 @@ def up(a, V):
         raise SystemExit("STOPPED: the cloud copy of latest.pt is NEWER than yours. Copying yours over it "
                          "would throw away training. Run `python handoff.py down ...` first "
                          "(or --force if you really mean it).")
-    ssh_out(a.host, a.port, f"mkdir -p {shlex.quote(remote_dir)}")
+    ssh_out(a.host, a.port, f"mkdir -p {rq(remote_dir)}")
     for name in FILES:
         src = os.path.join(local_dir, name)
         if not os.path.exists(src):
             continue
         print(f"sending {name} ({os.path.getsize(src) / 1e9:.1f} GB)...")
         scp_up(a.host, a.port, src, f"{remote_dir}/{name}.part")
-        ssh_out(a.host, a.port, f"mv {shlex.quote(remote_dir + '/' + name + '.part')} {shlex.quote(remote_dir + '/' + name)}")
+        ssh_out(a.host, a.port, f"mv {rq(remote_dir + '/' + name + '.part')} {rq(remote_dir + '/' + name)}")
         _, size = remote_stat(a.host, a.port, f"{remote_dir}/{name}")
         if size != os.path.getsize(src):
             raise SystemExit(f"{name}: sizes differ after copying ({size} vs {os.path.getsize(src)}). Run it again.")
