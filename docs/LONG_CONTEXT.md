@@ -29,6 +29,24 @@ length. So we do the opposite of "train long from the start":
 | Stretch 3 | 100,000 | ~0.5-1B tokens | 48 GB minimum; RTX PRO 6000 (96 GB) is the good fit |
 | Re-tune | mixed 2K-32K | small | any |
 
+## Rehearse on v3 first, while v3.5 pretrains
+v3.5's stretch can't start until its 30B-token pretraining is done (months). v3 finishes much sooner,
+so **we run the whole recipe on v3 first**, at the same time as v3.5 pretrains:
+
+1. v3 finishes pretraining (about 2 weeks from the start of its run).
+2. **Baseline on v3:** `eval_long.py` at 2K and the normal exam (`exam.py`), saved.
+3. **Stretch v3 (this is "v3-long"):** 2K -> 8K -> 16K, and 32K if the tests keep passing.
+4. v3.5 starts pretraining on the other machine.
+5. Everything learned on v3 (which RoPE recipe works, how much long data it needs, real seconds per
+   step and memory at each length, whether the thresholds are sensible) is applied to v3.5's
+   stretch later, with the guesswork gone. v3-long is also a useful model in its own right.
+
+It needs **two GPUs at once** (v3.5 pretraining and the v3 stretch). The v3 stretch is only days of
+work: the rented RTX 3090 (24 GB) is the natural place for it (it fits 32K on a 394M model), while
+the home 4070 (12 GB) is limited to about 8K-16K. Whichever machine is not pretraining v3.5 does
+the stretch. The v3 stretch also has to wait for v3's chat-tuning decision: stretch the pretrained
+`final.pt`, then chat-tune (with some long examples), not the other way around.
+
 ## How the stretch works (three settings, no new architecture)
 * **Raise the RoPE base** (`rope_theta`) at each step (for example 500K -> 2M -> 8M). RoPE tells
   the model where each token is; a bigger base means the rotation for far-apart tokens stays
@@ -73,7 +91,7 @@ length. So we do the opposite of "train long from the start":
 | **Multi-fact** (2-3 facts in different places; one question needs all of them) | >=80% at the tested length | Under 70%, or a big drop from the previous length |
 | **Long-code** (a question about a function defined far earlier) | >=70% at that length | Under 60% |
 | **Nothing got worse** (HellaSwag and the chat sheet, same as the baseline) | HellaSwag within 1 point, chat sheet within 1 answer | HellaSwag down 2+ points, or clearly worse chat answers |
-| **Loss by position** (loss on early vs. late tokens of a long document) | Loss keeps falling or stays flat as position increases, up to the tested length | Loss rises again, or is flat from about 20% of the length onward (it is ignoring the rest) |
+| **Loss by position** (loss on early vs. late tokens of a long document; last quarter compared with the 20-30% mark) | Loss is at least 0.02 lower (more context is still helping) | Loss is more than 0.05 higher (longer context confuses it). Within that band is a warning: it may be ignoring the rest, so look before going on |
 
 What a failure means:
 * **Any failure stops the ladder.** We keep the last length that passed and go no further with that
@@ -87,14 +105,18 @@ What a failure means:
   too loose. The multi-fact and long-code lines are the softest: small models score much lower on
   those tasks.
 
-## What to build (in this order)
-1. Context meter (done: `chat.py`, `generate.py --context`): see what fills the window.
-2. Chunked loss and a `--seq_len` ramp in `train.py` so a long step can run at all.
-3. Long-document data builder (books, long articles, repositories, synthetic recall tasks).
-4. RoPE base / YaRN override when loading a checkpoint for extension.
-5. `eval_long.py`: the needle, multi-fact and by-position tests. Built and tried on small models first.
-6. Small-scale experiments before we commit to the big run: **local + global attention** and
-   **MLA** (see below) on the 30M model, to learn whether they'd help at our sizes.
+## What to build (in this order; all of it can be built while v3 trains)
+1. Context meter: **done** (`chat.py`, `generate.py --context`).
+2. `eval_long.py`, the needle / multi-fact / code / position tests with the thresholds above: **done
+   and unit-tested** on stand-in readers and tiny models. Not yet run on a real v3 checkpoint.
+3. Chunked loss and a sequence-length option in `train.py` so a long step can run at all.
+4. Long-document data builder (books, long articles, repositories, made-up recall tasks).
+5. RoPE base / YaRN override when loading a checkpoint for extension (`eval_long.py` already has
+   `--seq_len` and `--rope_theta` to test a stretched checkpoint).
+6. Small-scale experiments before the big run: **local + global attention** and **MLA** (see below)
+   on the 30M model, to learn whether they'd help at our sizes.
+
+Target: 3-5 are ready before v3 finishes, so its stretch can start the day it is done.
 
 ## Beyond 100K (500K and further)
 This needs a model designed for it, not a stretch of v3.5: most layers looking only at nearby text
