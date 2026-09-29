@@ -26,7 +26,9 @@ Options:
     --context      chat mode: show the context meter after every reply (how full the
                    model's memory is, and what it has forgotten)
     --lookup       chat mode: search the Wikipedia index (wiki_index.py) for each
-                   message and give the best passages to the model as notes
+                   message and give the best passages to the model as notes. Only the
+                   newest question keeps its notes (older ones are dropped to save room)
+    --notes        with --lookup: passages per question (default 3; 2 leaves more room)
 """
 import argparse, os
 
@@ -49,6 +51,7 @@ p.add_argument("--repetition_penalty", type=float, default=1.15)
 p.add_argument("--chat", action="store_true")
 p.add_argument("--context", action="store_true", help="chat: show the context meter after every reply")
 p.add_argument("--lookup", action="store_true", help="chat: look each message up in Wikipedia first")
+p.add_argument("--notes", type=int, default=3, help="chat --lookup: passages per question (fewer = more room)")
 p.add_argument("--db", default=os.path.join("data", "wiki", "wiki.db"))
 args = p.parse_args()
 V = get_version(args.version)
@@ -104,7 +107,7 @@ if args.chat:
             history = []                       # v1: every message on its own
         message = {"role": "user", "content": msg}
         if wiki:
-            notes = wiki.search(msg, 3)
+            notes = wiki.search(msg, args.notes)
             if notes:
                 message["notes"] = [{"title": n["title"], "text": n["text"]} for n in notes]
                 print("(looked up: " + "; ".join(n["title"] for n in notes) + ")")

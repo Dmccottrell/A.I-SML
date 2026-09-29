@@ -128,20 +128,39 @@ def _first_kept(parts, max_tokens):
     return start
 
 
-def build_prompt(tok, history, max_tokens):
+def drop_old_notes(history, keep=1):
+    """Keep looked-up notes only on the newest `keep` messages that have them.
+
+    Notes are ~500 tokens per question, but once the AI has answered, its answer already holds what
+    it needed from them. Keeping every old question's notes filled v3's 2,048-token memory after
+    2-3 questions; dropping them leaves room for many more. keep=1 also matches training, where a
+    conversation never has more than one set of notes (and a "that's wrong" right after an answer
+    still sees the notes it should recheck, because they belong to the newest message that has any).
+    keep=0 drops all notes; None keeps everything (the old behaviour).
+    """
+    if keep is None:
+        return list(history)
+    with_notes = [i for i, m in enumerate(history) if m.get("notes")]
+    old = set(with_notes[:max(0, len(with_notes) - keep)])
+    return [{k: v for k, v in m.items() if k != "notes"} if i in old else m for i, m in enumerate(history)]
+
+
+def build_prompt(tok, history, max_tokens, keep_notes=1):
     """Tokens to feed the model so it writes the next assistant reply.
 
     history: messages so far, ending with the user's newest message.
+    Notes are kept only on the newest message that has them (see drop_old_notes).
     If the whole conversation doesn't fit in max_tokens, the OLDEST messages
     are dropped first (the AI "forgets" the start of a long chat). If even
     the newest message is too long, only its last max_tokens tokens are kept.
     """
+    history = drop_old_notes(history, keep_notes)
     parts = [_encode_message(tok, m)[0] for m in history]
     ids = [t for p in parts[_first_kept(parts, max_tokens):] for t in p]
     return ids[-max_tokens:]
 
 
-def context_report(tok, history, window, reserve=0):
+def context_report(tok, history, window, reserve=0, keep_notes=1):
     """Where the model's memory (context window) is going, counted in exact tokens.
 
     window:  the model's context length (model.cfg.max_seq_len)
@@ -158,6 +177,9 @@ def context_report(tok, history, window, reserve=0):
                                 ("in window", "partly cut" or "forgotten"), text, titles
     """
     limit = max(64, window - reserve)
+    dropped = [bool(m.get("notes")) for m in history]
+    history = drop_old_notes(history, keep_notes)
+    dropped = [d and not m.get("notes") for d, m in zip(dropped, history)]
     parts, notes_len = [], []
     for m in history:
         part = _encode_message(tok, m)[0]
@@ -182,7 +204,8 @@ def context_report(tok, history, window, reserve=0):
             kinds["notes"] += note_part
             kinds["user" if m["role"] == "user" else "ai"] += visible - note_part
         out.append({"role": m["role"], "tokens": n, "notes_tokens": notes_len[i], "status": status,
-                    "text": m["content"], "titles": [x["title"] for x in m.get("notes") or []]})
+                    "text": m["content"], "titles": [x["title"] for x in m.get("notes") or []],
+                    "notes_dropped": dropped[i]})
     used = kept - cut_front
     return {"window": window, "reserve": reserve, "limit": limit, "used": used,
             "free": limit - used, **kinds,
@@ -224,7 +247,8 @@ def format_window_view(r, preview=70):
         text = " ".join(m["text"].split())
         text = text if len(text) <= preview else text[:preview - 1] + "..."
         mark = {"in window": "  ", "partly cut": "~ ", "forgotten": "x "}[m["status"]]
-        extra = f" + notes: {', '.join(m['titles'])} ({m['notes_tokens']:,} tokens)" if m["titles"] else ""
+        extra = f" + notes: {', '.join(m['titles'])} ({m['notes_tokens']:,} tokens)" if m["titles"] else \
+            " (its notes were dropped to save room)" if m.get("notes_dropped") else ""
         lines.append(f"{mark}{i:>3}. {who} {m['tokens']:>6,} tokens  {text}{extra}")
     lines.append("  (x = forgotten, the model no longer sees it;  ~ = its beginning was cut off)")
     return "\n".join(lines)

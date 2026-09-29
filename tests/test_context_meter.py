@@ -94,5 +94,37 @@ class Meter(unittest.TestCase):
         self.assertNotIn("forgotten (cut off)", empty)
 
 
+class OldNotes(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.tok = make_tok()
+
+    def lookup_chat(self, n):
+        h = []
+        for i in range(n):
+            h.append({"role": "user", "content": f"question {i} about the cat",
+                      "notes": [{"title": f"Page {i}", "text": "springfield is the capital of illinois " * 8}]})
+            h.append({"role": "assistant", "content": f"answer {i} the fox jumps"})
+        return h
+
+    def test_only_the_newest_notes_are_kept(self):
+        h = self.lookup_chat(4) + [{"role": "user", "content": "that is wrong"}]
+        out = chat.drop_old_notes(h)
+        self.assertEqual([bool(m.get("notes")) for m in out], [False] * 6 + [True, False, False])
+        self.assertTrue(all("notes" in m for m in h if m["role"] == "user" and "question" in m["content"]))  # input untouched
+        self.assertEqual(chat.drop_old_notes(h, None), h)
+        self.assertFalse(any(m.get("notes") for m in chat.drop_old_notes(h, 0)))
+
+    def test_many_more_turns_fit(self):
+        h = self.lookup_chat(12)
+        old = chat.context_report(self.tok, h, 600, 50, keep_notes=None)
+        new = chat.context_report(self.tok, h, 600, 50)
+        self.assertGreater(len(h) - new["forgotten_messages"], 2 * (len(h) - old["forgotten_messages"]))
+        self.assertEqual(new["used"], len(chat.build_prompt(self.tok, h, new["limit"])))
+        view = chat.format_window_view(new)
+        self.assertIn("notes were dropped", view)
+        self.assertIn("Page 11", view)
+
+
 if __name__ == "__main__":
     unittest.main()
