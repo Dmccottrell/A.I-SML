@@ -310,7 +310,12 @@ You ─► Router ─► Base ──┼─► IT helper       (printers, network
 - **Coding helper:** the same loop for code (see [Agentic coding](#agentic-coding-a-coding-helper-that-works-in-a-loop)).
 - **Voice:** Whisper turns your voice into text and Piper reads the answer aloud. Both are small,
   open source and offline, and run alongside the AI.
-- **Personal memory:** saved notes about you that it looks up in later chats.
+- **Personal memory:** saved notes about you that it looks up in later chats. **Prototype built
+  early (`chat_memory.py`, `generate.py --chat --memory`):** past chats and facts you save
+  (`remember: ...`) are kept on your computer and searched like the Wikipedia lookup; the best
+  matches reach the model as notes ("Earlier chat (Sep 29)", "Saved memory"), a format v3 is already
+  trained on. `memories` / `forget <n>` / `forget everything` / `--private`. Still to do: saving facts
+  automatically ("my name is ..."), meaning-based search instead of keywords, and the app's memory screen.
 
 ### Agentic coding (a coding helper that works in a loop)
 
