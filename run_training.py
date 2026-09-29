@@ -37,7 +37,8 @@ RUN WINDOWS (so the PC is yours the rest of the time)
     at the next one. Leave this window open and the PC awake. --days lists the
     days a window STARTS on ("mon-fri", "all", "mon,wed,sat"), so with
     mon-fri Friday's window runs until Saturday 14:00. It stops within one
-    step (~30 seconds) of the end time.
+    step (~30 seconds) of the end time. Times are the machine's local clock; on a rented
+    machine (usually UTC) add --utc_offset, e.g. --utc_offset -5 for US Central summer time.
 
     --exit_after_window: exit at the end of the window instead of waiting. On a rented cloud
     machine, run something after it that switches the machine off, so you stop paying, e.g.:
@@ -106,16 +107,17 @@ def parse_days(text):
     return days
 
 
-def schedule_check(window, days, now=None):
+def schedule_check(window, days, now=None, tz=None):
     """Are we inside a run window right now?
 
     Returns (inside, seconds_until_the_window_ends_or_next_starts, end_timestamp_or_None).
     `window` is (start_minute, end_minute); `days` are the weekdays a window STARTS on.
+    `tz` is the time zone the window is written in (a rented machine's clock is usually UTC, not yours).
     """
-    now = now or datetime.datetime.now()
+    now = now or datetime.datetime.now(tz)
     start, end = window
     mins = now.hour * 60 + now.minute
-    at = lambda d, m: datetime.datetime.combine(d, datetime.time(m // 60, m % 60))
+    at = lambda d, m: datetime.datetime.combine(d, datetime.time(m // 60, m % 60), tzinfo=now.tzinfo)
     today = now.date()
     # which day did the window we might be in start on?
     window_day = None
@@ -165,7 +167,7 @@ def run_once(command):
 
 
 def supervise(train_args, ckpt_dir, script="train.py", first_wait=30.0,
-              max_stalled=3, max_restarts=50, window=None, days=None, exit_after_window=False):
+              max_stalled=3, max_restarts=50, window=None, days=None, exit_after_window=False, tz=None):
     """Run `script` with `train_args`, restarting after crashes. Returns the exit code to use."""
     os.makedirs(ckpt_dir, exist_ok=True)
     log_path = os.path.join(ckpt_dir, "supervisor.log")
@@ -179,7 +181,7 @@ def supervise(train_args, ckpt_dir, script="train.py", first_wait=30.0,
     while True:
         launch = list(args)
         if window:
-            inside, seconds, stop_ts = schedule_check(window, days)
+            inside, seconds, stop_ts = schedule_check(window, days, tz=tz)
             if not inside:
                 log(f"outside the run window: waiting {seconds / 3600:.1f} h for the next one. "
                     "Keep this window open and the PC awake. Ctrl+C to stop.", log_path)
@@ -243,18 +245,22 @@ def main():
     p.add_argument("--exit_after_window", action="store_true",
                    help="with --window: exit at the end of the window instead of waiting for the next one "
                         "(for rented machines, so a command after it can switch the machine off)")
+    p.add_argument("--utc_offset", type=float, default=None,
+                   help="hours from UTC of the time zone the --window is written in (e.g. -5). A rented machine's "
+                        "clock is usually UTC, so set this there; handoff.py --start does it for you")
     p.add_argument("--days", default="all", help="days a window starts on: mon-fri, all, mon,wed,sat (default all)")
     args, rest = p.parse_known_args()
     V = get_version(args.version)
     print("This will restart training automatically after a crash. "
           "Press Ctrl+C once to pause it safely.", flush=True)
+    tz = datetime.timezone(datetime.timedelta(hours=args.utc_offset)) if args.utc_offset is not None else None
     window = parse_window(args.window) if args.window else None
     days = parse_days(args.days)
     if window:
         print(f"Run window: {args.window} on {args.days} (days a window starts).", flush=True)
     sys.exit(supervise(["--version", args.version] + rest, V.ckpt_dir, args.script,
                        args.wait_seconds, max_restarts=args.max_restarts, window=window, days=days,
-                       exit_after_window=args.exit_after_window))
+                       exit_after_window=args.exit_after_window, tz=tz))
 
 
 if __name__ == "__main__":

@@ -14,7 +14,7 @@ WHAT THIS FILE DOES
     into your account's SSH keys on the provider's website.
 
     up:    copies latest.pt (and pre_decay.pt if it exists), and with --start also starts training
-           on the cloud machine inside tmux (window 21:30-13:00, then it switches itself off).
+           on the cloud machine inside tmux (window 21:30-13:00 in YOUR time, then it switches itself off).
     down:  copies them back to this PC.
     --with_tokenizer (first time only): also copies data/<version>/tokenizer.json. Do this BEFORE
            building the data in the cloud, so both machines use the identical tokenizer.
@@ -24,6 +24,7 @@ WHAT THIS FILE DOES
     and tells you, because copying over it would throw work away.
 """
 import argparse
+import datetime
 import os
 import shlex
 import subprocess
@@ -90,8 +91,11 @@ def up(a, V):
             raise SystemExit(f"{name}: sizes differ after copying ({size} vs {os.path.getsize(src)}). Run it again.")
     print("copied OK.")
     if a.start:
+        # The cloud machine's clock is usually UTC. Pass THIS PC's offset so the window means YOUR hours.
+        offset = a.cloud_utc_offset if a.cloud_utc_offset is not None else \
+            datetime.datetime.now().astimezone().utcoffset().total_seconds() / 3600
         run = (f"cd {a.repo} && python run_training.py --version {a.version} --window {a.cloud_window} "
-               f"--exit_after_window --backup_dir ~/backups; {a.stop_command}")
+               f"--utc_offset {offset:g} --exit_after_window --backup_dir ~/backups; {a.stop_command}")
         ssh_out(a.host, a.port, f"tmux kill-session -t train 2>/dev/null; tmux new -d -s train {shlex.quote(run)}")
         print(f"started training on the cloud machine (window {a.cloud_window}). "
               "Look at it any time: ssh in, then `tmux attach -t train`.")
@@ -131,6 +135,8 @@ def main():
     p.add_argument("--repo", default="~/A.I-SML", help="where the project is on the cloud machine")
     p.add_argument("--start", action="store_true", help="up: also start training on the cloud machine")
     p.add_argument("--cloud_window", default="21:30-13:00", help="run window used with --start")
+    p.add_argument("--cloud_utc_offset", type=float, default=None,
+                   help="hours from UTC that --cloud_window is written in (default: this PC's current offset)")
     p.add_argument("--stop_command", default="vastai stop instance $CONTAINER_ID",
                    help="run on the cloud machine after its window, to switch it off (Vast.ai's command; "
                         "use 'true' to do nothing)")
