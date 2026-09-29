@@ -28,6 +28,8 @@ Options:
     --lookup       chat mode: search the Wikipedia index (wiki_index.py) for each
                    message and give the best passages to the model as notes. Only the
                    newest question keeps its notes (older ones are dropped to save room)
+    --memory       chat mode: remember earlier chats and facts you save ("remember: ..."), on this
+                   computer only (see chat_memory.py). --private: this chat isn't saved
     --notes        with --lookup: passages per question (default 3; 2 leaves more room)
 """
 import argparse, os
@@ -52,6 +54,9 @@ p.add_argument("--chat", action="store_true")
 p.add_argument("--context", action="store_true", help="chat: show the context meter after every reply")
 p.add_argument("--lookup", action="store_true", help="chat: look each message up in Wikipedia first")
 p.add_argument("--notes", type=int, default=3, help="chat --lookup: passages per question (fewer = more room)")
+p.add_argument("--memory", action="store_true", help="chat: remember earlier chats and saved facts (chat_memory.py)")
+p.add_argument("--private", action="store_true", help="with --memory: don't save this chat")
+p.add_argument("--memory_db", default=os.path.join("data", "memory", "memory.db"))
 p.add_argument("--db", default=os.path.join("data", "wiki", "wiki.db"))
 args = p.parse_args()
 V = get_version(args.version)
@@ -83,6 +88,13 @@ if args.chat:
     if args.lookup:
         from wiki_index import WikiIndex
         wiki = WikiIndex(args.db)
+    mem = chat_id = None
+    if args.memory:
+        from chat_memory import ChatMemory, handle_command
+        mem = ChatMemory(args.memory_db)
+        chat_id = None if args.private else mem.start_chat()
+        print("(memory on" + (", private: this chat won't be saved" if args.private else "") +
+              ". 'remember: <fact>', 'memories', 'forget <n>')")
     while True:
         try:
             msg = input("\nYou: ").strip()
@@ -90,8 +102,15 @@ if args.chat:
             break                              # input ended (e.g. piped text)
         if msg == "quit":
             break
+        if mem:
+            said = handle_command(mem, msg)
+            if said is not None:
+                print(said)
+                continue
         if msg == "reset":
             history = []
+            if mem and chat_id is not None:
+                chat_id = mem.start_chat()         # the cleared messages can now come back as memories
             print("(conversation cleared)")
             continue
         if msg in ("context", "window"):
@@ -106,15 +125,20 @@ if args.chat:
         if not V.chat_memory:
             history = []                       # v1: every message on its own
         message = {"role": "user", "content": msg}
+        found = []
+        if mem:
+            found += mem.notes(msg, exclude_chat=chat_id)
         if wiki:
-            notes = wiki.search(msg, args.notes)
-            if notes:
-                message["notes"] = [{"title": n["title"], "text": n["text"]} for n in notes]
-                print("(looked up: " + "; ".join(n["title"] for n in notes) + ")")
+            found += [{"title": n["title"], "text": n["text"]} for n in wiki.search(msg, args.notes)]
+        if found:
+            message["notes"] = found
+            print("(looked up: " + "; ".join(n["title"] for n in found) + ")")
         history.append(message)
         reply = continue_ids(build_prompt(tok, history, max_prompt)).strip()
         history.append({"role": "assistant", "content": reply})
         print("AI:", reply)
+        if mem and chat_id is not None:
+            mem.add_exchange(chat_id, msg, reply)
         if args.context:
             print(format_meter(context_report(tok, history, model.cfg.max_seq_len, args.tokens)))
 else:
