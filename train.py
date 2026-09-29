@@ -461,6 +461,7 @@ if os.path.exists(LATEST_PATH) and not args.fresh:
 # ============================== main training loop ==============================
 t0 = time.time()
 it = start_iter
+last_printed = start_iter - 1     # the iteration of the last "iter N" line (for the time per iteration)
 pilot_times = []                 # seconds per iteration, for the pilot report
 try:
     for it in range(start_iter, S.max_iters + 1):
@@ -527,14 +528,18 @@ try:
             if it + 1 >= args.pilot:
                 break
         elif it % 50 == 0:
+            # Divide by the iterations actually run since the last line: after a resume (e.g. at 1383)
+            # the first line (1400) covers only 18 of them, not 50, and dividing by 50 showed ~3x too fast.
             dt = time.time() - t0; t0 = time.time()
-            mprint(f"iter {it}: loss {loss.item():.3f}  lr {get_lr(it):.2e}  {dt*1000/50:.0f}ms/iter")
+            per_it = dt / max(1, it - last_printed)
+            last_printed = it
+            mprint(f"iter {it}: loss {loss.item():.3f}  lr {get_lr(it):.2e}  {per_it*1000:.0f}ms/iter")
             log_metric(it, "loss", loss.item())
             log_metric(it, "lr", get_lr(it))
             if it > start_iter and it % args.notify_every == 0:
-                left_h = (S.max_iters - it) * dt / 50 / 3600
+                left_h = (S.max_iters - it) * per_it / 3600
                 phone(f"step {it:,}/{S.max_iters:,} ({100 * it / S.max_iters:.1f}%)  loss {loss.item():.2f}  "
-                      f"{dt / 50:.1f} s/step  ~{left_h / 24:.1f} days left", "progress")
+                      f"{per_it:.1f} s/step  ~{left_h / 24:.1f} days left", "progress")
 
         if args.stop_at and it < S.max_iters:
             stop = time.time() >= args.stop_at
