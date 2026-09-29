@@ -558,19 +558,25 @@ battery, not a bigger download.
 
 **How the versions line up with tiers** (like a lab's small, mid and large model families):
 
-| Tier class | Size | Versions |
-|---|---|---|
-| Small and fast | ~400M-1B | v3 (400M, phone-only "lite"), **v3.5** (1B), then **v4 = "v3.5 2.0"**: the same size, now with skill packs, the router, tools, thinking, effort levels and the app |
-| Balanced | ~3B | v5 (needs cloud training) |
-| Most capable | 5-7B | v6, v6.5 |
-| Top | 13-30B | v7, v8 (see [Beyond v6.5](#beyond-v65-v7-v8-and-max)) |
+| Tier class | Working name | Size | Versions |
+|---|---|---|---|
+| Phone-lite | **Rune** | ~400M | v3 |
+| Small and fast | **Skald** | ~1B | **v3.5**, then **v4 = "Skald 2"**: the same size, now with skill packs, the router, tools, thinking, effort levels and the app |
+| Balanced | **Saga** | ~3B | v5 (needs cloud training) |
+| Most capable | **Edda** | 5-7B | v6, v6.5 |
+| Top | **Norn** | 13-30B | v7, v8 (see [Beyond v6.5](#beyond-v65-v7-v8-and-max)) |
 
-So v4 is a new *generation* of the small tier, not a bigger model. It keeps v3.5's brain (no cloud cost).
+So v4 (Skald 2) is a new *generation* of the small tier, not a bigger model. It keeps v3.5's brain (no cloud cost).
 Optional, if time allows: a short "skill-aware" extra reading round on v3.5's weights (a few billion
 tokens with tool calls, thinking steps and code-with-tests mixed in) so the skill packs start from a base
 that already knows those formats.
 
-For a product, give the tiers **your own names** (not another company's model names).
+**Names (working names):** a family of Norse storytelling words, since these are language models. A *rune* is
+a small written character, a *skald* a Norse poet, a *saga* a long story, the *Eddas* the great collections
+of Norse tales, and the *Norns* the three fates who weave everything. They are placeholders: **no trademark
+check has been done**, so search each name (and its domain) before a public launch, and rename if there is a
+conflict. In this document, the older placeholder names map as: Lite = Rune, Standard = Skald,
+Pro = Saga and Edda, Max = Norn.
 
 ## Model tiers (Lite, Standard, Pro, Max)
 
@@ -580,12 +586,12 @@ speed or smarts.
 
 | Tier | Size | Runs on | Good for | Arrives |
 |---|---|---|---|---|
-| **Lite** | ~400M (v3-size) | Any phone, offline, very fast | Quick questions, small talk, simple lookups | With v3.5 |
-| **Standard** | ~1B (v3.5) | Phones and PCs | Everyday use: lookups, explanations, advice | v3.5 |
-| **Pro** | 3B–7B (v5–v6.5) | PC or a server (the app's online mode) | Harder questions, coding, long writing | v5+ |
-| **Max** | 13B, later ~30B ("upper small", then "medium"; see [Beyond v6.5](#beyond-v65-v7-v8-and-max)) | A server, or a PC with a 24 GB GPU for 13B; online mode | The hardest questions: deep reasoning, real coding help, long documents. Also the teacher for every smaller tier | After v6.5, if funded |
+| **Lite = Rune** | ~400M (v3-size) | Any phone, offline, very fast | Quick questions, small talk, simple lookups | With v3.5 |
+| **Standard = Skald** | ~1B (v3.5, v4) | Phones and PCs | Everyday use: lookups, explanations, advice | v3.5 |
+| **Pro = Saga, Edda** | 3B (v5), 5-7B (v6-v6.5) | PC or a server (the app's online mode) | Harder questions, coding, long writing | v5+ |
+| **Max = Norn** | 13B, later ~30B ("upper small", then "medium"; see [Beyond v6.5](#beyond-v65-v7-v8-and-max)) | A server, or a PC with a 24 GB GPU for 13B; online mode | The hardest questions: deep reasoning, real coding help, long documents. Also the teacher for every smaller tier | After v6.5, if funded |
 
-The names are placeholders; pick your own.
+The names are working names (see above).
 
 **How they're made:**
 - **Same recipe for every tier:** same tokenizer, data mix and chat lessons, so they behave alike
