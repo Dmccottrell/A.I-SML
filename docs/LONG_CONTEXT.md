@@ -58,6 +58,8 @@ resume, `run_training.py`, `handoff.py`, `--notify`, backups):
 | `v3-long-32k` | 32,768 | 8,000,000 | 1,500 (~0.39B) | `v3-long-16k/final.pt` |
 
 ```
+python prepare_long_data.py --version v3 --test        # 10-minute check that every source downloads
+python prepare_long_data.py --version v3               # ~1.4B tokens (~2.8 GB) into data/v3-long
 python eval_long.py --version v3                       # baseline (the 2K model)
 python train.py --version v3-long-8k --pilot           # speed + memory at 8K
 python run_training.py --version v3-long-8k            # the stretch
@@ -65,9 +67,21 @@ python eval_long.py --version v3-long-8k               # the gate: go on only if
 python exam.py --version v3-long-8k                    # "nothing got worse"
 ```
 then the same with `16k`, then `32k`. The learning rate (6e-5, gentle), RoPE bases and step counts
-are starting guesses that the 8K step tests. Until the long-document builder exists these read v3's
-own data, which teaches the mechanics but little long-range skill, so the real quality run waits
-for it.
+are starting guesses that the 8K step tests.
+
+### What the long data is (`prepare_long_data.py`)
+| Part | Share | Why |
+|---|---|---|
+| Books (PG-19, public-domain Project Gutenberg books) | 30% | the longest natural text there is: characters and plots span the whole book |
+| Wikipedia articles of 24,000+ characters | 15% | long, factual, well organized |
+| FineWeb-Edu pages of 16,000+ characters | 10% | long educational web pages |
+| Python code grouped by repository | 10% | a function defined in one file is used in another |
+| Recall practice (made up) | 5% | 2-6 facts hidden in real text, questions at the end, sometimes one the text can't answer ("The text doesn't say") |
+| v3's own short text | 30% | so it keeps its short-text skill |
+
+The recall practice never uses the tests' wording (eval_long.py's "secret code", "vault", "Mira",
+"get_port_"), so a pass means a real skill. val.bin holds only long natural text; eval_long.py
+reads it as filler. Documents containing test questions are skipped, as in the main data.
 
 ## How the stretch works (three settings, no new architecture)
 * **Raise the RoPE base** (`rope_theta`) at each step (for example 500K -> 2M -> 8M). RoPE tells
@@ -134,7 +148,9 @@ What a failure means:
 3. Chunked loss and the stretch settings: **done** (`config.py` versions `v3-long-8k`, `v3-long-16k`,
    `v3-long-32k`; `train.py` starts each from the previous one's `final.pt`). Tested on tiny models on
    a CPU; not yet run on a GPU.
-4. Long-document data builder (books, long articles, repositories, made-up recall tasks).
+4. Long-document data builder: **done** (`prepare_long_data.py`). Tested offline with stand-in
+   data; the real data sets (PG-19 books, Wikipedia, FineWeb-Edu, codeparrot) are not yet checked
+   from this code, so run its `--test` first.
 5. RoPE base / YaRN override when loading a checkpoint for extension (`eval_long.py` already has
    `--seq_len` and `--rope_theta` to test a stretched checkpoint).
 6. Small-scale experiments before the big run: **local + global attention** and **MLA** (see below)

@@ -58,6 +58,8 @@ version of it.
 | `model.py` | library | `TinyLM`, `Block`, `Attention` (with GQA + KV cache), `FeedForward`, `RMSNorm`, RoPE helpers, `load_checkpoint` | the neural network itself |
 | `prepare_data.py` | script | `encode_split`, `encode_story`, `init_worker` | how the v1 dataset is built |
 | `prepare_web_data.py` | script | `LOADERS`, `sources_for`, `train_tokenizer`, `encode_source`, `join_files` | how the v2/v3 datasets are streamed, mixed and resumed |
+| `prepare_long_data.py` | script | `LONG_MIX`, `group_by_repo`, `recall_document`, `copy_replay` | the long-document data for stretching the context (docs/LONG_CONTEXT.md) |
+| `eval_long.py` | script | `needle_case`, `run_retrieval`, `token_losses`, `position_verdict` | the long-context tests and their pass/fail rules |
 | `train.py` | script | `get_batch`, `get_lr`, `estimate_loss`, `save_latest`, main loop | how the model learns (and pauses/resumes) |
 | `generate.py` | script | `continue_ids`, chat loop with memory | how the model writes text |
 | `make_chat_data.py` | script | `story_to_examples`, `build_examples`, `BASICS` | how v1 chat examples are made |
