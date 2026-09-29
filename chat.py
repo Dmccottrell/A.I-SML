@@ -119,6 +119,15 @@ def encode_conversation(tok, messages, max_tokens):
     return ids[:max_tokens], mask[:max_tokens]
 
 
+def _first_kept(parts, max_tokens):
+    """Index of the oldest message that stays in the window (older ones are dropped first)."""
+    start, total = 0, sum(len(p) for p in parts)
+    while start < len(parts) - 1 and total > max_tokens:
+        total -= len(parts[start])
+        start += 1
+    return start
+
+
 def build_prompt(tok, history, max_tokens):
     """Tokens to feed the model so it writes the next assistant reply.
 
@@ -128,7 +137,94 @@ def build_prompt(tok, history, max_tokens):
     the newest message is too long, only its last max_tokens tokens are kept.
     """
     parts = [_encode_message(tok, m)[0] for m in history]
-    while len(parts) > 1 and sum(len(p) for p in parts) > max_tokens:
-        parts.pop(0)
-    ids = [t for p in parts for t in p]
+    ids = [t for p in parts[_first_kept(parts, max_tokens):] for t in p]
     return ids[-max_tokens:]
+
+
+def context_report(tok, history, window, reserve=0):
+    """Where the model's memory (context window) is going, counted in exact tokens.
+
+    window:  the model's context length (model.cfg.max_seq_len)
+    reserve: tokens kept free for the reply being written (the --tokens setting)
+    Uses the same rule as build_prompt, so "in window" here is exactly what the model sees.
+
+    Returns a dict:
+        window, reserve, limit (= room for the prompt), used, free,
+        notes / user / ai       tokens in the window by kind (looked-up notes, your
+                                messages, the AI's replies)
+        forgotten               tokens cut off (whole old messages, or the front of a huge one)
+        forgotten_messages      how many old messages were dropped
+        messages                one entry per message: role, tokens, notes_tokens, status
+                                ("in window", "partly cut" or "forgotten"), text, titles
+    """
+    limit = max(64, window - reserve)
+    parts, notes_len = [], []
+    for m in history:
+        part = _encode_message(tok, m)[0]
+        parts.append(part)
+        n = 0
+        if m["role"] == "user" and m.get("notes"):     # notes = everything except the question itself
+            n = len(part) - (len(tok.encode(m["content"], allow_special=False)) + 2)
+        notes_len.append(n)
+    start = _first_kept(parts, limit)
+    kept = sum(len(p) for p in parts[start:])
+    cut_front = max(0, kept - limit)                   # only when the newest message alone is too long
+    out, kinds = [], {"notes": 0, "user": 0, "ai": 0}
+    for i, m in enumerate(history):
+        n, status = len(parts[i]), "in window"
+        if i < start:
+            status = "forgotten"
+        elif i == len(history) - 1 and cut_front:
+            status = "partly cut"
+        if i >= start:
+            visible = n - (cut_front if status == "partly cut" else 0)
+            note_part = min(notes_len[i], visible)
+            kinds["notes"] += note_part
+            kinds["user" if m["role"] == "user" else "ai"] += visible - note_part
+        out.append({"role": m["role"], "tokens": n, "notes_tokens": notes_len[i], "status": status,
+                    "text": m["content"], "titles": [x["title"] for x in m.get("notes") or []]})
+    used = kept - cut_front
+    return {"window": window, "reserve": reserve, "limit": limit, "used": used,
+            "free": limit - used, **kinds,
+            "forgotten": sum(len(p) for p in parts[:start]) + cut_front, "forgotten_messages": start,
+            "messages": out}
+
+
+def format_meter(r, width=40):
+    """The context meter as text: a bar plus the numbers behind it."""
+    total = max(1, r["window"])
+    cells = [("N", r["notes"]), ("Y", r["user"]), ("A", r["ai"]), ("R", min(r["reserve"], r["window"])),
+             (".", max(0, r["window"] - r["used"] - min(r["reserve"], r["window"])))]
+    bar, filled = "", 0
+    for i, (ch, n) in enumerate(cells):
+        want = round(width * sum(c[1] for c in cells[:i + 1]) / total)
+        bar += ch * max(0, want - filled)
+        filled = max(filled, want)
+    bar = (bar + "." * width)[:width]
+    pct = 100 * (r["used"] + min(r["reserve"], r["window"])) / total
+    lines = [f"Context window: {r['used'] + r['reserve']:,} / {r['window']:,} tokens ({pct:.0f}%)",
+             f"[{bar}]",
+             f"  N  looked-up notes       {r['notes']:>7,}",
+             f"  Y  your messages         {r['user']:>7,}",
+             f"  A  AI replies            {r['ai']:>7,}",
+             f"  R  kept for the reply    {r['reserve']:>7,}",
+             f"  .  free                  {max(0, r['window'] - r['used'] - r['reserve']):>7,}"]
+    if r["forgotten"]:
+        lines.append(f"  forgotten (cut off)      {r['forgotten']:>7,}   "
+                     f"({r['forgotten_messages']} old message{'s' if r['forgotten_messages'] != 1 else ''} "
+                     f"no longer seen)")
+    return "\n".join(lines)
+
+
+def format_window_view(r, preview=70):
+    """What the model can see, message by message, with forgotten ones marked."""
+    lines = []
+    for i, m in enumerate(r["messages"], 1):
+        who = "You" if m["role"] == "user" else "AI "
+        text = " ".join(m["text"].split())
+        text = text if len(text) <= preview else text[:preview - 1] + "..."
+        mark = {"in window": "  ", "partly cut": "~ ", "forgotten": "x "}[m["status"]]
+        extra = f" + notes: {', '.join(m['titles'])} ({m['notes_tokens']:,} tokens)" if m["titles"] else ""
+        lines.append(f"{mark}{i:>3}. {who} {m['tokens']:>6,} tokens  {text}{extra}")
+    lines.append("  (x = forgotten, the model no longer sees it;  ~ = its beginning was cut off)")
+    return "\n".join(lines)

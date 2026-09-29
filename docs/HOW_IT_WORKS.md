@@ -52,7 +52,7 @@ version of it.
 |---|---|---|---|
 | `stage.py` | settings | `STAGE`, `CKPT_DIR`, `EXPORT_DIR` | where files are saved (dev / staging / production) |
 | `config.py` | settings | `VERSIONS`, `Version`, `TrainSettings`, `FinetuneSettings`, `get_version` | how v1 and v2 differ (size, folders, training) |
-| `chat.py` | library | `encode_conversation`, `build_prompt`, `normalize`, `CHAT_TEMPLATE` | the chat format (one place for training, chat and phone) |
+| `chat.py` | library | `encode_conversation`, `build_prompt`, `context_report`, `normalize`, `CHAT_TEMPLATE` | the chat format (one place for training, chat and phone) and the context meter |
 | `bigram.py` | script | one table `W` | the training loop in its simplest form |
 | `tokenizer.py` | library | `BPETokenizer.train/train_fast/encode/decode/save/load`, `merge_ids` | how text becomes numbers |
 | `model.py` | library | `TinyLM`, `Block`, `Attention` (with GQA + KV cache), `FeedForward`, `RMSNorm`, RoPE helpers, `load_checkpoint` | the neural network itself |
