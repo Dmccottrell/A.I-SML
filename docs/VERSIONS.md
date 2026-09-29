@@ -1,8 +1,12 @@
 # Version Comparison
 
-All versions side by side. v1 and v2 are finished and run on the phone. v3's code and data are ready (13.3B tokens prepared); its pilot run and training are next.
+All versions side by side. v1 and v2 are finished and run on the phone. v3's code and data are ready (13.3B tokens prepared) and its training started on 28 September (pilot: ~25.6 s/step, about 13.4 days nonstop).
 v3.5, v4, v5, v6 and v6.5 are planned: their numbers are estimates and will change once v3's results are in.
 Details: [V2.md](V2.md), [V3.md](V3.md), [ROADMAP.md](ROADMAP.md). Settings live in `config.py`.
+
+**Working names** (Norse storytelling words; no trademark check yet): **Rune** (v3, phone-lite), **Skald** (v3.5, and v4 as
+**Skald 2**: the same size with skills added), **Saga** (v5), **Edda** (v6, v6.5) and **Norn** (the future top tier, 13B+).
+**Tier** = which model, **version** = which generation, **effort** = how long it thinks; see the roadmap.
 
 **Two kinds of jumps:** v1 → v2 → v3 → v3.5 each give the model a **bigger brain and more to
 read**. v4 is different: it keeps v3.5's ~1.05B brain and adds **abilities around it** (specialist
@@ -14,6 +18,7 @@ v6 (5B) and v6.5 (7B) keep growing toward medium size, mainly for the PC and onl
 
 |  | **v1** ✅ | **v2** ✅ | **v3** 🛠️ | **v3.5** (planned) | **v4** (planned) | **v5** (planned) | **v6** (planned) | **v6.5** (planned) |
 |---|---|---|---|---|---|---|---|---|
+| Working name | – | – | Rune | Skald | Skald 2 | Saga | Edda | Edda (extended) |
 | Parameters | 29.5M | 88M | 394M | **~1.04B** | ~1.04B base + LoRA skill packs (small add-on weights, a few MB each, switched by a router) | **~3B** | **~5B** | **~7B** |
 | Shape | 512 wide × 8 layers | 768 wide × 12 layers | 1024 wide × 32 layers | 2048 wide × 22 layers | Same as v3.5 | ~3072 wide × 28 layers | ~3584 wide × 36 layers | 4096 wide × 32 layers |
 | Memory (context length) | 512 tokens | 1,024 tokens | 2,048 tokens | 2,048 tokens | 2,048 tokens + saved notes about you | 4,096 tokens | 8,192 tokens | 8,192 tokens |
@@ -262,15 +267,16 @@ offline use; these power the PC and the app's online mode. Details: [ROADMAP.md]
 
 - **v1:** a children's story-teller that runs on your phone
 - **v2:** a mini assistant with basic general knowledge and real conversations
-- **v3:** an **accurate, honest** assistant that looks facts up, admits when it doesn't know, and
+- **v3 (Rune):** an **accurate, honest** assistant that looks facts up, admits when it doesn't know, and
   handles basic code
-- **v3.5:** v3's features on a **~1.05B brain** that reads 30B tokens: the biggest model trained at home
-- **v4:** a **personal assistant**: specialist skills, exact math with tools, a Quick / Balanced / Deep
+- **v3.5 (Skald):** v3's features on a **~1.05B brain** that reads 30B tokens: the biggest model trained at home
+- **v4 (Skald 2):** a **personal assistant**: specialist skills, exact math with tools, a Quick / Balanced / Deep
   thinking dial, coding help, documents, voice, and your own app
-- **v5:** a **genuinely capable** 3B assistant: the first version trained in the cloud, and the first
+- **v5 (Saga):** a **genuinely capable** 3B assistant: the first version trained in the cloud, and the first
   that can "see" pictures through a helper
-- **v6:** a **5B bigger small** model: stronger reasoning and coding, powering the PC and online mode
-- **v6.5:** a **7B borderline medium** model: the strongest version and the app's online brain
+- **v6 (Edda):** a **5B bigger small** model: stronger reasoning and coding, powering the PC and online mode
+- **v6.5 (Edda, extended):** a **7B borderline medium** model: the strongest version so far and the app's online brain
+- **v7, v8 (Norn):** the future top tier, ~13B then ~30B, if funding and results allow (online mode)
 
 ## Update log
 
