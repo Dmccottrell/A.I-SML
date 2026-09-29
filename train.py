@@ -39,6 +39,18 @@ PILOT RUN (do this before any long run)
     out of memory, lower batch_size (and raise grad_accum) or turn on
     grad_checkpoint in config.py, then pilot again. Nothing is saved.
 
+MORE THAN ONE GPU (DDP; a rented machine with 2 or more GPUs, e.g. 2 x RTX 3090)
+    Start it with torchrun (or run_training.py --gpus 2, which does that for you):
+        torchrun --standalone --nproc_per_node=2 train.py --version v3
+    Every GPU holds a full copy of the model and reads DIFFERENT text; their gradients are
+    averaged once per step. The settings don't change: grad_accum is the TOTAL number of
+    micro-batches per step, shared between the GPUs (so it must divide evenly), which keeps
+    every step the same size as on one GPU. Only the first process prints, evaluates and saves.
+    A checkpoint saved on 1 GPU resumes on 2, and the other way round.
+    Needs a GPU with room for the whole model + optimizer (v3.5: 24 GB is enough with
+    gradient checkpointing; use optimizer="adamw", not "adamw_cpu", which would need each GPU's
+    own copy of ~17 GB of RAM).
+
 Usage:  python train.py                    (v1: checkpoints/dev/)
         python train.py --version v2       (v2: checkpoints/dev/v2/)
         python train.py --version v2 --fresh
@@ -64,6 +76,8 @@ if os.name == "nt" and "TORCHINDUCTOR_CACHE_DIR" not in os.environ:
             break
         except OSError:
             continue
+
+import contextlib
 
 import numpy as np
 import torch
@@ -107,6 +121,33 @@ ANNEAL_DATA = os.path.join(DATA_DIR, "anneal", "train.bin")
 # wsd schedule: the step where the learning rate starts to fade
 DECAY_START = int(S.max_iters * (1 - S.decay_frac)) if S.schedule == "wsd" else S.max_iters + 1
 
+# ---------------- several GPUs (DDP), started by torchrun ----------------
+WORLD = int(os.environ.get("WORLD_SIZE", "1"))      # how many processes (GPUs) are training together
+RANK = int(os.environ.get("RANK", "0"))
+LOCAL_RANK = int(os.environ.get("LOCAL_RANK", "0"))
+DIST = WORLD > 1
+IS_MAIN = RANK == 0                                   # only the first process prints, evaluates and saves
+if DIST:
+    import datetime
+    import signal
+    import torch.distributed as dist
+    # a long timeout: the other GPUs wait while the first one evaluates or saves a big checkpoint
+    dist.init_process_group(backend="nccl" if torch.cuda.is_available() else "gloo",
+                            timeout=datetime.timedelta(minutes=60))
+    if torch.cuda.is_available():
+        torch.cuda.set_device(LOCAL_RANK)
+    if hasattr(signal, "SIGTERM"):                    # torchrun stops its workers with SIGTERM: treat it like Ctrl+C
+        def _stop(*_):
+            raise KeyboardInterrupt
+        signal.signal(signal.SIGTERM, _stop)
+
+
+def mprint(*a, **k):
+    """print, but only from the first process"""
+    if IS_MAIN:
+        print(*a, **k)
+
+
 # Use the GPU if there is one. bfloat16 = fast 16-bit numbers on modern GPUs
 # (RTX 30/40/50); older GPUs fall back to float16; CPU uses normal float32.
 device = "cuda" if torch.cuda.is_available() else "cpu"
@@ -119,6 +160,13 @@ cfg.vocab_size = BPETokenizer.load(os.path.join(DATA_DIR, "tokenizer.json")).voc
 
 os.makedirs(OUT_DIR, exist_ok=True)
 torch.manual_seed(1337)   # same random choices every run, so results are repeatable
+ACCUM = S.grad_accum      # micro-batches THIS process runs per step
+if DIST:
+    if S.grad_accum % WORLD:
+        sys.exit(f"grad_accum ({S.grad_accum}) must divide evenly between {WORLD} GPUs. "
+                 "Change grad_accum in config.py or use a different number of GPUs.")
+    ACCUM = S.grad_accum // WORLD
+PAUSE_MARKER = os.path.join(OUT_DIR, "paused_on_schedule")   # tells run_training.py "stopped on schedule"
 
 
 def data_file(split, it=0):
@@ -189,8 +237,16 @@ def get_lr(it):
 model = TinyLM(cfg).to(device)
 model.grad_checkpoint = S.grad_checkpoint
 model.checkpoint_every = S.checkpoint_every
-print(f"{V.name}: {model.num_params()/1e6:.1f}M parameters on {device}"
-      + (f"  (gradient checkpointing on, every {S.checkpoint_every} block)" if S.grad_checkpoint else ""))
+mprint(f"{V.name}: {model.num_params()/1e6:.1f}M parameters on {device}"
+       + (f" x {WORLD} GPUs (DDP)" if DIST else "")
+       + (f"  (gradient checkpointing on, every {S.checkpoint_every} block)" if S.grad_checkpoint else ""))
+# With several GPUs the model is wrapped so gradients are averaged across them. `model` stays the plain
+# model (for saving, loading and evaluating); `wrapped` is what training runs through.
+wrapped = model
+if DIST:
+    from torch.nn.parallel import DistributedDataParallel as DDP
+    wrapped = DDP(model, device_ids=[LOCAL_RANK] if device == "cuda" else None, broadcast_buffers=False)
+    torch.manual_seed(1337 + RANK)      # the same weights everywhere (DDP copied them), but different text per GPU
 
 # Weight decay on matrices only (not norms)
 decay = [p for n, p in model.named_parameters() if p.dim() >= 2]
@@ -231,6 +287,8 @@ def save_atomic(obj, path):
 
 def save_latest(next_iter, path=LATEST_PATH):
     """Save everything needed to resume training at iteration `next_iter`."""
+    if not IS_MAIN:
+        return
     save_atomic({"model": model.state_dict(), "optimizer": optimizer.state_dict(),
                  "scaler": scaler.state_dict(), "config": cfg.__dict__,
                  "iter": next_iter, "best_val": best_val,
@@ -243,7 +301,7 @@ last_backup = time.time()
 def maybe_backup():
     """Copy latest.pt to --backup_dir every --backup_every_hours (e.g. to another drive)."""
     global last_backup
-    if not args.backup_dir or time.time() - last_backup < args.backup_every_hours * 3600:
+    if not IS_MAIN or not args.backup_dir or time.time() - last_backup < args.backup_every_hours * 3600:
         return
     last_backup = time.time()          # on failure, try again at the next interval
     try:
@@ -258,7 +316,7 @@ def maybe_backup():
 
 # ---- progress log: metrics.csv always, TensorBoard graphs if it's installed ----
 tb = None
-if not args.pilot:
+if not args.pilot and IS_MAIN:
     try:
         from torch.utils.tensorboard import SummaryWriter
         tb = SummaryWriter(os.path.join(OUT_DIR, "tb"))
@@ -268,7 +326,7 @@ if not args.pilot:
 
 def log_metric(it, name, value):
     """Append one number to metrics.csv (and TensorBoard): e.g. (2000, "val_loss", 3.1)."""
-    if args.pilot:
+    if args.pilot or not IS_MAIN:
         return
     path = os.path.join(OUT_DIR, "metrics.csv")
     new = not os.path.exists(path)
@@ -284,7 +342,7 @@ def log_metric(it, name, value):
 
 # ---- mini-exam: 500 HellaSwag questions (see exam.py) ----
 exam_questions = None
-if S.exam_every and not args.pilot:
+if S.exam_every and not args.pilot and IS_MAIN:
     try:
         from benchmarks import load_hellaswag
         exam_questions = load_hellaswag()[:500]
@@ -308,7 +366,7 @@ def estimate_loss():
         for k in range(S.eval_iters):
             x, y = get_batch(split)
             with autocast:
-                _, loss = train_model(x, y)
+                _, loss = (model if DIST else train_model)(x, y)     # not the DDP wrapper: only one GPU evaluates
             losses[k] = loss.item()
         out[split] = losses.mean().item()
     model.train()
@@ -318,29 +376,29 @@ def estimate_loss():
 # ---- torch.compile: turns the model into faster GPU code (optional) ----
 # The first steps are slow while it compiles. If it isn't available (on
 # Windows it needs: pip install triton-windows), training continues without it.
-train_model = model
+train_model = wrapped
 if S.compile and not args.no_compile and device == "cuda":
     try:
-        train_model = torch.compile(model)
+        train_model = torch.compile(wrapped)
         x, y = get_batch("train")
         with autocast:
             _, loss = train_model(x, y)        # compiles now, so errors show up here
         loss.backward()
         optimizer.zero_grad(set_to_none=True)
-        print("torch.compile: on")
+        mprint("torch.compile: on")
     except Exception as e:
-        train_model = model
+        train_model = wrapped
         optimizer.zero_grad(set_to_none=True)
-        print(f"torch.compile: off ({type(e).__name__}). Training without it; "
-              "on Windows, `pip install triton-windows` can enable it.")
+        mprint(f"torch.compile: off ({type(e).__name__}). Training without it; "
+               "on Windows, `pip install triton-windows` can enable it.")
         why = " ".join(str(e).split())[:500]          # the reason, on one line
-        print(f"  reason: {why}")
+        mprint(f"  reason: {why}")
         low = why.lower()
         if "triton" in low:
-            print("  hint: pip install -U triton-windows")
+            mprint("  hint: pip install -U triton-windows")
         if "cl.exe" in low or "compiler" in low or "visual studio" in low:
-            print("  hint: install Visual Studio Build Tools (Desktop development with C++), then run "
-                  "from the 'x64 Native Tools Command Prompt for VS'")
+            mprint("  hint: install Visual Studio Build Tools (Desktop development with C++), then run "
+                   "from the 'x64 Native Tools Command Prompt for VS'")
 
 # ---- resume from latest.pt if there is one ----
 start_iter, best_val = 0, float("inf")
@@ -352,11 +410,14 @@ if os.path.exists(LATEST_PATH) and not args.fresh:
         # Only float16 GPUs use the scaler. A run saved on a bfloat16 GPU (RTX 30/40/50)
         # has an empty one, so a float16 GPU (e.g. Kaggle's T4) just starts it fresh.
         scaler.load_state_dict(state["scaler"])
-    torch.set_rng_state(state["rng"].cpu())
     start_iter, best_val = state["iter"], state["best_val"]
+    if DIST:      # every GPU must read DIFFERENT text, so don't all restore the same random state
+        torch.manual_seed(1337 + RANK + 100_003 * start_iter)
+    else:
+        torch.set_rng_state(state["rng"].cpu())
     if start_iter > S.max_iters:
         sys.exit(f"training already finished ({LATEST_PATH}); use --fresh to start over")
-    print(f"resuming from iteration {start_iter} (best val so far {best_val:.3f})")
+    mprint(f"resuming from iteration {start_iter} (best val so far {best_val:.3f})")
 
 # ============================== main training loop ==============================
 t0 = time.time()
@@ -370,15 +431,15 @@ try:
             maybe_backup()
         if it == DECAY_START and not args.pilot:
             save_latest(it, PRE_DECAY_PATH)      # can be trained further later
-            print(f"step {it}: learning rate starts to fade"
-                  + (f"; now reading the anneal set ({ANNEAL_DATA})" if os.path.exists(ANNEAL_DATA) else ""))
+            mprint(f"step {it}: learning rate starts to fade"
+                   + (f"; now reading the anneal set ({ANNEAL_DATA})" if os.path.exists(ANNEAL_DATA) else ""))
 
         # Set this iteration's learning rate
         for g in optimizer.param_groups:
             g["lr"] = get_lr(it)
 
         # Periodically evaluate, and save a checkpoint if val loss is the best so far
-        if it % S.eval_every == 0:
+        if it % S.eval_every == 0 and IS_MAIN:
             losses = estimate_loss()
             print(f"step {it}: train {losses['train']:.3f}  val {losses['val']:.3f}")
             log_metric(it, "train_loss", losses["train"])
@@ -398,11 +459,14 @@ try:
         # gradients before one optimizer step. Acts like one big batch
         # without needing the memory for it.
         t_iter = time.time()
-        for micro in range(S.grad_accum):
+        for micro in range(ACCUM):
             x, y = get_batch("train", it)
-            with autocast:
-                _, loss = train_model(x, y)
-            scaler.scale(loss / S.grad_accum).backward()   # gradients ADD UP across micro-batches
+            # With several GPUs, gradients are shared between them only after the LAST micro-batch
+            sync = wrapped.no_sync() if (DIST and micro < ACCUM - 1) else contextlib.nullcontext()
+            with sync:
+                with autocast:
+                    _, loss = train_model(x, y)
+                scaler.scale(loss / ACCUM).backward()      # gradients ADD UP across micro-batches
         if args.pilot and it == start_iter:
             pilot_first_loss = loss.item()
         scaler.unscale_(optimizer)
@@ -418,27 +482,37 @@ try:
                 torch.cuda.synchronize()
             pilot_times.append(time.time() - t_iter)
             if it % 10 == 0:
-                print(f"pilot iter {it}: loss {loss.item():.3f}  {pilot_times[-1]*1000:.0f}ms/iter")
+                mprint(f"pilot iter {it}: loss {loss.item():.3f}  {pilot_times[-1]*1000:.0f}ms/iter")
             if it + 1 >= args.pilot:
                 break
         elif it % 50 == 0:
             dt = time.time() - t0; t0 = time.time()
-            print(f"iter {it}: loss {loss.item():.3f}  lr {get_lr(it):.2e}  {dt*1000/50:.0f}ms/iter")
+            mprint(f"iter {it}: loss {loss.item():.3f}  lr {get_lr(it):.2e}  {dt*1000/50:.0f}ms/iter")
             log_metric(it, "loss", loss.item())
             log_metric(it, "lr", get_lr(it))
 
-        if args.stop_at and time.time() >= args.stop_at and it < S.max_iters:
-            # The run window is over: iteration `it` is done, so save and stop (resume starts at it + 1)
-            save_latest(it + 1)
-            print(f"\nrun window over: saved at iteration {it + 1}. Training resumes at the next window.")
-            sys.exit(75)                          # 75 = "paused on schedule" (run_training.py waits, then restarts)
+        if args.stop_at and it < S.max_iters:
+            stop = time.time() >= args.stop_at
+            if DIST:                              # every GPU must stop on the SAME step, so the first one decides
+                flag = torch.tensor([1.0 if stop else 0.0], device=device)
+                dist.broadcast(flag, src=0)
+                stop = flag.item() > 0.5
+            if stop:
+                # The run window is over: iteration `it` is done, so save and stop (resume starts at it + 1)
+                save_latest(it + 1)
+                if IS_MAIN:
+                    print(f"\nrun window over: saved at iteration {it + 1}. Training resumes at the next window.")
+                    open(PAUSE_MARKER, "w").close()     # torchrun can't pass on an exit code, so leave a note
+                if DIST:
+                    dist.barrier()                # let the first GPU finish saving before anyone exits
+                sys.exit(0 if DIST else 75)       # 75 = "paused on schedule" (run_training.py waits, then restarts)
 except KeyboardInterrupt:
     if args.pilot:
         sys.exit("\npilot stopped")
     # Ctrl+C: iteration `it` didn't finish, so resume will redo it
     optimizer.zero_grad(set_to_none=True)
     save_latest(it)
-    print(f"\npaused at iteration {it}. Run the same command again to resume.")
+    mprint(f"\npaused at iteration {it}. Run the same command again to resume.")
     sys.exit(0)
 except torch.cuda.OutOfMemoryError:
     sys.exit(f"\nOUT OF GPU MEMORY at iteration {it}. In config.py ({V.name}): halve batch_size and "
@@ -450,28 +524,45 @@ if args.pilot:
     tokens = S.batch_size * S.grad_accum * cfg.max_seq_len
     evals = (S.max_iters // S.eval_every + 1) * 2 * S.eval_iters * sec / S.grad_accum
     total_h = (sec * S.max_iters + evals) / 3600
-    print("\n==================== PILOT REPORT ====================")
-    print(f"model:          {V.name}, {model.num_params()/1e6:.1f}M parameters, "
-          f"grad_checkpoint={S.grad_checkpoint}, optimizer={S.optimizer}, compile={'on' if train_model is not model else 'off'}")
-    print(f"speed:          {sec:.2f} s/iter = {tokens/sec/1e3:.1f}k tokens/s")
-    if device == "cuda":
-        print(f"GPU memory:     {torch.cuda.max_memory_reserved()/2**30:.1f} GB peak "
-              f"of {torch.cuda.get_device_properties(0).total_memory/2**30:.1f} GB")
-    print(f"loss:           {pilot_first_loss:.3f} -> {loss.item():.3f} (should be going down)")
-    print(f"full run:       {S.max_iters:,} iters ~ {total_h:.0f} hours ({total_h/24:.1f} days)")
-    print("=======================================================")
+    if IS_MAIN:
+        print("\n==================== PILOT REPORT ====================")
+        print(f"model:          {V.name}, {model.num_params()/1e6:.1f}M parameters, "
+              f"grad_checkpoint={S.grad_checkpoint}, optimizer={S.optimizer}, "
+              f"compile={'on' if train_model is not wrapped else 'off'}"
+              + (f", {WORLD} GPUs (DDP)" if DIST else ""))
+        print(f"speed:          {sec:.2f} s/iter = {tokens/sec/1e3:.1f}k tokens/s")
+        if device == "cuda":
+            print(f"GPU memory:     {torch.cuda.max_memory_reserved()/2**30:.1f} GB peak "
+                  f"of {torch.cuda.get_device_properties(0).total_memory/2**30:.1f} GB (per GPU)")
+        print(f"loss:           {pilot_first_loss:.3f} -> {loss.item():.3f} (should be going down)")
+        print(f"full run:       {S.max_iters:,} iters ~ {total_h:.0f} hours ({total_h/24:.1f} days)")
+        print("=======================================================")
+    if DIST:
+        dist.barrier()
+        dist.destroy_process_group()
     sys.exit(0)
+
+if DIST and os.environ.get("DDP_SELFCHECK"):
+    # Debug aid: after training, every GPU's weights must be identical (they should be, by design)
+    total = sum(p.double().sum().item() for p in model.parameters())
+    sums = [None] * WORLD
+    dist.all_gather_object(sums, total)
+    mprint(f"ddp check: parameter sums per GPU {sums} -> " + ("all GPUs identical" if len(set(sums)) == 1 else "MISMATCH"))
 
 save_latest(S.max_iters + 1)   # marks training as finished
 # The FINAL weights: usually the best model, since the learning rate ends small.
 # (ckpt.pt keeps the best val score, but val scores are noisy by about +-0.05.)
 FINAL_PATH = os.path.join(OUT_DIR, "final.pt")
-save_atomic({"model": model.state_dict(), "config": cfg.__dict__,
-             "iter": S.max_iters, "val_loss": best_val}, FINAL_PATH)
-if args.backup_dir:
-    try:
-        os.makedirs(args.backup_dir, exist_ok=True)
-        shutil.copyfile(FINAL_PATH, os.path.join(args.backup_dir, f"{V.name}_final.pt"))
-    except OSError as e:
-        print(f"WARNING: couldn't copy final.pt to {args.backup_dir} ({e}). It is safe in {FINAL_PATH}.")
-print(f"done. best val loss {best_val:.3f} (ckpt.pt); final weights saved in {FINAL_PATH}")
+if IS_MAIN:
+    save_atomic({"model": model.state_dict(), "config": cfg.__dict__,
+                 "iter": S.max_iters, "val_loss": best_val}, FINAL_PATH)
+    if args.backup_dir:
+        try:
+            os.makedirs(args.backup_dir, exist_ok=True)
+            shutil.copyfile(FINAL_PATH, os.path.join(args.backup_dir, f"{V.name}_final.pt"))
+        except OSError as e:
+            print(f"WARNING: couldn't copy final.pt to {args.backup_dir} ({e}). It is safe in {FINAL_PATH}.")
+    print(f"done. best val loss {best_val:.3f} (ckpt.pt); final weights saved in {FINAL_PATH}")
+if DIST:
+    dist.barrier()
+    dist.destroy_process_group()

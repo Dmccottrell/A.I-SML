@@ -167,17 +167,26 @@ def run_once(command):
 
 
 def supervise(train_args, ckpt_dir, script="train.py", first_wait=30.0,
-              max_stalled=3, max_restarts=50, window=None, days=None, exit_after_window=False, tz=None):
+              max_stalled=3, max_restarts=50, window=None, days=None, exit_after_window=False, tz=None, gpus=1):
     """Run `script` with `train_args`, restarting after crashes. Returns the exit code to use."""
     os.makedirs(ckpt_dir, exist_ok=True)
     log_path = os.path.join(ckpt_dir, "supervisor.log")
     latest = os.path.join(ckpt_dir, "latest.pt")
     args = list(train_args)
+    marker = os.path.join(ckpt_dir, "paused_on_schedule")
+
+    def command(extra):
+        """python train.py ...  or, with several GPUs, torchrun starting one copy per GPU"""
+        if gpus > 1:
+            return [sys.executable, "-m", "torch.distributed.run", "--standalone",
+                    f"--nproc_per_node={gpus}", script] + extra
+        return [sys.executable, script] + extra
+
     if "--pilot" in args:                          # a trial run: no restarting
-        return run_once([sys.executable, script] + args)[0]
+        return run_once(command(args))[0]
 
     stalled, restarts = 0, 0
-    log(f"starting: python {script} {' '.join(args)}", log_path)
+    log(f"starting: python {script} {' '.join(args)}" + (f" on {gpus} GPUs" if gpus > 1 else ""), log_path)
     while True:
         launch = list(args)
         if window:
@@ -195,9 +204,12 @@ def supervise(train_args, ckpt_dir, script="train.py", first_wait=30.0,
                 continue
             launch += ["--stop_at", str(stop_ts)]
         saved_before, started = mtime(latest), time.time()
-        code, interrupted = run_once([sys.executable, script] + launch)
+        if os.path.exists(marker):
+            os.remove(marker)
+        code, interrupted = run_once(command(launch))
         args = [a for a in args if a != "--fresh"]   # restarts must RESUME, never start over
-        if code == PAUSED_ON_SCHEDULE and not interrupted:
+        # train.py leaves a note when it stops on schedule (torchrun can't pass on the exit code 75)
+        if (code == PAUSED_ON_SCHEDULE or os.path.exists(marker)) and not interrupted:
             if exit_after_window:
                 log("run window over: training saved. Exiting (--exit_after_window).", log_path)
                 return 0
@@ -245,6 +257,8 @@ def main():
     p.add_argument("--exit_after_window", action="store_true",
                    help="with --window: exit at the end of the window instead of waiting for the next one "
                         "(for rented machines, so a command after it can switch the machine off)")
+    p.add_argument("--gpus", type=int, default=1,
+                   help="train on this many GPUs of one machine (uses torchrun; see train.py)")
     p.add_argument("--utc_offset", type=float, default=None,
                    help="hours from UTC of the time zone the --window is written in (e.g. -5). A rented machine's "
                         "clock is usually UTC, so set this there; handoff.py --start does it for you")
@@ -260,7 +274,7 @@ def main():
         print(f"Run window: {args.window} on {args.days} (days a window starts).", flush=True)
     sys.exit(supervise(["--version", args.version] + rest, V.ckpt_dir, args.script,
                        args.wait_seconds, max_restarts=args.max_restarts, window=window, days=days,
-                       exit_after_window=args.exit_after_window, tz=tz))
+                       exit_after_window=args.exit_after_window, tz=tz, gpus=args.gpus))
 
 
 if __name__ == "__main__":

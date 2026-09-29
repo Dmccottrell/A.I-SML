@@ -61,7 +61,7 @@ data, code and training.
 | `prepare_data.py` | 4 | v1 data: downloads TinyStories, trains the tokenizer, writes `data/train.bin` / `val.bin` |
 | `prepare_web_data.py` | 4 | v2+ data: streams FineWeb-Edu + Wikipedia (+ code for v3) + TinyStories into `data/<version>/` (resumable) |
 | `prepare_data_v2.py` | 4 | Shortcut for `prepare_web_data.py --version v2` |
-| `train.py` | 5 | Pretraining loop. Ctrl+C pauses; run again to resume |
+| `train.py` | 5 | Pretraining loop. Ctrl+C pauses; run again to resume. Also trains on several GPUs of one machine (DDP, via torchrun or `run_training.py --gpus N`) |
 | `run_training.py` | 5 | Runs `train.py` and restarts it automatically after a crash (for long runs) |
 | `offload_optim.py` | 5 | AdamW that keeps its memory in system RAM, so a 1B model fits on a 12 GB GPU (v3.5) |
 | `docs/CLOUD.md` | - | How to rent a GPU and train there when your PC is off (or for big runs) |
