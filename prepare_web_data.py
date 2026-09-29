@@ -319,9 +319,18 @@ def encode_source(name, loader, train_budget, val_budget, out_dir, tok_path, poo
     val_path = os.path.join(out_dir, f"{name}_val.bin")
     prog = {"docs": 0, "train_bytes": 0, "val_bytes": 0, "skipped": 0}
     if os.path.exists(prog_path):
-        with open(prog_path) as f:
-            prog = json.load(f)
-        print(f"{name}: resuming after {prog['docs']:,} documents")
+        try:
+            with open(prog_path) as f:
+                prog = json.load(f)
+            print(f"{name}: resuming after {prog['docs']:,} documents")
+        except (json.JSONDecodeError, KeyError, OSError):
+            # Stopped (e.g. Ctrl+C) at the instant the file was being rewritten. Without it we don't know
+            # how much of the .bin files is good, so this source starts again from its beginning.
+            print(f"{name}: the progress file is damaged; starting this source again from the beginning")
+            for path in (train_path, val_path):
+                if os.path.exists(path):
+                    os.remove(path)
+            prog = {"docs": 0, "train_bytes": 0, "val_bytes": 0, "skipped": 0}
 
     # Open for appending, then cut off anything written after the last saved progress
     ftrain, fval = open(train_path, "ab"), open(val_path, "ab")
@@ -350,8 +359,9 @@ def encode_source(name, loader, train_budget, val_budget, out_dir, tok_path, poo
             prog["docs"] += len(batch)
             ftrain.flush(); fval.flush()
             prog["train_bytes"], prog["val_bytes"] = ftrain.tell(), fval.tell()
-            with open(prog_path, "w") as f:
+            with open(prog_path + ".tmp", "w") as f:       # write a new file, then swap it in: never left half-written
                 json.dump(prog, f)
+            os.replace(prog_path + ".tmp", prog_path)
             rate = (n_train + n_val - start_tokens) / max(time.time() - t0, 1e-9)
             eta_h = max(0, train_budget - n_train) / max(rate, 1) / 3600
             print(f"  {name}: {n_train:,}/{train_budget:,} train tokens  "
