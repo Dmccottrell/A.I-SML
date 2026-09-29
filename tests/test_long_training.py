@@ -69,7 +69,7 @@ class Settings(unittest.TestCase):
             self.assertEqual(V.train.grad_accum * length, 262_144)
             self.assertTrue(V.train.init_from.endswith(f"{prev}/final.pt"), V.train.init_from)
             self.assertGreater(V.model.rope_theta, config.VERSIONS[prev].model.rope_theta)
-            self.assertEqual(V.data_dir, "data/v3")
+            self.assertEqual(V.data_dir, "data/v3-long")
             for k in ("dim", "n_layers", "n_heads", "n_kv_heads", "hidden_dim", "vocab_size"):
                 self.assertEqual(getattr(V.model, k), getattr(config.VERSIONS["v3"].model, k))
             prev = V.name

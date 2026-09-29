@@ -244,13 +244,15 @@ VERSIONS = {
 # Each step starts from the one before it (init_from) with a longer context and a bigger RoPE base, and
 # trains briefly at a gentle learning rate. Every step keeps ~262k tokens per step, like v3.
 # The RoPE bases, step counts and learning rate are starting guesses: the 8K step tests them, and
-# eval_long.py decides whether to go on. The data is v3's own until the long-document builder exists.
+# eval_long.py decides whether to go on. The data is data/v3-long (prepare_long_data.py --version v3):
+# books, long articles, whole code repositories, recall practice, plus 30% of v3's own short text.
 def _v3_long(length, rope_theta, iters, init_from):
     v3 = VERSIONS["v3"]
     name = f"v3-long-{length // 1024}k"
     return name, replace(
         v3, name=name,
         description=f"v3 stretched to a {length:,}-token memory",
+        data_dir="data/v3-long",
         ckpt_dir=f"{CKPT_DIR}/{name}",
         export_dir=f"{EXPORT_DIR}/{name}",
         model=replace(v3.model, max_seq_len=length, rope_theta=rope_theta),
