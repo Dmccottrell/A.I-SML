@@ -403,7 +403,10 @@ if S.compile and not args.no_compile and device == "cuda":
 # ---- resume from latest.pt if there is one ----
 start_iter, best_val = 0, float("inf")
 if os.path.exists(LATEST_PATH) and not args.fresh:
-    state = torch.load(LATEST_PATH, map_location=device)
+    # Load onto the CPU, NOT the GPU: a checkpoint is ~5 GB (v3) and a copy left on the GPU pushed a 12 GB
+    # card over its limit, so Windows spilled into slow system memory and training ran ~5x slower.
+    # load_state_dict copies the values to wherever the model and optimizer live.
+    state = torch.load(LATEST_PATH, map_location="cpu")
     model.load_state_dict(state["model"])
     optimizer.load_state_dict(state["optimizer"])
     if state["scaler"]:
@@ -417,6 +420,9 @@ if os.path.exists(LATEST_PATH) and not args.fresh:
         torch.set_rng_state(state["rng"].cpu())
     if start_iter > S.max_iters:
         sys.exit(f"training already finished ({LATEST_PATH}); use --fresh to start over")
+    del state                                     # free the CPU copy too
+    if device == "cuda":
+        torch.cuda.empty_cache()
     mprint(f"resuming from iteration {start_iter} (best val so far {best_val:.3f})")
 
 # ============================== main training loop ==============================

@@ -121,7 +121,7 @@ def train_arm(name, model, cfg, data, a, total_steps, base_units, out_dir, devic
     rng = np.random.default_rng(1234 if name == "grown" else 4321)
     step = 0
     if os.path.exists(latest):
-        state = torch.load(latest, map_location=device)
+        state = torch.load(latest, map_location="cpu")   # not the GPU: a copy left there wastes memory
         model.load_state_dict(state["model"]); opt.load_state_dict(state["optimizer"])
         step = state["step"]; rng.bit_generator.state = state["rng"]
         print(f"[{name}] resuming at step {step:,} of {total_steps:,}")
