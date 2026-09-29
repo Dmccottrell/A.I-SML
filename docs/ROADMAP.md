@@ -470,6 +470,8 @@ Gemini runs a small model on phones and a big one in the cloud).
 **Ways to keep the cost down:**
 - **Grow instead of starting over:** start v6 from v5's weights (copy and stack its layers,
   "depth up-scaling"), and v6.5 from v6. This is why they share v5's tokenizer.
+  `growth_test.py` measures how much this really saves (v2's 12 layers grown to 24, against a 24-layer model
+  from scratch with the same total compute; ~20 hours on the 4070, run when the GPU is free).
 - **Free compute grants:** Google's TPU Research Cloud and similar programs. A documented
   project with results from v1–v5 is a strong application.
 - **The same PC + cloud split as v5:** data prep, pilots, chat training, DPO, skill packs,
