@@ -16,6 +16,11 @@ WHAT THIS FILE DOES
                     "Answer yes or no...") answered by the teacher. Answers
                     that don't follow the instruction (e.g. 5 items instead
                     of 4) are thrown away automatically.
+      study         Lessons for the Study helper skill pack (Beta, docs/SKILLS.md):
+                    a student's question, an explanation with an example
+                    ending in "Quick check: ...?", the student's answer
+                    (right or wrong) and the helper's feedback. Lessons that
+                    break the format are thrown away.
 
     Every result is checked and appended to data/v3/teacher/<task>.jsonl.
     It is resumable: run the same command again and finished examples are
@@ -46,6 +51,7 @@ HOSTED TEACHER (optional: no GPU needed, so it can run while your GPU trains)
 Usage:
     python make_teacher_data.py --task lookup --n 30000
     python make_teacher_data.py --task instructions --n 8000
+    python make_teacher_data.py --task study --n 3000     (Study helper skill pack)
     python make_teacher_data.py --task lookup --n 20      (a quick check first)
 """
 import argparse
@@ -222,7 +228,116 @@ def make_instruction(i, server, wiki, seed):
     return {"i": i, "prompt": prompt, "answer": answer}
 
 
-TASKS = {"lookup": make_lookup, "instructions": make_instruction}
+# ------------------------------------------------------------------ task: study helper lessons (skill pack, Beta)
+# (subject, topic, lowest level, highest level): levels 0 = elementary, 1 = middle school, 2 = high school
+STUDY_TOPICS = [
+    ("math", "adding fractions with different denominators", 0, 1), ("math", "long division", 0, 1),
+    ("math", "percentages", 0, 2), ("math", "the order of operations", 0, 1), ("math", "place value", 0, 0),
+    ("math", "area and perimeter of a rectangle", 0, 1), ("math", "ratios and proportions", 1, 1),
+    ("math", "negative numbers", 1, 1), ("math", "solving one-step equations", 1, 1),
+    ("math", "solving two-step equations", 1, 2), ("math", "the Pythagorean theorem", 1, 2),
+    ("math", "slope of a line", 1, 2), ("math", "exponents", 1, 2), ("math", "probability", 1, 2),
+    ("math", "mean, median and mode", 0, 1), ("math", "factoring quadratics", 2, 2),
+    ("math", "the quadratic formula", 2, 2), ("math", "systems of linear equations", 2, 2),
+    ("math", "sine, cosine and tangent", 2, 2), ("math", "prime numbers", 0, 1),
+    ("science", "photosynthesis", 0, 2), ("science", "the water cycle", 0, 1), ("science", "states of matter", 0, 1),
+    ("science", "the parts of a plant cell", 1, 2), ("science", "how the heart pumps blood", 0, 2),
+    ("science", "food chains and food webs", 0, 1), ("science", "Newton's three laws of motion", 1, 2),
+    ("science", "atoms, protons, neutrons and electrons", 1, 2), ("science", "the periodic table", 1, 2),
+    ("science", "chemical versus physical changes", 1, 1), ("science", "DNA and genes", 1, 2),
+    ("science", "natural selection", 1, 2), ("science", "the phases of the moon", 0, 1),
+    ("science", "why we have seasons", 0, 2), ("science", "simple circuits", 1, 2), ("science", "gravity", 0, 2),
+    ("science", "the layers of the Earth", 0, 1), ("science", "mitosis", 2, 2), ("science", "acids and bases", 1, 2),
+    ("science", "energy: kinetic and potential", 1, 2), ("science", "the rock cycle", 0, 1),
+    ("history", "why the American Revolution started", 1, 2), ("history", "the causes of World War I", 2, 2),
+    ("history", "ancient Egypt", 0, 1), ("history", "the Roman Empire", 1, 2), ("history", "the civil rights movement", 1, 2),
+    ("history", "the Industrial Revolution", 1, 2), ("history", "the three branches of the US government", 0, 2),
+    ("history", "the Renaissance", 1, 2), ("history", "the Cold War", 2, 2),
+    ("geography", "latitude and longitude", 0, 1), ("geography", "the seven continents", 0, 0),
+    ("geography", "how rivers shape the land", 1, 1), ("geography", "climate versus weather", 0, 1),
+    ("english", "nouns, verbs and adjectives", 0, 0), ("english", "the difference between its and it's", 0, 1),
+    ("english", "writing a thesis statement", 1, 2), ("english", "similes and metaphors", 0, 1),
+    ("english", "subject-verb agreement", 0, 1), ("english", "the parts of a paragraph", 0, 1),
+    ("english", "active and passive voice", 1, 2), ("english", "using commas correctly", 0, 2),
+    ("english", "theme versus main idea", 1, 2),
+    ("computer science", "what an algorithm is", 0, 2), ("computer science", "binary numbers", 1, 2),
+    ("computer science", "variables and loops", 1, 2),
+    ("economics", "supply and demand", 1, 2), ("economics", "saving versus investing", 1, 2),
+]
+LEVELS = ["an elementary school student (about 9 years old)", "a middle school student (about 12)",
+          "a high school student (about 16)"]
+QUESTION_STYLES = [
+    "a direct question (\"What is ...?\")", "\"I don't understand ...\"", "\"Can you explain ... step by step?\"",
+    "\"I have a test on ... tomorrow, can you help me study?\"", "\"How do I ...?\" about a problem type",
+    "a question with a specific example problem to solve", "\"Why does ...?\"",
+]
+STUDY_PROMPT = """You are writing an example conversation for a friendly study helper that tutors {level}.
+
+Subject: {subject}. Topic: {topic}.
+The student asks {style}.
+
+Write:
+- "question": the student's message (1-2 sentences, sounds like a real student of that age).
+- "answer": the study helper's reply, 80-220 words, in this order:
+    1. a short, clear explanation in simple words for that age (no jargon without explaining it);
+    2. a worked example or numbered steps (start the example with "For example" or "Example:");
+    3. a last line that starts with "Quick check:" and asks ONE short question the student can answer.
+  Be warm but not over the top. Don't mention being an AI.
+- "student_reply": the student's answer to the quick check, which should be {correctness}.
+- "feedback": the helper's reply to that (1-3 sentences). {feedback_rule}
+
+Reply with only this JSON: {{"question": "...", "answer": "...", "student_reply": "...", "feedback": "..."}}"""
+FEEDBACK_RIGHT = "Say it's right and why, briefly."
+FEEDBACK_WRONG = ("Gently say it isn't quite right (e.g. \"Not quite\" or \"Close\"), explain the mistake, "
+                  "and give the correct answer.")
+RIGHT_WORDS = ("right", "correct", "yes", "exactly", "great", "nice", "well done", "good job", "perfect")
+WRONG_WORDS = ("not quite", "close", "almost", "not exactly", "actually", "careful", "isn't", "is not",
+               "not right", "nearly", "good try", "nice try")
+
+
+def study_prompt(rng):
+    """(teacher prompt, whether the student's reply should be correct, lesson info)."""
+    subject, topic, lo, hi = rng.choice(STUDY_TOPICS)
+    level = rng.randint(lo, hi)
+    correct = rng.random() < 0.5
+    prompt = STUDY_PROMPT.format(
+        level=LEVELS[level], subject=subject, topic=topic, style=rng.choice(QUESTION_STYLES),
+        correctness="correct" if correct else "wrong (a common mistake a student that age makes)",
+        feedback_rule=FEEDBACK_RIGHT if correct else FEEDBACK_WRONG)
+    return prompt, correct, {"subject": subject, "topic": topic, "level": level}
+
+
+def good_study_lesson(data, correct):
+    """Check the teacher followed the lesson format (otherwise the example is thrown away)."""
+    keys = ("question", "answer", "student_reply", "feedback")
+    if not data or not all(isinstance(data.get(k), str) and data[k].strip() for k in keys):
+        return False
+    answer = data["answer"].strip()
+    words = len(answer.split())
+    lines = [l.strip() for l in answer.splitlines() if l.strip()]
+    low_all = " ".join(data[k].lower() for k in keys)
+    feedback = data["feedback"].lower()
+    return (60 <= words <= 280
+            and lines[-1].lower().startswith("quick check:") and lines[-1].endswith("?")
+            and ("for example" in answer.lower() or "example:" in answer.lower()
+                 or any(re.match(r"^(\d+[.)]|step \d)", l.lower()) for l in lines))
+            and len(data["question"]) <= 300 and len(data["student_reply"]) <= 200 and len(data["feedback"]) <= 600
+            and "as an ai" not in low_all and "language model" not in low_all
+            and (any(w in feedback for w in RIGHT_WORDS) if correct else any(w in feedback for w in WRONG_WORDS)))
+
+
+def make_study(i, server, wiki, seed):
+    """One study-helper lesson: question, answer ending in a quick check, the student's try, feedback."""
+    rng = random.Random(seed * 1_000_003 + i)
+    prompt, correct, info = study_prompt(rng)
+    data = extract_json(ask_teacher(server, [{"role": "user", "content": prompt}], temperature=0.8, max_tokens=700))
+    if not good_study_lesson(data, correct):
+        return None
+    return {"i": i, **{k: data[k].strip() for k in ("question", "answer", "student_reply", "feedback")},
+            "student_correct": correct, **info}
+
+
+TASKS = {"lookup": make_lookup, "instructions": make_instruction, "study": make_study}
 
 
 # ------------------------------------------------------------------ running a task

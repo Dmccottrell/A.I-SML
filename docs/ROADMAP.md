@@ -100,7 +100,7 @@ Scores are saved next to each checkpoint, so the old version isn't re-tested eve
 | DPO (`make_dpo_pairs.py`, `dpo.py`) | prefers the better of two answers; pairs scored by checkable rules (facts from the notes, "I don't know" when right, counts), no grader to trust | ✅ built, first used on v3 |
 | Teacher-judged pairs | the teacher picks the better answer where no rule can check (style, helpfulness) | planned (v3.5) |
 | Verified self-training | several tries per math/code question; only checked-correct ones become lessons (teaches thinking) | v3.5 |
-| LoRA skill packs | small swappable add-ons per skill | test on v3, real at v4 |
+| LoRA skill packs (`lora.py`, `skills.py`, `train_skill.py`) | small swappable add-ons per skill, a Beta router and an access toggle | ✅ built: **Study helper (Beta)**, trained and tested on v3 once it's chat-tuned; real at v4 ([SKILLS.md](SKILLS.md)) |
 | RL with verifiable rewards (GRPO) | rewards from passing tests / correct math | v4/v5 |
 | Logit distillation | learning a bigger model's full probabilities | v4/v5 (needs the shared tokenizer decision) |
 
@@ -406,8 +406,10 @@ You ─► Router ─► Base ──┼─► IT helper       (printers, network
 ```
 
 - **One base model** (v4's brain: v3.5 trained longer; v3.5 or v3 until it's ready) holds general language and knowledge.
-- **Skill packs (LoRA adapters):** small add-ons of a few MB each, trained in under an hour
-  each. Adding one never breaks the others. llama.cpp supports them.
+- **Skill packs (LoRA adapters):** small add-ons (~19-25 MB each), trained in under an hour
+  each. Adding one never breaks the others. llama.cpp supports them. **Built as a Beta:** the Study
+  helper, a keyword router (`generate.py --skill auto`) and an access toggle (everyone / beta testers / off),
+  tested on v3 first; see [SKILLS.md](SKILLS.md).
 - **Router:** a small classifier that picks the right skill pack for each question.
 - **Tiers:** the router also picks the model size: Lite for easy messages, Standard for harder ones. See [Model tiers](#model-tiers-lite-standard-pro-max).
 
@@ -531,6 +533,10 @@ might ask next and the app shows it greyed out in the message box (Tab or Enter 
 on its own). v3 learns it from the user's follow-ups in everyday chats (weight 0.3), and
 `generate.py --chat --suggest` shows it in the terminal. If v3's suggestions are too plain, v3.5/v4
 can add teacher-written follow-up questions.
+
+**Skill pack access (built):** each pack has a switch (everyone / beta testers / off) in
+`data/skills_access.json`, and `skills.can_use()` decides per user. The app will show a toggle only for the
+packs an account may use, so Beta packs go to chosen testers first. See [SKILLS.md](SKILLS.md#who-can-use-a-pack-the-access-toggle).
 
 ---
 

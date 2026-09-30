@@ -79,11 +79,12 @@ data, code and training.
 | `harness.py` | 6 | v4 coding helper: safe file/command tools and the tool-calling loop (no model needed; tests in `tests/`) |
 | `muon.py`, `muon_test.py` | 5 | The Muon optimizer (`optimizer="muon"` in config.py), and an experiment that measures whether it needs fewer steps than AdamW on our models (~1–2 h on the 4070) |
 | `grow.py`, `growth_test.py` | 6 | Grow a trained model into a deeper one, and an experiment that measures how much training compute that saves (run when the GPU is free) |
-| `generate.py` | 6 | Generate text or chat with your model. Chat options: `--lookup` (Wikipedia notes), `--memory` (remembers you), `--suggest` (reply suggestions), `--context` (memory meter) |
+| `generate.py` | 6 | Generate text or chat with your model. Chat options: `--lookup` (Wikipedia notes), `--memory` (remembers you), `--suggest` (reply suggestions), `--context` (memory meter), `--skill` (skill packs) |
 | `make_chat_data.py` | 7 | v1: builds `data/chat.jsonl` fine-tuning examples automatically |
 | `make_chat_data_v2.py` | 7 | v2: builds `data/v2/chat.jsonl` (multi-turn conversations) |
 | `finetune.py` | 7 | Teach it a chat format using the version's `chat.jsonl`. Ctrl+C pauses; run again to resume. NEFTune (a little noise while training, for better answers) is on from v3 |
 | `make_dpo_pairs.py`, `dpo.py` | 7 | Preference training: the chat model answers each question several times, answers are scored by checkable rules (facts from the notes, "I don't know" when right, counts), and it learns to prefer the better one |
+| `lora.py`, `skills.py`, `make_skill_data.py`, `train_skill.py`, `skill_test.py` | 7 | Skill packs (Beta): small LoRA add-ons that make the chat model a specialist. First pack: the **Study helper**. Includes a Beta router (`generate.py --chat --skill auto`) and an access toggle (everyone / beta testers / off: `python skills.py access`). See [`docs/SKILLS.md`](docs/SKILLS.md) |
 | `average_ckpts.py` | 6 | Averages the last few snapshots of a run (kept during the fade) for a small free improvement |
 | `evaluate.py` + `eval/prompts.jsonl` | 6–7 | 20-question test sheet that scores a chat model |
 | `exam.py` | 6 | HellaSwag, a public common-sense test (works on pretrained models; compare versions) |

@@ -33,6 +33,9 @@ Options:
     --memory       chat mode: remember earlier chats and facts you save ("remember: ..."), on this
                    computer only (see chat_memory.py). --private: this chat isn't saved
     --notes        with --lookup: passages per question (default 3; 2 leaves more room)
+    --skill        chat mode: switch on a skill pack (skills.py, docs/SKILLS.md), e.g. --skill study, or
+                   --skill auto: the Beta router picks a trained pack for each message (or none).
+                   --user <name> checks that person's access (python skills.py access); default: the owner
 """
 import argparse, os
 
@@ -63,6 +66,10 @@ p.add_argument("--private", action="store_true", help="with --memory: don't save
 p.add_argument("--no_meaning", action="store_true", help="with --memory: keyword search only (no embedding model)")
 p.add_argument("--memory_db", default=os.path.join("data", "memory", "memory.db"))
 p.add_argument("--db", default=os.path.join("data", "wiki", "wiki.db"))
+p.add_argument("--skill", default=None, help="chat: a skill pack name (e.g. study), or auto (the router picks)")
+p.add_argument("--any_base", action="store_true", help="with --skill: use a pack trained on another chat.pt")
+p.add_argument("--user", default="owner", help="with --skill: whose access to check (python skills.py access); "
+               "the owner can use every pack")
 args = p.parse_args()
 V = get_version(args.version)
 ckpt_path = args.ckpt or os.path.join(V.ckpt_dir, "chat.pt" if args.chat else "ckpt.pt")
@@ -72,6 +79,24 @@ device = "cuda" if torch.cuda.is_available() else "cpu"
 model, _ = load_checkpoint(ckpt_path, device)
 tok = BPETokenizer.load(os.path.join(V.data_dir, "tokenizer.json"))
 _, assistant_id, eot = special_ids(tok)   # generation stops at <|endoftext|> (a suggestion stops at <|assistant|>)
+switcher = None
+if args.skill:
+    from skills import SKILLS, SkillSwitcher, allowed_skills, load_access, route, trained_skills
+    names = trained_skills(V.ckpt_dir) if args.skill == "auto" else [args.skill]
+    if args.skill != "auto" and args.skill not in SKILLS:
+        raise SystemExit(f"unknown skill {args.skill!r}: choose from {', '.join(SKILLS)} or auto")
+    names = allowed_skills(names, args.user, load_access())       # the access toggle (Beta packs: testers only)
+    if not names and args.skill != "auto":
+        raise SystemExit(f"{args.user} may not use the {args.skill} pack (Beta packs are for testers: "
+                         "python skills.py access), or it isn't trained yet (train_skill.py)")
+    if names:
+        switcher = SkillSwitcher(model, V.ckpt_dir, names, strict_base=not args.any_base)
+        if args.skill != "auto":
+            switcher.use(args.skill)
+        print("(skill packs: " + ", ".join(switcher.titles.values())
+              + (", picked per message)" if args.skill == "auto" else ")"))
+    else:
+        print(f"(no skill packs available for {args.user}: plain chat)")
 
 
 def continue_ids(ids):
@@ -154,6 +179,10 @@ if args.chat:
             message["notes"] = found
             print("(looked up: " + "; ".join(n["title"] for n in found) + ")")
         history.append(message)
+        if switcher and args.skill == "auto":
+            picked = route(msg, list(switcher.packs))
+            switcher.use(picked)
+            print(f"(skill: {switcher.titles[picked]})" if picked else "(skill: none, plain chat)")
         reply, facts = split_memory_calls(continue_ids(build_prompt(tok, history, max_prompt)))
         history.append({"role": "assistant", "content": reply, **({"memory": facts} if facts else {})})
         print("AI:", reply)
