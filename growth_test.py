@@ -108,17 +108,23 @@ def read_log(path):
         return [{k: float(v) for k, v in row.items()} for row in csv.DictReader(f)]
 
 
-def train_arm(name, model, cfg, data, a, total_steps, base_units, out_dir, device, autocast):
-    """Train `model` for total_steps, logging validation loss every --eval_every steps. Resumable."""
+def train_arm(name, model, cfg, data, a, total_steps, base_units, out_dir, device, autocast,
+              make_opt=None, seed=None, lr=None):
+    """Train `model` for total_steps, logging validation loss every --eval_every steps. Resumable.
+
+    make_opt(model) -> optimizer (default AdamW); seed: the order of the training text (runs with the
+    same seed read the same batches); lr: peak learning rate (default --lr). Used by muon_test.py too.
+    """
     log_path = os.path.join(out_dir, f"{name}.csv")
     latest = os.path.join(out_dir, f"{name}_latest.pt")
     done_flag = os.path.join(out_dir, f"{name}.done")
     if os.path.exists(done_flag):
         print(f"[{name}] already finished, skipping")
         return
-    opt = torch.optim.AdamW(model.parameters(), lr=a.lr, betas=(0.9, 0.95), weight_decay=0.1,
-                            fused=(device == "cuda"))
-    rng = np.random.default_rng(1234 if name == "grown" else 4321)
+    lr_max = lr or a.lr
+    opt = make_opt(model) if make_opt else torch.optim.AdamW(model.parameters(), lr=lr_max, betas=(0.9, 0.95),
+                                                             weight_decay=0.1, fused=(device == "cuda"))
+    rng = np.random.default_rng(seed if seed is not None else (1234 if name == "grown" else 4321))
     step = 0
     if os.path.exists(latest):
         state = torch.load(latest, map_location="cpu")   # not the GPU: a copy left there wastes memory
@@ -129,13 +135,15 @@ def train_arm(name, model, cfg, data, a, total_steps, base_units, out_dir, devic
     val = data.val_batches(a.batch_size, a.eval_iters)
     tokens_per_step = a.batch_size * a.grad_accum * cfg.max_seq_len
     t0, t_start_step = time.time(), step
+    train_seconds = [0.0]           # time spent training (not evaluating), for per-step speed
 
     def log(step_now):
         if step_now in logged:
             return
         tokens = step_now * tokens_per_step
         row = {"step": step_now, "tokens": tokens,
-               "units": base_units + tokens * cfg.n_layers, "val_loss": val_loss(model, val, autocast)}
+               "units": base_units + tokens * cfg.n_layers, "val_loss": val_loss(model, val, autocast),
+               "sec_per_step": train_seconds[0] / max(1, step_now - t_start_step)}
         new = not os.path.exists(log_path)
         with open(log_path, "a", newline="") as f:
             w = csv.DictWriter(f, fieldnames=list(row))
@@ -158,9 +166,10 @@ def train_arm(name, model, cfg, data, a, total_steps, base_units, out_dir, devic
         while step < total_steps:
             if step % a.eval_every == 0:
                 log(step)
-            lr = get_lr(step, total_steps, a.warmup, a.lr, a.lr * 0.1)
+            t_step = time.time()
+            lr_now = get_lr(step, total_steps, a.warmup, lr_max, lr_max * 0.1)
             for g in opt.param_groups:
-                g["lr"] = lr
+                g["lr"] = lr_now
             for _ in range(a.grad_accum):
                 x, y = data.train_batch(a.batch_size, rng)
                 with autocast:
@@ -168,6 +177,9 @@ def train_arm(name, model, cfg, data, a, total_steps, base_units, out_dir, devic
                 (loss / a.grad_accum).backward()
             torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
             opt.step(); opt.zero_grad(set_to_none=True)
+            if device == "cuda":
+                torch.cuda.synchronize()
+            train_seconds[0] += time.time() - t_step
             step += 1
             if step % a.save_every == 0:
                 save(step)

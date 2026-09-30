@@ -287,7 +287,11 @@ no_decay = [p for n, p in model.named_parameters() if p.dim() < 2]
 # average of each weight's gradients so updates are smooth and well-scaled.
 groups = [{"params": decay, "weight_decay": S.weight_decay},
           {"params": no_decay, "weight_decay": 0.0}]
-if S.optimizer == "adamw_cpu":
+if S.optimizer == "muon":
+    # Muon for the blocks' weight matrices, AdamW for embeddings and norms (see muon.py and muon_test.py)
+    from muon import Muon, muon_param_groups
+    optimizer = Muon(muon_param_groups(model, S.weight_decay), lr=S.lr_max)
+elif S.optimizer == "adamw_cpu":
     # Its memory lives in system RAM (see offload_optim.py): for models too big for the GPU
     from offload_optim import CPUOffloadAdamW
     optimizer = CPUOffloadAdamW(groups, lr=S.lr_max, betas=(0.9, 0.95))

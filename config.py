@@ -43,6 +43,8 @@ class TrainSettings:
     #   "adamw":      on the GPU (fastest; v1-v3)
     #   "adamw_cpu":  in system RAM (offload_optim.py): frees ~8 GB of GPU memory at 1B, needs ~17 GB of RAM
     #   "adamw8bit":  on the GPU in 8-bit (bitsandbytes): a quarter of the memory, slightly different maths
+    #   "muon":       Muon for the weight matrices + AdamW for the rest (muon.py): reportedly the same
+    #                 quality in fewer steps; muon_test.py measures it on our models first
     optimizer: str = "adamw"
     # Learning-rate schedule:
     #   "cosine": warm up, then fade slowly for the whole run (v1, v2)
