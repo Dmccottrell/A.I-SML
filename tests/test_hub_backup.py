@@ -85,6 +85,24 @@ class Backup(unittest.TestCase):
         self.assertEqual(H.checkpoint_iter(os.path.join(pc, "latest.pt")), 2200)
         self.assertEqual([f for f in os.listdir(pc) if f != "latest.pt"], [])   # no leftovers
 
+    def test_failed_cleanup_and_full_storage_are_reported(self):
+        cloud = os.path.join(self.d, "cloud")
+        save_ckpt(os.path.join(cloud, "latest.pt"), 4600)
+
+        def no_squash(repo_id, repo_type):
+            raise PermissionError("403 token can't squash")
+        self.fake.super_squash_history = no_squash
+        h = self.hub()
+        self.assertTrue(h.upload(os.path.join(cloud, "latest.pt"), 4600))   # the upload itself still counts
+        self.assertTrue(any("WARNING" in m and "older copies" in m for m in self.msgs))
+
+        def full(**kw):
+            raise RuntimeError("Bad request for commit endpoint: Private repository storage limit reached")
+        self.fake.create_commit = full
+        self.msgs.clear()
+        self.assertFalse(h.upload(os.path.join(cloud, "latest.pt"), 4600))
+        self.assertTrue(any("FAILED" in m and "storage is full" in m and "handoff.py" in m for m in self.msgs))
+
     def test_never_replaces_a_newer_local_copy(self):
         cloud, pc = os.path.join(self.d, "cloud"), os.path.join(self.d, "pc")
         save_ckpt(os.path.join(cloud, "latest.pt"), 1500)

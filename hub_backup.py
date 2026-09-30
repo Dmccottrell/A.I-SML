@@ -100,11 +100,15 @@ class HubBackup:
             operations=[CommitOperationAdd(f"{self.version}/{name}", path),
                         CommitOperationAdd(f"{self.version}/{name}.json", json.dumps(meta, indent=1).encode())],
             commit_message=f"{self.version} {name} at step {iter_}")
+        self.tell(f"hub backup: uploaded {name} (step {iter_:,}) to {self.repo} in {time.time() - t0:.0f} s")
         try:        # keep only the newest copy, so the repo doesn't grow by ~5 GB per upload
             self.api.super_squash_history(repo_id=self.repo, repo_type="model")
-        except Exception:
-            pass
-        self.tell(f"hub backup: uploaded {name} (step {iter_:,}) to {self.repo} in {time.time() - t0:.0f} s")
+        except Exception as e:
+            # Said out loud: a silent failure here once let old copies fill the free private storage, and every
+            # upload after that was refused ("Private repository storage limit reached").
+            self.tell(f"hub backup: WARNING: couldn't remove older copies ({type(e).__name__}: {str(e)[:150]}). "
+                      "The repo keeps growing ~5 GB per upload until it's full; delete old files in the repo's "
+                      "Settings on huggingface.co, and check the token may write to the repo.")
 
     def upload(self, path, iter_, name="latest.pt"):
         """Upload now and wait. Returns True if it worked."""
@@ -115,7 +119,10 @@ class HubBackup:
             return True
         except Exception as e:
             self.last_error = e
-            self.tell(f"hub backup: upload FAILED ({type(e).__name__}: {str(e)[:200]}). Training is not affected.")
+            hint = (" The Hugging Face storage is full: delete old copies in the repo's Settings (storage / LFS "
+                    "files) on huggingface.co, or copy the checkpoint with handoff.py instead."
+                    if "storage limit" in str(e).lower() else "")
+            self.tell(f"hub backup: upload FAILED ({type(e).__name__}: {str(e)[:200]}). Training is not affected.{hint}")
             return False
 
     def upload_in_background(self, path, iter_, name="latest.pt"):
