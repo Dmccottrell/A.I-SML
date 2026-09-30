@@ -1,9 +1,16 @@
 # Skill packs (Beta)
 
 A **skill pack** is a small add-on that makes the chat model a specialist, without changing the model
-itself. v4 plans six packs and a router that picks one per message. The first one, the **Study helper**,
-is a **Beta**: it's built and tested on v3 so the recipe is proven before v4, and only you (and people you
-add as testers) can use it.
+itself. v4 plans several packs and a router that picks one per message. The first two, the **Study helper**
+(for students) and the **Teacher assistant** (for teachers), are **Betas**: built and tested on v3 so the
+recipe is proven before v4, and only you (and people you add as testers) can use them.
+
+| Pack | For | Status |
+|---|---|---|
+| Study helper | Students: explains a topic, an example, a quick check, feedback | Beta (v3) |
+| Teacher assistant | Teachers (3rd grade first): worksheets with answer keys, reading passages, lesson plans, parent emails, report card comments, rubrics, activities; saves as PDF or Word | Beta (v3) |
+| Story writer, IT helper, Fact checker, Document helper, Coding helper | | planned (v4) |
+| Writing coach, Planner, Recipe and meal helper, Budget helper, Language tutor, Resume and job helper, Kids' mode | | ideas for v4, to look at later |
 
 ## How it works
 
@@ -63,12 +70,58 @@ python generate.py --version v3 --chat --skill study     # chat with it (or --sk
   scored on: ends with a quick check, gives an example or steps, 40–300 words, finishes properly. PASS when
   the pack is clearly better. Every answer is saved side by side in `skills/study_test.md`.
 
+## The Teacher assistant (Beta)
+
+Makes classroom materials for a teacher, starting with 3rd grade, in a fixed layout that saves as a
+printable PDF or an editable Word file:
+
+| Ask for | You get |
+|---|---|
+| "Make a 10-question worksheet on multiplication facts for 7s for my 3rd grade class, with an answer key" | Title, Name/Date line, numbered questions with room to write, **answer key on page 2** |
+| "Write a short reading passage about honeybees for 3rd grade, with 4 questions and an answer key" | A passage at about a 3rd-grade reading level, questions, key |
+| "Write a 45-minute lesson plan on area of rectangles" | Objective, materials, warm-up, teaching steps, practice, exit ticket |
+| "Make a spelling list of 8 words with long a" | Words with a sentence each, and a practice idea |
+| "Write a short email to parents about the field trip" | Greeting, clear details as bullet points, sign-off |
+| "Write 3 report card comments for a student who is improving in reading" | Positive, specific comments using [Student], never an invented name |
+| "Make a simple rubric for a paragraph about their favorite animal" | 3-5 criteria with 3 / 2 / 1 score levels |
+| "Give me 6 brain break ideas for my class" | Numbered quick activities |
+
+**Checked, not trusted** (`classroom.py`), both for the teacher-written lessons (bad ones are thrown away)
+and for our model's answers (`skill_test.py`): the number of questions matches the request, every answer
+key has one answer per question, **every plain sum in a key is recalculated** (6 × 9 = 56 is caught),
+reading passages must score at about grade 5 or below (Flesch-Kincaid), lesson plans need every part,
+comments may not contain names. At ~1B (v3/v4) the results are good first drafts to review, not finished
+products.
+
+**Private:** it runs on your own computer (later the phone) and nothing is uploaded, which matters for
+anything about students.
+
+```
+python make_teacher_data.py --task teacher --n 3000     # teacher-written, checked examples
+python make_skill_data.py --version v3 --skill teacher
+python train_skill.py --version v3 --skill teacher
+python skill_test.py --version v3 --skill teacher --export   # scores + the pack's answers as PDFs in documents/skill_test/
+python generate.py --version v3 --chat --skill auto          # ask for a worksheet, then:  save fractions.pdf
+```
+
+## Saving answers as PDF or Word (`export_doc.py`)
+
+In chat, `save <name>` saves the last answer into `documents/`: `save fractions.pdf` (print it),
+`save fractions.docx` (edit it in Word or Google Docs first), `.md` or `.txt`. The model only writes the
+content; the page layout is fixed code, so every worksheet looks the same: big readable fonts, a
+Name/Date line on student pages, writing space under each question, and the answer key on its own page
+(print page 1 for the class). Works offline; needs `pip install fpdf2 python-docx` (in requirements.txt).
+From a file: `python export_doc.py answer.txt --out worksheet.pdf`. The v4 app puts the same code behind a
+Download / Print button.
+
 ## The Beta router
 
 `python generate.py --version v3 --chat --skill auto` picks a pack for each message (or none) and says
 which: `(skill: Study helper (Beta))` or `(skill: none, plain chat)`. It scores school words and question
 shapes; small talk ("hi", "what is your name?"), printer questions and poems stay with the plain model.
-It gets all 20 messages in `eval/skills/study.jsonl` right. v4 replaces it with a small trained classifier
+With both Beta packs loaded it gets every message in `eval/skills/study.jsonl` and `teacher.jsonl` right
+("explain fractions" goes to the Study helper, "make a fractions worksheet for my class" to the Teacher
+assistant). v4 replaces it with a small trained classifier
 that also picks the effort level and the model size.
 
 ## Who can use a pack (the access toggle)
@@ -93,8 +146,12 @@ switch, and the app's settings screen can show only the packs a user is allowed 
 
 - **Study helper:** retrain on v4's brain from the same lessons; add lessons with Wikipedia notes (cite the
   source), more subjects and levels, multi-step math checked by the calculator tool, and "quiz me" sessions.
+- **Teacher assistant:** more grades (K-5 first), differentiated versions (easier / on level / challenge)
+  in one request, math checked by the calculator tool, pictures and diagrams in worksheets, and the app's
+  Download / Print button. Your first real tester: a 3rd-grade teacher.
 - **More packs:** each one needs a data builder in `make_skill_data.py`, a teacher task, a test in
-  `skill_test.py` and its entry in `skills.py` (already listed: stories, IT helper, fact checker,
-  documents, coding).
+  `skill_test.py` and its entry in `skills.py` (already listed as planned: stories, IT helper, fact checker,
+  documents, coding; ideas to look at later: writing coach, planner, recipes and meals, budget, language
+  tutor, resume and jobs, kids' mode).
 - **Router:** a small trained classifier instead of keywords; also picks Lite/Standard and the effort level.
 - **Phone:** llama.cpp can load LoRA adapters next to the main file; the Beta ships merged files first.

@@ -10,6 +10,10 @@ WHAT THIS FILE DOES
         length        40-300 words (explains, but doesn't ramble)
         finished      ends properly instead of running out of room
 
+    For the Teacher assistant (classroom.py): the right number of questions or items, an answer key whose
+    sums are recalculated and right, reading passages at about a 3rd-grade level, lesson plans with every
+    part, parent emails with a greeting and sign-off, report card comments without invented names.
+
     It also checks the Beta router: does each message go to the right pack (or to none: "hi", a printer
     question, a poem)? The pack passes when it beats the plain model on the format rules; the test sheet
     (evaluate.py with --skill) checks it didn't make everyday answers worse.
@@ -18,6 +22,7 @@ WHAT THIS FILE DOES
 
 Usage:
     python skill_test.py --version v3 --skill study
+    python skill_test.py --version v3 --skill teacher --export         (+ the answers as PDFs, to look at)
     python skill_test.py --version v3 --skill study --router_only      (no model needed)
 """
 import argparse
@@ -41,7 +46,14 @@ def study_checks(text, finished):
     return {"quick check": quick, "example": example, "length": 40 <= n <= 300, "finished": finished}
 
 
-CHECKS = {"study": study_checks}
+def teacher_checks(text, finished, test):
+    """{rule: passed} for one Teacher assistant answer (classroom.py: counts, answer keys, reading level...)."""
+    from classroom import check_teacher_answer
+    return {**check_teacher_answer(text, test["spec"]), "finished": finished}
+
+
+CHECKS = {"study": lambda text, finished, test: study_checks(text, finished), "teacher": teacher_checks}
+BETA_ROUTED = ("study", "teacher")        # the router test sheets expect every Beta pack to be available
 
 
 def router_report(tests, available):
@@ -58,10 +70,14 @@ def router_report(tests, available):
     return right, len(tests), wrong
 
 
-def summarize(results):
-    """{rule: share passed} over [{rule: bool}]."""
-    rules = results[0].keys() if results else []
-    return {r: sum(x[r] for x in results) / len(results) for r in rules}
+def summarize(results, rules=None):
+    """{rule: share passed} over [{rule: bool}], counting only the answers the rule applies to."""
+    rules = rules or list(dict.fromkeys(k for x in results for k in x))
+    out = {}
+    for r in rules:
+        had = [x[r] for x in results if r in x]
+        out[r] = sum(had) / len(had) if had else 0.0
+    return out
 
 
 def main():
@@ -76,11 +92,12 @@ def main():
     p.add_argument("--repetition_penalty", type=float, default=1.15)
     p.add_argument("--router_only", action="store_true")
     p.add_argument("--any_base", action="store_true", help="use the pack even if it was trained on another chat.pt")
+    p.add_argument("--export", action="store_true", help="also save the pack's answers as PDFs in documents/skill_test/")
     a = p.parse_args()
     V = get_version(a.version)
     with open(os.path.join("eval", "skills", f"{a.skill}.jsonl"), encoding="utf-8") as f:
         tests = [json.loads(l) for l in f if l.strip()]
-    right, total, wrong = router_report(tests, [a.skill])
+    right, total, wrong = router_report(tests, list(BETA_ROUTED))
     print(f"router: {right}/{total} messages sent to the right place")
     for prompt, exp, got in wrong:
         print(f"  {prompt!r}: expected {exp}, got {got}")
@@ -112,12 +129,18 @@ def main():
             new = out[0, idx.size(1):].tolist()
             finished = bool(new) and new[-1] == eot
             text = tok.decode(new).replace("<|endoftext|>", "").strip()
-            rows[mode].append(check(text, finished))
+            rows[mode].append(check(text, finished, t))
             pair[mode] = text
         answers.append((t["prompt"], pair))
         print(f"{i + 1}/{len(skill_tests)} done", flush=True)
 
-    plain, packed = summarize(rows["plain"]), summarize(rows["pack"])
+    if a.export:
+        from export_doc import export
+        for i, (prompt, pair) in enumerate(answers, 1):
+            export(pair["pack"], os.path.join("documents", "skill_test", f"{a.skill}_{i:02d}.pdf"))
+        print("the pack's answers as PDFs: documents/skill_test/")
+    rules = list(dict.fromkeys(k for x in rows["plain"] + rows["pack"] for k in x))   # e.g. "reading level" only for passages
+    plain, packed = summarize(rows["plain"], rules), summarize(rows["pack"], rules)
     lines = [f"# {pack['title']} ({pack.get('status')}) on {V.name}", "",
              f"Router: {right}/{total} right.", "", "| Rule | Plain chat model | With the pack |", "|---|---|---|"]
     for r in plain:

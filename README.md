@@ -84,7 +84,8 @@ data, code and training.
 | `make_chat_data_v2.py` | 7 | v2: builds `data/v2/chat.jsonl` (multi-turn conversations) |
 | `finetune.py` | 7 | Teach it a chat format using the version's `chat.jsonl`. Ctrl+C pauses; run again to resume. NEFTune (a little noise while training, for better answers) is on from v3 |
 | `make_dpo_pairs.py`, `dpo.py` | 7 | Preference training: the chat model answers each question several times, answers are scored by checkable rules (facts from the notes, "I don't know" when right, counts), and it learns to prefer the better one |
-| `lora.py`, `skills.py`, `make_skill_data.py`, `train_skill.py`, `skill_test.py` | 7 | Skill packs (Beta): small LoRA add-ons that make the chat model a specialist. First pack: the **Study helper**. Includes a Beta router (`generate.py --chat --skill auto`) and an access toggle (everyone / beta testers / off: `python skills.py access`). See [`docs/SKILLS.md`](docs/SKILLS.md) |
+| `lora.py`, `skills.py`, `make_skill_data.py`, `train_skill.py`, `skill_test.py` | 7 | Skill packs (Beta): small LoRA add-ons that make the chat model a specialist. First packs: the **Study helper** and the **Teacher assistant** (`classroom.py`: 3rd-grade requests and checks). Includes a Beta router (`generate.py --chat --skill auto`) and an access toggle (everyone / beta testers / off: `python skills.py access`). See [`docs/SKILLS.md`](docs/SKILLS.md) |
+| `export_doc.py` | 7 | Saves an answer as a printable PDF or an editable Word file (in chat: `save worksheet.pdf`); worksheets get a Name/Date line and the answer key on its own page |
 | `average_ckpts.py` | 6 | Averages the last few snapshots of a run (kept during the fade) for a small free improvement |
 | `evaluate.py` + `eval/prompts.jsonl` | 6–7 | 20-question test sheet that scores a chat model |
 | `exam.py` | 6 | HellaSwag, a public common-sense test (works on pretrained models; compare versions) |

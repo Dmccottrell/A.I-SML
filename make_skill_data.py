@@ -8,6 +8,7 @@ WHAT THIS FILE DOES
         <data_dir>/skills/<skill>/train.jsonl   ~95%
         <data_dir>/skills/<skill>/val.jsonl     ~5% (never trained on: shows if the pack really learned)
 
+    Teacher assistant examples become one chat each: the teacher's request and the finished document.
     Study helper lessons become two kinds of chats:
       * the question and the explained answer ending in "Quick check: ...?"
       * the same, plus the student's try and the helper's feedback (right or wrong)
@@ -46,6 +47,13 @@ def study_chats(lessons, rng, followup=0.5):
                      {"role": "assistant", "content": rec["feedback"]}]
         out.append({"messages": msgs, "kind": "study_followup" if len(msgs) > 2 else "study"})
     return out
+
+
+@builder("teacher")
+def teacher_chats(lessons, rng):
+    """Chats from teacher-assistant examples: the teacher's request and the finished document."""
+    return [{"messages": [{"role": "user", "content": rec["request"]}, {"role": "assistant", "content": rec["answer"]}],
+             "kind": f"teacher_{rec['spec']['type']}"} for rec in lessons]
 
 
 def read_jsonl(path):

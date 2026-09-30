@@ -100,7 +100,7 @@ Scores are saved next to each checkpoint, so the old version isn't re-tested eve
 | DPO (`make_dpo_pairs.py`, `dpo.py`) | prefers the better of two answers; pairs scored by checkable rules (facts from the notes, "I don't know" when right, counts), no grader to trust | ✅ built, first used on v3 |
 | Teacher-judged pairs | the teacher picks the better answer where no rule can check (style, helpfulness) | planned (v3.5) |
 | Verified self-training | several tries per math/code question; only checked-correct ones become lessons (teaches thinking) | v3.5 |
-| LoRA skill packs (`lora.py`, `skills.py`, `train_skill.py`) | small swappable add-ons per skill, a Beta router and an access toggle | ✅ built: **Study helper (Beta)**, trained and tested on v3 once it's chat-tuned; real at v4 ([SKILLS.md](SKILLS.md)) |
+| LoRA skill packs (`lora.py`, `skills.py`, `train_skill.py`) | small swappable add-ons per skill, a Beta router and an access toggle | ✅ built: **Study helper** and **Teacher assistant** (Betas), trained and tested on v3 once it's chat-tuned; real at v4 ([SKILLS.md](SKILLS.md)) |
 | RL with verifiable rewards (GRPO) | rewards from passing tests / correct math | v4/v5 |
 | Logit distillation | learning a bigger model's full probabilities | v4/v5 (needs the shared tokenizer decision) |
 
@@ -397,7 +397,8 @@ v3.5 run ── pre_decay.pt ── fade ── ships as v3.5 (the app and skill
 ### Specialists (skill packs + router)
 
 ```
-                        ┌─► Study helper    (explains school topics)
+                        ┌─► Study helper    (explains school topics)          Beta on v3
+                        ├─► Teacher assistant (worksheets, lesson plans, PDFs)  Beta on v3
                         ├─► Story writer    (the v1 skill)
 You ─► Router ─► Base ──┼─► IT helper       (printers, networks, troubleshooting)
       (picks)   model   ├─► Fact checker    (looks things up, cites sources)
@@ -405,6 +406,12 @@ You ─► Router ─► Base ──┼─► IT helper       (printers, network
                         └─► Coding helper   (works in a loop, small tasks)
 ```
 
+- **More skill ideas (planned, to look at later):** writing coach, planner (with reminders), recipe and
+  meal helper, budget helper, language tutor, resume and job helper, kids' mode. Which come first follows
+  what Beta testers ask for. See [SKILLS.md](SKILLS.md).
+- **Save as PDF or Word (built, `export_doc.py`):** any answer, and above all the Teacher assistant's
+  worksheets, saves as a printable PDF (answer key on its own page) or an editable Word file; the app
+  gets a Download / Print button.
 - **One base model** (v4's brain: v3.5 trained longer; v3.5 or v3 until it's ready) holds general language and knowledge.
 - **Skill packs (LoRA adapters):** small add-ons (~19-25 MB each), trained in under an hour
   each. Adding one never breaks the others. llama.cpp supports them. **Built as a Beta:** the Study

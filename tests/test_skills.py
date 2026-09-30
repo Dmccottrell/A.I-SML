@@ -16,6 +16,8 @@ import lora as L
 import make_skill_data as MSD
 import make_teacher_data as MT
 import skill_test as ST
+import classroom as C
+import export_doc as E
 import skills as S
 import train_skill as TS
 from chat import encode_conversation, normalize, special_ids
@@ -151,12 +153,19 @@ class Router(unittest.TestCase):
     def test_only_loaded_packs_can_be_picked(self):
         self.assertIsNone(S.route("Can you explain photosynthesis?", []))
 
-    def test_the_test_sheet_routes_correctly(self):
-        with open(os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
-                               "eval", "skills", "study.jsonl")) as f:
-            tests = [json.loads(l) for l in f if l.strip()]
-        right, total, wrong = ST.router_report(tests, ["study"])
-        self.assertEqual(right, total, wrong)
+    def test_the_test_sheets_route_correctly_with_both_packs(self):
+        for sheet in ("study", "teacher"):
+            with open(os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+                                   "eval", "skills", f"{sheet}.jsonl")) as f:
+                tests = [json.loads(l) for l in f if l.strip()]
+            right, total, wrong = ST.router_report(tests, ["study", "teacher"])
+            self.assertEqual(right, total, wrong)
+
+    def test_teacher_requests_go_to_the_teacher_pack(self):
+        rng = random.Random(1)
+        for _ in range(60):
+            msg, spec = C.teacher_request(rng)
+            self.assertEqual(S.route(msg, ["study", "teacher"]), "teacher", msg)
 
 
 GOOD = {"question": "What is a fraction?",
@@ -315,6 +324,176 @@ class Checks(unittest.TestCase):
         steps = "1. Subtract 5 from both sides.\n2. Divide by 3.\n" + "word " * 40 + "\nQuick check: what is x?"
         self.assertTrue(ST.study_checks(steps, True)["example"])
         self.assertEqual(ST.summarize([{"a": True}, {"a": False}]), {"a": 0.5})
+        self.assertEqual(ST.summarize([{"a": True}, {"a": False, "b": True}]), {"a": 0.5, "b": 1.0})
+        r = ST.teacher_checks(WORKSHEET, True, {"spec": {"type": "worksheet", "n": 4}})
+        self.assertTrue(all(r.values()), r)
+
+
+WORKSHEET = """# Multiplication Facts: 6s
+Grade 3 - Math - Worksheet
+Instructions: Solve each problem.
+## Questions
+1. 6 × 4 = ____
+2. What is 42 ÷ 6?
+3. There are 6 boxes with 3 crayons in each box. How many crayons are there in all?
+4. 6 x 9 = ____
+## Answer key
+1. 24
+2. 7
+3. 18 crayons
+4. 54"""
+
+READING = """# The Busy Bees
+Grade 3 - Reading
+Bees live in a home called a hive. A hive can have many bees. Each bee has a job. Some bees look for
+flowers. They drink the sweet juice inside. It is called nectar. The bees take the nectar back to the hive.
+They make honey from it. Other bees keep the hive clean. One big bee is the queen. She lays the eggs. Bees
+help plants too. They carry pollen from flower to flower. This helps new seeds grow. Next time you see a
+bee, let it work. It is very busy!
+## Questions
+1. What is a bee's home called?
+2. What do bees make honey from?
+3. How do bees help plants?
+## Answer key
+1. A hive.
+2. Nectar from flowers.
+3. They carry pollen from flower to flower."""
+
+
+class Export(unittest.TestCase):
+    def setUp(self):
+        self.d = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, self.d)
+
+    def test_parse_finds_the_title_questions_and_key(self):
+        doc = E.parse(WORKSHEET)
+        self.assertEqual(doc.title, "Multiplication Facts: 6s")
+        self.assertTrue(doc.for_students)
+        self.assertEqual(len(doc.items("questions")), 4)
+        self.assertEqual(doc.items("key"), ["24", "7", "18 crayons", "54"])
+        email = E.parse("# Field trip\nDear Families,\nWe are going.\nThank you,\n[Teacher name]")
+        self.assertFalse(email.for_students)
+
+    def test_pdf_has_the_key_on_its_own_page(self):
+        path = E.export(WORKSHEET, os.path.join(self.d, "ws.pdf"))
+        with open(path, "rb") as f:
+            data = f.read()
+        self.assertTrue(data.startswith(b"%PDF"))
+        self.assertEqual(data.count(b"/Type /Page\n") + data.count(b"/Type /Page\r") + data.count(b"/Type /Page "), 2)
+
+    def test_word_file_and_text_formats(self):
+        from docx import Document
+        path = E.export(WORKSHEET, os.path.join(self.d, "ws.docx"))
+        doc = Document(path)
+        text = "\n".join(p.text for p in doc.paragraphs)
+        self.assertIn("Name:", text)
+        self.assertIn("Answer key", text)
+        self.assertIn("w:br", doc.element.xml.split("Answer key")[0][-3000:])          # page break before the key
+        md = open(E.export(WORKSHEET, os.path.join(self.d, "ws.md"))).read()
+        self.assertIn("## Answer key", md)
+        with self.assertRaises(ValueError):
+            E.export(WORKSHEET, os.path.join(self.d, "ws.exe"))
+
+    def test_odd_characters_and_safe_names(self):
+        E.export("# Quotes \u201chi\u201d \u2014 \u00bd and \u03c0\n1. a", os.path.join(self.d, "q.pdf"))
+        E.export("# Odd\x00\x07 bytes\n1. a\x1b", os.path.join(self.d, "odd.docx"))
+        self.assertEqual(E.safe_name("../../etc/passwd"), os.path.join("documents", "passwd.pdf"))
+        self.assertEqual(E.safe_name(" fractions.docx"), os.path.join("documents", "fractions.docx"))
+        self.assertEqual(E.safe_name(""), os.path.join("documents", "document.pdf"))
+
+
+class Classroom(unittest.TestCase):
+    def test_sums_in_answer_keys_are_recalculated(self):
+        self.assertEqual(C.arithmetic_answer("6 × 4 = ____"), 24)
+        self.assertEqual(C.arithmetic_answer("What is 56 ÷ 8?"), 7)
+        self.assertEqual(C.arithmetic_answer("345 + 128 = ____"), 473)
+        self.assertIsNone(C.arithmetic_answer("There are 6 boxes with 3 crayons. How many in all?"))
+        self.assertIsNone(C.arithmetic_answer("7 ÷ 2 = ____"))                   # not a whole number: skipped
+        qs = ["6 × 4 = ____", "8 x 7 = ____", "Name a noun."]
+        self.assertEqual(C.wrong_key_items(qs, ["24", "54", "dog"]), [2])
+
+    def test_reading_level(self):
+        passage = E.parse(READING).sections[0].blocks
+        text = " ".join(v for k, v in passage if k == "para")
+        self.assertLess(C.reading_grade(text), 4.0)
+        hard = ("Photosynthetic organisms synthesize carbohydrates utilizing electromagnetic radiation, "
+                "consequently generating atmospheric oxygen as a byproduct of metabolic transformation.")
+        self.assertGreater(C.reading_grade(hard), 12)
+
+    def test_good_answers_pass_every_kind(self):
+        good = {
+            "worksheet": (WORKSHEET, {"n": 4}),
+            "reading": (READING, {"n": 3}),
+            "lesson_plan": ("# Area of Rectangles\nGrade 3 - Math - 45 minutes\n## Objective\nStudents will be able "
+                            "to find the area of a rectangle by counting square units and multiplying.\n## Materials\n"
+                            "- grid paper\n- rulers\n## Warm-up (5 minutes)\nReview multiplication facts with a "
+                            "quick game where students say the product out loud.\n## Teaching (15 minutes)\n1. Show a "
+                            "rectangle on grid paper.\n2. Count the squares together.\n3. Show that rows times "
+                            "columns gives the same number.\n## Practice (20 minutes)\nStudents draw rectangles and "
+                            "find the area of each one with a partner, then check each other's work.\n## Exit ticket"
+                            "\nWhat is the area of a rectangle that is 3 units by 5 units?", {}),
+            "parent_email": ("# Field Trip Next Friday\nDear Families,\nOur class is going to the science museum "
+                             "next Friday. We will leave at 9:00 and return by 2:00. Please send your child with a "
+                             "packed lunch and a water bottle.\n- Sign and return the permission slip by Wednesday\n"
+                             "- Wear comfortable shoes\nWe are so excited to learn together!\nThank you,\n"
+                             "[Teacher name]", {}),
+            "comments": ("# Report card comments\n1. [Student] has grown so much in reading this term and now reads "
+                         "longer books with confidence.\n2. [Student] uses reading strategies well; a next step is "
+                         "practicing reading aloud at home.", {"n": 2}),
+            "rubric": ("# Favorite Animal Paragraph rubric\nGrade 3\n## Criteria\n- Topic sentence: 3 = clear, 2 = "
+                       "some, 1 = missing\n- Details: 3 = three facts, 2 = two, 1 = one\n- Spelling: 3 = few mistakes, "
+                       "2 = some, 1 = many", {}),
+            "activities": ("# Brain Breaks\n1. Freeze dance: dance and freeze when the music stops.\n2. Simon says: "
+                           "follow the leader's moves.\n3. Stretch and count: stretch while counting to 20.", {"n": 3}),
+            "spelling": ("# Long A Words\nGrade 3 - Spelling\n## Words\n1. rain: The rain fell all day.\n2. cake: "
+                         "We ate cake.\n## Practice idea\nWrite each word three times.", {"n": 2}),
+        }
+        for kind, (text, extra) in good.items():
+            r = C.check_teacher_answer(text, {"type": kind, **extra})
+            self.assertTrue(C.passes(r), (kind, r))
+
+    def test_bad_answers_fail(self):
+        spec = {"type": "worksheet", "n": 4}
+        self.assertFalse(C.check_teacher_answer(WORKSHEET.replace("4. 54", "4. 56"), spec)["key is right"])
+        self.assertFalse(C.check_teacher_answer(WORKSHEET, {"type": "worksheet", "n": 5})["count"])
+        self.assertFalse(C.check_teacher_answer(WORKSHEET.split("## Answer key")[0], spec)["answer key"])
+        self.assertFalse(C.check_teacher_answer("Sure! Here is your worksheet:\n" + WORKSHEET, spec)["layout"])
+        named = "# Comments\n1. Emma has grown so much in reading this year and loves books."
+        self.assertFalse(C.check_teacher_answer(named, {"type": "comments", "n": 1})["no names"])
+
+    def test_every_request_kind_has_a_layout(self):
+        rng = random.Random(2)
+        kinds = set()
+        for _ in range(200):
+            msg, spec = C.teacher_request(rng)
+            kinds.add(spec["type"])
+            self.assertIn("#", C.layout_for(spec))
+        self.assertEqual(kinds, set(C.LAYOUT))
+
+    def test_the_teacher_task_keeps_only_checked_answers(self):
+        def fake_teacher(server, messages, **kw):
+            """Writes a correct worksheet of the asked length (whatever the request), one wrong key in a few."""
+            import re as _re
+            m = _re.search(r"exactly (\d+) numbered questions", messages[-1]["content"])
+            n = int(m.group(1)) if m else 3
+            wrong = n == 8                                                 # a wrong key: must be thrown away
+            qs = "\n".join(f"{i}. {i} × 3 = ____" for i in range(1, n + 1))
+            keys = "\n".join(f"{i}. {i * 3 + (1 if wrong and i == 2 else 0)}" for i in range(1, n + 1))
+            return f"```markdown\n# Times 3\nGrade 3 - Math - Worksheet\n## Questions\n{qs}\n## Answer key\n{keys}\n```"
+        saved = MT.ask_teacher
+        try:
+            MT.ask_teacher = fake_teacher
+            results = [MT.make_teacher(i, None, None, 1) for i in range(60)]
+        finally:
+            MT.ask_teacher = saved
+        kept = [r for r in results if r]
+        self.assertTrue(kept)                                  # correct worksheets pass
+        self.assertTrue(all(r["spec"]["type"] == "worksheet" and r["spec"]["n"] != 8 for r in kept))
+        self.assertTrue(all(r["answer"].startswith("# ") for r in kept))
+        self.assertLess(len(kept), 40)                         # everything else is thrown away
+        chats = MSD.teacher_chats(kept, random.Random(0))
+        self.assertEqual(chats[0]["messages"][1]["content"], kept[0]["answer"])
+        self.assertEqual(chats[0]["kind"], "teacher_worksheet")
 
 
 if __name__ == "__main__":

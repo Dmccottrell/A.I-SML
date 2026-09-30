@@ -21,6 +21,11 @@ WHAT THIS FILE DOES
                     ending in "Quick check: ...?", the student's answer
                     (right or wrong) and the helper's feedback. Lessons that
                     break the format are thrown away.
+      teacher       Materials for the Teacher assistant skill pack (Beta):
+                    worksheets with answer keys, reading passages, lesson
+                    plans, spelling lists, parent emails, report card comments,
+                    rubrics, activities (3rd grade first). Checked by
+                    classroom.py: counts, recalculated answer keys, reading level.
 
     Every result is checked and appended to data/v3/teacher/<task>.jsonl.
     It is resumable: run the same command again and finished examples are
@@ -52,6 +57,7 @@ Usage:
     python make_teacher_data.py --task lookup --n 30000
     python make_teacher_data.py --task instructions --n 8000
     python make_teacher_data.py --task study --n 3000     (Study helper skill pack)
+    python make_teacher_data.py --task teacher --n 3000   (Teacher assistant skill pack)
     python make_teacher_data.py --task lookup --n 20      (a quick check first)
 """
 import argparse
@@ -337,7 +343,28 @@ def make_study(i, server, wiki, seed):
             "student_correct": correct, **info}
 
 
-TASKS = {"lookup": make_lookup, "instructions": make_instruction, "study": make_study}
+# ------------------------------------------------------------------ task: teacher assistant materials (skill pack, Beta)
+TEACHER_SYSTEM = ("You help an elementary school teacher make classroom materials. Follow the requested layout "
+                  "exactly: it is turned into a printable page. Everything must be accurate and right for the "
+                  "grade. Never invent student names (use [Student]). Don't add anything before the # title or "
+                  "after the last section, and don't mention being an AI.")
+
+
+def make_teacher(i, server, wiki, seed):
+    """One teacher-assistant example: a teacher's request and a finished, checked document."""
+    import classroom
+    rng = random.Random(seed * 1_000_003 + i)
+    request, spec = classroom.teacher_request(rng)
+    prompt = f"{request}\n\nUse exactly this layout:\n{classroom.layout_for(spec)}"
+    answer = ask_teacher(server, [{"role": "system", "content": TEACHER_SYSTEM},
+                                  {"role": "user", "content": prompt}], temperature=0.7, max_tokens=900)
+    answer = re.sub(r"^```\w*\n|\n?```$", "", answer.strip()).strip()        # a ```markdown fence around it
+    if not classroom.passes(classroom.check_teacher_answer(answer, spec)):
+        return None
+    return {"i": i, "request": request, "answer": answer, "spec": spec}
+
+
+TASKS = {"lookup": make_lookup, "instructions": make_instruction, "study": make_study, "teacher": make_teacher}
 
 
 # ------------------------------------------------------------------ running a task

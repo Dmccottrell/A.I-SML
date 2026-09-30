@@ -3,8 +3,8 @@ skills.py - Skill packs: small add-ons (LoRA, see lora.py) that make the chat mo
 
 WHAT THIS FILE DOES
     A skill pack is a small file of extra weights (~19 MB for v3) trained for one job, on top of a finished chat model
-    (chat.pt). v4 plans six (study, stories, IT help, fact checking, documents, coding) and a router
-    that picks one per message. This file holds:
+    (chat.pt). v4 plans several (study, teacher, stories, IT help, fact checking, documents, coding, and
+    more ideas listed as "planned") and a router that picks one per message. This file holds:
 
       SKILLS       what each pack is: its name, what it does, words that suggest it (for the router),
                    and whether it is ready or still a Beta
@@ -12,8 +12,8 @@ WHAT THIS FILE DOES
       route()      the Beta router: picks a pack for a message by its words (v4 replaces this with a
                    small trained classifier)
 
-    The first pack is the **Study helper (Beta)**, trained and tested on v3 so the recipe is proven
-    before v4. A pack only fits the model it was trained on: v4's brain gets its own packs (retraining
+    The first packs are the **Study helper** and the **Teacher assistant** (both Beta), trained and tested
+    on v3 so the recipe is proven before v4. A pack only fits the model it was trained on: v4's brain gets its own packs (retraining
     takes under an hour each), from the same data.
 
     Build and train one (details in docs/SKILLS.md):
@@ -69,6 +69,22 @@ SKILLS = {
                  (r"\d\s*[a-z]?\s*[-+*/=^]\s*\d", 2),
                  (r"\bhelp me (understand|study|learn|with my)\b", 2), (r"\bi (don't|do not) (get|understand)\b", 2),
                  (r"\bstep by step\b", 2), (r"\bquiz me\b", 2), (r"\bexplain\b", 1))),
+    "teacher": Skill(
+        "teacher", "Teacher assistant",
+        "Makes classroom materials for teachers (3rd grade first): worksheets with answer keys, reading "
+        "passages with questions, lesson plans, spelling lists, parent emails, report card comments, rubrics "
+        "and activities, in a layout that saves as PDF or Word (export_doc.py)",
+        "beta",
+        words=("worksheet", "worksheets", "rubric", "parents", "parent", "newsletter", "students", "classroom",
+               "spelling", "comments", "recess", "activities", "passage", "printable", "handout", "centers"),
+        phrases=((r"\bworksheets?\b", 3), (r"\blesson plans?\b", 3), (r"\banswer key\b", 3), (r"\brubric\b", 3),
+                 (r"\bmy (class|students|kids|classroom|\w+ graders)\b", 3),
+                 (r"\bmy \w+[- ]grade (class|classroom|students|kids)\b", 3),
+                 (r"\b(email|letter|note|newsletter) (to|for) (the )?(parents|families)\b", 3),
+                 (r"\breport card\b", 3), (r"\bexit tickets?\b", 3), (r"\bbrain breaks?\b", 3),
+                 (r"\bspelling (list|words|test)\b", 3), (r"\breading passage\b", 3),
+                 (r"\b(practice|word) problems for\b", 3), (r"\bfor (my )?(\d(st|nd|rd|th)|first|second|third|fourth|fifth)[- ]grad(e|ers)\b", 2),
+                 (r"\bmorning meeting\b", 3), (r"\bindoor recess\b", 3), (r"\bearly finishers?\b", 3))),
     # Planned for v4 (listed so the router and docs know them; no data or training yet)
     "stories": Skill("stories", "Story writer", "Creative writing and stories", "planned",
                      words=("story", "poem", "write", "character", "tale", "once")),
@@ -81,6 +97,21 @@ SKILLS = {
                   words=("summarize", "summary", "rewrite", "draft", "letter", "to-do", "notes", "email")),
     "coding": Skill("coding", "Coding helper", "Small coding tasks in a loop with tests", "planned",
                     words=("code", "python", "function", "bug", "script", "javascript", "html", "error")),
+    # More ideas for v4, to look at later (the order will follow what Beta testers ask for)
+    "writing": Skill("writing", "Writing coach", "Feedback on essays and stories: what's good and what to fix, "
+                     "without rewriting it for you", "planned", words=("essay", "paragraph", "feedback", "draft")),
+    "planner": Skill("planner", "Planner", "Turns a busy week into a schedule, with the reminders tool", "planned",
+                     words=("schedule", "plan", "week", "calendar", "remind", "organize")),
+    "recipes": Skill("recipes", "Recipe and meal helper", "Meal plans, shopping lists, what to make with what "
+                     "you have", "planned", words=("recipe", "cook", "dinner", "meal", "ingredients", "grocery")),
+    "budget": Skill("budget", "Budget helper", "Simple budgets and savings plans, exact numbers with the "
+                    "calculator", "planned", words=("budget", "save", "savings", "spend", "bills", "money")),
+    "language": Skill("language", "Language tutor", "Practice conversations and vocabulary (e.g. Spanish "
+                      "basics)", "planned", words=("spanish", "french", "translate", "vocabulary", "language")),
+    "career": Skill("career", "Resume and job helper", "Resumes, cover letters and interview practice", "planned",
+                    words=("resume", "cover letter", "interview", "job", "hiring")),
+    "kids": Skill("kids", "Kids' mode", "Extra-safe, simple answers for children, with the Study helper at "
+                  "elementary level", "planned", words=()),
 }
 
 PACK_FORMAT = 1

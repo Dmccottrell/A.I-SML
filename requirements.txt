@@ -7,3 +7,6 @@ datasets
 safetensors
 tokenizers
 transformers
+# saving answers as PDF / Word files (export_doc.py, the Teacher assistant)
+fpdf2
+python-docx
