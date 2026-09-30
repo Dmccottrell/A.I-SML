@@ -95,6 +95,10 @@ p.add_argument("--pilot", type=int, nargs="?", const=60, default=0,
 p.add_argument("--no_compile", action="store_true", help="don't try torch.compile")
 p.add_argument("--backup_dir", default=None, help="also copy latest.pt to this folder (e.g. another drive)")
 p.add_argument("--backup_every_hours", type=float, default=24)
+p.add_argument("--hub_backup", default=os.environ.get("HUB_BACKUP"),
+               help="private Hugging Face repo (e.g. yourname/aisml-checkpoints): keep a copy of latest.pt OFF "
+                    "this machine, uploaded every --hub_every_hours and when training stops (see hub_backup.py)")
+p.add_argument("--hub_every_hours", type=float, default=2)
 p.add_argument("--notify", default=os.environ.get("NTFY_TOPIC"),
                help="ntfy.sh topic: send progress messages to your phone (see notify.py)")
 p.add_argument("--notify_every", type=int, default=250, help="steps between progress messages")
@@ -350,6 +354,37 @@ def maybe_backup():
         print(f"WARNING: backup to {args.backup_dir} failed ({e}). Training continues.")
 
 
+# ---- off-machine backup (a private Hugging Face repo), so a machine that dies doesn't take the run with it ----
+hub = None
+if args.hub_backup and IS_MAIN and not args.pilot:
+    from hub_backup import HubBackup
+    def _hub_tell(message):
+        print(message, flush=True)
+        if "FAILED" in message or "can't" in message:      # only problems go to the phone
+            phone(message, "backup")
+    hub = HubBackup(args.hub_backup, V.name, tell=_hub_tell)
+    if hub.check():
+        hub.last_upload = time.time()          # the first upload comes after --hub_every_hours
+        print(f"hub backup: latest.pt goes to {args.hub_backup} every {args.hub_every_hours:g} h and when training stops")
+    else:
+        hub = None
+
+
+def hub_upload(next_iter, wait=False, name="latest.pt", path=None):
+    """Upload the newest checkpoint to the hub backup (in the background, or now and wait)."""
+    if hub is None:
+        return
+    path = path or LATEST_PATH
+    if wait:
+        print("uploading the off-machine backup before stopping (Ctrl+C again to skip it)...", flush=True)
+        try:
+            hub.upload(path, next_iter, name)
+        except KeyboardInterrupt:
+            print("backup upload skipped")
+    else:
+        hub.upload_in_background(path, next_iter, name)
+
+
 # ---- progress log: metrics.csv always, TensorBoard graphs if it's installed ----
 tb = None
 if not args.pilot and IS_MAIN:
@@ -473,6 +508,8 @@ try:
         if it > start_iter and it % S.save_every == 0 and not args.pilot:
             save_latest(it)
             maybe_backup()
+            if hub is not None and hub.due(args.hub_every_hours):
+                hub_upload(it)
         if it == DECAY_START and not args.pilot:
             save_latest(it, PRE_DECAY_PATH)      # can be trained further later
             mprint(f"step {it}: learning rate starts to fade"
@@ -556,7 +593,8 @@ try:
                 save_latest(it + 1)
                 if IS_MAIN:
                     print(f"\nrun window over: saved at iteration {it + 1}. Training resumes at the next window.")
-                    phone(f"window over: saved at step {it + 1:,}", "paused")
+                    hub_upload(it + 1, wait=True)
+                    phone(f"window over: saved at step {it + 1:,}" + (" (backed up)" if hub else ""), "paused")
                     open(PAUSE_MARKER, "w").close()     # torchrun can't pass on an exit code, so leave a note
                 if DIST:
                     dist.barrier()                # let the first GPU finish saving before anyone exits
@@ -567,6 +605,8 @@ except KeyboardInterrupt:
     # Ctrl+C: iteration `it` didn't finish, so resume will redo it
     optimizer.zero_grad(set_to_none=True)
     save_latest(it)
+    if IS_MAIN:
+        hub_upload(it, wait=True)
     mprint(f"\npaused at iteration {it}. Run the same command again to resume.")
     phone(f"paused at step {it:,} (stopped by you)", "paused")
     sys.exit(0)
@@ -618,6 +658,8 @@ if IS_MAIN:
             shutil.copyfile(FINAL_PATH, os.path.join(args.backup_dir, f"{V.name}_final.pt"))
         except OSError as e:
             print(f"WARNING: couldn't copy final.pt to {args.backup_dir} ({e}). It is safe in {FINAL_PATH}.")
+    hub_upload(S.max_iters + 1, wait=True)
+    hub_upload(S.max_iters, wait=True, name="final.pt", path=FINAL_PATH)
     print(f"done. best val loss {best_val:.3f} (ckpt.pt); final weights saved in {FINAL_PATH}")
     phone(f"FINISHED. best val loss {best_val:.3f}. final weights saved.", "done")
 if DIST:

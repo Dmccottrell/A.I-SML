@@ -16,6 +16,7 @@ Rent a GPU by the hour from a service such as RunPod or Vast.ai. What to look fo
 | **RTX 4090 (24 GB)** or better | about 2x your 4070. A 24 GB card also has room to spare for v3.5. |
 | **100+ GB disk** (200 GB for v3.5) | tokenized data ~tens of GB, checkpoints, cache |
 | **Linux with Docker template "PyTorch 2.x / CUDA 12.x"** | PyTorch is already installed |
+| **Reliability 99%+** (Vast shows it on each offer) | a host that goes offline takes your run with it until it's back. Our first host (~98%) went offline mid-run. A few cents more per hour is worth it |
 | **Interruptible / spot** (optional) | cheaper. It can be shut down any time; `run_training.py` resumes from the last save, so you lose at most ~50 minutes. On-demand costs more but never stops. |
 
 Check the price per hour and the *storage* price. Storage is billed even while the machine is
@@ -162,6 +163,27 @@ copy of the model and reads different text, and their gradients are averaged onc
 - **Debug check:** `DDP_SELFCHECK=1` makes it print, at the end of a run, whether all GPUs ended with identical weights.
 - **v3.5 memory:** use `optimizer="adamw"` (not `adamw_cpu`) on multi-GPU machines, otherwise each GPU needs its own ~17 GB of RAM.
 - **Tested** on a CPU with two processes (identical weights, pause and resume, window stop, Ctrl+C); **not yet on real GPUs**.
+
+## Off-machine backup (do this: a rented machine can disappear)
+`--backup_dir` copies `latest.pt` to another folder on the SAME machine. If the machine goes offline,
+that copy is stuck too. `--hub_backup` also uploads it to a **private Hugging Face repo** every 2 hours
+(`--hub_every_hours`) and whenever training stops (end of the run window, Ctrl+C, finished), in the
+background so training doesn't wait. Then any machine can continue from it.
+
+One-time setup (details at the top of `hub_backup.py`):
+1. huggingface.co: create a **private** model repo, e.g. `yourname/aisml-checkpoints`.
+2. Settings -> Access Tokens -> a **fine-grained** token with **write** access to that repo only.
+3. On the cloud machine (and the PC): `hf auth login`, paste it. Never paste it into a chat or a file.
+
+Then:
+```
+python handoff.py up --version v3 --host root@IP --port PORT --start --hub_backup yourname/aisml-checkpoints --notify <topic>
+python run_training.py --version v3 --hub_backup yourname/aisml-checkpoints ...          (on the PC, optional)
+python hub_backup.py down --version v3 --repo yourname/aisml-checkpoints               (get the newest copy anywhere)
+python hub_backup.py status --version v3 --repo yourname/aisml-checkpoints
+```
+`down` only replaces your `latest.pt` if the backup is newer. Only the newest copy is kept in the repo
+(~5 GB for v3). Upload problems never stop training; they are printed and sent to your phone.
 
 ## 8. Do not forget
 
