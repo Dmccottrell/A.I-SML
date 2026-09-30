@@ -11,7 +11,7 @@ version's test-sheet results decide what the next one focuses on.
 | **v2** ✅ | Knowledge | 88M | General Q&A, explanations, multi-turn chat | RTX 4070, ~18 hours | $0 |
 | **v3** 🛠️ | Accuracy | ~400M | Looks things up (RAG), says "I don't know", handles corrections, exact instructions, preference training (DPO), remembers you, reply suggestions, basic code; v3-long stretches it to 8K–32K | RTX 4070 afternoons + a rented RTX 3090 overnight (25.8 / 17.5 s/step) | ~$30–40 cloud + electricity |
 | **v3.5** | Scale at home | **~1.05B** | Same features as v3 on a much bigger brain; reads 30B tokens | RTX 4070, ~3.5–4.5 months nonstop (pausable) | ~$110–270 electricity |
-| **v4** | Abilities | Best base so far (1B) | Specialist skill packs + router, tools, voice, own app | RTX 4070 | $0 |
+| **v4** | Abilities | v3.5 **trained longer** (1B, +15–30B tokens) | Specialist skill packs + router, tools, voice, own app | RTX 4070, ~1.5–4 months while the app is built | ~$55–270 electricity |
 | **v5** | Scale | 3B | Genuinely capable assistant | Cloud (from scratch) **or** RTX 4070 (fine-tune an open 3B) | ~$1,500+ **or** $0 |
 | **v6** | Bigger small | **5B** | Stronger reasoning, coding and knowledge; 8k memory; powers online mode | Cloud (or grown from v5) | ~$4,000–6,000 (less with growth or a grant) |
 | **v6.5** | Borderline medium | **7B** | The best model for PC and server; the app's online brain | Cloud (or grown from v6) | ~$8,000–12,000 (less with growth or a grant) |
@@ -112,7 +112,7 @@ Scores are saved next to each checkpoint, so the old version isn't re-tested eve
 | **Reliable hosts** | Vast.ai hosts vary; ours dropped from 98% to 73% reliability in a night | rent 99%+ reliability (or Secure Cloud) from now on |
 | **8-bit training on the 4070** | ~1.3-1.5x faster matrix math (the 3090 can't) | idea; needs a pilot |
 | **Better data mix** (some DCLM-style general web next to FineWeb-Edu) | better everyday common sense (HellaSwag) at the same cost | idea for v3.5's data build |
-| **More reading** | every doubling of tokens helps; 1B keeps improving past 30B | budget decision for v3.5 (30B → 60-100B) |
+| **More reading** | every doubling of tokens helps; 1B keeps improving past 30B | chosen: **v4's brain is v3.5 continued** (+15–30B tokens, ~43–58 per parameter) |
 
 **Tokens per parameter (how much each version reads for its size):** v2 ~30, v3 ~30 (11.8B tokens /
 394M), v3.5 ~29. "Compute-optimal" is ~20; modern small models read far more (SmolLM2-360M: ~11,000,
@@ -199,7 +199,9 @@ and has a test-sheet score recorded as the **baseline** for v3. ✅ All done.
 
 **Status:** pretraining is running (PC in the afternoon, a rented RTX 3090 overnight). Step 2,000:
 val loss 3.426 and **HellaSwag 33.4%** (500-question mini-exam), already above v2's final 28.4% at 4% of
-the training. Built while it trains and waiting for the finished model: chat lessons with memory and
+the training. Step 4,000: val 2.900 and **HellaSwag 35.6%**, ahead of the forecast: v3's final forecast
+rises from 37–42% to ~40–45%, v3.5's from 45–52% to ~49–55%, and v4 (v3.5 trained longer) ~51–58%.
+Two more exams (steps 6,000 and 8,000) confirm or undo this. Built while it trains and waiting for the finished model: chat lessons with memory and
 reply suggestions, NEFTune, checkpoint averaging, DPO with rule-checked pairs (`make_dpo_pairs.py`,
 `dpo.py`), `compare.py` (the release gate against v2), the context meter, long-context tools for v3-long,
 and an off-machine checkpoint backup (`hub_backup.py`). Next after pretraining: average → chat-tune →
@@ -270,7 +272,7 @@ Goal: the biggest brain that can realistically be trained at home, as cheaply as
 training time, but models keep improving with more reading. 30B gives a model roughly as good as a
 ~1.3–1.5B one trained the standard way, while staying 1B-sized on the phone (same speed and file
 size). The extra ~1.5 months and ~$50 are paid once. If more is wanted later, the run can continue
-from `pre_decay.pt` (e.g. to 40B) instead of starting over.
+from `pre_decay.pt` instead of starting over: that is exactly what **v4** does (see [v4's brain](#v4s-brain-v35-trained-longer)).
 
 **Why ~1.05B and not 1.15B or 1.3B:** training needs the weights, gradients and optimizer on a 12 GB
 card at once. ~1.05B fits with CPU offload plus gradient checkpointing; 1.15B is tighter (+1–2 test points, +15% time); 1.3B
@@ -346,14 +348,51 @@ many thinly). With 1B parameters there's room for more:
 - **Mandatory pilot runs**: ~1.05B (and 1.15B if memory allows), to confirm memory, speed and falling loss
 
 **While it trains:** the GPU is busy, so this is the time to *write* v4's code (the coding
-harness, router, website) and test it on small models, then train the skill packs afterwards.
+harness, router, website) and test it on small models (and on v3). **Keep `pre_decay.pt`** (saved at
+step 103,500, before the fade): v4's brain continues from it.
 
 **Checkpoints:** keep `latest.pt` backed up (`--backup_dir`). A five-month run is worth protecting.
 ---
 
 ## v4: Abilities
 
-Goal: turn the model into a **personal assistant** with specialist skills.
+Goal: turn the model into a **personal assistant** with specialist skills, on a **better-read brain**.
+
+### v4's brain: v3.5 trained longer
+
+v4 doesn't start a new brain. It **continues v3.5** from `pre_decay.pt` (the copy saved just before
+v3.5's fade), reads more at the steady learning rate, then fades again on a new anneal set. Same trick
+as "v3+" would be for v3.
+
+| | v3.5 | v4 |
+|---|---|---|
+| Size, phone speed, download | 1.05B, ~650 MB (Q4) | **the same** |
+| Reading | 30B tokens (~29 per parameter) | **+15B or +30B more** (~43–58 per parameter) |
+| HellaSwag forecast | ~49–55% | **~51–58%** (+1–2 points for +15B, +2–3 for +30B) |
+| Where / how long | RTX 4070, ~3.5–4.5 months | RTX 4070: **~1.5–2 months (+15B) or ~3–4 months (+30B)**, faster with cloud nights or Muon |
+| Cost | ~$110–270 electricity | ~$55–270 electricity |
+
+**Why this way:** v4's abilities are mostly *code* (app, router, tools, voice), and the GPU would sit idle
+while that's written. Instead, the PC trains v4's brain in the background:
+
+```
+v3.5 run ── pre_decay.pt ── fade ── ships as v3.5 (the app and skill packs are built and tested on it)
+               │
+               └── v4 brain: continue +15–30B tokens ── new fade ── skill packs, thinking and tools
+                                                                    retrained on it (days) ── v4 ships
+```
+
+- **Data:** new pages, never repeated: more of FineWeb-Edu's `sample-100BT` than v3.5 read, more code
+  and math, plus a few percent of **skill-aware text** (tool calls, thinking steps, code with tests), so
+  the skill packs start from a base that already knows those formats. A second pass over v3.5's data is
+  the fallback. `prepare_web_data.py` will need a way to skip what v3.5 already read (to build).
+- **How much:** +15B or +30B is decided once v3.5's scores are in.
+- **Gate:** v4's brain must beat v3.5 in `compare.py` before the skill packs move to it.
+- **Code needed** (small): a `v4` entry in `config.py` with `init_from` = v3.5's `pre_decay.pt`, the new
+  step total and fade point, and the new data folder.
+- **Not chosen (for now):** growing v3.5 deeper (`grow.py`, 22 → 32 layers, ~1.5B) would add ~4–6 points
+  but doesn't fit in the 4070's 12 GB (cloud only, ~$400–600) and is ~1.45× slower on phones. It stays
+  an option for a later PC/online model; `growth_test.py` measures what growth saves first.
 
 ### Specialists (skill packs + router)
 
@@ -366,7 +405,7 @@ You ─► Router ─► Base ──┼─► IT helper       (printers, network
                         └─► Coding helper   (works in a loop, small tasks)
 ```
 
-- **One base model** (v3.5's 1B, or v3 until it's ready) holds general language and knowledge.
+- **One base model** (v4's brain: v3.5 trained longer; v3.5 or v3 until it's ready) holds general language and knowledge.
 - **Skill packs (LoRA adapters):** small add-ons of a few MB each, trained in under an hour
   each. Adding one never breaks the others. llama.cpp supports them.
 - **Router:** a small classifier that picks the right skill pack for each question.
@@ -659,10 +698,10 @@ battery, not a bigger download.
 | Most capable | **Edda** | 5-7B | v6, v6.5 |
 | Top | **Norn** | 13-30B | v7, v8 (see [Beyond v6.5](#beyond-v65-v7-v8-and-max)) |
 
-So v4 (Skald 2) is a new *generation* of the small tier, not a bigger model. It keeps v3.5's brain (no cloud cost).
-Optional, if time allows: a short "skill-aware" extra reading round on v3.5's weights (a few billion
-tokens with tool calls, thinking steps and code-with-tests mixed in) so the skill packs start from a base
-that already knows those formats.
+So v4 (Skald 2) is a new *generation* of the small tier, not a bigger model: v3.5's brain **trained longer**
+(15–30B more tokens, including some "skill-aware" text with tool calls, thinking steps and code with tests,
+so the skill packs start from a base that already knows those formats), plus the abilities. No cloud needed.
+See [v4's brain](#v4s-brain-v35-trained-longer).
 
 **Names (working names):** a family of Norse storytelling words, since these are language models. A *rune* is
 a small written character, a *skald* a Norse poet, a *saga* a long story, the *Eddas* the great collections
