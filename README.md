@@ -80,7 +80,9 @@ data, code and training.
 | `generate.py` | 6 | Generate text or chat with your model. Chat options: `--lookup` (Wikipedia notes), `--memory` (remembers you), `--suggest` (reply suggestions), `--context` (memory meter) |
 | `make_chat_data.py` | 7 | v1: builds `data/chat.jsonl` fine-tuning examples automatically |
 | `make_chat_data_v2.py` | 7 | v2: builds `data/v2/chat.jsonl` (multi-turn conversations) |
-| `finetune.py` | 7 | Teach it a chat format using the version's `chat.jsonl`. Ctrl+C pauses; run again to resume |
+| `finetune.py` | 7 | Teach it a chat format using the version's `chat.jsonl`. Ctrl+C pauses; run again to resume. NEFTune (a little noise while training, for better answers) is on from v3 |
+| `make_dpo_pairs.py`, `dpo.py` | 7 | Preference training: the chat model answers each question several times, answers are scored by checkable rules (facts from the notes, "I don't know" when right, counts), and it learns to prefer the better one |
+| `average_ckpts.py` | 6 | Averages the last few snapshots of a run (kept during the fade) for a small free improvement |
 | `evaluate.py` + `eval/prompts.jsonl` | 6–7 | 20-question test sheet that scores a chat model |
 | `exam.py` | 6 | HellaSwag, a public common-sense test (works on pretrained models; compare versions) |
 | `wiki_index.py` | v3 | Searchable copy of Wikipedia for lookups (build + search) |

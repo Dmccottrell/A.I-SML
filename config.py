@@ -53,6 +53,8 @@ class TrainSettings:
     schedule: str = "cosine"
     decay_frac: float = 0.1
     exam_every: int = 0         # mini-exam (500 HellaSwag questions) every N steps; 0 = off
+    snapshot_every: int = 0     # during the wsd fade: keep the weights every N steps (snap_<step>.pt) for
+                                # average_ckpts.py (the average of the last few is usually a bit better); 0 = off
     compile: bool = False       # try torch.compile for speed (falls back automatically if unavailable)
     # Long-context stretching (docs/LONG_CONTEXT.md). Both off for normal pretraining.
     init_from: str = ""         # a fresh run starts from these weights (e.g. v3's final.pt) instead of random ones
@@ -65,6 +67,12 @@ class FinetuneSettings:
     epochs: int = 3             # passes over all chat examples
     batch_size: int = 16
     lr: float = 5e-5
+    # NEFTune: add a little random noise to the word vectors while fine-tuning (never when chatting).
+    # Published results: noticeably better chat answers for free. 0 = off; 5 is the paper's usual value.
+    neftune_alpha: float = 0.0
+    # Preference training (dpo.py): how strongly to prefer the better answer, and a gentle learning rate
+    dpo_beta: float = 0.1
+    dpo_lr: float = 2e-6
 
 
 @dataclass
@@ -184,9 +192,10 @@ VERSIONS = {
             schedule="wsd",      # steady, then fade over the last 10% on the anneal data
             decay_frac=0.1,
             exam_every=2000,     # HellaSwag mini-exam: is it really getting smarter?
+            snapshot_every=900,  # 5 snapshots in the last 4,500 steps, for average_ckpts.py (~1.6 GB each)
             compile=True,        # tested by --pilot; turns itself off if it doesn't work
         ),
-        finetune=FinetuneSettings(epochs=2, batch_size=4, lr=5e-5),
+        finetune=FinetuneSettings(epochs=2, batch_size=4, lr=5e-5, neftune_alpha=5.0),
         chat_memory=True,
     ),
     "v3.5": Version(
@@ -233,9 +242,10 @@ VERSIONS = {
             schedule="wsd",
             decay_frac=0.1,
             exam_every=5000,
+            snapshot_every=2300,     # 5 snapshots in the last 11,500 steps (~4.2 GB each)
             compile=True,
         ),
-        finetune=FinetuneSettings(epochs=2, batch_size=2, lr=3e-5),
+        finetune=FinetuneSettings(epochs=2, batch_size=2, lr=3e-5, neftune_alpha=5.0),
         chat_memory=True,
     ),
 }
