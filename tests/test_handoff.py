@@ -45,6 +45,18 @@ class CloudPaths(unittest.TestCase):
         a.update(kw)
         return types.SimpleNamespace(**a)
 
+    def test_still_training_means_a_gpu_program_not_just_a_window(self):
+        bin_dir = os.path.join(self.home, "bin")
+        os.makedirs(bin_dir)
+        fake = os.path.join(bin_dir, "nvidia-smi")
+        env = dict(os.environ, HOME=self.home, PATH=bin_dir + os.pathsep + os.environ["PATH"])
+        for pids, want in (("", "no"), ("1234\n", "yes")):
+            with open(fake, "w") as f:
+                f.write(f"#!/bin/sh\nprintf '{pids}'\n")
+            os.chmod(fake, 0o755)
+            r = subprocess.run(["bash", "-c", H.STILL_TRAINING], capture_output=True, text=True, env=env)
+            self.assertEqual(r.stdout.strip(), want, pids)
+
     def test_quoting(self):
         self.assertEqual(H.rq("~/A.I-SML/a b"), "\"$HOME\"'/A.I-SML/a b'")
         self.assertEqual(H.rq("/root/x"), "/root/x")
