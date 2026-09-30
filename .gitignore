@@ -13,3 +13,6 @@ muon_test/
 .venv/
 __pycache__/
 *.pyc
+
+# Files the AI saved for you (worksheets, lesson plans)
+documents/

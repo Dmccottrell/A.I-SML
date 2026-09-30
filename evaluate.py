@@ -24,6 +24,7 @@ Usage:  python evaluate.py                        (v1 chat model)
         python evaluate.py --version v2 --ckpt checkpoints/dev/v2/ckpt.pt
         python evaluate.py --version v3 --lookup
         python evaluate.py --version v2 --prompts eval/prompts_v3.jsonl   (v2 on v3's sheet)
+        python evaluate.py --version v3 --skill study     (with a skill pack on: did everyday answers get worse?)
 
 The report is saved next to the checkpoint: eval_<checkpoint name>.md
 """
@@ -45,6 +46,7 @@ p.add_argument("--lookup", action="store_true", help="give the model Wikipedia n
 p.add_argument("--db", default=os.path.join("data", "wiki", "wiki.db"))
 p.add_argument("--tokens", type=int, default=150)
 p.add_argument("--repetition_penalty", type=float, default=1.15)
+p.add_argument("--skill", default=None, help="switch on this skill pack (skills.py) for every question")
 args = p.parse_args()
 V = get_version(args.version)
 ckpt_path = args.ckpt or os.path.join(V.ckpt_dir, "chat.pt")
@@ -59,6 +61,9 @@ device = "cuda" if torch.cuda.is_available() else "cpu"
 model, _ = load_checkpoint(ckpt_path, device)
 tok = BPETokenizer.load(os.path.join(V.data_dir, "tokenizer.json"))
 _, _, eot = special_ids(tok)
+if args.skill:
+    from skills import load_pack, pack_path
+    load_pack(model, pack_path(V.ckpt_dir, args.skill))
 
 with open(args.prompts, encoding="utf-8") as f:
     tests = [json.loads(line) for line in f if line.strip()]
@@ -84,7 +89,7 @@ def answer(question, history=()):
 
 passed = defaultdict(int)
 total = defaultdict(int)
-lines = [f"# Evaluation: {ckpt_path}\n"]
+lines = [f"# Evaluation: {ckpt_path}" + (f" + skill pack {args.skill}" if args.skill else "") + "\n"]
 def check(t, reply):
     """True if `reply` passes test `t` (see the extra fields at the top of this file)."""
     low = reply.lower()
@@ -117,7 +122,8 @@ score = f"TOTAL: {sum(passed.values())}/{sum(total.values())}"
 print(score)
 lines[1:1] = ["\n".join(summary) + f"\n\n**{score}**\n"]
 
-report = os.path.join(os.path.dirname(ckpt_path), f"eval_{os.path.splitext(os.path.basename(ckpt_path))[0]}.md")
+report = os.path.join(os.path.dirname(ckpt_path), f"eval_{os.path.splitext(os.path.basename(ckpt_path))[0]}"
+                      + (f"_{args.skill}" if args.skill else "") + ".md")
 with open(report, "w", encoding="utf-8") as f:
     f.write("\n".join(lines))
 print("report saved to", report)

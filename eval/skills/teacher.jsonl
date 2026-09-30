@@ -1,0 +1,18 @@
+{"prompt": "Make a 8-question worksheet on multiplication facts for 7s for my 3rd grade class, with an answer key.", "route": "teacher", "spec": {"type": "worksheet", "n": 8}}
+{"prompt": "Can you make me a worksheet on equivalent fractions for 3rd grade? 6 questions and an answer key please.", "route": "teacher", "spec": {"type": "worksheet", "n": 6}}
+{"prompt": "I need 10 practice problems on division facts within 100 for 3rd grade students, with answers.", "route": "teacher", "spec": {"type": "worksheet", "n": 10}}
+{"prompt": "Make a 5-question worksheet on nouns, verbs and adjectives for my 3rd grade class, with an answer key.", "route": "teacher", "spec": {"type": "worksheet", "n": 5}}
+{"prompt": "Write a short reading passage about honeybees for 3rd grade, with 4 comprehension questions and an answer key.", "route": "teacher", "spec": {"type": "reading", "n": 4}}
+{"prompt": "Write a short reading passage about sea turtles for 3rd grade, with 3 comprehension questions and an answer key.", "route": "teacher", "spec": {"type": "reading", "n": 3}}
+{"prompt": "Write a 45-minute lesson plan on area of rectangles for 3rd grade.", "route": "teacher", "spec": {"type": "lesson_plan"}}
+{"prompt": "Write a 30-minute lesson plan on the life cycle of a butterfly for 3rd grade.", "route": "teacher", "spec": {"type": "lesson_plan"}}
+{"prompt": "Make a 3rd grade spelling list of 8 words with long a (a_e, ai, ay), with a sentence for each word.", "route": "teacher", "spec": {"type": "spelling", "n": 8}}
+{"prompt": "Write a short email to parents about an upcoming field trip to the science museum.", "route": "teacher", "spec": {"type": "parent_email"}}
+{"prompt": "Write 3 report card comments for a 3rd grade student who is improving in reading.", "route": "teacher", "spec": {"type": "comments", "n": 3}}
+{"prompt": "Make a simple rubric for a paragraph about their favorite animal for 3rd grade.", "route": "teacher", "spec": {"type": "rubric"}}
+{"prompt": "Give me 6 brain break ideas for my 3rd grade class.", "route": "teacher", "spec": {"type": "activities", "n": 6}}
+{"prompt": "Give me 5 indoor recess ideas for my 3rd grade class.", "route": "teacher", "spec": {"type": "activities", "n": 5}}
+{"prompt": "I don't understand how to add fractions with different denominators.", "route": "study"}
+{"prompt": "Can you explain photosynthesis?", "route": "study"}
+{"prompt": "What is 6 times 7?", "route": null}
+{"prompt": "hi", "route": null}
