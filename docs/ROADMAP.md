@@ -9,7 +9,7 @@ version's test-sheet results decide what the next one focuses on.
 |---|---|---|---|---|---|
 | **v1** ✅ | Learn the pipeline | 30M | Tells children's stories; runs offline on the phone | RTX 4070, 4 hours | $0 |
 | **v2** ✅ | Knowledge | 88M | General Q&A, explanations, multi-turn chat | RTX 4070, ~18 hours | $0 |
-| **v3** 🛠️ | Accuracy | ~400M | Looks things up (RAG), says "I don't know", handles corrections, exact instructions, preference training, basic code | RTX 4070, ~13–14 days nonstop (pilot: ~25 s/step with `torch.compile`) | ~$15–20 electricity |
+| **v3** 🛠️ | Accuracy | ~400M | Looks things up (RAG), says "I don't know", handles corrections, exact instructions, preference training (DPO), remembers you, reply suggestions, basic code; v3-long stretches it to 8K–32K | RTX 4070 afternoons + a rented RTX 3090 overnight (25.8 / 17.5 s/step) | ~$30–40 cloud + electricity |
 | **v3.5** | Scale at home | **~1.05B** | Same features as v3 on a much bigger brain; reads 30B tokens | RTX 4070, ~3.5–4.5 months nonstop (pausable) | ~$110–270 electricity |
 | **v4** | Abilities | Best base so far (1B) | Specialist skill packs + router, tools, voice, own app | RTX 4070 | $0 |
 | **v5** | Scale | 3B | Genuinely capable assistant | Cloud (from scratch) **or** RTX 4070 (fine-tune an open 3B) | ~$1,500+ **or** $0 |
@@ -104,6 +104,22 @@ Scores are saved next to each checkpoint, so the old version isn't re-tested eve
 | RL with verifiable rewards (GRPO) | rewards from passing tests / correct math | v4/v5 |
 | Logit distillation | learning a bigger model's full probabilities | v4/v5 (needs the shared tokenizer decision) |
 
+## Speed and safety experiments
+| Idea | What it could give | Status |
+|---|---|---|
+| **Muon optimizer** (`muon.py`, `muon_test.py`) | the same quality in reportedly 30-50% fewer steps; would shorten v3.5 a lot | built; `muon_test.py` (~1-2 h on the 4070) decides before v3.5 |
+| **Off-machine backup** (`hub_backup.py`) | a rented machine dying costs at most ~30 min of training | built and running for v3 |
+| **Reliable hosts** | Vast.ai hosts vary; ours dropped from 98% to 73% reliability in a night | rent 99%+ reliability (or Secure Cloud) from now on |
+| **8-bit training on the 4070** | ~1.3-1.5x faster matrix math (the 3090 can't) | idea; needs a pilot |
+| **Better data mix** (some DCLM-style general web next to FineWeb-Edu) | better everyday common sense (HellaSwag) at the same cost | idea for v3.5's data build |
+| **More reading** | every doubling of tokens helps; 1B keeps improving past 30B | budget decision for v3.5 (30B → 60-100B) |
+
+**Tokens per parameter (how much each version reads for its size):** v2 ~30, v3 ~30 (11.8B tokens /
+394M), v3.5 ~29. "Compute-optimal" is ~20; modern small models read far more (SmolLM2-360M: ~11,000,
+Qwen2.5-0.5B: ~36,000), which is the main reason they score higher. Reading 1T tokens would take v3
+~2 years on one RTX 3090 or ~70 days on one H100 (~$3,700 either way; preparing the data is fast:
+~4-5 days). Better data, Muon and distillation get part of that gain for much less.
+
 ## Learning from a bigger AI (distillation)
 
 A bigger AI (the **teacher**) helps train ours (the **student**). The student's brain is still
@@ -181,9 +197,13 @@ and has a test-sheet score recorded as the **baseline** for v3. ✅ All done.
 
 ## v3: Accuracy (in progress)
 
-**Status:** phase 1 (pretraining upgrades) and phase 2 (Wikipedia lookups, teacher script, chat
-lessons for every v2 phone mistake, 39-question test sheet) are built and tested. Next: data prep,
-the teacher run, then pretraining. Phase 3 (DPO) comes after the chat model exists.
+**Status:** pretraining is running (PC in the afternoon, a rented RTX 3090 overnight). Step 2,000:
+val loss 3.426 and **HellaSwag 33.4%** (500-question mini-exam), already above v2's final 28.4% at 4% of
+the training. Built while it trains and waiting for the finished model: chat lessons with memory and
+reply suggestions, NEFTune, checkpoint averaging, DPO with rule-checked pairs (`make_dpo_pairs.py`,
+`dpo.py`), `compare.py` (the release gate against v2), the context meter, long-context tools for v3-long,
+and an off-machine checkpoint backup (`hub_backup.py`). Next after pretraining: average → chat-tune →
+DPO → compare.
 
 Goal: **accurate when it answers, honest when it doesn't.** No AI is completely accurate
 (not even the largest ones), but small models can get much more reliable with the right design.
@@ -202,7 +222,8 @@ Goal: **accurate when it answers, honest when it doesn't.** No AI is completely 
 | **Bigger test sheet** | More questions, plus scoring for "admitted uncertainty correctly" | Proves accuracy actually improved |
 
 **Tools starting in v3:** keyword search for lookups (FAISS as an upgrade), a local teacher model
-that writes the lookup and "I don't know" examples and grades answers for DPO, standard AI exams
+that writes the lookup and "I don't know" examples (DPO pairs are scored by checkable rules instead of
+the teacher, so no grader has to be trusted), standard AI exams
 (lm-evaluation-harness), TensorBoard graphs, and optionally the 8-bit optimizer. See
 [Tools by version](#tools-by-version).
 
@@ -213,8 +234,11 @@ that writes the lookup and "I don't know" examples and grades answers for DPO, s
   while reading a higher-quality anneal set (top-rated web pages, Wikipedia, math)
 - **Longer-memory ready:** RoPE setting 500,000, so stretching to 8k tokens later is easier
 - **Mini-exam** (HellaSwag, 500 questions) every 2,000 steps, plus `exam.py` for the full test
-- **metrics.csv + TensorBoard graphs**, **torch.compile** speed-up (automatic fallback), and
-  **`--backup_dir`** copies of `latest.pt`
+- **metrics.csv + TensorBoard graphs**, **torch.compile** speed-up (automatic fallback),
+  **`--backup_dir`** copies of `latest.pt`, and **`--hub_backup`**: a copy OFF the machine (a private
+  Hugging Face repo) every 30 min-2 h, after a rented host went offline mid-run
+- **Phone alerts** (`--notify`), **snapshots during the fade** for checkpoint averaging, and PC/cloud
+  handoff (`handoff.py`)
 - A `--pilot` option (speed, memory and finish-time report) and optional gradient checkpointing
 
 **Ready for later features without retraining:** the 20 spare special tokens are planned for thinking
