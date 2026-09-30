@@ -75,7 +75,11 @@ class HubBackup:
         """Can we write to the repo? Creates it (private) if it doesn't exist. Returns True/False."""
         try:
             self.api.whoami()
-            self.api.create_repo(self.repo, private=True, exist_ok=True, repo_type="model")
+            try:
+                self.api.create_repo(self.repo, private=True, exist_ok=True, repo_type="model")
+            except Exception:
+                # a token limited to ONE existing repo may not be allowed to create repos: fine if it exists
+                self.api.repo_info(self.repo, repo_type="model")
             return True
         except Exception as e:
             self.last_error = e

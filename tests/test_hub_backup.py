@@ -21,8 +21,13 @@ class FakeHub:
     def whoami(self):
         return {"name": "me"}
 
-    def create_repo(self, repo, private, exist_ok, repo_type):
+    def repo_info(self, repo, repo_type):
         if not self.can_write:
+            raise PermissionError("403")
+        return {"id": repo}
+
+    def create_repo(self, repo, private, exist_ok, repo_type):
+        if not self.can_write or getattr(self, "no_create", False):
             raise PermissionError("403 read-only token")
         assert private
 
@@ -112,6 +117,10 @@ class Backup(unittest.TestCase):
         self.assertFalse(h.upload(path, 5))
         self.assertIn("FAILED", self.msgs[-1])
         self.assertIsNone(h.download(os.path.join(self.d, "pc")))     # nothing uploaded: says so, no crash
+
+    def test_a_token_for_one_existing_repo_is_enough(self):
+        self.fake.no_create = True
+        self.assertTrue(self.hub().check())
 
     def test_checkpoint_iter(self):
         p = os.path.join(self.d, "c", "latest.pt")
