@@ -3,6 +3,8 @@ data/
 checkpoints/
 export/
 models/
+growth_test/
+muon_test/
 *.gguf
 *.bin
 *.pt

@@ -60,6 +60,7 @@ version of it.
 | `prepare_web_data.py` | script | `LOADERS`, `sources_for`, `train_tokenizer`, `encode_source`, `join_files` | how the v2/v3 datasets are streamed, mixed and resumed |
 | `prepare_long_data.py` | script | `LONG_MIX`, `group_by_repo`, `recall_document`, `copy_replay` | the long-document data for stretching the context (docs/LONG_CONTEXT.md) |
 | `chat_memory.py` | library + script | `ChatMemory`, `notes`, `remember`, `forget`, `handle_command` | remembering earlier chats and saved facts (on this computer only) |
+| `muon.py`, `muon_test.py` | library + script | `Muon`, `orthogonalize`, `muon_param_groups`; `report` | the Muon optimizer, and the AdamW-vs-Muon experiment |
 | `compare.py` | script | `score_version`, `run_skills`, `compare`, `print_table` | two versions on the same tests, side by side, with the release rule |
 | `eval_long.py` | script | `needle_case`, `run_retrieval`, `token_losses`, `position_verdict` | the long-context tests and their pass/fail rules |
 | `train.py` | script | `get_batch`, `get_lr`, `estimate_loss`, `save_latest`, main loop | how the model learns (and pauses/resumes) |

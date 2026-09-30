@@ -74,6 +74,7 @@ data, code and training.
 | `handoff.py` | 5 | Moves a training run between your PC and a rented cloud GPU (one command each way) |
 | `notify.py` | 5 | Push messages to your phone about training progress, crashes and finish (free, via ntfy.sh); see `docs/PHONE.md` |
 | `harness.py` | 6 | v4 coding helper: safe file/command tools and the tool-calling loop (no model needed; tests in `tests/`) |
+| `muon.py`, `muon_test.py` | 5 | The Muon optimizer (`optimizer="muon"` in config.py), and an experiment that measures whether it needs fewer steps than AdamW on our models (~1–2 h on the 4070) |
 | `grow.py`, `growth_test.py` | 6 | Grow a trained model into a deeper one, and an experiment that measures how much training compute that saves (run when the GPU is free) |
 | `generate.py` | 6 | Generate text or chat with your model. Chat options: `--lookup` (Wikipedia notes), `--memory` (remembers you), `--suggest` (reply suggestions), `--context` (memory meter) |
 | `make_chat_data.py` | 7 | v1: builds `data/chat.jsonl` fine-tuning examples automatically |
