@@ -510,6 +510,11 @@ try:
             maybe_backup()
             if hub is not None and hub.due(args.hub_every_hours):
                 hub_upload(it)
+        if (S.snapshot_every and it >= DECAY_START and it > start_iter and it % S.snapshot_every == 0
+                and not args.pilot and IS_MAIN):
+            # weights only (no optimizer): for average_ckpts.py at the end of the run
+            save_atomic({"model": model.state_dict(), "config": cfg.__dict__, "iter": it},
+                        os.path.join(OUT_DIR, f"snap_{it}.pt"))
         if it == DECAY_START and not args.pilot:
             save_latest(it, PRE_DECAY_PATH)      # can be trained further later
             mprint(f"step {it}: learning rate starts to fade"

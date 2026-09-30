@@ -91,6 +91,19 @@ one side-by-side scoreboard with the verdict (HellaSwag, the test sheet by categ
 notes / "I don't know" / memory / secrets / suggestions, and `--long` for the long-context check).
 Scores are saved next to each checkpoint, so the old version isn't re-tested every time.
 
+## Fine-tuning ladder (from simple to advanced)
+| Technique | What it does | Status |
+|---|---|---|
+| Chat fine-tuning (`finetune.py`) | learns from the AI's answers only (and the user's follow-ups at 30%, for suggestions) | ✅ built |
+| NEFTune | a little noise on the word vectors while fine-tuning: better chat answers for free | ✅ built, on from v3 |
+| Checkpoint averaging (`average_ckpts.py`) | averages the last snapshots of the fade (v3: every 900 steps) | ✅ built, used when v3 finishes |
+| DPO (`make_dpo_pairs.py`, `dpo.py`) | prefers the better of two answers; pairs scored by checkable rules (facts from the notes, "I don't know" when right, counts), no grader to trust | ✅ built, first used on v3 |
+| Teacher-judged pairs | the teacher picks the better answer where no rule can check (style, helpfulness) | planned (v3.5) |
+| Verified self-training | several tries per math/code question; only checked-correct ones become lessons (teaches thinking) | v3.5 |
+| LoRA skill packs | small swappable add-ons per skill | test on v3, real at v4 |
+| RL with verifiable rewards (GRPO) | rewards from passing tests / correct math | v4/v5 |
+| Logit distillation | learning a bigger model's full probabilities | v4/v5 (needs the shared tokenizer decision) |
+
 ## Learning from a bigger AI (distillation)
 
 A bigger AI (the **teacher**) helps train ours (the **student**). The student's brain is still

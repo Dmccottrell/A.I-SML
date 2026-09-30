@@ -48,6 +48,7 @@ add_version_arg(p)
 p.add_argument("--base", default=None,
                help="pretrained checkpoint to start from (default: the finished run's final weights)")
 p.add_argument("--fresh", action="store_true", help="ignore chat_latest.pt and start over")
+p.add_argument("--neftune_alpha", type=float, default=None, help="NEFTune noise (default: config.py; 0 = off)")
 args = p.parse_args()
 V = get_version(args.version)
 S = V.finetune
@@ -157,6 +158,19 @@ def epoch_order(epoch):
     random.Random(1234 + epoch).shuffle(order)
     return order
 
+
+# ---- NEFTune: a little noise on the word vectors while training (config: neftune_alpha) ----
+# Noise size alpha / sqrt(sequence length x vector size), as in the NEFTune paper. Only while training:
+# the saved model and chatting are unaffected. (The output layer shares these weights but not this noise.)
+NEFTUNE = args.neftune_alpha if args.neftune_alpha is not None else S.neftune_alpha
+if NEFTUNE > 0:
+    def _neftune(module, inputs, output):
+        if module.training:
+            scale = NEFTUNE / (output.size(1) * output.size(2)) ** 0.5
+            output = output + torch.empty_like(output).uniform_(-scale, scale)
+        return output
+    model.embed.register_forward_hook(_neftune)
+    print(f"NEFTune on (alpha {NEFTUNE:g})")
 
 # ---- training loop: same idea as train.py, but over the chat examples ----
 # Small learning rate so the model learns the chat format without

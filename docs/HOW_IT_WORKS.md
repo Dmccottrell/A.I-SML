@@ -62,6 +62,8 @@ version of it.
 | `chat_memory.py` | library + script | `ChatMemory`, `notes`, `remember`, `forget`, `handle_command` | remembering earlier chats and saved facts (on this computer only) |
 | `muon.py`, `muon_test.py` | library + script | `Muon`, `orthogonalize`, `muon_param_groups`; `report` | the Muon optimizer, and the AdamW-vs-Muon experiment |
 | `hub_backup.py` | library + script | `HubBackup` (`check`, `upload_in_background`, `download`), `checkpoint_iter` | the off-machine checkpoint backup |
+| `dpo.py`, `make_dpo_pairs.py` | scripts | `dpo_loss`, `sequence_logps`, `encode_pair`; `score_lookup`, `pick_pair` | preference training and its checked answer pairs |
+| `average_ckpts.py` | script | `average_state_dicts`, `snapshot_paths` | averaging the last snapshots of a run |
 | `compare.py` | script | `score_version`, `run_skills`, `compare`, `print_table` | two versions on the same tests, side by side, with the release rule |
 | `eval_long.py` | script | `needle_case`, `run_retrieval`, `token_losses`, `position_verdict` | the long-context tests and their pass/fail rules |
 | `train.py` | script | `get_batch`, `get_lr`, `estimate_loss`, `save_latest`, main loop | how the model learns (and pauses/resumes) |
