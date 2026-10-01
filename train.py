@@ -27,7 +27,8 @@ v3+ EXTRAS (switched on in config.py)
       10% of steps while reading <data_dir>/anneal/train.bin, a higher-quality
       mix ("study the best material last"). pre_decay.pt is saved just before
       the fade, so the run can be continued later.
-    * Mini-exam: every `exam_every` steps, 500 HellaSwag questions (see exam.py).
+    * Mini-exam: every `exam_every` steps, the first `exam_questions` HellaSwag questions (500 for v3,
+      5,000 for v3.5, 0 = all 10,042; see exam.py).
     * torch.compile: faster training when available (turns itself off if not).
     * metrics.csv (and TensorBoard graphs if installed) in the checkpoint folder:
           tensorboard --logdir checkpoints/dev/v3/tb
@@ -423,12 +424,17 @@ def log_metric(it, name, value):
         tb.flush()
 
 
-# ---- mini-exam: 500 HellaSwag questions (see exam.py) ----
+# ---- mini-exam: the first exam_questions HellaSwag questions (see exam.py) ----
 exam_questions = None
 if S.exam_every and not args.pilot and IS_MAIN:
     try:
         from benchmarks import load_hellaswag
-        exam_questions = load_hellaswag()[:500]
+        exam_questions = load_hellaswag()
+        if S.exam_questions:
+            exam_questions = exam_questions[:S.exam_questions]
+        # the metric's name says how many questions, so scores from different sizes are never mixed up
+        exam_name = "hellaswag_500" if len(exam_questions) == 500 else (
+            f"hellaswag_{len(exam_questions)}" if S.exam_questions else "hellaswag_full")
         exam_tok = BPETokenizer.load(os.path.join(DATA_DIR, "tokenizer.json"))
     except Exception as e:
         print(f"mini-exam off: couldn't load HellaSwag ({e})")
@@ -552,8 +558,9 @@ try:
             from exam import hellaswag_accuracy
             acc = hellaswag_accuracy(model, exam_tok, exam_questions, device, autocast)
             print(f"exam {it}: HellaSwag {acc*100:.1f}% (random = 25%)")
-            phone(f"step {it:,}: HellaSwag {acc*100:.1f}% (random is 25%)", "exam")
-            log_metric(it, "hellaswag_500", acc)
+            phone(f"step {it:,}: HellaSwag {acc*100:.1f}% on {len(exam_questions):,} questions (random is 25%)",
+                  "exam")
+            log_metric(it, exam_name, acc)
 
         # Gradient accumulation: run several small batches and add up their
         # gradients before one optimizer step. Acts like one big batch

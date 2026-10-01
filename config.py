@@ -52,7 +52,10 @@ class TrainSettings:
     #             of steps while reading the higher-quality "anneal" data (v3+)
     schedule: str = "cosine"
     decay_frac: float = 0.1
-    exam_every: int = 0         # mini-exam (500 HellaSwag questions) every N steps; 0 = off
+    exam_every: int = 0         # mini-exam (HellaSwag) every N steps; 0 = off
+    exam_questions: int = 500   # how many HellaSwag questions the mini-exam uses (the first N);
+                                # 0 = all 10,042. More = a steadier score: 500 swings about +-2 points,
+                                # 5,000 about +-0.7, all about +-0.5 (v4 uses all)
     snapshot_every: int = 0     # during the wsd fade: keep the weights every N steps (snap_<step>.pt) for
                                 # average_ckpts.py (the average of the last few is usually a bit better); 0 = off
     compile: bool = False       # try torch.compile for speed (falls back automatically if unavailable)
@@ -247,6 +250,7 @@ VERSIONS = {
             schedule="wsd",
             decay_frac=0.1,
             exam_every=5000,
+            exam_questions=5000,     # a steadier score than v3's 500 (~3-4 min per exam); v4: 0 = all 10,042
             snapshot_every=2300,     # 5 snapshots in the last 11,500 steps (~4.2 GB each)
             compile=True,
         ),

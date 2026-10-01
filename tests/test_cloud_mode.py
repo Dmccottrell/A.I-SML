@@ -35,6 +35,12 @@ class Settings(unittest.TestCase):
         for gpus in (1, 2, 4):
             self.assertEqual(cloud.train.grad_accum % gpus, 0, gpus)          # splits evenly between GPUs
 
+    def test_exam_size_per_version(self):
+        self.assertEqual(config.get_version("v3").train.exam_questions, 500)     # the running v3 is unchanged
+        self.assertEqual(config.get_version("v3.5").train.exam_questions, 5000)
+        self.assertEqual(config.parse_setting("exam_questions=0", config.get_version("v3.5").train),
+                         ("exam_questions", 0))                                   # 0 = all 10,042
+
     def test_versions_without_cloud_settings_are_unchanged(self):
         self.assertEqual(config.get_version("v3", cloud=True), config.get_version("v3"))
 

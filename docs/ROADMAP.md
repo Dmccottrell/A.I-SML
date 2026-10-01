@@ -405,6 +405,9 @@ v3.5 run ── pre_decay.pt ── fade ── ships as v3.5 (the app and skill
                                                                     retrained on it (days) ── v4 ships
 ```
 
+- **Mini-exam: the full HellaSwag test** (all 10,042 questions, `exam_questions=0`), so every check is
+  as accurate as the final one (about ±0.5 points; v3 used 500 questions, v3.5 uses 5,000). Set it in
+  v4's config entry when the continuation run is added.
 - **Data:** new pages, never repeated: more of FineWeb-Edu's `sample-100BT` than v3.5 read, more code
   and math, plus a few percent of **skill-aware text** (tool calls, thinking steps, code with tests), so
   the skill packs start from a base that already knows those formats. A second pass over v3.5's data is
