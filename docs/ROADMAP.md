@@ -323,6 +323,9 @@ many thinly). With 1B parameters there's room for more:
 **Built so far (tested on CPU with a tiny model; the real memory and speed need the RTX 4070 pilot):**
 - `v3.5` entry in `config.py` (1.036B parameters, 115,000 steps, `python train.py --version v3.5 --pilot`)
 - `offload_optim.py`: optimizer in system RAM (`optimizer="adamw_cpu"`); gives the same numbers as normal AdamW and resumes correctly
+- **Cloud mode** (`train.py --cloud`, `cloud_train` in `config.py`): on rented 32 GB cards (planned: **2x RTX 5090, ~2-2.5
+  weeks, ~$280-360**) the 12 GB workarounds come off (optimizer on the GPU, no gradient checkpointing, micro-batch 2 x 64,
+  saves every 150 steps). Same steps and results, so one run moves between home and cloud at any step. See [V3_5.md](V3_5.md)
 - `checkpoint_every` setting: protect every block (1) or every 2nd block (2) with gradient checkpointing
 - `optimizer="adamw8bit"` (bitsandbytes) as a fallback (untested here)
 

@@ -83,7 +83,7 @@ import contextlib
 import numpy as np
 import torch
 
-from config import add_version_arg, get_version
+from config import add_version_arg, get_version, parse_setting
 from model import TinyLM
 from tokenizer import BPETokenizer
 
@@ -104,6 +104,11 @@ p.add_argument("--notify", default=os.environ.get("NTFY_TOPIC"),
 p.add_argument("--notify_every", type=int, default=250, help="steps between progress messages")
 p.add_argument("--stop_at", type=float, default=0,
                help="(used by run_training.py --window) save and stop after the step that ends past this time")
+p.add_argument("--cloud", action="store_true",
+               help="cloud mode: the version's settings for a big rented GPU (config.py cloud_train; e.g. v3.5 "
+                    "on RTX 5090s). Same steps and results, faster. A run can switch between modes at any step")
+p.add_argument("--set", action="append", default=[], metavar="NAME=VALUE",
+               help="change one training setting for this run, e.g. --set grad_checkpoint=true (repeatable)")
 args = p.parse_args()
 if args.backup_dir and not args.pilot:
     # Check the backup folder NOW, so a typo or a missing drive stops the run in seconds,
@@ -113,8 +118,13 @@ if args.backup_dir and not args.pilot:
     except OSError as e:
         sys.exit(f"can't use --backup_dir {args.backup_dir!r}: {e}\n"
                  "Pick a folder on a drive that exists (e.g. C:\\ai-backups), or leave --backup_dir out.")
-V = get_version(args.version)
+V = get_version(args.version, cloud=args.cloud)
+if args.set:
+    from dataclasses import replace
+    V = replace(V, train=replace(V.train, **dict(parse_setting(x, V.train) for x in args.set)))
 S = V.train                      # training settings for this version
+if args.cloud and not get_version(args.version).cloud_train:
+    print(f"(--cloud: {V.name} has no cloud settings, using its normal ones)")
 
 # ---------------- settings ----------------
 DATA_DIR = V.data_dir
@@ -275,7 +285,9 @@ if S.init_from and (args.fresh or not os.path.exists(LATEST_PATH)):
 mprint(f"{V.name}: {model.num_params()/1e6:.1f}M parameters on {device}"
        + (f" x {WORLD} GPUs (DDP)" if DIST else "")
        + (f"  (gradient checkpointing on, every {S.checkpoint_every} block)" if S.grad_checkpoint else "")
-       + (f"  (context {cfg.max_seq_len:,}, loss in chunks of {S.loss_chunk:,})" if S.loss_chunk else ""))
+       + (f"  (context {cfg.max_seq_len:,}, loss in chunks of {S.loss_chunk:,})" if S.loss_chunk else "")
+       + (f"  [cloud mode: {S.optimizer}, micro-batch {S.batch_size} x {S.grad_accum}, saves every {S.save_every}]"
+          if args.cloud and get_version(args.version).cloud_train else ""))
 # With several GPUs the model is wrapped so gradients are averaged across them. `model` stays the plain
 # model (for saving, loading and evaluating); `wrapped` is what training runs through.
 wrapped = model
@@ -627,8 +639,9 @@ if args.pilot:
     total_h = (sec * S.max_iters + evals) / 3600
     if IS_MAIN:
         print("\n==================== PILOT REPORT ====================")
-        print(f"model:          {V.name}, {model.num_params()/1e6:.1f}M parameters, "
-              f"grad_checkpoint={S.grad_checkpoint}, optimizer={S.optimizer}, "
+        print(f"model:          {V.name}, {model.num_params()/1e6:.1f}M parameters"
+              + (" (cloud mode)" if args.cloud and get_version(args.version).cloud_train else "") + ", "
+              f"grad_checkpoint={S.grad_checkpoint}, optimizer={S.optimizer}, batch {S.batch_size}x{S.grad_accum}, "
               f"compile={'on' if train_model is not wrapped else 'off'}"
               + (f", {WORLD} GPUs (DDP)" if DIST else ""))
         print(f"speed:          {sec:.2f} s/iter = {tokens/sec/1e3:.1f}k tokens/s")

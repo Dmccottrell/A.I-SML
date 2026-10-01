@@ -98,6 +98,11 @@ class Version:
     # higher-quality mix read while the learning rate fades at the end.
     anneal_mix: tuple = ()
     anneal_tokens: int = 0
+    # "Cloud mode" (train.py --cloud): training settings for a big rented GPU (24 GB+, e.g. RTX 5090),
+    # as (setting, value) pairs that replace the home ones. Only HOW the work is done changes (memory
+    # tricks, micro-batch size, how often it saves); every step still sees the same ~262k tokens and the
+    # same learning rate, so a run can move between home and cloud mode at any step.
+    cloud_train: tuple = ()
 
 
 VERSIONS = {
@@ -245,6 +250,14 @@ VERSIONS = {
             snapshot_every=2300,     # 5 snapshots in the last 11,500 steps (~4.2 GB each)
             compile=True,
         ),
+        # On 32 GB cards (RTX 5090; 1, 2 or 4 of them) the 12 GB workarounds above only cost speed:
+        cloud_train=(
+            ("optimizer", "adamw"),        # optimizer memory on the GPU (~17 GB fits); required for several GPUs
+            ("grad_checkpoint", False),    # ~30% faster; the pilot shows whether memory allows it
+            ("batch_size", 2),             # 2 x 2048 tokens per micro-batch: the GPU works more efficiently
+            ("grad_accum", 64),            # ... so half as many: still 128 x 2048 = ~262k tokens per step
+            ("save_every", 150),           # a checkpoint is ~17 GB: every ~25 min instead of every ~10
+        ),
         finetune=FinetuneSettings(epochs=2, batch_size=2, lr=3e-5, neftune_alpha=5.0),
         chat_memory=True,
     ),
@@ -293,11 +306,37 @@ for _args in ((8192, 2_000_000.0, 2000, f"{CKPT_DIR}/v3/final.pt"),        # ~0.
     VERSIONS[_name] = _version
 
 
-def get_version(name):
-    """Return the Version called `name` ("v1", "v2", ...), with a clear error if unknown."""
+def get_version(name, cloud=False):
+    """Return the Version called `name` ("v1", "v2", ...), with a clear error if unknown.
+
+    cloud=True applies the version's cloud_train settings (train.py --cloud). Versions without them
+    are returned unchanged.
+    """
     if name not in VERSIONS:
         raise SystemExit(f"unknown version {name!r}; choose from {', '.join(VERSIONS)}")
-    return VERSIONS[name]
+    V = VERSIONS[name]
+    if cloud and V.cloud_train:
+        V = replace(V, train=replace(V.train, **dict(V.cloud_train)))
+    return V
+
+
+def parse_setting(text, settings):
+    """("grad_checkpoint", True) from "grad_checkpoint=true", typed like the field in `settings`."""
+    if "=" not in text:
+        raise SystemExit(f"--set needs name=value, got {text!r}")
+    name, raw = (x.strip() for x in text.split("=", 1))
+    if not hasattr(settings, name):
+        raise SystemExit(f"--set: unknown training setting {name!r}")
+    old = getattr(settings, name)
+    if isinstance(old, bool):
+        if raw.lower() not in ("true", "false", "1", "0", "yes", "no", "on", "off"):
+            raise SystemExit(f"--set {name}: use true or false")
+        return name, raw.lower() in ("true", "1", "yes", "on")
+    if isinstance(old, int):
+        return name, int(raw)
+    if isinstance(old, float):
+        return name, float(raw)
+    return name, raw
 
 
 def add_version_arg(parser):
