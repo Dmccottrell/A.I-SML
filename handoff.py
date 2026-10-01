@@ -115,6 +115,14 @@ def up(a, V):
               "Look at it any time: ssh in, then `tmux attach -t train`.")
 
 
+# "Is it still training?" = is a program using the cloud GPU. (The tmux window alone isn't proof: it can stay
+# open at an empty prompt after training paused.) Without nvidia-smi, fall back to the window check.
+STILL_TRAINING = ("if command -v nvidia-smi >/dev/null 2>&1; then "
+                  "[ \"$(nvidia-smi --query-compute-apps=pid --format=csv,noheader 2>/dev/null | grep -c .)\" -gt 0 ] "
+                  "&& echo yes || echo no; "
+                  "else tmux has-session -t train 2>/dev/null && echo yes || echo no; fi")
+
+
 def down(a, V):
     local_dir = V.ckpt_dir
     remote_dir = f"{a.repo}/{V.ckpt_dir}".replace("\\", "/")
@@ -125,9 +133,9 @@ def down(a, V):
     if os.path.exists(latest) and os.path.getmtime(latest) > r_time + 60 and not a.force:
         raise SystemExit("STOPPED: the latest.pt on THIS PC is newer than the cloud's. Copying the cloud's "
                          "over it would throw away training. Use `up` instead (or --force).")
-    if ssh_out(a.host, a.port, "tmux has-session -t train 2>/dev/null && echo yes || echo no") == "yes" and not a.force:
-        raise SystemExit("the cloud machine is still training (tmux session 'train'). Wait for its window to "
-                         "end, or press Ctrl+C once in `tmux attach -t train`, then run this again.")
+    if ssh_out(a.host, a.port, STILL_TRAINING) == "yes" and not a.force:
+        raise SystemExit("the cloud machine is still training (a program is using its GPU). Pause it first: "
+                         "`tmux send-keys -t train C-c` on the cloud machine, wait ~30 s, then run this again.")
     os.makedirs(local_dir, exist_ok=True)
     for name in FILES + DOWN_ONLY:
         rfile = f"{remote_dir}/{name}"
