@@ -46,7 +46,8 @@ Meta use). Each one is added when a version actually needs it, and several can s
 | **bitsandbytes** (8-bit optimizer) | Cuts optimizer memory ~75% | v3 (optional) → **v3.5** (needed) | In v3 it could replace gradient checkpointing if the pilot runs out of memory, and it's a rehearsal for 1B |
 | **TRL-style DPO** | "Which answer is better" training | **v3** | Small enough to write ourselves, like the rest of the training code |
 | **PEFT / LoRA** | Small add-on skill packs | Try on v3 → **v4** | A first skill pack can be tested cheaply on v2/v3 |
-| **Tool calling (MCP-style)** | The model asks for a tool, our code runs it | v3 (lookups) → **v4** | v3's "look it up" is the first tool; v4 adds calculator, clock, files, web search |
+| **Web search** (`web_search.py`: Wikipedia's free search, or Brave Search with a key) | Online mode: our code searches the web and hands the results to the model as notes | **v3** (off by default) → better every version | See [Web search, version by version](#web-search-version-by-version) |
+| **Tool calling (MCP-style)** | The model asks for a tool, our code runs it | v3 (lookups) → **v4** | v3's "look it up" is the first tool; v4 adds calculator, clock, files, and lets the model call web search itself |
 | **Whisper** (OpenAI, open source) | Speech-to-text | **v4** (can try any time) | Independent of the brain, so it can be tested early |
 | **Text-to-speech** (e.g. Piper) | Speaks the answers | **v4** | Small, offline, open source |
 | **FSDP** (inside PyTorch) | Splits training across many GPUs | Written during v3.5 → **v5** | Needed for 3B in the cloud, and for v6/v6.5 |
@@ -75,7 +76,7 @@ later version (the scripts take `--version`):
 | Context | 2K, stretched to 8K–32K | 32K, goal 75K–100K | same as v3.5 | 128K goal, a model designed for long text (local + global attention, smaller memory per token) | 256K → 500K goals |
 | Memory of you | saves facts itself, finds past chats by meaning | better judgement about what to save | memory screen, model-driven saving through tools | summarizes old chats into memories | the same, larger |
 | Reply suggestions | simple, from real follow-ups | sharper (bigger model) | greyed-out in the app; teacher-written follow-ups if plain | better | best |
-| Facts | Wikipedia lookups | uses what it reads better | + live web search (online mode) | combines several sources | long documents |
+| Facts | Wikipedia lookups + web search (our code searches) | reads web results better (2× the lessons) | the model decides when to search (tool call) | combines several sources | long documents, research mode |
 | Thinking | trial on math | short thinking | adaptive + effort levels | longer | extended |
 | Tools / coding | – | – | calculator, files, coding loop | more reliable | strongest |
 
@@ -222,6 +223,7 @@ Goal: **accurate when it answers, honest when it doesn't.** No AI is completely 
 | **More Wikipedia** | 20% of the reading (up from 15%), stories down to 2% | Wikipedia packs the most facts per word. A small boost to what it remembers; lookups do the heavy lifting |
 | **Math in the training mix** | 5% FineMath (web pages that explain math step by step) | Better with numbers, word problems and step-by-step thinking |
 | **Bigger test sheet** | More questions, plus scoring for "admitted uncertainty correctly" | Proves accuracy actually improved |
+| **Web search (online mode, optional)** | `generate.py --web`: our code searches the web for each message; the model answers from the results, naming the site and date. ~1,500 chat lessons (`web_lessons.py`) plus honest answers about other AIs | v2 made up "metrics for Claude" and claimed "ChatGPT is better than Claude". See [Web search, version by version](#web-search-version-by-version) |
 
 **Tools starting in v3:** keyword search for lookups (FAISS as an upgrade), a local teacher model
 that writes the lookup and "I don't know" examples (DPO pairs are scored by checkable rules instead of
@@ -248,6 +250,24 @@ the teacher, so no grader has to be trusted), standard AI exams
 [Thinking, effort levels and analytical steps](#thinking-effort-levels-and-analytical-steps).
 
 Details and commands: [V3.md](V3.md).
+
+### Web search, version by version
+
+No AI goes online by itself, not even ChatGPT or Claude: the app searches, the model reads what comes
+back. v3 starts simple, and every version gets better at it. Off by default (private and offline); when
+it's on, only the question is sent to the search service.
+
+| Version | Who decides to search | What the model learns | Lessons | Test |
+|---|---|---|---|---|
+| **v3** | Our code, for every message (`--web`) | Answer from the results, name the site and date; newest result wins; say when sources disagree or don't answer it; honest about other AIs | ~1,500 web + 400 other-AI (`web_lessons.py`) | `eval/web.jsonl` |
+| **v3.5** | Our code | The same, with twice the practice; reads longer, messier pages (its 32K memory fits whole pages) | ~3,000 (`WEB_LESSONS`) | same sheet, should score higher |
+| **v4** | **The model**: it writes a `search` tool call only when a question needs fresh facts, and can search again with better words | When to search, rewriting a query, a second round when the first results are thin | + tool-call lessons | + "should it have searched?" checks |
+| **v5** | The model | Combines several sources into one answer, notices a site that contradicts the others, prefers trusted sites | + multi-source lessons | + harder disagreement cases |
+| **v6+** | The model | Research mode: several rounds, reading many pages, a short report with sources | | |
+
+Sources: Wikipedia's free search (no key), or Brave Search's API for the whole web (free tier, a key in
+`BRAVE_API_KEY`). Trusted sites (encyclopedias, .gov/.edu, science, big news agencies) go first, and
+blocked sites are skipped, because a small model believes whatever it reads.
 
 ---
 

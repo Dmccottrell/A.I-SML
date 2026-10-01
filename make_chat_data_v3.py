@@ -25,6 +25,10 @@ WHAT THIS FILE DOES
       memory_skip      passwords, moods, other people -> don't     saving things it shouldn't
       memory_recall    answer from "Saved memory" / earlier-chat   "I don't know your name" when it does
                        notes, or say it doesn't know yet
+      web, web_latest, answer from web search results: name the   (new: online mode, web_search.py)
+      web_disagree,    site and date, prefer the newest, say when
+      web_none         sources disagree or don't answer it
+      other_ai         honest about other AIs (no notes)           "ChatGPT is better than Claude because..."
 
     lookup/dont_know/correction/stand_firm/memory_doubt come from the teacher's
     lookup examples, and instruction from its instruction examples
@@ -65,6 +69,10 @@ def set_version(name):
     print(f"{name}: lessons -> {OUT_PATH} (teacher examples from {TEACHER_DIR}, conversations up to "
           f"{MAX_CHARS:,} characters)")
 
+# Web search lessons per version: each one gets more practice reading web results (web_lessons.py).
+# v4 adds lessons where the model itself decides to search (a tool call); see docs/ROADMAP.md.
+WEB_LESSONS = {"v3": 1_500, "v3.5": 3_000}
+
 # ------------------------------------------------------------------ identity
 # Edit these to give your AI its own name and personality!
 IDENTITY_QA = [
@@ -83,9 +91,10 @@ IDENTITY_QA = [
      "called A.I-SML."),
     (["Are you human?", "Are you a real person?"],
      "No, I'm an AI: a computer program that writes text. I'm not a person."),
-    (["Can you browse the internet?", "Are you connected to the internet?"],
-     "No, I run offline, so I can't browse the internet or know about recent events. With "
-     "lookups turned on, I can search a saved copy of Wikipedia."),
+    (["Can you browse the internet?", "Are you connected to the internet?", "Can you look things up online?"],
+     "I run offline, so on my own I can't browse the internet or know about recent events. With "
+     "lookups turned on, I can search a saved copy of Wikipedia, and if web search is turned on, the "
+     "app searches the web for me and I answer from what it finds."),
     (["Do you make mistakes?", "Are you always right?"],
      "Yes, I make mistakes, especially with facts. I'm a small model, so please double-check "
      "anything important."),
@@ -495,6 +504,9 @@ def build(general, stories, lookup_records, instruction_records, wiki, a, seed=1
     parts["identity"] = identity_conversations(rng, a.identity)
     parts["small_talk"] = small_talk_conversations(rng, a.small_talk)
     parts.update(memory_conversations(rng, getattr(a, "memory", 0)))
+    from web_lessons import other_ai_conversations, web_conversations
+    parts.update(web_conversations(rng, getattr(a, "web", 0)))
+    parts["other_ai"] = other_ai_conversations(rng, getattr(a, "other_ai", 0))
     if stories:
         from make_chat_data_v2 import story_conversations
         rng.shuffle(stories)
@@ -530,11 +542,16 @@ if __name__ == "__main__":
     p.add_argument("--small_talk", type=int, default=1_500)
     p.add_argument("--stories", type=int, default=4_000)
     p.add_argument("--memory", type=int, default=3_000, help="remembering-you lessons (save / don't / recall)")
+    p.add_argument("--web", type=int, default=None, help="web search lessons (web_lessons.py); "
+                   "default: more for each newer version (WEB_LESSONS)")
+    p.add_argument("--other_ai", type=int, default=400, help="honest answers about other AI assistants")
     p.add_argument("--db", default=os.path.join("data", "wiki", "wiki.db"))
     p.add_argument("--version", default="v3", help="v3 or any later version (v3.5, v3-long-8k, ...): "
                    "every later version reuses these lessons, and adds its own on top")
     a = p.parse_args()
     set_version(a.version)
+    if a.web is None:
+        a.web = WEB_LESSONS.get(a.version, max(WEB_LESSONS.values()))
 
     from make_chat_data_v2 import load_smoltalk, load_story_texts
     wiki = None
