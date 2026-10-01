@@ -270,7 +270,11 @@ VERSIONS = {
         ),
         # On 32 GB cards (RTX 5090; 1, 2 or 4 of them) the 12 GB workarounds above only cost speed:
         cloud_train=(
-            ("optimizer", "adamw"),        # optimizer memory on the GPU (~17 GB fits); required for several GPUs
+            ("optimizer", "muon"),         # Muon won muon_test.py (Oct 2026): AdamW's final loss in ~33% fewer
+                                           # steps, and 0.124 lower at the end. Its memory is on the GPU, so
+                                           # v3.5 now trains on the rented GPUs only: a Muon run can't move to
+                                           # the 4070 (12 GB) or switch optimizers midway. --set optimizer=adamw
+                                           # gives the old portable setup
             ("grad_checkpoint", False),    # ~30% faster; the pilot shows whether memory allows it
             ("batch_size", 2),             # 2 x 2048 tokens per micro-batch: the GPU works more efficiently
             ("grad_accum", 64),            # ... so half as many: still 128 x 2048 = ~262k tokens per step

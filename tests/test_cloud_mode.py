@@ -23,7 +23,7 @@ class Settings(unittest.TestCase):
         home, cloud = config.get_version("v3.5"), config.get_version("v3.5", cloud=True)
         self.assertEqual(home.train.optimizer, "adamw_cpu")                   # home settings untouched
         self.assertTrue(home.train.grad_checkpoint)
-        self.assertEqual(cloud.train.optimizer, "adamw")
+        self.assertEqual(cloud.train.optimizer, "muon")                       # muon_test.py's winner (cloud only)
         self.assertFalse(cloud.train.grad_checkpoint)
         tokens = lambda V: V.train.batch_size * V.train.grad_accum * V.model.max_seq_len
         self.assertEqual(tokens(cloud), tokens(home))                         # same ~262k tokens per step
