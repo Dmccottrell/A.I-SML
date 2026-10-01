@@ -147,6 +147,12 @@ class EndToEnd(unittest.TestCase):
         self.assertNotIn("gradient checkpointing on", out)
         state = torch.load(os.path.join(d, "ck", "latest.pt"), map_location="cpu", weights_only=False)
         self.assertGreater(state["iter"], 18)
+        self.assertEqual(state["optimizer_kind"], "adamw")
+        # ...but an AdamW run can't continue with Muon (its memory is different): a clear stop, not garbage
+        r = subprocess.run([sys.executable, launch, "--version", "vtiny", "--set", "optimizer=muon"],
+                           capture_output=True, text=True, cwd=ROOT, env=dict(os.environ, ITERS="24"), timeout=600)
+        self.assertNotEqual(r.returncode, 0)
+        self.assertIn("can't switch optimizers", r.stdout + r.stderr)
 
 
 if __name__ == "__main__":

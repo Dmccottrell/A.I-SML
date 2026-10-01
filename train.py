@@ -338,11 +338,19 @@ def save_atomic(obj, path):
     os.replace(tmp, path)
 
 
+def optimizer_kind(name):
+    """Optimizers whose saved state is interchangeable: adamw and adamw_cpu are the same AdamW (tested in
+    tests/test_cloud_mode.py), so a run can move between home and cloud mode. Muon and 8-bit AdamW keep
+    different state, so a run that started with one must finish with it."""
+    return "adamw" if name in ("adamw", "adamw_cpu") else name
+
+
 def save_latest(next_iter, path=LATEST_PATH):
     """Save everything needed to resume training at iteration `next_iter`."""
     if not IS_MAIN:
         return
     save_atomic({"model": model.state_dict(), "optimizer": optimizer.state_dict(),
+                 "optimizer_kind": optimizer_kind(S.optimizer),
                  "scaler": scaler.state_dict(), "config": cfg.__dict__,
                  "iter": next_iter, "best_val": best_val,
                  "rng": torch.get_rng_state()}, path)
@@ -495,6 +503,13 @@ if os.path.exists(LATEST_PATH) and not args.fresh:
     # card over its limit, so Windows spilled into slow system memory and training ran ~5x slower.
     # load_state_dict copies the values to wherever the model and optimizer live.
     state = torch.load(LATEST_PATH, map_location="cpu")
+    saved_kind = state.get("optimizer_kind")         # older checkpoints don't say (they were all AdamW)
+    if saved_kind and saved_kind != optimizer_kind(S.optimizer):
+        sys.exit(f"{LATEST_PATH} was trained with {saved_kind}, but this run is set to {S.optimizer}. A run can't "
+                 f"switch optimizers midway (their saved memory is different). Continue it with the same one: "
+                 f"--set optimizer={'adamw_cpu' if saved_kind == 'adamw' and not args.cloud else saved_kind}"
+                 + (" (v3.5's cloud mode uses Muon; a run started at home with AdamW stays AdamW)"
+                    if saved_kind == "adamw" and S.optimizer == "muon" else ""))
     model.load_state_dict(state["model"])
     optimizer.load_state_dict(state["optimizer"])
     if state["scaler"]:
