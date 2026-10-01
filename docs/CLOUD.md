@@ -199,7 +199,7 @@ python hub_backup.py status --version v3 --repo yourname/aisml-checkpoints
 | Run | Time on one 4090 | Approx. rental |
 |---|---|---|
 | v3 (394M) | ~6-7 days | $50-100 |
-| v3.5 (~1.05B) | ~5-6 weeks | several hundred dollars |
+| v3.5 (~1.12B, 40B tokens) | ~20-25 days on 2x RTX 5090 | ~$420-530 |
 
 Free research credits (e.g. Google TPU Research Cloud) exist but need a JAX/TPU port of the training
 code, which is not built yet. See `docs/ROADMAP.md`.

@@ -53,9 +53,13 @@ class TrainSettings:
     schedule: str = "cosine"
     decay_frac: float = 0.1
     exam_every: int = 0         # mini-exam (HellaSwag) every N steps; 0 = off
-    exam_questions: int = 500   # how many HellaSwag questions the mini-exam uses (the first N);
-                                # 0 = all 10,042. More = a steadier score: 500 swings about +-2 points,
-                                # 5,000 about +-0.7, all about +-0.5 (v4 uses all)
+    exam_questions: int = 500   # how many HellaSwag questions the mini-exam uses; 0 = all 10,042.
+                                # More = a steadier score: 500 swings about +-2 points, 5,000 about
+                                # +-0.7, all about +-0.5 (v4 uses all)
+    exam_pick: str = "first"    # "first": the first N (v3; they are ~5 points EASIER than the whole test,
+                                # because the file starts with the easier video-caption questions);
+                                # "spread": N spread evenly over the whole test (v3.5+), so it matches
+                                # the full test
     snapshot_every: int = 0     # during the wsd fade: keep the weights every N steps (snap_<step>.pt) for
                                 # average_ckpts.py (the average of the last few is usually a bit better); 0 = off
     compile: bool = False       # try torch.compile for speed (falls back automatically if unavailable)
@@ -97,6 +101,8 @@ class Version:
     tokenizer_sample_mb: float = 30   # text sample used to train the tokenizer
     special_tokens: tuple = tuple(SPECIAL_TOKENS)   # the tokenizer's special tokens (see tokenizer.py)
     decontaminate: bool = False  # skip training documents that contain test questions (benchmarks.py)
+    tokenizer_from: str = ""    # use this version's tokenizer instead of training a new one (a run that
+                                # continues another version's weights must read with the same tokenizer)
     # "Study the best material last" (used with schedule="wsd"): a separate,
     # higher-quality mix read while the learning rate fades at the end.
     anneal_mix: tuple = ()
@@ -208,26 +214,33 @@ VERSIONS = {
     ),
     "v3.5": Version(
         name="v3.5",
-        description="~1.05B assistant: v3's features on a bigger brain; reads 30B tokens incl. several code languages",
+        description="~1.12B assistant: v3's features on a bigger brain; reads 40B tokens: educational and "
+                    "everyday web, Wikipedia, several code languages, math, textbook-style text",
         data_dir="data/v3.5",
         ckpt_dir=f"{CKPT_DIR}/v3.5",
         export_dir=f"{EXPORT_DIR}/v3.5",
         vocab_size=32768,
-        # The bigger slice of educational web pages means no page is read twice. Wikipedia is
-        # ~one full read of English Wikipedia (~4.5B tokens). Code covers several languages.
-        data_mix=(("fineweb_100bt", 0.63), ("wikipedia", 0.15), ("code_multi", 0.13), ("math", 0.075),
-                  ("tinystories", 0.015)),
-        data_tokens=30_000_000_000,
+        # 40B tokens (docs/V3_5.md, "The reading"). Educational pages (FineWeb-Edu) stay at ~19B, the
+        # same amount as the 30B plan, and everyday web pages (DCLM) are added ON TOP: better everyday
+        # common sense (HellaSwag) without losing school knowledge. Wikipedia is ~one full read of
+        # English Wikipedia (~4.5B tokens). More code and math than the 30B plan. No TinyStories: they
+        # were written by GPT-3.5/4, and this project never trains on ChatGPT/Claude/Gemini output.
+        # "cosmopedia" is textbook-style text written by an OPEN model (Mixtral).
+        data_mix=(("fineweb_100bt", 0.475), ("dclm", 0.175), ("wikipedia", 0.1125), ("code_multi", 0.125),
+                  ("math", 0.075), ("cosmopedia", 0.0375)),
+        data_tokens=40_000_000_000,
         tokenizer_sample_mb=60,      # includes every code language
         special_tokens=tuple(EXTENDED_SPECIAL_TOKENS),
         decontaminate=True,
-        anneal_mix=(("fineweb_hq_100bt", 0.40), ("wikipedia", 0.25), ("math", 0.15), ("code_multi", 0.15),
-                    ("tinystories", 0.05)),
-        anneal_tokens=3_000_000_000,
+        # The last 10% (~4B tokens): the best pages, plus human-written questions and answers (Stack
+        # Exchange) so it reaches chat training already used to "question -> helpful answer"
+        anneal_mix=(("fineweb_hq_100bt", 0.35), ("dclm", 0.10), ("wikipedia", 0.20), ("math", 0.12),
+                    ("code_multi", 0.13), ("cosmopedia", 0.05), ("qa", 0.05)),
+        anneal_tokens=4_100_000_000,
         model=ModelConfig(
             vocab_size=32768,
             dim=2048,
-            n_layers=22,
+            n_layers=24,         # 1.12B parameters (22 layers = 1.04B); still fits the RTX 4070 at home
             n_heads=32,          # 64 dims per head
             n_kv_heads=4,        # 8 query heads share each key/value head
             hidden_dim=5632,     # 22 x 256, so phones can use the smaller Q4_K format
@@ -237,7 +250,7 @@ VERSIONS = {
         train=TrainSettings(
             batch_size=1,
             grad_accum=128,      # 128 x 2048 = ~262k tokens per step
-            max_iters=115_000,   # 115k steps x 262k tokens = ~30 billion tokens
+            max_iters=152_600,   # 152.6k steps x 262k tokens = ~40 billion tokens (~36 per parameter)
             warmup_iters=2_000,
             lr_max=3e-4,         # bigger model, gentler steps
             lr_min=3e-5,
@@ -251,7 +264,8 @@ VERSIONS = {
             decay_frac=0.1,
             exam_every=5000,
             exam_questions=5000,     # a steadier score than v3's 500 (~3-4 min per exam); v4: 0 = all 10,042
-            snapshot_every=2300,     # 5 snapshots in the last 11,500 steps (~4.2 GB each)
+            exam_pick="spread",      # spread over the whole test, so it matches the full-test score
+            snapshot_every=3050,     # 5 snapshots in the last 15,260 steps (~4.5 GB each)
             compile=True,
         ),
         # On 32 GB cards (RTX 5090; 1, 2 or 4 of them) the 12 GB workarounds above only cost speed:
@@ -308,6 +322,41 @@ for _args in ((8192, 2_000_000.0, 2000, f"{CKPT_DIR}/v3/final.pt"),        # ~0.
               (32768, 8_000_000.0, 1500, f"{CKPT_DIR}/v3-long-16k/final.pt")):  # ~0.39B tokens
     _name, _version = _v3_long(*_args)
     VERSIONS[_name] = _version
+
+
+# ---- v3+: v3 read further, a cheap test of v3.5's new reading mix before the big run ----
+# Both start from v3's pre_decay.pt (step 40,500, just before v3's fade), read ~2.5B NEW tokens at v3's
+# steady learning rate, then fade again on the same anneal mix. They differ ONLY in what they read:
+#   v3plus      60% everyday web (DCLM) + 40% educational web (FineWeb-Edu)   <- v3.5's new idea
+#   v3plus-edu  100% educational web                                           <- the comparison
+# Same steps, same cost, so the full HellaSwag test (exam.py) shows what the everyday web adds. The
+# winner is also a better v3 (same size and phone speed). ~9,500 steps: ~18 h, ~$9 each on one RTX 5090.
+def _v3_plus(name, mix, description):
+    v3 = VERSIONS["v3"]
+    return replace(
+        v3, name=name, description=description,
+        data_dir=f"data/{name}",
+        ckpt_dir=f"{CKPT_DIR}/{name}",
+        export_dir=f"{EXPORT_DIR}/{name}",
+        tokenizer_from="v3",
+        data_mix=mix,
+        data_tokens=2_500_000_000,
+        anneal_mix=(("fineweb_hq_100bt", 0.45), ("wikipedia", 0.25), ("math", 0.15), ("code", 0.15)),
+        anneal_tokens=260_000_000,
+        train=replace(
+            v3.train,
+            max_iters=9_540,       # ~2.5B tokens
+            warmup_iters=200,      # a fresh optimizer: ease back up to v3's steady learning rate
+            snapshot_every=0,
+            exam_every=1000,
+            init_from=f"{CKPT_DIR}/v3/pre_decay.pt",
+        ))
+
+
+VERSIONS["v3plus"] = _v3_plus("v3plus", (("dclm", 0.60), ("fineweb_100bt", 0.40)),
+                              "v3 read further with everyday web pages (DCLM): the test for v3.5's mix")
+VERSIONS["v3plus-edu"] = _v3_plus("v3plus-edu", (("fineweb_100bt", 1.0),),
+                                  "v3 read further with educational pages only: the comparison for v3plus")
 
 
 def get_version(name, cloud=False):

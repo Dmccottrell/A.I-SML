@@ -9,7 +9,7 @@ Details: [V2.md](V2.md), [V3.md](V3.md), [ROADMAP.md](ROADMAP.md). Settings live
 **Tier** = which model, **version** = which generation, **effort** = how long it thinks; see the roadmap.
 
 **Two kinds of jumps:** v1 → v2 → v3 → v3.5 each give the model a **bigger brain and more to
-read**. v4 is different: it keeps v3.5's ~1.05B size but **trains it longer** (it continues from v3.5's
+read**. v4 is different: it keeps v3.5's ~1.12B size but **trains it longer** (it continues from v3.5's
 `pre_decay.pt` with 15–30B more tokens, so ~1.5–2× the reading), and adds **abilities around it** (specialist
 skill packs, tools, thinking with effort levels, voice, your own app). The PC trains v4's brain while the app
 and skills are being built, so no GPU time is wasted. It's the jump from "a model" to "an assistant".
@@ -22,7 +22,7 @@ v6 (5B) and v6.5 (7B) keep growing toward medium size, mainly for the PC and onl
 |---|---|---|---|---|---|---|---|---|
 | Working name | – | – | Rune | Skald | Skald 2 | Saga | Edda | Edda (extended) |
 | Parameters | 29.5M | 88M | 394M | **~1.04B** | ~1.04B base + LoRA skill packs (small add-on weights, a few MB each, switched by a router) | **~3B** | **~5B** | **~7B** |
-| Shape | 512 wide × 8 layers | 768 wide × 12 layers | 1024 wide × 32 layers | 2048 wide × 22 layers | Same as v3.5 | ~3072 wide × 28 layers | ~3584 wide × 36 layers | 4096 wide × 32 layers |
+| Shape | 512 wide × 8 layers | 768 wide × 12 layers | 1024 wide × 32 layers | 2048 wide × 24 layers | Same as v3.5 | ~3072 wide × 28 layers | ~3584 wide × 36 layers | 4096 wide × 32 layers |
 | Memory (context length) | 512 tokens | 1,024 tokens | 2,048 tokens; **v3-long: 8K → 16K → 32K** (stretched after training, if the tests pass) | 2,048, then stretched to **32K, goal 75K–100K** | Same as v3.5's stretched length + saved notes about you | **Goal 128K** (built for long text from the start) | **Goal 256K** | **Goal 500K** |
 | Vocabulary | 8,192 | 16,384 | 32,768 | 32,768 | 32,768 | 65,536 | 65,536 | 65,536 |
 | Attention | Standard | Grouped-query (faster on phones) | Grouped-query | Grouped-query | Grouped-query | Grouped-query | Grouped-query | Grouped-query |
@@ -36,8 +36,8 @@ the long-context tests pass at that length (docs/LONG_CONTEXT.md). "Memory (cont
 
 |  | **v1** | **v2** | **v3** | **v3.5** | **v4** | **v5** | **v6** | **v6.5** |
 |---|---|---|---|---|---|---|---|---|
-| **Data to prepare** | 467M tokens (TinyStories) | 2.8B tokens | **12B + 1.3B anneal** (done in 1h26m) | **30B + 3B anneal** (~3.5–5 hours) | **15–30B new tokens** (more of FineWeb-Edu's `sample-100BT`, code and math that v3.5 didn't read, with tool calls, thinking steps and code-with-tests mixed in) + a new anneal set; plus the skill datasets: a few thousand examples per skill, teacher-written reasoning and tool-use runs kept only when verified correct | **~60B tokens** | **~100B tokens** (minimum) | **~140B tokens** (minimum) |
-| Data mix | 100% children's stories | 80% web, 15% Wikipedia, 5% stories | 63% web, 20% Wikipedia, 10% Python, 5% math, 2% stories | 63% web, 15% Wikipedia, 13% code in **several languages** (Python, JavaScript, HTML/CSS, SQL, shell, C#/Java), 7.5% math, 1.5% stories; web from FineWeb-Edu's bigger `sample-100BT` slice so nothing repeats | Like v3.5 (new pages, nothing repeated), plus a few % skill-aware text; then skill packs: study, stories, IT help, fact checking, coding, tool use | Like v3.5, much bigger slice (plus more code and math) | Like v5 (web, Wikipedia, multi-language code, math), bigger slice | Same as v6, bigger slice |
+| **Data to prepare** | 467M tokens (TinyStories) | 2.8B tokens | **12B + 1.3B anneal** (done in 1h26m) | **40B + 4.1B anneal** (~5–8 hours) | **15–30B new tokens** (more of FineWeb-Edu's `sample-100BT`, code and math that v3.5 didn't read, with tool calls, thinking steps and code-with-tests mixed in) + a new anneal set; plus the skill datasets: a few thousand examples per skill, teacher-written reasoning and tool-use runs kept only when verified correct | **~60B tokens** | **~100B tokens** (minimum) | **~140B tokens** (minimum) |
+| Data mix | 100% children's stories | 80% web, 15% Wikipedia, 5% stories | 63% web, 20% Wikipedia, 10% Python, 5% math, 2% stories | 47.5% educational web (FineWeb-Edu `sample-100BT`), **17.5% everyday web (DCLM)**, 11% Wikipedia, 12.5% code in **9 languages**, 7.5% math, 4% textbook-style (Cosmopedia); no stories; final phase adds human-written Q&A | Like v3.5 (new pages, nothing repeated), plus a few % skill-aware text; then skill packs: study, stories, IT help, fact checking, coding, tool use | Like v3.5, much bigger slice (plus more code and math) | Like v5 (web, Wikipedia, multi-language code, math), bigger slice | Same as v6, bigger slice |
 | Disk space | ~1 GB | ~6 GB | ~27 GB | ~66 GB | ~30–60 GB (can reuse v3.5's freed space) | ~120 GB | ~200 GB | ~280 GB |
 | Batch per step | 65,536 tokens | 131,072 tokens | 262,144 tokens | 262,144 tokens | 262,144 tokens (then small for skill packs) | ~1M tokens (across several GPUs) | ~1M tokens (across several GPUs) | ~1M tokens (across several GPUs) |
 | **Steps** | 20,000 | 20,000 | **45,000** | **~115,000** | **~57,000–115,000 more**, continuing v3.5 from `pre_decay.pt`; ~1–2k per skill pack | **~60,000** | **~100,000** | **~140,000** |
@@ -71,7 +71,7 @@ real GSM8K questions (a well-known math test) are kept for testing only, never f
 | Test sheet (`evaluate.py`, /20) | Only identity and story questions | **18/20** (baseline) | Goal: clearly beat v2 | Goal: beat v3 | Goal: beat v3.5, plus new tests for tools and skills | Goal: beat v4 | Goal: beat v5 | Goal: beat v6 |
 | v3 test sheet (`prompts_v3.jsonl`, /41) | — | Run to set the baseline* | Goal: clearly beat v2, most of all on facts_hard, instructions, topic_switch, honesty, correction | Goal: beat v3 | Goal: beat v3.5, plus thinking and tool-use tests | Goal: beat v4 | Goal: beat v5 | Goal: beat v6 |
 | Phone speed (PocketPal, Q8_0) | — | **~210–245 tokens/s**, first word in <0.1 s | Slower (4.5× bigger); measured when done | Slower again (~2.7× v3); measured when done | Same as v3.5 (skill packs add little) | Slower; measured when done | Slow on phones; fast on PC | PC and server |
-| HellaSwag (`exam.py`, random = 25%) | — | **28.4%** (baseline) | Goal: ~33–38%; **forecast now ~40–45%** (35.6% at step 4,000) | Goal: higher than v3; forecast ~49–55% | Forecast **~51–58%** (v3.5 + 2–3 points from the extra reading) | Goal: beat v4, plus harder reasoning and coding tests | Goal: beat v5 | Goal: beat v6 |
+| HellaSwag (`exam.py`, full test, random = 25%) | — | **28.4%** (baseline) | **31.7% at step 15,000** (full test; the 500-question mini-exam reads ~5 points high); forecast **~34–38%** | Forecast **~44–51%** (1.12B, 40B tokens with everyday web) | Forecast **~46–54%** (v3.5 + 2–3 points from the extra reading) | Goal: beat v4, plus harder reasoning and coding tests | Goal: beat v5 | Goal: beat v6 |
 | Public yardsticks (`lm-evaluation-harness`: ARC, MMLU; small GSM8K-style math) | — | Run to set the baseline | Goal: beat v2 | Goal: beat v3 | Measured with thinking on and off | Goal: beat v4 | Goal: beat v5 | Goal: beat v6 |
 | Tool, thinking and coding tests (v4+) | — | — | — | — | New: right tool called, task finished, thinking on vs off, small coding tasks | Goal: beat v4 | Goal: beat v5 | Goal: beat v6 |
 
@@ -282,7 +282,7 @@ offline use; these power the PC and the app's online mode. Details: [ROADMAP.md]
 - **v2:** a mini assistant with basic general knowledge and real conversations
 - **v3 (Rune):** an **accurate, honest** assistant that looks facts up, admits when it doesn't know, and
   handles basic code
-- **v3.5 (Skald):** v3's features on a **~1.05B brain** that reads 30B tokens: the biggest model trained at home
+- **v3.5 (Skald):** v3's features on a **~1.12B brain** that reads 40B tokens (educational and everyday web, code, math)
 - **v4 (Skald 2):** v3.5's brain **trained longer**, turned into a **personal assistant**: specialist skills, exact math with tools, a Quick / Balanced / Deep
   thinking dial, coding help, documents, voice, and your own app
 - **v5 (Saga):** a **genuinely capable** 3B assistant: the first version trained in the cloud, and the first

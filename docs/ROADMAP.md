@@ -10,7 +10,7 @@ version's test-sheet results decide what the next one focuses on.
 | **v1** ✅ | Learn the pipeline | 30M | Tells children's stories; runs offline on the phone | RTX 4070, 4 hours | $0 |
 | **v2** ✅ | Knowledge | 88M | General Q&A, explanations, multi-turn chat | RTX 4070, ~18 hours | $0 |
 | **v3** 🛠️ | Accuracy | ~400M | Looks things up (RAG), says "I don't know", handles corrections, exact instructions, preference training (DPO), remembers you, reply suggestions, basic code; v3-long stretches it to 8K–32K | RTX 4070 afternoons + a rented RTX 3090 overnight (25.8 / 17.5 s/step) | ~$30–40 cloud + electricity |
-| **v3.5** | Scale at home | **~1.05B** | Same features as v3 on a much bigger brain; reads 30B tokens | RTX 4070, ~3.5–4.5 months nonstop (pausable) | ~$110–270 electricity |
+| **v3.5** | Scale | **~1.12B** | Same features as v3 on a much bigger brain; reads 40B tokens (educational + everyday web, code, math) | 2× RTX 5090, ~20–25 days (or the RTX 4070, ~5–6.5 months) | ~$420–530 rented |
 | **v4** | Abilities | v3.5 **trained longer** (1B, +15–30B tokens) | Specialist skill packs + router, tools, voice, own app | RTX 4070, ~1.5–4 months while the app is built | ~$55–270 electricity |
 | **v5** | Scale | 3B | Genuinely capable assistant | Cloud (from scratch) **or** RTX 4070 (fine-tune an open 3B) | ~$1,500+ **or** $0 |
 | **v6** | Bigger small | **5B** | Stronger reasoning, coding and knowledge; 8k memory; powers online mode | Cloud (or grown from v5) | ~$4,000–6,000 (less with growth or a grant) |
@@ -202,6 +202,10 @@ and has a test-sheet score recorded as the **baseline** for v3. ✅ All done.
 val loss 3.426 and **HellaSwag 33.4%** (500-question mini-exam), already above v2's final 28.4% at 4% of
 the training. Step 4,000: val 2.900 and **HellaSwag 35.6%**, ahead of the forecast: v3's final forecast
 rises from 37–42% to ~40–45%, v3.5's from 45–52% to ~49–55%, and v4 (v3.5 trained longer) ~51–58%.
+**Correction (step 15,000):** those mini-exam scores use the FIRST 500 questions, which are ~5 points
+easier than the whole test. The full test (all 10,042) gave **31.7%** at step 15,000 (37% on the first
+500), against v2's full-test 28.4%. Forecasts on the full test: **v3 ~34–38%, v3.5 ~44–51%** (1.12B, 40B
+tokens with everyday web), **v4 ~46–54%**. From now on versions are compared on the full test only.
 Two more exams (steps 6,000 and 8,000) confirm or undo this. Built while it trains and waiting for the finished model: chat lessons with memory and
 reply suggestions, NEFTune, checkpoint averaging, DPO with rule-checked pairs (`make_dpo_pairs.py`,
 `dpo.py`), `compare.py` (the release gate against v2), the context meter, long-context tools for v3-long,
@@ -271,60 +275,54 @@ blocked sites are skipped, because a small model believes whatever it reads.
 
 ---
 
-## v3.5: ~1.05B on the RTX 4070
+## v3.5: ~1.12B, 40B tokens (2× RTX 5090, or started at home)
 
-Goal: the biggest brain that can realistically be trained at home, as cheaply as possible.
-(700M was considered and skipped: 1B costs more time but not more money.)
+Goal: the biggest brain that runs well on a phone, reading as much as a few weeks of rented GPUs allow.
+**Final plan (Oct 2026):** 24 layers (1.12B, up from 1.04B), 40B tokens (up from 30B) with everyday web
+pages added on top of the educational ones, more code and math, no TinyStories. Step by step: [V3_5.md](V3_5.md).
 
 | | |
 |---|---|
-| Size | **~1.05B** parameters: 2048 wide × 22 layers, feed-forward 5,632, grouped-query attention (4 key/value heads), 32k vocabulary. All sizes are multiples of 256, so the phone's Q4 format works |
-| Reading | **30B tokens** (~29 per parameter) + a 3B-token anneal set; ~66 GB on disk |
-| Steps | ~115,000 at 262,144 tokens each |
-| Time | **~3.5–4.5 months running 24/7** (estimated from v3's measured 26.5 s/step: ~70 s/step by scaling, ~84–96 s with the memory tricks below). At 16 hours a day: ~5–6.5 months; 12 hours: ~7–9 months. Pause with Ctrl+C for gaming, resume anytime; only the hours the GPU trains count |
-| Cost | **~$110–270** electricity (~$140–180 at $0.20/kWh): about 700–900 kWh at ~270 W for the whole PC (GPU ~165 W plus the rest), so multiply by your own rate. Less with a GPU power limit of ~80% |
-| Memory | Needs **both CPU offload** (the optimizer lives in system RAM; ~16 GB free RAM) **and gradient checkpointing** on part or all of the layers. v3's measured 10.2 GB shows offload alone isn't enough: fp32 weights + gradients alone are ~8.4 GB at 1.04B parameters, and activations grow ~1.4× |
-| Phone file | ~650 MB (Q4) or ~1.1 GB (Q8) |
-| Features | Everything from v3 (lookups, "I don't know", corrections, preference training) |
+| Size | **1.124B** parameters: 2048 wide × 24 layers, feed-forward 5,632, grouped-query attention (4 key/value heads), 32k vocabulary. All sizes are multiples of 256, so the phone's Q4 format works |
+| Reading | **40B tokens** (~36 per parameter) + a 4.1B-token final-phase set; ~88 GB on disk (~170 GB free while building) |
+| Steps | 152,600 at 262,144 tokens each; the fade starts at step 137,340 |
+| Time / cost | **2× RTX 5090: ~20–25 days, ~$420–530** (~20–30% less if Muon passes its test). RTX 4070 nonstop: ~5–6.5 months, ~$160–390 electricity |
+| Memory at home | CPU offload (optimizer in system RAM, ~18 GB free RAM) plus gradient checkpointing; 1.12B still fits the 12 GB card, so the run can move home if the rental ends |
+| Phone file | ~700 MB (Q4) or ~1.2 GB (Q8) |
+| Features | Everything from v3 (lookups, web search, "I don't know", corrections, memory, preference training) |
 | **Code** | **Several languages** instead of Python only (see below) |
 
-**Why 30B tokens instead of 20B:** ~20 tokens per parameter is the most *efficient* use of
-training time, but models keep improving with more reading. 30B gives a model roughly as good as a
-~1.3–1.5B one trained the standard way, while staying 1B-sized on the phone (same speed and file
-size). The extra ~1.5 months and ~$50 are paid once. If more is wanted later, the run can continue
-from `pre_decay.pt` instead of starting over: that is exactly what **v4** does (see [v4's brain](#v4s-brain-v35-trained-longer)).
+**Why 40B tokens and everyday web:** v3's full-test HellaSwag (31.7% at step 15,000, 37% on the first 500
+questions only) showed the educational-only mix is strong on knowledge but weaker on everyday "what
+happens next" sense. Everyday pages (DCLM) are **added** rather than swapped in, so the ~19B educational
+tokens stay. A cheap A/B (v3plus vs v3plus-edu, ~$9 each) checks the idea before the big run.
 
-**Why ~1.05B and not 1.15B or 1.3B:** training needs the weights, gradients and optimizer on a 12 GB
-card at once. ~1.05B fits with CPU offload plus gradient checkpointing; 1.15B is tighter (+1–2 test points, +15% time); 1.3B
-needs 16-bit-only training (+3–4 points, +30% time). The v3.5 pilot runs confirm memory and speed;
-if there's clear headroom, 1.15B can still be chosen then.
+**Why 1.12B and not 1.2B+:** 24 layers still fits the 4070 (the backup if the rental ends) and leaves
+room in a 29-day rental; 1.2B+ might not fit at home. Deeper rather than wider (research on small
+models favours depth), so phone speed drops only ~8%.
 
-### v3.5's data (~33B tokens to prepare)
+### v3.5's data (~44B tokens to prepare)
 
-**Main reading: 30B tokens**
+**Main reading: 40B tokens**
 
 | Share | Tokens | Source | Notes |
 |---|---|---|---|
-| 63% | 18.9B | Educational web pages (FineWeb-Edu `sample-100BT`) | The bigger slice, so no page is read twice (v3 used `sample-10BT`) |
-| 15% | 4.5B | Wikipedia | About one full read of English Wikipedia (it's only ~4–5B tokens), so its share drops from v3's 20% |
-| 13% | 3.9B | Code, several languages | Python ~1.9B, JavaScript/HTML/CSS ~0.9B, C# or Java ~0.5B, SQL ~0.3B, shell/PowerShell ~0.3B |
-| 7.5% | 2.25B | Math (FineMath) | Up from 5%: helps step-by-step reasoning |
-| 1.5% | 0.45B | Stories (TinyStories) | Nearly all of TinyStories |
+| 47.5% | 19.0B | Educational web pages (FineWeb-Edu `sample-100BT`) | The same amount as the 30B plan; no page read twice |
+| 17.5% | 7.0B | **Everyday web (DCLM-baseline)** | How-tos, forums, reviews, news, filtered for quality |
+| 11.25% | 4.5B | Wikipedia | About one full read of English Wikipedia |
+| 12.5% | 5.0B | Code, 9 languages (The Stack) | Python first, then JavaScript/HTML/CSS, SQL, Java, C#, shell, PowerShell |
+| 7.5% | 3.0B | Math (FineMath 4+) | Step-by-step math |
+| 3.75% | 1.5B | Textbook-style text (Cosmopedia v2) | Written by the open Mixtral model, not ChatGPT/Claude/Gemini |
 
-**Anneal set: 3B tokens** (read during the last 10% of steps)
+**Final phase: 4.1B tokens** (read during the last 10% of steps): 35% top-rated FineWeb-Edu pages,
+10% DCLM, 20% Wikipedia, 12% math, 13% code, 5% Cosmopedia, **5% human-written Q&A (Stack Exchange,
+best answer)**, so the model reaches chat training already used to "question → helpful answer".
 
-| Share | Tokens | Source |
-|---|---|---|
-| 40% | 1.2B | Top-rated web pages (FineWeb-Edu score 4–5) |
-| 25% | 0.75B | Wikipedia |
-| 15% | 0.45B | Math |
-| 15% | 0.45B | Code |
-| 5% | 0.15B | Stories |
+**No TinyStories from v3.5 on:** they were written by GPT-3.5/4, and this project never trains on
+ChatGPT/Claude/Gemini output. Stories in the chat lessons now come from Cosmopedia.
 
-**Preparing it:** ~33B tokens, ~66 GB, about **3.5–5 hours** at the ~2.6M tokens/second measured for
-v3 (the code dataset may be slower). Test questions are removed as in v3. A new 32k tokenizer is
-trained on a sample that includes every code language. **Disk tip:** v3's 27 GB of data can be
-deleted once v3 has finished training.
+**Preparing it:** ~44B tokens, about **5–8 hours** at v3's measured speed. Test questions are removed
+as in v3. Keep one tokenizer for every machine (home and cloud) so the data matches.
 
 **Multi-language code.** v3 reads only Python (a small brain learns one language well rather than
 many thinly). With 1B parameters there's room for more:
@@ -368,7 +366,7 @@ many thinly). With 1B parameters there's room for more:
   multi-language code source
 - **Step-by-step math in the chat data**: the teacher model writes worked word problems (GSM8K
   style) for fine-tuning. Keep the real GSM8K questions for testing only, so the test stays fair.
-- **Mandatory pilot runs**: ~1.05B (and 1.15B if memory allows), to confirm memory, speed and falling loss
+- **Mandatory pilot runs**: at 1.12B, to confirm memory, speed and falling loss
 
 **While it trains:** the GPU is busy, so this is the time to *write* v4's code (the coding
 harness, router, website) and test it on small models (and on v3). **Keep `pre_decay.pt`** (saved at
@@ -389,9 +387,9 @@ as "v3+" would be for v3.
 
 | | v3.5 | v4 |
 |---|---|---|
-| Size, phone speed, download | 1.05B, ~650 MB (Q4) | **the same** |
-| Reading | 30B tokens (~29 per parameter) | **+15B or +30B more** (~43–58 per parameter) |
-| HellaSwag forecast | ~49–55% | **~51–58%** (+1–2 points for +15B, +2–3 for +30B) |
+| Size, phone speed, download | 1.12B, ~700 MB (Q4) | **the same** |
+| Reading | 40B tokens (~36 per parameter) | **+15B or +30B more** (~49–62 per parameter) |
+| HellaSwag forecast (full test) | ~44–51% | **~46–54%** (+1–2 points for +15B, +2–3 for +30B) |
 | Where / how long | RTX 4070, ~3.5–4.5 months | RTX 4070: **~1.5–2 months (+15B) or ~3–4 months (+30B)**, faster with cloud nights or Muon |
 | Cost | ~$110–270 electricity | ~$55–270 electricity |
 
@@ -496,7 +494,7 @@ this (`<|tool_call|>`, `<|tool_result|>`) are already reserved in v3's tokenizer
 | Model | What it can do |
 |---|---|
 | v3 (394M) | Autocomplete only, no agent work |
-| v3.5 / v4 (~1.05B) | Small, simple tasks: fix an obvious bug in one short file, write a small function, run a command and read the result |
+| v3.5 / v4 (~1.12B) | Small, simple tasks: fix an obvious bug in one short file, write a small function, run a command and read the result |
 | v5 (3B) | Small multi-step jobs: a few files, a couple of retries |
 | v6.5 (7B) | Real everyday scripting help |
 
@@ -791,7 +789,7 @@ planning an ONNX/WebLLM version: it would mean a second conversion path for litt
 | Size | Realistic targets | Not realistic |
 |---|---|---|
 | v1-v2 (30-88M) | Phones, PCs, browsers | Microcontrollers (an ESP32 has ~0.5 MB of RAM, the file alone is 20+ MB) and smartwatches |
-| v3-v4 (0.4-1.05B) | Phones, PCs, browsers, Raspberry Pi 5 (a few words per second), old laptops | Pi Zero / Pico |
+| v3-v4 (0.4-1.12B) | Phones, PCs, browsers, Raspberry Pi 5 (a few words per second), old laptops | Pi Zero / Pico |
 | v5-v6.5 (3-7B) | PCs with a GPU or 8 GB+ RAM, Apple Silicon Macs, servers; high-end phones for 3B | Older phones |
 
 Downloads are quantized (Q4 by default), not 16-bit: a 7B model is ~4 GB in Q4 but ~14 GB in 16-bit.

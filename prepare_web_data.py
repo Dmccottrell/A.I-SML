@@ -12,7 +12,14 @@ WHAT THIS FILE DOES (run it once per version; it takes a while)
                       PowerShell (The Stack, license-filtered)          (v3.5)
          fineweb_100bt / fineweb_hq_100bt - the bigger FineWeb-Edu slice (v3.5)
          math       - FineMath: web pages with step-by-step math      (v3+)
-         tinystories- the v1 stories (already on your PC)
+         dclm       - DCLM-baseline: everyday web pages (how-tos, forums, reviews,
+                      news), filtered for quality                       (v3.5, v3plus)
+         cosmopedia - textbook-style explanations and stories written by an OPEN
+                      model (Mixtral), from SmolLM's corpus             (v3.5)
+         qa         - human-written questions and answers from Stack Exchange,
+                      best answer first; only in v3.5's anneal set      (v3.5)
+         tinystories- the v1 stories (v1-v3 only: written by GPT-3.5/4, so not
+                      used from v3.5 on)
        How much of each is set per version in config.py (data_mix):
          v2: 80% fineweb, 15% wikipedia, 5% stories          ~2.8B tokens
          v3: 63% fineweb, 20% wikipedia, 10% code, 5% math, 2% stories  ~12B tokens
@@ -205,6 +212,57 @@ def load_math():
         yield row["text"]
 
 
+def load_dclm():
+    """DCLM-baseline: ordinary web pages (how-tos, forums, reviews, recipes, news) kept by a quality
+    filter. Broader and more everyday than FineWeb-Edu, which keeps only "educational" pages: the
+    kind of text HellaSwag-style common sense ("what happens next") comes from."""
+    from datasets import load_dataset
+    try:
+        ds = load_dataset("mlfoundations/dclm-baseline-1.0-parquet", split="train", streaming=True)
+    except Exception as e:
+        print(f"(dclm parquet copy unavailable: {e}; trying the original)")
+        ds = load_dataset("mlfoundations/dclm-baseline-1.0", split="train", streaming=True)
+    for row in ds:
+        text = row.get("text") or ""
+        if len(text) >= 200:
+            yield text
+
+
+def load_cosmopedia():
+    """Cosmopedia v2 (from SmolLM's corpus): textbook pages, lessons and stories written by an open
+    model (Mixtral-8x7B-Instruct). Not ChatGPT/Claude/Gemini output, so it fits this project's rule."""
+    from datasets import load_dataset
+    ds = load_dataset("HuggingFaceTB/smollm-corpus", "cosmopedia-v2", split="train", streaming=True)
+    for row in ds:
+        yield row["text"]
+
+
+def _html_to_text(html_text):
+    """Stack Exchange posts are HTML: keep paragraphs, list items and code blocks as plain text."""
+    import html as _html
+    t = re.sub(r"(?i)<br\s*/?>|</p>|</li>|</h\d>|</pre>|</blockquote>", "\n", html_text)
+    t = re.sub(r"(?i)<li[^>]*>", "- ", t)
+    t = _html.unescape(re.sub(r"<[^>]+>", "", t))
+    return re.sub(r"\n{3,}", "\n\n", t).strip()
+
+
+def load_qa():
+    """Human-written questions and answers (Stack Exchange): the question, then its best answer.
+
+    Only answers with a positive score; only for the anneal set, so the model meets the
+    "question -> helpful answer" shape before chat training."""
+    from datasets import load_dataset
+    ds = load_dataset("HuggingFaceH4/stack-exchange-preferences", split="train", streaming=True)
+    for row in ds:
+        answers = [a for a in row.get("answers") or [] if (a.get("pm_score") or 0) > 0 and a.get("text")]
+        if not answers or not row.get("question"):
+            continue
+        best = max(answers, key=lambda a: (bool(a.get("selected")), a.get("pm_score") or 0))
+        q, a = _html_to_text(row["question"]), _html_to_text(best["text"])
+        if 30 <= len(q) and 50 <= len(a) and len(q) + len(a) <= 12_000:
+            yield f"Question: {q}\n\nAnswer: {a}"
+
+
 # Source name (as used in config.py's data_mix) -> loader
 LOADERS = {
     "fineweb": load_fineweb,
@@ -216,6 +274,9 @@ LOADERS = {
     "fineweb_hq_100bt": load_fineweb_hq_100bt,
     "code_multi": load_code_multi,
     "tinystories": load_tinystories,
+    "dclm": load_dclm,
+    "cosmopedia": load_cosmopedia,
+    "qa": load_qa,
 }
 
 
@@ -280,11 +341,22 @@ def encode_doc(text):
 
 
 # ------------------------------------------------------------------ steps
-def train_tokenizer(out_dir, sample_chars, sources, vocab_size, special_tokens=None):
-    """Train the tokenizer on a sample mixed from all sources (by share)."""
+def train_tokenizer(out_dir, sample_chars, sources, vocab_size, special_tokens=None, copy_from=None):
+    """Train the tokenizer on a sample mixed from all sources (by share).
+
+    copy_from: another version's data folder whose tokenizer this version must use (v3plus reads with
+    v3's tokenizer, because it continues v3's weights)."""
     path = os.path.join(out_dir, "tokenizer.json")
     if os.path.exists(path):
         print(f"tokenizer: {path} already exists, skipping")
+        return path
+    if copy_from:
+        src = os.path.join(copy_from, "tokenizer.json")
+        if not os.path.exists(src):
+            raise SystemExit(f"this version uses the tokenizer in {src}, which isn't there: copy it first")
+        import shutil
+        shutil.copyfile(src, path)
+        print(f"tokenizer: copied {src}")
         return path
     parts = []
     for name, loader, share in sources:
@@ -417,7 +489,8 @@ def main(argv=None):
     print(f"building {a.total_tokens:,} tokens into {out_dir}/ with {a.workers} CPU workers")
 
     test_ngrams = load_test_ngrams() if V.decontaminate and not a.no_decontam else None
-    tok_path = train_tokenizer(out_dir, int(a.sample_mb * 1e6), sources, V.vocab_size, V.special_tokens)
+    tok_path = train_tokenizer(out_dir, int(a.sample_mb * 1e6), sources, V.vocab_size, V.special_tokens,
+                               get_version(V.tokenizer_from).data_dir if V.tokenizer_from else None)
     for name, loader, share in sources:
         encode_source(name, loader, int(a.total_tokens * share), int(a.val_tokens * share),
                       out_dir, tok_path, a.workers, a.batch_docs, test_ngrams)

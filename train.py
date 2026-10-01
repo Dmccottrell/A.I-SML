@@ -429,12 +429,11 @@ exam_questions = None
 if S.exam_every and not args.pilot and IS_MAIN:
     try:
         from benchmarks import load_hellaswag
-        exam_questions = load_hellaswag()
-        if S.exam_questions:
-            exam_questions = exam_questions[:S.exam_questions]
-        # the metric's name says how many questions, so scores from different sizes are never mixed up
-        exam_name = "hellaswag_500" if len(exam_questions) == 500 else (
-            f"hellaswag_{len(exam_questions)}" if S.exam_questions else "hellaswag_full")
+        from exam import pick_questions
+        exam_questions = pick_questions(load_hellaswag(), S.exam_questions, S.exam_pick)
+        # the metric's name says how many questions (and "spread" or not), so scores are never mixed up
+        exam_name = ("hellaswag_full" if not S.exam_questions else f"hellaswag_{len(exam_questions)}"
+                     + ("_spread" if S.exam_pick == "spread" else ""))
         exam_tok = BPETokenizer.load(os.path.join(DATA_DIR, "tokenizer.json"))
     except Exception as e:
         print(f"mini-exam off: couldn't load HellaSwag ({e})")

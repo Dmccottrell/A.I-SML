@@ -20,7 +20,9 @@ WHAT THIS FILE DOES
       unknowable       personal/live/made-up questions -> honest   inventing answers about anything
       identity         a different answer for each question        same paragraph for "What can you do?"
       small_talk       casual greetings and chit-chat              "Whats up" -> it invented its own question
-      story            tell stories (keeps v1's skill)             -
+      story            tell stories (keeps v1's skill); stories   -
+                       from Cosmopedia (an open model), not
+                       TinyStories (written by GPT-3.5/4)
       memory_save      "my name is Sam" -> save it (a tool call)   (new: remembering you, chat_memory.py)
       memory_skip      passwords, moods, other people -> don't     saving things it shouldn't
       memory_recall    answer from "Saved memory" / earlier-chat   "I don't know your name" when it does
@@ -508,9 +510,8 @@ def build(general, stories, lookup_records, instruction_records, wiki, a, seed=1
     parts.update(web_conversations(rng, getattr(a, "web", 0)))
     parts["other_ai"] = other_ai_conversations(rng, getattr(a, "other_ai", 0))
     if stories:
-        from make_chat_data_v2 import story_conversations
         rng.shuffle(stories)
-        parts["story"] = [ex["messages"] for ex in story_conversations(stories, rng, a.stories)]
+        parts["story"] = story_conversations(stories, rng, a.stories)
     examples = []
     for kind, convos in parts.items():
         kept = [c for c in convos if total_chars(c) <= MAX_CHARS]
@@ -523,6 +524,50 @@ def build(general, stories, lookup_records, instruction_records, wiki, a, seed=1
         print(f"  your own examples: {len(mine)} (x3)")
     rng.shuffle(examples)
     return examples
+
+
+MAX_STORY = 3000      # characters: a short story, well inside the chat lessons' size limit
+
+
+def load_clean_stories(n=12_000, max_rows=3_000_000):
+    """Short stories for the story lessons, from Cosmopedia v2 (written by an OPEN model, Mixtral).
+
+    v1-v3's TinyStories were written by GPT-3.5/4, and this project never trains on ChatGPT/Claude/
+    Gemini output, so the chat lessons use these instead. Keeps stories (by the "format" or "audience"
+    field, or a story-like opening) of at most MAX_STORY characters."""
+    from datasets import load_dataset
+    ds = load_dataset("HuggingFaceTB/smollm-corpus", "cosmopedia-v2", split="train", streaming=True)
+    out = []
+    for i, row in enumerate(ds):
+        if len(out) >= n or i >= max_rows:
+            break
+        text = (row.get("text") or "").strip()
+        kind = f"{row.get('format', '')} {row.get('audience', '')}".lower()
+        storyish = "story" in kind or "child" in kind or text.lower().startswith(("once upon", "one day"))
+        if storyish and 300 <= len(text) <= MAX_STORY:
+            out.append(text)
+    print(f"stories: {len(out):,} short Cosmopedia stories")
+    return out
+
+
+def story_conversations(stories, rng, n):
+    """Story requests that each story actually answers ("Tell me a story about Lily.")."""
+    import re
+    from make_chat_data import NAME_PROMPTS, OPEN_PROMPTS, STOPWORDS, WORD_PROMPTS
+    out = []
+    for story in stories:
+        m = re.search(r"\bnamed ([A-Z][a-z]+)", story)
+        words = [w for w in re.findall(r"\b[a-z]{4,10}\b", story) if w not in STOPWORDS]
+        if m:
+            prompt = rng.choice(NAME_PROMPTS).format(x=m.group(1))
+        elif words and rng.random() < 0.6:
+            prompt = rng.choice(WORD_PROMPTS).format(x=rng.choice(words))
+        else:
+            prompt = rng.choice(OPEN_PROMPTS)
+        out.append([user(prompt), assistant(story)])
+        if len(out) >= n:
+            break
+    return out
 
 
 def read_jsonl(path):
@@ -553,14 +598,14 @@ if __name__ == "__main__":
     if a.web is None:
         a.web = WEB_LESSONS.get(a.version, max(WEB_LESSONS.values()))
 
-    from make_chat_data_v2 import load_smoltalk, load_story_texts
+    from make_chat_data_v2 import load_smoltalk
     wiki = None
     if os.path.exists(a.db):
         from wiki_index import WikiIndex
         wiki = WikiIndex(a.db)
     else:
         print(f"(no Wikipedia index at {a.db}: lookup lessons will only include the source passage)")
-    examples = build(load_smoltalk(), load_story_texts(),
+    examples = build(load_smoltalk(), load_clean_stories() if a.stories else [],
                      read_jsonl(os.path.join(TEACHER_DIR, "lookup.jsonl")),
                      read_jsonl(os.path.join(TEACHER_DIR, "instructions.jsonl")), wiki, a)
     os.makedirs(V.data_dir, exist_ok=True)
