@@ -50,10 +50,11 @@ Hero, "Four models, one family", what it does (private by default, remembers you
 "Built from the ground up" (what Yuvra is), "At home or in the cloud, private or public", try it, footer. Placeholders left in:
 `[YEAR]` and the invite link.
 
-## Usage and limits
-Two screens: **Usage** (what a person sees: current session, weekly limits, one bar per model in its colour, "On this device: not counted") and
-**Limits** (owner only: per group, per model session and weekly points, cost weights, what happens at the limit). The plan, including server-side
-enforcement, is in docs/APP_SPEC.md ("Usage and limits").
+## Usage and limits: sparks
+Yuvra's own usage design, counted in tokens and shown as **sparks** (1 spark = 1,000 counted tokens). The phone's **Sparks** screen shows a brain that fills
+like a tank (with the core as the spark), a seven-day strip for the week, and tokens by model. The owner-only **Sparks and limits** screen sets the tank
+(capacity and hourly refill), the weekly ceiling, the Everyday and Long context windows, the counting multipliers and the model weights. The context
+window caps one request; it is not an allowance. Full plan and worked examples: docs/APP_SPEC.md ("Usage and limits: sparks").
 
 ## Still open
 - Final logo choice (the earlier network-Y and cradle ideas were dropped), plus app-icon and favicon exports as PNG/ICO.

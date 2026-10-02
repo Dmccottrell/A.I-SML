@@ -14,8 +14,8 @@
     "Picker.dc.html": {"x": 0, "y": 3900, "w": 440, "h": 720, "title": "Select model"},
     "Phone.dc.html": {"x": 520, "y": 3900, "w": 390, "h": 844, "title": "Phone (dark)"},
     "PhoneLight.dc.html": {"x": 990, "y": 3900, "w": 390, "h": 844, "title": "Phone (light)"},
-    "Usage.dc.html": {"x": 1460, "y": 3900, "w": 390, "h": 844, "title": "Usage (phone)"},
-    "Limits.dc.html": {"x": 1930, "y": 3900, "w": 1100, "h": 800, "title": "Limits (owner settings)"}
+    "Usage.dc.html": {"x": 1460, "y": 3900, "w": 390, "h": 1000, "title": "Sparks (phone)"},
+    "Limits.dc.html": {"x": 1930, "y": 3900, "w": 1180, "h": 900, "title": "Sparks and limits (owner settings)"}
   },
   "order": ["Logo.dc.html", "Colours.dc.html", "Main.dc.html", "HomeLight.dc.html", "Chat.dc.html", "ChatLight.dc.html", "Picker.dc.html", "Phone.dc.html", "PhoneLight.dc.html", "Usage.dc.html", "Limits.dc.html"],
   "notes": {

@@ -12,51 +12,63 @@
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Sora:wght@500;600;700&family=DM+Sans:wght@400;500;600&display=swap">
 <style>
 body{margin:0}
-div, span, button, svg, path, circle { transition: background-color .7s ease, color .7s ease, border-color .7s ease, fill .7s ease, stroke .7s ease, opacity .7s ease; }
-circle[style*="fill: var(--sun)"] { fill: var(--core) !important; stroke: var(--sun); stroke-width: 3; }
+div, span, button, svg, path, circle, rect { transition: background-color .7s ease, color .7s ease, border-color .7s ease, fill .7s ease, stroke .7s ease, opacity .7s ease; }
 </style>
 </helmet>
-<div style="{{themeStyle}}; width: 390px; height: 844px; box-sizing: border-box; background: var(--bg); background-image: radial-gradient(500px 300px at 60% -8%, var(--glow), transparent 70%); color: var(--text); font-family: 'DM Sans', sans-serif; font-size: 16px; line-height: 1.45; display: flex; flex-direction: column">
+<div style="{{themeStyle}}; width: 390px; height: 1000px; box-sizing: border-box; background: var(--bg); background-image: radial-gradient(520px 320px at 50% 8%, var(--glow), transparent 70%); color: var(--text); font-family: 'DM Sans', sans-serif; font-size: 16px; line-height: 1.45; display: flex; flex-direction: column">
 
-<div style="height: 60px; box-sizing: border-box; padding: 0 8px; display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid var(--line)">
+<div style="height: 60px; box-sizing: border-box; padding: 0 8px; display: flex; align-items: center; justify-content: space-between">
 <button aria-label="Back" style="background: transparent; border: 0; color: var(--text); font-size: 22px; width: 44px; height: 44px">&larr;</button>
-<div style="font-family: 'Sora', sans-serif; font-weight: 600; font-size: 20px">Usage</div>
-<button aria-label="About usage" style="background: transparent; border: 0; color: var(--muted); font-size: 18px; width: 44px; height: 44px">i</button>
+<div style="font-family: 'Sora', sans-serif; font-weight: 600; font-size: 20px">Sparks</div>
+<button aria-label="How sparks are counted" style="background: transparent; border: 0; color: var(--muted); font-size: 18px; width: 44px; height: 44px">?</button>
 </div>
 
-<div style="flex: 1; overflow: hidden; padding: 20px 16px; display: flex; flex-direction: column; gap: 18px">
+<div style="flex: 1; overflow: hidden; padding: 4px 16px 20px; display: flex; flex-direction: column; gap: 22px">
 
-<div style="background: var(--surface); border: 1px solid var(--line); border-radius: 18px; padding: 18px 18px 16px; display: flex; flex-direction: column; gap: 12px">
-<div style="display: flex; justify-content: space-between; align-items: baseline"><span style="font-size: 18px; font-weight: 600">Current session</span><span style="color: var(--muted)">43% used</span></div>
-<div style="height: 10px; border-radius: 999px; background: var(--surface2); overflow: hidden"><div style="width: 43%; height: 100%; background: var(--accent); border-radius: 999px"></div></div>
-<div style="color: var(--muted); font-size: 14px">Resets in 1 hr 10 min</div>
+<!-- the brain tank: it fills like a tank; the core is the spark -->
+<div style="display: flex; flex-direction: column; align-items: center; gap: 10px">
+<svg width="210" height="210" viewBox="0 0 64 64" fill="none" role="img" aria-label="Brain tank, 62 percent full">
+<defs><clipPath id="tank"><path d="M32 56 C22 56 12 51 10 41 C5 37 5 28 11 24 C10 16 18 8 26 11 C29 6 35 6 38 11 C46 8 54 16 53 24 C59 28 59 37 54 41 C52 51 42 56 32 56 Z"/></clipPath></defs>
+<g clip-path="url(#tank)"><rect x="0" y="26" width="64" height="32" style="fill: var(--accent)" fill-opacity="0.85"/><rect x="0" y="24.5" width="64" height="2" style="fill: var(--text)" fill-opacity="0.35"/></g>
+<path d="M32 56 C22 56 12 51 10 41 C5 37 5 28 11 24 C10 16 18 8 26 11 C29 6 35 6 38 11 C46 8 54 16 53 24 C59 28 59 37 54 41 C52 51 42 56 32 56 Z" style="stroke: var(--text)" stroke-width="2.5" stroke-linejoin="round"/>
+<path d="M32 55 V36 M32 36 L21 18 M32 36 L43 18" style="stroke: var(--text)" stroke-opacity="0.5" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+<circle cx="32" cy="36" r="5" style="fill: var(--core); stroke: var(--sun)" stroke-width="2.5"/>
+</svg>
+<div style="text-align: center"><span style="font-family: 'Sora', sans-serif; font-weight: 600; font-size: 44px; letter-spacing: -0.02em">124</span> <span style="color: var(--muted); font-size: 18px">of 200 sparks</span></div>
+<div style="color: var(--muted); font-size: 15px; text-align: center">Refilling 25 an hour &middot; full again by 9:40 PM</div>
 </div>
 
-<div style="font-size: 13px; font-weight: 600; letter-spacing: 0.1em; color: var(--muted); padding: 0 4px">WEEKLY LIMITS</div>
-
-<div style="background: var(--surface); border: 1px solid var(--line); border-radius: 18px; padding: 18px; display: flex; flex-direction: column; gap: 16px">
-<div style="display: flex; flex-direction: column; gap: 10px">
-<div style="display: flex; justify-content: space-between; align-items: baseline"><span style="font-size: 18px; font-weight: 600">All models</span><span style="color: var(--muted)">62% used</span></div>
-<div style="height: 10px; border-radius: 999px; background: var(--surface2); overflow: hidden"><div style="width: 62%; height: 100%; background: var(--accent); border-radius: 999px"></div></div>
-<div style="color: var(--muted); font-size: 14px">Resets Sun 2:00 AM</div>
+<!-- this week: a strip of days, not a bar -->
+<div style="background: var(--surface); border: 1px solid var(--line); border-radius: 18px; padding: 16px 18px; display: flex; flex-direction: column; gap: 14px">
+<div style="display: flex; justify-content: space-between; align-items: baseline"><span style="font-weight: 600">This week</span><span style="color: var(--muted); font-size: 14px">195 of 1,000 &middot; resets Sun 2:00 AM</span></div>
+<div style="display: flex; align-items: flex-end; gap: 8px; height: 64px">
+<div style="flex: 1; display: flex; flex-direction: column; align-items: center; gap: 6px"><div style="width: 100%; height: 38px; border-radius: 6px; background: var(--accent); opacity: 0.55"></div><span style="font-size: 12px; color: var(--muted)">M</span></div>
+<div style="flex: 1; display: flex; flex-direction: column; align-items: center; gap: 6px"><div style="width: 100%; height: 22px; border-radius: 6px; background: var(--accent); opacity: 0.55"></div><span style="font-size: 12px; color: var(--muted)">T</span></div>
+<div style="flex: 1; display: flex; flex-direction: column; align-items: center; gap: 6px"><div style="width: 100%; height: 56px; border-radius: 6px; background: var(--accent); opacity: 0.55"></div><span style="font-size: 12px; color: var(--muted)">W</span></div>
+<div style="flex: 1; display: flex; flex-direction: column; align-items: center; gap: 6px"><div style="width: 100%; height: 30px; border-radius: 6px; background: var(--accent); opacity: 0.55"></div><span style="font-size: 12px; color: var(--muted)">T</span></div>
+<div style="flex: 1; display: flex; flex-direction: column; align-items: center; gap: 6px"><div style="width: 100%; height: 44px; border-radius: 6px; background: var(--accent)"></div><span style="font-size: 12px; font-weight: 600">F</span></div>
+<div style="flex: 1; display: flex; flex-direction: column; align-items: center; gap: 6px"><div style="width: 100%; height: 6px; border-radius: 6px; border: 1px dashed var(--line)"></div><span style="font-size: 12px; color: var(--muted)">S</span></div>
+<div style="flex: 1; display: flex; flex-direction: column; align-items: center; gap: 6px"><div style="width: 100%; height: 6px; border-radius: 6px; border: 1px dashed var(--line)"></div><span style="font-size: 12px; color: var(--muted)">S</span></div>
 </div>
+<div style="color: var(--muted); font-size: 14px">On pace: you could use about 575 more a day until it resets.</div>
+</div>
+
+<!-- tokens, by model -->
+<div style="background: var(--surface); border: 1px solid var(--line); border-radius: 18px; padding: 16px 18px; display: flex; flex-direction: column; gap: 12px">
+<div style="display: flex; justify-content: space-between; align-items: baseline"><span style="font-weight: 600">Tokens this week</span><span style="color: var(--muted); font-size: 14px">1 spark = 1,000 tokens</span></div>
+<div style="display: flex; justify-content: space-between"><span style="display: flex; align-items: center; gap: 8px"><span style="width: 10px; height: 10px; border-radius: 999px; background: #FF4B1F"></span>Flare</span><span>85,000 counted <span style="color: var(--muted)">&middot; 85 sparks</span></span></div>
+<div style="display: flex; justify-content: space-between"><span style="display: flex; align-items: center; gap: 8px"><span style="width: 10px; height: 10px; border-radius: 999px; background: #EEF0F6"></span>Equinox</span><span>55,000 counted <span style="color: var(--muted)">&middot; 110 sparks (x2)</span></span></div>
 <div style="height: 1px; background: var(--line)"></div>
-<div style="display: flex; flex-direction: column; gap: 14px">
-<div style="display: flex; flex-direction: column; gap: 6px"><div style="display: flex; justify-content: space-between"><span style="display: flex; align-items: center; gap: 8px"><span style="width: 10px; height: 10px; border-radius: 999px; background: #FF4B1F"></span>Flare</span><span style="color: var(--muted)">20%</span></div><div style="height: 6px; border-radius: 999px; background: var(--surface2); overflow: hidden"><div style="width: 20%; height: 100%; background: #FF4B1F"></div></div></div>
-<div style="display: flex; flex-direction: column; gap: 6px"><div style="display: flex; justify-content: space-between"><span style="display: flex; align-items: center; gap: 8px"><span style="width: 10px; height: 10px; border-radius: 999px; background: #EEF0F6"></span>Equinox</span><span style="color: var(--muted)">35%</span></div><div style="height: 6px; border-radius: 999px; background: var(--surface2); overflow: hidden"><div style="width: 35%; height: 100%; background: #EEF0F6"></div></div></div>
-<div style="display: flex; flex-direction: column; gap: 6px"><div style="display: flex; justify-content: space-between"><span style="display: flex; align-items: center; gap: 8px"><span style="width: 10px; height: 10px; border-radius: 999px; background: #F2A60C"></span>Solstice</span><span style="color: var(--muted)">70%</span></div><div style="height: 6px; border-radius: 999px; background: var(--surface2); overflow: hidden"><div style="width: 70%; height: 100%; background: #F2A60C"></div></div></div>
-<div style="display: flex; flex-direction: column; gap: 6px"><div style="display: flex; justify-content: space-between"><span style="display: flex; align-items: center; gap: 8px"><span style="width: 10px; height: 10px; border-radius: 999px; background: #A8D1F5"></span>Apogee</span><span style="color: #FF7A7A; font-weight: 600">92% &middot; nearly at the limit</span></div><div style="height: 6px; border-radius: 999px; background: var(--surface2); overflow: hidden"><div style="width: 92%; height: 100%; background: #E5484D"></div></div></div>
-</div>
+<div style="display: flex; justify-content: space-between; color: var(--muted); font-size: 14px"><span>You wrote</span><span>41,000</span></div>
+<div style="display: flex; justify-content: space-between; color: var(--muted); font-size: 14px"><span>Yuvra wrote</span><span>63,000</span></div>
+<div style="display: flex; justify-content: space-between; color: var(--muted); font-size: 14px"><span>Earlier chat re-read (counts 1/10)</span><span>358,000 &rarr; 35,800</span></div>
 </div>
 
-<div style="background: var(--surface); border: 1px solid var(--line); border-radius: 18px; padding: 16px 18px; display: flex; flex-direction: column; gap: 6px">
-<div style="font-weight: 600">On this device</div>
-<div style="color: var(--muted); font-size: 15px">Not counted. Models that run on your phone have no limit; limits only apply to models served from a shared server.</div>
-</div>
+<div style="color: var(--muted); font-size: 14px; text-align: center">Models on your own device are free and never counted.</div>
 </div>
 </div>
 </x-dc>
-<script type="text/x-dc" data-dc-script data-props='{"theme":{"editor":"enum","options":["dark","light"],"default":"dark"},"model":{"editor":"enum","options":["flare","equinox","solstice","apogee","brand"],"default":"brand"},"$preview":{"width":390,"height":844}}'>
+<script type="text/x-dc" data-dc-script data-props='{"theme":{"editor":"enum","options":["dark","light"],"default":"dark"},"model":{"editor":"enum","options":["flare","equinox","solstice","apogee","brand"],"default":"brand"},"$preview":{"width":390,"height":1000}}'>
 const BASE = {
   dark: {bg: '#07080D', side: '#0A0B11', surface: '#0F1119', surface2: '#161926', line: '#232739', text: '#EEF0F6', muted: '#9AA3BC'},
   light: {bg: '#F7F8FC', side: '#EEF0F7', surface: '#FFFFFF', surface2: '#EEF0F7', line: '#D8DCEA', text: '#0D0F1A', muted: '#4A526B'}

@@ -58,22 +58,51 @@ tests, and what "done" means for the first version).
 
 ---
 
-### Usage and limits (plan)
-Like other AI apps, Yuvra shows people how much they have used and lets the **owner (you) set limits**. Designs: `Usage` (phone) and `Limits`
-(owner settings) in `design/canvas/`.
+### Usage and limits: sparks (plan)
+Yuvra's own way to show and limit usage. It is counted in **tokens**, shown as **sparks** (1 spark = 1,000 counted tokens), and drawn as a
+**brain that fills like a tank** instead of a plain progress bar. Designs: `Usage` (the phone's "Sparks" screen) and `Limits` (owner settings) in
+`design/canvas/`.
+
+**Three different numbers (this is the part that is easy to mix up):**
+
+| Number | What it is | Example (private testers) |
+|---|---|---|
+| **1. The context window** | The most ONE request can hold: the model's working memory for a single message and its history. It is a cap per request, **not an allowance** | Everyday 8,192; Long up to 32,768 |
+| **2. The tank** | How much a person can use *right now*. It refills steadily (a "token bucket"), so there is no cliff where everything resets at once | Capacity 200,000 tokens, refills 25,000 per hour (empty to full in 8 hours) |
+| **3. The weekly ceiling** | The total of every chat in 7 days. A hard stop for heavy use | 1,000,000 tokens, resets Sun 2:00 AM |
+
+So **32,768 is not "32,000 every few hours"**. It only limits how big a single request may be. What a person may use over time is the tank (short term) and
+the weekly ceiling (long term). A message is allowed only if both have room; the smaller one wins.
+
+**What a message costs (token-based counting).** A chat is re-read from the start on every message, so a long chat costs more per message. Counted tokens =
+(new text you send x 1) + (earlier chat the server already holds x 0.1) + (what Yuvra writes x 1), then multiplied by the model's weight (Flare 1,
+Equinox 2, Solstice 5, Apogee 10). The 0.1 is because a server that keeps the earlier part of the chat in memory does not recompute it ("prefix
+caching"); a server without that must count it at x 1. Starting values, to be tuned after measuring real server time.
+
+Worked example (each turn: you write 150 tokens, Yuvra writes 350, so the chat grows by 500):
+
+| | After 10 messages | Why |
+|---|---|---|
+| A new chat for every message | 5,000 | each message stands alone (500) |
+| One growing chat, no caching | 27,500 | every message re-reads everything before it |
+| One growing chat, with caching | 7,250 | the earlier part counts at 1/10 |
+| A chat whose window is full at 32K, no caching | ~325,000 | ~32,500 per message |
+| The same full 32K chat, with caching | ~37,000 | ~3,700 per message |
+
+So under the 1,000,000 weekly ceiling a person gets roughly 2,000 short messages, or about 270 messages in a full 32K chat. **Long chats drain the allowance much faster**;
+the app says so, and the tank makes it visible. (Note: the total does NOT flatten at the window size. The window caps one request; the running total keeps
+growing with every message.)
 
 | Part | Plan |
 |---|---|
-| **Where people see usage** | Settings, then **Usage**, and a tap on the chat's status line. A "Current session" bar (resets in 1 hr 10 min), "Weekly limits" with an "All models" bar and one bar per model (in its own colour), and a note that models running on the person's own device are not counted |
-| **What is counted** | **Points** = tokens (read + written) x the model's **cost weight**, so a bigger model uses more (starting weights: Flare 1, Equinox 2, Solstice 5, Apogee 10, adjustable). Only numbers are stored (user, model, tokens in and out, time), never message text |
-| **Windows** | A **session** (rolling 5 hours) and a **weekly** limit that resets at a set time (for example Sun 2:00 AM). Both are settings |
-| **Who sets limits** | Only the owner, in an owner-only **Limits** screen: per group (Private testers, Public later), per model, and per person (an override for one tester). Presets, a pause-all switch, and alerts to you at 80% and 100% |
-| **What applies** | Only models **served from a shared machine** (your PC, a rented server): that is where the cost is. Models running on a person's own device have no limit and are not counted |
-| **At the limit** | Warn at 80%. At 100% pause that model and offer: a smaller model, the on-device model (no limit), or wait for the reset ("Resets Sun 2:00 AM") |
-| **Where it is enforced** | On the **server**, by the person's key, never only in the app (an app can be changed). The server counts every request, refuses over-limit ones with a clear message, and the Usage screen reads the same counts, so what people see matches what is enforced |
-| **Storage** | A small table `usage(user, model, tokens_in, tokens_out, at)` in the server's SQLite, plus a limits table the owner edits. Counts per window are summed; old rows can be pruned |
-| **Tests** | With a fake clock: points add up with weights; the session and weekly windows reset on time; the warning and the block fire at 80% and 100%; a per-person override beats the group limit; on-device use is never counted; no message text is ever stored |
-| **Model list fields** | `cost_weight` per model in `models.json` |
+| **Where people see it** | Settings, then **Sparks**, and a tap on the chat's status line. The brain tank (how full, "124 of 200 sparks", "refilling 25 an hour, full by 9:40 PM"), **This week** as a strip of seven days (not one bar) with a pace note ("you could use about 575 more a day"), and **Tokens this week** by model with a breakdown (you wrote / Yuvra wrote / earlier chat re-read). On-device models: "free, never counted" |
+| **Who sets limits** | Only the owner, in the **Limits** screen: the tank (capacity, refill), the weekly ceiling and reset time, the Everyday and Long windows, the counting multipliers, the model weights; per group (Private testers, Public later) and per person (overrides). Alerts at 80% of the week and at the ceiling; a pause-everything switch |
+| **What applies** | Only models **served from a shared machine** (your PC, a rented server). Models running on a person's own device are free and never counted |
+| **When the tank runs low** | A quiet note at 20%. At empty that model pauses and offers a smaller model, the on-device model (free), or "back to full in about 2 hours". At the weekly ceiling: "resets Sun 2:00 AM" with the same options |
+| **Enforced on the server** | By the person's key, never only in the app. The server counts every request, refuses over-limit ones with a clear message, and the Sparks screen reads the same numbers |
+| **Stored** | `usage(user, model, fresh_in, cached_in, out, at)` and the limits table in the server's SQLite: numbers only, never message text. Tank level = capacity minus recent use plus refill; week = sum since the reset |
+| **Tests** | With a fake clock: counting multipliers and weights add up; the tank refills at the set rate and never exceeds capacity; the weekly total resets on time; a message needs room in both; the 20% note and the empty block fire; a per-person override beats the group limit; on-device use is never counted; no message text is stored |
+| **Model list field** | `cost_weight` per model in `models.json` |
 
 ### Context window and the device check (plan)
 The window (the model's working memory, in tokens) costs RAM, not storage: the model's cache grows with every token. The app chooses
