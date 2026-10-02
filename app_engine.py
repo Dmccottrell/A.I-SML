@@ -5,7 +5,7 @@ WHAT THIS FILE DOES
     The path of one message (docs/APP_SPEC.md, Part 3) and what happens when a step fails:
 
       choose_model   which model answers: refuses one the device is too small for (offers the next smaller), and when
-                     the PC is off asks before switching to the on-device model (never silently)
+                     the PC is off switches to the on-device model (labelled; or asks first, a Setting)
       Guard          wraps the streaming reply: a hard length cap, a Stop button, and a loop detector, so a reply
                      can't run forever
       ChatStore      SQLite chats; the reply is saved WHILE it streams, so closing the app loses at most a few
@@ -39,18 +39,23 @@ def smaller_fallback(models, model, ram_gb):
     return max(fits, key=lambda m: (m["min_ram_gb"], m["version"]), default=None)
 
 
-def choose_model(models, model_id, ram_gb=None, pc_online=True, ask=None):
+def choose_model(models, model_id, ram_gb=None, pc_online=True, ask=None, when_pc_off="switch"):
     """The model to run: `models` is the visible list, `model_id` the person's choice.
 
     Too big for the device -> ModelTooBig (with the next smaller one offered).
-    Online model but the PC is off -> asks `ask(fallback_model) -> bool`; without a yes, raises PcUnreachable
-    (so the app shows the question). Never switches without asking."""
+    Online model but the PC is off -> `when_pc_off` decides (a Setting):
+      "switch" (default): use the on-device fallback right away. The answer is labelled with the model that really
+                          wrote it ("PC off: answered by Equinox on this device"), so it is never hidden. Safe, because
+                          the fallback runs on the device and sends nothing anywhere.
+      "ask":              asks `ask(fallback_model) -> bool`; without a yes, raises PcUnreachable.
+    With no on-device model to fall back to, it always raises PcUnreachable (nothing to switch to).
+    The other direction (device -> online) is never automatic: sending messages off the device is always the person's choice."""
     model = next(m for m in models if m["id"] == model_id)
     if model["where"] == "device" and ram_gb is not None and ram_gb < model["min_ram_gb"]:
         raise ModelTooBig(model, ram_gb, smaller_fallback(models, model, ram_gb))
     if model["where"] == "online" and not pc_online:
         fallback = smaller_fallback(models, model, ram_gb)
-        if fallback and ask and ask(fallback):
+        if fallback and (when_pc_off == "switch" or (ask and ask(fallback))):
             return fallback
         raise PcUnreachable(fallback)
     return model
