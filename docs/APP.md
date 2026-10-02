@@ -65,9 +65,62 @@ within days and becomes online mode for the phone:
 3. **Memory:** what it remembers about you; edit, delete, "forget everything"; export/import.
 4. **Skills:** Study helper and Teacher assistant (Betas) with on/off switches; only packs the account
    may use are shown (`skills.py` access toggle); "Auto" lets the router pick.
-5. **Settings:** model (which `.gguf`), online mode on/off and the PC's address, web search on/off,
+5. **Settings:** model picker (see below), online mode on/off and the PC's address, web search on/off,
    lookups on/off, text size, dark mode, privacy summary.
 6. **Documents:** saved worksheets and lesson plans (PDF/Word) for the Teacher assistant.
+
+## Model picker (the "Select model" sheet)
+
+A sheet that opens from the chat header (tap the model name), like the model menus in other AI apps. It lets
+you choose the model, the effort, and see where each one runs. Works the same on the phone, the PC and the website.
+
+```
+ Select model                                   X
+ -------------------------------------------------
+  Auto   (the router picks)                  [check]
+         Best model and effort for each question
+  Yuvra Flare            [On this phone]
+         Fastest for quick answers
+  Yuvra Equinox          [On this phone]
+         For everyday work and homework
+  Yuvra Solstice         [Online: your PC]
+         For harder questions and long writing
+  Yuvra Apogee           [Online: your PC]
+         For your toughest challenges
+ -------------------------------------------------
+  Effort                              Balanced  >
+ -------------------------------------------------
+  Skills                              Study helper (Beta), Teacher assistant (Beta)  >
+ -------------------------------------------------
+  Other models
+  Yuvra Equinox 2   [Not downloaded, 700 MB]
+  Yuvra Flare (v3) / earlier versions
+```
+
+- **One card per model:** name, a one-line description, and a badge that says where it runs: **On this phone**
+  (offline), **Online: your PC** (messages go to your own PC; the sheet says so), **Not downloaded (700 MB)**
+  (tap to download with a progress bar), or **Beta**. A check mark shows the current choice.
+- **Auto** (the default) hands the choice to the router (`skills.py` today; a small trained classifier in v4),
+  which picks the size, the effort and the skill pack per question, and the chat says what it picked.
+- **Effort:** Quick / Balanced / Deep, the thinking dial from the roadmap. Greyed out for models that can't think yet.
+- **Skills:** the same on/off list as the Skills screen, shortcut included.
+- **Other models:** older versions you kept, downloaded files, and test builds, so you can compare (v3 vs v3.5).
+- **Honest limits:** a model the device can't run (not enough memory) is greyed out with the reason; the
+  badge shows the measured speed on this device once known ("about 200 words a second"); an online model shows
+  "needs your PC to be on" when it can't be reached, and the app falls back to the phone model after asking.
+- **Access toggle:** which cards appear follows the same rule as the skill packs (`can_use()`, everyone / beta /
+  off): a Beta model shows only for the people on the beta list.
+- **Switching mid-chat** keeps the conversation and adds a small divider ("Switched to Yuvra Equinox"). Each
+  answer keeps a tag of which model wrote it.
+- **Credits-style badge (later):** if online mode ever runs on a paid server, a card can carry a "Uses online
+  credits" badge, like other apps do for their biggest models.
+
+**Where the list comes from:** one `models.json` manifest (the app reads it; the PC server serves the same
+file at `/models`). One entry per model: `id`, `name`, `tagline`, `tier` (Lite / Standard / Pro / Max),
+`where` (device / online), `file` and `size_mb` (the `.gguf`), `sha256` (to check the download), `min_ram_gb`,
+`context` (tokens), `status` (stable / beta / off), `supports_effort`, `skills` (which packs fit this model; a pack only
+fits the `chat.pt` it was trained on), and `from_version` (v3, v3.5, ...). Adding a new model is adding a line,
+not changing the app.
 
 ## Features by version
 | | v3 (now) | v3.5 | v4 |
