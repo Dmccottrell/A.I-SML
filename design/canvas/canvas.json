@@ -2,129 +2,40 @@
   "v": 3,
   "attachments": {},
   "boards": {
-    "Chat.dc.html": {
-      "h": 860,
-      "is_interactive": true,
-      "title": "Chat (dark): pick a model, effort, or press Send",
-      "w": 1360,
-      "x": 0,
-      "y": 2020
-    },
-    "ChatLight.dc.html": {
-      "h": 860,
-      "is_interactive": true,
-      "title": "Chat (light)",
-      "w": 1360,
-      "x": 0,
-      "y": 2960
-    },
-    "Colours.dc.html": {
-      "h": 700,
-      "title": "Model colours",
-      "w": 1360,
-      "x": 0,
-      "y": 1240
-    },
-    "HomeLight.dc.html": {
-      "expand": "fill",
-      "h": 3000,
-      "title": "Website home (light)",
-      "w": 1360,
-      "x": 2880,
-      "y": 0
-    },
-    "Limits.dc.html": {
-      "h": 900,
-      "is_interactive": true,
-      "title": "Usage limits (owner): switch the plan",
-      "w": 1180,
-      "x": 1930,
-      "y": 3900
-    },
-    "Logo.dc.html": {
-      "h": 1160,
-      "title": "Logo and brand",
-      "w": 1360,
-      "x": 0,
-      "y": 0
-    },
-    "Main.dc.html": {
-      "expand": "fill",
-      "h": 3000,
-      "title": "Website home (dark)",
-      "w": 1360,
-      "x": 1440,
-      "y": 0
-    },
-    "Phone.dc.html": {
-      "h": 844,
-      "title": "Phone (dark): tap Balanced or Send",
-      "w": 390,
-      "x": 520,
-      "y": 3900,
-      "is_interactive": true
-    },
-    "PhoneLight.dc.html": {
-      "h": 844,
-      "title": "Phone (light)",
-      "w": 390,
-      "x": 990,
-      "y": 3900
-    },
-    "Picker.dc.html": {
-      "h": 720,
-      "title": "Select model",
-      "w": 440,
-      "x": 0,
-      "y": 3900
-    },
-    "Usage.dc.html": {
-      "h": 1120,
-      "is_interactive": true,
-      "title": "Usage (phone): switch the plan",
-      "w": 390,
-      "x": 1460,
-      "y": 3900
-    }
+    "Logo.dc.html": {"h": 1160, "title": "Logo and brand", "w": 1360, "x": 0, "y": 0, "page": "brand"},
+    "Colours.dc.html": {"h": 700, "title": "Model colours", "w": 1360, "x": 0, "y": 1240, "page": "brand"},
+    "Main.dc.html": {"expand": "fill", "h": 1900, "title": "Home", "w": 1360, "x": 0, "y": 0, "page": "website"},
+    "SiteModels.dc.html": {"expand": "fill", "h": 1900, "title": "Models", "w": 1360, "x": 1440, "y": 0, "page": "website"},
+    "SitePlans.dc.html": {"expand": "fill", "h": 1700, "title": "Plans", "w": 1360, "x": 2880, "y": 0, "page": "website"},
+    "SiteUsage.dc.html": {"expand": "fill", "h": 2100, "title": "How usage works", "w": 1360, "x": 4320, "y": 0, "page": "website"},
+    "SiteAbout.dc.html": {"expand": "fill", "h": 2000, "title": "About", "w": 1360, "x": 5760, "y": 0, "page": "website"},
+    "HomeLight.dc.html": {"expand": "fill", "h": 1900, "title": "Home (light)", "w": 1360, "x": 7200, "y": 0, "page": "website"},
+    "Chat.dc.html": {"h": 860, "is_interactive": true, "title": "Chat (dark): pick a model, effort, or press Send", "w": 1360, "x": 0, "y": 0, "page": "app"},
+    "ChatLight.dc.html": {"h": 860, "is_interactive": true, "title": "Chat (light)", "w": 1360, "x": 0, "y": 940, "page": "app"},
+    "Picker.dc.html": {"h": 720, "title": "Select model", "w": 440, "x": 1440, "y": 0, "page": "app"},
+    "Phone.dc.html": {"h": 844, "is_interactive": true, "title": "Phone (dark): tap Balanced or Send", "w": 390, "x": 1960, "y": 0, "page": "app"},
+    "PhoneLight.dc.html": {"h": 844, "title": "Phone (light)", "w": 390, "x": 2430, "y": 0, "page": "app"},
+    "Usage.dc.html": {"h": 1120, "is_interactive": true, "title": "Usage (phone): switch the plan", "w": 390, "x": 2900, "y": 0, "page": "app"},
+    "Limits.dc.html": {"h": 900, "is_interactive": true, "title": "Usage limits (owner): switch the plan", "w": 1180, "x": 3380, "y": 0, "page": "app"}
   },
-  "createdOnFiles": {
-    "at": "2026-10-02T20:00:00Z",
-    "v": 1
-  },
+  "createdOnFiles": {"at": "2026-10-02T20:00:00Z", "v": 1},
   "designSystems": [],
-  "launch": {
-    "view": "canvas"
-  },
+  "launch": {"view": "canvas"},
   "notes": {
-    "n1": {
-      "size": 24,
-      "text": "Every screen has a Dark/Light switch and a Model switch in its Tweaks. On Chat, open the model chip under the message box and pick a model: the whole page changes colour with a short transition.",
-      "w": 520,
-      "x": 1440,
-      "y": 3900
-    },
-    "t1": {
-      "kind": "title1",
-      "maxW": 4240,
-      "text": "Yuvra: logo and website",
-      "w": 240,
-      "x": 0,
-      "y": -300
-    }
+    "t1": {"kind": "title1", "maxW": 1360, "text": "Yuvra brand", "w": 240, "x": 0, "y": -300, "page": "brand"},
+    "t2": {"kind": "title1", "maxW": 8560, "text": "Yuvra website: five pages", "w": 240, "x": 0, "y": -300, "page": "website"},
+    "t3": {"kind": "title1", "maxW": 4560, "text": "Yuvra app screens", "w": 240, "x": 0, "y": -300, "page": "app"},
+    "n1": {"size": 24, "text": "Every screen has a Dark/Light switch and a Model switch in its Tweaks. On Chat, open the model chip or the effort chip under the message box, press Send, and watch the usage line.", "w": 520, "x": 1440, "y": 820, "page": "app"}
   },
   "order": [
-    "Logo.dc.html",
-    "Colours.dc.html",
-    "Main.dc.html",
-    "HomeLight.dc.html",
-    "Chat.dc.html",
-    "ChatLight.dc.html",
-    "Picker.dc.html",
-    "Phone.dc.html",
-    "PhoneLight.dc.html",
-    "Usage.dc.html",
-    "Limits.dc.html"
+    "Logo.dc.html", "Colours.dc.html",
+    "Main.dc.html", "SiteModels.dc.html", "SitePlans.dc.html", "SiteUsage.dc.html", "SiteAbout.dc.html", "HomeLight.dc.html",
+    "Chat.dc.html", "ChatLight.dc.html", "Picker.dc.html", "Phone.dc.html", "PhoneLight.dc.html", "Usage.dc.html", "Limits.dc.html"
   ],
-  "pages": [],
+  "pages": [
+    {"id": "brand", "name": "Brand"},
+    {"id": "website", "name": "Website"},
+    {"id": "app", "name": "App screens"}
+  ],
   "title": "Yuvra Website and Logo"
 }

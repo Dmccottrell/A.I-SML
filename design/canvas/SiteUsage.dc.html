@@ -1,0 +1,133 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>How Yuvra usage works</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Sora:wght@500;600;700&family=DM+Sans:wght@400;500;600&display=swap">
+<style>
+body{margin:0}
+div, span, button, svg, path, circle { transition: background-color .6s ease, color .6s ease, border-color .6s ease, fill .6s ease, stroke .6s ease; }
+circle[style*="fill: var(--sun)"] { fill: var(--core) !important; stroke: var(--sun); stroke-width: 3; }
+a{color:var(--text);text-decoration:none}
+a:hover{color:var(--accenttext)}
+</style>
+</helmet>
+<div style="{{themeStyle}}; min-height: 2100px; background: var(--bg); background-image: radial-gradient(1200px 600px at 50% -5%, var(--glow), transparent 70%); color: var(--text); font-family: 'DM Sans', sans-serif; font-size: 17px; line-height: 1.55">
+
+<div style="max-width: 1200px; margin: 0 auto; padding: 24px; display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 16px">
+<a href="Main.dc.html" style="display: flex; align-items: center; gap: 10px">
+<svg width="38" height="38" viewBox="0 0 64 64" fill="none" aria-label="Yuvra">
+<path d="M32 56 C22 56 12 51 10 41 C5 37 5 28 11 24 C10 16 18 8 26 11 C29 6 35 6 38 11 C46 8 54 16 53 24 C59 28 59 37 54 41 C52 51 42 56 32 56 Z" style="stroke: var(--text)" stroke-width="4" stroke-linejoin="round"/>
+<path d="M32 55 V36 M32 36 L21 18 M32 36 L43 18" style="stroke: var(--text)" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+<circle cx="32" cy="36" r="6.5" style="fill: var(--sun)"/>
+</svg>
+<span style="font-family: 'Sora', sans-serif; font-weight: 600; font-size: 24px; letter-spacing: -0.02em">Yuvra</span>
+</a>
+<div style="display: flex; flex-wrap: wrap; align-items: center; gap: 28px; font-size: 16px; font-weight: 500">
+<a href="SiteModels.dc.html">Models</a>
+<a href="SitePlans.dc.html">Plans</a>
+<a href="SiteUsage.dc.html" style="color: var(--accenttext); border-bottom: 2px solid var(--accent); padding-bottom: 2px">How usage works</a>
+<a href="SiteAbout.dc.html">About</a>
+<a href="Main.dc.html#try" style="background: var(--accent); color: var(--onaccent); border-radius: 999px; padding: 12px 22px; font-weight: 600">Open Yuvra</a>
+</div>
+</div>
+
+<div style="max-width: 1200px; margin: 0 auto; padding: 56px 24px 32px; display: flex; flex-direction: column; gap: 16px">
+<div style="font-size: 14px; font-weight: 600; letter-spacing: 0.14em; color: var(--accenttext)">HOW USAGE WORKS</div>
+<h1 style="margin: 0; font-family: 'Sora', sans-serif; font-weight: 600; font-size: 56px; line-height: 1.05; letter-spacing: -0.03em">You always know what is left.</h1>
+<p style="margin: 0; color: var(--muted); font-size: 20px; max-width: 700px">Yuvra shows your usage in plain messages, right under the message box. There is a short-term amount for right now and a longer one for the week.</p>
+</div>
+
+<div style="max-width: 1200px; margin: 0 auto; padding: 24px; display: flex; flex-wrap: wrap; gap: 20px">
+<div style="flex: 1 1 480px; background: var(--surface); border: 1px solid var(--line); border-radius: 24px; padding: 32px; display: flex; flex-direction: column; gap: 14px">
+<svg width="84" height="84" viewBox="0 0 64 64" fill="none" role="img" aria-label="Brain tank">
+<defs><clipPath id="siteTank"><path d="M32 56 C22 56 12 51 10 41 C5 37 5 28 11 24 C10 16 18 8 26 11 C29 6 35 6 38 11 C46 8 54 16 53 24 C59 28 59 37 54 41 C52 51 42 56 32 56 Z"/></clipPath></defs>
+<g clip-path="url(#siteTank)"><rect x="0" y="26" width="64" height="32" style="fill: var(--accent)" fill-opacity="0.85"/></g>
+<path d="M32 56 C22 56 12 51 10 41 C5 37 5 28 11 24 C10 16 18 8 26 11 C29 6 35 6 38 11 C46 8 54 16 53 24 C59 28 59 37 54 41 C52 51 42 56 32 56 Z" style="stroke: var(--text)" stroke-width="3" stroke-linejoin="round"/>
+<circle cx="32" cy="36" r="5" style="fill: var(--sun)"/>
+</svg>
+<h3 style="margin: 0; font-family: 'Sora', sans-serif; font-weight: 600; font-size: 26px">Right now</h3>
+<p style="margin: 0; color: var(--muted)">A brain that fills like a tank shows how many messages you can send in one sitting. It refills by itself, steadily, so there is no waiting for a reset. From empty it is full again in about 8 hours.</p>
+</div>
+<div style="flex: 1 1 480px; background: var(--surface); border: 1px solid var(--line); border-radius: 24px; padding: 32px; display: flex; flex-direction: column; gap: 14px">
+<div style="height: 84px; display: flex; align-items: flex-end; gap: 8px"><div style="flex: 1; height: 38px; border-radius: 6px; background: var(--accent); opacity: 0.55"></div><div style="flex: 1; height: 22px; border-radius: 6px; background: var(--accent); opacity: 0.55"></div><div style="flex: 1; height: 62px; border-radius: 6px; background: var(--accent); opacity: 0.55"></div><div style="flex: 1; height: 30px; border-radius: 6px; background: var(--accent); opacity: 0.55"></div><div style="flex: 1; height: 48px; border-radius: 6px; background: var(--accent)"></div><div style="flex: 1; height: 6px; border-radius: 6px; border: 1px dashed var(--line)"></div><div style="flex: 1; height: 6px; border-radius: 6px; border: 1px dashed var(--line)"></div></div>
+<h3 style="margin: 0; font-family: 'Sora', sans-serif; font-weight: 600; font-size: 26px">This week</h3>
+<p style="margin: 0; color: var(--muted)">A weekly total, shown as a percentage and about how many messages are left. It resets every Monday at 4 AM in your own time zone. A strip of seven days shows which days were busy.</p>
+</div>
+</div>
+
+<div style="border-top: 1px solid var(--line)">
+<div style="max-width: 1200px; margin: 0 auto; padding: 64px 24px; display: flex; flex-direction: column; gap: 24px">
+<h2 style="margin: 0; font-family: 'Sora', sans-serif; font-weight: 600; font-size: 36px; letter-spacing: -0.02em">What a message costs</h2>
+<p style="margin: 0; color: var(--muted); font-size: 19px; max-width: 720px">A message is one question and a normal-length answer. Bigger models use more of your usage. On a Pro week (about 1,000,000 tokens), that comes to roughly:</p>
+<div style="display: flex; flex-wrap: wrap; gap: 20px">
+<div style="flex: 1 1 220px; background: var(--surface); border: 1px solid var(--line); border-radius: 20px; padding: 24px"><div style="display: flex; align-items: center; gap: 8px; color: var(--muted)"><span style="width: 10px; height: 10px; border-radius: 999px; background: #FF4B1F"></span>Flare</div><div style="font-family: 'Sora', sans-serif; font-weight: 600; font-size: 32px">2,000</div><div style="color: var(--muted); font-size: 14px">messages a week</div></div>
+<div style="flex: 1 1 220px; background: var(--surface); border: 1px solid var(--line); border-radius: 20px; padding: 24px"><div style="display: flex; align-items: center; gap: 8px; color: var(--muted)"><span style="width: 10px; height: 10px; border-radius: 999px; background: #EEF0F6"></span>Equinox</div><div style="font-family: 'Sora', sans-serif; font-weight: 600; font-size: 32px">1,000</div><div style="color: var(--muted); font-size: 14px">messages a week</div></div>
+<div style="flex: 1 1 220px; background: var(--surface); border: 1px solid var(--line); border-radius: 20px; padding: 24px"><div style="display: flex; align-items: center; gap: 8px; color: var(--muted)"><span style="width: 10px; height: 10px; border-radius: 999px; background: #F2A60C"></span>Solstice</div><div style="font-family: 'Sora', sans-serif; font-weight: 600; font-size: 32px">400</div><div style="color: var(--muted); font-size: 14px">messages a week</div></div>
+<div style="flex: 1 1 220px; background: var(--surface); border: 1px solid var(--line); border-radius: 20px; padding: 24px"><div style="display: flex; align-items: center; gap: 8px; color: var(--muted)"><span style="width: 10px; height: 10px; border-radius: 999px; background: #A8D1F5"></span>Apogee</div><div style="font-family: 'Sora', sans-serif; font-weight: 600; font-size: 32px">200</div><div style="color: var(--muted); font-size: 14px">messages a week</div></div>
+</div>
+</div>
+</div>
+
+<div style="border-top: 1px solid var(--line)">
+<div style="max-width: 1200px; margin: 0 auto; padding: 64px 24px; display: flex; flex-direction: column; gap: 24px">
+<h2 style="margin: 0; font-family: 'Sora', sans-serif; font-weight: 600; font-size: 36px; letter-spacing: -0.02em">Thinking longer costs more</h2>
+<p style="margin: 0; color: var(--muted); font-size: 19px; max-width: 720px">The effort setting next to the model chooser changes both the answer and the cost.</p>
+<div style="display: flex; flex-wrap: wrap; gap: 20px">
+<div style="flex: 1 1 260px; background: var(--surface); border: 1px solid var(--line); border-radius: 20px; padding: 24px; display: flex; flex-direction: column; gap: 6px"><b style="font-family: 'Sora', sans-serif; font-size: 20px">Quick</b><span style="color: var(--muted)">Fastest. Uses less: about 40% fewer.</span></div>
+<div style="flex: 1 1 260px; background: var(--surface); border: 1px solid var(--accent); border-radius: 20px; padding: 24px; display: flex; flex-direction: column; gap: 6px"><b style="font-family: 'Sora', sans-serif; font-size: 20px">Balanced</b><span style="color: var(--muted)">Normal speed and normal usage.</span></div>
+<div style="flex: 1 1 260px; background: var(--surface); border: 1px solid var(--line); border-radius: 20px; padding: 24px; display: flex; flex-direction: column; gap: 6px"><b style="font-family: 'Sora', sans-serif; font-size: 20px">Deep</b><span style="color: var(--muted)">Slowest and most careful. Uses about twice as much.</span></div>
+</div>
+</div>
+</div>
+
+<div style="border-top: 1px solid var(--line)">
+<div style="max-width: 1200px; margin: 0 auto; padding: 64px 24px; display: flex; flex-wrap: wrap; gap: 20px">
+<div style="flex: 1 1 480px; background: var(--surface); border: 1px solid var(--line); border-radius: 24px; padding: 32px; display: flex; flex-direction: column; gap: 10px">
+<h3 style="margin: 0; font-family: 'Sora', sans-serif; font-weight: 600; font-size: 24px">Make it last</h3>
+<ul style="margin: 0; padding-left: 20px; color: var(--muted)"><li>Long chats use more, because every message re-reads the chat so far. Start a new chat for a new topic.</li><li>Use Quick for simple questions.</li><li>Use a model on your own device: it is free and never counted.</li></ul>
+</div>
+<div style="flex: 1 1 480px; background: var(--surface); border: 1px solid var(--line); border-radius: 24px; padding: 32px; display: flex; flex-direction: column; gap: 10px">
+<h3 style="margin: 0; font-family: 'Sora', sans-serif; font-weight: 600; font-size: 24px">For the curious</h3>
+<p style="margin: 0; color: var(--muted)">Behind the scenes, everything is counted in tokens (small pieces of words). The text you send counts once, earlier chat the server already holds counts at a tenth, and what Yuvra writes counts once, then it is multiplied by the model&rsquo;s weight (Flare 1, Equinox 2, Solstice 5, Apogee 10). Tap &ldquo;See the numbers&rdquo; in the Usage screen to see them.</p>
+</div>
+</div>
+</div>
+
+<div style="border-top: 1px solid var(--line)">
+<div style="max-width: 1200px; margin: 0 auto; padding: 32px 24px 48px; display: flex; flex-wrap: wrap; justify-content: space-between; gap: 16px; color: var(--muted); font-size: 15px">
+<span>&copy; Yuvra.AI [YEAR]. Private by design.</span>
+<div style="display: flex; flex-wrap: wrap; gap: 24px"><a href="SiteModels.dc.html" style="color: var(--muted)">Models</a><a href="SitePlans.dc.html" style="color: var(--muted)">Plans</a><a href="SiteUsage.dc.html" style="color: var(--muted)">How usage works</a><a href="SiteAbout.dc.html" style="color: var(--muted)">About</a></div>
+</div>
+</div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"theme":{"editor":"enum","options":["dark","light"],"default":"dark"},"model":{"editor":"enum","options":["flare","equinox","solstice","apogee","brand"],"default":"brand"},"$preview":{"width":1360,"height":2100}}'>
+const BASE = {
+  dark: {bg: '#07080D', side: '#0A0B11', surface: '#0F1119', surface2: '#161926', line: '#232739', text: '#EEF0F6', muted: '#9AA3BC'},
+  light: {bg: '#F7F8FC', side: '#EEF0F7', surface: '#FFFFFF', surface2: '#EEF0F7', line: '#D8DCEA', text: '#0D0F1A', muted: '#4A526B'}
+};
+const MODEL = {
+  brand: {dark: {accent: '#F5A524', onaccent: '#1A1204', accenttext: '#F5A524', sun: '#F5A524', core: '#F5A524', glow: 'rgba(245,165,36,.14)'}, light: {accent: '#F5A524', onaccent: '#1A1204', accenttext: '#8F5600', sun: '#E08A00', core: '#E08A00', glow: 'rgba(245,165,36,.12)'}},
+  flare: {dark: {accent: '#FF4B1F', onaccent: '#1A0500', accenttext: '#FF6B3D', sun: '#FF4B1F', core: '#FFF3E6', glow: 'rgba(255,75,31,.20)'}, light: {accent: '#FF4B1F', onaccent: '#1A0500', accenttext: '#B83208', sun: '#E5340A', core: '#FFF3E6', glow: 'rgba(255,75,31,.12)'}},
+  equinox: {dark: {accent: '#EEF0F6', onaccent: '#07080D', accenttext: '#EEF0F6', sun: '#EEF0F6', core: '#07080D', glow: 'rgba(238,240,246,.08)'}, light: {accent: '#0D0F1A', onaccent: '#FFFFFF', accenttext: '#0D0F1A', sun: '#0D0F1A', core: '#FFFFFF', glow: 'rgba(13,15,26,.07)'}},
+  solstice: {dark: {accent: '#F2A60C', onaccent: '#1F1400', accenttext: '#FFBE3B', sun: '#F2A60C', core: '#FFE7A0', glow: 'rgba(242,166,12,.18)'}, light: {accent: '#F2A60C', onaccent: '#1F1400', accenttext: '#8A5A00', sun: '#D18A00', core: '#FFE7A0', glow: 'rgba(242,166,12,.13)'}},
+  apogee: {dark: {accent: '#A8D1F5', onaccent: '#06121F', accenttext: '#B5D8F8', sun: '#A8D1F5', core: '#F4F9FF', glow: 'rgba(168,209,245,.15)'}, light: {accent: '#A8D1F5', onaccent: '#06121F', accenttext: '#2A5F96', sun: '#4F8FC9', core: '#F4F9FF', glow: 'rgba(120,170,220,.15)'}}
+};
+class Component extends DCLogic {
+  renderVals() {
+    const mode = this.props.theme === 'light' ? 'light' : 'dark';
+    const id = MODEL[this.props.model] ? this.props.model : 'brand';
+    const t = Object.assign({}, BASE[mode], MODEL[id][mode]);
+    return { themeStyle: Object.keys(t).map((k) => '--' + k + ':' + t[k]).join(';') };
+  }
+}
+</script>
+</body>
+</html>
