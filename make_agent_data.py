@@ -10,13 +10,14 @@ WHAT THIS FILE DOES
 
     Everything is made by our own code from templates; no other AI writes any of it.
 
-Usage:  python make_agent_data.py --version v3.5            (about 40,000 runs; a few minutes)
+Usage:  python make_agent_data.py --version v3.5            (about 40,000 runs; shows its progress; roughly 20-60 minutes, using every core)
         python make_agent_data.py --version v3.5 --n 2000
 """
 import argparse
 import json
 import os
 import random
+import time
 from multiprocessing import Pool
 
 import agent_tasks as A
@@ -55,21 +56,30 @@ def one(seed):
     return None if r is None else {"kind": kind, "text": render(r["messages"])}
 
 
-def build(n, seed=1337, workers=None):
+def build(n, seed=1337, workers=None, progress=None):
+    """The kept runs for seeds seed .. seed+n. `progress(done, kept)` is called every 500 runs."""
+    rows = []
     with Pool(workers) as pool:
-        return [r for r in pool.imap(one, range(seed, seed + n), chunksize=50) if r]
+        for i, r in enumerate(pool.imap(one, range(seed, seed + n), chunksize=20), 1):
+            if r:
+                rows.append(r)
+            if progress and i % 500 == 0:
+                progress(i, len(rows))
+    return rows
 
 
 def main():
     from config import get_version
     p = argparse.ArgumentParser()
     p.add_argument("--version", default="v3.5")
-    p.add_argument("--n", type=int, default=40_000)
+    p.add_argument("--n", type=int, default=40_000, help="runs to try (each takes ~0.3-1 s of one core; Windows is slower)")
     a = p.parse_args()
     V = get_version(a.version)
     out = os.path.join(V.data_dir, "agent_traces.jsonl")
     os.makedirs(V.data_dir, exist_ok=True)
-    rows = build(a.n)
+    t0 = time.time()
+    rows = build(a.n, progress=lambda done, kept: print(
+        f"  {done:,}/{a.n:,} runs, {kept:,} kept, ~{(a.n - done) * (time.time() - t0) / done / 60:.0f} min left", flush=True))
     with open(out, "w", encoding="utf-8") as f:
         for r in rows:
             f.write(json.dumps(r, ensure_ascii=False) + "\n")

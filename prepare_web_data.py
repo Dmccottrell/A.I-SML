@@ -282,7 +282,7 @@ def load_agent_traces():
     """Practice runs of the coding helper (make_agent_data.py writes them; nothing to download)."""
     path = os.path.join(get_version("v3.5").data_dir, "agent_traces.jsonl")
     if not os.path.exists(path):
-        raise SystemExit(f"{path} is missing: run  python make_agent_data.py --version v3.5  first (a few minutes)")
+        raise SystemExit(f"{path} is missing: run  python make_agent_data.py --version v3.5  first (about 20-60 minutes)")
     with open(path, encoding="utf-8") as f:
         for line in f:
             if line.strip():
