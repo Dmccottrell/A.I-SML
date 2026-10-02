@@ -4,7 +4,7 @@ All versions side by side. v1 and v2 are finished and run on the phone. v3's cod
 v3.5, v4, v5, v6 and v6.5 are planned: their numbers are estimates and will change once v3's results are in.
 Details: [V2.md](V2.md), [V3.md](V3.md), [ROADMAP.md](ROADMAP.md). Settings live in `config.py`.
 
-**Working names** (Norse storytelling words; no trademark check yet): **Rune** (v3, phone-lite), **Skald** (v3.5, and v4 as
+**The app is called Yuvra** (working name, Yuvra.AI; see [APP.md](APP.md)). **Model working names** (Norse storytelling words; no trademark check yet): **Rune** (v3, phone-lite), **Skald** (v3.5, and v4 as
 **Skald 2**: the same size, trained longer, with skills added), **Saga** (v5), **Edda** (v6, v6.5) and **Norn** (the future top tier, 13B+).
 **Tier** = which model, **version** = which generation, **effort** = how long it thinks; see the roadmap.
 
