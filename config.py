@@ -326,7 +326,13 @@ def _v3_long(length, rope_theta, iters, init_from):
 
 for _args in ((8192, 2_000_000.0, 2000, f"{CKPT_DIR}/v3/final.pt"),        # ~0.52B tokens
               (16384, 4_000_000.0, 1500, f"{CKPT_DIR}/v3-long-8k/final.pt"),  # ~0.39B tokens
-              (32768, 8_000_000.0, 1500, f"{CKPT_DIR}/v3-long-16k/final.pt")):  # ~0.39B tokens
+              (32768, 8_000_000.0, 1500, f"{CKPT_DIR}/v3-long-16k/final.pt"),  # ~0.39B tokens
+              # Experimental rungs beyond the plan, to find where v3 stops being able to use distance
+              # (stretch_ladder.py runs them one by one and stops at the first one that fails its tests).
+              # Same recipe: RoPE base doubles with the length, ~262k tokens per step, fewer steps as it gets costly.
+              (65536, 16_000_000.0, 1000, f"{CKPT_DIR}/v3-long-32k/final.pt"),   # ~0.26B tokens
+              (131072, 32_000_000.0, 800, f"{CKPT_DIR}/v3-long-64k/final.pt"),   # ~0.21B tokens
+              (262144, 64_000_000.0, 600, f"{CKPT_DIR}/v3-long-128k/final.pt")):  # ~0.16B tokens
     _name, _version = _v3_long(*_args)
     VERSIONS[_name] = _version
 

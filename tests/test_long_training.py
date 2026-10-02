@@ -63,7 +63,7 @@ class Settings(unittest.TestCase):
 
     def test_stretch_ladder(self):
         prev = "v3"
-        for length in (8192, 16384, 32768):
+        for length in (8192, 16384, 32768, 65536, 131072, 262144):
             V = config.VERSIONS[f"v3-long-{length // 1024}k"]
             self.assertEqual(V.model.max_seq_len, length)
             self.assertEqual(V.train.grad_accum * length, 262_144)
