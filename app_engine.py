@@ -26,6 +26,7 @@ import urllib.error
 import urllib.request
 
 import chat
+import chat_polish
 from app_errors import AppError, BadKey, ModelTooBig, PcUnreachable, ReplyInterrupted, WrongServer
 
 MAX_REPLY_CHARS = 8000          # ~2,000 tokens: a reply longer than the whole memory is a loop, not an answer
@@ -143,18 +144,34 @@ class ChatStore:
                                (chat_id,)).fetchall()
         return [dict(zip(("id", "role", "content", "model_id", "status"), r)) for r in rows]
 
+    def fold(self, chat_id, ids, summary):
+        """Replace `ids` (older messages) by a summary for the model: the first becomes the summary, the rest are marked
+        "compacted". Nothing is deleted, so the screen still shows them."""
+        first, rest = ids[0], ids[1:]
+        if chat_id < 0:
+            msgs = self.private[chat_id]
+            msgs[first].update(role="user", content=summary, status="summary")
+            for i in rest:
+                msgs[i]["status"] = "compacted"
+            return
+        self.db.execute("UPDATE messages SET role = 'user', content = ?, status = 'summary' WHERE id = ?", (summary, first))
+        self.db.executemany("UPDATE messages SET status = 'compacted' WHERE id = ?", [(i,) for i in rest])
+        self.db.commit()
+
     def interrupted(self, chat_id):
         """Replies that were cut off (the app closed or the model stopped) and never finished."""
         return [m for m in self.messages(chat_id) if m["status"] == "partial"]
 
     def history(self, chat_id):
         """The chat as chat.py wants it: [{"role", "content"}], a cut-off reply included (marked by its status)."""
-        return [{"role": m["role"], "content": m["content"]} for m in self.messages(chat_id) if m["content"]]
+        return [{"role": m["role"], "content": m["content"]} for m in self.messages(chat_id)
+                if m["content"] and m["status"] != "compacted"]
 
 
 # ------------------------------------------------------------------ one message, start to finish
 def run_turn(tok, store, chat_id, backend, model, window, max_new, user_text=None, stop=None, save_every=8,
-             keep_notes=1, notes=None, limiter=None, user=None, effort="balanced", clock=time.time):
+             keep_notes=1, notes=None, limiter=None, user=None, effort="balanced", clock=time.time,
+             pacer=None, auto_compact=True, summarize=None):
     """Answer one message. Adds the user's message (if given), streams the reply while saving it, and returns
     {"text", "reason", "forgotten_messages"}. If the model fails mid-reply, what was written is kept (marked
     partial) and the AppError is re-raised, so the screen can offer "Continue".
@@ -163,9 +180,15 @@ def run_turn(tok, store, chat_id, backend, model, window, max_new, user_text=Non
     usage_limits.LimitError is raised before anything is added or run), the estimated cost is held while the reply is
     written, and the real token counts settle it afterwards. A failed reply gives the hold back. A model that runs on
     the device (model["where"] == "device") is never counted.
+
+    `pacer` (chat_polish.paced, with the time of sending) makes the reply appear after a short pause and write out
+    steadily. `auto_compact` shortens a chat that fills the model's memory (chat_polish.compact_chat).
     """
     if user_text is not None:
         store.add(chat_id, "user", user_text)
+    folded = 0
+    if auto_compact:
+        folded = chat_polish.compact_chat(tok, store, chat_id, window, max_new, summarize=summarize, keep_notes=keep_notes)
     history = store.history(chat_id)
     if user_text is not None and notes:
         history[-1]["notes"] = notes
@@ -178,7 +201,8 @@ def run_turn(tok, store, chat_id, backend, model, window, max_new, user_text=Non
         est = (len(ids) + max_new) * limiter.weight(key) * limiter.cfg["effort"][effort]
         res = limiter.reserve(user, key, effort, est, clock(), where="device" if model.get("where") == "device" else "server")
     row = store.add(chat_id, "assistant", "", model["id"], "partial")
-    guard = Guard(backend.stream(ids, max_new), stop=stop)
+    stream = backend.stream(ids, max_new)
+    guard = Guard(pacer(stream) if pacer else stream, stop=stop)
     count = 0
     try:
         for _ in guard:
@@ -196,7 +220,7 @@ def run_turn(tok, store, chat_id, backend, model, window, max_new, user_text=Non
     store.update(chat_id, row, guard.text, "done")
     _settle(limiter, res, backend, tok, ids, guard.text, effort, clock)
     return {"text": guard.text, "reason": guard.reason, "forgotten_messages": report["forgotten_messages"],
-            "message_id": row}
+            "message_id": row, "compacted_messages": folded}
 
 
 def _settle(limiter, res, backend, tok, ids, text, effort, clock, failed=False):
