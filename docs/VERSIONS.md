@@ -6,11 +6,11 @@ Details: [V2.md](V2.md), [V3.md](V3.md), [ROADMAP.md](ROADMAP.md). Settings live
 
 **The app and the model family are called Yuvra** (working name, Yuvra.AI; see [APP.md](APP.md)). Each model is the
 umbrella name plus one of **four role names** plus a generation number (checked by web search only; no trademark search yet):
-**Yuvra Flare 3** (v3, smallest and fastest), **Yuvra Equinox 3.5** (v3.5) and **Yuvra Equinox 4** (v4: the same size, trained longer, with
+**Yuvra Flare 3** (v3) and **Yuvra Flare 3.5** (v3.5: a ~1.12B brain), then **Yuvra Equinox 4** (v4: Flare 3.5's brain trained longer, with
 skills added), **Yuvra Solstice 5** (v5), **Yuvra Apogee 6** (v6) and **Yuvra Apogee 6.5** (v6.5), then **Yuvra Apogee 7** and
-**8** (the 13B+ models). Flare = smallest and fastest, Equinox = balanced everyday, Solstice = stronger (PC / online), Apogee =
+**8** (the 13B+ models). Flare = fast and light, Equinox = balanced everyday, Solstice = stronger (PC / online), Apogee =
 most capable. Each name has its own number, which only goes up when that model is updated (so the numbers differ, like
-Flare 3, Equinox 4, Solstice 5, Apogee 6 at the same time); older ones move to "Other models" in the app's picker. "+" and grown models get decimals (Flare 3.1, Flare 3.5; a grown
+Flare 3.5, Equinox 4, Solstice 5, Apogee 6 at the same time); older ones move to "Other models" in the app's picker. "+" and grown models get decimals (Flare 3.1, Flare 3.5; a grown
 Flare 3 becomes Flare 4.1): see the number table in ROADMAP.md.
 (Earlier Norse working names: Rune = Flare, Skald = Equinox, Saga = Solstice, Edda = Apogee. A second set, Nova, Pulsar, Quasar
 and Supernova, was dropped because known AI models already use those names.)
@@ -28,7 +28,7 @@ v6 (5B) and v6.5 (7B) keep growing toward medium size, mainly for the PC and onl
 
 |  | **v1** ✅ | **v2** ✅ | **v3** 🛠️ | **v3.5** (planned) | **v4** (planned) | **v5** (planned) | **v6** (planned) | **v6.5** (planned) |
 |---|---|---|---|---|---|---|---|---|
-| Model name | – | – | Yuvra Flare 3 | Yuvra Equinox 3.5 | Yuvra Equinox 4 | Yuvra Solstice 5 | Yuvra Apogee 6 | Yuvra Apogee 6.5 |
+| Model name | – | – | Yuvra Flare 3 | Yuvra Flare 3.5 | Yuvra Equinox 4 | Yuvra Solstice 5 | Yuvra Apogee 6 | Yuvra Apogee 6.5 |
 | Parameters | 29.5M | 88M | 394M | **~1.12B** | ~1.12B base + LoRA skill packs (small add-on weights, a few MB each, switched by a router) | **~3B** | **~5B** | **~7B** |
 | Shape | 512 wide × 8 layers | 768 wide × 12 layers | 1024 wide × 32 layers | 2048 wide × 24 layers | Same as v3.5 | ~3072 wide × 28 layers | ~3584 wide × 36 layers | 4096 wide × 32 layers |
 | Memory (context length) | 512 tokens | 1,024 tokens | 2,048 tokens; **v3-long: 8K → 16K → 32K** (stretched after training, if the tests pass) | 2,048, then stretched to **32K, goal 75K–100K** | Same as v3.5's stretched length + saved notes about you | **Goal 128K** (built for long text from the start) | **Goal 256K** | **Goal 500K** |
@@ -291,7 +291,7 @@ offline use; these power the PC and the app's online mode. Details: [ROADMAP.md]
 - **v2:** a mini assistant with basic general knowledge and real conversations
 - **v3 (Yuvra Flare 3):** an **accurate, honest** assistant that looks facts up, admits when it doesn't know, and
   handles basic code
-- **v3.5 (Yuvra Equinox 3.5):** v3's features on a **~1.12B brain** that reads 40B tokens (educational and everyday web, code, math)
+- **v3.5 (Yuvra Flare 3.5):** v3's features on a **~1.12B brain** that reads 40B tokens (educational and everyday web, code, math)
 - **v4 (Yuvra Equinox 4):** v3.5's brain **trained longer**, turned into a **personal assistant**: specialist skills, exact math with tools, a Quick / Balanced / Deep
   thinking dial, coding help, documents, voice, and your own app
 - **v5 (Yuvra Solstice 5):** a **genuinely capable** 3B assistant: the first version trained in the cloud, and the first

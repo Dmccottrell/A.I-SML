@@ -29,8 +29,8 @@ live in `config.py`.
 ## Model family names (working names)
 
 The app and the whole family are called **Yuvra** (Yuvra.AI). Each model is Yuvra + one of four names + its own version
-number: **Yuvra Flare** (smallest and fastest), **Yuvra Equinox** (balanced everyday), **Yuvra Solstice** (stronger) and
-**Yuvra Apogee** (most capable). So v3 = Yuvra Flare 3 (~400M), v3.5 = Yuvra Equinox 3.5 (~1.1B), v4 = Yuvra Equinox 4,
+number: **Yuvra Flare** (fast and light), **Yuvra Equinox** (balanced everyday), **Yuvra Solstice** (stronger) and
+**Yuvra Apogee** (most capable). So v3 = Yuvra Flare 3 (~400M), v3.5 = Yuvra Flare 3.5 (~1.1B), v4 = Yuvra Equinox 4,
 v5 = Yuvra Solstice 5 (~3B), v6 / v6.5 = Yuvra Apogee 6 / 6.5 (5-7B), and later Yuvra Apogee 7, 8 (13B+); each
 name has its own number that goes up only when that model is updated (older ones stay available). They are placeholders: no
 trademark check has been done yet. See `docs/ROADMAP.md` and `docs/APP.md`.

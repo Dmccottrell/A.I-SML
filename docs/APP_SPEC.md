@@ -14,7 +14,7 @@ tests, and what "done" means for the first version).
 | Run a `.gguf` offline | **llama.cpp**: `llama-server` on the PC, and llama.cpp inside the Android app (via a plugin such as llama.rn). Same file format as `to_gguf.py` already makes |
 | Our own prompt format | The model was trained with special tokens (`<|user|>`, `<|assistant|>`, `<|notes|>`, `<|tool_call|>`). The chat template stored in the file only knows plain user/assistant text, so **the app builds the prompt itself** (a port of `chat.py`: notes in front of the question, old notes dropped, oldest turns forgotten) and sends it to the raw completion endpoint. Check special-token handling in the first pilot |
 | Generation settings | temperature 0.8, top-k 50, repetition penalty 1.15 (the values `generate.py` uses); stop at `<|endoftext|>`; streaming |
-| Context management | 2,048 tokens for Flare 3 and Equinox 3.5 (longer later). A **context meter** (exact token counts from the server's tokenizer) and a quiet "older messages forgotten" marker |
+| Context management | 2,048 tokens for Flare 3 and Flare 3.5 (longer later). A **context meter** (exact token counts from the server's tokenizer) and a quiet "older messages forgotten" marker |
 | Tool calls | Read `<|tool_call|>{"name": "remember", ...}` out of the reply (`split_memory_calls`) and act on it; v4 adds calculator, clock, files |
 
 ### 2. Knowledge and memory
