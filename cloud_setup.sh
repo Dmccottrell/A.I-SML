@@ -5,6 +5,9 @@
 #   bash cloud_setup.sh v3          # or v3.5
 #   bash cloud_setup.sh v3 2        # a machine with 2 GPUs (see docs/CLOUD.md, "More than one GPU")
 #
+# The pilot and the printed command use --cloud: versions with cloud settings (v3.5) drop the 12 GB
+# workarounds on a big GPU; for the others (v3) it changes nothing.
+#
 # It checks the GPU, installs the packages, builds the data (resumable: run it again if it stops),
 # runs the pilot, then prints the command that starts the real run. Run it inside tmux
 # (tmux new -s train) so it survives a dropped connection.
@@ -25,13 +28,14 @@ python prepare_web_data.py --version "$VERSION"
 
 echo "== 4/4 pilot run (about 60 steps: checks speed and memory)"
 if [ "$GPUS" -gt 1 ]; then
-  torchrun --standalone --nproc_per_node="$GPUS" train.py --version "$VERSION" --pilot
+  torchrun --standalone --nproc_per_node="$GPUS" train.py --version "$VERSION" --cloud --pilot
 else
-  python train.py --version "$VERSION" --pilot
+  python train.py --version "$VERSION" --cloud --pilot
 fi
 
 echo
 echo "Ready. If the PILOT REPORT above looks right, start the real run with:"
 if [ "$GPUS" -gt 1 ]; then GP="--gpus $GPUS "; else GP=""; fi
-echo "    python run_training.py --version $VERSION ${GP}--backup_dir ~/backups"
+echo "    python run_training.py --version $VERSION --cloud ${GP}--backup_dir ~/backups"
+echo "If the pilot ran out of GPU memory, add:  --set grad_checkpoint=true  (to both the pilot and the run)"
 echo "(Ctrl+B then D leaves tmux and keeps it running. Ctrl+C once pauses it safely.)"

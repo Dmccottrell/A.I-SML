@@ -14,6 +14,8 @@ WHAT THIS FILE DOES
       "history": earlier messages in the chat (topic switches, corrections)
       "count":   the answer must be a list of exactly this many items
       "sentences": the answer must have exactly this many sentences
+      "notes":   fixed notes for the question, e.g. web search results (eval/web.jsonl), so the
+                 test is the same every time and needs no internet
     --lookup gives the model Wikipedia notes for each question (v3+).
 
     Keyword checks are rough: a right answer worded differently can be
@@ -24,6 +26,7 @@ Usage:  python evaluate.py                        (v1 chat model)
         python evaluate.py --version v2 --ckpt checkpoints/dev/v2/ckpt.pt
         python evaluate.py --version v3 --lookup
         python evaluate.py --version v2 --prompts eval/prompts_v3.jsonl   (v2 on v3's sheet)
+        python evaluate.py --version v3 --prompts eval/web.jsonl     (reading web search results)
         python evaluate.py --version v3 --skill study     (with a skill pack on: did everyday answers get worse?)
 
 The report is saved next to the checkpoint: eval_<checkpoint name>.md
@@ -69,14 +72,16 @@ with open(args.prompts, encoding="utf-8") as f:
     tests = [json.loads(line) for line in f if line.strip()]
 
 
-def answer(question, history=()):
+def answer(question, history=(), notes=None):
     """Ask one question in a fresh conversation (after `history`, if any).
 
     Fixed seed + low temperature = repeatable.
     """
     torch.manual_seed(0)
     message = {"role": "user", "content": question}
-    if wiki:
+    if notes:
+        message["notes"] = notes
+    elif wiki:
         notes = wiki.search(question, 3)
         if notes:
             message["notes"] = [{"title": n["title"], "text": n["text"]} for n in notes]
@@ -105,7 +110,7 @@ def check(t, reply):
 
 
 for t in tests:
-    reply = answer(t["prompt"], t.get("history", []))
+    reply = answer(t["prompt"], t.get("history", []), t.get("notes"))
     ok = check(t, reply)
     passed[t["category"]] += ok
     total[t["category"]] += 1

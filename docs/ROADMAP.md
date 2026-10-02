@@ -10,8 +10,8 @@ version's test-sheet results decide what the next one focuses on.
 | **v1** ✅ | Learn the pipeline | 30M | Tells children's stories; runs offline on the phone | RTX 4070, 4 hours | $0 |
 | **v2** ✅ | Knowledge | 88M | General Q&A, explanations, multi-turn chat | RTX 4070, ~18 hours | $0 |
 | **v3** 🛠️ | Accuracy | ~400M | Looks things up (RAG), says "I don't know", handles corrections, exact instructions, preference training (DPO), remembers you, reply suggestions, basic code; v3-long stretches it to 8K–32K | RTX 4070 afternoons + a rented RTX 3090 overnight (25.8 / 17.5 s/step) | ~$30–40 cloud + electricity |
-| **v3.5** | Scale at home | **~1.05B** | Same features as v3 on a much bigger brain; reads 30B tokens | RTX 4070, ~3.5–4.5 months nonstop (pausable) | ~$110–270 electricity |
-| **v4** | Abilities | v3.5 **trained longer** (1B, +15–30B tokens) | Specialist skill packs + router, tools, voice, own app | RTX 4070, ~1.5–4 months while the app is built | ~$55–270 electricity |
+| **v3.5** | Scale | **~1.12B** | Same features as v3 on a much bigger brain; reads 40B tokens (educational + everyday web, code, math) | 2× RTX 5090, ~20–25 days (or the RTX 4070, ~5–6.5 months) | ~$420–530 rented |
+| **v4** | Abilities | v3.5 **trained longer** (1.12B, +15–30B tokens) | Specialist skill packs + router, tools, voice, own app | Rented GPUs, ~1–2 weeks, while the app is built | ~$55–270 electricity |
 | **v5** | Scale | 3B | Genuinely capable assistant | Cloud (from scratch) **or** RTX 4070 (fine-tune an open 3B) | ~$1,500+ **or** $0 |
 | **v6** | Bigger small | **5B** | Stronger reasoning, coding and knowledge; 8k memory; powers online mode | Cloud (or grown from v5) | ~$4,000–6,000 (less with growth or a grant) |
 | **v6.5** | Borderline medium | **7B** | The best model for PC and server; the app's online brain | Cloud (or grown from v6) | ~$8,000–12,000 (less with growth or a grant) |
@@ -46,7 +46,8 @@ Meta use). Each one is added when a version actually needs it, and several can s
 | **bitsandbytes** (8-bit optimizer) | Cuts optimizer memory ~75% | v3 (optional) → **v3.5** (needed) | In v3 it could replace gradient checkpointing if the pilot runs out of memory, and it's a rehearsal for 1B |
 | **TRL-style DPO** | "Which answer is better" training | **v3** | Small enough to write ourselves, like the rest of the training code |
 | **PEFT / LoRA** | Small add-on skill packs | Try on v3 → **v4** | A first skill pack can be tested cheaply on v2/v3 |
-| **Tool calling (MCP-style)** | The model asks for a tool, our code runs it | v3 (lookups) → **v4** | v3's "look it up" is the first tool; v4 adds calculator, clock, files, web search |
+| **Web search** (`web_search.py`: Wikipedia's free search, or Brave Search with a key) | Online mode: our code searches the web and hands the results to the model as notes | **v3** (off by default) → better every version | See [Web search, version by version](#web-search-version-by-version) |
+| **Tool calling (MCP-style)** | The model asks for a tool, our code runs it | v3 (lookups) → **v4** | v3's "look it up" is the first tool; v4 adds calculator, clock, files, and lets the model call web search itself |
 | **Whisper** (OpenAI, open source) | Speech-to-text | **v4** (can try any time) | Independent of the brain, so it can be tested early |
 | **Text-to-speech** (e.g. Piper) | Speaks the answers | **v4** | Small, offline, open source |
 | **FSDP** (inside PyTorch) | Splits training across many GPUs | Written during v3.5 → **v5** | Needed for 3B in the cloud, and for v6/v6.5 |
@@ -75,7 +76,7 @@ later version (the scripts take `--version`):
 | Context | 2K, stretched to 8K–32K | 32K, goal 75K–100K | same as v3.5 | 128K goal, a model designed for long text (local + global attention, smaller memory per token) | 256K → 500K goals |
 | Memory of you | saves facts itself, finds past chats by meaning | better judgement about what to save | memory screen, model-driven saving through tools | summarizes old chats into memories | the same, larger |
 | Reply suggestions | simple, from real follow-ups | sharper (bigger model) | greyed-out in the app; teacher-written follow-ups if plain | better | best |
-| Facts | Wikipedia lookups | uses what it reads better | + live web search (online mode) | combines several sources | long documents |
+| Facts | Wikipedia lookups + web search (our code searches) | reads web results better (2× the lessons) | the model decides when to search (tool call) | combines several sources | long documents, research mode |
 | Thinking | trial on math | short thinking | adaptive + effort levels | longer | extended |
 | Tools / coding | – | – | calculator, files, coding loop | more reliable | strongest |
 
@@ -107,12 +108,12 @@ Scores are saved next to each checkpoint, so the old version isn't re-tested eve
 ## Speed and safety experiments
 | Idea | What it could give | Status |
 |---|---|---|
-| **Muon optimizer** (`muon.py`, `muon_test.py`) | the same quality in reportedly 30-50% fewer steps; would shorten v3.5 a lot | built; `muon_test.py` (~1-2 h on the 4070) decides before v3.5 |
+| **Muon optimizer** (`muon.py`, `muon_test.py`) | the same quality in fewer steps | ✅ **tested and chosen for v3.5** (Oct 2): on a 39M test model it reached AdamW's final loss in ~33% fewer steps and ended 0.124 lower (3.809 vs 3.933). Its memory is on the GPU, so v3.5 trains on rented GPUs |
 | **Off-machine backup** (`hub_backup.py`) | a rented machine dying costs at most ~30 min of training | built and running for v3 |
 | **Reliable hosts** | Vast.ai hosts vary; ours dropped from 98% to 73% reliability in a night | rent 99%+ reliability (or Secure Cloud) from now on |
 | **8-bit training on the 4070** | ~1.3-1.5x faster matrix math (the 3090 can't) | idea; needs a pilot |
 | **Better data mix** (some DCLM-style general web next to FineWeb-Edu) | better everyday common sense (HellaSwag) at the same cost | idea for v3.5's data build |
-| **More reading** | every doubling of tokens helps; 1B keeps improving past 30B | chosen: **v4's brain is v3.5 continued** (+15–30B tokens, ~43–58 per parameter) |
+| **More reading** | every doubling of tokens helps; 1B keeps improving past 30B | chosen: v3.5 reads 40B; **v4's brain is v3.5 continued** (+15–30B tokens, ~49–62 per parameter) |
 
 **Tokens per parameter (how much each version reads for its size):** v2 ~30, v3 ~30 (11.8B tokens /
 394M), v3.5 ~29. "Compute-optimal" is ~20; modern small models read far more (SmolLM2-360M: ~11,000,
@@ -197,10 +198,16 @@ and has a test-sheet score recorded as the **baseline** for v3. ✅ All done.
 
 ## v3: Accuracy (in progress)
 
-**Status:** pretraining is running (PC in the afternoon, a rented RTX 3090 overnight). Step 2,000:
+**Status (Oct 2):** pretraining is running on a rented RTX 5090 (since step 6,054; 6.9 s/step), done ~Oct 3.
+Latest: step 18,000, mini-exam 39.4%, best val loss 2.636 (step 17,500); full test 31.7% at step 15,000.
+Earlier (PC in the afternoon, a rented RTX 3090 overnight): step 2,000:
 val loss 3.426 and **HellaSwag 33.4%** (500-question mini-exam), already above v2's final 28.4% at 4% of
 the training. Step 4,000: val 2.900 and **HellaSwag 35.6%**, ahead of the forecast: v3's final forecast
 rises from 37–42% to ~40–45%, v3.5's from 45–52% to ~49–55%, and v4 (v3.5 trained longer) ~51–58%.
+**Correction (step 15,000):** those mini-exam scores use the FIRST 500 questions, which are ~5 points
+easier than the whole test. The full test (all 10,042) gave **31.7%** at step 15,000 (37% on the first
+500), against v2's full-test 28.4%. Forecasts on the full test: **v3 ~34–38%, v3.5 ~44–51%** (1.12B, 40B
+tokens with everyday web), **v4 ~46–54%**. From now on versions are compared on the full test only.
 Two more exams (steps 6,000 and 8,000) confirm or undo this. Built while it trains and waiting for the finished model: chat lessons with memory and
 reply suggestions, NEFTune, checkpoint averaging, DPO with rule-checked pairs (`make_dpo_pairs.py`,
 `dpo.py`), `compare.py` (the release gate against v2), the context meter, long-context tools for v3-long,
@@ -222,6 +229,7 @@ Goal: **accurate when it answers, honest when it doesn't.** No AI is completely 
 | **More Wikipedia** | 20% of the reading (up from 15%), stories down to 2% | Wikipedia packs the most facts per word. A small boost to what it remembers; lookups do the heavy lifting |
 | **Math in the training mix** | 5% FineMath (web pages that explain math step by step) | Better with numbers, word problems and step-by-step thinking |
 | **Bigger test sheet** | More questions, plus scoring for "admitted uncertainty correctly" | Proves accuracy actually improved |
+| **Web search (online mode, optional)** | `generate.py --web`: our code searches the web for each message; the model answers from the results, naming the site and date. ~1,500 chat lessons (`web_lessons.py`) plus honest answers about other AIs | v2 made up "metrics for Claude" and claimed "ChatGPT is better than Claude". See [Web search, version by version](#web-search-version-by-version) |
 
 **Tools starting in v3:** keyword search for lookups (FAISS as an upgrade), a local teacher model
 that writes the lookup and "I don't know" examples (DPO pairs are scored by checkable rules instead of
@@ -249,62 +257,74 @@ the teacher, so no grader has to be trusted), standard AI exams
 
 Details and commands: [V3.md](V3.md).
 
+### Web search, version by version
+
+No AI goes online by itself, not even ChatGPT or Claude: the app searches, the model reads what comes
+back. v3 starts simple, and every version gets better at it. Off by default (private and offline); when
+it's on, only the question is sent to the search service.
+
+| Version | Who decides to search | What the model learns | Lessons | Test |
+|---|---|---|---|---|
+| **v3** | Our code, for every message (`--web`) | Answer from the results, name the site and date; newest result wins; say when sources disagree or don't answer it; honest about other AIs | ~1,500 web + 400 other-AI (`web_lessons.py`) | `eval/web.jsonl` |
+| **v3.5** | Our code | The same, with twice the practice; reads longer, messier pages (its 32K memory fits whole pages) | ~3,000 (`WEB_LESSONS`) | same sheet, should score higher |
+| **v4** | **The model**: it writes a `search` tool call only when a question needs fresh facts, and can search again with better words | When to search, rewriting a query, a second round when the first results are thin | + tool-call lessons | + "should it have searched?" checks |
+| **v5** | The model | Combines several sources into one answer, notices a site that contradicts the others, prefers trusted sites | + multi-source lessons | + harder disagreement cases |
+| **v6+** | The model | Research mode: several rounds, reading many pages, a short report with sources | | |
+
+Sources: Wikipedia's free search (no key), or Brave Search's API for the whole web (free tier, a key in
+`BRAVE_API_KEY`). Trusted sites (encyclopedias, .gov/.edu, science, big news agencies) go first, and
+blocked sites are skipped, because a small model believes whatever it reads.
+
 ---
 
-## v3.5: ~1.05B on the RTX 4070
+## v3.5: ~1.12B, 40B tokens (2× RTX 5090, or started at home)
 
-Goal: the biggest brain that can realistically be trained at home, as cheaply as possible.
-(700M was considered and skipped: 1B costs more time but not more money.)
+Goal: the biggest brain that runs well on a phone, reading as much as a few weeks of rented GPUs allow.
+**Final plan (Oct 2026):** 24 layers (1.12B, up from 1.04B), 40B tokens (up from 30B) with everyday web
+pages added on top of the educational ones, more code and math, no TinyStories. Step by step: [V3_5.md](V3_5.md).
 
 | | |
 |---|---|
-| Size | **~1.05B** parameters: 2048 wide × 22 layers, feed-forward 5,632, grouped-query attention (4 key/value heads), 32k vocabulary. All sizes are multiples of 256, so the phone's Q4 format works |
-| Reading | **30B tokens** (~29 per parameter) + a 3B-token anneal set; ~66 GB on disk |
-| Steps | ~115,000 at 262,144 tokens each |
-| Time | **~3.5–4.5 months running 24/7** (estimated from v3's measured 26.5 s/step: ~70 s/step by scaling, ~84–96 s with the memory tricks below). At 16 hours a day: ~5–6.5 months; 12 hours: ~7–9 months. Pause with Ctrl+C for gaming, resume anytime; only the hours the GPU trains count |
-| Cost | **~$110–270** electricity (~$140–180 at $0.20/kWh): about 700–900 kWh at ~270 W for the whole PC (GPU ~165 W plus the rest), so multiply by your own rate. Less with a GPU power limit of ~80% |
-| Memory | Needs **both CPU offload** (the optimizer lives in system RAM; ~16 GB free RAM) **and gradient checkpointing** on part or all of the layers. v3's measured 10.2 GB shows offload alone isn't enough: fp32 weights + gradients alone are ~8.4 GB at 1.04B parameters, and activations grow ~1.4× |
-| Phone file | ~650 MB (Q4) or ~1.1 GB (Q8) |
-| Features | Everything from v3 (lookups, "I don't know", corrections, preference training) |
+| Size | **1.124B** parameters: 2048 wide × 24 layers, feed-forward 5,632, grouped-query attention (4 key/value heads), 32k vocabulary. All sizes are multiples of 256, so the phone's Q4 format works |
+| Reading | **40B tokens** (~36 per parameter) + a 4.1B-token final-phase set; ~88 GB on disk (~170 GB free while building) |
+| Steps | 152,600 at 262,144 tokens each; the fade starts at step 137,340 |
+| Time / cost | **2× RTX 5090 with Muon: ~14–18 days, ~$290–380** (Muon passed its test). Choose ~250 GB of disk when renting |
+| Optimizer | **Muon** (cloud only: its memory doesn't fit the 4070's 12 GB, and a run can't switch optimizers midway; `train.py` refuses). The AdamW fallback (`--set optimizer=adamw`) can start at home but gives up Muon's saving |
+| Phone file | ~700 MB (Q4) or ~1.2 GB (Q8) |
+| Features | Everything from v3 (lookups, web search, "I don't know", corrections, memory, preference training) |
 | **Code** | **Several languages** instead of Python only (see below) |
 
-**Why 30B tokens instead of 20B:** ~20 tokens per parameter is the most *efficient* use of
-training time, but models keep improving with more reading. 30B gives a model roughly as good as a
-~1.3–1.5B one trained the standard way, while staying 1B-sized on the phone (same speed and file
-size). The extra ~1.5 months and ~$50 are paid once. If more is wanted later, the run can continue
-from `pre_decay.pt` instead of starting over: that is exactly what **v4** does (see [v4's brain](#v4s-brain-v35-trained-longer)).
+**Why 40B tokens and everyday web:** v3's full-test HellaSwag (31.7% at step 15,000, 37% on the first 500
+questions only) showed the educational-only mix is strong on knowledge but weaker on everyday "what
+happens next" sense. Everyday pages (DCLM) are **added** rather than swapped in, so the ~19B educational
+tokens stay. A cheap A/B (v3plus vs v3plus-edu, ~$9 each) checks the idea before the big run.
 
-**Why ~1.05B and not 1.15B or 1.3B:** training needs the weights, gradients and optimizer on a 12 GB
-card at once. ~1.05B fits with CPU offload plus gradient checkpointing; 1.15B is tighter (+1–2 test points, +15% time); 1.3B
-needs 16-bit-only training (+3–4 points, +30% time). The v3.5 pilot runs confirm memory and speed;
-if there's clear headroom, 1.15B can still be chosen then.
+**Why 1.12B and not 1.2B+:** 24 layers still fits the 4070 (the backup if the rental ends) and leaves
+room in a 29-day rental; 1.2B+ might not fit at home. Deeper rather than wider (research on small
+models favours depth), so phone speed drops only ~8%.
 
-### v3.5's data (~33B tokens to prepare)
+### v3.5's data (~44B tokens to prepare)
 
-**Main reading: 30B tokens**
+**Main reading: 40B tokens**
 
 | Share | Tokens | Source | Notes |
 |---|---|---|---|
-| 63% | 18.9B | Educational web pages (FineWeb-Edu `sample-100BT`) | The bigger slice, so no page is read twice (v3 used `sample-10BT`) |
-| 15% | 4.5B | Wikipedia | About one full read of English Wikipedia (it's only ~4–5B tokens), so its share drops from v3's 20% |
-| 13% | 3.9B | Code, several languages | Python ~1.9B, JavaScript/HTML/CSS ~0.9B, C# or Java ~0.5B, SQL ~0.3B, shell/PowerShell ~0.3B |
-| 7.5% | 2.25B | Math (FineMath) | Up from 5%: helps step-by-step reasoning |
-| 1.5% | 0.45B | Stories (TinyStories) | Nearly all of TinyStories |
+| 47.5% | 19.0B | Educational web pages (FineWeb-Edu `sample-100BT`) | The same amount as the 30B plan; no page read twice |
+| 17.5% | 7.0B | **Everyday web (DCLM-baseline)** | How-tos, forums, reviews, news, filtered for quality |
+| 11.25% | 4.5B | Wikipedia | About one full read of English Wikipedia |
+| 12.5% | 5.0B | Code, 9 languages (The Stack) | Python first, then JavaScript/HTML/CSS, SQL, Java, C#, shell, PowerShell |
+| 7.5% | 3.0B | Math (FineMath 4+) | Step-by-step math |
+| 3.75% | 1.5B | Textbook-style text (Cosmopedia v2) | Written by the open Mixtral model, not ChatGPT/Claude/Gemini |
 
-**Anneal set: 3B tokens** (read during the last 10% of steps)
+**Final phase: 4.1B tokens** (read during the last 10% of steps): 35% top-rated FineWeb-Edu pages,
+10% DCLM, 20% Wikipedia, 12% math, 13% code, 5% Cosmopedia, **5% human-written Q&A (Stack Exchange,
+best answer)**, so the model reaches chat training already used to "question → helpful answer".
 
-| Share | Tokens | Source |
-|---|---|---|
-| 40% | 1.2B | Top-rated web pages (FineWeb-Edu score 4–5) |
-| 25% | 0.75B | Wikipedia |
-| 15% | 0.45B | Math |
-| 15% | 0.45B | Code |
-| 5% | 0.15B | Stories |
+**No TinyStories from v3.5 on:** they were written by GPT-3.5/4, and this project never trains on
+ChatGPT/Claude/Gemini output. Stories in the chat lessons now come from Cosmopedia.
 
-**Preparing it:** ~33B tokens, ~66 GB, about **3.5–5 hours** at the ~2.6M tokens/second measured for
-v3 (the code dataset may be slower). Test questions are removed as in v3. A new 32k tokenizer is
-trained on a sample that includes every code language. **Disk tip:** v3's 27 GB of data can be
-deleted once v3 has finished training.
+**Preparing it:** ~44B tokens, about **5–8 hours** at v3's measured speed. Test questions are removed
+as in v3. Keep one tokenizer for every machine (home and cloud) so the data matches.
 
 **Multi-language code.** v3 reads only Python (a small brain learns one language well rather than
 many thinly). With 1B parameters there's room for more:
@@ -321,8 +341,11 @@ many thinly). With 1B parameters there's room for more:
   These require accepting their terms on Hugging Face and logging in with a token.
 
 **Built so far (tested on CPU with a tiny model; the real memory and speed need the RTX 4070 pilot):**
-- `v3.5` entry in `config.py` (1.036B parameters, 115,000 steps, `python train.py --version v3.5 --pilot`)
+- `v3.5` entry in `config.py` (1.124B parameters, 152,600 steps, `python train.py --version v3.5 --cloud --pilot`)
 - `offload_optim.py`: optimizer in system RAM (`optimizer="adamw_cpu"`); gives the same numbers as normal AdamW and resumes correctly
+- **Cloud mode** (`train.py --cloud`, `cloud_train` in `config.py`): on rented 32 GB cards (planned: **2x RTX 5090, ~2-2.5
+  weeks, ~$280-360**) the 12 GB workarounds come off (optimizer on the GPU, no gradient checkpointing, micro-batch 2 x 64,
+  saves every 150 steps). Same steps and results, so one run moves between home and cloud at any step. See [V3_5.md](V3_5.md)
 - `checkpoint_every` setting: protect every block (1) or every 2nd block (2) with gradient checkpointing
 - `optimizer="adamw8bit"` (bitsandbytes) as a fallback (untested here)
 
@@ -345,7 +368,7 @@ many thinly). With 1B parameters there's room for more:
   multi-language code source
 - **Step-by-step math in the chat data**: the teacher model writes worked word problems (GSM8K
   style) for fine-tuning. Keep the real GSM8K questions for testing only, so the test stays fair.
-- **Mandatory pilot runs**: ~1.05B (and 1.15B if memory allows), to confirm memory, speed and falling loss
+- **Mandatory pilot runs**: at 1.12B, to confirm memory, speed and falling loss
 
 **While it trains:** the GPU is busy, so this is the time to *write* v4's code (the coding
 harness, router, website) and test it on small models (and on v3). **Keep `pre_decay.pt`** (saved at
@@ -366,10 +389,10 @@ as "v3+" would be for v3.
 
 | | v3.5 | v4 |
 |---|---|---|
-| Size, phone speed, download | 1.05B, ~650 MB (Q4) | **the same** |
-| Reading | 30B tokens (~29 per parameter) | **+15B or +30B more** (~43–58 per parameter) |
-| HellaSwag forecast | ~49–55% | **~51–58%** (+1–2 points for +15B, +2–3 for +30B) |
-| Where / how long | RTX 4070, ~3.5–4.5 months | RTX 4070: **~1.5–2 months (+15B) or ~3–4 months (+30B)**, faster with cloud nights or Muon |
+| Size, phone speed, download | 1.12B, ~700 MB (Q4) | **the same** |
+| Reading | 40B tokens (~36 per parameter) | **+15B or +30B more** (~49–62 per parameter) |
+| HellaSwag forecast (full test) | ~44–51% | **~46–54%** (+1–2 points for +15B, +2–3 for +30B) |
+| Where / how long | 2× RTX 5090 with Muon, ~14–18 days | Rented GPUs with Muon (it must continue with v3.5's optimizer): roughly **+40–75% of v3.5's time** for +15–30B |
 | Cost | ~$110–270 electricity | ~$55–270 electricity |
 
 **Why this way:** v4's abilities are mostly *code* (app, router, tools, voice), and the GPU would sit idle
@@ -382,6 +405,9 @@ v3.5 run ── pre_decay.pt ── fade ── ships as v3.5 (the app and skill
                                                                     retrained on it (days) ── v4 ships
 ```
 
+- **Mini-exam: the full HellaSwag test** (all 10,042 questions, `exam_questions=0`), so every check is
+  as accurate as the final one (about ±0.5 points; v3 used 500 questions, v3.5 uses 5,000). Set it in
+  v4's config entry when the continuation run is added.
 - **Data:** new pages, never repeated: more of FineWeb-Edu's `sample-100BT` than v3.5 read, more code
   and math, plus a few percent of **skill-aware text** (tool calls, thinking steps, code with tests), so
   the skill packs start from a base that already knows those formats. A second pass over v3.5's data is
@@ -470,7 +496,7 @@ this (`<|tool_call|>`, `<|tool_result|>`) are already reserved in v3's tokenizer
 | Model | What it can do |
 |---|---|
 | v3 (394M) | Autocomplete only, no agent work |
-| v3.5 / v4 (~1.05B) | Small, simple tasks: fix an obvious bug in one short file, write a small function, run a command and read the result |
+| v3.5 / v4 (~1.12B) | Small, simple tasks: fix an obvious bug in one short file, write a small function, run a command and read the result |
 | v5 (3B) | Small multi-step jobs: a few files, a couple of retries |
 | v6.5 (7B) | Real everyday scripting help |
 
@@ -703,25 +729,28 @@ battery, not a bigger download.
 
 **How the versions line up with tiers** (like a lab's small, mid and large model families):
 
-| Tier class | Working name | Size | Versions |
+| Tier class | Model name | Size | Versions |
 |---|---|---|---|
-| Phone-lite | **Rune** | ~400M | v3 |
-| Small and fast | **Skald** | ~1B | **v3.5**, then **v4 = "Skald 2"**: the same size, now with skill packs, the router, tools, thinking, effort levels and the app |
-| Balanced | **Saga** | ~3B | v5 (needs cloud training) |
-| Most capable | **Edda** | 5-7B | v6, v6.5 |
-| Top | **Norn** | 13-30B | v7, v8 (see [Beyond v6.5](#beyond-v65-v7-v8-and-max)) |
+| Phone-lite | **Yuvra Flare** | ~400M | v3 |
+| Small and fast | **Yuvra Equinox** | ~1B | **v3.5**, then **v4 = "Yuvra Equinox 2"**: the same size, now with skill packs, the router, tools, thinking, effort levels and the app |
+| Balanced | **Yuvra Solstice** | ~3B | v5 (needs cloud training) |
+| Most capable | **Yuvra Apogee** | 5-7B | v6, v6.5 |
+| Top | **Yuvra Max (name to be chosen)** | 13-30B | v7, v8 (see [Beyond v6.5](#beyond-v65-v7-v8-and-max)) |
 
-So v4 (Skald 2) is a new *generation* of the small tier, not a bigger model: v3.5's brain **trained longer**
+So v4 (Yuvra Equinox 2) is a new *generation* of the small tier, not a bigger model: v3.5's brain **trained longer**
 (15–30B more tokens, including some "skill-aware" text with tool calls, thinking steps and code with tests,
 so the skill packs start from a base that already knows those formats), plus the abilities. No cloud needed.
 See [v4's brain](#v4s-brain-v35-trained-longer).
 
-**Names (working names):** a family of Norse storytelling words, since these are language models. A *rune* is
-a small written character, a *skald* a Norse poet, a *saga* a long story, the *Eddas* the great collections
-of Norse tales, and the *Norns* the three fates who weave everything. They are placeholders: **no trademark
-check has been done**, so search each name (and its domain) before a public launch, and rename if there is a
-conflict. In this document, the older placeholder names map as: Lite = Rune, Standard = Skald,
-Pro = Saga and Edda, Max = Norn.
+**Names (working names):** the umbrella is **Yuvra** (the app, Yuvra.AI, and the whole model family); each model adds a
+word from the sky's calendar, in order of size: **Flare** (small and quick), **Equinox** (day and night in balance: the
+balanced everyday model), **Solstice** (the sun at its furthest reach) and **Apogee** (the highest point of an orbit).
+The top tier's name is still to be chosen. They are placeholders: **no trademark check has been done beyond web searches
+(Oct 2026)**, so search each name (and its domain) before a public launch, and rename if there is a conflict. A first
+set (Nova, Pulsar, Quasar, Supernova) was dropped because each is already the name of a known AI model (Amazon Nova,
+Ambient.ai's Pulsar, Quasar Alpha and Quasar 438B, Arcee SuperNova); the words kept are only used by niche AI tools.
+Earlier Norse working names: Rune = Flare, Skald = Equinox, Saga = Solstice, Edda = Apogee, Norn = the top tier. In this
+document, the older tier names map as: Lite = Flare, Standard = Equinox, Pro = Solstice and Apogee, Max = (to be chosen).
 
 ## Model tiers (Lite, Standard, Pro, Max)
 
@@ -731,10 +760,10 @@ speed or smarts.
 
 | Tier | Size | Runs on | Good for | Arrives |
 |---|---|---|---|---|
-| **Lite = Rune** | ~400M (v3-size) | Any phone, offline, very fast | Quick questions, small talk, simple lookups | With v3.5 |
-| **Standard = Skald** | ~1B (v3.5, v4) | Phones and PCs | Everyday use: lookups, explanations, advice | v3.5 |
-| **Pro = Saga, Edda** | 3B (v5), 5-7B (v6-v6.5) | PC or a server (the app's online mode) | Harder questions, coding, long writing | v5+ |
-| **Max = Norn** | 13B, later ~30B ("upper small", then "medium"; see [Beyond v6.5](#beyond-v65-v7-v8-and-max)) | A server, or a PC with a 24 GB GPU for 13B; online mode | The hardest questions: deep reasoning, real coding help, long documents. Also the teacher for every smaller tier | After v6.5, if funded |
+| **Lite = Yuvra Flare** | ~400M (v3-size) | Any phone, offline, very fast | Quick questions, small talk, simple lookups | With v3.5 |
+| **Standard = Yuvra Equinox** | ~1B (v3.5, v4) | Phones and PCs | Everyday use: lookups, explanations, advice | v3.5 |
+| **Pro = Yuvra Solstice, Yuvra Apogee** | 3B (v5), 5-7B (v6-v6.5) | PC or a server (the app's online mode) | Harder questions, coding, long writing | v5+ |
+| **Max = Yuvra Max (name to be chosen)** | 13B, later ~30B ("upper small", then "medium"; see [Beyond v6.5](#beyond-v65-v7-v8-and-max)) | A server, or a PC with a 24 GB GPU for 13B; online mode | The hardest questions: deep reasoning, real coding help, long documents. Also the teacher for every smaller tier | After v6.5, if funded |
 
 The names are working names (see above).
 
@@ -765,7 +794,7 @@ planning an ONNX/WebLLM version: it would mean a second conversion path for litt
 | Size | Realistic targets | Not realistic |
 |---|---|---|
 | v1-v2 (30-88M) | Phones, PCs, browsers | Microcontrollers (an ESP32 has ~0.5 MB of RAM, the file alone is 20+ MB) and smartwatches |
-| v3-v4 (0.4-1.05B) | Phones, PCs, browsers, Raspberry Pi 5 (a few words per second), old laptops | Pi Zero / Pico |
+| v3-v4 (0.4-1.12B) | Phones, PCs, browsers, Raspberry Pi 5 (a few words per second), old laptops | Pi Zero / Pico |
 | v5-v6.5 (3-7B) | PCs with a GPU or 8 GB+ RAM, Apple Silicon Macs, servers; high-end phones for 3B | Older phones |
 
 Downloads are quantized (Q4 by default), not 16-bit: a 7B model is ~4 GB in Q4 but ~14 GB in 16-bit.
@@ -785,6 +814,7 @@ planned yet.
 ## One app for phone and PC (the plan for the website and app)
 
 Goal: the same AI, with the same name, chats and notes, on the phone and the PC, offline or online.
+The detailed design (modes, screens, how the Python features plug in, build order): [APP.md](APP.md).
 
 **The trick: build the app once.** Write the chat screen and the "brain around the model" (chat
 format, lookups, notes, tools, effort levels) in **one web codebase (TypeScript/JavaScript)**, then

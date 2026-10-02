@@ -165,7 +165,7 @@ fewer key/value heads, plus 4-8 bit compression of the cache); position encoding
 a staged curriculum up to 512K with the long sequence split across several GPUs (ring attention);
 and lots of long data. Until then, **retrieval and compaction** (the Wikipedia lookup, summarizing
 old conversation, saved notes) give the effect of a bigger window at a fraction of the cost.
-That is the Saga-class (3B) plan, after v3.5.
+That is the Yuvra Solstice-class (3B) plan, after v3.5.
 
 ## Reading the context meter
 `python generate.py --version v3 --chat --context` prints after every reply:

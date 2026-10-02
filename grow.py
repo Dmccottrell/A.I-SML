@@ -15,7 +15,7 @@ WHAT THIS FILE DOES
     The optimizer's memory is NOT carried over (the new model starts a fresh optimizer).
 
     Used by growth_test.py (the experiment that measures how much compute growth really saves).
-    The same code will grow Saga into Edda later.
+    The same code will grow Yuvra Solstice into Yuvra Apogee later.
 
     Right after growing, the model is usually a bit WORSE than before (the copies weren't
     trained to work together), then it recovers quickly. That short dip is normal.

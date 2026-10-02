@@ -161,7 +161,9 @@ copy of the model and reads different text, and their gradients are averaged onc
 - **Checkpoints move freely:** a save from 1 GPU resumes on 2 GPUs and back. So your home run can carry on in the cloud.
 - **Expect** about 1.8-1.9x for 2 GPUs (my estimate; the pilot report prints the real speed).
 - **Debug check:** `DDP_SELFCHECK=1` makes it print, at the end of a run, whether all GPUs ended with identical weights.
-- **v3.5 memory:** use `optimizer="adamw"` (not `adamw_cpu`) on multi-GPU machines, otherwise each GPU needs its own ~17 GB of RAM.
+- **v3.5:** add `--cloud` (cloud mode: `optimizer="adamw"` on the GPU, no gradient checkpointing, micro-batch 2 x 64, saves
+  every 150 steps; see docs/V3_5.md). It's required on multi-GPU machines (`adamw_cpu` would need ~17 GB of RAM per GPU),
+  and `cloud_setup.sh` uses it for you: `python run_training.py --version v3.5 --cloud --gpus 2`.
 - **Tested** on a CPU with two processes (identical weights, pause and resume, window stop, Ctrl+C); **not yet on real GPUs**.
 
 ## Off-machine backup (do this: a rented machine can disappear)
@@ -197,7 +199,7 @@ python hub_backup.py status --version v3 --repo yourname/aisml-checkpoints
 | Run | Time on one 4090 | Approx. rental |
 |---|---|---|
 | v3 (394M) | ~6-7 days | $50-100 |
-| v3.5 (~1.05B) | ~5-6 weeks | several hundred dollars |
+| v3.5 (~1.12B, 40B tokens) | ~20-25 days on 2x RTX 5090 | ~$420-530 |
 
 Free research credits (e.g. Google TPU Research Cloud) exist but need a JAX/TPU port of the training
 code, which is not built yet. See `docs/ROADMAP.md`.

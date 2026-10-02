@@ -105,7 +105,7 @@ def up(a, V):
         # The cloud machine's clock is usually UTC. Pass THIS PC's offset so the window means YOUR hours.
         offset = a.cloud_utc_offset if a.cloud_utc_offset is not None else \
             datetime.datetime.now().astimezone().utcoffset().total_seconds() / 3600
-        run = (f"cd {a.repo} && python run_training.py --version {a.version} --window {a.cloud_window} "
+        run = (f"cd {a.repo} && python run_training.py --version {a.version} --cloud --window {a.cloud_window} "
                f"--utc_offset {offset:g} --exit_after_window --backup_dir ~/backups"
                + (f" --gpus {a.cloud_gpus}" if a.cloud_gpus > 1 else "")
                + (f" --notify {shlex.quote(a.notify)}" if a.notify else "")

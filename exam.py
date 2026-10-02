@@ -23,7 +23,9 @@ WHAT THIS FILE DOES
 
 Usage:
     python exam.py --version v2                  full test (10,042 questions)
-    python exam.py --version v3 --n 1000         first 1,000 questions only
+    python exam.py --version v3 --n 1000         first 1,000 questions only (easier than the whole test)
+    python exam.py --version v3 --n 1000 --spread   1,000 spread over the whole test (matches the full score)
+    Compare versions on the FULL test only: the first questions of the file are the easier kind.
     python exam.py --version v2 --ckpt checkpoints/dev/v2/ckpt.pt
 """
 import argparse
@@ -50,6 +52,17 @@ def final_weights(V):
 
 
 @torch.no_grad()
+def pick_questions(examples, n=0, how="first"):
+    """n questions from the test (0 = all). how="first": the first n (v3's mini-exam; the file starts with
+    the easier video-caption questions, so these score ~5 points HIGHER than the whole test);
+    how="spread": n evenly spaced over the whole test, so the score matches the full test."""
+    if not n or n >= len(examples):
+        return list(examples)
+    if how == "spread":
+        return [examples[i * len(examples) // n] for i in range(n)]
+    return list(examples[:n])
+
+
 def hellaswag_accuracy(model, tok, examples, device, autocast=None):
     """Fraction of `examples` where the model prefers the correct ending.
 
@@ -104,7 +117,9 @@ def main():
     add_version_arg(p)
     p.add_argument("--ckpt", default=None,
                    help="default: the finished run's final weights (final.pt or a finished latest.pt), else ckpt.pt")
-    p.add_argument("--n", type=int, default=0, help="only the first N questions (default: all)")
+    p.add_argument("--n", type=int, default=0, help="only N questions (default: all)")
+    p.add_argument("--spread", action="store_true", help="with --n: spread the N over the whole test (matches "
+                   "the full score); without it, the first N (v3's mini-exam set, ~5 points easier)")
     a = p.parse_args()
     V = get_version(a.version)
     ckpt = a.ckpt or final_weights(V)
@@ -115,8 +130,7 @@ def main():
     model, _ = load_checkpoint(ckpt, device)
     tok = BPETokenizer.load(os.path.join(V.data_dir, "tokenizer.json"))
     examples = load_hellaswag()
-    if a.n:
-        examples = examples[:a.n]
+    examples = pick_questions(examples, a.n or 0, "spread" if a.spread else "first")
     print(f"HellaSwag: {len(examples):,} questions, model {ckpt}")
     acc = hellaswag_accuracy(model, tok, examples, device, autocast)
     print(f"accuracy: {acc*100:.1f}%  (random guessing = 25%)")

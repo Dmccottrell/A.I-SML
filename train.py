@@ -27,7 +27,8 @@ v3+ EXTRAS (switched on in config.py)
       10% of steps while reading <data_dir>/anneal/train.bin, a higher-quality
       mix ("study the best material last"). pre_decay.pt is saved just before
       the fade, so the run can be continued later.
-    * Mini-exam: every `exam_every` steps, 500 HellaSwag questions (see exam.py).
+    * Mini-exam: every `exam_every` steps, the first `exam_questions` HellaSwag questions (500 for v3,
+      5,000 for v3.5, 0 = all 10,042; see exam.py).
     * torch.compile: faster training when available (turns itself off if not).
     * metrics.csv (and TensorBoard graphs if installed) in the checkpoint folder:
           tensorboard --logdir checkpoints/dev/v3/tb
@@ -83,7 +84,7 @@ import contextlib
 import numpy as np
 import torch
 
-from config import add_version_arg, get_version
+from config import add_version_arg, get_version, parse_setting
 from model import TinyLM
 from tokenizer import BPETokenizer
 
@@ -104,6 +105,11 @@ p.add_argument("--notify", default=os.environ.get("NTFY_TOPIC"),
 p.add_argument("--notify_every", type=int, default=250, help="steps between progress messages")
 p.add_argument("--stop_at", type=float, default=0,
                help="(used by run_training.py --window) save and stop after the step that ends past this time")
+p.add_argument("--cloud", action="store_true",
+               help="cloud mode: the version's settings for a big rented GPU (config.py cloud_train; e.g. v3.5 "
+                    "on RTX 5090s). Same steps and results, faster. A run can switch between modes at any step")
+p.add_argument("--set", action="append", default=[], metavar="NAME=VALUE",
+               help="change one training setting for this run, e.g. --set grad_checkpoint=true (repeatable)")
 args = p.parse_args()
 if args.backup_dir and not args.pilot:
     # Check the backup folder NOW, so a typo or a missing drive stops the run in seconds,
@@ -113,8 +119,13 @@ if args.backup_dir and not args.pilot:
     except OSError as e:
         sys.exit(f"can't use --backup_dir {args.backup_dir!r}: {e}\n"
                  "Pick a folder on a drive that exists (e.g. C:\\ai-backups), or leave --backup_dir out.")
-V = get_version(args.version)
+V = get_version(args.version, cloud=args.cloud)
+if args.set:
+    from dataclasses import replace
+    V = replace(V, train=replace(V.train, **dict(parse_setting(x, V.train) for x in args.set)))
 S = V.train                      # training settings for this version
+if args.cloud and not get_version(args.version).cloud_train:
+    print(f"(--cloud: {V.name} has no cloud settings, using its normal ones)")
 
 # ---------------- settings ----------------
 DATA_DIR = V.data_dir
@@ -275,7 +286,9 @@ if S.init_from and (args.fresh or not os.path.exists(LATEST_PATH)):
 mprint(f"{V.name}: {model.num_params()/1e6:.1f}M parameters on {device}"
        + (f" x {WORLD} GPUs (DDP)" if DIST else "")
        + (f"  (gradient checkpointing on, every {S.checkpoint_every} block)" if S.grad_checkpoint else "")
-       + (f"  (context {cfg.max_seq_len:,}, loss in chunks of {S.loss_chunk:,})" if S.loss_chunk else ""))
+       + (f"  (context {cfg.max_seq_len:,}, loss in chunks of {S.loss_chunk:,})" if S.loss_chunk else "")
+       + (f"  [cloud mode: {S.optimizer}, micro-batch {S.batch_size} x {S.grad_accum}, saves every {S.save_every}]"
+          if args.cloud and get_version(args.version).cloud_train else ""))
 # With several GPUs the model is wrapped so gradients are averaged across them. `model` stays the plain
 # model (for saving, loading and evaluating); `wrapped` is what training runs through.
 wrapped = model
@@ -325,11 +338,19 @@ def save_atomic(obj, path):
     os.replace(tmp, path)
 
 
+def optimizer_kind(name):
+    """Optimizers whose saved state is interchangeable: adamw and adamw_cpu are the same AdamW (tested in
+    tests/test_cloud_mode.py), so a run can move between home and cloud mode. Muon and 8-bit AdamW keep
+    different state, so a run that started with one must finish with it."""
+    return "adamw" if name in ("adamw", "adamw_cpu") else name
+
+
 def save_latest(next_iter, path=LATEST_PATH):
     """Save everything needed to resume training at iteration `next_iter`."""
     if not IS_MAIN:
         return
     save_atomic({"model": model.state_dict(), "optimizer": optimizer.state_dict(),
+                 "optimizer_kind": optimizer_kind(S.optimizer),
                  "scaler": scaler.state_dict(), "config": cfg.__dict__,
                  "iter": next_iter, "best_val": best_val,
                  "rng": torch.get_rng_state()}, path)
@@ -411,12 +432,16 @@ def log_metric(it, name, value):
         tb.flush()
 
 
-# ---- mini-exam: 500 HellaSwag questions (see exam.py) ----
+# ---- mini-exam: the first exam_questions HellaSwag questions (see exam.py) ----
 exam_questions = None
 if S.exam_every and not args.pilot and IS_MAIN:
     try:
         from benchmarks import load_hellaswag
-        exam_questions = load_hellaswag()[:500]
+        from exam import pick_questions
+        exam_questions = pick_questions(load_hellaswag(), S.exam_questions, S.exam_pick)
+        # the metric's name says how many questions (and "spread" or not), so scores are never mixed up
+        exam_name = ("hellaswag_full" if not S.exam_questions else f"hellaswag_{len(exam_questions)}"
+                     + ("_spread" if S.exam_pick == "spread" else ""))
         exam_tok = BPETokenizer.load(os.path.join(DATA_DIR, "tokenizer.json"))
     except Exception as e:
         print(f"mini-exam off: couldn't load HellaSwag ({e})")
@@ -478,6 +503,13 @@ if os.path.exists(LATEST_PATH) and not args.fresh:
     # card over its limit, so Windows spilled into slow system memory and training ran ~5x slower.
     # load_state_dict copies the values to wherever the model and optimizer live.
     state = torch.load(LATEST_PATH, map_location="cpu")
+    saved_kind = state.get("optimizer_kind")         # older checkpoints don't say (they were all AdamW)
+    if saved_kind and saved_kind != optimizer_kind(S.optimizer):
+        sys.exit(f"{LATEST_PATH} was trained with {saved_kind}, but this run is set to {S.optimizer}. A run can't "
+                 f"switch optimizers midway (their saved memory is different). Continue it with the same one: "
+                 f"--set optimizer={'adamw_cpu' if saved_kind == 'adamw' and not args.cloud else saved_kind}"
+                 + (" (v3.5's cloud mode uses Muon; a run started at home with AdamW stays AdamW)"
+                    if saved_kind == "adamw" and S.optimizer == "muon" else ""))
     model.load_state_dict(state["model"])
     optimizer.load_state_dict(state["optimizer"])
     if state["scaler"]:
@@ -540,8 +572,9 @@ try:
             from exam import hellaswag_accuracy
             acc = hellaswag_accuracy(model, exam_tok, exam_questions, device, autocast)
             print(f"exam {it}: HellaSwag {acc*100:.1f}% (random = 25%)")
-            phone(f"step {it:,}: HellaSwag {acc*100:.1f}% (random is 25%)", "exam")
-            log_metric(it, "hellaswag_500", acc)
+            phone(f"step {it:,}: HellaSwag {acc*100:.1f}% on {len(exam_questions):,} questions (random is 25%)",
+                  "exam")
+            log_metric(it, exam_name, acc)
 
         # Gradient accumulation: run several small batches and add up their
         # gradients before one optimizer step. Acts like one big batch
@@ -627,8 +660,9 @@ if args.pilot:
     total_h = (sec * S.max_iters + evals) / 3600
     if IS_MAIN:
         print("\n==================== PILOT REPORT ====================")
-        print(f"model:          {V.name}, {model.num_params()/1e6:.1f}M parameters, "
-              f"grad_checkpoint={S.grad_checkpoint}, optimizer={S.optimizer}, "
+        print(f"model:          {V.name}, {model.num_params()/1e6:.1f}M parameters"
+              + (" (cloud mode)" if args.cloud and get_version(args.version).cloud_train else "") + ", "
+              f"grad_checkpoint={S.grad_checkpoint}, optimizer={S.optimizer}, batch {S.batch_size}x{S.grad_accum}, "
               f"compile={'on' if train_model is not wrapped else 'off'}"
               + (f", {WORLD} GPUs (DDP)" if DIST else ""))
         print(f"speed:          {sec:.2f} s/iter = {tokens/sec/1e3:.1f}k tokens/s")

@@ -27,9 +27,10 @@ live in `config.py`.
 
 ## Model family names (working names)
 
-Norse storytelling words, since these are language models: **Rune** (phone-lite, ~400M), **Skald**
-(small, ~1B: v3.5, and v4 as "Skald 2"), **Saga** (~3B), **Edda** (5-7B) and **Norn** (top, 13B+). They are
-placeholders: no trademark check has been done yet. See `docs/ROADMAP.md`.
+The app and the whole family are called **Yuvra** (Yuvra.AI); each model adds a word from the sky's calendar,
+ordered by size: **Yuvra Flare** (phone-lite, ~400M), **Yuvra Equinox** (small, ~1B: v3.5, and v4 as "Yuvra Equinox 2"),
+**Yuvra Solstice** (~3B) and **Yuvra Apogee** (5-7B); the top tier (13B+) is still to be named. They are placeholders:
+no trademark check has been done yet. See `docs/ROADMAP.md` and `docs/APP.md`.
 
 ## Pretrained weights policy
 
@@ -79,7 +80,7 @@ data, code and training.
 | `harness.py` | 6 | v4 coding helper: safe file/command tools and the tool-calling loop (no model needed; tests in `tests/`) |
 | `muon.py`, `muon_test.py` | 5 | The Muon optimizer (`optimizer="muon"` in config.py), and an experiment that measures whether it needs fewer steps than AdamW on our models (~1–2 h on the 4070) |
 | `grow.py`, `growth_test.py` | 6 | Grow a trained model into a deeper one, and an experiment that measures how much training compute that saves (run when the GPU is free) |
-| `generate.py` | 6 | Generate text or chat with your model. Chat options: `--lookup` (Wikipedia notes), `--memory` (remembers you), `--suggest` (reply suggestions), `--context` (memory meter), `--skill` (skill packs) |
+| `generate.py` | 6 | Generate text or chat with your model. Chat options: `--lookup` (Wikipedia notes), `--web` (web search, online mode), `--memory` (remembers you), `--suggest` (reply suggestions), `--context` (memory meter), `--skill` (skill packs) |
 | `make_chat_data.py` | 7 | v1: builds `data/chat.jsonl` fine-tuning examples automatically |
 | `make_chat_data_v2.py` | 7 | v2: builds `data/v2/chat.jsonl` (multi-turn conversations) |
 | `finetune.py` | 7 | Teach it a chat format using the version's `chat.jsonl`. Ctrl+C pauses; run again to resume. NEFTune (a little noise while training, for better answers) is on from v3 |
@@ -90,6 +91,8 @@ data, code and training.
 | `evaluate.py` + `eval/prompts.jsonl` | 6–7 | 20-question test sheet that scores a chat model |
 | `exam.py` | 6 | HellaSwag, a public common-sense test (works on pretrained models; compare versions) |
 | `wiki_index.py` | v3 | Searchable copy of Wikipedia for lookups (build + search) |
+| `web_search.py` | v3 | Web search for online mode (Wikipedia's free search or Brave Search); results become notes |
+| `web_lessons.py` | v3 | Chat lessons for reading web results and honest answers about other AIs (used by make_chat_data_v3.py) |
 | `make_teacher_data.py` | v3 | The teacher model (Qwen2.5-7B via llama.cpp, or rented per token from a hosting API) writes practice examples |
 | `make_chat_data_v3.py` | 7 | v3 and every later version (`--version`): chat lessons that fix v2's mistakes (lookups, "I don't know", corrections, instructions, topic switches), remembering you, and reply suggestions |
 | `chat_memory.py` | 7 | Remembers earlier chats and facts about you, on your computer only (`generate.py --chat --memory`); search by keywords and by meaning |

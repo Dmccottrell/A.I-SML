@@ -15,6 +15,7 @@ Usage:  python generate.py --prompt "Once upon a time"
         python generate.py --chat                    (v1, uses chat.pt)
         python generate.py --version v2 --chat
         python generate.py --version v3 --chat --lookup   (v3+: looks things up in Wikipedia first)
+        python generate.py --version v3 --chat --web      (v3+: searches the web first; online mode)
 
 Options:
     --ckpt         checkpoint to load (default: ckpt.pt, or chat.pt with --chat)
@@ -32,7 +33,11 @@ Options:
                    empty line to send it (needs a v3+ chat model, trained with user follow-ups)
     --memory       chat mode: remember earlier chats and facts you save ("remember: ..."), on this
                    computer only (see chat_memory.py). --private: this chat isn't saved
-    --notes        with --lookup: passages per question (default 3; 2 leaves more room)
+    --web          chat mode: search the web for each message (web_search.py) and give the best results to
+                   the model as notes, with the site and date. OFF by default: when on, your message is
+                   sent to the search service (Wikipedia's free search, or Brave with BRAVE_API_KEY set).
+                   --web_source auto|wikipedia|brave, --web_read opens the pages for better passages
+    --notes        with --lookup / --web: passages per question (default 3; 2 leaves more room)
     save <name>    chat mode: save the last answer as a PDF, Word, Markdown or text file in documents/
                    (e.g. "save fractions.pdf"; worksheets get a Name/Date line and the answer key on page 2)
     --skill        chat mode: switch on a skill pack (skills.py, docs/SKILLS.md), e.g. --skill study, or
@@ -61,7 +66,10 @@ p.add_argument("--repetition_penalty", type=float, default=1.15)
 p.add_argument("--chat", action="store_true")
 p.add_argument("--context", action="store_true", help="chat: show the context meter after every reply")
 p.add_argument("--lookup", action="store_true", help="chat: look each message up in Wikipedia first")
-p.add_argument("--notes", type=int, default=3, help="chat --lookup: passages per question (fewer = more room)")
+p.add_argument("--web", action="store_true", help="chat: search the web for each message (online mode)")
+p.add_argument("--web_source", default="auto", help="with --web: auto, wikipedia or brave (needs BRAVE_API_KEY)")
+p.add_argument("--web_read", action="store_true", help="with --web: open the result pages (slower, better notes)")
+p.add_argument("--notes", type=int, default=3, help="chat --lookup/--web: passages per question (fewer = more room)")
 p.add_argument("--suggest", action="store_true", help="chat: suggest a likely next message after each reply")
 p.add_argument("--memory", action="store_true", help="chat: remember earlier chats and saved facts (chat_memory.py)")
 p.add_argument("--private", action="store_true", help="with --memory: don't save this chat")
@@ -128,6 +136,10 @@ if args.chat:
     if args.lookup:
         from wiki_index import WikiIndex
         wiki = WikiIndex(args.db)
+    if args.web:
+        from web_search import pick_source, web_notes
+        print(f"(web search on, using {pick_source(args.web_source)}: each message is sent to the search "
+              "service. 'web off' / 'web on' to switch)")
     mem = chat_id = None
     if args.memory:
         from chat_memory import ChatMemory, handle_command, load_embedder
@@ -171,6 +183,12 @@ if args.chat:
             except (ValueError, SystemExit) as e:
                 print(f"(couldn't save: {e})")
             continue
+        if msg in ("web on", "web off"):
+            if msg == "web on" and "web_notes" not in globals():
+                from web_search import pick_source, web_notes
+            args.web = msg == "web on"
+            print(f"(web search {'on' if args.web else 'off'})")
+            continue
         if msg in ("context", "window"):
             report = context_report(tok, history, model.cfg.max_seq_len, args.tokens) if history else None
             if report is None:
@@ -188,6 +206,11 @@ if args.chat:
             found += mem.notes(msg, exclude_chat=chat_id)
         if wiki:
             found += [{"title": n["title"], "text": n["text"]} for n in wiki.search(msg, args.notes)]
+        if args.web:
+            web = web_notes(msg, args.notes, args.web_source, args.web_read)
+            found += [{"title": n["title"], "text": n["text"]} for n in web]
+            for n in web:
+                print(f"  (web: {n['url']})")
         if found:
             message["notes"] = found
             print("(looked up: " + "; ".join(n["title"] for n in found) + ")")
