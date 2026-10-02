@@ -72,13 +72,15 @@ def main():
     from config import get_version
     p = argparse.ArgumentParser()
     p.add_argument("--version", default="v3.5")
+    p.add_argument("--workers", type=int, default=min(4, os.cpu_count() or 1),
+                   help="parallel processes (default 4: more can overload a Windows PC, since every run starts programs)")
     p.add_argument("--n", type=int, default=40_000, help="runs to try (each takes ~0.3-1 s of one core; Windows is slower)")
     a = p.parse_args()
     V = get_version(a.version)
     out = os.path.join(V.data_dir, "agent_traces.jsonl")
     os.makedirs(V.data_dir, exist_ok=True)
     t0 = time.time()
-    rows = build(a.n, progress=lambda done, kept: print(
+    rows = build(a.n, workers=a.workers, progress=lambda done, kept: print(
         f"  {done:,}/{a.n:,} runs, {kept:,} kept, ~{(a.n - done) * (time.time() - t0) / done / 60:.0f} min left", flush=True))
     with open(out, "w", encoding="utf-8") as f:
         for r in rows:
