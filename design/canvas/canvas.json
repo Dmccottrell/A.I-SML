@@ -13,9 +13,11 @@
     "ChatLight.dc.html": {"x": 0, "y": 2960, "w": 1360, "h": 860, "title": "Chat (light)", "is_interactive": true},
     "Picker.dc.html": {"x": 0, "y": 3900, "w": 440, "h": 720, "title": "Select model"},
     "Phone.dc.html": {"x": 520, "y": 3900, "w": 390, "h": 844, "title": "Phone (dark)"},
-    "PhoneLight.dc.html": {"x": 990, "y": 3900, "w": 390, "h": 844, "title": "Phone (light)"}
+    "PhoneLight.dc.html": {"x": 990, "y": 3900, "w": 390, "h": 844, "title": "Phone (light)"},
+    "Usage.dc.html": {"x": 1460, "y": 3900, "w": 390, "h": 844, "title": "Usage (phone)"},
+    "Limits.dc.html": {"x": 1930, "y": 3900, "w": 1100, "h": 800, "title": "Limits (owner settings)"}
   },
-  "order": ["Logo.dc.html", "Colours.dc.html", "Main.dc.html", "HomeLight.dc.html", "Chat.dc.html", "ChatLight.dc.html", "Picker.dc.html", "Phone.dc.html", "PhoneLight.dc.html"],
+  "order": ["Logo.dc.html", "Colours.dc.html", "Main.dc.html", "HomeLight.dc.html", "Chat.dc.html", "ChatLight.dc.html", "Picker.dc.html", "Phone.dc.html", "PhoneLight.dc.html", "Usage.dc.html", "Limits.dc.html"],
   "notes": {
     "t1": {"x": 0, "y": -300, "text": "Yuvra: logo and website", "kind": "title1", "maxW": 4240},
     "n1": {"x": 1440, "y": 3900, "text": "Every screen has a Dark/Light switch and a Model switch in its Tweaks. On Chat, open the model chip under the message box and pick a model: the whole page changes colour with a short transition.", "w": 520, "size": "m"}
