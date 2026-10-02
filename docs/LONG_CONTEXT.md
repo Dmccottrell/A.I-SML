@@ -191,6 +191,10 @@ and lots of long data. Until then, **retrieval and compaction** (the Wikipedia l
 old conversation, saved notes) give the effect of a bigger window at a fraction of the cost.
 That is the Yuvra Solstice-class (3B) plan, after v3.5.
 
+## On a phone: the device check
+A long memory costs RAM (about 32 KB per token for v3 at 16-bit, ~16 KB with an 8-bit cache), so the app chooses the window per device and never
+above what the model passed here. See [APP_SPEC.md, Context window and the device check](APP_SPEC.md#context-window-and-the-device-check-plan).
+
 ## Reading the context meter
 `python generate.py --version v3 --chat --context` prints after every reply:
 ```

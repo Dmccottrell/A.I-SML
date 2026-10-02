@@ -132,6 +132,11 @@ file at `/models`). One entry per model: `id`, `name`, `tagline`, `tier` (Lite /
 fits the `chat.pt` it was trained on), and `from_version` (v3, v3.5, ...). Adding a new model is adding a line,
 not changing the app.
 
+## Context window and the device check (plan)
+The app picks each chat's window from the device's **free RAM**, what the model **passed** on the long-context ladder, and a speed
+limit, with an Everyday mode (about 8K), an opt-in Long mode and Remote for any length. Details and the numbers are in
+[APP_SPEC.md](APP_SPEC.md#context-window-and-the-device-check-plan). The model list gains `context_tested`, `kv_kb_per_token` and `weights_mb`.
+
 ## Where models run, and who can reach them (plan)
 Both are planned, and they are separate choices:
 - **Home and cloud:** a model can run on the device, on your own PC at home, or on a rented cloud server. The same
