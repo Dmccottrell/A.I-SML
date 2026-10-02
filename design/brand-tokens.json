@@ -1,0 +1,113 @@
+{
+  "note": "Design tokens for Yuvra (docs: design/README.md). Colours per model; each has a dark and a light variant.",
+  "base": {
+    "dark": {
+      "bg": "#07080D",
+      "side": "#0A0B11",
+      "surface": "#0F1119",
+      "surface2": "#161926",
+      "line": "#232739",
+      "text": "#EEF0F6",
+      "muted": "#9AA3BC"
+    },
+    "light": {
+      "bg": "#F7F8FC",
+      "side": "#EEF0F7",
+      "surface": "#FFFFFF",
+      "surface2": "#EEF0F7",
+      "line": "#D8DCEA",
+      "text": "#0D0F1A",
+      "muted": "#4A526B"
+    }
+  },
+  "models": {
+    "brand": {
+      "dark": {
+        "accent": "#F5A524",
+        "onaccent": "#1A1204",
+        "accenttext": "#F5A524",
+        "sun": "#F5A524",
+        "core": "#F5A524"
+      },
+      "light": {
+        "accent": "#F5A524",
+        "onaccent": "#1A1204",
+        "accenttext": "#8F5600",
+        "sun": "#E08A00",
+        "core": "#E08A00"
+      }
+    },
+    "flare": {
+      "feel": "hot red-orange, white-hot core, aggressive burst",
+      "dark": {
+        "accent": "#FF4B1F",
+        "onaccent": "#1A0500",
+        "accenttext": "#FF6B3D",
+        "sun": "#FF4B1F",
+        "core": "#FFF3E6"
+      },
+      "light": {
+        "accent": "#FF4B1F",
+        "onaccent": "#1A0500",
+        "accenttext": "#B83208",
+        "sun": "#E5340A",
+        "core": "#FFF3E6"
+      }
+    },
+    "equinox": {
+      "feel": "pure black and white, balance of light and dark",
+      "dark": {
+        "accent": "#EEF0F6",
+        "onaccent": "#07080D",
+        "accenttext": "#EEF0F6",
+        "sun": "#EEF0F6",
+        "core": "#07080D"
+      },
+      "light": {
+        "accent": "#0D0F1A",
+        "onaccent": "#FFFFFF",
+        "accenttext": "#0D0F1A",
+        "sun": "#0D0F1A",
+        "core": "#FFFFFF"
+      }
+    },
+    "solstice": {
+      "feel": "deep molten gold, the peak of the sun's power",
+      "dark": {
+        "accent": "#F2A60C",
+        "onaccent": "#1F1400",
+        "accenttext": "#FFBE3B",
+        "sun": "#F2A60C",
+        "core": "#FFE7A0"
+      },
+      "light": {
+        "accent": "#F2A60C",
+        "onaccent": "#1F1400",
+        "accenttext": "#8A5A00",
+        "sun": "#D18A00",
+        "core": "#FFE7A0"
+      }
+    },
+    "apogee": {
+      "feel": "cold silver-blue, pale ice, distant and quiet",
+      "dark": {
+        "accent": "#A8D1F5",
+        "onaccent": "#06121F",
+        "accenttext": "#B5D8F8",
+        "sun": "#A8D1F5",
+        "core": "#F4F9FF"
+      },
+      "light": {
+        "accent": "#A8D1F5",
+        "onaccent": "#06121F",
+        "accenttext": "#2A5F96",
+        "sun": "#4F8FC9",
+        "core": "#F4F9FF"
+      }
+    }
+  },
+  "fonts": {
+    "display": "Sora (500, 600, 700)",
+    "body": "DM Sans (400, 500, 600)"
+  }
+}

@@ -1,0 +1,97 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Yuvra select model</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Sora:wght@500;600;700&family=DM+Sans:wght@400;500;600&display=swap">
+<style>
+body{margin:0}
+div, span, button, svg, path, circle { transition: background-color .7s ease, color .7s ease, border-color .7s ease, fill .7s ease, stroke .7s ease, opacity .7s ease; }
+circle[style*="fill: var(--sun)"] { fill: var(--core) !important; stroke: var(--sun); stroke-width: 3; }
+</style>
+</helmet>
+<div style="{{themeStyle}}; width: 440px; height: 720px; box-sizing: border-box; background: var(--surface); border: 1px solid var(--line); border-radius: 24px; color: var(--text); font-family: 'DM Sans', sans-serif; font-size: 16px; line-height: 1.4; padding: 24px; display: flex; flex-direction: column; gap: 12px">
+
+<div style="display: flex; justify-content: space-between; align-items: center">
+<div style="font-family: 'Sora', sans-serif; font-weight: 600; font-size: 22px">Select model</div>
+<button aria-label="Close" style="background: transparent; border: 0; color: var(--muted); font-size: 22px; width: 44px; height: 44px">&times;</button>
+</div>
+
+<!-- Auto: the router picks the model and the effort -->
+<div style="background: var(--surface2); border-radius: 16px; padding: 14px 16px; display: flex; align-items: center; gap: 14px; border: 1px solid var(--line)">
+<svg width="30" height="30" viewBox="0 0 64 64" fill="none" aria-hidden="true"><circle cx="32" cy="32" r="12" style="fill: var(--sun)"/><circle cx="32" cy="32" r="26" style="stroke: var(--sun)" stroke-opacity="0.45" stroke-width="4"/></svg>
+<div style="flex: 1"><div style="font-weight: 600">Auto</div><div style="font-size: 14px; color: var(--muted)">Picks the best model and effort for each question</div></div>
+</div>
+
+<!-- Flare 3.5: the chosen model -->
+<div style="border-radius: 16px; padding: 12px 16px; display: flex; align-items: center; gap: 14px; border: 1px solid var(--accent); background: var(--surface2)">
+<svg width="32" height="32" viewBox="0 0 64 64" fill="none" aria-hidden="true"><path d="M32 56 C22 56 12 51 10 41 C5 37 5 28 11 24 C10 16 18 8 26 11 C29 6 35 6 38 11 C46 8 54 16 53 24 C59 28 59 37 54 41 C52 51 42 56 32 56 Z" style="stroke: var(--text)" stroke-width="5" stroke-linejoin="round"/><circle cx="32" cy="36" r="7" style="fill: var(--sun)"/></svg>
+<div style="flex: 1"><div style="font-weight: 600">Flare <span style="font-weight: 400; color: var(--muted)">3.5</span></div><div style="font-size: 14px; color: var(--muted)">Fast and light, for quick answers</div></div>
+<span style="color: var(--accenttext); font-weight: 700" aria-label="Selected">&#10003;</span>
+</div>
+
+<!-- Equinox 4 -->
+<div style="border-radius: 16px; padding: 12px 16px; display: flex; align-items: center; gap: 14px; border: 1px solid var(--line)">
+<svg width="32" height="32" viewBox="0 0 64 64" fill="none" aria-hidden="true"><path d="M32 56 C22 56 12 51 10 41 C5 37 5 28 11 24 C10 16 18 8 26 11 C29 6 35 6 38 11 C46 8 54 16 53 24 C59 28 59 37 54 41 C52 51 42 56 32 56 Z" style="stroke: var(--text)" stroke-width="4" stroke-linejoin="round"/><path d="M32 55 V36 M32 36 L21 18 M32 36 L43 18" style="stroke: var(--text)" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/><circle cx="32" cy="36" r="6.5" style="fill: var(--sun)"/></svg>
+<div style="flex: 1"><div style="font-weight: 600">Equinox <span style="font-weight: 400; color: var(--muted)">4</span></div><div style="font-size: 14px; color: var(--muted)">Everyday work and homework, with skills and tools</div></div>
+</div>
+
+<!-- Solstice 5 -->
+<div style="border-radius: 16px; padding: 12px 16px; display: flex; align-items: center; gap: 14px; border: 1px solid var(--line)">
+<svg width="32" height="32" viewBox="0 0 64 64" fill="none" aria-hidden="true"><path d="M32 56 C22 56 12 51 10 41 C5 37 5 28 11 24 C10 16 18 8 26 11 C29 6 35 6 38 11 C46 8 54 16 53 24 C59 28 59 37 54 41 C52 51 42 56 32 56 Z" style="stroke: var(--text)" stroke-width="3.5" stroke-linejoin="round"/><path d="M32 55 V36 M32 36 L21 18 M32 36 L43 18" style="stroke: var(--text)" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"/><path d="M15 27 C19 22 24 24 24 29 M49 27 C45 22 40 24 40 29" stroke-opacity="0.55" style="stroke: var(--text)" stroke-width="2.5" stroke-linecap="round"/><circle cx="32" cy="36" r="6" style="fill: var(--sun)"/></svg>
+<div style="flex: 1"><div style="font-weight: 600">Solstice <span style="font-weight: 400; color: var(--muted)">5</span></div><div style="font-size: 14px; color: var(--muted)">Harder questions and long writing</div></div>
+</div>
+
+<!-- Apogee 6 -->
+<div style="border-radius: 16px; padding: 12px 16px; display: flex; align-items: center; gap: 14px; border: 1px solid var(--line); opacity: 0.85">
+<svg width="32" height="32" viewBox="0 0 64 64" fill="none" aria-hidden="true"><path d="M32 56 C22 56 12 51 10 41 C5 37 5 28 11 24 C10 16 18 8 26 11 C29 6 35 6 38 11 C46 8 54 16 53 24 C59 28 59 37 54 41 C52 51 42 56 32 56 Z" style="stroke: var(--sun)" stroke-width="3.5" stroke-linejoin="round"/><path d="M32 55 V36 M32 36 L21 18 M32 36 L43 18" style="stroke: var(--text)" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"/><circle cx="32" cy="36" r="5.5" style="fill: var(--sun)"/></svg>
+<div style="flex: 1"><div style="font-weight: 600">Apogee <span style="font-weight: 400; color: var(--muted)">6</span></div><div style="font-size: 14px; color: var(--muted)">Your toughest challenges</div></div>
+<span style="font-size: 13px; border: 1px solid var(--line); color: var(--muted); border-radius: 999px; padding: 4px 10px; white-space: nowrap">PC off</span>
+</div>
+
+<!-- Effort and Skills: also reachable from the chat's effort chip and the + menu -->
+<div style="display: flex; justify-content: space-between; padding: 12px 4px; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line)">
+<span style="font-weight: 600">Effort</span><span style="color: var(--muted)">Quick &middot; <span style="color: var(--text); font-weight: 600">Balanced</span> &middot; Deep</span>
+</div>
+<div style="display: flex; justify-content: space-between; padding: 0 4px">
+<span style="font-weight: 600">Skills</span><span style="color: var(--muted)">Study helper, Teacher assistant &rsaquo;</span>
+</div>
+
+<div style="margin-top: auto; display: flex; flex-direction: column; gap: 8px">
+<div style="font-size: 12px; font-weight: 600; letter-spacing: 0.1em; color: var(--muted)">OTHER MODELS</div>
+<div style="display: flex; justify-content: space-between; align-items: center; color: var(--muted)">
+<span>Flare 3 (older)</span>
+<span style="font-size: 13px; border: 1px solid var(--line); border-radius: 999px; padding: 4px 10px">Not downloaded &middot; 240 MB</span>
+</div>
+</div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"theme":{"editor":"enum","options":["dark","light"],"default":"dark"},"model":{"editor":"enum","options":["flare","equinox","solstice","apogee","brand"],"default":"flare"},"$preview":{"width":440,"height":720}}'>
+const BASE = {
+  dark: {bg: '#07080D', side: '#0A0B11', surface: '#0F1119', surface2: '#161926', line: '#232739', text: '#EEF0F6', muted: '#9AA3BC'},
+  light: {bg: '#F7F8FC', side: '#EEF0F7', surface: '#FFFFFF', surface2: '#EEF0F7', line: '#D8DCEA', text: '#0D0F1A', muted: '#4A526B'}
+};
+const MODEL = {
+  brand: {dark: {accent: '#F5A524', onaccent: '#1A1204', accenttext: '#F5A524', sun: '#F5A524', core: '#F5A524', glow: 'rgba(245,165,36,.14)'}, light: {accent: '#F5A524', onaccent: '#1A1204', accenttext: '#8F5600', sun: '#E08A00', core: '#E08A00', glow: 'rgba(245,165,36,.12)'}},
+  flare: {dark: {accent: '#FF4B1F', onaccent: '#1A0500', accenttext: '#FF6B3D', sun: '#FF4B1F', core: '#FFF3E6', glow: 'rgba(255,75,31,.20)'}, light: {accent: '#FF4B1F', onaccent: '#1A0500', accenttext: '#B83208', sun: '#E5340A', core: '#FFF3E6', glow: 'rgba(255,75,31,.12)'}},
+  equinox: {dark: {accent: '#EEF0F6', onaccent: '#07080D', accenttext: '#EEF0F6', sun: '#EEF0F6', core: '#07080D', glow: 'rgba(238,240,246,.08)'}, light: {accent: '#0D0F1A', onaccent: '#FFFFFF', accenttext: '#0D0F1A', sun: '#0D0F1A', core: '#FFFFFF', glow: 'rgba(13,15,26,.07)'}},
+  solstice: {dark: {accent: '#F2A60C', onaccent: '#1F1400', accenttext: '#FFBE3B', sun: '#F2A60C', core: '#FFE7A0', glow: 'rgba(242,166,12,.18)'}, light: {accent: '#F2A60C', onaccent: '#1F1400', accenttext: '#8A5A00', sun: '#D18A00', core: '#FFE7A0', glow: 'rgba(242,166,12,.13)'}},
+  apogee: {dark: {accent: '#A8D1F5', onaccent: '#06121F', accenttext: '#B5D8F8', sun: '#A8D1F5', core: '#F4F9FF', glow: 'rgba(168,209,245,.15)'}, light: {accent: '#A8D1F5', onaccent: '#06121F', accenttext: '#2A5F96', sun: '#4F8FC9', core: '#F4F9FF', glow: 'rgba(120,170,220,.15)'}}
+};
+class Component extends DCLogic {
+  renderVals() {
+    const mode = this.props.theme === 'light' ? 'light' : 'dark';
+    const id = MODEL[this.props.model] ? this.props.model : 'flare';
+    const t = Object.assign({}, BASE[mode], MODEL[id][mode]);
+    return { themeStyle: Object.keys(t).map((k) => '--' + k + ':' + t[k]).join(';') };
+  }
+}
+</script>
+</body>
+</html>

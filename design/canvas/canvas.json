@@ -1,0 +1,24 @@
+{
+  "v": 3,
+  "createdOnFiles": {"v": 1, "at": "2026-10-02T20:00:00Z"},
+  "title": "Yuvra Website and Logo",
+  "launch": {"view": "canvas"},
+  "pages": [],
+  "boards": {
+    "Logo.dc.html": {"x": 0, "y": 0, "w": 1360, "h": 1160, "title": "Logo and brand"},
+    "Colours.dc.html": {"x": 0, "y": 1240, "w": 1360, "h": 700, "title": "Model colours"},
+    "Main.dc.html": {"x": 1440, "y": 0, "w": 1360, "h": 3000, "title": "Website home (dark)", "expand": "fill"},
+    "HomeLight.dc.html": {"x": 2880, "y": 0, "w": 1360, "h": 3000, "title": "Website home (light)", "expand": "fill"},
+    "Chat.dc.html": {"x": 0, "y": 2020, "w": 1360, "h": 860, "title": "Chat (dark): pick a model to re-colour", "is_interactive": true},
+    "ChatLight.dc.html": {"x": 0, "y": 2960, "w": 1360, "h": 860, "title": "Chat (light)", "is_interactive": true},
+    "Picker.dc.html": {"x": 0, "y": 3900, "w": 440, "h": 720, "title": "Select model"},
+    "Phone.dc.html": {"x": 520, "y": 3900, "w": 390, "h": 844, "title": "Phone (dark)"},
+    "PhoneLight.dc.html": {"x": 990, "y": 3900, "w": 390, "h": 844, "title": "Phone (light)"}
+  },
+  "order": ["Logo.dc.html", "Colours.dc.html", "Main.dc.html", "HomeLight.dc.html", "Chat.dc.html", "ChatLight.dc.html", "Picker.dc.html", "Phone.dc.html", "PhoneLight.dc.html"],
+  "notes": {
+    "t1": {"x": 0, "y": -300, "text": "Yuvra: logo and website", "kind": "title1", "maxW": 4240},
+    "n1": {"x": 1440, "y": 3900, "text": "Every screen has a Dark/Light switch and a Model switch in its Tweaks. On Chat, open the model chip under the message box and pick a model: the whole page changes colour with a short transition.", "w": 520, "size": "m"}
+  },
+  "designSystems": []
+}
