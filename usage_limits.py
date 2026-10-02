@@ -43,7 +43,8 @@ class LimitError(Exception):
 
     def to_http(self):
         """(status, headers, body) for the server: 429 for limits, 403 for a model the plan doesn't include, 503 when paused."""
-        status = {"model_not_in_plan": 403, "paused": 503}.get(self.code, 429)
+        status = {"model_not_in_plan": 403, "model_unavailable": 403, "paused": 503, "bad_effort": 400,
+                  "deep_needs_bigger": 409}.get(self.code, 429)
         headers = {"Retry-After": str(int(math.ceil(self.retry_after)))} if self.retry_after else {}
         return status, headers, self.to_dict()
 
@@ -157,9 +158,9 @@ class Limiter:
         Raises LimitError when the request may not run."""
         if where == "device":
             return None                                        # a model on the person's own device: free and uncounted
-        if self.cfg.get("paused"):
-            raise LimitError("paused", "Yuvra is paused for now. Please try again later.", retry_after=600)
         u, t = self.effective(user)
+        if self.cfg.get("paused") and not u["owner"]:
+            raise LimitError("paused", "Yuvra is paused for now. Please try again later.", retry_after=600)
         allowed = t["models"]
         if allowed != "all" and model_key not in allowed and not u["owner"]:
             raise LimitError("model_not_in_plan", f"{model_key.title()} isn't in your plan.", choices=list(allowed))

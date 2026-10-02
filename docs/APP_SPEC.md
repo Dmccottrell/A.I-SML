@@ -302,15 +302,15 @@ Not covered here: the "small model answers badly" row, which only better trainin
    and must score the same.
 
 ### What "done" means for the first version (phase 1: web app on the PC)
-- [ ] `python app_server.py` starts the server; a browser page opens and chats with a model, streaming.
+- [x] `python app_server.py` starts the server; a browser page opens and chats with a model, streaming. (Built: demo mode without a model, `--llama` for a real one. Not yet tried against a real llama-server and a trained model.)
 - [ ] The prompt builder matches `chat.py` token for token (golden tests pass).
-- [ ] Chats are saved and listed; Stop and Regenerate work; private chat mode works.
+- [x] Chats are saved and listed; Stop and Regenerate work; private chat mode works.
 - [ ] Memory: it saves "my name is Sam", recalls it in a new chat, and the Memory screen can delete it.
-- [ ] The model picker lists the models in `models.json`, shows the right badges, switches mid-chat.
+- [x] The model picker lists the models in `models.json`, shows the right badges, switches mid-chat.
 - [ ] Study helper and Teacher assistant switches (access toggle respected); Save as PDF / Word works.
 - [ ] Web search switch works and says when it is on; sources are shown under answers.
-- [ ] Settings shows what leaves the device; delete-everything works.
-- [ ] Installable as an app (PWA) and usable from the phone on the same network.
+- [x] Settings shows what leaves the device; delete-everything works.
+- [x] Installable as an app (PWA) and usable from the phone on the same network (`--host 0.0.0.0`). Not yet tried on a real phone.
 
 ### What is not in the first version
 Voice, tools (calculator, alarms), the phone-assistant mode, accounts, iPhone, the public website and on-device
@@ -346,3 +346,12 @@ beta list", and "memory finds an earlier chat by meaning, not only by words".
   free memory, reading speed and the plan; it says why, and `shrink` drops it when memory falls. Try it:
   `python context_window.py --ram 8 --mode long`.
 - `chat_polish.py` (+ `tests/test_chat_polish.py`): the thinking words, the one-second pause, steady word-by-word writing, and automatic shortening of a long chat; wired into `run_turn`.
+- `app_server.py` + `web/` (+ `tests/test_app_server.py`, 31 tests): the app server and the chat page. Run `python app_server.py`
+  (demo mode) or `python app_server.py --llama http://127.0.0.1:8080 --tokenizer data/v3/tokenizer.json`. It prints a link with your
+  owner key; `--add-user sam pro` makes a tester's link; `--host 0.0.0.0` opens it to your network (phone). The page has the
+  hamburger menu / sidebar, model picker and effort menu under the box, the usage line that counts as you send, the thinking logo
+  and words, steady writing, Stop and Regenerate, private chats, a Usage screen, Settings (look, chat length, delete everything)
+  and, for the owner, adding testers and pausing everyone. Plans are enforced on the server (429 / 403 / 503, the page shows a
+  plain message and when it refills). Message text is never logged; keys are in `.yuvra/users.json` (kept out of git).
+  **Not built yet:** Memory, Skills, Documents, web search, Teacher assistant and Save as PDF / Word (the menu says "Coming soon"),
+  and the golden prompt-parity tests.
