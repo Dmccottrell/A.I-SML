@@ -8,7 +8,7 @@ with an optional **online mode** that uses a bigger model on your own PC (later 
 **App name (working, chosen Oct 2026): Yuvra** (say "YOOV-ruh"), with the website/domain **Yuvra.AI**.
 A web search found no exact match, only look-alikes (the Yuva AI companies). Before it is public: search
 the US trademark database (tmsearch.uspto.gov), Google Play and the App Store, and check that yuvra.ai
-and yuvra.com are free. The models are named Yuvra + a role (Flare, Equinox, Solstice, Apogee) + a generation number, for example Yuvra Equinox 3.5; see docs/ROADMAP.md, "Names".
+and yuvra.com are free. The models are named Yuvra + a role (Flare, Equinox, Solstice, Apogee) + a generation number, for example Yuvra Flare 3.5; see docs/ROADMAP.md, "Names".
 Backups if Yuvra fails those checks: Brynja, Quenby, Eirvala, Vardrun.
 
 This builds on [ROADMAP.md: One app for phone and PC](ROADMAP.md#one-app-for-phone-and-pc-the-plan-for-the-website-and-app)
@@ -81,7 +81,7 @@ you choose the model, the effort, and see where each one runs. Works the same on
  -------------------------------------------------
   Auto   (the router picks)                  [check]
          Best model and effort for each question
-  Yuvra Flare 3
+  Yuvra Flare 3.5
          Fastest for quick answers
   Yuvra Equinox 4
          For everyday work and homework
@@ -95,7 +95,7 @@ you choose the model, the effort, and see where each one runs. Works the same on
   Skills                              Study helper (Beta), Teacher assistant (Beta)  >
  -------------------------------------------------
   Other models
-  Yuvra Equinox 3.5  (older)  [Not downloaded, 700 MB]
+  Yuvra Flare 3  (older)  [Not downloaded, 240 MB]
   Earlier versions of any name
 ```
 
@@ -110,9 +110,9 @@ you choose the model, the effort, and see where each one runs. Works the same on
   which picks the size, the effort and the skill pack per question, and the chat says what it picked.
 - **Effort:** Quick / Balanced / Deep, the thinking dial from the roadmap. Greyed out for models that can't think yet.
 - **Skills:** the same on/off list as the Skills screen, shortcut included.
-- **One card per name, newest version first** (each name has its own number, e.g. Flare 3, Equinox 4, Solstice 5, Apogee 6). When a
+- **One card per name, newest version first** (each name has its own number, e.g. Flare 3.5, Equinox 4, Solstice 5, Apogee 6). When a
   model is updated the old one moves to **Other models**, with downloaded files and test builds, so you can compare
-  (Equinox 3.5 vs Equinox 4). **Only a limited selection of older models is kept** (for example the previous one or two
+  (Flare 3 vs Flare 3.5). **Only a limited selection of older models is kept** (for example the previous one or two
   versions of each name, plus anything you pinned); the exact rule is still to be decided, and the manifest gets a `keep` /
   `retire_after` field for it.
 - **Honest limits:** a model the device can't run (not enough memory) is greyed out with the reason; the

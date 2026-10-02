@@ -1,12 +1,12 @@
 {
   "models": [
-    {"id": "flare-3", "name": "Flare", "version": 3, "from_version": "v3", "tagline": "Fastest for quick answers",
+    {"id": "flare-3", "name": "Flare", "version": 3, "from_version": "v3", "tagline": "Fast and light, for quick answers",
      "tier": "Lite", "where": "device", "file": "flare-3.q4_0.gguf", "size_mb": 240, "sha256": "", "min_ram_gb": 2,
      "context": 2048, "status": "beta", "supports_effort": false, "skills": ["study", "teacher"], "pinned": false},
-    {"id": "equinox-3.5", "name": "Equinox", "version": 3.5, "from_version": "v3.5", "tagline": "For everyday work and homework",
-     "tier": "Standard", "where": "device", "file": "equinox-3.5.q4_0.gguf", "size_mb": 700, "sha256": "", "min_ram_gb": 4,
+    {"id": "flare-3.5", "name": "Flare", "version": 3.5, "from_version": "v3.5", "tagline": "Fast and light, for quick answers",
+     "tier": "Lite", "where": "device", "file": "flare-3.5.q4_0.gguf", "size_mb": 700, "sha256": "", "min_ram_gb": 4,
      "context": 2048, "status": "planned", "supports_effort": false, "skills": ["study", "teacher"], "pinned": false},
-    {"id": "equinox-4", "name": "Equinox", "version": 4, "from_version": "v4", "tagline": "For everyday work and homework",
+    {"id": "equinox-4", "name": "Equinox", "version": 4, "from_version": "v4", "tagline": "For everyday work and homework, with skills and tools",
      "tier": "Standard", "where": "device", "file": "equinox-4.q4_0.gguf", "size_mb": 700, "sha256": "", "min_ram_gb": 4,
      "context": 4096, "status": "planned", "supports_effort": true, "skills": ["study", "teacher", "coding"], "pinned": false},
     {"id": "solstice-5", "name": "Solstice", "version": 5, "from_version": "v5", "tagline": "For harder questions and long writing",

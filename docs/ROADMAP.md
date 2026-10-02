@@ -739,13 +739,13 @@ battery, not a bigger download.
 
 | Tier class | Model name | Size | Versions |
 |---|---|---|---|
-| Lite | **Yuvra Flare 3** | ~400M | v3 |
-| Small and fast | **Yuvra Equinox 3.5**, then **Yuvra Equinox 4** | ~1B | **v3.5**, then **v4**: the same size, now with skill packs, the router, tools, thinking, effort levels and the app |
+| Lite (fast and light) | **Yuvra Flare 3**, then **Yuvra Flare 3.5** | ~400M, then ~1.12B | v3, then **v3.5** |
+| Everyday | **Yuvra Equinox 4** | ~1.12B | **v4**: Flare 3.5's brain trained longer, now with skill packs, the router, tools, thinking, effort levels and the app |
 | Balanced | **Yuvra Solstice 5** | ~3B | v5 (needs cloud training) |
 | Most capable | **Yuvra Apogee 6, 6.5** | 5-7B | v6, v6.5 |
 | Top | **Yuvra Apogee 7, 8** | 13-30B | v7, v8 (see [Beyond v6.5](#beyond-v65-v7-v8-and-max)) |
 
-So v4 (Yuvra Equinox 4) is a new *generation* of the small tier, not a bigger model: v3.5's brain **trained longer**
+So v4 (Yuvra Equinox 4) is a new *generation*, not a bigger model: Flare 3.5's brain **trained longer**
 (15–30B more tokens, including some "skill-aware" text with tool calls, thinking steps and code with tests,
 so the skill packs start from a base that already knows those formats), plus the abilities. No cloud needed.
 See [v4's brain](#v4s-brain-v35-trained-longer).
@@ -754,24 +754,26 @@ See [v4's brain](#v4s-brain-v35-trained-longer).
 **four role names**, taken from the sky's calendar, and a generation number.
 
 **How the names work:** four names that always make up the lineup, the way other AI families have a small, a middle and
-a big model: **Yuvra Flare** (smallest and fastest, for phones), **Yuvra Equinox** (balanced everyday), **Yuvra Solstice**
+a big model: **Yuvra Flare** (fast and light), **Yuvra Equinox** (balanced everyday), **Yuvra Solstice**
 (stronger, for a PC or online mode) and **Yuvra Apogee** (most capable). **Each name has its own version number**, and a
-number only goes up when *that* model is updated, so the numbers differ from name to name (for example Flare 3, Equinox 4,
+number only goes up when *that* model is updated, so the numbers differ from name to name (for example Flare 3.5, Equinox 4,
 Solstice 5 and Apogee 6 at the same time). When a model is updated, the new one takes the main spot in the app's picker and
 the old one moves to "Other models" (still downloadable). The numbers follow the project's version numbers (v3, v3.5, v4, ...):
 a model is numbered by the project version it was built in, and a model can also get a refresh between versions
-(Flare 3 -> Flare 3.5). So **Yuvra Equinox 3.5** is the Equinox built in v3.5, the next Equinox is Equinox 4 (v4), and Flare stays
-Flare 3 until a new small model is trained (say Flare 7). A number *before* the name ("Yuvra 2 Flare") is kept for a full reset
+(Flare 3 -> Flare 3.5). So **Yuvra Flare 3.5** is the Flare built in v3.5 (a ~1.12B brain, bigger than Flare 3), the first Equinox is
+Equinox 4 (v4: Flare 3.5's brain trained longer, plus skills, tools and effort levels), and Flare stays Flare 3.5 until a new
+small model is trained (say Flare 7). A number *before* the name ("Yuvra 2 Flare") is kept for a full reset
 of the whole family (a new tokenizer or design, so old files and skill packs don't carry over), if that ever happens.
 
 | Lineup in the picker | Yuvra Flare | Yuvra Equinox | Yuvra Solstice | Yuvra Apogee |
 |---|---|---|---|---|
-| Now (Oct 2026) | 3 | 3.5 (about to train) | – | – |
-| After v4 | 3 | 4 (3.5 moves to Other models) | – | – |
-| After v5 | 3 | 4 | 5 | – |
-| After v6.5 | 3 | 4 | 5 | 6.5 (6 moves to Other models) |
-| After v7 (13B) | 3 | 4 | 5 | 7 |
-| A later new small model | 7 (3 moves to Other models) | 4 | 5 | 7 |
+| Now (Oct 2026) | 3 (3.5 about to train) | – | – | – |
+| After v3.5 | 3.5 (3 moves to Other models) | – | – | – |
+| After v4 | 3.5 | 4 | – | – |
+| After v5 | 3.5 | 4 | 5 | – |
+| After v6.5 | 3.5 | 4 | 5 | 6.5 (6 moves to Other models) |
+| After v7 (13B) | 3.5 | 4 | 5 | 7 |
+| A later new small model | 7 (3.5 moves to Other models) | 4 | 5 | 7 |
 
 **Numbers for "+" and grown models.** Between the big steps a name can have variants, and the decimal says what happened:
 
@@ -779,7 +781,7 @@ of the whole family (a new tokenizer or design, so old files and skill packs don
 |---|---|---|
 | **A whole number** | A big step: trained from scratch, or a new size or new abilities | Flare 3, then Flare 5 (a fresh retrain at a new size) |
 | **.1, .2, ...** | A **"+" model**: the same weights read more (like v3+, continuing from `pre_decay.pt`), same size | Flare 3.1 (v3 + more reading) |
-| **.5** | A bigger refresh of the same weights (more reading plus new chat tuning, DPO or lessons) | Flare 3.5 |
+| **.5** | A half step: a bigger refresh of the same weights (more reading plus new chat tuning), or the project's half-version model (v3.5 is a new, larger Flare) | Flare 3.5 |
 | **Next whole number + .1** | A **grown model** (`grow.py` adds layers, so the size changes), started from the earlier weights | Flare 4.1 (Flare 3 grown deeper); its own "+" steps are 4.2, 4.5, ... |
 
 Growth only adds layers (same width and tokenizer), so a grown Flare is a deeper Flare, never an Equinox. Every new number
@@ -801,8 +803,8 @@ speed or smarts.
 
 | Tier | Size | Runs on | Good for | Arrives |
 |---|---|---|---|---|
-| **Lite = Yuvra Flare** (Flare 3) | ~400M (v3-size) | Any phone, offline, very fast | Quick questions, small talk, simple lookups | With v3.5 |
-| **Standard = Yuvra Equinox** (3.5, 4) | ~1B (v3.5, v4) | Phones and PCs | Everyday use: lookups, explanations, advice | v3.5 |
+| **Lite = Yuvra Flare** (Flare 3, 3.5) | ~400M (Flare 3), ~1.12B (Flare 3.5) | Any phone, offline, fast | Quick questions, small talk, simple lookups | v3, v3.5 |
+| **Standard = Yuvra Equinox** (4) | ~1.12B (v4) | Phones and PCs | Everyday use: lookups, explanations, advice, skills and tools | v4 |
 | **Pro = Yuvra Solstice, Yuvra Apogee** (Solstice 5, Apogee 6, 6.5) | 3B (v5), 5-7B (v6-v6.5) | PC or a server (the app's online mode) | Harder questions, coding, long writing | v5+ |
 | **Max = the largest Yuvra Apogee** (Apogee 7, 8) | 13B, later ~30B ("upper small", then "medium"; see [Beyond v6.5](#beyond-v65-v7-v8-and-max)) | A server, or a PC with a 24 GB GPU for 13B; online mode | The hardest questions: deep reasoning, real coding help, long documents. Also the teacher for every smaller tier | After v6.5, if funded |
 
