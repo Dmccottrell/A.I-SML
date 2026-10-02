@@ -16,3 +16,6 @@ __pycache__/
 
 # Files the AI saved for you (worksheets, lesson plans)
 documents/
+
+# The app server keeps keys, chats and usage here: never commit
+.yuvra/

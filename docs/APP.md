@@ -191,3 +191,4 @@ Both are planned, and they are separate choices:
 `models.json` + `models.py` (the picker's list), `app_errors.py`, `app_engine.py`, `app_download.py` (failure handling, tested in
 `tests/test_app_robust.py`). Next: `app_server.py` and the chat page.
 `limits.json` + `usage_limits.py` (plans, token counting, tank, weekly reset), `context_window.py` (the device check for the context window), both tested; `run_turn` can count usage per person.
+`app_server.py` + `web/`: the first working app (browser, PC). Run `python app_server.py`. Android comes next.

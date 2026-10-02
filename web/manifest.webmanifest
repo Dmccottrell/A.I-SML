@@ -1,0 +1,9 @@
+{
+  "name": "Yuvra",
+  "short_name": "Yuvra",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#07080D",
+  "theme_color": "#07080D",
+  "icons": [{"src": "/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any"}]
+}

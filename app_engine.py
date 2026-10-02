@@ -144,6 +144,50 @@ class ChatStore:
                                (chat_id,)).fetchall()
         return [dict(zip(("id", "role", "content", "model_id", "status"), r)) for r in rows]
 
+    def list_chats(self):
+        """Saved chats, newest first: [{"id", "title", "updated"}]. Private chats are never listed."""
+        rows = self.db.execute("SELECT c.id, c.title, COALESCE(MAX(m.created), c.created) AS t FROM chats c "
+                               "LEFT JOIN messages m ON m.chat_id = c.id GROUP BY c.id ORDER BY t DESC, c.id DESC").fetchall()
+        return [{"id": r[0], "title": r[1], "updated": r[2]} for r in rows]
+
+    def exists(self, chat_id):
+        if chat_id < 0:
+            return chat_id in self.private
+        return self.db.execute("SELECT 1 FROM chats WHERE id = ?", (chat_id,)).fetchone() is not None
+
+    def title(self, chat_id):
+        if chat_id < 0:
+            return "Private chat"
+        r = self.db.execute("SELECT title FROM chats WHERE id = ?", (chat_id,)).fetchone()
+        return r[0] if r else ""
+
+    def set_title(self, chat_id, title):
+        if chat_id >= 0:
+            self.db.execute("UPDATE chats SET title = ? WHERE id = ?", (title, chat_id))
+            self.db.commit()
+
+    def remove_message(self, chat_id, message_id):
+        if chat_id < 0:
+            self.private[chat_id][message_id]["status"] = "compacted"   # hidden; ids stay stable
+            self.private[chat_id][message_id]["content"] = ""
+            return
+        self.db.execute("DELETE FROM messages WHERE id = ?", (message_id,))
+        self.db.commit()
+
+    def delete_chat(self, chat_id):
+        if chat_id < 0:
+            self.private.pop(chat_id, None)
+            return
+        self.db.execute("DELETE FROM messages WHERE chat_id = ?", (chat_id,))
+        self.db.execute("DELETE FROM chats WHERE id = ?", (chat_id,))
+        self.db.commit()
+
+    def delete_everything(self):
+        self.db.execute("DELETE FROM messages")
+        self.db.execute("DELETE FROM chats")
+        self.db.commit()
+        self.private.clear()
+
     def fold(self, chat_id, ids, summary):
         """Replace `ids` (older messages) by a summary for the model: the first becomes the summary, the rest are marked
         "compacted". Nothing is deleted, so the screen still shows them."""
@@ -184,8 +228,7 @@ def run_turn(tok, store, chat_id, backend, model, window, max_new, user_text=Non
     `pacer` (chat_polish.paced, with the time of sending) makes the reply appear after a short pause and write out
     steadily. `auto_compact` shortens a chat that fills the model's memory (chat_polish.compact_chat).
     """
-    if user_text is not None:
-        store.add(chat_id, "user", user_text)
+    user_row = store.add(chat_id, "user", user_text) if user_text is not None else None
     folded = 0
     if auto_compact:
         folded = chat_polish.compact_chat(tok, store, chat_id, window, max_new, summarize=summarize, keep_notes=keep_notes)
@@ -199,7 +242,12 @@ def run_turn(tok, store, chat_id, backend, model, window, max_new, user_text=Non
     if limiter is not None and user is not None:
         key = model["name"].lower()
         est = (len(ids) + max_new) * limiter.weight(key) * limiter.cfg["effort"][effort]
-        res = limiter.reserve(user, key, effort, est, clock(), where="device" if model.get("where") == "device" else "server")
+        try:
+            res = limiter.reserve(user, key, effort, est, clock(), where="device" if model.get("where") == "device" else "server")
+        except Exception:
+            if user_row is not None:                           # refused: the question was never asked
+                store.remove_message(chat_id, user_row)
+            raise
     row = store.add(chat_id, "assistant", "", model["id"], "partial")
     stream = backend.stream(ids, max_new)
     guard = Guard(pacer(stream) if pacer else stream, stop=stop)
