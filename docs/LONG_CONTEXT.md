@@ -1,6 +1,6 @@
 # Long context: taking v3.5 from 2,048 tokens to 75,000-100,000
 
-**Goal:** v3.5 (the ~1.04B model) should read and use **75K-100K tokens** (roughly 55,000-75,000
+**Goal:** v3.5 (the ~1.12B model) should read and use **75K-100K tokens** (roughly 55,000-75,000
 words, a short novel) and stay good at everything else. Longer (500K+) belongs to a later
 from-scratch model; see the end.
 
