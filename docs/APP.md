@@ -113,7 +113,7 @@ you choose the model, the effort, and see where each one runs. Works the same on
   `retire_after` field for it.
 - **Honest limits:** a model the device can't run (not enough memory) is greyed out with the reason; the
   badge shows the measured speed on this device once known ("about 200 words a second"); an online model shows
-  "needs your PC to be on" when it can't be reached, and the app falls back to the phone model after asking.
+  "needs your PC to be on" when it can't be reached, and the app falls back to the phone model and labels the answer (a Setting can make it ask first).
 - **Access toggle:** which cards appear follows the same rule as the skill packs (`can_use()`, everyone / beta /
   off): a Beta model shows only for the people on the beta list.
 - **Switching mid-chat** keeps the conversation and adds a small divider ("Switched to Yuvra Equinox 4"). Each

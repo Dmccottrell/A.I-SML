@@ -44,16 +44,26 @@ class WhichModel(unittest.TestCase):
             E.choose_model(MODELS, "flare-3", ram_gb=1)
         self.assertEqual(c.exception.choices, [])
 
-    def test_pc_off_asks_and_never_switches_silently(self):
-        with self.assertRaises(X.PcUnreachable) as c:                       # no answer given: raised, nothing switched
-            E.choose_model(MODELS, "solstice-5", ram_gb=8, pc_online=False)
+    def test_pc_off_switches_to_the_device_model_by_default(self):
+        self.assertEqual(E.choose_model(MODELS, "solstice-5", ram_gb=8, pc_online=False)["id"], "equinox-4")
+        self.assertEqual(E.choose_model(MODELS, "solstice-5", pc_online=True)["id"], "solstice-5")
+
+    def test_pc_off_can_ask_first(self):
+        with self.assertRaises(X.PcUnreachable) as c:                       # no answer given: nothing switched
+            E.choose_model(MODELS, "solstice-5", ram_gb=8, pc_online=False, when_pc_off="ask")
         self.assertEqual(c.exception.choices, ["equinox-4"])
         with self.assertRaises(X.PcUnreachable):                            # the person said no
-            E.choose_model(MODELS, "solstice-5", ram_gb=8, pc_online=False, ask=lambda m: False)
+            E.choose_model(MODELS, "solstice-5", ram_gb=8, pc_online=False, when_pc_off="ask", ask=lambda m: False)
         asked = []
-        got = E.choose_model(MODELS, "solstice-5", ram_gb=8, pc_online=False, ask=lambda m: asked.append(m["id"]) or True)
+        got = E.choose_model(MODELS, "solstice-5", ram_gb=8, pc_online=False, when_pc_off="ask",
+                             ask=lambda m: asked.append(m["id"]) or True)
         self.assertEqual((got["id"], asked), ("equinox-4", ["equinox-4"]))
-        self.assertEqual(E.choose_model(MODELS, "solstice-5", pc_online=True)["id"], "solstice-5")
+
+    def test_nothing_to_fall_back_to_is_an_error_either_way(self):
+        only_online = [model("solstice-5", "Solstice", 5, where="online")]
+        with self.assertRaises(X.PcUnreachable) as c:
+            E.choose_model(only_online, "solstice-5", pc_online=False)
+        self.assertEqual(c.exception.choices, [])
 
 
 class Runaway(unittest.TestCase):

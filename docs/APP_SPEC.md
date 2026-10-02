@@ -37,7 +37,7 @@ tests, and what "done" means for the first version).
 |---|---|
 | Model list | One `models.json` manifest (id, name, tagline, tier, where, file, size, sha256, min RAM, context, status, which skill packs fit, `keep` rule). Adding a model = adding a line |
 | Download manager | Resume after a dropped connection, check the sha256, show size and storage left, delete old models, keep only a limited selection of older ones |
-| Online mode | Your PC's server over a **private connection** (Tailscale or a Cloudflare tunnel) with a secret key; the app says when it's used, and falls back to the phone model (after asking) if the PC is off |
+| Online mode | Your PC's server over a **private connection** (Tailscale or a Cloudflare tunnel) with a secret key; the app says when it's used, and falls back to the phone model (clearly labelled; a Setting can make it ask first) if the PC is off |
 | Device check | Not enough memory = the card is greyed out with the reason; measured speed shown once known |
 
 ### 5. Safety, privacy and trust
@@ -127,7 +127,7 @@ load it (with a spinner); PC unreachable -> offer the phone model.
 | Problem | The app |
 |---|---|
 | Not enough memory for the model | Greyed out with the reason; suggest the smaller one |
-| PC off or unreachable (online mode) | "Your PC isn't reachable. Use Flare on this phone?" (never switches silently) |
+| PC off or unreachable (online mode) | Switches to the on-device model right away and labels the answer ("PC off: answered by Equinox on this device"); a Setting can make it ask first instead. Never the other way: going from device to online is always the person's choice |
 | Download interrupted | Resumes; verifies the checksum; never loads a half-file |
 | Context full | Drops the oldest turns and old notes (as chat.py does), shows the marker; the meter explains |
 | Model answers badly (small model) | The "that's wrong" flow rechecks notes; the "I don't know" lessons; a visible reminder to double-check |
@@ -138,7 +138,7 @@ load it (with a spinner); PC unreachable -> offer the phone model.
 **Built and tested (Oct 2026):** every row above is now code with a test that forces the failure (`tests/test_app_robust.py`,
 23 tests, against a fake model and real local web servers). `app_errors.py` gives each failure a plain message and one next
 step (and buttons where there is a choice); `app_engine.py` has `choose_model` (too big: refused and the next smaller one
-offered; PC off: asks, never switches silently), `Guard` (length cap, loop detector, Stop button that closes the
+offered; PC off: switches to the device model and says so, or asks first if the Setting says so), `Guard` (length cap, loop detector, Stop button that closes the
 connection), `ChatStore` (the reply is saved while it streams; a cut-off reply is found again after a restart; private chats
 never touch the disk), `run_turn` (uses `chat.py`'s prompt builder, returns how many old messages were forgotten for the
 marker), `LlamaServer` (the real client for llama-server) and `test_connection` (the button: unreachable / wrong key /
