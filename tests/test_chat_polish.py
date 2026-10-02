@@ -46,9 +46,9 @@ class Paced(unittest.TestCase):
         out, _ = self.run_paced(["Hello there, how ", "can I help?"])
         self.assertEqual("".join(out), "Hello there, how can I help?")
 
-    def test_first_word_waits_a_second(self):
+    def test_first_word_waits_three_seconds(self):
         _, times = self.run_paced(["Hi"])
-        self.assertGreaterEqual(times[0], 1.0)
+        self.assertGreaterEqual(times[0], 3.0)
 
     def test_burst_is_written_steadily(self):
         out, times = self.run_paced(["one two three four five six seven eight nine ten eleven twelve"])
@@ -62,11 +62,11 @@ class Paced(unittest.TestCase):
 
         def slow():
             for w in ("a ", "b ", "c "):
-                c.t += 3.0                                     # the model takes 3 s per word
+                c.t += 4.0                                     # the model takes 4 s per word
                 yield w
         out = list(P.paced(slow(), clock=c.now, sleep=c.sleep, start=c.t))
         self.assertEqual("".join(out), "a b c ")
-        self.assertEqual(c.slept, [])                          # already past the 1 s pause and the rate
+        self.assertEqual(c.slept, [])                          # already past the 3 s pause and the rate
 
     def test_catches_up_when_behind(self):
         text = "word " * 400
@@ -163,7 +163,7 @@ class Compact(unittest.TestCase):
                        user_text="and now?", pacer=pacer)
         self.assertGreater(r["compacted_messages"], 0)
         self.assertEqual(r["text"].strip(), "Sure thing, here you go.")
-        self.assertGreaterEqual(sum(c.slept), 1.0)
+        self.assertGreaterEqual(sum(c.slept), 3.0)
 
     def test_stop_button_still_works_with_pacing(self):
         st, cid = self.fill(1)
