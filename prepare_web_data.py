@@ -263,12 +263,26 @@ def load_qa():
             yield f"Question: {q}\n\nAnswer: {a}"
 
 
+def _commit_files():
+    """The Python files of CommitPackFT, found by listing the repository (its old loading script is no longer
+    supported by `datasets`, so we read the data files directly)."""
+    from huggingface_hub import list_repo_files
+    files = [f for f in list_repo_files("bigcode/commitpackft", repo_type="dataset")
+             if re.search(r"(^|/)python/", f) and f.endswith((".jsonl", ".json", ".parquet"))]
+    if not files:
+        raise SystemExit("could not find the Python files of bigcode/commitpackft (has the dataset moved?)")
+    return sorted(files)
+
+
 def load_commits():
     """Real code changes with their messages (CommitPackFT, Python only): "Commit: <message>", then the file
     before and after. Final phase only: it shows what a small change looks like and how it is described, the
     habit behind "edit one thing, then say what you changed". Only commits of permissively licensed repos."""
     from datasets import load_dataset
-    ds = load_dataset("bigcode/commitpackft", "python", split="train", streaming=True)
+    files = _commit_files()
+    kind = "parquet" if files[0].endswith(".parquet") else "json"
+    ds = load_dataset(kind, data_files=[f"hf://datasets/bigcode/commitpackft/{f}" for f in files],
+                      split="train", streaming=True)
     ok = {"mit", "apache-2.0", "bsd-2-clause", "bsd-3-clause", "isc", "unlicense", "cc0-1.0"}
     for row in ds:
         if (row.get("license") or "").lower() not in ok:

@@ -113,17 +113,24 @@ class Commits(unittest.TestCase):
                 {"license": "gpl-3.0", "message": "x", "old_contents": "a", "new_contents": "b"},
                 {"license": "mit", "message": "", "old_contents": "a", "new_contents": "b"},
                 {"license": "mit", "message": "big", "old_contents": "a" * 9000, "new_contents": "b"}]
+        calls = []
         fake = types.ModuleType("datasets")
-        fake.load_dataset = lambda *a, **k: rows
-        old = sys.modules.get("datasets")
-        sys.modules["datasets"] = fake
+        fake.load_dataset = lambda *a, **k: (calls.append((a, k)), rows)[1]
+        hub = types.ModuleType("huggingface_hub")
+        hub.list_repo_files = lambda *a, **k: ["README.md", "data/go/data.jsonl", "data/python/data.jsonl"]
+        old = {n: sys.modules.get(n) for n in ("datasets", "huggingface_hub")}
+        sys.modules["datasets"], sys.modules["huggingface_hub"] = fake, hub
         try:
             out = list(P.load_commits())
         finally:
-            if old is not None:
-                sys.modules["datasets"] = old
-            else:
-                del sys.modules["datasets"]
+            for n, m in old.items():
+                if m is not None:
+                    sys.modules[n] = m
+                else:
+                    del sys.modules[n]
+        args, kwargs = calls[0]
+        self.assertEqual(args[0], "json")                                   # data files, not the old loading script
+        self.assertEqual(kwargs["data_files"], ["hf://datasets/bigcode/commitpackft/data/python/data.jsonl"])
         self.assertEqual(len(out), 1)
         self.assertTrue(out[0].startswith("Commit: Fix typo"))
         self.assertIn("helo", out[0])
