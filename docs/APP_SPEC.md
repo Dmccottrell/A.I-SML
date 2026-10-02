@@ -58,9 +58,10 @@ tests, and what "done" means for the first version).
 
 ---
 
-### Usage and limits: sparks (plan)
-Yuvra's own way to show and limit usage. It is counted in **tokens**, shown as **sparks** (1 spark = 1,000 counted tokens), and drawn as a
-**brain that fills like a tank** instead of a plain progress bar. Designs: `Usage` (the phone's "Sparks" screen) and `Limits` (owner settings) in
+### Usage and limits (plan)
+Yuvra's own way to show and limit usage. It is counted in **tokens**, shown as a **charge** percentage with the token counts underneath, and drawn as a
+**brain that fills like a tank** instead of a plain progress bar. Every number on the screen (the tank, the weekly ceiling) follows the **account's plan**
+(Free, Pro or Mega). Designs: `Usage` (the phone's "Usage" screen) and `Limits` (owner settings) in
 `design/canvas/`.
 
 **Three different numbers (this is the part that is easy to mix up):**
@@ -95,11 +96,12 @@ growing with every message.)
 
 | Part | Plan |
 |---|---|
-| **Where people see it** | Settings, then **Sparks**, and a tap on the chat's status line. The brain tank (how full, "124 of 200 sparks", "refilling 25 an hour, full by 9:40 PM"), **This week** (resets Mon 4:00 AM) as a strip of seven days (not one bar) with a pace note ("you could use about 575 more a day"), and **Tokens this week** by model with a breakdown (you wrote / Yuvra wrote / earlier chat re-read). On-device models: "free, never counted" |
+| **Where people see it** | Settings, then **Usage**, and a tap on the chat's status line. **Plain language first, numbers on request.** (1) **Right now**: the brain tank and "about 250 messages", "plenty left", "full again by 9:40 PM". (2) **Left this week**: "80%", "about 1,600 messages", "resets Monday 4 AM", "you are using it at a comfortable pace". (3) **Messages left this week, by model** ("Flare about 1,610, Equinox about 805, ..."), because bigger models use more. (4) A tip ("Long chats use more. Start a new chat for a new topic"). (5) **See the numbers**: a collapsed section with the token counts (tank, refill, week, used, by model). Plain status words ("Plenty left", "Getting low", "Almost out") change at 50%, 20% and 5% |
+| **"Messages left" = tokens left / the cost of a normal message** | A normal message (a question and a normal-length answer) counts as about **500 tokens on Flare**. A bigger model multiplies it (Equinox 2, Solstice 5, Apogee 10), so "messages left" is shown **per model**: the same usage buys fewer Apogee messages than Flare ones. The 500 is a setting, measured later from real chats and rounded ("about 1,610", never "1,608"). People never need to see the word "token" unless they open "See the numbers" |
 | **Who sets limits** | Only the owner, in the **Limits** screen: the tank (capacity, refill), the weekly ceiling and reset time, the Everyday and Long windows, the counting multipliers, the model weights; per tier (Free, Pro, Mega) and per person (overrides). Alerts at 80% of the week and at the ceiling; a pause-everything switch |
 | **What applies** | Only models **served from a shared machine** (your PC, a rented server). Models running on a person's own device are free and never counted |
 | **When the tank runs low** | A quiet note at 20%. At empty that model pauses and offers a smaller model, the on-device model (free), or "back to full in about 2 hours". At the weekly ceiling: "resets Mon 4:00 AM" with the same options |
-| **Enforced on the server** | By the person's key, never only in the app. The server counts every request, refuses over-limit ones with a clear message, and the Sparks screen reads the same numbers |
+| **Enforced on the server** | By the person's key, never only in the app. The server counts every request, refuses over-limit ones with a clear message, and the Usage screen reads the same numbers |
 | **Stored** | `usage(user, model, fresh_in, cached_in, out, at)` and the limits table in the server's SQLite: numbers only, never message text. Tank level = capacity minus recent use plus refill; week = sum since the reset |
 | **Tests** | With a fake clock: counting multipliers and weights add up; the tank refills at the set rate and never exceeds capacity; the weekly total resets on time; a message needs room in both; the 20% note and the empty block fire; a per-person override beats the group limit; on-device use is never counted; no message text is stored |
 | **Model list field** | `cost_weight` per model in `models.json` |
@@ -110,12 +112,12 @@ the reset (it refills all week). The setting is `weekly_reset: "mon 04:00"`, and
 
 **Tiers (planned): Free, Pro, Mega.** Same app and the same models; the tiers differ in how much of the shared server they may use. Models running on a person's own
 device are free and unlimited in every tier, which is the selling point of the free one. These are starting values to be tuned against what the server can really carry
-(measured tokens per second, and how many people are on at once). 1 spark = 1,000 counted tokens.
+(measured tokens per second, and how many people are on at once).
 
 | | **Free** | **Pro** | **Mega** |
 |---|---|---|---|
 | Tank (capacity / refill per hour) | 40,000 / 5,000 (full in 8 h) | 200,000 / 25,000 (full in 8 h) | 800,000 / 100,000 (full in 8 h) |
-| Weekly ceiling | 150,000 (150 sparks) | 1,000,000 (1,000 sparks) | 5,000,000 (5,000 sparks) |
+| Weekly ceiling | 150,000 | 1,000,000 | 5,000,000 |
 | Roughly, in short messages (~500 counted each) | ~300 a week | ~2,000 a week | ~10,000 a week |
 | Models from the server | Flare, Equinox | All four (Flare, Equinox, Solstice, Apogee) | All four |
 | Context window (one request) | Everyday 8,192 | Everyday 8,192, Long up to 32,768 | Everyday 8,192, Long up to the longest the model passed (64K and up) |

@@ -1,26 +1,129 @@
 {
   "v": 3,
-  "createdOnFiles": {"v": 1, "at": "2026-10-02T20:00:00Z"},
-  "title": "Yuvra Website and Logo",
-  "launch": {"view": "canvas"},
-  "pages": [],
+  "attachments": {},
   "boards": {
-    "Logo.dc.html": {"x": 0, "y": 0, "w": 1360, "h": 1160, "title": "Logo and brand"},
-    "Colours.dc.html": {"x": 0, "y": 1240, "w": 1360, "h": 700, "title": "Model colours"},
-    "Main.dc.html": {"x": 1440, "y": 0, "w": 1360, "h": 3000, "title": "Website home (dark)", "expand": "fill"},
-    "HomeLight.dc.html": {"x": 2880, "y": 0, "w": 1360, "h": 3000, "title": "Website home (light)", "expand": "fill"},
-    "Chat.dc.html": {"x": 0, "y": 2020, "w": 1360, "h": 860, "title": "Chat (dark): pick a model to re-colour", "is_interactive": true},
-    "ChatLight.dc.html": {"x": 0, "y": 2960, "w": 1360, "h": 860, "title": "Chat (light)", "is_interactive": true},
-    "Picker.dc.html": {"x": 0, "y": 3900, "w": 440, "h": 720, "title": "Select model"},
-    "Phone.dc.html": {"x": 520, "y": 3900, "w": 390, "h": 844, "title": "Phone (dark)"},
-    "PhoneLight.dc.html": {"x": 990, "y": 3900, "w": 390, "h": 844, "title": "Phone (light)"},
-    "Usage.dc.html": {"x": 1460, "y": 3900, "w": 390, "h": 1000, "title": "Sparks (phone)"},
-    "Limits.dc.html": {"x": 1930, "y": 3900, "w": 1180, "h": 900, "title": "Sparks and limits (owner settings)"}
+    "Chat.dc.html": {
+      "h": 860,
+      "is_interactive": true,
+      "title": "Chat (dark): pick a model to re-colour",
+      "w": 1360,
+      "x": 0,
+      "y": 2020
+    },
+    "ChatLight.dc.html": {
+      "h": 860,
+      "is_interactive": true,
+      "title": "Chat (light)",
+      "w": 1360,
+      "x": 0,
+      "y": 2960
+    },
+    "Colours.dc.html": {
+      "h": 700,
+      "title": "Model colours",
+      "w": 1360,
+      "x": 0,
+      "y": 1240
+    },
+    "HomeLight.dc.html": {
+      "expand": "fill",
+      "h": 3000,
+      "title": "Website home (light)",
+      "w": 1360,
+      "x": 2880,
+      "y": 0
+    },
+    "Limits.dc.html": {
+      "h": 900,
+      "is_interactive": true,
+      "title": "Usage limits (owner): switch the plan",
+      "w": 1180,
+      "x": 1930,
+      "y": 3900
+    },
+    "Logo.dc.html": {
+      "h": 1160,
+      "title": "Logo and brand",
+      "w": 1360,
+      "x": 0,
+      "y": 0
+    },
+    "Main.dc.html": {
+      "expand": "fill",
+      "h": 3000,
+      "title": "Website home (dark)",
+      "w": 1360,
+      "x": 1440,
+      "y": 0
+    },
+    "Phone.dc.html": {
+      "h": 844,
+      "title": "Phone (dark)",
+      "w": 390,
+      "x": 520,
+      "y": 3900
+    },
+    "PhoneLight.dc.html": {
+      "h": 844,
+      "title": "Phone (light)",
+      "w": 390,
+      "x": 990,
+      "y": 3900
+    },
+    "Picker.dc.html": {
+      "h": 720,
+      "title": "Select model",
+      "w": 440,
+      "x": 0,
+      "y": 3900
+    },
+    "Usage.dc.html": {
+      "h": 1120,
+      "is_interactive": true,
+      "title": "Usage (phone): switch the plan",
+      "w": 390,
+      "x": 1460,
+      "y": 3900
+    }
   },
-  "order": ["Logo.dc.html", "Colours.dc.html", "Main.dc.html", "HomeLight.dc.html", "Chat.dc.html", "ChatLight.dc.html", "Picker.dc.html", "Phone.dc.html", "PhoneLight.dc.html", "Usage.dc.html", "Limits.dc.html"],
+  "createdOnFiles": {
+    "at": "2026-10-02T20:00:00Z",
+    "v": 1
+  },
+  "designSystems": [],
+  "launch": {
+    "view": "canvas"
+  },
   "notes": {
-    "t1": {"x": 0, "y": -300, "text": "Yuvra: logo and website", "kind": "title1", "maxW": 4240},
-    "n1": {"x": 1440, "y": 3900, "text": "Every screen has a Dark/Light switch and a Model switch in its Tweaks. On Chat, open the model chip under the message box and pick a model: the whole page changes colour with a short transition.", "w": 520, "size": "m"}
+    "n1": {
+      "size": 24,
+      "text": "Every screen has a Dark/Light switch and a Model switch in its Tweaks. On Chat, open the model chip under the message box and pick a model: the whole page changes colour with a short transition.",
+      "w": 520,
+      "x": 1440,
+      "y": 3900
+    },
+    "t1": {
+      "kind": "title1",
+      "maxW": 4240,
+      "text": "Yuvra: logo and website",
+      "w": 240,
+      "x": 0,
+      "y": -300
+    }
   },
-  "designSystems": []
+  "order": [
+    "Logo.dc.html",
+    "Colours.dc.html",
+    "Main.dc.html",
+    "HomeLight.dc.html",
+    "Chat.dc.html",
+    "ChatLight.dc.html",
+    "Picker.dc.html",
+    "Phone.dc.html",
+    "PhoneLight.dc.html",
+    "Usage.dc.html",
+    "Limits.dc.html"
+  ],
+  "pages": [],
+  "title": "Yuvra Website and Logo"
 }

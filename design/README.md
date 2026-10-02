@@ -50,11 +50,12 @@ Hero, "Four models, one family", what it does (private by default, remembers you
 "Built from the ground up" (what Yuvra is), "At home or in the cloud, private or public", try it, footer. Placeholders left in:
 `[YEAR]` and the invite link.
 
-## Usage and limits: sparks
-Yuvra's own usage design, counted in tokens and shown as **sparks** (1 spark = 1,000 counted tokens). The phone's **Sparks** screen shows a brain that fills
-like a tank (with the core as the spark), a seven-day strip for the week, and tokens by model. The owner-only **Sparks and limits** screen sets the tank
-(capacity and hourly refill), the weekly ceiling, the Everyday and Long context windows, the counting multipliers and the model weights. The context
-window caps one request; it is not an allowance. Full plan and worked examples: docs/APP_SPEC.md ("Usage and limits: sparks").
+## Usage and limits
+Plain language first: **messages left**, not tokens. The phone's **Usage** screen shows a brain that fills like a tank ("Right now: about 250 messages"), "Left this week"
+(a big percentage, about how many messages, the reset time, "comfortable pace"), messages left by model, a tip for making usage last, and a collapsed "See the numbers (tokens)" section.
+**Every number follows the account's plan** (Free, Pro, Mega), so the same screen shows different amounts on each. The owner-only **Usage limits** screen has a tab per plan and sets the
+tank (capacity and hourly refill), the weekly ceiling, the Everyday and Long context windows, the models the plan can use, the counting multipliers and the model weights. The context window
+caps one request; it is not an allowance. Full plan and worked examples: docs/APP_SPEC.md ("Usage and limits").
 
 ## Still open
 - Final logo choice (the earlier network-Y and cradle ideas were dropped), plus app-icon and favicon exports as PNG/ICO.
