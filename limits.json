@@ -1,0 +1,17 @@
+{
+  "note": "Usage limits per plan (docs/APP_SPEC.md, 'Usage and limits'). Amounts are starting values to tune against what the server can carry.",
+  "weekly_reset": "mon 04:00",
+  "weekly_window": "fixed",
+  "message_tokens": 500,
+  "multipliers": {"fresh_in": 1, "cached_in": 0.1, "out": 1},
+  "effort": {"quick": 0.6, "balanced": 1, "deep": 2.2},
+  "paused": false,
+  "tiers": {
+    "free": {"tank": 40000, "refill_per_hour": 5000, "week": 150000, "models": ["flare", "equinox"],
+             "windows": {"everyday": 8192, "long": 8192}, "priority": 0},
+    "pro":  {"tank": 200000, "refill_per_hour": 25000, "week": 1000000, "models": "all",
+             "windows": {"everyday": 8192, "long": 32768}, "priority": 0},
+    "mega": {"tank": 800000, "refill_per_hour": 100000, "week": 5000000, "models": "all",
+             "windows": {"everyday": 8192, "long": 65536}, "priority": 1}
+  }
+}

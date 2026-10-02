@@ -154,10 +154,15 @@ class ChatStore:
 
 # ------------------------------------------------------------------ one message, start to finish
 def run_turn(tok, store, chat_id, backend, model, window, max_new, user_text=None, stop=None, save_every=8,
-             keep_notes=1, notes=None):
+             keep_notes=1, notes=None, limiter=None, user=None, effort="balanced", clock=time.time):
     """Answer one message. Adds the user's message (if given), streams the reply while saving it, and returns
     {"text", "reason", "forgotten_messages"}. If the model fails mid-reply, what was written is kept (marked
     partial) and the AppError is re-raised, so the screen can offer "Continue".
+
+    With a `limiter` (usage_limits.Limiter) and a `user`, the message is checked against the person's plan first (a
+    usage_limits.LimitError is raised before anything is added or run), the estimated cost is held while the reply is
+    written, and the real token counts settle it afterwards. A failed reply gives the hold back. A model that runs on
+    the device (model["where"] == "device") is never counted.
     """
     if user_text is not None:
         store.add(chat_id, "user", user_text)
@@ -167,6 +172,11 @@ def run_turn(tok, store, chat_id, backend, model, window, max_new, user_text=Non
     limit = window - max_new
     report = chat.context_report(tok, history, window, reserve=max_new, keep_notes=keep_notes)
     ids = chat.build_prompt(tok, history, limit, keep_notes=keep_notes)
+    res = None
+    if limiter is not None and user is not None:
+        key = model["name"].lower()
+        est = (len(ids) + max_new) * limiter.weight(key) * limiter.cfg["effort"][effort]
+        res = limiter.reserve(user, key, effort, est, clock(), where="device" if model.get("where") == "device" else "server")
     row = store.add(chat_id, "assistant", "", model["id"], "partial")
     guard = Guard(backend.stream(ids, max_new), stop=stop)
     count = 0
@@ -177,13 +187,30 @@ def run_turn(tok, store, chat_id, backend, model, window, max_new, user_text=Non
                 store.update(chat_id, row, guard.text, "partial")
     except AppError:
         store.update(chat_id, row, guard.text, "partial")
+        _settle(limiter, res, backend, tok, ids, guard.text, effort, clock, failed=not guard.text)
         raise
     except Exception as e:                                     # a broken connection, a crashed server...
         store.update(chat_id, row, guard.text, "partial")
+        _settle(limiter, res, backend, tok, ids, guard.text, effort, clock, failed=not guard.text)
         raise ReplyInterrupted() from e
     store.update(chat_id, row, guard.text, "done")
+    _settle(limiter, res, backend, tok, ids, guard.text, effort, clock)
     return {"text": guard.text, "reason": guard.reason, "forgotten_messages": report["forgotten_messages"],
             "message_id": row}
+
+
+def _settle(limiter, res, backend, tok, ids, text, effort, clock, failed=False):
+    """Count what was really used. A reply that produced nothing costs nothing. Backends that report their own counts
+    (backend.usage = {"fresh_in", "cached_in", "out"}) are trusted; otherwise the prompt and the reply are counted."""
+    if limiter is None or res is None:
+        return
+    if failed:
+        limiter.cancel(res, clock())
+        return
+    u = getattr(backend, "usage", None) or {}
+    fresh = u.get("fresh_in", len(ids))
+    out = u.get("out", len(tok.encode(text, allow_special=False)) if text else 0)
+    limiter.settle(res, fresh, u.get("cached_in", 0), out, effort, clock())
 
 
 # ------------------------------------------------------------------ the model
