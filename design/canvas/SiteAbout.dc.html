@@ -45,10 +45,48 @@ a:hover{color:var(--accenttext)}
 </div>
 
 <div style="max-width: 1200px; margin: 0 auto; padding: 24px; display: flex; flex-wrap: wrap; gap: 20px">
-<div style="flex: 1 1 240px; border-top: 2px solid var(--accent); padding-top: 16px"><div style="font-family: 'Sora', sans-serif; font-weight: 600; font-size: 40px; letter-spacing: -0.02em">0</div><div style="color: var(--muted)">borrowed weights. Every parameter is trained here.</div></div>
-<div style="flex: 1 1 240px; border-top: 2px solid var(--accent); padding-top: 16px"><div style="font-family: 'Sora', sans-serif; font-weight: 600; font-size: 40px; letter-spacing: -0.02em">1.12B</div><div style="color: var(--muted)">parameters in Flare 3.5, now in training.</div></div>
-<div style="flex: 1 1 240px; border-top: 2px solid var(--accent); padding-top: 16px"><div style="font-family: 'Sora', sans-serif; font-weight: 600; font-size: 40px; letter-spacing: -0.02em">40B</div><div style="color: var(--muted)">tokens of web, Wikipedia, code and maths read by Flare 3.5.</div></div>
-<div style="flex: 1 1 240px; border-top: 2px solid var(--accent); padding-top: 16px"><div style="font-family: 'Sora', sans-serif; font-weight: 600; font-size: 40px; letter-spacing: -0.02em">4</div><div style="color: var(--muted)">models planned, from a fast one to one for your toughest work.</div></div>
+<div style="flex: 1 1 200px; border-top: 2px solid var(--accent); padding-top: 16px"><div style="font-family: 'Sora', sans-serif; font-weight: 600; font-size: 40px; letter-spacing: -0.02em">0</div><div style="color: var(--muted)">borrowed weights. Every parameter is trained here.</div></div>
+<div style="flex: 1 1 200px; border-top: 2px solid var(--accent); padding-top: 16px"><div style="font-family: 'Sora', sans-serif; font-weight: 600; font-size: 40px; letter-spacing: -0.02em">1.12B</div><div style="color: var(--muted)">parameters in Flare 3.5, now in training.</div></div>
+<div style="flex: 1 1 200px; border-top: 2px solid var(--accent); padding-top: 16px"><div style="font-family: 'Sora', sans-serif; font-weight: 600; font-size: 40px; letter-spacing: -0.02em">40B</div><div style="color: var(--muted)">tokens of web, Wikipedia, code and maths read by Flare 3.5.</div></div>
+<div style="flex: 1 1 200px; border-top: 2px solid var(--accent); padding-top: 16px"><div style="font-family: 'Sora', sans-serif; font-weight: 600; font-size: 40px; letter-spacing: -0.02em">4</div><div style="color: var(--muted)">models planned, from a fast one to one for your toughest work.</div></div>
+</div>
+
+<div style="max-width: 1200px; margin: 0 auto; padding: 8px 24px 40px">
+<div style="background: var(--surface); border: 1px solid var(--line); border-radius: 24px; padding: 32px; display: flex; flex-direction: column; gap: 20px">
+<div style="display: flex; flex-wrap: wrap; justify-content: space-between; align-items: baseline; gap: 12px">
+<h2 style="margin: 0; font-family: 'Sora', sans-serif; font-weight: 600; font-size: 28px; letter-spacing: -0.02em">How it measures up</h2>
+<span style="color: var(--muted); font-size: 14px">HellaSwag, a public common-sense test. Guessing scores 25% (the dashed line).</span>
+</div>
+<div style="display: grid; grid-template-columns: 260px 1fr; gap: 20px; align-items: center">
+<div><div style="font-weight: 600">Earlier model v2 (88M)</div><div style="color: var(--muted); font-size: 14px">Measured, full test</div></div>
+<div style="position: relative; height: 34px; border-radius: 8px; background: var(--surface2)">
+<div style="position: absolute; left: 41.7%; top: -4px; bottom: -4px; width: 0; border-left: 2px dashed var(--muted)"></div>
+<div style="position: absolute; left: 0; top: 0; bottom: 0; width: 47.3%; background: var(--accent); border-radius: 8px; display: flex; align-items: center; justify-content: flex-end; padding-right: 10px; color: var(--onaccent); font-weight: 600; font-size: 14px">28.4%</div>
+</div>
+</div>
+<div style="display: grid; grid-template-columns: 260px 1fr; gap: 20px; align-items: center">
+<div><div style="font-weight: 600">Flare 3 (394M)</div><div style="color: var(--muted); font-size: 14px">Measured at step 15,000 of 45,000; final score pending</div></div>
+<div style="position: relative; height: 34px; border-radius: 8px; background: var(--surface2)">
+<div style="position: absolute; left: 41.7%; top: -4px; bottom: -4px; width: 0; border-left: 2px dashed var(--muted)"></div>
+<div style="position: absolute; left: 0; top: 0; bottom: 0; width: 52.8%; background: var(--accent); border-radius: 8px; display: flex; align-items: center; justify-content: flex-end; padding-right: 10px; color: var(--onaccent); font-weight: 600; font-size: 14px">31.7%</div>
+</div>
+</div>
+<div style="display: grid; grid-template-columns: 260px 1fr; gap: 20px; align-items: center">
+<div><div style="font-weight: 600">Flare 3.5 (1.12B)</div><div style="color: var(--muted); font-size: 14px">Forecast, in training</div></div>
+<div style="position: relative; height: 34px; border-radius: 8px; background: var(--surface2)">
+<div style="position: absolute; left: 41.7%; top: -4px; bottom: -4px; width: 0; border-left: 2px dashed var(--muted)"></div>
+<div style="position: absolute; left: 73.3%; width: 11.7%; top: 0; bottom: 0; border: 2px dashed var(--accent); border-radius: 8px; display: flex; align-items: center; justify-content: center; color: var(--accenttext); font-weight: 600; font-size: 14px; box-sizing: border-box">44 to 51%</div>
+</div>
+</div>
+<div style="display: grid; grid-template-columns: 260px 1fr; gap: 20px; align-items: center">
+<div><div style="font-weight: 600">Equinox 4 (1.12B, trained longer)</div><div style="color: var(--muted); font-size: 14px">Forecast, planned</div></div>
+<div style="position: relative; height: 34px; border-radius: 8px; background: var(--surface2)">
+<div style="position: absolute; left: 41.7%; top: -4px; bottom: -4px; width: 0; border-left: 2px dashed var(--muted)"></div>
+<div style="position: absolute; left: 76.7%; width: 13.3%; top: 0; bottom: 0; border: 2px dashed var(--accent); border-radius: 8px; display: flex; align-items: center; justify-content: center; color: var(--accenttext); font-weight: 600; font-size: 14px; box-sizing: border-box">46 to 54%</div>
+</div>
+</div>
+<div style="color: var(--muted); font-size: 14px; line-height: 1.5">Solid bars are measured on the full 10,042-question test. Dashed bars are forecasts, not results; they will be replaced with measured scores as each model finishes training. On Yuvra&rsquo;s own 20-question test sheet, v2 scored 18 of 20. More public tests (such as ARC and maths problems) will be added once they are measured.</div>
+</div>
 </div>
 
 <div style="max-width: 1200px; margin: 0 auto; padding: 24px 24px 56px; display: flex; flex-wrap: wrap; gap: 20px">
