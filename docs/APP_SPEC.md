@@ -148,6 +148,11 @@ as the Usage screen (the account's plan decides the tank size), and a tap opens 
 "Messages left" depends on what you have selected: the model's weight and the effort level both change the cost of one message, so switching from Flare to Apogee, or from Balanced to Deep,
 changes the number straight away. (Memory facts and the context meter move to the Usage details and the chat's menu; they are not on this line any more.)
 
+**Motion (designed in the interactive `Chat` and `Phone` boards).** When a message is sent: the message rises into the chat; a three-dot "thinking" indicator shows for a moment (about 0.25 s on Quick,
+0.8 s on Balanced, 1.9 s on Deep, so the effort level is felt); the reply then types in word by word (faster on Quick, slower on Deep); a small "+500 tokens" note floats up from the usage line; and the
+usage bar, the percentage, the "messages left" and the "tokens used" all ease to their new values (counting down or up) instead of jumping. The usage bar and the line turn red at 20%. The same motion is
+used on the phone. In the preview the reply text is a stand-in; in the app it streams from the model.
+
 **Effort: three real choices.** The effort chip next to the model chip opens a small menu:
 
 | Level | What it does | Speed | Usage |

@@ -12,6 +12,9 @@
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Sora:wght@500;600;700&family=DM+Sans:wght@400;500;600&display=swap">
 <style>
 body{margin:0}
+@keyframes rise { 0% { opacity: 0; transform: translateY(14px); } 100% { opacity: 1; transform: translateY(0); } }
+@keyframes floatup { 0% { opacity: 0; transform: translateY(8px); } 20% { opacity: 1; } 100% { opacity: 0; transform: translateY(-22px); } }
+@keyframes dot { 0%, 80%, 100% { opacity: 0.25; transform: translateY(0); } 40% { opacity: 1; transform: translateY(-3px); } }
 div, span, button, svg, path, circle { transition: background-color .7s ease, color .7s ease, border-color .7s ease, fill .7s ease, stroke .7s ease, opacity .7s ease; }
 circle[style*="fill: var(--sun)"] { fill: var(--core) !important; stroke: var(--sun); stroke-width: 3; }
 </style>
@@ -30,7 +33,7 @@ circle[style*="fill: var(--sun)"] { fill: var(--core) !important; stroke: var(--
 <button aria-label="Menu" style="background: transparent; border: 0; color: var(--text); font-size: 22px; width: 44px; height: 44px">&#8943;</button>
 </div>
 
-<div style="flex: 1; overflow: hidden; padding: 20px 16px; display: flex; flex-direction: column; gap: 20px">
+<div style="flex: 1; overflow: hidden; padding: 20px 16px; display: flex; flex-direction: column; justify-content: flex-end; gap: 16px">
 <div style="align-self: flex-end; max-width: 80%; background: var(--surface2); border-radius: 18px 18px 4px 18px; padding: 12px 16px">Why is the sky blue?</div>
 <div style="display: flex; flex-direction: column; gap: 10px">
 <div style="display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--muted)">
@@ -44,6 +47,18 @@ Flare &middot; read 2 notes
 <span style="border: 1px solid var(--line); color: var(--muted); border-radius: 999px; padding: 8px 14px; font-size: 14px">Why are sunsets red?</span>
 </div>
 </div>
+<sc-for list="{{chat}}" as="m" hint-placeholder-count="2">
+<div style="align-self: {{m.align}}; max-width: {{m.maxw}}; display: flex; flex-direction: column; gap: 6px; animation: rise 0.4s ease both">
+<div style="background: {{m.bg}}; border: 1px solid {{m.border}}; border-radius: {{m.radius}}; padding: 14px 18px">{{m.text}}</div>
+</div>
+</sc-for>
+<sc-if value="{{typing}}" hint-placeholder-val="{{ false }}">
+<div style="align-self: flex-start; background: var(--surface); border: 1px solid var(--line); border-radius: 18px 18px 18px 4px; padding: 16px 20px; display: flex; gap: 6px; animation: rise 0.3s ease both" aria-label="Thinking">
+<span style="width: 8px; height: 8px; border-radius: 999px; background: var(--muted); animation: dot 1s infinite"></span>
+<span style="width: 8px; height: 8px; border-radius: 999px; background: var(--muted); animation: dot 1s infinite 0.15s"></span>
+<span style="width: 8px; height: 8px; border-radius: 999px; background: var(--muted); animation: dot 1s infinite 0.3s"></span>
+</div>
+</sc-if>
 </div>
 
 <sc-if value="{{effortOpen}}" hint-placeholder-val="{{ false }}">
@@ -61,7 +76,7 @@ Flare &middot; read 2 notes
 
 <div style="padding: 0 12px 12px; display: flex; flex-direction: column; gap: 8px">
 <div style="background: var(--surface); border: 1px solid var(--line); border-radius: 20px; padding: 14px 10px 10px 16px; display: flex; flex-direction: column; gap: 12px">
-<span style="color: var(--muted)">Message Yuvra&hellip;</span>
+<input value="{{draft}}" onInput="{{ onDraft }}" onKeyDown="{{ onKey }}" placeholder="Message Yuvra..." aria-label="Message" style="width: 100%; box-sizing: border-box; background: transparent; border: 0; outline: none; color: var(--text); font: 400 16px 'DM Sans', sans-serif; padding: 0">
 <div style="display: flex; align-items: center; justify-content: space-between">
 <div style="display: flex; align-items: center; gap: 8px">
 <button aria-label="Attach, skills, web search" style="background: transparent; color: var(--text); border: 1px solid var(--line); border-radius: 12px; width: 44px; height: 44px; font: 400 22px 'DM Sans', sans-serif">+</button>
@@ -73,7 +88,11 @@ Flare <span style="color: var(--muted)">&#9662;</span></button>
 <button onClick="{{ send }}" aria-label="Send" style="background: var(--accent); color: var(--onaccent); border: 0; border-radius: 12px; width: 44px; height: 44px; font: 700 20px 'DM Sans', sans-serif">&uarr;</button>
 </div>
 </div>
-<div style="text-align: center; font-size: 12px; color: {{usageColor}}">{{usageText}}</div>
+<div style="position: relative; display: flex; flex-direction: column; align-items: center; gap: 6px">
+<sc-if value="{{popOn}}" hint-placeholder-val="{{ false }}"><span style="position: absolute; right: 6px; top: -22px; font-size: 12px; font-weight: 600; color: var(--accenttext); animation: floatup 1.3s ease-out both">{{popText}}</span></sc-if>
+<div style="width: 180px; height: 4px; border-radius: 999px; background: var(--surface2); overflow: hidden"><div style="width: {{usagePct}}%; height: 100%; background: {{barColor}}; border-radius: 999px; transition: width 0.3s linear"></div></div>
+<div style="font-size: 12px; color: {{usageColor}}">{{usageText}}</div>
+</div>
 </div>
 </div>
 </x-dc>
@@ -99,41 +118,96 @@ const EFFORT = {
 const MESSAGE = 500;   // counted tokens in one normal message and its answer on a weight-1 model at Balanced
 const fmt = (n) => Math.round(n).toLocaleString('en-US');
 const nice = (n) => fmt(n >= 100 ? Math.round(n / 10) * 10 : Math.round(n));
-// everything the usage line and the effort menu need, from the current model, effort and tokens spent
-function usageBits(self, modelId) {
+// the numbers: tokens left in the tank, what one message costs now, and what is shown (the shown value eases toward the real one)
+function usageNumbers(self, modelId) {
   const plan = PLANS[self.props.plan] ? self.props.plan : 'pro';
   const cap = PLANS[plan].cap;
-  const left = Math.max(0, cap * 0.62 - self.state.spent);       // the tank starts 62% full in this preview
+  const realLeft = Math.max(0, cap * 0.62 - self.state.spent);
+  const shownLeft = Math.max(0, cap * 0.62 - self.state.shown);
   const cost = MESSAGE * (WEIGHT[modelId] || 2) * EFFORT[self.state.effort].mult;
-  const pct = Math.round(left / cap * 100);
-  const text = left <= 0 ? 'Usage: out for now, back to full in about 3 hours'
-    : 'Usage: ' + pct + '% \u00b7 about ' + nice(left / cost) + ' messages left';
+  return {cap, realLeft, shownLeft, cost};
+}
+const SAMPLES = [
+  ['Give me three tips for studying', 'Sure. 1. Study in short blocks of about 25 minutes. 2. Quiz yourself instead of rereading. 3. Sleep well before a test.'],
+  ['Explain fractions simply', 'A fraction shows a part of a whole. In 3/4 the whole is cut into 4 equal pieces, and you have 3 of them.'],
+  ['Write a friendly note to a parent', 'Hello! Thank you for your support this week. Your child has been working hard, and I am happy to share how well things are going.']
+];
+function tween(self) {
+  if (self._tw) clearInterval(self._tw);
+  self._tw = setInterval(() => {
+    const target = self.state.spent, cur = self.state.shown;
+    const next = Math.abs(target - cur) < 1 ? target : cur + (target - cur) * 0.16;
+    self.setState({shown: next});
+    if (next === target) { clearInterval(self._tw); self._tw = null; }
+  }, 30);
+}
+function doSend(self, modelId, who) {
+  const st = self.state;
+  const u = usageNumbers(self, modelId);
+  if (u.realLeft <= 0) return;
+  const typed = (st.draft || '').trim();
+  const sample = SAMPLES[st.sampleIdx % SAMPLES.length];
+  const userText = typed || sample[0];
+  const replyText = typed ? 'This is a preview reply. In the real app ' + who + ' writes the answer here.' : sample[1];
+  const speed = {quick: 22, balanced: 45, deep: 80}[st.effort];      // Deep takes longer, like the real thing
+  const think = {quick: 250, balanced: 800, deep: 1900}[st.effort];
+  const id = Date.now();
+  self.setState({chat: st.chat.concat([{id: id, role: 'user', text: userText}]), draft: '', typing: true,
+                 sampleIdx: typed ? st.sampleIdx : st.sampleIdx + 1, spent: st.spent + u.cost, pop: {n: Math.round(u.cost), id: id}});
+  tween(self);
+  setTimeout(() => self.setState({pop: null}), 1400);
+  setTimeout(() => {
+    const rid = id + 1, words = replyText.split(' ');
+    self.setState({typing: false, chat: self.state.chat.concat([{id: rid, role: 'assistant', text: ''}])});
+    let n = 0;
+    const iv = setInterval(() => {
+      n += 1;
+      self.setState({chat: self.state.chat.map((m) => (m.id === rid ? Object.assign({}, m, {text: words.slice(0, n).join(' ')}) : m))});
+      if (n >= words.length) clearInterval(iv);
+    }, speed);
+  }, think);
+}
+// everything the usage line, the effort menu and the new messages need
+function usageBits(self, modelId, who) {
+  const u = usageNumbers(self, modelId);
+  const pct = Math.round(u.shownLeft / u.cap * 100);
+  const out = u.realLeft <= 0;
+  const text = out ? 'Usage: out for now, back to full in about 3 hours'
+    : 'Usage: ' + pct + '% · about ' + fmt(Math.floor(u.shownLeft / u.cost)) + ' messages left';
   const items = ['quick', 'balanced', 'deep'].map((k) => {
     const blocked = k === 'deep' && modelId === 'flare';
     return {
       name: EFFORT[k].name, use: EFFORT[k].use, blurb: blocked ? 'Needs Equinox or a bigger model.' : EFFORT[k].blurb,
-      mark: self.state.effort === k ? '\u2713' : '', opacity: blocked ? 0.45 : 1,
+      mark: self.state.effort === k ? '✓' : '', opacity: blocked ? 0.45 : 1,
       border: self.state.effort === k ? 'var(--accent)' : 'var(--line)',
       pick: () => { if (!blocked) self.setState({effort: k, effortOpen: false}); }
     };
   });
+  const chat = self.state.chat.map((m) => (m.role === 'user'
+    ? {text: m.text, who: '', align: 'flex-end', bg: 'var(--surface2)', border: 'var(--surface2)', radius: '18px 18px 4px 18px', maxw: '78%'}
+    : {text: m.text || '…', who: who, align: 'flex-start', bg: 'var(--surface)', border: 'var(--line)', radius: '18px 18px 18px 4px', maxw: '92%'}));
   return {
-    usageText: text, usageSub: fmt(cap - left) + ' tokens used', usageColor: pct <= 20 ? '#E5484D' : 'var(--muted)',
+    usageText: text, usageSub: fmt(u.cap - u.shownLeft) + ' tokens used', usageColor: pct <= 20 ? '#E5484D' : 'var(--muted)',
+    usagePct: pct, barColor: pct <= 20 ? '#E5484D' : 'var(--accent)',
     effortName: EFFORT[self.state.effort].name, effortOpen: self.state.effortOpen, effortItems: items,
     toggleEffort: () => self.setState({effortOpen: !self.state.effortOpen, open: false}),
-    send: () => self.setState({spent: self.state.spent + cost})
+    send: () => doSend(self, modelId, who),
+    draft: self.state.draft, onDraft: (e) => self.setState({draft: e.target.value}),
+    onKey: (e) => { if (e.key === 'Enter') doSend(self, modelId, who); },
+    chat: chat, typing: self.state.typing,
+    popOn: !!self.state.pop, popText: self.state.pop ? '+' + fmt(self.state.pop.n) + ' tokens' : ''
   };
 }
 class Component extends DCLogic {
   constructor(props) {
     super(props);
-    this.state = {effortOpen: false, effort: 'balanced', spent: 0};
+    this.state = {effortOpen: false, effort: 'balanced', spent: 0, shown: 0, draft: '', chat: [], typing: false, pop: null, sampleIdx: 0};
   }
   renderVals() {
     const mode = this.props.theme === 'light' ? 'light' : 'dark';
     const id = MODEL[this.props.model] ? this.props.model : 'flare';
     const t = Object.assign({}, BASE[mode], MODEL[id][mode]);
-    return Object.assign({themeStyle: Object.keys(t).map((k) => '--' + k + ':' + t[k]).join(';')}, usageBits(this, id));
+    return Object.assign({themeStyle: Object.keys(t).map((k) => '--' + k + ':' + t[k]).join(';')}, usageBits(this, id, 'Flare'));
   }
 }
 </script>
