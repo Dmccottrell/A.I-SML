@@ -11,7 +11,7 @@ version's test-sheet results decide what the next one focuses on.
 | **v2** ✅ | Knowledge | 88M | General Q&A, explanations, multi-turn chat | RTX 4070, ~18 hours | $0 |
 | **v3** 🛠️ | Accuracy | ~400M | Looks things up (RAG), says "I don't know", handles corrections, exact instructions, preference training (DPO), remembers you, reply suggestions, basic code; v3-long stretches it to 8K–32K | RTX 4070 afternoons + a rented RTX 3090 overnight (25.8 / 17.5 s/step) | ~$30–40 cloud + electricity |
 | **v3.5** | Scale | **~1.12B** | Same features as v3 on a much bigger brain; reads 40B tokens (educational + everyday web, code, math) | 2× RTX 5090, ~20–25 days (or the RTX 4070, ~5–6.5 months) | ~$420–530 rented |
-| **v4** | Abilities | v3.5 **trained longer** (1B, +15–30B tokens) | Specialist skill packs + router, tools, voice, own app | RTX 4070, ~1.5–4 months while the app is built | ~$55–270 electricity |
+| **v4** | Abilities | v3.5 **trained longer** (1.12B, +15–30B tokens) | Specialist skill packs + router, tools, voice, own app | Rented GPUs, ~1–2 weeks, while the app is built | ~$55–270 electricity |
 | **v5** | Scale | 3B | Genuinely capable assistant | Cloud (from scratch) **or** RTX 4070 (fine-tune an open 3B) | ~$1,500+ **or** $0 |
 | **v6** | Bigger small | **5B** | Stronger reasoning, coding and knowledge; 8k memory; powers online mode | Cloud (or grown from v5) | ~$4,000–6,000 (less with growth or a grant) |
 | **v6.5** | Borderline medium | **7B** | The best model for PC and server; the app's online brain | Cloud (or grown from v6) | ~$8,000–12,000 (less with growth or a grant) |
@@ -108,12 +108,12 @@ Scores are saved next to each checkpoint, so the old version isn't re-tested eve
 ## Speed and safety experiments
 | Idea | What it could give | Status |
 |---|---|---|
-| **Muon optimizer** (`muon.py`, `muon_test.py`) | the same quality in reportedly 30-50% fewer steps; would shorten v3.5 a lot | built; `muon_test.py` (~1-2 h on the 4070) decides before v3.5 |
+| **Muon optimizer** (`muon.py`, `muon_test.py`) | the same quality in fewer steps | ✅ **tested and chosen for v3.5** (Oct 2): on a 39M test model it reached AdamW's final loss in ~33% fewer steps and ended 0.124 lower (3.809 vs 3.933). Its memory is on the GPU, so v3.5 trains on rented GPUs |
 | **Off-machine backup** (`hub_backup.py`) | a rented machine dying costs at most ~30 min of training | built and running for v3 |
 | **Reliable hosts** | Vast.ai hosts vary; ours dropped from 98% to 73% reliability in a night | rent 99%+ reliability (or Secure Cloud) from now on |
 | **8-bit training on the 4070** | ~1.3-1.5x faster matrix math (the 3090 can't) | idea; needs a pilot |
 | **Better data mix** (some DCLM-style general web next to FineWeb-Edu) | better everyday common sense (HellaSwag) at the same cost | idea for v3.5's data build |
-| **More reading** | every doubling of tokens helps; 1B keeps improving past 30B | chosen: **v4's brain is v3.5 continued** (+15–30B tokens, ~43–58 per parameter) |
+| **More reading** | every doubling of tokens helps; 1B keeps improving past 30B | chosen: v3.5 reads 40B; **v4's brain is v3.5 continued** (+15–30B tokens, ~49–62 per parameter) |
 
 **Tokens per parameter (how much each version reads for its size):** v2 ~30, v3 ~30 (11.8B tokens /
 394M), v3.5 ~29. "Compute-optimal" is ~20; modern small models read far more (SmolLM2-360M: ~11,000,
@@ -198,7 +198,9 @@ and has a test-sheet score recorded as the **baseline** for v3. ✅ All done.
 
 ## v3: Accuracy (in progress)
 
-**Status:** pretraining is running (PC in the afternoon, a rented RTX 3090 overnight). Step 2,000:
+**Status (Oct 2):** pretraining is running on a rented RTX 5090 (since step 6,054; 6.9 s/step), done ~Oct 3.
+Latest: step 18,000, mini-exam 39.4%, best val loss 2.636 (step 17,500); full test 31.7% at step 15,000.
+Earlier (PC in the afternoon, a rented RTX 3090 overnight): step 2,000:
 val loss 3.426 and **HellaSwag 33.4%** (500-question mini-exam), already above v2's final 28.4% at 4% of
 the training. Step 4,000: val 2.900 and **HellaSwag 35.6%**, ahead of the forecast: v3's final forecast
 rises from 37–42% to ~40–45%, v3.5's from 45–52% to ~49–55%, and v4 (v3.5 trained longer) ~51–58%.
@@ -286,8 +288,8 @@ pages added on top of the educational ones, more code and math, no TinyStories. 
 | Size | **1.124B** parameters: 2048 wide × 24 layers, feed-forward 5,632, grouped-query attention (4 key/value heads), 32k vocabulary. All sizes are multiples of 256, so the phone's Q4 format works |
 | Reading | **40B tokens** (~36 per parameter) + a 4.1B-token final-phase set; ~88 GB on disk (~170 GB free while building) |
 | Steps | 152,600 at 262,144 tokens each; the fade starts at step 137,340 |
-| Time / cost | **2× RTX 5090: ~20–25 days, ~$420–530** (~20–30% less if Muon passes its test). RTX 4070 nonstop: ~5–6.5 months, ~$160–390 electricity |
-| Memory at home | CPU offload (optimizer in system RAM, ~18 GB free RAM) plus gradient checkpointing; 1.12B still fits the 12 GB card, so the run can move home if the rental ends |
+| Time / cost | **2× RTX 5090 with Muon: ~14–18 days, ~$290–380** (Muon passed its test). Choose ~250 GB of disk when renting |
+| Optimizer | **Muon** (cloud only: its memory doesn't fit the 4070's 12 GB, and a run can't switch optimizers midway; `train.py` refuses). The AdamW fallback (`--set optimizer=adamw`) can start at home but gives up Muon's saving |
 | Phone file | ~700 MB (Q4) or ~1.2 GB (Q8) |
 | Features | Everything from v3 (lookups, web search, "I don't know", corrections, memory, preference training) |
 | **Code** | **Several languages** instead of Python only (see below) |
@@ -339,7 +341,7 @@ many thinly). With 1B parameters there's room for more:
   These require accepting their terms on Hugging Face and logging in with a token.
 
 **Built so far (tested on CPU with a tiny model; the real memory and speed need the RTX 4070 pilot):**
-- `v3.5` entry in `config.py` (1.036B parameters, 115,000 steps, `python train.py --version v3.5 --pilot`)
+- `v3.5` entry in `config.py` (1.124B parameters, 152,600 steps, `python train.py --version v3.5 --cloud --pilot`)
 - `offload_optim.py`: optimizer in system RAM (`optimizer="adamw_cpu"`); gives the same numbers as normal AdamW and resumes correctly
 - **Cloud mode** (`train.py --cloud`, `cloud_train` in `config.py`): on rented 32 GB cards (planned: **2x RTX 5090, ~2-2.5
   weeks, ~$280-360**) the 12 GB workarounds come off (optimizer on the GPU, no gradient checkpointing, micro-batch 2 x 64,
@@ -390,7 +392,7 @@ as "v3+" would be for v3.
 | Size, phone speed, download | 1.12B, ~700 MB (Q4) | **the same** |
 | Reading | 40B tokens (~36 per parameter) | **+15B or +30B more** (~49–62 per parameter) |
 | HellaSwag forecast (full test) | ~44–51% | **~46–54%** (+1–2 points for +15B, +2–3 for +30B) |
-| Where / how long | RTX 4070, ~3.5–4.5 months | RTX 4070: **~1.5–2 months (+15B) or ~3–4 months (+30B)**, faster with cloud nights or Muon |
+| Where / how long | 2× RTX 5090 with Muon, ~14–18 days | Rented GPUs with Muon (it must continue with v3.5's optimizer): roughly **+40–75% of v3.5's time** for +15–30B |
 | Cost | ~$110–270 electricity | ~$55–270 electricity |
 
 **Why this way:** v4's abilities are mostly *code* (app, router, tools, voice), and the GPU would sit idle
