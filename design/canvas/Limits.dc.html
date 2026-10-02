@@ -12,17 +12,18 @@
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Sora:wght@500;600;700&family=DM+Sans:wght@400;500;600&display=swap">
 <style>
 body{margin:0}
-input{box-sizing: border-box}
+.fld { width: 100%; box-sizing: border-box; background: var(--surface2); color: var(--text); border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; font: 500 16px 'DM Sans', sans-serif; min-height: 44px; }
+.lab { font-size: 13px; font-weight: 600; letter-spacing: 0.06em; color: var(--muted); display: block; margin-bottom: 6px; }
 </style>
 </helmet>
-<div style="{{themeStyle}}; width: 1100px; height: 800px; box-sizing: border-box; background: var(--bg); background-image: radial-gradient(900px 400px at 60% -10%, var(--glow), transparent 70%); color: var(--text); font-family: 'DM Sans', sans-serif; font-size: 16px; line-height: 1.45; padding: 40px; display: flex; flex-direction: column; gap: 24px">
+<div style="{{themeStyle}}; width: 1180px; height: 900px; box-sizing: border-box; background: var(--bg); background-image: radial-gradient(900px 400px at 60% -10%, var(--glow), transparent 70%); color: var(--text); font-family: 'DM Sans', sans-serif; font-size: 16px; line-height: 1.45; padding: 40px; display: flex; flex-direction: column; gap: 22px">
 
 <div style="display: flex; justify-content: space-between; align-items: flex-end; gap: 24px">
 <div>
 <div style="font-size: 13px; font-weight: 600; letter-spacing: 0.12em; color: var(--accenttext)">OWNER &middot; SETTINGS</div>
-<h1 style="margin: 4px 0 0; font-family: 'Sora', sans-serif; font-weight: 600; font-size: 34px; letter-spacing: -0.02em">Limits</h1>
+<h1 style="margin: 4px 0 0; font-family: 'Sora', sans-serif; font-weight: 600; font-size: 34px; letter-spacing: -0.02em">Sparks and limits</h1>
 </div>
-<div style="color: var(--muted); max-width: 440px; font-size: 15px">Only you can see this. Limits apply to models served from your PC or a server, never to models running on a person&rsquo;s own device.</div>
+<div style="color: var(--muted); max-width: 470px; font-size: 15px">Only you see this. Limits apply to models served from your PC or a server, never to a model running on a person&rsquo;s own device. 1 spark = 1,000 counted tokens.</div>
 </div>
 
 <div style="display: flex; gap: 10px">
@@ -31,50 +32,71 @@ input{box-sizing: border-box}
 <button style="background: transparent; color: var(--muted); border: 1px solid var(--line); border-radius: 999px; padding: 10px 20px; font: 500 15px 'DM Sans', sans-serif; min-height: 44px">Per person</button>
 </div>
 
-<div style="background: var(--surface); border: 1px solid var(--line); border-radius: 20px; overflow: hidden">
-<div style="display: grid; grid-template-columns: 1.4fr 1fr 1fr 1fr; gap: 16px; padding: 14px 24px; font-size: 13px; font-weight: 600; letter-spacing: 0.08em; color: var(--muted); border-bottom: 1px solid var(--line)">
-<span>MODEL</span><span>SESSION (5 HOURS)</span><span>WEEKLY</span><span>COST WEIGHT</span>
+<div style="display: flex; gap: 20px; flex: 1; min-height: 0">
+
+<!-- left: the three numbers -->
+<div style="flex: 1; display: flex; flex-direction: column; gap: 16px">
+
+<div style="background: var(--surface); border: 1px solid var(--line); border-radius: 20px; padding: 20px 24px; display: flex; flex-direction: column; gap: 12px">
+<div style="display: flex; justify-content: space-between"><b>1. The tank</b><span style="color: var(--muted); font-size: 14px">short-term: how much at once</span></div>
+<div style="display: flex; gap: 14px">
+<div style="flex: 1"><label class="lab" for="cap">CAPACITY (TOKENS)</label><input id="cap" class="fld" value="200,000"></div>
+<div style="flex: 1"><label class="lab" for="refill">REFILLS (TOKENS PER HOUR)</label><input id="refill" class="fld" value="25,000"></div>
+</div>
+<div style="color: var(--muted); font-size: 14px">Empty to full in 8 hours. It refills steadily, so there is no &ldquo;wait for the reset&rdquo; cliff.</div>
 </div>
 
-<div style="display: grid; grid-template-columns: 1.4fr 1fr 1fr 1fr; gap: 16px; align-items: center; padding: 14px 24px; border-bottom: 1px solid var(--line)">
-<span style="display: flex; align-items: center; gap: 10px"><span style="width: 12px; height: 12px; border-radius: 999px; background: #FF4B1F"></span><b>Flare</b></span>
-<label><span style="position: absolute; left: -9999px">Flare session points</span><input value="400" style="width: 100%; background: var(--surface2); color: var(--text); border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; font: 500 16px 'DM Sans', sans-serif; min-height: 44px"></label>
-<label><span style="position: absolute; left: -9999px">Flare weekly points</span><input value="4000" style="width: 100%; background: var(--surface2); color: var(--text); border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; font: 500 16px 'DM Sans', sans-serif; min-height: 44px"></label>
-<label><span style="position: absolute; left: -9999px">Flare cost weight</span><input value="1" style="width: 100%; background: var(--surface2); color: var(--text); border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; font: 500 16px 'DM Sans', sans-serif; min-height: 44px"></label>
+<div style="background: var(--surface); border: 1px solid var(--line); border-radius: 20px; padding: 20px 24px; display: flex; flex-direction: column; gap: 12px">
+<div style="display: flex; justify-content: space-between"><b>2. The week</b><span style="color: var(--muted); font-size: 14px">long-term ceiling</span></div>
+<div style="display: flex; gap: 14px">
+<div style="flex: 1"><label class="lab" for="week">WEEKLY CEILING (TOKENS)</label><input id="week" class="fld" value="1,000,000"></div>
+<div style="flex: 1"><label class="lab" for="reset">RESETS</label><input id="reset" class="fld" value="Sun 2:00 AM"></div>
 </div>
-<div style="display: grid; grid-template-columns: 1.4fr 1fr 1fr 1fr; gap: 16px; align-items: center; padding: 14px 24px; border-bottom: 1px solid var(--line)">
-<span style="display: flex; align-items: center; gap: 10px"><span style="width: 12px; height: 12px; border-radius: 999px; background: #EEF0F6"></span><b>Equinox</b></span>
-<label><span style="position: absolute; left: -9999px">Equinox session points</span><input value="400" style="width: 100%; background: var(--surface2); color: var(--text); border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; font: 500 16px 'DM Sans', sans-serif; min-height: 44px"></label>
-<label><span style="position: absolute; left: -9999px">Equinox weekly points</span><input value="4000" style="width: 100%; background: var(--surface2); color: var(--text); border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; font: 500 16px 'DM Sans', sans-serif; min-height: 44px"></label>
-<label><span style="position: absolute; left: -9999px">Equinox cost weight</span><input value="2" style="width: 100%; background: var(--surface2); color: var(--text); border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; font: 500 16px 'DM Sans', sans-serif; min-height: 44px"></label>
+<div style="color: var(--muted); font-size: 14px">The total of every chat in the week. The tank can be full and the week still empty, or the other way round; the smaller one wins.</div>
 </div>
-<div style="display: grid; grid-template-columns: 1.4fr 1fr 1fr 1fr; gap: 16px; align-items: center; padding: 14px 24px; border-bottom: 1px solid var(--line)">
-<span style="display: flex; align-items: center; gap: 10px"><span style="width: 12px; height: 12px; border-radius: 999px; background: #F2A60C"></span><b>Solstice</b></span>
-<label><span style="position: absolute; left: -9999px">Solstice session points</span><input value="400" style="width: 100%; background: var(--surface2); color: var(--text); border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; font: 500 16px 'DM Sans', sans-serif; min-height: 44px"></label>
-<label><span style="position: absolute; left: -9999px">Solstice weekly points</span><input value="4000" style="width: 100%; background: var(--surface2); color: var(--text); border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; font: 500 16px 'DM Sans', sans-serif; min-height: 44px"></label>
-<label><span style="position: absolute; left: -9999px">Solstice cost weight</span><input value="5" style="width: 100%; background: var(--surface2); color: var(--text); border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; font: 500 16px 'DM Sans', sans-serif; min-height: 44px"></label>
+
+<div style="background: var(--surface); border: 1px solid var(--line); border-radius: 20px; padding: 20px 24px; display: flex; flex-direction: column; gap: 12px">
+<div style="display: flex; justify-content: space-between"><b>3. One request</b><span style="color: var(--muted); font-size: 14px">not an allowance</span></div>
+<div style="display: flex; gap: 14px">
+<div style="flex: 1"><label class="lab" for="everyday">EVERYDAY WINDOW (TOKENS)</label><input id="everyday" class="fld" value="8,192"></div>
+<div style="flex: 1"><label class="lab" for="long">LONG WINDOW, UP TO (TOKENS)</label><input id="long" class="fld" value="32,768"></div>
 </div>
-<div style="display: grid; grid-template-columns: 1.4fr 1fr 1fr 1fr; gap: 16px; align-items: center; padding: 14px 24px">
-<span style="display: flex; align-items: center; gap: 10px"><span style="width: 12px; height: 12px; border-radius: 999px; background: #A8D1F5"></span><b>Apogee</b></span>
-<label><span style="position: absolute; left: -9999px">Apogee session points</span><input value="400" style="width: 100%; background: var(--surface2); color: var(--text); border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; font: 500 16px 'DM Sans', sans-serif; min-height: 44px"></label>
-<label><span style="position: absolute; left: -9999px">Apogee weekly points</span><input value="4000" style="width: 100%; background: var(--surface2); color: var(--text); border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; font: 500 16px 'DM Sans', sans-serif; min-height: 44px"></label>
-<label><span style="position: absolute; left: -9999px">Apogee cost weight</span><input value="10" style="width: 100%; background: var(--surface2); color: var(--text); border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; font: 500 16px 'DM Sans', sans-serif; min-height: 44px"></label>
+<div style="color: var(--muted); font-size: 14px">The context window: the most one message may carry. 32,768 is not &ldquo;32,000 every few hours&rdquo;; it only caps a single request.</div>
 </div>
 </div>
 
-<div style="display: flex; flex-wrap: wrap; gap: 20px">
-<div style="flex: 1 1 400px; background: var(--surface); border: 1px solid var(--line); border-radius: 20px; padding: 20px 24px; display: flex; flex-direction: column; gap: 10px">
-<div style="font-weight: 600">When someone reaches a limit</div>
-<div style="color: var(--muted); font-size: 15px">Warn at 80%. At 100% pause that model and offer: use a smaller model, use the on-device model (no limit), or wait for the reset.</div>
+<!-- right: counting -->
+<div style="flex: 1; display: flex; flex-direction: column; gap: 16px">
+
+<div style="background: var(--surface); border: 1px solid var(--line); border-radius: 20px; padding: 20px 24px; display: flex; flex-direction: column; gap: 14px">
+<b>How tokens are counted</b>
+<div style="display: grid; grid-template-columns: 1fr 120px; gap: 10px 14px; align-items: center">
+<label for="w-fresh" style="color: var(--muted)">New text you send (fresh input)</label><input id="w-fresh" class="fld" value="x 1">
+<label for="w-cached" style="color: var(--muted)">Earlier chat the server already holds (re-read)</label><input id="w-cached" class="fld" value="x 0.1">
+<label for="w-out" style="color: var(--muted)">What Yuvra writes (output)</label><input id="w-out" class="fld" value="x 1">
 </div>
-<div style="flex: 1 1 400px; background: var(--surface); border: 1px solid var(--line); border-radius: 20px; padding: 20px 24px; display: flex; flex-direction: column; gap: 10px">
-<div style="font-weight: 600">What is counted</div>
-<div style="color: var(--muted); font-size: 15px">Points = tokens x the model&rsquo;s cost weight, so a bigger model uses more. Only numbers are stored, never message text. Resets: session every 5 hours, weekly Sun 2:00 AM.</div>
+<div style="color: var(--muted); font-size: 14px">Then multiplied by the model&rsquo;s weight. Starting values; tune them after measuring real server time.</div>
+</div>
+
+<div style="background: var(--surface); border: 1px solid var(--line); border-radius: 20px; padding: 20px 24px; display: flex; flex-direction: column; gap: 14px">
+<b>Model weights</b>
+<div style="display: flex; gap: 12px">
+<div style="flex: 1"><label class="lab" for="m1"><span style="display: inline-block; width: 9px; height: 9px; border-radius: 999px; background: #FF4B1F; margin-right: 6px"></span>FLARE</label><input id="m1" class="fld" value="1"></div>
+<div style="flex: 1"><label class="lab" for="m2"><span style="display: inline-block; width: 9px; height: 9px; border-radius: 999px; background: #EEF0F6; margin-right: 6px"></span>EQUINOX</label><input id="m2" class="fld" value="2"></div>
+<div style="flex: 1"><label class="lab" for="m3"><span style="display: inline-block; width: 9px; height: 9px; border-radius: 999px; background: #F2A60C; margin-right: 6px"></span>SOLSTICE</label><input id="m3" class="fld" value="5"></div>
+<div style="flex: 1"><label class="lab" for="m4"><span style="display: inline-block; width: 9px; height: 9px; border-radius: 999px; background: #A8D1F5; margin-right: 6px"></span>APOGEE</label><input id="m4" class="fld" value="10"></div>
+</div>
+</div>
+
+<div style="background: var(--surface); border: 1px solid var(--line); border-radius: 20px; padding: 20px 24px; display: flex; flex-direction: column; gap: 8px">
+<b>When the tank runs low</b>
+<div style="color: var(--muted); font-size: 15px">At 20% left, a quiet note. At empty, that model pauses and offers a smaller model, the on-device model (free), or &ldquo;back to full in about 2 hours&rdquo;. You are alerted at 80% of the week and at the ceiling, and can pause everything.</div>
+</div>
 </div>
 </div>
 </div>
 </x-dc>
-<script type="text/x-dc" data-dc-script data-props='{"theme":{"editor":"enum","options":["dark","light"],"default":"dark"},"model":{"editor":"enum","options":["flare","equinox","solstice","apogee","brand"],"default":"brand"},"$preview":{"width":1100,"height":800}}'>
+<script type="text/x-dc" data-dc-script data-props='{"theme":{"editor":"enum","options":["dark","light"],"default":"dark"},"model":{"editor":"enum","options":["flare","equinox","solstice","apogee","brand"],"default":"brand"},"$preview":{"width":1180,"height":900}}'>
 const BASE = {
   dark: {bg: '#07080D', side: '#0A0B11', surface: '#0F1119', surface2: '#161926', line: '#232739', text: '#EEF0F6', muted: '#9AA3BC'},
   light: {bg: '#F7F8FC', side: '#EEF0F7', surface: '#FFFFFF', surface2: '#EEF0F7', line: '#D8DCEA', text: '#0D0F1A', muted: '#4A526B'}
