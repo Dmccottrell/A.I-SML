@@ -57,6 +57,32 @@ class CloudPaths(unittest.TestCase):
             r = subprocess.run(["bash", "-c", H.STILL_TRAINING], capture_output=True, text=True, env=env)
             self.assertEqual(r.stdout.strip(), want, pids)
 
+    def test_start_passes_extra_training_settings(self):
+        sent, real_ssh = [], H.ssh_out
+
+        def ssh_out(host, port, command):
+            if "run_training.py" in command:               # the start command: record it, don't launch anything
+                sent.append(command)
+                return ""
+            return real_ssh(host, port, command)
+        H.ssh_out = ssh_out
+        V_remote = types.SimpleNamespace(ckpt_dir="checkpoints/dev/v3", data_dir="data/v3")
+        cwd = os.getcwd()
+        os.chdir(self.local)
+        try:
+            os.makedirs("checkpoints/dev/v3")
+            with open("checkpoints/dev/v3/latest.pt", "wb") as f:
+                f.write(b"x" * 10)
+            a = self.args(start=True, version="v3.5", cloud_window="21:30-13:00", cloud_utc_offset=0, cloud_gpus=4,
+                          notify=None, hub_backup=None, stop_command="true", train_args="--set optimizer=muon_cpu")
+            H.up(a, V_remote)
+        finally:
+            os.chdir(cwd)
+        self.assertEqual(len(sent), 1)
+        self.assertIn("--cloud", sent[0])
+        self.assertIn("--gpus 4", sent[0])
+        self.assertIn("--set optimizer=muon_cpu", sent[0])
+
     def test_quoting(self):
         self.assertEqual(H.rq("~/A.I-SML/a b"), "\"$HOME\"'/A.I-SML/a b'")
         self.assertEqual(H.rq("/root/x"), "/root/x")

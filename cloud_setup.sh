@@ -37,5 +37,6 @@ echo
 echo "Ready. If the PILOT REPORT above looks right, start the real run with:"
 if [ "$GPUS" -gt 1 ]; then GP="--gpus $GPUS "; else GP=""; fi
 echo "    python run_training.py --version $VERSION --cloud ${GP}--backup_dir ~/backups"
-echo "If the pilot ran out of GPU memory, add:  --set grad_checkpoint=true  (to both the pilot and the run)"
+echo "If the pilot ran out of GPU memory (24 GB cards: RTX 3090/4090), add:  --set optimizer=muon_cpu  (Muon's memory in RAM; best first try)"
+echo "or  --set grad_checkpoint=true  (about 30% slower), to both the pilot and the run"
 echo "(Ctrl+B then D leaves tmux and keeps it running. Ctrl+C once pauses it safely.)"
