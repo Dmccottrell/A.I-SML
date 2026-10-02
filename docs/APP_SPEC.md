@@ -141,6 +141,27 @@ changed without touching code. Pricing is not decided; the tiers only decide acc
   its refill in one night), so the plan starts with the **fixed** reset plus the tank; rolling stays an option behind one setting (`weekly_window: fixed | rolling`),
   with a test for each.
 
+### The usage line and the effort menu (plan)
+**The usage line.** The small line under the message box now shows usage, not "Memory / Context": **"Usage: 62% · about 248 messages left"**, with the tokens used beside it on
+desktop (**"76,000 tokens used"**). It is live: every message sent adds its real cost, so the percentage, the messages left and the tokens used all move together. It reads the same numbers
+as the Usage screen (the account's plan decides the tank size), and a tap opens that screen. At 20% it turns red; at empty it says "out for now, back to full in about 3 hours".
+"Messages left" depends on what you have selected: the model's weight and the effort level both change the cost of one message, so switching from Flare to Apogee, or from Balanced to Deep,
+changes the number straight away. (Memory facts and the context meter move to the Usage details and the chat's menu; they are not on this line any more.)
+
+**Effort: three real choices.** The effort chip next to the model chip opens a small menu:
+
+| Level | What it does | Speed | Usage |
+|---|---|---|---|
+| **Quick** | Answers directly, thinks briefly. Best for simple questions | Fastest | Uses less (about 0.6x) |
+| **Balanced** (default) | A good mix of speed and care | Normal | Normal (1x) |
+| **Deep** | Thinks it through, checks its work, may try again before answering. More accurate on hard questions | Slowest | Uses more (about 2x) |
+
+How it works: effort is a **thinking budget**. The model writes out its reasoning (the "<|notes|>"-style steps planned for v4) before the final answer; a bigger budget means more steps and a
+self-check, and for Deep, optionally a second try (a vote between answers). That is why Deep is slower and costs more, and why it is more accurate on hard questions. The multipliers are starting
+values to measure on real chats. **Models that cannot think yet** (Flare) offer only Quick and Balanced, and Deep is greyed out with "Needs Equinox or a bigger model"; until v4's thinking training exists,
+Quick and Balanced differ only in how long the answer is allowed to be. Switching to a model that can't do Deep drops the level to Balanced. Auto picks the level per question, shown in the chat.
+Designs: the interactive `Chat` and `Phone` boards in `design/canvas/` (open the model or effort chip, press Send).
+
 ### Context window and the device check (plan)
 The window (the model's working memory, in tokens) costs RAM, not storage: the model's cache grows with every token. The app chooses
 the window per device and per model, and never lets it exceed what the model can really use.

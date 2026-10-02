@@ -5,7 +5,7 @@
     "Chat.dc.html": {
       "h": 860,
       "is_interactive": true,
-      "title": "Chat (dark): pick a model to re-colour",
+      "title": "Chat (dark): pick a model, effort, or press Send",
       "w": 1360,
       "x": 0,
       "y": 2020
@@ -58,10 +58,11 @@
     },
     "Phone.dc.html": {
       "h": 844,
-      "title": "Phone (dark)",
+      "title": "Phone (dark): tap Balanced or Send",
       "w": 390,
       "x": 520,
-      "y": 3900
+      "y": 3900,
+      "is_interactive": true
     },
     "PhoneLight.dc.html": {
       "h": 844,
