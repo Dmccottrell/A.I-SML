@@ -81,13 +81,13 @@ you choose the model, the effort, and see where each one runs. Works the same on
  -------------------------------------------------
   Auto   (the router picks)                  [check]
          Best model and effort for each question
-  Yuvra Flare 3          [On this phone]
+  Yuvra Flare 3
          Fastest for quick answers
-  Yuvra Equinox 4        [On this phone]
+  Yuvra Equinox 4
          For everyday work and homework
-  Yuvra Solstice 5       [Online: your PC]
+  Yuvra Solstice 5
          For harder questions and long writing
-  Yuvra Apogee 6         [Online: your PC]
+  Yuvra Apogee 6         [PC off]
          For your toughest challenges
  -------------------------------------------------
   Effort                              Balanced  >
@@ -99,9 +99,13 @@ you choose the model, the effort, and see where each one runs. Works the same on
   Earlier versions of any name
 ```
 
-- **One card per model:** name, a one-line description, and a badge that says where it runs: **On this phone**
-  (offline), **Online: your PC** (messages go to your own PC; the sheet says so), **Not downloaded (700 MB)**
-  (tap to download with a progress bar), or **Beta**. A check mark shows the current choice.
+- **One card per model:** the name (just "Flare", "Equinox"; the version is a small grey number), a one-line description,
+  and a badge only when something needs saying: **Not downloaded (700 MB)** (tap to download with a progress bar),
+  **PC off** / **Needs your PC** (when a model is being served from your own machine and it isn't reachable), or **Beta**.
+  There is no fixed "on this phone" / "on your PC" label: **every model can run at home or in the cloud** (see
+  "Where models run" below), and each answer says where it ran. A check mark shows the current choice.
+- **The picker sits under the message box**, next to + and Send, so the model is easy to see and change; the chip
+  shows just the name.
 - **Auto** (the default) hands the choice to the router (`skills.py` today; a small trained classifier in v4),
   which picks the size, the effort and the skill pack per question, and the chat says what it picked.
 - **Effort:** Quick / Balanced / Deep, the thinking dial from the roadmap. Greyed out for models that can't think yet.
@@ -127,6 +131,16 @@ file at `/models`). One entry per model: `id`, `name`, `tagline`, `tier` (Lite /
 `context` (tokens), `status` (stable / beta / off), `supports_effort`, `skills` (which packs fit this model; a pack only
 fits the `chat.pt` it was trained on), and `from_version` (v3, v3.5, ...). Adding a new model is adding a line,
 not changing the app.
+
+## Where models run, and who can reach them (plan)
+Both are planned, and they are separate choices:
+- **Home and cloud:** a model can run on the device, on your own PC at home, or on a rented cloud server. The same
+  `.gguf` and the same app work in all three; the app only points at a different address. A model is not tied to one place;
+  `models.json`'s `where` field becomes a list of places (device, home, cloud), and the answer's tag says where THAT answer ran.
+- **Private and public:** *private* means you and your named testers (home PC through a tunnel, or a private cloud server
+  with keys); *public* means anyone, from a hosted cloud server with accounts and limits. Private comes first; public is a
+  later step with its own checks (accounts, abuse limits, trademark and domain). See
+  [ROADMAP.md, hosting](ROADMAP.md#hosting-the-online-server-to-revisit).
 
 ## Features by version
 | | v3 (now) | v3.5 | v4 |

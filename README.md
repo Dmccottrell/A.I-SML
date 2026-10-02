@@ -1,8 +1,9 @@
 # A.I-SML — Build Your Own Small Language Model
 
 Llama-style language models built completely from scratch: your own tokenizer, your own
-transformer, your own training run. No pretrained weights. The finished models run on your
-PC and fully offline on your phone.
+transformer, your own training run. No pretrained weights. Any finished model can run wherever you
+want it: fully offline on your phone or PC, at home on your own machine, or in the cloud (private for
+you and your testers, or public). Where it runs is a choice per chat, not a property of the model.
 
 | Version | What it is | Status |
 |---|---|---|
@@ -28,7 +29,7 @@ live in `config.py`.
 ## Model family names (working names)
 
 The app and the whole family are called **Yuvra** (Yuvra.AI). Each model is Yuvra + one of four names + its own version
-number: **Yuvra Flare** (smallest, phone-lite), **Yuvra Equinox** (balanced everyday), **Yuvra Solstice** (stronger) and
+number: **Yuvra Flare** (smallest and fastest), **Yuvra Equinox** (balanced everyday), **Yuvra Solstice** (stronger) and
 **Yuvra Apogee** (most capable). So v3 = Yuvra Flare 3 (~400M), v3.5 = Yuvra Equinox 3.5 (~1.1B), v4 = Yuvra Equinox 4,
 v5 = Yuvra Solstice 5 (~3B), v6 / v6.5 = Yuvra Apogee 6 / 6.5 (5-7B), and later Yuvra Apogee 7, 8 (13B+); each
 name has its own number that goes up only when that model is updated (older ones stay available). They are placeholders: no

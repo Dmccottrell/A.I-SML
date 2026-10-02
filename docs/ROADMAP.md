@@ -739,7 +739,7 @@ battery, not a bigger download.
 
 | Tier class | Model name | Size | Versions |
 |---|---|---|---|
-| Phone-lite | **Yuvra Flare 3** | ~400M | v3 |
+| Lite | **Yuvra Flare 3** | ~400M | v3 |
 | Small and fast | **Yuvra Equinox 3.5**, then **Yuvra Equinox 4** | ~1B | **v3.5**, then **v4**: the same size, now with skill packs, the router, tools, thinking, effort levels and the app |
 | Balanced | **Yuvra Solstice 5** | ~3B | v5 (needs cloud training) |
 | Most capable | **Yuvra Apogee 6, 6.5** | 5-7B | v6, v6.5 |
@@ -913,6 +913,11 @@ providers' own pages; check them before paying. A 1B model in Q4 (~700 MB) needs
 Things that differ from training on Vast: it must stay up (use on-demand, not interruptible machines), the IP can change (use the
 tunnel), and disk is billed even when the machine is off. Move to a bigger GPU only when many people chat at once. The app code
 does not change: it only points at a different address.
+
+**The plan is both, not either/or.** Every model should be runnable at home *and* in the cloud, and reachable *privately*
+(you and named testers) or *publicly* (anyone, with accounts and limits). Home first for private use, then a rented server
+for always-on private access, then a public hosted version. Same files, same app; only the address and who may connect
+change.
 
 **Revisit when:** the test group needs it to work while the PC is off, or before any public launch. Then also: write the
 server install steps (llama-server + tunnel), re-check prices, and decide CPU vs small GPU from measured speed.

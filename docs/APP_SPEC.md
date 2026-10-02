@@ -73,7 +73,7 @@ the PC and the website (the PC adds a chats sidebar).
 |   Make a 10-question worksheet on                |
 |   multiplication facts for 7s                    |
 |                                                  |
-|   Yuvra   (Teacher assistant, on this phone)     |
+|   Equinox   (Teacher assistant)                  |
 |   # Multiplying by 7                             |
 |   Name: ______   Date: ______                    |
 |   1. 7 x 3 = ___   ...                           |
@@ -86,7 +86,8 @@ the PC and the website (the PC adds a chats sidebar).
 |  Memory: 3 facts  *  Context 31%  *  Offline     |   <- small status line
 +--------------------------------------------------+
 ```
-- **The badge** under each answer says which model and where ("on this phone" / "online: your PC").
+- **The tag** above each answer says which model wrote it (just the name, "Equinox"), and where it ran only when that is
+  worth knowing (for example "on your PC" when a remote model answered). The model picker sits under the message box.
 - **The status line:** memory used, context meter, and **Offline / Online** (tap for details).
 - **Reply suggestions** are tappable chips (from the suggest-next-message lesson).
 
