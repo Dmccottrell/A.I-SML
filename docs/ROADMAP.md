@@ -731,23 +731,25 @@ battery, not a bigger download.
 
 | Tier class | Model name | Size | Versions |
 |---|---|---|---|
-| Phone-lite | **Yuvra Rune** | ~400M | v3 |
-| Small and fast | **Yuvra Skald** | ~1B | **v3.5**, then **v4 = "Yuvra Skald 2"**: the same size, now with skill packs, the router, tools, thinking, effort levels and the app |
-| Balanced | **Yuvra Saga** | ~3B | v5 (needs cloud training) |
-| Most capable | **Yuvra Edda** | 5-7B | v6, v6.5 |
-| Top | **Yuvra Norn** | 13-30B | v7, v8 (see [Beyond v6.5](#beyond-v65-v7-v8-and-max)) |
+| Phone-lite | **Yuvra Flare** | ~400M | v3 |
+| Small and fast | **Yuvra Nova** | ~1B | **v3.5**, then **v4 = "Yuvra Nova 2"**: the same size, now with skill packs, the router, tools, thinking, effort levels and the app |
+| Balanced | **Yuvra Pulsar** | ~3B | v5 (needs cloud training) |
+| Most capable | **Yuvra Quasar** | 5-7B | v6, v6.5 |
+| Top | **Yuvra Supernova** | 13-30B | v7, v8 (see [Beyond v6.5](#beyond-v65-v7-v8-and-max)) |
 
-So v4 (Yuvra Skald 2) is a new *generation* of the small tier, not a bigger model: v3.5's brain **trained longer**
+So v4 (Yuvra Nova 2) is a new *generation* of the small tier, not a bigger model: v3.5's brain **trained longer**
 (15–30B more tokens, including some "skill-aware" text with tool calls, thinking steps and code with tests,
 so the skill packs start from a base that already knows those formats), plus the abilities. No cloud needed.
 See [v4's brain](#v4s-brain-v35-trained-longer).
 
-**Names (working names):** the umbrella is **Yuvra** (the app, Yuvra.AI, and the whole model family); each model adds a Norse storytelling word, since these are language models: **Yuvra Rune**, **Yuvra Skald**, **Yuvra Saga**, **Yuvra Edda**, **Yuvra Norn** (short forms like "Rune" are fine in text). A *rune* is
-a small written character, a *skald* a Norse poet, a *saga* a long story, the *Eddas* the great collections
-of Norse tales, and the *Norns* the three fates who weave everything. They are placeholders: **no trademark
-check has been done**, so search each name (and its domain) before a public launch, and rename if there is a
-conflict. In this document, the older placeholder names map as: Lite = Rune, Standard = Skald,
-Pro = Saga and Edda, Max = Norn.
+**Names (working names):** the umbrella is **Yuvra** (the app, Yuvra.AI, and the whole model family); each model adds a
+space word, ordered like the sky by size and power: a **flare** (small and quick), a **nova** (a star that brightens),
+a **pulsar** (a precise, steady beacon), a **quasar** (the brightest thing in the sky) and a **supernova** (the biggest
+blast). They are placeholders: **no trademark check has been done**, and some are already common in AI (for example,
+Amazon has a model family called Nova), so search each name (and its domain) before a public launch, and rename if there
+is a conflict. The earlier Norse working names are retired; where older notes use them: Rune = Flare, Skald = Nova,
+Saga = Pulsar, Edda = Quasar, Norn = Supernova. In this document, the older tier names map as: Lite = Flare,
+Standard = Nova, Pro = Pulsar and Quasar, Max = Supernova.
 
 ## Model tiers (Lite, Standard, Pro, Max)
 
@@ -757,10 +759,10 @@ speed or smarts.
 
 | Tier | Size | Runs on | Good for | Arrives |
 |---|---|---|---|---|
-| **Lite = Yuvra Rune** | ~400M (v3-size) | Any phone, offline, very fast | Quick questions, small talk, simple lookups | With v3.5 |
-| **Standard = Yuvra Skald** | ~1B (v3.5, v4) | Phones and PCs | Everyday use: lookups, explanations, advice | v3.5 |
-| **Pro = Yuvra Saga, Yuvra Edda** | 3B (v5), 5-7B (v6-v6.5) | PC or a server (the app's online mode) | Harder questions, coding, long writing | v5+ |
-| **Max = Yuvra Norn** | 13B, later ~30B ("upper small", then "medium"; see [Beyond v6.5](#beyond-v65-v7-v8-and-max)) | A server, or a PC with a 24 GB GPU for 13B; online mode | The hardest questions: deep reasoning, real coding help, long documents. Also the teacher for every smaller tier | After v6.5, if funded |
+| **Lite = Yuvra Flare** | ~400M (v3-size) | Any phone, offline, very fast | Quick questions, small talk, simple lookups | With v3.5 |
+| **Standard = Yuvra Nova** | ~1B (v3.5, v4) | Phones and PCs | Everyday use: lookups, explanations, advice | v3.5 |
+| **Pro = Yuvra Pulsar, Yuvra Quasar** | 3B (v5), 5-7B (v6-v6.5) | PC or a server (the app's online mode) | Harder questions, coding, long writing | v5+ |
+| **Max = Yuvra Supernova** | 13B, later ~30B ("upper small", then "medium"; see [Beyond v6.5](#beyond-v65-v7-v8-and-max)) | A server, or a PC with a 24 GB GPU for 13B; online mode | The hardest questions: deep reasoning, real coding help, long documents. Also the teacher for every smaller tier | After v6.5, if funded |
 
 The names are working names (see above).
 

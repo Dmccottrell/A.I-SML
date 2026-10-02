@@ -4,7 +4,7 @@ growth_test.py - Does growing a trained model save training compute? (an experim
 THE QUESTION
     Growing a trained small model into a deeper one (see grow.py) should be cheaper than
     training the deeper model from scratch. This measures how much cheaper, on our own models,
-    before we count on it for Saga -> Edda (which would save cloud money).
+    before we count on it for Yuvra Pulsar -> Yuvra Quasar (which would save cloud money).
 
 THE TEST (defaults: v2's 88M, 12 layers, grown to 24 layers)
     Two runs of the SAME 24-layer model, given the SAME total compute:
