@@ -163,9 +163,22 @@ Android. Each has its place in [APP.md](APP.md) (build order); none is needed to
 
 ---
 
-## Decisions that shape the build
-1. **PC/web first or Android first?** Recommended: PC/web (also becomes the online-mode server).
-2. **Who first:** family only (you and your wife), a small test group, or public.
-3. **Skill packs:** merged files first (simple), or LoRA adapters (flexible, needs the converter).
-4. **Memory search:** keyword only first, or the small embedding model from day one.
-5. **App lock and encryption:** on by default, or a setting.
+## Decisions that shape the build (decided Oct 2026)
+1. **Platform: PC/web first.** The local server and browser page come first; they also become the online-mode server. Android follows.
+2. **Who first: a small test group** (not family-only). So the beta access list matters from day one: `models.json` status
+   `beta` + the same beta-user list as the skill packs (`skills.py`), and each tester is a named user. Public later.
+3. **Skill packs: LoRA adapters** next to the main model file (not merged copies). Needs a converter from our LoRA format
+   (`lora.py`) to llama.cpp's adapter format, with a test that the adapter gives the same answers as the merged model.
+   Until the converter exists, the first build can load merged files (`chat_study.gguf`) behind the same switch.
+4. **Memory search: keyword AND meaning from day one**, using the small embedding model (already in `chat_memory.py`);
+   keyword search stays as the fallback if the embedding model is missing.
+5. **App lock and encryption: a setting, off by default.** Turn on in Settings (device PIN/biometrics); the chat database is
+   encrypted when it is on.
+
+What this changes in the first version's checklist: add "adapter converter + same-answers test", "named testers and the
+beta list", and "memory finds an earlier chat by meaning, not only by words".
+
+## Built so far
+- `models.json` + `models.py` (+ `tests/test_models.py`): the model list and the picker logic (one card per name, newest
+  first; older ones under Other models with the retention rule; greyed out when the device is too small; online models
+  need the PC; beta models only for the beta list). Try it: `python models.py`.
