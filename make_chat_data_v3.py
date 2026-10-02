@@ -35,6 +35,7 @@ WHAT THIS FILE DOES
       ask_first,       carry on after old steps were folded away
       too_big,
       compaction
+      typo             the same lessons with the user's message typed messily (waht, whats up, pls) and the clean answer
       other_ai         honest about other AIs (no notes)           "ChatGPT is better than Claude because..."
 
     lookup/dont_know/correction/stand_firm/memory_doubt come from the teacher's
@@ -528,6 +529,11 @@ def build(general, stories, lookup_records, instruction_records, wiki, a, seed=1
         kept = [c for c in convos if total_chars(c) <= MAX_CHARS]
         print(f"  {kind:13s} {len(kept):7,}")
         examples += [{"messages": c, "kind": kind} for c in kept]
+    if getattr(a, "typos", 0):
+        from typo_lessons import typo_copies
+        messy = typo_copies(examples, rng, a.typos)
+        print(f"  {'typo':13s} {len(messy):7,}  (messy copies of {a.typos:.0%} of the lessons above)")
+        examples += messy
     if os.path.exists(MY_EXAMPLES):
         with open(MY_EXAMPLES, encoding="utf-8") as f:
             mine = [json.loads(line) for line in f if line.strip()]
@@ -600,6 +606,8 @@ if __name__ == "__main__":
     p.add_argument("--memory", type=int, default=3_000, help="remembering-you lessons (save / don't / recall)")
     p.add_argument("--web", type=int, default=None, help="web search lessons (web_lessons.py); "
                    "default: more for each newer version (WEB_LESSONS)")
+    p.add_argument("--typos", type=float, default=0.12, help="share of lessons that also get a copy with messy typing "
+                   "(typo_lessons.py; 0 to turn off)")
     p.add_argument("--agent", type=int, default=None, help="coding-helper lessons (agent_lessons.py); "
                    "default: AGENT_LESSONS for the version")
     p.add_argument("--other_ai", type=int, default=400, help="honest answers about other AI assistants")
