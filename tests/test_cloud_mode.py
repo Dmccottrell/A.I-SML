@@ -21,9 +21,10 @@ from offload_optim import CPUOffloadAdamW
 class Settings(unittest.TestCase):
     def test_cloud_mode_changes_how_not_what(self):
         home, cloud = config.get_version("v3.5"), config.get_version("v3.5", cloud=True)
-        self.assertEqual(home.train.optimizer, "adamw_cpu")                   # home settings untouched
+        self.assertEqual(home.train.optimizer, "muon_cpu")                    # Muon with its memory in RAM (fits 12 GB)
         self.assertTrue(home.train.grad_checkpoint)
-        self.assertEqual(cloud.train.optimizer, "muon")                       # muon_test.py's winner (cloud only)
+        self.assertEqual(cloud.train.optimizer, "muon")                       # the same Muon, memory on the GPU
+        self.assertEqual(config.optimizer_kind(home.train.optimizer), config.optimizer_kind(cloud.train.optimizer))
         self.assertFalse(cloud.train.grad_checkpoint)
         tokens = lambda V: V.train.batch_size * V.train.grad_accum * V.model.max_seq_len
         self.assertEqual(tokens(cloud), tokens(home))                         # same ~262k tokens per step
@@ -109,8 +110,8 @@ LAUNCH = textwrap.dedent("""
                       max_seq_len=32),
         train=replace(v.train, max_iters=int(os.environ["ITERS"]), batch_size=1, grad_accum=4, eval_every=10,
                       eval_iters=2, save_every=5, exam_every=0, warmup_iters=2, snapshot_every=0,
-                      compile=False, grad_checkpoint=True, optimizer="adamw_cpu"),
-        cloud_train=(("optimizer", "adamw"), ("grad_checkpoint", False), ("batch_size", 2), ("grad_accum", 2),
+                      compile=False, grad_checkpoint=True, optimizer=os.environ.get("HOME_OPT", "adamw_cpu")),
+        cloud_train=(("optimizer", os.environ.get("CLOUD_OPT", "adamw")), ("grad_checkpoint", False), ("batch_size", 2), ("grad_accum", 2),
                      ("save_every", 7)))
     sys.argv = ["train.py"] + sys.argv[1:]
     runpy.run_path({train!r}, run_name="__main__")
@@ -132,9 +133,9 @@ class EndToEnd(unittest.TestCase):
         with open(launch, "w") as f:
             f.write(LAUNCH.format(root=ROOT, data=data, ck=os.path.join(d, "ck"), train=os.path.join(ROOT, "train.py")))
 
-        def run(iters, *extra):
+        def run(iters, *extra, **env):
             r = subprocess.run([sys.executable, launch, "--version", "vtiny", *extra], capture_output=True, text=True,
-                               cwd=ROOT, env=dict(os.environ, ITERS=str(iters)), timeout=600)
+                               cwd=ROOT, env=dict(os.environ, ITERS=str(iters), **env), timeout=600)
             self.assertEqual(r.returncode, 0, r.stdout[-2000:] + r.stderr[-2000:])
             return r.stdout
 

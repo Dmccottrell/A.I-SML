@@ -80,7 +80,7 @@ data, code and training.
 | `hub_backup.py` | 5 | Off-machine backup of the checkpoint to a private Hugging Face repo (`--hub_backup`), so a rented machine going offline doesn't take the run with it |
 | `notify.py` | 5 | Push messages to your phone about training progress, crashes and finish (free, via ntfy.sh); see `docs/PHONE.md` |
 | `harness.py` | 6 | v4 coding helper: safe file/command tools and the tool-calling loop (no model needed; tests in `tests/`) |
-| `muon.py`, `muon_test.py` | 5 | The Muon optimizer (`optimizer="muon"` in config.py), and an experiment that measures whether it needs fewer steps than AdamW on our models (~1–2 h on the 4070) |
+| `muon.py`, `muon_test.py` | 5 | The Muon optimizer (`optimizer="muon"` in config.py; `"muon_cpu"` keeps its memory in RAM so it fits a 12 GB card), and an experiment that measures whether it needs fewer steps than AdamW on our models (~1–2 h on the 4070) |
 | `grow.py`, `growth_test.py` | 6 | Grow a trained model into a deeper one, and an experiment that measures how much training compute that saves (run when the GPU is free) |
 | `generate.py` | 6 | Generate text or chat with your model. Chat options: `--lookup` (Wikipedia notes), `--web` (web search, online mode), `--memory` (remembers you), `--suggest` (reply suggestions), `--context` (memory meter), `--skill` (skill packs) |
 | `make_chat_data.py` | 7 | v1: builds `data/chat.jsonl` fine-tuning examples automatically |

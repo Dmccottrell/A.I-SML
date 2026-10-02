@@ -289,7 +289,7 @@ pages added on top of the educational ones, more code and math, no TinyStories. 
 | Reading | **40B tokens** (~36 per parameter) + a 4.1B-token final-phase set; ~88 GB on disk (~170 GB free while building) |
 | Steps | 152,600 at 262,144 tokens each; the fade starts at step 137,340 |
 | Time / cost | **2× RTX 5090 with Muon: ~14–18 days, ~$290–380** (Muon passed its test). Choose ~250 GB of disk when renting |
-| Optimizer | **Muon** (cloud only: its memory doesn't fit the 4070's 12 GB, and a run can't switch optimizers midway; `train.py` refuses). The AdamW fallback (`--set optimizer=adamw`) can start at home but gives up Muon's saving |
+| Optimizer | **Muon**, in two forms with interchangeable saved state: `muon_cpu` at home (memory in RAM, fits the 4070's 12 GB) and `muon` in the cloud (memory on the GPU). A run can start at home and finish on rented GPUs; mixing Muon with AdamW is refused |
 | Phone file | ~700 MB (Q4) or ~1.2 GB (Q8) |
 | Features | Everything from v3 (lookups, web search, "I don't know", corrections, memory, preference training) |
 | **Code** | **Several languages** instead of Python only (see below) |
@@ -392,7 +392,7 @@ as "v3+" would be for v3.
 | Size, phone speed, download | 1.12B, ~700 MB (Q4) | **the same** |
 | Reading | 40B tokens (~36 per parameter) | **+15B or +30B more** (~49–62 per parameter) |
 | HellaSwag forecast (full test) | ~44–51% | **~46–54%** (+1–2 points for +15B, +2–3 for +30B) |
-| Where / how long | 2× RTX 5090 with Muon, ~14–18 days | Rented GPUs with Muon (it must continue with v3.5's optimizer): roughly **+40–75% of v3.5's time** for +15–30B |
+| Where / how long | 2× RTX 5090 with Muon, ~14–18 days | Rented GPUs with Muon (it continues with v3.5's optimizer, `muon` or `muon_cpu`): roughly **+40–75% of v3.5's time** for +15–30B |
 | Cost | ~$110–270 electricity | ~$55–270 electricity |
 
 **Why this way:** v4's abilities are mostly *code* (app, router, tools, voice), and the GPU would sit idle
