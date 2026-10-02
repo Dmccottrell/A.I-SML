@@ -50,6 +50,11 @@ Hero, "Four models, one family", what it does (private by default, remembers you
 "Built from the ground up" (what Yuvra is), "At home or in the cloud, private or public", try it, footer. Placeholders left in:
 `[YEAR]` and the invite link.
 
+## Usage and limits
+Two screens: **Usage** (what a person sees: current session, weekly limits, one bar per model in its colour, "On this device: not counted") and
+**Limits** (owner only: per group, per model session and weekly points, cost weights, what happens at the limit). The plan, including server-side
+enforcement, is in docs/APP_SPEC.md ("Usage and limits").
+
 ## Still open
 - Final logo choice (the earlier network-Y and cradle ideas were dropped), plus app-icon and favicon exports as PNG/ICO.
 - Equinox's spark is a black core in a white ring; a yin-yang symbol is not drawn yet.

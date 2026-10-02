@@ -58,6 +58,23 @@ tests, and what "done" means for the first version).
 
 ---
 
+### Usage and limits (plan)
+Like other AI apps, Yuvra shows people how much they have used and lets the **owner (you) set limits**. Designs: `Usage` (phone) and `Limits`
+(owner settings) in `design/canvas/`.
+
+| Part | Plan |
+|---|---|
+| **Where people see usage** | Settings, then **Usage**, and a tap on the chat's status line. A "Current session" bar (resets in 1 hr 10 min), "Weekly limits" with an "All models" bar and one bar per model (in its own colour), and a note that models running on the person's own device are not counted |
+| **What is counted** | **Points** = tokens (read + written) x the model's **cost weight**, so a bigger model uses more (starting weights: Flare 1, Equinox 2, Solstice 5, Apogee 10, adjustable). Only numbers are stored (user, model, tokens in and out, time), never message text |
+| **Windows** | A **session** (rolling 5 hours) and a **weekly** limit that resets at a set time (for example Sun 2:00 AM). Both are settings |
+| **Who sets limits** | Only the owner, in an owner-only **Limits** screen: per group (Private testers, Public later), per model, and per person (an override for one tester). Presets, a pause-all switch, and alerts to you at 80% and 100% |
+| **What applies** | Only models **served from a shared machine** (your PC, a rented server): that is where the cost is. Models running on a person's own device have no limit and are not counted |
+| **At the limit** | Warn at 80%. At 100% pause that model and offer: a smaller model, the on-device model (no limit), or wait for the reset ("Resets Sun 2:00 AM") |
+| **Where it is enforced** | On the **server**, by the person's key, never only in the app (an app can be changed). The server counts every request, refuses over-limit ones with a clear message, and the Usage screen reads the same counts, so what people see matches what is enforced |
+| **Storage** | A small table `usage(user, model, tokens_in, tokens_out, at)` in the server's SQLite, plus a limits table the owner edits. Counts per window are summed; old rows can be pruned |
+| **Tests** | With a fake clock: points add up with weights; the session and weekly windows reset on time; the warning and the block fire at 80% and 100%; a per-person override beats the group limit; on-device use is never counted; no message text is ever stored |
+| **Model list fields** | `cost_weight` per model in `models.json` |
+
 ### Context window and the device check (plan)
 The window (the model's working memory, in tokens) costs RAM, not storage: the model's cache grows with every token. The app chooses
 the window per device and per model, and never lets it exceed what the model can really use.

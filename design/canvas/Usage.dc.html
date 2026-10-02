@@ -1,0 +1,81 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Yuvra usage on phone</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Sora:wght@500;600;700&family=DM+Sans:wght@400;500;600&display=swap">
+<style>
+body{margin:0}
+div, span, button, svg, path, circle { transition: background-color .7s ease, color .7s ease, border-color .7s ease, fill .7s ease, stroke .7s ease, opacity .7s ease; }
+circle[style*="fill: var(--sun)"] { fill: var(--core) !important; stroke: var(--sun); stroke-width: 3; }
+</style>
+</helmet>
+<div style="{{themeStyle}}; width: 390px; height: 844px; box-sizing: border-box; background: var(--bg); background-image: radial-gradient(500px 300px at 60% -8%, var(--glow), transparent 70%); color: var(--text); font-family: 'DM Sans', sans-serif; font-size: 16px; line-height: 1.45; display: flex; flex-direction: column">
+
+<div style="height: 60px; box-sizing: border-box; padding: 0 8px; display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid var(--line)">
+<button aria-label="Back" style="background: transparent; border: 0; color: var(--text); font-size: 22px; width: 44px; height: 44px">&larr;</button>
+<div style="font-family: 'Sora', sans-serif; font-weight: 600; font-size: 20px">Usage</div>
+<button aria-label="About usage" style="background: transparent; border: 0; color: var(--muted); font-size: 18px; width: 44px; height: 44px">i</button>
+</div>
+
+<div style="flex: 1; overflow: hidden; padding: 20px 16px; display: flex; flex-direction: column; gap: 18px">
+
+<div style="background: var(--surface); border: 1px solid var(--line); border-radius: 18px; padding: 18px 18px 16px; display: flex; flex-direction: column; gap: 12px">
+<div style="display: flex; justify-content: space-between; align-items: baseline"><span style="font-size: 18px; font-weight: 600">Current session</span><span style="color: var(--muted)">43% used</span></div>
+<div style="height: 10px; border-radius: 999px; background: var(--surface2); overflow: hidden"><div style="width: 43%; height: 100%; background: var(--accent); border-radius: 999px"></div></div>
+<div style="color: var(--muted); font-size: 14px">Resets in 1 hr 10 min</div>
+</div>
+
+<div style="font-size: 13px; font-weight: 600; letter-spacing: 0.1em; color: var(--muted); padding: 0 4px">WEEKLY LIMITS</div>
+
+<div style="background: var(--surface); border: 1px solid var(--line); border-radius: 18px; padding: 18px; display: flex; flex-direction: column; gap: 16px">
+<div style="display: flex; flex-direction: column; gap: 10px">
+<div style="display: flex; justify-content: space-between; align-items: baseline"><span style="font-size: 18px; font-weight: 600">All models</span><span style="color: var(--muted)">62% used</span></div>
+<div style="height: 10px; border-radius: 999px; background: var(--surface2); overflow: hidden"><div style="width: 62%; height: 100%; background: var(--accent); border-radius: 999px"></div></div>
+<div style="color: var(--muted); font-size: 14px">Resets Sun 2:00 AM</div>
+</div>
+<div style="height: 1px; background: var(--line)"></div>
+<div style="display: flex; flex-direction: column; gap: 14px">
+<div style="display: flex; flex-direction: column; gap: 6px"><div style="display: flex; justify-content: space-between"><span style="display: flex; align-items: center; gap: 8px"><span style="width: 10px; height: 10px; border-radius: 999px; background: #FF4B1F"></span>Flare</span><span style="color: var(--muted)">20%</span></div><div style="height: 6px; border-radius: 999px; background: var(--surface2); overflow: hidden"><div style="width: 20%; height: 100%; background: #FF4B1F"></div></div></div>
+<div style="display: flex; flex-direction: column; gap: 6px"><div style="display: flex; justify-content: space-between"><span style="display: flex; align-items: center; gap: 8px"><span style="width: 10px; height: 10px; border-radius: 999px; background: #EEF0F6"></span>Equinox</span><span style="color: var(--muted)">35%</span></div><div style="height: 6px; border-radius: 999px; background: var(--surface2); overflow: hidden"><div style="width: 35%; height: 100%; background: #EEF0F6"></div></div></div>
+<div style="display: flex; flex-direction: column; gap: 6px"><div style="display: flex; justify-content: space-between"><span style="display: flex; align-items: center; gap: 8px"><span style="width: 10px; height: 10px; border-radius: 999px; background: #F2A60C"></span>Solstice</span><span style="color: var(--muted)">70%</span></div><div style="height: 6px; border-radius: 999px; background: var(--surface2); overflow: hidden"><div style="width: 70%; height: 100%; background: #F2A60C"></div></div></div>
+<div style="display: flex; flex-direction: column; gap: 6px"><div style="display: flex; justify-content: space-between"><span style="display: flex; align-items: center; gap: 8px"><span style="width: 10px; height: 10px; border-radius: 999px; background: #A8D1F5"></span>Apogee</span><span style="color: #FF7A7A; font-weight: 600">92% &middot; nearly at the limit</span></div><div style="height: 6px; border-radius: 999px; background: var(--surface2); overflow: hidden"><div style="width: 92%; height: 100%; background: #E5484D"></div></div></div>
+</div>
+</div>
+
+<div style="background: var(--surface); border: 1px solid var(--line); border-radius: 18px; padding: 16px 18px; display: flex; flex-direction: column; gap: 6px">
+<div style="font-weight: 600">On this device</div>
+<div style="color: var(--muted); font-size: 15px">Not counted. Models that run on your phone have no limit; limits only apply to models served from a shared server.</div>
+</div>
+</div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"theme":{"editor":"enum","options":["dark","light"],"default":"dark"},"model":{"editor":"enum","options":["flare","equinox","solstice","apogee","brand"],"default":"brand"},"$preview":{"width":390,"height":844}}'>
+const BASE = {
+  dark: {bg: '#07080D', side: '#0A0B11', surface: '#0F1119', surface2: '#161926', line: '#232739', text: '#EEF0F6', muted: '#9AA3BC'},
+  light: {bg: '#F7F8FC', side: '#EEF0F7', surface: '#FFFFFF', surface2: '#EEF0F7', line: '#D8DCEA', text: '#0D0F1A', muted: '#4A526B'}
+};
+const MODEL = {
+  brand: {dark: {accent: '#F5A524', onaccent: '#1A1204', accenttext: '#F5A524', sun: '#F5A524', core: '#F5A524', glow: 'rgba(245,165,36,.14)'}, light: {accent: '#F5A524', onaccent: '#1A1204', accenttext: '#8F5600', sun: '#E08A00', core: '#E08A00', glow: 'rgba(245,165,36,.12)'}},
+  flare: {dark: {accent: '#FF4B1F', onaccent: '#1A0500', accenttext: '#FF6B3D', sun: '#FF4B1F', core: '#FFF3E6', glow: 'rgba(255,75,31,.20)'}, light: {accent: '#FF4B1F', onaccent: '#1A0500', accenttext: '#B83208', sun: '#E5340A', core: '#FFF3E6', glow: 'rgba(255,75,31,.12)'}},
+  equinox: {dark: {accent: '#EEF0F6', onaccent: '#07080D', accenttext: '#EEF0F6', sun: '#EEF0F6', core: '#07080D', glow: 'rgba(238,240,246,.08)'}, light: {accent: '#0D0F1A', onaccent: '#FFFFFF', accenttext: '#0D0F1A', sun: '#0D0F1A', core: '#FFFFFF', glow: 'rgba(13,15,26,.07)'}},
+  solstice: {dark: {accent: '#F2A60C', onaccent: '#1F1400', accenttext: '#FFBE3B', sun: '#F2A60C', core: '#FFE7A0', glow: 'rgba(242,166,12,.18)'}, light: {accent: '#F2A60C', onaccent: '#1F1400', accenttext: '#8A5A00', sun: '#D18A00', core: '#FFE7A0', glow: 'rgba(242,166,12,.13)'}},
+  apogee: {dark: {accent: '#A8D1F5', onaccent: '#06121F', accenttext: '#B5D8F8', sun: '#A8D1F5', core: '#F4F9FF', glow: 'rgba(168,209,245,.15)'}, light: {accent: '#A8D1F5', onaccent: '#06121F', accenttext: '#2A5F96', sun: '#4F8FC9', core: '#F4F9FF', glow: 'rgba(120,170,220,.15)'}}
+};
+class Component extends DCLogic {
+  renderVals() {
+    const mode = this.props.theme === 'light' ? 'light' : 'dark';
+    const id = MODEL[this.props.model] ? this.props.model : 'brand';
+    const t = Object.assign({}, BASE[mode], MODEL[id][mode]);
+    return { themeStyle: Object.keys(t).map((k) => '--' + k + ':' + t[k]).join(';') };
+  }
+}
+</script>
+</body>
+</html>
