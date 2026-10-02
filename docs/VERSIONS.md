@@ -9,7 +9,8 @@ umbrella name plus one of **four role names** plus a generation number (checked 
 **Yuvra Flare 3** (v3, phone-lite), **Yuvra Equinox 3.5** (v3.5) and **Yuvra Equinox 4** (v4: the same size, trained longer, with
 skills added), **Yuvra Solstice 5** (v5), **Yuvra Apogee 6** (v6) and **Yuvra Apogee 6.5** (v6.5), then **Yuvra Apogee 7** and
 **8** (the 13B+ models). Flare = smallest and fastest, Equinox = balanced everyday, Solstice = stronger (PC / online), Apogee =
-most capable; the number is the generation, and later generations reuse the same four names ("Yuvra Flare 7").
+most capable. Each name has its own number, which only goes up when that model is updated (so the numbers differ, like
+Flare 3, Equinox 4, Solstice 5, Apogee 6 at the same time); older ones move to "Other models" in the app's picker.
 (Earlier Norse working names: Rune = Flare, Skald = Equinox, Saga = Solstice, Edda = Apogee. A second set, Nova, Pulsar, Quasar
 and Supernova, was dropped because known AI models already use those names.)
 **Tier** = which model, **version** = which generation, **effort** = how long it thinks; see the roadmap.

@@ -745,14 +745,25 @@ See [v4's brain](#v4s-brain-v35-trained-longer).
 **Names (working names):** the umbrella is **Yuvra** (the app, Yuvra.AI, and the whole model family). Each model adds one of
 **four role names**, taken from the sky's calendar, and a generation number.
 
-**How the names work:** four names for four roles, plus a number for the generation (like other model families).
-**Yuvra Flare** is the smallest and fastest (phones), **Yuvra Equinox** the balanced everyday model, **Yuvra Solstice**
-the stronger model for a PC or online mode, and **Yuvra Apogee** the most capable. The number is the project version the model
-was built in: **Yuvra Equinox 3.5**, **Yuvra Apogee 6.5**. Models past v6 keep the same four names with a bigger number
-(**Yuvra Apogee 7**, **Yuvra Flare 7**, ...), so the name says the role and the number says how new it is. A number *before*
-the name ("Yuvra 2 Flare") is kept for a full reset of the whole family (a new tokenizer or design, so old files and
-skill packs don't carry over), if that ever happens. Today each version trains one size, so the role follows the size; later a
-generation can ship several roles at once.
+**How the names work:** four names that always make up the lineup, the way other AI families have a small, a middle and
+a big model: **Yuvra Flare** (smallest and fastest, for phones), **Yuvra Equinox** (balanced everyday), **Yuvra Solstice**
+(stronger, for a PC or online mode) and **Yuvra Apogee** (most capable). **Each name has its own version number**, and a
+number only goes up when *that* model is updated, so the numbers differ from name to name (for example Flare 3, Equinox 4,
+Solstice 5 and Apogee 6 at the same time). When a model is updated, the new one takes the main spot in the app's picker and
+the old one moves to "Other models" (still downloadable). The numbers follow the project's version numbers (v3, v3.5, v4, ...):
+a model is numbered by the project version it was built in, and a model can also get a refresh between versions
+(Flare 3 -> Flare 3.5). So **Yuvra Equinox 3.5** is the Equinox built in v3.5, the next Equinox is Equinox 4 (v4), and Flare stays
+Flare 3 until a new small model is trained (say Flare 7). A number *before* the name ("Yuvra 2 Flare") is kept for a full reset
+of the whole family (a new tokenizer or design, so old files and skill packs don't carry over), if that ever happens.
+
+| Lineup in the picker | Yuvra Flare | Yuvra Equinox | Yuvra Solstice | Yuvra Apogee |
+|---|---|---|---|---|
+| Now (Oct 2026) | 3 | 3.5 (about to train) | – | – |
+| After v4 | 3 | 4 (3.5 moves to Other models) | – | – |
+| After v5 | 3 | 4 | 5 | – |
+| After v6.5 | 3 | 4 | 5 | 6.5 (6 moves to Other models) |
+| After v7 (13B) | 3 | 4 | 5 | 7 |
+| A later new small model | 7 (3 moves to Other models) | 4 | 5 | 7 |
 
 They are placeholders: **no trademark check has been done beyond web searches (Oct 2026)**, so search each name (and its domain)
 before a public launch, and rename if there is a conflict. A first set (Nova, Pulsar, Quasar, Supernova) was dropped because each

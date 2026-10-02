@@ -94,7 +94,7 @@ you choose the model, the effort, and see where each one runs. Works the same on
  -------------------------------------------------
   Other models
   Yuvra Equinox 3.5  (older)  [Not downloaded, 700 MB]
-  Other earlier generations
+  Earlier versions of any name
 ```
 
 - **One card per model:** name, a one-line description, and a badge that says where it runs: **On this phone**
@@ -104,8 +104,9 @@ you choose the model, the effort, and see where each one runs. Works the same on
   which picks the size, the effort and the skill pack per question, and the chat says what it picked.
 - **Effort:** Quick / Balanced / Deep, the thinking dial from the roadmap. Greyed out for models that can't think yet.
 - **Skills:** the same on/off list as the Skills screen, shortcut included.
-- **One card per role, newest generation first** (the number shows the generation). **Other models:** older generations you
-  kept, downloaded files, and test builds, so you can compare (Equinox 3.5 vs Equinox 4).
+- **One card per name, newest version first** (each name has its own number, e.g. Flare 3, Equinox 4, Solstice 5, Apogee 6). When a
+  model is updated the old one moves to **Other models**, with downloaded files and test builds, so you can compare
+  (Equinox 3.5 vs Equinox 4).
 - **Honest limits:** a model the device can't run (not enough memory) is greyed out with the reason; the
   badge shows the measured speed on this device once known ("about 200 words a second"); an online model shows
   "needs your PC to be on" when it can't be reached, and the app falls back to the phone model after asking.
