@@ -47,6 +47,8 @@ Meta use). Each one is added when a version actually needs it, and several can s
 | **TRL-style DPO** | "Which answer is better" training | **v3** | Small enough to write ourselves, like the rest of the training code |
 | **PEFT / LoRA** | Small add-on skill packs | Try on v3 → **v4** | A first skill pack can be tested cheaply on v2/v3 |
 | **Web search** (`web_search.py`: Wikipedia's free search, or Brave Search with a key) | Online mode: our code searches the web and hands the results to the model as notes | **v3** (off by default) → better every version | See [Web search, version by version](#web-search-version-by-version) |
+| **Coding harness extras** (`harness.py`) | A safe git subset, syntax diagnostics, project notes, hooks with a finish gate, permissions, compaction, tool registry | ✅ built (Oct 2026) | See [Agentic coding](#agentic-coding-a-coding-helper-that-works-in-a-loop); the MCP client itself is not built |
+| **App reliability layer** (`app_engine.py`, `app_download.py`) | Plain errors, model choice, reply guard, chats saved as they stream, resumable checksum-checked downloads | ✅ built (Oct 2026) | See [APP_SPEC.md](APP_SPEC.md) |
 | **Tool calling (MCP-style)** | The model asks for a tool, our code runs it | v3 (lookups) → **v4** | v3's "look it up" is the first tool; v4 adds calculator, clock, files, and lets the model call web search itself |
 | **Whisper** (OpenAI, open source) | Speech-to-text | **v4** (can try any time) | Independent of the brain, so it can be tested early |
 | **Text-to-speech** (e.g. Piper) | Speaks the answers | **v4** | Small, offline, open source |
@@ -562,7 +564,8 @@ those, and repeat. This is a cheap, home-friendly version of how big labs train 
   in context" toggle). We'll check which tags they recognize and match them.
 
 ### Your own app (offline + online)
-One app and one website that work offline and online. See
+One app and one website that work offline and online. The design and decisions are in [APP.md](APP.md) and
+[APP_SPEC.md](APP_SPEC.md); the model list, failure handling and downloads are built and tested. See
 [Offline and online](#offline-and-online-the-goal-for-the-app-and-website) and
 [Using your AI](#using-your-ai-apps) below.
 

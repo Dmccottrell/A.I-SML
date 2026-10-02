@@ -8,9 +8,9 @@ PC and fully offline on your phone.
 |---|---|---|
 | **v1** | 30M story-teller trained on TinyStories (~32MB on the phone) | ✅ Done: runs offline on the phone |
 | **v2** | 88M mini assistant: web text + Wikipedia + multi-turn chat (89MB on the phone) | ✅ Done: 18/20 test sheet, HellaSwag 28.4%, runs offline on the phone. See **[docs/V2.md](docs/V2.md)** |
-| **v3** | 394M accuracy-focused assistant: + code and math, 2,048-token memory (~240MB on the phone as Q4), lookups, remembers you, reply suggestions | 🛠️ Pretraining (step 2,000 of 45,000: val 3.426, HellaSwag 33.4%, already above v2's final 28.4%). ~30 tokens read per parameter: PC afternoons + rented RTX 3090 overnight. See **[docs/V3.md](docs/V3.md)** |
+| **v3** | 394M accuracy-focused assistant: + code and math, 2,048-token memory (~240MB on the phone as Q4), lookups, remembers you, reply suggestions | 🛠️ Pretraining on a rented RTX 5090 (step ~27,500 of 45,000, about 1.4 days left). HellaSwag on the full test: 31.7% at step 15,000 (v2: 28.4%); the 500-question mini-exam reads about 5 points higher. ~30 tokens read per parameter. See **[docs/V3.md](docs/V3.md)** |
 | **v3-long** | v3 stretched to 8K → 16K → 32K tokens after it finishes (the rehearsal for v3.5's 75K–100K) | Code ready, tested on small models: see **[docs/LONG_CONTEXT.md](docs/LONG_CONTEXT.md)** |
-| **v3.5** | ~1.04B, then stretched to 32K+ (goal 75K–100K) | Code ready: see **[docs/V3_5.md](docs/V3_5.md)** |
+| **v3.5** | ~1.12B (24 layers), 40B tokens, Muon optimizer; then stretched to 32K+ (goal 75K–100K) | Code ready, data build in progress: see **[docs/V3_5.md](docs/V3_5.md)** |
 
 **After v3's pretraining:** average the last snapshots → chat fine-tune (with NEFTune) → DPO → `compare.py --old v2 --new v3`. Steps in [docs/V3.md](docs/V3.md).
 
