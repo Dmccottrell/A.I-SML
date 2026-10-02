@@ -154,9 +154,20 @@ not changing the app.
 4. **v4:** tools, voice, phone assistant mode, more skill packs.
 5. **iPhone** (needs a Mac and the $99/year developer account) and a public website, if wanted.
 
-## Decisions still open
-- **Name** and icon.
+## Decided (Oct 2026; details in [APP_SPEC.md](APP_SPEC.md))
+- **Name:** Yuvra / Yuvra.AI (trademark, store and domain checks still to do).
+- **Platform:** PC/web first, Android after.
+- **Who first:** a small test group (named testers, the beta list), then public.
+- **Skill packs:** LoRA adapters (needs a converter to llama.cpp's format); **memory search:** keyword and meaning from day one.
+- **App lock / encryption:** a setting, off by default.
+- **When the PC is off:** switch to the on-device model and label the answer; a Setting can make it ask first.
+- **Online mode host:** your home PC through a tunnel for now; rented hosting options are in [ROADMAP.md](ROADMAP.md#hosting-the-online-server-to-revisit).
+
+## Still open
 - **Android only** at first, or iPhone too?
-- **Who first:** family only, a test group, or public (affects accounts and the server).
-- **Online mode host:** your PC only (free, works while it's on), or a rented/pay-per-use server.
-- **How many older models to keep** under "Other models" (and whether old downloads are deleted automatically).
+- **How many older models to keep** under "Other models": the default is the newest two per name plus pinned ones (`keep_latest_per_name` in `models.json`); whether old downloads are deleted automatically is undecided.
+- Icon, and the badge wording ("Online: your PC" vs "Remote: your PC").
+
+## Built so far
+`models.json` + `models.py` (the picker's list), `app_errors.py`, `app_engine.py`, `app_download.py` (failure handling, tested in
+`tests/test_app_robust.py`). Next: `app_server.py` and the chat page.
