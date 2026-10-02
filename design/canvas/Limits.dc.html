@@ -21,15 +21,15 @@ body{margin:0}
 <div style="display: flex; justify-content: space-between; align-items: flex-end; gap: 24px">
 <div>
 <div style="font-size: 13px; font-weight: 600; letter-spacing: 0.12em; color: var(--accenttext)">OWNER &middot; SETTINGS</div>
-<h1 style="margin: 4px 0 0; font-family: 'Sora', sans-serif; font-weight: 600; font-size: 34px; letter-spacing: -0.02em">Sparks and limits</h1>
+<h1 style="margin: 4px 0 0; font-family: 'Sora', sans-serif; font-weight: 600; font-size: 34px; letter-spacing: -0.02em">Usage limits</h1>
 </div>
-<div style="color: var(--muted); max-width: 470px; font-size: 15px">Only you see this. Limits apply to models served from your PC or a server, never to a model running on a person&rsquo;s own device. 1 spark = 1,000 counted tokens.</div>
+<div style="color: var(--muted); max-width: 470px; font-size: 15px">Only you see this. Limits apply to models served from your PC or a server, never to a model running on a person&rsquo;s own device. Everything is counted in tokens.</div>
 </div>
 
 <div style="display: flex; gap: 10px">
-<button style="background: var(--accent); color: var(--onaccent); border: 0; border-radius: 999px; padding: 10px 20px; font: 600 15px 'DM Sans', sans-serif; min-height: 44px">Pro (private testers)</button>
-<button style="background: transparent; color: var(--muted); border: 1px solid var(--line); border-radius: 999px; padding: 10px 20px; font: 500 15px 'DM Sans', sans-serif; min-height: 44px">Free</button>
-<button style="background: transparent; color: var(--muted); border: 1px solid var(--line); border-radius: 999px; padding: 10px 20px; font: 500 15px 'DM Sans', sans-serif; min-height: 44px">Mega</button>
+<button onClick="{{ pickFree }}" style="background: {{freeBg}}; color: {{freeFg}}; border: 1px solid var(--line); border-radius: 999px; padding: 10px 20px; font: 600 15px 'DM Sans', sans-serif; min-height: 44px">Free</button>
+<button onClick="{{ pickPro }}" style="background: {{proBg}}; color: {{proFg}}; border: 1px solid var(--line); border-radius: 999px; padding: 10px 20px; font: 600 15px 'DM Sans', sans-serif; min-height: 44px">Pro (private testers)</button>
+<button onClick="{{ pickMega }}" style="background: {{megaBg}}; color: {{megaFg}}; border: 1px solid var(--line); border-radius: 999px; padding: 10px 20px; font: 600 15px 'DM Sans', sans-serif; min-height: 44px">Mega</button>
 <button style="background: transparent; color: var(--muted); border: 1px solid var(--line); border-radius: 999px; padding: 10px 20px; font: 500 15px 'DM Sans', sans-serif; min-height: 44px">Per person</button>
 </div>
 
@@ -41,8 +41,8 @@ body{margin:0}
 <div style="background: var(--surface); border: 1px solid var(--line); border-radius: 20px; padding: 20px 24px; display: flex; flex-direction: column; gap: 12px">
 <div style="display: flex; justify-content: space-between"><b>1. The tank</b><span style="color: var(--muted); font-size: 14px">short-term: how much at once</span></div>
 <div style="display: flex; gap: 14px">
-<div style="flex: 1"><label class="lab" for="cap">CAPACITY (TOKENS)</label><input id="cap" class="fld" value="200,000"></div>
-<div style="flex: 1"><label class="lab" for="refill">REFILLS (TOKENS PER HOUR)</label><input id="refill" class="fld" value="25,000"></div>
+<div style="flex: 1"><label class="lab" for="cap">CAPACITY (TOKENS)</label><input id="cap" class="fld" value="{{cap}}"></div>
+<div style="flex: 1"><label class="lab" for="refill">REFILLS (TOKENS PER HOUR)</label><input id="refill" class="fld" value="{{refill}}"></div>
 </div>
 <div style="color: var(--muted); font-size: 14px">Empty to full in 8 hours. It refills steadily, so there is no &ldquo;wait for the reset&rdquo; cliff.</div>
 </div>
@@ -50,7 +50,7 @@ body{margin:0}
 <div style="background: var(--surface); border: 1px solid var(--line); border-radius: 20px; padding: 20px 24px; display: flex; flex-direction: column; gap: 12px">
 <div style="display: flex; justify-content: space-between"><b>2. The week</b><span style="color: var(--muted); font-size: 14px">long-term ceiling</span></div>
 <div style="display: flex; gap: 14px">
-<div style="flex: 1"><label class="lab" for="week">WEEKLY CEILING (TOKENS)</label><input id="week" class="fld" value="1,000,000"></div>
+<div style="flex: 1"><label class="lab" for="week">WEEKLY CEILING (TOKENS)</label><input id="week" class="fld" value="{{week}}"></div>
 <div style="flex: 1"><label class="lab" for="reset">RESETS</label><input id="reset" class="fld" value="Mon 4:00 AM (their time)"></div>
 </div>
 <div style="color: var(--muted); font-size: 14px">The total of every chat in the week. The tank can be full and the week still empty, or the other way round; the smaller one wins.</div>
@@ -60,8 +60,9 @@ body{margin:0}
 <div style="display: flex; justify-content: space-between"><b>3. One request</b><span style="color: var(--muted); font-size: 14px">not an allowance</span></div>
 <div style="display: flex; gap: 14px">
 <div style="flex: 1"><label class="lab" for="everyday">EVERYDAY WINDOW (TOKENS)</label><input id="everyday" class="fld" value="8,192"></div>
-<div style="flex: 1"><label class="lab" for="long">LONG WINDOW, UP TO (TOKENS)</label><input id="long" class="fld" value="32,768"></div>
+<div style="flex: 1"><label class="lab" for="long">LONG WINDOW, UP TO (TOKENS)</label><input id="long" class="fld" value="{{longWin}}"></div>
 </div>
+<div style="font-size: 14px"><span style="color: var(--muted)">Models this plan can use:</span> <b>{{models}}</b></div>
 <div style="color: var(--muted); font-size: 14px">The context window: the most one message may carry. 32,768 is not &ldquo;32,000 every few hours&rdquo;; it only caps a single request.</div>
 </div>
 </div>
@@ -97,7 +98,7 @@ body{margin:0}
 </div>
 </div>
 </x-dc>
-<script type="text/x-dc" data-dc-script data-props='{"theme":{"editor":"enum","options":["dark","light"],"default":"dark"},"model":{"editor":"enum","options":["flare","equinox","solstice","apogee","brand"],"default":"brand"},"$preview":{"width":1180,"height":900}}'>
+<script type="text/x-dc" data-dc-script data-props='{"theme":{"editor":"enum","options":["dark","light"],"default":"dark"},"plan":{"editor":"enum","options":["free","pro","mega"],"default":"pro"},"model":{"editor":"enum","options":["flare","equinox","solstice","apogee","brand"],"default":"brand"},"$preview":{"width":1180,"height":900}}'>
 const BASE = {
   dark: {bg: '#07080D', side: '#0A0B11', surface: '#0F1119', surface2: '#161926', line: '#232739', text: '#EEF0F6', muted: '#9AA3BC'},
   light: {bg: '#F7F8FC', side: '#EEF0F7', surface: '#FFFFFF', surface2: '#EEF0F7', line: '#D8DCEA', text: '#0D0F1A', muted: '#4A526B'}
@@ -109,12 +110,32 @@ const MODEL = {
   solstice: {dark: {accent: '#F2A60C', onaccent: '#1F1400', accenttext: '#FFBE3B', glow: 'rgba(242,166,12,.18)'}, light: {accent: '#F2A60C', onaccent: '#1F1400', accenttext: '#8A5A00', glow: 'rgba(242,166,12,.13)'}},
   apogee: {dark: {accent: '#A8D1F5', onaccent: '#06121F', accenttext: '#B5D8F8', glow: 'rgba(168,209,245,.15)'}, light: {accent: '#A8D1F5', onaccent: '#06121F', accenttext: '#2A5F96', glow: 'rgba(120,170,220,.15)'}}
 };
+// The plans' limits (docs/APP_SPEC.md). In the real app these come from limits.json, one block per plan.
+const PLANS = {
+  free: {cap: 40000, refill: 5000, week: 150000, longWin: 8192, models: 'Flare, Equinox'},
+  pro: {cap: 200000, refill: 25000, week: 1000000, longWin: 32768, models: 'Flare, Equinox, Solstice, Apogee'},
+  mega: {cap: 800000, refill: 100000, week: 5000000, longWin: 65536, models: 'Flare, Equinox, Solstice, Apogee'}
+};
+const fmt = (n) => Math.round(n).toLocaleString('en-US');
 class Component extends DCLogic {
+  constructor(props) {
+    super(props);
+    this.state = {plan: (props && PLANS[props.plan]) ? props.plan : 'pro'};
+  }
   renderVals() {
     const mode = this.props.theme === 'light' ? 'light' : 'dark';
     const id = MODEL[this.props.model] ? this.props.model : 'brand';
     const t = Object.assign({}, BASE[mode], MODEL[id][mode]);
-    return { themeStyle: Object.keys(t).map((k) => '--' + k + ':' + t[k]).join(';') };
+    const p = PLANS[this.state.plan];
+    const tab = (name) => ({bg: this.state.plan === name ? 'var(--accent)' : 'transparent', fg: this.state.plan === name ? 'var(--onaccent)' : 'var(--muted)'});
+    return {
+      themeStyle: Object.keys(t).map((k) => '--' + k + ':' + t[k]).join(';'),
+      cap: fmt(p.cap), refill: fmt(p.refill), week: fmt(p.week), longWin: fmt(p.longWin), models: p.models,
+      freeBg: tab('free').bg, freeFg: tab('free').fg, proBg: tab('pro').bg, proFg: tab('pro').fg, megaBg: tab('mega').bg, megaFg: tab('mega').fg,
+      pickFree: () => this.setState({plan: 'free'}),
+      pickPro: () => this.setState({plan: 'pro'}),
+      pickMega: () => this.setState({plan: 'mega'})
+    };
   }
 }
 </script>
