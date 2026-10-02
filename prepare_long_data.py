@@ -49,7 +49,7 @@ from config import get_version
 # name -> share of the tokens
 LONG_MIX = (("books", 0.30), ("wiki_long", 0.15), ("web_long", 0.10), ("code_repos", 0.10),
             ("recall", 0.05), ("replay", 0.30))
-TOTAL_TOKENS = 1_400_000_000        # covers the 8K, 16K and 32K stretch steps (~1.3B)
+TOTAL_TOKENS = 1_400_000_000        # covers the 8K, 16K and 32K stretch steps (~1.3B); for the full ladder to 256K use --total_tokens 2100000000
 VAL_TOKENS = 2_000_000
 BATCH_DOCS = {"books": 8, "recall": 16}   # documents per progress save (books are huge)
 

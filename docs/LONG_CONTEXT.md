@@ -69,6 +69,30 @@ python exam.py --version v3-long-8k                    # "nothing got worse"
 then the same with `16k`, then `32k`. The learning rate (6e-5, gentle), RoPE bases and step counts
 are starting guesses that the 8K step tests.
 
+### How far can v3 go? The full ladder (experiment)
+To find the limit instead of stopping at 32K, the ladder continues to **64K, 128K and 256K** (`v3-long-64k`, `-128k`, `-256k`: RoPE base
+16M, 32M, 64M; 1,000 / 800 / 600 steps of ~262k tokens, ~0.63B tokens more). **`stretch_ladder.py` runs it hands-off and stops
+at the first step that fails**, so nothing is trained past the point where v3 stops coping, and it tells you the last length that passed.
+```
+python prepare_long_data.py --version v3 --total_tokens 2100000000   # enough data for the whole ladder (~2.1B tokens)
+python stretch_ladder.py --dry_run                                   # the plan and the exact commands
+python stretch_ladder.py                                             # run it (carry on by running it again)
+python stretch_ladder.py --stop_after v3-long-64k                    # or stop at a length you choose
+```
+A step passes only if its long-context gate passes (needle at every depth, multi-fact, long-code, loss by position). It stops with
+a plain message if a step fails its tests, crashes, or runs out of GPU memory. "Nothing got worse" (`exam.py --version <step>`)
+is still checked by you after each passing step, against v3's baseline. A passing step is the new starting point for the next.
+
+What to expect on the RTX 5090 (32 GB), as estimates the pilot (`train.py --version <step> --pilot`) will replace with facts:
+* **64K:** comfortable. **128K:** probably fits (with checkpointing and the chunked loss). **256K:** may not fit: the saved activations
+  alone are ~17 GB on top of ~6 GB for weights and optimizer, so it is borderline. If the pilot runs out of memory, the ladder stops
+  there; a 48-96 GB rented card would be the next try.
+* **Speed:** attention dominates, so each step is slower than the one before. Run the pilot per length for the real seconds per step.
+* **Data:** most documents are far shorter than 64K+ tokens, so past ~100K the windows are mostly several documents joined, and only
+  whole books and the synthetic recall practice teach real long-range use. That is a likely reason the ladder will stop somewhere between
+  64K and 256K; the loss-by-position and needle tests will show it.
+* **Phones:** a long memory costs RAM (the cache), so the app would use a shorter window on a phone even if v3-long can read 128K.
+
 ### What the long data is (`prepare_long_data.py`)
 | Part | Share | Why |
 |---|---|---|
