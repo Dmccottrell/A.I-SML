@@ -809,6 +809,7 @@ planned yet.
 ## One app for phone and PC (the plan for the website and app)
 
 Goal: the same AI, with the same name, chats and notes, on the phone and the PC, offline or online.
+The detailed design (modes, screens, how the Python features plug in, build order): [APP.md](APP.md).
 
 **The trick: build the app once.** Write the chat screen and the "brain around the model" (chat
 format, lookups, notes, tools, effort levels) in **one web codebase (TypeScript/JavaScript)**, then
