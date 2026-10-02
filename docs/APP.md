@@ -106,7 +106,9 @@ you choose the model, the effort, and see where each one runs. Works the same on
 - **Skills:** the same on/off list as the Skills screen, shortcut included.
 - **One card per name, newest version first** (each name has its own number, e.g. Flare 3, Equinox 4, Solstice 5, Apogee 6). When a
   model is updated the old one moves to **Other models**, with downloaded files and test builds, so you can compare
-  (Equinox 3.5 vs Equinox 4).
+  (Equinox 3.5 vs Equinox 4). **Only a limited selection of older models is kept** (for example the previous one or two
+  versions of each name, plus anything you pinned); the exact rule is still to be decided, and the manifest gets a `keep` /
+  `retire_after` field for it.
 - **Honest limits:** a model the device can't run (not enough memory) is greyed out with the reason; the
   badge shows the measured speed on this device once known ("about 200 words a second"); an online model shows
   "needs your PC to be on" when it can't be reached, and the app falls back to the phone model after asking.
@@ -155,3 +157,4 @@ not changing the app.
 - **Android only** at first, or iPhone too?
 - **Who first:** family only, a test group, or public (affects accounts and the server).
 - **Online mode host:** your PC only (free, works while it's on), or a rented/pay-per-use server.
+- **How many older models to keep** under "Other models" (and whether old downloads are deleted automatically).
