@@ -6,7 +6,7 @@ Details: [V2.md](V2.md), [V3.md](V3.md), [ROADMAP.md](ROADMAP.md). Settings live
 
 **The app and the model family are called Yuvra** (working name, Yuvra.AI; see [APP.md](APP.md)). Each model is the
 umbrella name plus one of **four role names** plus a generation number (checked by web search only; no trademark search yet):
-**Yuvra Flare 3** (v3, phone-lite), **Yuvra Equinox 3.5** (v3.5) and **Yuvra Equinox 4** (v4: the same size, trained longer, with
+**Yuvra Flare 3** (v3, smallest and fastest), **Yuvra Equinox 3.5** (v3.5) and **Yuvra Equinox 4** (v4: the same size, trained longer, with
 skills added), **Yuvra Solstice 5** (v5), **Yuvra Apogee 6** (v6) and **Yuvra Apogee 6.5** (v6.5), then **Yuvra Apogee 7** and
 **8** (the 13B+ models). Flare = smallest and fastest, Equinox = balanced everyday, Solstice = stronger (PC / online), Apogee =
 most capable. Each name has its own number, which only goes up when that model is updated (so the numbers differ, like
