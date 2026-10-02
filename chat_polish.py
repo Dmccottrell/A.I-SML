@@ -1,12 +1,12 @@
 """
-chat_polish.py - How a reply feels: the thinking label, the one-second pause, smooth word-by-word writing, and
+chat_polish.py - How a reply feels: the thinking label, the three-second pause, smooth word-by-word writing, and
 automatic shortening of a long chat (docs/APP_SPEC.md, "How a reply feels").
 
 WHAT THIS FILE DOES
     thinking_word(n)        the label shown while Yuvra thinks ("Thinking", "Pondering", ...): a different word every few
                             seconds, never the same twice in a row. The small logo animates next to it (the screen's job).
     paced(pieces, ...)      wraps the model's stream of text pieces:
-                              1. the first word never appears sooner than `min_first_s` (1 second) after sending, so even
+                              1. the first word never appears sooner than `min_first_s` (3 seconds) after sending, so even
                                  the quickest answer shows the thinking state first, like other AI chats;
                               2. text that arrives in a burst (or all at once) is released a few characters at a time at a
                                  steady speed, so it is written out cleanly; if it falls too far behind it speeds up, so
@@ -23,7 +23,7 @@ import chat
 THINKING_WORDS = ("Thinking", "Pondering", "Reasoning", "Working it out", "Considering", "Mulling it over",
                   "Figuring it out", "Reflecting", "Weighing it up", "Putting it together")
 THINKING_SWITCH_S = 2.2
-MIN_FIRST_S = 1.0
+MIN_FIRST_S = 3.0
 RATE_CPS = 90.0                 # characters per second when text arrives faster than this (about 22 words a second)
 MAX_LAG_S = 1.5
 

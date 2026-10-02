@@ -241,7 +241,7 @@ function doSend(self, modelId, who) {
   const userText = typed || sample[0];
   const replyText = typed ? 'This is a preview reply. In the real app ' + who + ' writes the answer here.' : sample[1];
   const speed = {quick: 30, balanced: 48, deep: 75}[st.effort];      // Deep takes longer, like the real thing
-  const think = {quick: 1000, balanced: 1200, deep: 2400}[st.effort];   // never sooner than one second: a chance to think
+  const think = {quick: 3000, balanced: 3000, deep: 3600}[st.effort];   // never sooner than three seconds: a chance to think
   const id = Date.now();
   self.setState({chat: st.chat.concat([{id: id, role: 'user', text: userText}]), draft: '', typing: true, thinkIdx: 0,
                  sampleIdx: typed ? st.sampleIdx : st.sampleIdx + 1, spent: st.spent + u.cost, pop: {n: Math.round(u.cost), id: id}});
