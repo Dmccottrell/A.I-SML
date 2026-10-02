@@ -104,6 +104,19 @@ growing with every message.)
 | **Tests** | With a fake clock: counting multipliers and weights add up; the tank refills at the set rate and never exceeds capacity; the weekly total resets on time; a message needs room in both; the 20% note and the empty block fire; a per-person override beats the group limit; on-device use is never counted; no message text is stored |
 | **Model list field** | `cost_weight` per model in `models.json` |
 
+**How the server enforces it (details):**
+- **Exact counts.** The server counts tokens with the model's own tokenizer (`chat.py` builds the prompt) and takes the figures llama-server reports for each
+  reply (tokens read, tokens written, tokens already cached). Never character counts.
+- **Check, reserve, settle.** Before a request runs, estimate its cost and check the tank and the week. If there is room, **reserve** the estimate (so two requests
+  at once cannot both slip under the limit), then **settle** with the real numbers when the reply ends and give back the difference. A stopped or failed reply is
+  settled with what was actually used.
+- **Over the limit = HTTP 429** (Too Many Requests) with a `Retry-After` time and a small JSON body (`code`, `message`, `resets_at`, and the choices to offer). The app turns it into the
+  friendly message ("tank empty: back to full in about 2 hours"), never a raw error.
+- **Weekly window: fixed reset or rolling 7 days?** *Fixed* (resets Sun 2:00 AM) is easy to explain and show. *Rolling* (always the last 168 hours) stops a person emptying the
+  week on Saturday night and getting a fresh one on Sunday morning. With the tank, that burst is already capped (a person cannot spend more than the tank's capacity plus
+  its refill in one night), so the plan starts with the **fixed** reset plus the tank; rolling stays an option behind one setting (`weekly_window: fixed | rolling`),
+  with a test for each.
+
 ### Context window and the device check (plan)
 The window (the model's working memory, in tokens) costs RAM, not storage: the model's cache grows with every token. The app chooses
 the window per device and per model, and never lets it exceed what the model can really use.
