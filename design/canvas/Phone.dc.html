@@ -14,6 +14,7 @@
 body{margin:0}
 @keyframes rise { 0% { opacity: 0; transform: translateY(14px); } 100% { opacity: 1; transform: translateY(0); } }
 @keyframes floatup { 0% { opacity: 0; transform: translateY(8px); } 20% { opacity: 1; } 100% { opacity: 0; transform: translateY(-22px); } }
+@keyframes breathe { 0%, 100% { transform: scale(0.92); opacity: 0.75; } 50% { transform: scale(1.08); opacity: 1; } }
 @keyframes dot { 0%, 80%, 100% { opacity: 0.25; transform: translateY(0); } 40% { opacity: 1; transform: translateY(-3px); } }
 div, span, button, svg, path, circle { transition: background-color .7s ease, color .7s ease, border-color .7s ease, fill .7s ease, stroke .7s ease, opacity .7s ease; }
 circle[style*="fill: var(--sun)"] { fill: var(--core) !important; stroke: var(--sun); stroke-width: 3; }
@@ -53,10 +54,13 @@ Flare &middot; read 2 notes
 </div>
 </sc-for>
 <sc-if value="{{typing}}" hint-placeholder-val="{{ false }}">
-<div style="align-self: flex-start; background: var(--surface); border: 1px solid var(--line); border-radius: 18px 18px 18px 4px; padding: 16px 20px; display: flex; gap: 6px; animation: rise 0.3s ease both" aria-label="Thinking">
-<span style="width: 8px; height: 8px; border-radius: 999px; background: var(--muted); animation: dot 1s infinite"></span>
-<span style="width: 8px; height: 8px; border-radius: 999px; background: var(--muted); animation: dot 1s infinite 0.15s"></span>
-<span style="width: 8px; height: 8px; border-radius: 999px; background: var(--muted); animation: dot 1s infinite 0.3s"></span>
+<div style="align-self: flex-start; display: flex; align-items: center; gap: 12px; padding: 6px 4px; animation: rise 0.3s ease both" aria-label="Thinking">
+<svg width="30" height="30" viewBox="0 0 64 64" fill="none" style="animation: breathe 1.6s ease-in-out infinite" aria-hidden="true">
+<path d="M32 56 C22 56 12 51 10 41 C5 37 5 28 11 24 C10 16 18 8 26 11 C29 6 35 6 38 11 C46 8 54 16 53 24 C59 28 59 37 54 41 C52 51 42 56 32 56 Z" style="stroke: var(--text)" stroke-width="4" stroke-linejoin="round" stroke-dasharray="40 14" stroke-dashoffset="0"><animate attributeName="stroke-dashoffset" from="0" to="-108" dur="2.4s" repeatCount="indefinite"/></path>
+<path d="M32 55 V36 M32 36 L21 18 M32 36 L43 18" style="stroke: var(--text)" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+<circle cx="32" cy="36" r="6.5" style="fill: var(--sun)"><animate attributeName="r" values="5;8;5" dur="1.6s" repeatCount="indefinite"/></circle>
+</svg>
+<span style="color: var(--muted); font-size: 15px; animation: rise 0.35s ease both">{{thinkLabel}}<span style="animation: dot 1.2s infinite">.</span><span style="animation: dot 1.2s infinite 0.2s">.</span><span style="animation: dot 1.2s infinite 0.4s">.</span></span>
 </div>
 </sc-if>
 </div>
@@ -115,6 +119,7 @@ const EFFORT = {
   balanced: {name: 'Balanced', mult: 1, use: 'Normal usage', blurb: 'A good mix of speed and care. The default.'},
   deep: {name: 'Deep', mult: 2.2, use: 'Uses more', blurb: 'Takes longer: thinks it through and checks its work. More accurate on hard questions.'}
 };
+const THINK = ['Thinking', 'Pondering', 'Reasoning', 'Working it out', 'Considering', 'Mulling it over', 'Figuring it out', 'Reflecting', 'Weighing it up', 'Putting it together'];
 const MESSAGE = 500;   // counted tokens in one normal message and its answer on a weight-1 model at Balanced
 const fmt = (n) => Math.round(n).toLocaleString('en-US');
 const nice = (n) => fmt(n >= 100 ? Math.round(n / 10) * 10 : Math.round(n));
@@ -149,20 +154,23 @@ function doSend(self, modelId, who) {
   const sample = SAMPLES[st.sampleIdx % SAMPLES.length];
   const userText = typed || sample[0];
   const replyText = typed ? 'This is a preview reply. In the real app ' + who + ' writes the answer here.' : sample[1];
-  const speed = {quick: 22, balanced: 45, deep: 80}[st.effort];      // Deep takes longer, like the real thing
-  const think = {quick: 250, balanced: 800, deep: 1900}[st.effort];
+  const speed = {quick: 30, balanced: 48, deep: 75}[st.effort];      // Deep takes longer, like the real thing
+  const think = {quick: 1000, balanced: 1200, deep: 2400}[st.effort];   // never sooner than one second: a chance to think
   const id = Date.now();
-  self.setState({chat: st.chat.concat([{id: id, role: 'user', text: userText}]), draft: '', typing: true,
+  self.setState({chat: st.chat.concat([{id: id, role: 'user', text: userText}]), draft: '', typing: true, thinkIdx: 0,
                  sampleIdx: typed ? st.sampleIdx : st.sampleIdx + 1, spent: st.spent + u.cost, pop: {n: Math.round(u.cost), id: id}});
   tween(self);
+  if (self._th) clearInterval(self._th);
+  self._th = setInterval(() => self.setState({thinkIdx: self.state.thinkIdx + 1}), 2200);
   setTimeout(() => self.setState({pop: null}), 1400);
   setTimeout(() => {
     const rid = id + 1, words = replyText.split(' ');
+    clearInterval(self._th);
     self.setState({typing: false, chat: self.state.chat.concat([{id: rid, role: 'assistant', text: ''}])});
     let n = 0;
     const iv = setInterval(() => {
       n += 1;
-      self.setState({chat: self.state.chat.map((m) => (m.id === rid ? Object.assign({}, m, {text: words.slice(0, n).join(' ')}) : m))});
+      self.setState({chat: self.state.chat.map((m) => (m.id === rid ? Object.assign({}, m, {text: words.slice(0, n).join(' ') + (n < words.length ? ' ▍' : '')}) : m))});
       if (n >= words.length) clearInterval(iv);
     }, speed);
   }, think);
@@ -195,13 +203,14 @@ function usageBits(self, modelId, who) {
     draft: self.state.draft, onDraft: (e) => self.setState({draft: e.target.value}),
     onKey: (e) => { if (e.key === 'Enter') doSend(self, modelId, who); },
     chat: chat, typing: self.state.typing,
+    thinkIdx: self.state.thinkIdx, thinkLabel: THINK[self.state.thinkIdx % THINK.length],
     popOn: !!self.state.pop, popText: self.state.pop ? '+' + fmt(self.state.pop.n) + ' tokens' : ''
   };
 }
 class Component extends DCLogic {
   constructor(props) {
     super(props);
-    this.state = {effortOpen: false, effort: 'balanced', spent: 0, shown: 0, draft: '', chat: [], typing: false, pop: null, sampleIdx: 0};
+    this.state = {effortOpen: false, effort: 'balanced', spent: 0, shown: 0, draft: '', chat: [], typing: false, thinkIdx: 0, pop: null, sampleIdx: 0};
   }
   renderVals() {
     const mode = this.props.theme === 'light' ? 'light' : 'dark';

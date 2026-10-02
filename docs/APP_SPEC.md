@@ -190,6 +190,17 @@ Manifest fields this needs (in `models.json`): `context` (trained length), `cont
 the ladder has run), `kv_kb_per_token` (16-bit) and `weights_mb`. Tests: with a fake device (RAM, free RAM) the chosen window must never exceed
 the smallest of the three limits, must drop and say so when memory falls, and must never be chosen above `context_tested`.
 
+### How a reply feels (built: `chat_polish.py`)
+| Part | Behaviour |
+|---|---|
+| **Thinking** | After Send, the small Yuvra logo animates (the brain outline travels around, the core pulses) next to a label that changes every ~2 seconds and never repeats twice in a row: Thinking, Pondering, Reasoning, Working it out, Considering, Mulling it over, Figuring it out, Reflecting, Weighing it up, Putting it together |
+| **One-second pause** | The first word never appears sooner than 1 second after sending, even for the quickest answer (Quick), so there is always a moment of thinking. Balanced and Deep wait as long as the model needs |
+| **Clean writing** | The reply is written out word by word at a steady speed (about 22 words a second at most), never dumped in one lump. If the model is far ahead the writing speeds up so the screen is never more than ~1.5 s behind. What is saved is the same text |
+| **Stays at the bottom** | The newest message stays in view while the reply is written; scrolling up pauses that, and a "down" button brings it back (screen job, shown in the `Chat` / `Phone` designs) |
+| **Auto-shortening** | When a chat fills 80% of the room for the prompt, older messages become a short summary (the last 4 stay word for word). They stay visible on screen, marked "summarized"; only what the model reads changes. The summary can be written by the model or, if that fails, a plain list of what was asked and answered |
+
+`app_engine.run_turn` takes `pacer=` (for the pause and steady writing) and shortens the chat by itself (`auto_compact=True`).
+
 ## Part 2: What it looks like
 
 Dark by default, calm and plain: lots of space, one accent colour, big readable text. Same layout on the phone,
@@ -334,3 +345,4 @@ beta list", and "memory finds an earlier chat by meaning, not only by words".
 - `context_window.py` (+ `tests/test_context_window.py`): the device check. The window is the smallest of what the model passed,
   free memory, reading speed and the plan; it says why, and `shrink` drops it when memory falls. Try it:
   `python context_window.py --ram 8 --mode long`.
+- `chat_polish.py` (+ `tests/test_chat_polish.py`): the thinking words, the one-second pause, steady word-by-word writing, and automatic shortening of a long chat; wired into `run_turn`.
