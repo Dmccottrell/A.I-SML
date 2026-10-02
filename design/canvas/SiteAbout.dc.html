@@ -52,42 +52,40 @@ a:hover{color:var(--accenttext)}
 </div>
 
 <div style="max-width: 1200px; margin: 0 auto; padding: 8px 24px 40px">
-<div style="background: var(--surface); border: 1px solid var(--line); border-radius: 24px; padding: 32px; display: flex; flex-direction: column; gap: 20px">
-<div style="display: flex; flex-wrap: wrap; justify-content: space-between; align-items: baseline; gap: 12px">
-<h2 style="margin: 0; font-family: 'Sora', sans-serif; font-weight: 600; font-size: 28px; letter-spacing: -0.02em">How it measures up</h2>
-<span style="color: var(--muted); font-size: 14px">HellaSwag, a public common-sense test. Guessing scores 25% (the dashed line).</span>
-</div>
-<div style="display: grid; grid-template-columns: 260px 1fr; gap: 20px; align-items: center">
-<div><div style="font-weight: 600">Earlier model v2 (88M)</div><div style="color: var(--muted); font-size: 14px">Measured, full test</div></div>
-<div style="position: relative; height: 34px; border-radius: 8px; background: var(--surface2)">
-<div style="position: absolute; left: 41.7%; top: -4px; bottom: -4px; width: 0; border-left: 2px dashed var(--muted)"></div>
-<div style="position: absolute; left: 0; top: 0; bottom: 0; width: 47.3%; background: var(--accent); border-radius: 8px; display: flex; align-items: center; justify-content: flex-end; padding-right: 10px; color: var(--onaccent); font-weight: 600; font-size: 14px">28.4%</div>
-</div>
-</div>
-<div style="display: grid; grid-template-columns: 260px 1fr; gap: 20px; align-items: center">
-<div><div style="font-weight: 600">Flare 3 (394M)</div><div style="color: var(--muted); font-size: 14px">Measured at step 15,000 of 45,000; final score pending</div></div>
-<div style="position: relative; height: 34px; border-radius: 8px; background: var(--surface2)">
-<div style="position: absolute; left: 41.7%; top: -4px; bottom: -4px; width: 0; border-left: 2px dashed var(--muted)"></div>
-<div style="position: absolute; left: 0; top: 0; bottom: 0; width: 52.8%; background: var(--accent); border-radius: 8px; display: flex; align-items: center; justify-content: flex-end; padding-right: 10px; color: var(--onaccent); font-weight: 600; font-size: 14px">31.7%</div>
-</div>
-</div>
-<div style="display: grid; grid-template-columns: 260px 1fr; gap: 20px; align-items: center">
-<div><div style="font-weight: 600">Flare 3.5 (1.12B)</div><div style="color: var(--muted); font-size: 14px">Forecast, in training</div></div>
-<div style="position: relative; height: 34px; border-radius: 8px; background: var(--surface2)">
-<div style="position: absolute; left: 41.7%; top: -4px; bottom: -4px; width: 0; border-left: 2px dashed var(--muted)"></div>
-<div style="position: absolute; left: 73.3%; width: 11.7%; top: 0; bottom: 0; border: 2px dashed var(--accent); border-radius: 8px; display: flex; align-items: center; justify-content: center; color: var(--accenttext); font-weight: 600; font-size: 14px; box-sizing: border-box">44 to 51%</div>
-</div>
-</div>
-<div style="display: grid; grid-template-columns: 260px 1fr; gap: 20px; align-items: center">
-<div><div style="font-weight: 600">Equinox 4 (1.12B, trained longer)</div><div style="color: var(--muted); font-size: 14px">Forecast, planned</div></div>
-<div style="position: relative; height: 34px; border-radius: 8px; background: var(--surface2)">
-<div style="position: absolute; left: 41.7%; top: -4px; bottom: -4px; width: 0; border-left: 2px dashed var(--muted)"></div>
-<div style="position: absolute; left: 76.7%; width: 13.3%; top: 0; bottom: 0; border: 2px dashed var(--accent); border-radius: 8px; display: flex; align-items: center; justify-content: center; color: var(--accenttext); font-weight: 600; font-size: 14px; box-sizing: border-box">46 to 54%</div>
-</div>
-</div>
-<div style="color: var(--muted); font-size: 14px; line-height: 1.5">Solid bars are measured on the full 10,042-question test. Dashed bars are forecasts, not results; they will be replaced with measured scores as each model finishes training. On Yuvra&rsquo;s own 20-question test sheet, v2 scored 18 of 20. More public tests (such as ARC and maths problems) will be added once they are measured.</div>
-</div>
-</div>
+<div style="display: flex; flex-direction: column; gap: 16px">
+<div style="display: flex; flex-wrap: wrap; justify-content: space-between; align-items: baseline; gap: 12px"><h2 style="margin: 0; font-family: 'Sora', sans-serif; font-weight: 600; font-size: 32px; letter-spacing: -0.02em">How it measures up</h2><span style="color: var(--muted); font-size: 14px">Yuvra models and versions, side by side</span></div>
+<div style="overflow-x: auto"><div style="min-width: 980px; display: grid; grid-template-columns: 250px repeat(6, 1fr); align-items: stretch">
+<div></div>
+<div style="padding: 16px 8px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px;"><span style="font-family: 'Sora', sans-serif; font-weight: 600; font-size: 19px">Earlier v2</span><span style="color: var(--muted); font-size: 13px">88M</span></div>
+<div style="padding: 16px 8px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px;"><span style="font-family: 'Sora', sans-serif; font-weight: 600; font-size: 19px">Flare 3</span><span style="color: var(--muted); font-size: 13px">394M</span></div>
+<div style="padding: 16px 8px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; background: var(--surface2); border: 2px solid var(--accent); border-bottom: 0; border-radius: 18px 18px 0 0;"><span style="font-family: 'Sora', sans-serif; font-weight: 600; font-size: 19px">Flare 3.5</span><span style="color: var(--muted); font-size: 13px">1.12B</span></div>
+<div style="padding: 16px 8px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px;"><span style="font-family: 'Sora', sans-serif; font-weight: 600; font-size: 19px">Equinox 4</span><span style="color: var(--muted); font-size: 13px">1.12B</span></div>
+<div style="padding: 16px 8px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px;"><span style="font-family: 'Sora', sans-serif; font-weight: 600; font-size: 19px">Solstice 5</span><span style="color: var(--muted); font-size: 13px">3B</span></div>
+<div style="padding: 16px 8px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px;"><span style="font-family: 'Sora', sans-serif; font-weight: 600; font-size: 19px">Apogee 6</span><span style="color: var(--muted); font-size: 13px">5B to 7B</span></div>
+<div style="padding: 16px 8px 16px 0; border-top: 1px solid var(--line); display: flex; flex-direction: column; justify-content: center"><span style="font-weight: 600; font-size: 17px">Common sense</span><span style="color: var(--muted); font-size: 13px">HellaSwag, guessing scores 25%</span></div>
+<div style="padding: 16px 8px; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; gap: 2px; border-top: 1px solid var(--line);"><span style="font-family: 'Sora', sans-serif; font-weight: 600; font-size: 22px">28.4%</span><span style="color: var(--muted); font-size: 12px">full test</span></div>
+<div style="padding: 16px 8px; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; gap: 2px; border-top: 1px solid var(--line);"><span style="font-family: 'Sora', sans-serif; font-weight: 600; font-size: 22px">31.7%</span><span style="color: var(--muted); font-size: 12px">at step 15,000 of 45,000</span></div>
+<div style="padding: 16px 8px; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; gap: 2px; border-top: 1px solid var(--line); background: var(--surface2); border-left: 2px solid var(--accent); border-right: 2px solid var(--accent);"><span style="font-family: 'Sora', sans-serif; font-weight: 600; font-size: 20px; color: var(--accenttext); border: 2px dashed var(--accent); border-radius: 10px; padding: 2px 10px">44 to 51%</span><span style="color: var(--muted); font-size: 12px">forecast</span></div>
+<div style="padding: 16px 8px; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; gap: 2px; border-top: 1px solid var(--line);"><span style="font-family: 'Sora', sans-serif; font-weight: 600; font-size: 20px; color: var(--accenttext); border: 2px dashed var(--accent); border-radius: 10px; padding: 2px 10px">46 to 54%</span><span style="color: var(--muted); font-size: 12px">forecast</span></div>
+<div style="padding: 16px 8px; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; gap: 2px; border-top: 1px solid var(--line);"><span style="font-size: 22px; color: var(--muted)">&mdash;</span></div>
+<div style="padding: 16px 8px; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; gap: 2px; border-top: 1px solid var(--line);"><span style="font-size: 22px; color: var(--muted)">&mdash;</span></div>
+<div style="padding: 16px 8px 16px 0; border-top: 1px solid var(--line); display: flex; flex-direction: column; justify-content: center"><span style="font-weight: 600; font-size: 17px">Yuvra test sheet</span><span style="color: var(--muted); font-size: 13px">20 questions: facts, instructions, honesty</span></div>
+<div style="padding: 16px 8px; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; gap: 2px; border-top: 1px solid var(--line);"><span style="font-family: 'Sora', sans-serif; font-weight: 600; font-size: 22px">18 / 20</span><span style="color: var(--muted); font-size: 12px">measured</span></div>
+<div style="padding: 16px 8px; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; gap: 2px; border-top: 1px solid var(--line);"><span style="font-size: 22px; color: var(--muted)">&mdash;</span></div>
+<div style="padding: 16px 8px; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; gap: 2px; border-top: 1px solid var(--line); background: var(--surface2); border-left: 2px solid var(--accent); border-right: 2px solid var(--accent);"><span style="font-size: 22px; color: var(--muted)">&mdash;</span></div>
+<div style="padding: 16px 8px; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; gap: 2px; border-top: 1px solid var(--line);"><span style="font-size: 22px; color: var(--muted)">&mdash;</span></div>
+<div style="padding: 16px 8px; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; gap: 2px; border-top: 1px solid var(--line);"><span style="font-size: 22px; color: var(--muted)">&mdash;</span></div>
+<div style="padding: 16px 8px; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; gap: 2px; border-top: 1px solid var(--line);"><span style="font-size: 22px; color: var(--muted)">&mdash;</span></div>
+<div style="padding: 16px 8px 16px 0; border-top: 1px solid var(--line); display: flex; flex-direction: column; justify-content: center"><span style="font-weight: 600; font-size: 17px">Long-document recall</span><span style="color: var(--muted); font-size: 13px">Needle in a haystack (needs the long-memory stretch)</span></div>
+<div style="padding: 16px 8px; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; gap: 2px; border-top: 1px solid var(--line);"><span style="font-size: 22px; color: var(--muted)">&mdash;</span></div>
+<div style="padding: 16px 8px; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; gap: 2px; border-top: 1px solid var(--line);"><span style="font-size: 22px; color: var(--muted)">&mdash;</span></div>
+<div style="padding: 16px 8px; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; gap: 2px; border-top: 1px solid var(--line); background: var(--surface2); border-left: 2px solid var(--accent); border-right: 2px solid var(--accent); border-bottom: 2px solid var(--accent); border-radius: 0 0 18px 18px;"><span style="font-size: 22px; color: var(--muted)">&mdash;</span></div>
+<div style="padding: 16px 8px; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; gap: 2px; border-top: 1px solid var(--line);"><span style="font-size: 22px; color: var(--muted)">&mdash;</span></div>
+<div style="padding: 16px 8px; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; gap: 2px; border-top: 1px solid var(--line);"><span style="font-size: 22px; color: var(--muted)">&mdash;</span></div>
+<div style="padding: 16px 8px; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; gap: 2px; border-top: 1px solid var(--line);"><span style="font-size: 22px; color: var(--muted)">&mdash;</span></div>
+</div></div>
+<div style="color: var(--muted); font-size: 14px; line-height: 1.5">Solid numbers are measured. Dashed numbers are forecasts, not results, and are replaced as each model finishes training. A dash means not measured yet. HellaSwag is scored on the full 10,042-question test. More public tests (ARC, maths word problems) are added here once they are measured.</div>
+</div></div>
 
 <div style="max-width: 1200px; margin: 0 auto; padding: 24px 24px 56px; display: flex; flex-wrap: wrap; gap: 20px">
 <div style="flex: 1 1 320px; background: var(--surface); border: 1px solid var(--line); border-radius: 20px; padding: 32px; display: flex; flex-direction: column; gap: 12px"><h3 style="margin: 0; font-family: 'Sora', sans-serif; font-weight: 600; font-size: 24px">Its own brain</h3><p style="margin: 0; color: var(--muted)">We wrote the tokenizer, the transformer and the training loop, then trained it on carefully chosen reading: educational pages, everyday web text, all of English Wikipedia, code in many languages and step-by-step maths.</p></div>
