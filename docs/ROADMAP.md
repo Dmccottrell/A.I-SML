@@ -765,6 +765,19 @@ of the whole family (a new tokenizer or design, so old files and skill packs don
 | After v7 (13B) | 3 | 4 | 5 | 7 |
 | A later new small model | 7 (3 moves to Other models) | 4 | 5 | 7 |
 
+**Numbers for "+" and grown models.** Between the big steps a name can have variants, and the decimal says what happened:
+
+| Number | Meaning | Example (Flare) |
+|---|---|---|
+| **A whole number** | A big step: trained from scratch, or a new size or new abilities | Flare 3, then Flare 5 (a fresh retrain at a new size) |
+| **.1, .2, ...** | A **"+" model**: the same weights read more (like v3+, continuing from `pre_decay.pt`), same size | Flare 3.1 (v3 + more reading) |
+| **.5** | A bigger refresh of the same weights (more reading plus new chat tuning, DPO or lessons) | Flare 3.5 |
+| **Next whole number + .1** | A **grown model** (`grow.py` adds layers, so the size changes), started from the earlier weights | Flare 4.1 (Flare 3 grown deeper); its own "+" steps are 4.2, 4.5, ... |
+
+Growth only adds layers (same width and tokenizer), so a grown Flare is a deeper Flare, never an Equinox. Every new number
+is a new set of weights, so its skill packs are retrained (a pack only fits the exact model it was trained on). The app's picker
+shows the newest of each name and keeps the rest under "Other models".
+
 They are placeholders: **no trademark check has been done beyond web searches (Oct 2026)**, so search each name (and its domain)
 before a public launch, and rename if there is a conflict. A first set (Nova, Pulsar, Quasar, Supernova) was dropped because each
 is already the name of a known AI model (Amazon Nova, Ambient.ai's Pulsar, Quasar Alpha and Quasar 438B, Arcee SuperNova); the
