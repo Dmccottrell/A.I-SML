@@ -731,26 +731,35 @@ battery, not a bigger download.
 
 | Tier class | Model name | Size | Versions |
 |---|---|---|---|
-| Phone-lite | **Yuvra Flare** | ~400M | v3 |
-| Small and fast | **Yuvra Equinox** | ~1B | **v3.5**, then **v4 = "Yuvra Equinox 2"**: the same size, now with skill packs, the router, tools, thinking, effort levels and the app |
-| Balanced | **Yuvra Solstice** | ~3B | v5 (needs cloud training) |
-| Most capable | **Yuvra Apogee** | 5-7B | v6, v6.5 |
-| Top | **Yuvra Max (name to be chosen)** | 13-30B | v7, v8 (see [Beyond v6.5](#beyond-v65-v7-v8-and-max)) |
+| Phone-lite | **Yuvra Flare 3** | ~400M | v3 |
+| Small and fast | **Yuvra Equinox 3.5**, then **Yuvra Equinox 4** | ~1B | **v3.5**, then **v4**: the same size, now with skill packs, the router, tools, thinking, effort levels and the app |
+| Balanced | **Yuvra Solstice 5** | ~3B | v5 (needs cloud training) |
+| Most capable | **Yuvra Apogee 6, 6.5** | 5-7B | v6, v6.5 |
+| Top | **Yuvra Apogee 7, 8** | 13-30B | v7, v8 (see [Beyond v6.5](#beyond-v65-v7-v8-and-max)) |
 
-So v4 (Yuvra Equinox 2) is a new *generation* of the small tier, not a bigger model: v3.5's brain **trained longer**
+So v4 (Yuvra Equinox 4) is a new *generation* of the small tier, not a bigger model: v3.5's brain **trained longer**
 (15–30B more tokens, including some "skill-aware" text with tool calls, thinking steps and code with tests,
 so the skill packs start from a base that already knows those formats), plus the abilities. No cloud needed.
 See [v4's brain](#v4s-brain-v35-trained-longer).
 
-**Names (working names):** the umbrella is **Yuvra** (the app, Yuvra.AI, and the whole model family); each model adds a
-word from the sky's calendar, in order of size: **Flare** (small and quick), **Equinox** (day and night in balance: the
-balanced everyday model), **Solstice** (the sun at its furthest reach) and **Apogee** (the highest point of an orbit).
-The top tier's name is still to be chosen. They are placeholders: **no trademark check has been done beyond web searches
-(Oct 2026)**, so search each name (and its domain) before a public launch, and rename if there is a conflict. A first
-set (Nova, Pulsar, Quasar, Supernova) was dropped because each is already the name of a known AI model (Amazon Nova,
-Ambient.ai's Pulsar, Quasar Alpha and Quasar 438B, Arcee SuperNova); the words kept are only used by niche AI tools.
-Earlier Norse working names: Rune = Flare, Skald = Equinox, Saga = Solstice, Edda = Apogee, Norn = the top tier. In this
-document, the older tier names map as: Lite = Flare, Standard = Equinox, Pro = Solstice and Apogee, Max = (to be chosen).
+**Names (working names):** the umbrella is **Yuvra** (the app, Yuvra.AI, and the whole model family). Each model adds one of
+**four role names**, taken from the sky's calendar, and a generation number.
+
+**How the names work:** four names for four roles, plus a number for the generation (like other model families).
+**Yuvra Flare** is the smallest and fastest (phones), **Yuvra Equinox** the balanced everyday model, **Yuvra Solstice**
+the stronger model for a PC or online mode, and **Yuvra Apogee** the most capable. The number is the project version the model
+was built in: **Yuvra Equinox 3.5**, **Yuvra Apogee 6.5**. Models past v6 keep the same four names with a bigger number
+(**Yuvra Apogee 7**, **Yuvra Flare 7**, ...), so the name says the role and the number says how new it is. A number *before*
+the name ("Yuvra 2 Flare") is kept for a full reset of the whole family (a new tokenizer or design, so old files and
+skill packs don't carry over), if that ever happens. Today each version trains one size, so the role follows the size; later a
+generation can ship several roles at once.
+
+They are placeholders: **no trademark check has been done beyond web searches (Oct 2026)**, so search each name (and its domain)
+before a public launch, and rename if there is a conflict. A first set (Nova, Pulsar, Quasar, Supernova) was dropped because each
+is already the name of a known AI model (Amazon Nova, Ambient.ai's Pulsar, Quasar Alpha and Quasar 438B, Arcee SuperNova); the
+words kept are only used by niche AI tools. Earlier Norse working names: Rune = Flare, Skald = Equinox, Saga = Solstice,
+Edda = Apogee. In this document, the tier names map as: Lite = Flare, Standard = Equinox, Pro = Solstice and Apogee,
+Max = the largest Apogee.
 
 ## Model tiers (Lite, Standard, Pro, Max)
 
@@ -760,10 +769,10 @@ speed or smarts.
 
 | Tier | Size | Runs on | Good for | Arrives |
 |---|---|---|---|---|
-| **Lite = Yuvra Flare** | ~400M (v3-size) | Any phone, offline, very fast | Quick questions, small talk, simple lookups | With v3.5 |
-| **Standard = Yuvra Equinox** | ~1B (v3.5, v4) | Phones and PCs | Everyday use: lookups, explanations, advice | v3.5 |
-| **Pro = Yuvra Solstice, Yuvra Apogee** | 3B (v5), 5-7B (v6-v6.5) | PC or a server (the app's online mode) | Harder questions, coding, long writing | v5+ |
-| **Max = Yuvra Max (name to be chosen)** | 13B, later ~30B ("upper small", then "medium"; see [Beyond v6.5](#beyond-v65-v7-v8-and-max)) | A server, or a PC with a 24 GB GPU for 13B; online mode | The hardest questions: deep reasoning, real coding help, long documents. Also the teacher for every smaller tier | After v6.5, if funded |
+| **Lite = Yuvra Flare** (Flare 3) | ~400M (v3-size) | Any phone, offline, very fast | Quick questions, small talk, simple lookups | With v3.5 |
+| **Standard = Yuvra Equinox** (3.5, 4) | ~1B (v3.5, v4) | Phones and PCs | Everyday use: lookups, explanations, advice | v3.5 |
+| **Pro = Yuvra Solstice, Yuvra Apogee** (Solstice 5, Apogee 6, 6.5) | 3B (v5), 5-7B (v6-v6.5) | PC or a server (the app's online mode) | Harder questions, coding, long writing | v5+ |
+| **Max = the largest Yuvra Apogee** (Apogee 7, 8) | 13B, later ~30B ("upper small", then "medium"; see [Beyond v6.5](#beyond-v65-v7-v8-and-max)) | A server, or a PC with a 24 GB GPU for 13B; online mode | The hardest questions: deep reasoning, real coding help, long documents. Also the teacher for every smaller tier | After v6.5, if funded |
 
 The names are working names (see above).
 

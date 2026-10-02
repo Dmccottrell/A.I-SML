@@ -4,13 +4,14 @@ All versions side by side. v1 and v2 are finished and run on the phone. v3's cod
 v3.5, v4, v5, v6 and v6.5 are planned: their numbers are estimates and will change once v3's results are in.
 Details: [V2.md](V2.md), [V3.md](V3.md), [ROADMAP.md](ROADMAP.md). Settings live in `config.py`.
 
-**The app and the model family are called Yuvra** (working name, Yuvra.AI; see [APP.md](APP.md)); each model carries the
-umbrella name plus a word from the sky's calendar, ordered by size (checked by web search only; no trademark search yet):
-**Yuvra Flare** (v3, phone-lite), **Yuvra Equinox** (v3.5, and v4 as **Yuvra Equinox 2**: the same size, trained longer,
-with skills added), **Yuvra Solstice** (v5), **Yuvra Apogee** (v6, v6.5) and a future top tier (13B+) whose name is still
-to be chosen. The short form (Flare, Equinox, ...) is fine in running text. (Earlier Norse working names: Rune = Flare,
-Skald = Equinox, Saga = Solstice, Edda = Apogee, Norn = top tier. A second set, Nova, Pulsar, Quasar and Supernova, was
-dropped because known AI models already use those names.)
+**The app and the model family are called Yuvra** (working name, Yuvra.AI; see [APP.md](APP.md)). Each model is the
+umbrella name plus one of **four role names** plus a generation number (checked by web search only; no trademark search yet):
+**Yuvra Flare 3** (v3, phone-lite), **Yuvra Equinox 3.5** (v3.5) and **Yuvra Equinox 4** (v4: the same size, trained longer, with
+skills added), **Yuvra Solstice 5** (v5), **Yuvra Apogee 6** (v6) and **Yuvra Apogee 6.5** (v6.5), then **Yuvra Apogee 7** and
+**8** (the 13B+ models). Flare = smallest and fastest, Equinox = balanced everyday, Solstice = stronger (PC / online), Apogee =
+most capable; the number is the generation, and later generations reuse the same four names ("Yuvra Flare 7").
+(Earlier Norse working names: Rune = Flare, Skald = Equinox, Saga = Solstice, Edda = Apogee. A second set, Nova, Pulsar, Quasar
+and Supernova, was dropped because known AI models already use those names.)
 **Tier** = which model, **version** = which generation, **effort** = how long it thinks; see the roadmap.
 
 **Two kinds of jumps:** v1 → v2 → v3 → v3.5 each give the model a **bigger brain and more to
@@ -25,7 +26,7 @@ v6 (5B) and v6.5 (7B) keep growing toward medium size, mainly for the PC and onl
 
 |  | **v1** ✅ | **v2** ✅ | **v3** 🛠️ | **v3.5** (planned) | **v4** (planned) | **v5** (planned) | **v6** (planned) | **v6.5** (planned) |
 |---|---|---|---|---|---|---|---|---|
-| Model name | – | – | Yuvra Flare | Yuvra Equinox | Yuvra Equinox 2 | Yuvra Solstice | Yuvra Apogee | Yuvra Apogee (extended) |
+| Model name | – | – | Yuvra Flare 3 | Yuvra Equinox 3.5 | Yuvra Equinox 4 | Yuvra Solstice 5 | Yuvra Apogee 6 | Yuvra Apogee 6.5 |
 | Parameters | 29.5M | 88M | 394M | **~1.12B** | ~1.12B base + LoRA skill packs (small add-on weights, a few MB each, switched by a router) | **~3B** | **~5B** | **~7B** |
 | Shape | 512 wide × 8 layers | 768 wide × 12 layers | 1024 wide × 32 layers | 2048 wide × 24 layers | Same as v3.5 | ~3072 wide × 28 layers | ~3584 wide × 36 layers | 4096 wide × 32 layers |
 | Memory (context length) | 512 tokens | 1,024 tokens | 2,048 tokens; **v3-long: 8K → 16K → 32K** (stretched after training, if the tests pass) | 2,048, then stretched to **32K, goal 75K–100K** | Same as v3.5's stretched length + saved notes about you | **Goal 128K** (built for long text from the start) | **Goal 256K** | **Goal 500K** |
@@ -286,16 +287,16 @@ offline use; these power the PC and the app's online mode. Details: [ROADMAP.md]
 
 - **v1:** a children's story-teller that runs on your phone
 - **v2:** a mini assistant with basic general knowledge and real conversations
-- **v3 (Yuvra Flare):** an **accurate, honest** assistant that looks facts up, admits when it doesn't know, and
+- **v3 (Yuvra Flare 3):** an **accurate, honest** assistant that looks facts up, admits when it doesn't know, and
   handles basic code
-- **v3.5 (Yuvra Equinox):** v3's features on a **~1.12B brain** that reads 40B tokens (educational and everyday web, code, math)
-- **v4 (Yuvra Equinox 2):** v3.5's brain **trained longer**, turned into a **personal assistant**: specialist skills, exact math with tools, a Quick / Balanced / Deep
+- **v3.5 (Yuvra Equinox 3.5):** v3's features on a **~1.12B brain** that reads 40B tokens (educational and everyday web, code, math)
+- **v4 (Yuvra Equinox 4):** v3.5's brain **trained longer**, turned into a **personal assistant**: specialist skills, exact math with tools, a Quick / Balanced / Deep
   thinking dial, coding help, documents, voice, and your own app
-- **v5 (Yuvra Solstice):** a **genuinely capable** 3B assistant: the first version trained in the cloud, and the first
+- **v5 (Yuvra Solstice 5):** a **genuinely capable** 3B assistant: the first version trained in the cloud, and the first
   that can "see" pictures through a helper
-- **v6 (Yuvra Apogee):** a **5B bigger small** model: stronger reasoning and coding, powering the PC and online mode
-- **v6.5 (Yuvra Apogee, extended):** a **7B borderline medium** model: the strongest version so far and the app's online brain
-- **v7, v8 (Yuvra Max, name to be chosen):** the future top tier, ~13B then ~30B, if funding and results allow (online mode)
+- **v6 (Yuvra Apogee 6):** a **5B bigger small** model: stronger reasoning and coding, powering the PC and online mode
+- **v6.5 (Yuvra Apogee 6.5):** a **7B borderline medium** model: the strongest version so far and the app's online brain
+- **v7, v8 (Yuvra Apogee 7 and 8):** the future top tier, ~13B then ~30B, if funding and results allow (online mode)
 
 ## Update log
 

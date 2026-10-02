@@ -27,10 +27,12 @@ live in `config.py`.
 
 ## Model family names (working names)
 
-The app and the whole family are called **Yuvra** (Yuvra.AI); each model adds a word from the sky's calendar,
-ordered by size: **Yuvra Flare** (phone-lite, ~400M), **Yuvra Equinox** (small, ~1B: v3.5, and v4 as "Yuvra Equinox 2"),
-**Yuvra Solstice** (~3B) and **Yuvra Apogee** (5-7B); the top tier (13B+) is still to be named. They are placeholders:
-no trademark check has been done yet. See `docs/ROADMAP.md` and `docs/APP.md`.
+The app and the whole family are called **Yuvra** (Yuvra.AI). Each model is Yuvra + one of four role names + a generation
+number: **Yuvra Flare** (smallest, phone-lite), **Yuvra Equinox** (balanced everyday), **Yuvra Solstice** (stronger) and
+**Yuvra Apogee** (most capable). So v3 = Yuvra Flare 3 (~400M), v3.5 = Yuvra Equinox 3.5 (~1.1B), v4 = Yuvra Equinox 4,
+v5 = Yuvra Solstice 5 (~3B), v6 / v6.5 = Yuvra Apogee 6 / 6.5 (5-7B), and later Yuvra Apogee 7, 8 (13B+); newer
+generations keep the same four names with a bigger number (for example Yuvra Flare 7). They are placeholders: no trademark
+check has been done yet. See `docs/ROADMAP.md` and `docs/APP.md`.
 
 ## Pretrained weights policy
 
