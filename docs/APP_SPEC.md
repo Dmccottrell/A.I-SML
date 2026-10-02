@@ -326,3 +326,11 @@ beta list", and "memory finds an earlier chat by meaning, not only by words".
 - `models.json` + `models.py` (+ `tests/test_models.py`): the model list and the picker logic (one card per name, newest
   first; older ones under Other models with the retention rule; greyed out when the device is too small; online models
   need the PC; beta models only for the beta list). Try it: `python models.py`.
+- `limits.json` + `usage_limits.py` (+ `tests/test_usage_limits.py`): the plans (Free, Pro, Mega), token counting, the tank, the
+  fixed weekly reset (in the person's time zone), reserve / settle / cancel, 429 / 403 / 503 answers, and the plain numbers for
+  the Usage screen (`Limiter.snapshot`). `app_engine.run_turn` takes an optional `limiter` and `user`
+  (`tests/test_usage_turn.py`): the message is checked first, the real tokens are counted after, a failed reply is given back,
+  and a model on the device is never counted.
+- `context_window.py` (+ `tests/test_context_window.py`): the device check. The window is the smallest of what the model passed,
+  free memory, reading speed and the plan; it says why, and `shrink` drops it when memory falls. Try it:
+  `python context_window.py --ram 8 --mode long`.
