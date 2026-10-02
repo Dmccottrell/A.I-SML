@@ -30,6 +30,11 @@ WHAT THIS FILE DOES
       web, web_latest, answer from web search results: name the   (new: online mode, web_search.py)
       web_disagree,    site and date, prefer the newest, say when
       web_none         sources disagree or don't answer it
+      tool_use,        coding helper: read/change/test with tools, follow  (new: agent_lessons.py, v3.5+)
+      project_context, project notes, ask before git commits, say "too big", 
+      ask_first,       carry on after old steps were folded away
+      too_big,
+      compaction
       other_ai         honest about other AIs (no notes)           "ChatGPT is better than Claude because..."
 
     lookup/dont_know/correction/stand_firm/memory_doubt come from the teacher's
@@ -74,6 +79,9 @@ def set_version(name):
 # Web search lessons per version: each one gets more practice reading web results (web_lessons.py).
 # v4 adds lessons where the model itself decides to search (a tool call); see docs/ROADMAP.md.
 WEB_LESSONS = {"v3": 1_500, "v3.5": 3_000}
+# Coding-helper lessons (agent_lessons.py): tool use, project notes, asking first, too-big tasks, folded history.
+# v3 has none; v3.5 starts the habit (small tasks); v4 practises it much more.
+AGENT_LESSONS = {"v3": 0, "v3.5": 2_500}
 
 # ------------------------------------------------------------------ identity
 # Edit these to give your AI its own name and personality!
@@ -509,6 +517,9 @@ def build(general, stories, lookup_records, instruction_records, wiki, a, seed=1
     from web_lessons import other_ai_conversations, web_conversations
     parts.update(web_conversations(rng, getattr(a, "web", 0)))
     parts["other_ai"] = other_ai_conversations(rng, getattr(a, "other_ai", 0))
+    if getattr(a, "agent", 0):
+        from agent_lessons import agent_conversations
+        parts.update(agent_conversations(rng, a.agent))
     if stories:
         rng.shuffle(stories)
         parts["story"] = story_conversations(stories, rng, a.stories)
@@ -589,6 +600,8 @@ if __name__ == "__main__":
     p.add_argument("--memory", type=int, default=3_000, help="remembering-you lessons (save / don't / recall)")
     p.add_argument("--web", type=int, default=None, help="web search lessons (web_lessons.py); "
                    "default: more for each newer version (WEB_LESSONS)")
+    p.add_argument("--agent", type=int, default=None, help="coding-helper lessons (agent_lessons.py); "
+                   "default: AGENT_LESSONS for the version")
     p.add_argument("--other_ai", type=int, default=400, help="honest answers about other AI assistants")
     p.add_argument("--db", default=os.path.join("data", "wiki", "wiki.db"))
     p.add_argument("--version", default="v3", help="v3 or any later version (v3.5, v3-long-8k, ...): "
@@ -597,6 +610,8 @@ if __name__ == "__main__":
     set_version(a.version)
     if a.web is None:
         a.web = WEB_LESSONS.get(a.version, max(WEB_LESSONS.values()))
+    if a.agent is None:
+        a.agent = AGENT_LESSONS.get(a.version, 0)
 
     from make_chat_data_v2 import load_smoltalk
     wiki = None

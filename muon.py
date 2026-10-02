@@ -19,6 +19,8 @@ WHAT THIS FILE DOES
     (optimizer="muon").
 
     Use it for NEW runs only: a run started with AdamW can't continue with Muon (different memory).
+    MuonCPUOffload (optimizer="muon_cpu") is the same Muon with its memory in RAM, so it fits a 12 GB card at 1.12B
+    parameters; its saved state is interchangeable with Muon's (start at home, finish on rented GPUs).
 """
 import math
 
@@ -75,6 +77,34 @@ class Muon(torch.optim.Optimizer):
                         eps=eps, weight_decay=0.0, use_muon=False)
         super().__init__(param_groups, defaults)
 
+    def _update(self, p, group, state):
+        """One parameter's update. `state` is its optimizer memory (on p's device here; see MuonCPUOffload)."""
+        lr, wd = group["lr"], group["weight_decay"]
+        g = p.grad
+        if group["use_muon"]:
+            if "momentum" not in state:
+                state["momentum"] = torch.zeros_like(g)
+            buf = state["momentum"]
+            buf.mul_(group["momentum"]).add_(g)
+            u = g.add(buf, alpha=group["momentum"]) if group["nesterov"] else buf
+            o = orthogonalize(u, group["ns_steps"])
+            scale = 0.2 * math.sqrt(max(p.size(0), p.size(1)))
+            p.mul_(1 - lr * wd)
+            p.add_(o.to(p.dtype), alpha=-lr * scale)
+        else:                                          # plain AdamW
+            if "step" not in state:
+                state["step"] = 0
+                state["exp_avg"] = torch.zeros_like(p)
+                state["exp_avg_sq"] = torch.zeros_like(p)
+            state["step"] += 1
+            b1, b2 = group["betas"]
+            state["exp_avg"].mul_(b1).add_(g, alpha=1 - b1)
+            state["exp_avg_sq"].mul_(b2).addcmul_(g, g, value=1 - b2)
+            m_hat = state["exp_avg"] / (1 - b1 ** state["step"])
+            v_hat = state["exp_avg_sq"] / (1 - b2 ** state["step"])
+            p.mul_(1 - lr * wd)
+            p.addcdiv_(m_hat, v_hat.sqrt().add_(group["eps"]), value=-lr)
+
     @torch.no_grad()
     def step(self, closure=None):
         loss = None
@@ -82,33 +112,60 @@ class Muon(torch.optim.Optimizer):
             with torch.enable_grad():
                 loss = closure()
         for group in self.param_groups:
-            lr, wd = group["lr"], group["weight_decay"]
+            for p in group["params"]:
+                if p.grad is not None:
+                    self._update(p, group, self.state[p])
+        return loss
+
+
+class MuonCPUOffload(Muon):
+    """The same Muon, with its memory (momentum, and AdamW's averages for the embedding and norms) kept in the
+    computer's RAM instead of on the GPU. Option "muon_cpu" in config.py.
+
+    Why: at 1.12B parameters Muon's own memory is ~4.5 GB; with the weights (4.5 GB) and gradients (4.5 GB)
+    that does not fit a 12 GB card (RTX 4070), but weights + gradients alone do (like adamw_cpu).
+    How: for each weight matrix in turn, its memory is copied RAM -> GPU, updated with exactly the same code and
+    maths as Muon (the Newton-Schulz step still runs on the GPU), then copied back. That moves ~4.5 GB each way per
+    step (about a second), small next to a ~90 s step. RAM needed: ~5 GB (adamw_cpu needs ~17 GB).
+
+    The saved state is the same as Muon's, so a run can start at home with "muon_cpu" and continue on a rented GPU
+    with "muon" (or back): train.py treats them as one optimizer.
+    """
+
+    def _to_cpu(self, t):
+        t = t.detach().to("cpu", copy=True)
+        return t.pin_memory() if torch.cuda.is_available() else t
+
+    @torch.no_grad()
+    def step(self, closure=None):
+        loss = None
+        if closure is not None:
+            with torch.enable_grad():
+                loss = closure()
+        for group in self.param_groups:
             for p in group["params"]:
                 if p.grad is None:
                     continue
-                g = p.grad
-                state = self.state[p]
-                if group["use_muon"]:
-                    if "momentum" not in state:
-                        state["momentum"] = torch.zeros_like(g)
-                    buf = state["momentum"]
-                    buf.mul_(group["momentum"]).add_(g)
-                    u = g.add(buf, alpha=group["momentum"]) if group["nesterov"] else buf
-                    o = orthogonalize(u, group["ns_steps"])
-                    scale = 0.2 * math.sqrt(max(p.size(0), p.size(1)))
-                    p.mul_(1 - lr * wd)
-                    p.add_(o.to(p.dtype), alpha=-lr * scale)
-                else:                                  # plain AdamW
-                    if "step" not in state:
-                        state["step"] = 0
-                        state["exp_avg"] = torch.zeros_like(p)
-                        state["exp_avg_sq"] = torch.zeros_like(p)
-                    state["step"] += 1
-                    b1, b2 = group["betas"]
-                    state["exp_avg"].mul_(b1).add_(g, alpha=1 - b1)
-                    state["exp_avg_sq"].mul_(b2).addcmul_(g, g, value=1 - b2)
-                    m_hat = state["exp_avg"] / (1 - b1 ** state["step"])
-                    v_hat = state["exp_avg_sq"] / (1 - b2 ** state["step"])
-                    p.mul_(1 - lr * wd)
-                    p.addcdiv_(m_hat, v_hat.sqrt().add_(group["eps"]), value=-lr)
+                cpu_state = self.state[p]
+                gpu_state = {k: (v.to(p.device, non_blocking=True) if torch.is_tensor(v) else v)
+                             for k, v in cpu_state.items()}
+                self._update(p, group, gpu_state)
+                for k, v in gpu_state.items():
+                    if not torch.is_tensor(v):
+                        cpu_state[k] = v
+                    elif k in cpu_state:
+                        cpu_state[k].copy_(v, non_blocking=True)      # back into the same RAM buffer
+                    else:
+                        cpu_state[k] = self._to_cpu(v)               # first step: the buffer is created
+        if torch.cuda.is_available():
+            torch.cuda.synchronize()
         return loss
+
+    def load_state_dict(self, state_dict):
+        """Load a saved state (from Muon or MuonCPUOffload), then keep it in RAM."""
+        super().load_state_dict(state_dict)            # puts the numbers on each weight's device
+        with torch.no_grad():
+            for st in self.state.values():
+                for k, v in list(st.items()):
+                    if torch.is_tensor(v) and v.device.type != "cpu":
+                        st[k] = self._to_cpu(v)

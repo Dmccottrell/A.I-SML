@@ -43,8 +43,10 @@ class TrainSettings:
     #   "adamw":      on the GPU (fastest; v1-v3)
     #   "adamw_cpu":  in system RAM (offload_optim.py): frees ~8 GB of GPU memory at 1B, needs ~17 GB of RAM
     #   "adamw8bit":  on the GPU in 8-bit (bitsandbytes): a quarter of the memory, slightly different maths
-    #   "muon":       Muon for the weight matrices + AdamW for the rest (muon.py): reportedly the same
-    #                 quality in fewer steps; muon_test.py measures it on our models first
+    #   "muon":       Muon for the weight matrices + AdamW for the rest (muon.py): the same quality in ~33% fewer
+    #                 steps (muon_test.py); its memory is on the GPU (~4.5 GB at 1.12B)
+    #   "muon_cpu":   the same Muon with its memory in system RAM (~5 GB): fits a 12 GB card at 1.12B. Its saved
+    #                 state is interchangeable with "muon", so a run can start at home and finish on rented GPUs
     optimizer: str = "adamw"
     # Learning-rate schedule:
     #   "cosine": warm up, then fade slowly for the whole run (v1, v2)
@@ -235,7 +237,8 @@ VERSIONS = {
         # The last 10% (~4B tokens): the best pages, plus human-written questions and answers (Stack
         # Exchange) so it reaches chat training already used to "question -> helpful answer"
         anneal_mix=(("fineweb_hq_100bt", 0.35), ("dclm", 0.10), ("wikipedia", 0.20), ("math", 0.12),
-                    ("code_multi", 0.13), ("cosmopedia", 0.05), ("qa", 0.05)),
+                    ("code_multi", 0.113), ("cosmopedia", 0.05), ("qa", 0.05), ("commits", 0.015),
+                    ("agent_traces", 0.002)),
         anneal_tokens=4_100_000_000,
         model=ModelConfig(
             vocab_size=32768,
@@ -259,7 +262,7 @@ VERSIONS = {
             save_every=50,       # ~70-95 s per step, so about every 1-1.5 hours
             grad_checkpoint=True,    # needed at 1B on a 12 GB card (see docs/ROADMAP.md)
             checkpoint_every=1,      # the pilot decides: 2 is faster if memory allows
-            optimizer="adamw_cpu",   # optimizer memory lives in system RAM
+            optimizer="muon_cpu",    # Muon (won muon_test.py) with its memory in system RAM; the cloud uses "muon"
             schedule="wsd",
             decay_frac=0.1,
             exam_every=5000,
@@ -361,6 +364,14 @@ VERSIONS["v3plus"] = _v3_plus("v3plus", (("dclm", 0.60), ("fineweb_100bt", 0.40)
                               "v3 read further with everyday web pages (DCLM): the test for v3.5's mix")
 VERSIONS["v3plus-edu"] = _v3_plus("v3plus-edu", (("fineweb_100bt", 1.0),),
                                   "v3 read further with educational pages only: the comparison for v3plus")
+
+
+def optimizer_kind(name):
+    """Optimizers whose saved state is interchangeable. adamw and adamw_cpu are the same AdamW, and muon and muon_cpu
+    are the same Muon (tested in tests/test_cloud_mode.py and tests/test_muon_cpu.py), so a run can move between home
+    and cloud mode. AdamW and Muon (and 8-bit AdamW) keep different state, so a run that started with one must
+    finish with it."""
+    return {"adamw_cpu": "adamw", "muon_cpu": "muon"}.get(name, name)
 
 
 def get_version(name, cloud=False):

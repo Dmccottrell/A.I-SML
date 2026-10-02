@@ -140,5 +140,112 @@ class Loop(unittest.TestCase):
             self.assertEqual(r["turns"], 3)
 
 
+def scripted(*steps):
+    it = iter(steps)
+    return lambda msgs: next(it)
+
+
+class AroundTheLoop(unittest.TestCase):
+    def setUp(self):
+        self.sb = h.Sandbox()
+        self.addCleanup(self.sb.close)
+
+    def test_git_safe_subset(self):
+        import shutil
+        if not shutil.which("git"):
+            self.skipTest("git not installed")
+        self.sb.git("init")
+        self.sb.write_file("a.txt", "hi\n")
+        self.sb.git("add a.txt")
+        self.assertIn("a.txt", self.sb.git("status"))
+        self.sb.git("commit -m first")
+        self.assertIn("first", self.sb.git("log"))
+        for bad in ("push origin main", "-c core.x=y status", "status --git-dir=/x", "config user.name x", "-C / status"):
+            with self.assertRaises(h.ToolError, msg=bad):
+                self.sb.git(bad)
+
+    def test_worktree(self):
+        import shutil
+        if not shutil.which("git"):
+            self.skipTest("git not installed")
+        self.sb.git("init")
+        self.sb.write_file("a.txt", "hi\n")
+        self.sb.git("add a.txt")
+        self.sb.git("commit -m first")
+        self.sb.git("worktree add try1")
+        self.assertIn("try1", self.sb.git("worktree list"))
+        self.sb.git("worktree remove try1")
+
+    def test_diagnostics(self):
+        self.sb.write_file("bad.py", "def f(:\n  pass\n")
+        self.sb.write_file("ok.py", "x = 1\n")
+        self.assertIn("syntax error", self.sb.diagnostics("bad.py"))
+        self.assertNotIn("ok.py:", self.sb.diagnostics("ok.py"))
+
+    def test_registry(self):
+        self.sb.register_tool("shout", lambda text="": text.upper())
+        r = h.run_agent("x", scripted(call("shout", text="hi"), call("finish", summary="done")), self.sb,
+                        permissions=h.Permissions(rules={"shout": "allow"}))
+        self.assertIn("HI", r["messages"][2]["content"])
+        with self.assertRaises(ValueError):
+            self.sb.register_tool("run", len)
+
+    def test_permissions(self):
+        p = h.Permissions()
+        self.assertIsNone(p.check("read_file", {"path": "a"}))
+        self.assertIsNone(p.check("git", {"args": "status"}))
+        self.assertIsNotNone(p.check("git", {"args": "commit -m x"}))
+        asked = []
+        yes = h.Permissions(ask=lambda n, a: (asked.append(n), True)[1])
+        self.assertIsNone(yes.check("git", {"args": "commit -m x"}))
+        self.assertEqual(asked, ["git"])
+        self.assertIn("not allowed", h.Permissions(rules={"run": "deny"}).check("run", {"command": "ls"}))
+
+    def test_hooks_after_edit_and_finish_gate(self):
+        self.sb.write_file(".yuvra/hooks.json", json.dumps([
+            {"event": "after_edit", "match": "*.py", "run": "python -m py_compile {path}"},
+            {"event": "on_finish", "run": "python check.py"}]))
+        self.sb.write_file("check.py", "import os, sys\nsys.exit(0 if os.path.exists('ok.flag') else 1)\n")
+        r = h.run_agent("x", scripted(call("write_file", path="m.py", content="def f(:\n"),
+                                      call("finish", summary="early"),
+                                      call("write_file", path="ok.flag", content="1"),
+                                      call("finish", summary="now")), self.sb)
+        texts = [m["content"] for m in r["messages"]]
+        self.assertTrue(any("hook" in t and "py_compile" in t for t in texts))     # the syntax error was shown
+        self.assertTrue(any("not finished yet" in t for t in texts))               # the gate stopped it once
+        self.assertTrue(r["finished"])
+        self.assertEqual(r["summary"], "now")
+
+    def test_project_notes_are_shown(self):
+        self.sb.write_file("AGENTS.md", "Use tabs. Tests: python -m unittest")
+        seen = []
+        h.run_agent("fix it", lambda m: (seen.append(m[0]["content"]), call("finish", summary="x"))[1], self.sb)
+        self.assertIn("Project notes", seen[0])
+        self.assertIn("Use tabs", seen[0])
+        self.assertTrue(seen[0].endswith("Task: fix it"))
+        seen.clear()
+        h.run_agent("fix it", lambda m: (seen.append(m[0]["content"]), call("finish", summary="x"))[1], self.sb,
+                    project=False)
+        self.assertEqual(seen[0], "fix it")
+
+    def test_compaction_keeps_task_and_recent_steps(self):
+        steps = [call("read_file", path="a.py")] * 8 + [call("run", command="python -m unittest")] + [
+            call("finish", summary="done")]
+        sizes = []
+
+        def gen(msgs):
+            sizes.append(len(msgs))
+            return steps[len(sizes) - 1]
+        self.sb.write_file("a.py", "x = 1\n" * 30)
+        r = h.run_agent("the task", gen, self.sb, max_turns=10, context_tokens=200)
+        self.assertTrue(r["finished"])
+        self.assertLess(max(sizes), 8)                       # never grew past the tail + task
+        self.assertTrue(r["episodes"])
+        self.assertIn("Earlier steps:", r["messages"][0]["content"])
+        self.assertTrue(r["messages"][0]["content"].startswith("the task"))
+        roles = [m["role"] for m in r["messages"]]
+        self.assertEqual(roles, ["user", "assistant"] * (len(roles) // 2))        # still alternating
+
+
 if __name__ == "__main__":
     unittest.main()

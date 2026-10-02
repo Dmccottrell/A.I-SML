@@ -1,5 +1,7 @@
 # The app: design (draft, Oct 2026)
 
+The detailed requirements, screens, flows and tests are in [APP_SPEC.md](APP_SPEC.md); this file is the overview and build order.
+
 One app for the phone and the PC. It runs **your own model, on your own device, offline by default**,
 with an optional **online mode** that uses a bigger model on your own PC (later a server).
 

@@ -263,6 +263,32 @@ def load_qa():
             yield f"Question: {q}\n\nAnswer: {a}"
 
 
+def load_commits():
+    """Real code changes with their messages (CommitPackFT, Python only): "Commit: <message>", then the file
+    before and after. Final phase only: it shows what a small change looks like and how it is described, the
+    habit behind "edit one thing, then say what you changed". Only commits of permissively licensed repos."""
+    from datasets import load_dataset
+    ds = load_dataset("bigcode/commitpackft", "python", split="train", streaming=True)
+    ok = {"mit", "apache-2.0", "bsd-2-clause", "bsd-3-clause", "isc", "unlicense", "cc0-1.0"}
+    for row in ds:
+        if (row.get("license") or "").lower() not in ok:
+            continue
+        old, new, msg = row.get("old_contents") or "", row.get("new_contents") or "", (row.get("message") or "").strip()
+        if msg and old and new and old != new and len(old) + len(new) <= 8_000:
+            yield f"Commit: {msg}\n\nBefore ({row.get('old_file') or 'file'}):\n{old}\n\nAfter:\n{new}"
+
+
+def load_agent_traces():
+    """Practice runs of the coding helper (make_agent_data.py writes them; nothing to download)."""
+    path = os.path.join(get_version("v3.5").data_dir, "agent_traces.jsonl")
+    if not os.path.exists(path):
+        raise SystemExit(f"{path} is missing: run  python make_agent_data.py --version v3.5  first (a few minutes)")
+    with open(path, encoding="utf-8") as f:
+        for line in f:
+            if line.strip():
+                yield json.loads(line)["text"]
+
+
 # Source name (as used in config.py's data_mix) -> loader
 LOADERS = {
     "fineweb": load_fineweb,
@@ -277,6 +303,8 @@ LOADERS = {
     "dclm": load_dclm,
     "cosmopedia": load_cosmopedia,
     "qa": load_qa,
+    "commits": load_commits,
+    "agent_traces": load_agent_traces,
 }
 
 

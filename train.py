@@ -84,7 +84,7 @@ import contextlib
 import numpy as np
 import torch
 
-from config import add_version_arg, get_version, parse_setting
+from config import add_version_arg, get_version, optimizer_kind, parse_setting
 from model import TinyLM
 from tokenizer import BPETokenizer
 
@@ -304,10 +304,12 @@ no_decay = [p for n, p in model.named_parameters() if p.dim() < 2]
 # average of each weight's gradients so updates are smooth and well-scaled.
 groups = [{"params": decay, "weight_decay": S.weight_decay},
           {"params": no_decay, "weight_decay": 0.0}]
-if S.optimizer == "muon":
-    # Muon for the blocks' weight matrices, AdamW for embeddings and norms (see muon.py and muon_test.py)
-    from muon import Muon, muon_param_groups
-    optimizer = Muon(muon_param_groups(model, S.weight_decay), lr=S.lr_max)
+if S.optimizer in ("muon", "muon_cpu"):
+    # Muon for the blocks' weight matrices, AdamW for embeddings and norms (see muon.py and muon_test.py);
+    # muon_cpu keeps Muon's memory in system RAM (fits a 12 GB card at 1.12B)
+    from muon import Muon, MuonCPUOffload, muon_param_groups
+    optimizer = (MuonCPUOffload if S.optimizer == "muon_cpu" else Muon)(muon_param_groups(model, S.weight_decay),
+                                                                        lr=S.lr_max)
 elif S.optimizer == "adamw_cpu":
     # Its memory lives in system RAM (see offload_optim.py): for models too big for the GPU
     from offload_optim import CPUOffloadAdamW
@@ -336,13 +338,6 @@ def save_atomic(obj, path):
     tmp = path + ".tmp"
     torch.save(obj, tmp)
     os.replace(tmp, path)
-
-
-def optimizer_kind(name):
-    """Optimizers whose saved state is interchangeable: adamw and adamw_cpu are the same AdamW (tested in
-    tests/test_cloud_mode.py), so a run can move between home and cloud mode. Muon and 8-bit AdamW keep
-    different state, so a run that started with one must finish with it."""
-    return "adamw" if name in ("adamw", "adamw_cpu") else name
 
 
 def save_latest(next_iter, path=LATEST_PATH):
@@ -507,9 +502,9 @@ if os.path.exists(LATEST_PATH) and not args.fresh:
     if saved_kind and saved_kind != optimizer_kind(S.optimizer):
         sys.exit(f"{LATEST_PATH} was trained with {saved_kind}, but this run is set to {S.optimizer}. A run can't "
                  f"switch optimizers midway (their saved memory is different). Continue it with the same one: "
-                 f"--set optimizer={'adamw_cpu' if saved_kind == 'adamw' and not args.cloud else saved_kind}"
-                 + (" (v3.5's cloud mode uses Muon; a run started at home with AdamW stays AdamW)"
-                    if saved_kind == "adamw" and S.optimizer == "muon" else ""))
+                 f"--set optimizer={({'adamw': 'adamw_cpu', 'muon': 'muon_cpu'}.get(saved_kind, saved_kind) if not args.cloud else saved_kind)}"
+                 + (" (v3.5 uses Muon; a run started with AdamW stays AdamW)"
+                    if saved_kind == "adamw" and S.optimizer in ("muon", "muon_cpu") else ""))
     model.load_state_dict(state["model"])
     optimizer.load_state_dict(state["optimizer"])
     if state["scaler"]:
