@@ -28,7 +28,7 @@ THE TOOLS
     finish(summary)                   the model says it is done
 
 AROUND THE LOOP (all plain code, nothing the model has to learn except the tool format)
-    project notes     YUVRA.md / AGENTS.md / CLAUDE.md in the workspace is shown to the model as "Project notes"
+    project notes     YUVRA.md / AGENTS.md in the workspace is shown to the model as "Project notes"
     hooks             .yuvra/hooks.json: commands that run after an edit (e.g. a syntax check), before a command,
                       or when the model tries to finish (a "finish gate": the tests must pass first)
     permissions       which tools run freely, which ask first (git commit, ...), which are refused
@@ -70,7 +70,7 @@ GIT_SUBCOMMANDS = {"status", "diff", "log", "show", "init", "add", "commit", "br
 GIT_READ_ONLY = {"status", "diff", "log", "show", "init"}
 GIT_BLOCKED_FLAGS = ("-C", "-c", "--git-dir", "--work-tree", "--exec-path", "--upload-pack", "--receive-pack",
                      "--namespace", "--super-prefix", "--config-env", "--output", "--ext-diff", "--textconv")
-PROJECT_FILES = ("YUVRA.md", "AGENTS.md", "CLAUDE.md")
+PROJECT_FILES = ("YUVRA.md", "AGENTS.md")
 HOOKS_FILE = os.path.join(".yuvra", "hooks.json")
 
 # Shown to the model at the start of a coding session (and in every coding lesson), so it knows the tools
@@ -416,7 +416,7 @@ class Hooks:
 
 
 def load_project_notes(sandbox, limit=1200):
-    """The text of YUVRA.md / AGENTS.md / CLAUDE.md in the workspace (the first found), or ""."""
+    """The text of YUVRA.md / AGENTS.md in the workspace (the first found), or ""."""
     for name in PROJECT_FILES:
         try:
             with open(os.path.join(sandbox.root, name), encoding="utf-8", errors="replace") as f:
@@ -468,7 +468,7 @@ def run_agent(task, generate, sandbox, max_turns=8, system=None, project=True, h
               ask=None, context_tokens=None):
     """Let a model work on `task`. `generate(messages)` returns the model's next reply as text.
 
-    project        show the workspace's YUVRA.md / AGENTS.md / CLAUDE.md as "Project notes" before the task
+    project        show the workspace's YUVRA.md / AGENTS.md as "Project notes" before the task
     hooks          a Hooks object (default: .yuvra/hooks.json in the workspace, if any)
     permissions    a Permissions object (default: the defaults; `ask(name, args) -> bool` is used for "ask")
     context_tokens when the conversation gets near this size, old steps are compacted (see `compact`)
