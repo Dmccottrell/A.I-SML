@@ -97,6 +97,7 @@ data, code and training.
 | `exam.py` | 6 | HellaSwag, a public common-sense test (works on pretrained models; compare versions) |
 | `wiki_index.py` | v3 | Searchable copy of Wikipedia for lookups (build + search) |
 | `web_search.py` | v3 | Web search for online mode (Wikipedia's free search or Brave Search); results become notes |
+| `typo_lessons.py` | v3 | Chat lessons for messy typing: copies of ordinary lessons with the user's message typed carelessly (slips, no apostrophes, text-speak) and the clean answer; on by default in `make_chat_data_v3.py` (`--typos`) |
 | `web_lessons.py` | v3 | Chat lessons for reading web results and honest answers about other AIs (used by make_chat_data_v3.py) |
 | `make_teacher_data.py` | v3 | The teacher model (Qwen2.5-7B via llama.cpp, or rented per token from a hosting API) writes practice examples |
 | `make_chat_data_v3.py` | 7 | v3 and every later version (`--version`): chat lessons that fix v2's mistakes (lookups, "I don't know", corrections, instructions, topic switches), remembering you, and reply suggestions |
