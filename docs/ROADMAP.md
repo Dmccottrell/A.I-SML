@@ -889,6 +889,33 @@ chat format and prompts live in one shared file, so a chat behaves the same on e
 
 ---
 
+### Hosting the online server (to revisit)
+
+"Online" in the app means **where the model runs** (a computer that is not the phone), not "searches the web". Web search is a
+separate switch. A domain (yuvra.ai) is only a name that points at a server; something still has to run the model. A Cloudflare
+tunnel gives a home PC a stable name (for example `chat.yuvra.ai`) without opening ports.
+
+Decided for now: **the home PC through a tunnel**, for you and a small test group. When it should keep working while the PC is
+off, rent a machine by the month. Prices below are listed prices found in a web search (Oct 2026), not verified on the
+providers' own pages; check them before paying. A 1B model in Q4 (~700 MB) needs far less than any of these GPUs.
+
+| Option | Example | Roughly | Notes |
+|---|---|---|---|
+| CPU VPS | Contabo (4 vCPU, 8 GB), Hetzner CPX31 | ~$7 / ~$16 a month | Cheapest always-on; about 10-20 words a second, fine for testers |
+| Small GPU, monthly | CloudClusters RTX 3060 Ti | ~$129 a month | Fast, always on |
+| Mid GPU, monthly | GPUCloudHQ RTX 4090 / 5090; CloudClusters 4090 | ~$189 / ~$279 / ~$359 a month | GPUCloudHQ is far below others (DatabaseMart lists the 5090 at ~$479): read the terms |
+| Dedicated, Europe | Hetzner GEX44 (RTX 4000, 20 GB); LeaderGPU | ~EUR 184-234 (+ setup fee); from EUR 249 | Billed until cancelled; no stop button |
+| Pay per use | serverless GPU platforms | only when used | Cheapest while few use it; a slow first reply |
+
+Things that differ from training on Vast: it must stay up (use on-demand, not interruptible machines), the IP can change (use the
+tunnel), and disk is billed even when the machine is off. Move to a bigger GPU only when many people chat at once. The app code
+does not change: it only points at a different address.
+
+**Revisit when:** the test group needs it to work while the PC is off, or before any public launch. Then also: write the
+server install steps (llama-server + tunnel), re-check prices, and decide CPU vs small GPU from measured speed.
+
+---
+
 ## Using your AI (apps)
 
 "Production" means **the version you rely on day to day**. You don't have to build an app to use
