@@ -33,6 +33,9 @@ class Plan(unittest.TestCase):
         self.assertAlmostEqual(tokens("math"), 3.0, places=1)
         for name, _ in V.data_mix + V.anneal_mix:
             self.assertIn(name, P.LOADERS, name)
+        anneal = dict(V.anneal_mix)
+        self.assertGreater(anneal["commits"], 0)                    # coding-helper reading in the final phase
+        self.assertGreater(anneal["agent_traces"], 0)
 
     def test_steps_match_the_data(self):
         for name in ("v3.5", "v3plus", "v3plus-edu"):

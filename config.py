@@ -237,7 +237,8 @@ VERSIONS = {
         # The last 10% (~4B tokens): the best pages, plus human-written questions and answers (Stack
         # Exchange) so it reaches chat training already used to "question -> helpful answer"
         anneal_mix=(("fineweb_hq_100bt", 0.35), ("dclm", 0.10), ("wikipedia", 0.20), ("math", 0.12),
-                    ("code_multi", 0.13), ("cosmopedia", 0.05), ("qa", 0.05)),
+                    ("code_multi", 0.113), ("cosmopedia", 0.05), ("qa", 0.05), ("commits", 0.015),
+                    ("agent_traces", 0.002)),
         anneal_tokens=4_100_000_000,
         model=ModelConfig(
             vocab_size=32768,

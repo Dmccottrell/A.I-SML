@@ -98,10 +98,29 @@ def format_notes(notes):
     return "\n".join(f"[{i}] {n['title']}: {n['text']}" for i, n in enumerate(notes, 1))
 
 
+TOOL_TOKENS = ("<|tool_call|>", "<|end_tool_call|>", "<|tool_result|>", "<|end_tool_result|>")
+TOOL_SPLIT = re.compile("(" + "|".join(re.escape(t) for t in TOOL_TOKENS) + ")")
+
+
+def encode_tool_text(tok, content):
+    """Like tok.encode(content, allow_special=False), except the four tool markers become their special tokens.
+    Only used for our own coding lessons (message["tools"] is true), never for text a person typed."""
+    out = []
+    for piece in TOOL_SPLIT.split(content):
+        if piece in TOOL_TOKENS:
+            out.append(tok.special[piece])
+        elif piece:
+            out += tok.encode(piece, allow_special=False)
+    return out
+
+
 def _encode_message(tok, message):
     """Tokens for one message, and whether the model should learn to write them."""
     U, A, EOT = special_ids(tok)
-    text = tok.encode(message["content"], allow_special=False)   # user text can't inject control tokens
+    if message.get("tools") and "<|tool_call|>" in tok.special:
+        text = encode_tool_text(tok, message["content"])            # a coding-lesson step: tool markers are real tokens
+    else:
+        text = tok.encode(message["content"], allow_special=False)   # user text can't inject control tokens
     if message["role"] == "user":
         notes = message.get("notes")
         if notes:
