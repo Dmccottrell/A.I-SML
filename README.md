@@ -27,9 +27,10 @@ live in `config.py`.
 
 ## Model family names (working names)
 
-Norse storytelling words, since these are language models: **Rune** (phone-lite, ~400M), **Skald**
-(small, ~1B: v3.5, and v4 as "Skald 2"), **Saga** (~3B), **Edda** (5-7B) and **Norn** (top, 13B+). They are
-placeholders: no trademark check has been done yet. See `docs/ROADMAP.md`.
+The app and the whole family are called **Yuvra** (Yuvra.AI); each model adds a Norse storytelling word,
+since these are language models: **Yuvra Rune** (phone-lite, ~400M), **Yuvra Skald** (small, ~1B: v3.5, and v4
+as "Yuvra Skald 2"), **Yuvra Saga** (~3B), **Yuvra Edda** (5-7B) and **Yuvra Norn** (top, 13B+). They are
+placeholders: no trademark check has been done yet. See `docs/ROADMAP.md` and `docs/APP.md`.
 
 ## Pretrained weights policy
 

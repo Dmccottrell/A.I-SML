@@ -4,8 +4,10 @@ All versions side by side. v1 and v2 are finished and run on the phone. v3's cod
 v3.5, v4, v5, v6 and v6.5 are planned: their numbers are estimates and will change once v3's results are in.
 Details: [V2.md](V2.md), [V3.md](V3.md), [ROADMAP.md](ROADMAP.md). Settings live in `config.py`.
 
-**The app is called Yuvra** (working name, Yuvra.AI; see [APP.md](APP.md)). **Model working names** (Norse storytelling words; no trademark check yet): **Rune** (v3, phone-lite), **Skald** (v3.5, and v4 as
-**Skald 2**: the same size, trained longer, with skills added), **Saga** (v5), **Edda** (v6, v6.5) and **Norn** (the future top tier, 13B+).
+**The app and the model family are called Yuvra** (working name, Yuvra.AI; see [APP.md](APP.md)); each model carries the
+umbrella name plus a Norse storytelling word (no trademark check yet): **Yuvra Rune** (v3, phone-lite), **Yuvra Skald** (v3.5, and v4 as
+**Yuvra Skald 2**: the same size, trained longer, with skills added), **Yuvra Saga** (v5), **Yuvra Edda** (v6, v6.5) and **Yuvra Norn** (the future top tier, 13B+).
+In running text the short form (Rune, Skald, ...) is fine.
 **Tier** = which model, **version** = which generation, **effort** = how long it thinks; see the roadmap.
 
 **Two kinds of jumps:** v1 → v2 → v3 → v3.5 each give the model a **bigger brain and more to
@@ -20,7 +22,7 @@ v6 (5B) and v6.5 (7B) keep growing toward medium size, mainly for the PC and onl
 
 |  | **v1** ✅ | **v2** ✅ | **v3** 🛠️ | **v3.5** (planned) | **v4** (planned) | **v5** (planned) | **v6** (planned) | **v6.5** (planned) |
 |---|---|---|---|---|---|---|---|---|
-| Working name | – | – | Rune | Skald | Skald 2 | Saga | Edda | Edda (extended) |
+| Model name | – | – | Yuvra Rune | Yuvra Skald | Yuvra Skald 2 | Yuvra Saga | Yuvra Edda | Yuvra Edda (extended) |
 | Parameters | 29.5M | 88M | 394M | **~1.12B** | ~1.12B base + LoRA skill packs (small add-on weights, a few MB each, switched by a router) | **~3B** | **~5B** | **~7B** |
 | Shape | 512 wide × 8 layers | 768 wide × 12 layers | 1024 wide × 32 layers | 2048 wide × 24 layers | Same as v3.5 | ~3072 wide × 28 layers | ~3584 wide × 36 layers | 4096 wide × 32 layers |
 | Memory (context length) | 512 tokens | 1,024 tokens | 2,048 tokens; **v3-long: 8K → 16K → 32K** (stretched after training, if the tests pass) | 2,048, then stretched to **32K, goal 75K–100K** | Same as v3.5's stretched length + saved notes about you | **Goal 128K** (built for long text from the start) | **Goal 256K** | **Goal 500K** |
@@ -281,16 +283,16 @@ offline use; these power the PC and the app's online mode. Details: [ROADMAP.md]
 
 - **v1:** a children's story-teller that runs on your phone
 - **v2:** a mini assistant with basic general knowledge and real conversations
-- **v3 (Rune):** an **accurate, honest** assistant that looks facts up, admits when it doesn't know, and
+- **v3 (Yuvra Rune):** an **accurate, honest** assistant that looks facts up, admits when it doesn't know, and
   handles basic code
-- **v3.5 (Skald):** v3's features on a **~1.12B brain** that reads 40B tokens (educational and everyday web, code, math)
-- **v4 (Skald 2):** v3.5's brain **trained longer**, turned into a **personal assistant**: specialist skills, exact math with tools, a Quick / Balanced / Deep
+- **v3.5 (Yuvra Skald):** v3's features on a **~1.12B brain** that reads 40B tokens (educational and everyday web, code, math)
+- **v4 (Yuvra Skald 2):** v3.5's brain **trained longer**, turned into a **personal assistant**: specialist skills, exact math with tools, a Quick / Balanced / Deep
   thinking dial, coding help, documents, voice, and your own app
-- **v5 (Saga):** a **genuinely capable** 3B assistant: the first version trained in the cloud, and the first
+- **v5 (Yuvra Saga):** a **genuinely capable** 3B assistant: the first version trained in the cloud, and the first
   that can "see" pictures through a helper
-- **v6 (Edda):** a **5B bigger small** model: stronger reasoning and coding, powering the PC and online mode
-- **v6.5 (Edda, extended):** a **7B borderline medium** model: the strongest version so far and the app's online brain
-- **v7, v8 (Norn):** the future top tier, ~13B then ~30B, if funding and results allow (online mode)
+- **v6 (Yuvra Edda):** a **5B bigger small** model: stronger reasoning and coding, powering the PC and online mode
+- **v6.5 (Yuvra Edda, extended):** a **7B borderline medium** model: the strongest version so far and the app's online brain
+- **v7, v8 (Yuvra Norn):** the future top tier, ~13B then ~30B, if funding and results allow (online mode)
 
 ## Update log
 
