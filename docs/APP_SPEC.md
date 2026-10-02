@@ -117,12 +117,12 @@ device are free and unlimited in every tier, which is the selling point of the f
 | Tank (capacity / refill per hour) | 40,000 / 5,000 (full in 8 h) | 200,000 / 25,000 (full in 8 h) | 800,000 / 100,000 (full in 8 h) |
 | Weekly ceiling | 150,000 (150 sparks) | 1,000,000 (1,000 sparks) | 5,000,000 (5,000 sparks) |
 | Roughly, in short messages (~500 counted each) | ~300 a week | ~2,000 a week | ~10,000 a week |
-| Models from the server | Flare | Flare, Equinox, Solstice | All, including Apogee |
+| Models from the server | Flare, Equinox | All four (Flare, Equinox, Solstice, Apogee) | All four |
 | Context window (one request) | Everyday 8,192 | Everyday 8,192, Long up to 32,768 | Everyday 8,192, Long up to the longest the model passed (64K and up) |
 | Priority when the server is busy | Normal | Normal | First |
 | Who | Anyone, once the public version exists | Your private testers now; paying users later | Heavy users; you (the owner) are exempt from all limits |
 
-Because model weights multiply the counted tokens (Flare 1, Equinox 2, Solstice 5, Apogee 10), the same weekly ceiling buys far fewer Apogee messages than Flare ones:
+Free is limited to Flare and Equinox; Pro and Mega can use all four models, so the paid tiers differ in how much they can use, not in which models. Because model weights multiply the counted tokens (Flare 1, Equinox 2, Solstice 5, Apogee 10), the same weekly ceiling buys far fewer Apogee messages than Flare ones:
 5,000,000 on Mega is about 500,000 Apogee tokens. The limits live in one config file (`limits.json`: a block per tier, plus per-person overrides), so tiers can be added or
 changed without touching code. Pricing is not decided; the tiers only decide access and amounts. The owner screen has a tab for each tier.
 
