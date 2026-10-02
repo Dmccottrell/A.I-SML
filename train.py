@@ -322,6 +322,8 @@ elif S.optimizer == "adamw8bit":
     optimizer = bnb.optim.AdamW8bit(groups, lr=S.lr_max, betas=(0.9, 0.95))
 else:
     optimizer = torch.optim.AdamW(groups, lr=S.lr_max, betas=(0.9, 0.95), fused=(device == "cuda"))
+mprint(f"optimizer: {type(optimizer).__name__} (setting '{S.optimizer}'"
+       + (", Muon for the weight matrices + AdamW for embeddings and norms" if S.optimizer in ("muon", "muon_cpu") else "") + ")")
 # GradScaler only matters for float16 (stops tiny gradients rounding to zero);
 # it is switched off automatically with bfloat16.
 scaler = torch.amp.GradScaler(enabled=(dtype == torch.float16))
