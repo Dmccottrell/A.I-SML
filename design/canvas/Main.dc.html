@@ -1,0 +1,262 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Yuvra website home</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Sora:wght@500;600;700&family=DM+Sans:wght@400;500;600&display=swap">
+<style>
+body{margin:0}
+body{margin:0}
+div, span, button, svg, path, circle { transition: background-color .7s ease, color .7s ease, border-color .7s ease, fill .7s ease, stroke .7s ease, opacity .7s ease; }
+circle[style*="fill: var(--sun)"] { fill: var(--core) !important; stroke: var(--sun); stroke-width: 3; }
+a{color:var(--text);text-decoration:none}
+a:hover{color:var(--accenttext)}
+</style>
+</helmet>
+<div style="{{themeStyle}}; min-height: 3000px; background: var(--bg); background-image: radial-gradient(1200px 600px at 50% -5%, var(--glow), transparent 70%); color: var(--text); font-family: 'DM Sans', sans-serif; font-size: 17px; line-height: 1.55">
+
+<!-- nav -->
+<div style="max-width: 1200px; margin: 0 auto; padding: 24px; display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 16px">
+<a href="#top" style="display: flex; align-items: center; gap: 10px">
+<svg width="38" height="38" viewBox="0 0 64 64" fill="none" aria-label="Yuvra">
+<path d="M32 56 C22 56 12 51 10 41 C5 37 5 28 11 24 C10 16 18 8 26 11 C29 6 35 6 38 11 C46 8 54 16 53 24 C59 28 59 37 54 41 C52 51 42 56 32 56 Z" style="stroke: var(--text)" stroke-width="4" stroke-linejoin="round"/>
+<path d="M32 55 V36 M32 36 L21 18 M32 36 L43 18" style="stroke: var(--text)" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+<circle cx="32" cy="36" r="6.5" style="fill: var(--sun)"/>
+</svg>
+<span style="font-family: 'Sora', sans-serif; font-weight: 600; font-size: 24px; letter-spacing: -0.02em">Yuvra</span>
+</a>
+<div style="display: flex; flex-wrap: wrap; align-items: center; gap: 28px; font-size: 16px; font-weight: 500">
+<a href="#models">Models</a>
+<a href="#features">What it does</a>
+<a href="#honest">How it stays honest</a>
+<a href="#try" style="background: var(--accent); color: var(--onaccent); border-radius: 999px; padding: 12px 22px; font-weight: 600">Open Yuvra</a>
+</div>
+</div>
+
+<!-- hero -->
+<div id="top" style="max-width: 1200px; margin: 0 auto; padding: 72px 24px 96px; display: flex; flex-wrap: wrap; align-items: center; gap: 56px">
+<div style="flex: 1 1 480px; display: flex; flex-direction: column; gap: 28px">
+<div style="font-size: 14px; font-weight: 600; letter-spacing: 0.14em; color: var(--accenttext)">YUVRA.AI &middot; PRIVATE BY DESIGN</div>
+<h1 style="margin: 0; font-family: 'Sora', sans-serif; font-weight: 600; font-size: 68px; line-height: 1.04; letter-spacing: -0.03em">An AI that thinks on your device.</h1>
+<p style="margin: 0; font-size: 21px; line-height: 1.5; color: var(--muted); max-width: 560px">Yuvra is a family of language models trained from scratch. They run on your own phone or PC, remember only what you let them, and show where an answer came from.</p>
+<div style="display: flex; flex-wrap: wrap; gap: 14px">
+<a href="#try" style="background: var(--accent); color: var(--onaccent); border-radius: 999px; padding: 16px 28px; font-weight: 600; font-size: 18px">Open the web app</a>
+<a href="#models" style="border: 1px solid var(--line); border-radius: 999px; padding: 16px 28px; font-weight: 600; font-size: 18px">Meet the models</a>
+</div>
+<div style="font-size: 15px; color: var(--muted)">Early access for a small test group. Android app to follow.</div>
+</div>
+
+<div style="flex: 1 1 420px; background: var(--surface); border: 1px solid var(--line); border-radius: 24px; padding: 24px; display: flex; flex-direction: column; gap: 18px">
+<div style="align-self: flex-end; max-width: 80%; background: var(--surface2); border-radius: 18px 18px 4px 18px; padding: 14px 18px">Why is the sky blue?</div>
+<div style="max-width: 94%; display: flex; flex-direction: column; gap: 12px">
+<div style="display: flex; align-items: center; gap: 8px; font-size: 14px; color: var(--muted)">
+<svg width="16" height="16" viewBox="0 0 64 64" fill="none" aria-hidden="true"><circle cx="32" cy="32" r="12" style="fill: var(--sun)"/><circle cx="32" cy="32" r="26" style="stroke: var(--sun)" stroke-opacity="0.4" stroke-width="5"/></svg>
+Read 2 notes from Wikipedia
+</div>
+<div style="background: var(--bg); border: 1px solid var(--line); border-radius: 18px 18px 18px 4px; padding: 14px 18px">Sunlight is made of many colours. Air scatters the short blue wavelengths far more than the long red ones, so blue light reaches your eyes from every direction.</div>
+<div style="display: flex; flex-wrap: wrap; gap: 8px; font-size: 14px">
+<span style="border: 1px solid var(--line); border-radius: 999px; padding: 4px 12px; color: var(--muted)">Source: Wikipedia, Rayleigh scattering</span>
+</div>
+</div>
+<div style="border: 1px solid var(--line); border-radius: 18px; padding: 12px 12px 12px 18px; display: flex; flex-direction: column; gap: 12px; color: var(--muted); font-size: 15px">
+<span>Message Yuvra&hellip;</span>
+<div style="display: flex; align-items: center; justify-content: space-between">
+<span style="border: 1px solid var(--line); border-radius: 10px; padding: 6px 12px; color: var(--text); font-weight: 600">Flare <span style="color: var(--muted)">&#9662;</span></span>
+<span style="background: var(--accent); color: var(--onaccent); border-radius: 10px; width: 36px; height: 36px; display: flex; align-items: center; justify-content: center; font-weight: 700" aria-hidden="true">&uarr;</span>
+</div>
+</div>
+</div>
+</div>
+
+<!-- models -->
+<div id="models" style="border-top: 1px solid var(--line)">
+<div style="max-width: 1200px; margin: 0 auto; padding: 96px 24px; display: flex; flex-direction: column; gap: 40px">
+<div style="display: flex; flex-direction: column; gap: 12px; max-width: 680px">
+<h2 style="margin: 0; font-family: 'Sora', sans-serif; font-weight: 600; font-size: 44px; letter-spacing: -0.02em">Four models, one family</h2>
+<p style="margin: 0; color: var(--muted); font-size: 19px">Each name has its own version number, so a newer Equinox replaces the older one. Pick one yourself, or let Auto choose per question.</p>
+</div>
+<div style="display: flex; flex-wrap: wrap; gap: 20px">
+
+<div style="flex: 1 1 250px; background: var(--surface); border: 1px solid var(--line); border-radius: 20px; padding: 28px; display: flex; flex-direction: column; gap: 14px">
+<svg width="34" height="34" viewBox="0 0 64 64" fill="none" aria-hidden="true"><path d="M32 56 C22 56 12 51 10 41 C5 37 5 28 11 24 C10 16 18 8 26 11 C29 6 35 6 38 11 C46 8 54 16 53 24 C59 28 59 37 54 41 C52 51 42 56 32 56 Z" style="stroke: var(--muted)" stroke-width="5" stroke-linejoin="round"/><circle cx="32" cy="36" r="6.5" style="fill: var(--muted)"/></svg>
+<div style="font-size: 13px; font-weight: 600; letter-spacing: 0.1em; color: var(--accenttext)">IN TRAINING</div>
+<div style="font-family: 'Sora', sans-serif; font-weight: 600; font-size: 28px">Flare</div>
+<div style="color: var(--muted)">Fast and light, for quick answers. Available now in beta.</div>
+</div>
+
+<div style="flex: 1 1 250px; background: var(--surface); border: 1px solid var(--line); border-radius: 20px; padding: 28px; display: flex; flex-direction: column; gap: 14px">
+<svg width="48" height="48" viewBox="0 0 64 64" fill="none" aria-hidden="true"><path d="M32 56 C22 56 12 51 10 41 C5 37 5 28 11 24 C10 16 18 8 26 11 C29 6 35 6 38 11 C46 8 54 16 53 24 C59 28 59 37 54 41 C52 51 42 56 32 56 Z" style="stroke: var(--text)" stroke-width="4" stroke-linejoin="round"/><circle cx="32" cy="36" r="6.5" style="fill: var(--text)"/></svg>
+<div style="font-size: 13px; font-weight: 600; letter-spacing: 0.1em; color: var(--muted)">PLANNED</div>
+<div style="font-family: 'Sora', sans-serif; font-weight: 600; font-size: 28px">Equinox</div>
+<div style="color: var(--muted)">For everyday work and homework, with skills, tools and effort levels.</div>
+</div>
+
+<div style="flex: 1 1 250px; background: var(--surface); border: 1px solid var(--line); border-radius: 20px; padding: 28px; display: flex; flex-direction: column; gap: 14px">
+<svg width="62" height="62" viewBox="0 0 64 64" fill="none" aria-hidden="true"><path d="M32 56 C22 56 12 51 10 41 C5 37 5 28 11 24 C10 16 18 8 26 11 C29 6 35 6 38 11 C46 8 54 16 53 24 C59 28 59 37 54 41 C52 51 42 56 32 56 Z" style="stroke: var(--text)" stroke-width="3.5" stroke-linejoin="round"/><path d="M32 55 V36 M32 36 L21 18 M32 36 L43 18" style="stroke: var(--text)" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"/><circle cx="32" cy="36" r="6" style="fill: var(--text)"/></svg>
+<div style="font-size: 13px; font-weight: 600; letter-spacing: 0.1em; color: var(--muted)">PLANNED</div>
+<div style="font-family: 'Sora', sans-serif; font-weight: 600; font-size: 28px">Solstice</div>
+<div style="color: var(--muted)">For harder questions and long writing.</div>
+</div>
+
+<div style="flex: 1 1 250px; background: var(--surface); border: 1px solid var(--line); border-radius: 20px; padding: 28px; display: flex; flex-direction: column; gap: 14px">
+<svg width="78" height="78" viewBox="0 0 64 64" fill="none" aria-hidden="true"><path d="M32 56 C22 56 12 51 10 41 C5 37 5 28 11 24 C10 16 18 8 26 11 C29 6 35 6 38 11 C46 8 54 16 53 24 C59 28 59 37 54 41 C52 51 42 56 32 56 Z" style="stroke: var(--sun)" stroke-width="3" stroke-linejoin="round"/><path d="M32 55 V36 M32 36 L21 18 M32 36 L43 18" style="stroke: var(--text)" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/><path d="M15 27 C19 22 24 24 24 29 M14 40 C19 37 22 41 22 46 M49 27 C45 22 40 24 40 29 M50 40 C45 37 42 41 42 46" stroke-opacity="0.55" style="stroke: var(--text)" stroke-width="2" stroke-linecap="round"/><circle cx="32" cy="36" r="5" style="fill: var(--sun)"/></svg>
+<div style="font-size: 13px; font-weight: 600; letter-spacing: 0.1em; color: var(--muted)">PLANNED</div>
+<div style="font-family: 'Sora', sans-serif; font-weight: 600; font-size: 28px">Apogee</div>
+<div style="color: var(--muted)">For your toughest challenges.</div>
+</div>
+</div>
+</div>
+</div>
+
+<!-- features -->
+<div id="features" style="border-top: 1px solid var(--line)">
+<div style="max-width: 1200px; margin: 0 auto; padding: 96px 24px; display: flex; flex-direction: column; gap: 40px">
+<h2 style="margin: 0; font-family: 'Sora', sans-serif; font-weight: 600; font-size: 44px; letter-spacing: -0.02em">What it does</h2>
+<div style="display: flex; flex-wrap: wrap; gap: 20px">
+
+<div style="flex: 1 1 520px; background: var(--surface); border: 1px solid var(--line); border-radius: 20px; padding: 32px; display: flex; flex-direction: column; gap: 12px">
+<h3 style="margin: 0; font-family: 'Sora', sans-serif; font-weight: 600; font-size: 24px">Private by default</h3>
+<p style="margin: 0; color: var(--muted)">The model is a file on your device. No account, no tracking, and nothing is sent anywhere unless you switch on remote mode or web search, and the screen always says when.</p>
+</div>
+
+<div style="flex: 1 1 520px; background: var(--surface); border: 1px solid var(--line); border-radius: 20px; padding: 32px; display: flex; flex-direction: column; gap: 12px">
+<h3 style="margin: 0; font-family: 'Sora', sans-serif; font-weight: 600; font-size: 24px">Remembers you, on your terms</h3>
+<p style="margin: 0; color: var(--muted)">It can save facts like your name, finds earlier chats by meaning, never saves passwords, and has a Memory screen where you can edit or delete anything. Private chats are never stored.</p>
+</div>
+
+<div style="flex: 1 1 520px; background: var(--surface); border: 1px solid var(--line); border-radius: 20px; padding: 32px; display: flex; flex-direction: column; gap: 12px">
+<h3 style="margin: 0; font-family: 'Sora', sans-serif; font-weight: 600; font-size: 24px">Looks things up and shows its sources</h3>
+<p style="margin: 0; color: var(--muted)">Wikipedia is built in. Web search is off by default; when it is on, answers name the site and date. If the notes don&rsquo;t say, it says it doesn&rsquo;t know.</p>
+</div>
+
+<div style="flex: 1 1 520px; background: var(--surface); border: 1px solid var(--line); border-radius: 20px; padding: 32px; display: flex; flex-direction: column; gap: 12px">
+<h3 style="margin: 0; font-family: 'Sora', sans-serif; font-weight: 600; font-size: 24px">Skills for real jobs</h3>
+<p style="margin: 0; color: var(--muted)">A Study helper and a Teacher assistant (both Beta) make worksheets, reading passages and lesson plans, and save them as a PDF or Word file.</p>
+</div>
+</div>
+</div>
+</div>
+
+<!-- honest -->
+<div id="honest" style="border-top: 1px solid var(--line)">
+<div style="max-width: 1200px; margin: 0 auto; padding: 96px 24px; display: flex; flex-direction: column; gap: 48px">
+<div style="display: flex; flex-direction: column; gap: 16px; max-width: 760px">
+<div style="font-size: 14px; font-weight: 600; letter-spacing: 0.14em; color: var(--accenttext)">WHAT YUVRA IS</div>
+<h2 style="margin: 0; font-family: 'Sora', sans-serif; font-weight: 600; font-size: 52px; line-height: 1.08; letter-spacing: -0.025em">Built from the ground up.</h2>
+<p style="margin: 0; color: var(--muted); font-size: 20px">Most AI apps are a thin layer on someone else&rsquo;s model. Yuvra is the model: its own tokenizer, its own transformer and its own training run, with no borrowed weights and no other assistant&rsquo;s answers in its lessons.</p>
+</div>
+
+<div style="display: flex; flex-wrap: wrap; gap: 20px">
+<div style="flex: 1 1 240px; border-top: 2px solid var(--accent); padding-top: 16px"><div style="font-family: 'Sora', sans-serif; font-weight: 600; font-size: 40px; letter-spacing: -0.02em">0</div><div style="color: var(--muted)">borrowed weights. Every parameter is trained here.</div></div>
+<div style="flex: 1 1 240px; border-top: 2px solid var(--accent); padding-top: 16px"><div style="font-family: 'Sora', sans-serif; font-weight: 600; font-size: 40px; letter-spacing: -0.02em">1.12B</div><div style="color: var(--muted)">parameters in Flare 3.5, now in training.</div></div>
+<div style="flex: 1 1 240px; border-top: 2px solid var(--accent); padding-top: 16px"><div style="font-family: 'Sora', sans-serif; font-weight: 600; font-size: 40px; letter-spacing: -0.02em">40B</div><div style="color: var(--muted)">tokens of web, Wikipedia, code and maths read by Flare 3.5.</div></div>
+<div style="flex: 1 1 240px; border-top: 2px solid var(--accent); padding-top: 16px"><div style="font-family: 'Sora', sans-serif; font-weight: 600; font-size: 40px; letter-spacing: -0.02em">4</div><div style="color: var(--muted)">models planned, from a fast one for quick answers to one for your toughest work.</div></div>
+</div>
+
+<div style="display: flex; flex-wrap: wrap; gap: 20px">
+<div style="flex: 1 1 320px; background: var(--surface); border: 1px solid var(--line); border-radius: 20px; padding: 32px; display: flex; flex-direction: column; gap: 12px">
+<h3 style="margin: 0; font-family: 'Sora', sans-serif; font-weight: 600; font-size: 24px">Its own brain</h3>
+<p style="margin: 0; color: var(--muted)">We wrote the tokenizer, the transformer and the training loop, then trained it on carefully chosen reading: educational pages, everyday web text, all of English Wikipedia, code in many languages and step-by-step maths.</p>
+</div>
+<div style="flex: 1 1 320px; background: var(--surface); border: 1px solid var(--line); border-radius: 20px; padding: 32px; display: flex; flex-direction: column; gap: 12px">
+<h3 style="margin: 0; font-family: 'Sora', sans-serif; font-weight: 600; font-size: 24px">Taught like a good assistant</h3>
+<p style="margin: 0; color: var(--muted)">It answers from its notes and names the source. It says &ldquo;I don&rsquo;t know&rdquo; instead of guessing, rechecks when you say it&rsquo;s wrong, keeps to exact counts and formats, follows a change of topic, and reads through typos.</p>
+</div>
+<div style="flex: 1 1 320px; background: var(--surface); border: 1px solid var(--line); border-radius: 20px; padding: 32px; display: flex; flex-direction: column; gap: 12px">
+<h3 style="margin: 0; font-family: 'Sora', sans-serif; font-weight: 600; font-size: 24px">A family that keeps improving</h3>
+<p style="margin: 0; color: var(--muted)">Every new version keeps everything the last one learned, and must beat it on the same tests before it replaces it. Bigger siblings follow, and the app stays the same.</p>
+</div>
+</div>
+
+<div style="font-size: 15px; color: var(--muted)">Like any AI, Yuvra can make mistakes. That is why it shows its sources and which model answered, so you can check what matters.</div>
+</div>
+
+<!-- home or cloud, private or public -->
+<div style="border-top: 1px solid var(--line)">
+<div style="max-width: 1200px; margin: 0 auto; padding: 96px 24px; display: flex; flex-direction: column; gap: 40px">
+<div style="display: flex; flex-direction: column; gap: 12px; max-width: 700px">
+<h2 style="margin: 0; font-family: 'Sora', sans-serif; font-weight: 600; font-size: 44px; letter-spacing: -0.02em">At home or in the cloud. Private or public.</h2>
+<p style="margin: 0; color: var(--muted); font-size: 19px">Any Yuvra model can run wherever you want it, and be shared as widely as you want. Same models, same app; only the address and the guest list change.</p>
+</div>
+<div style="display: flex; flex-wrap: wrap; gap: 20px">
+<div style="flex: 1 1 250px; background: var(--surface); border: 1px solid var(--line); border-radius: 20px; padding: 28px; display: flex; flex-direction: column; gap: 12px">
+<div style="font-size: 13px; font-weight: 600; letter-spacing: 0.1em; color: var(--accenttext)">AVAILABLE NOW</div>
+<div style="font-family: 'Sora', sans-serif; font-weight: 600; font-size: 24px">Home</div>
+<div style="color: var(--muted)">On your phone or your own PC, on your terms.</div>
+</div>
+<div style="flex: 1 1 250px; background: var(--surface); border: 1px solid var(--line); border-radius: 20px; padding: 28px; display: flex; flex-direction: column; gap: 12px">
+<div style="font-size: 13px; font-weight: 600; letter-spacing: 0.1em; color: var(--muted)">PLANNED</div>
+<div style="font-family: 'Sora', sans-serif; font-weight: 600; font-size: 24px">Cloud</div>
+<div style="color: var(--muted)">The same models on a server, so Yuvra works when your PC is off.</div>
+</div>
+<div style="flex: 1 1 250px; background: var(--surface); border: 1px solid var(--line); border-radius: 20px; padding: 28px; display: flex; flex-direction: column; gap: 12px">
+<div style="font-size: 13px; font-weight: 600; letter-spacing: 0.1em; color: var(--accenttext)">EARLY ACCESS</div>
+<div style="font-family: 'Sora', sans-serif; font-weight: 600; font-size: 24px">Private</div>
+<div style="color: var(--muted)">Just you and the people you invite, each with their own key.</div>
+</div>
+<div style="flex: 1 1 250px; background: var(--surface); border: 1px solid var(--line); border-radius: 20px; padding: 28px; display: flex; flex-direction: column; gap: 12px">
+<div style="font-size: 13px; font-weight: 600; letter-spacing: 0.1em; color: var(--muted)">PLANNED</div>
+<div style="font-family: 'Sora', sans-serif; font-weight: 600; font-size: 24px">Public</div>
+<div style="color: var(--muted)">Open to anyone, with accounts and fair limits.</div>
+</div>
+</div>
+</div>
+</div>
+
+<!-- try -->
+<div id="try" style="border-top: 1px solid var(--line)">
+<div style="max-width: 1200px; margin: 0 auto; padding: 96px 24px; display: flex; flex-direction: column; align-items: center; gap: 24px; text-align: center">
+<svg width="80" height="80" viewBox="0 0 64 64" fill="none" aria-label="Yuvra">
+<path d="M32 56 C22 56 12 51 10 41 C5 37 5 28 11 24 C10 16 18 8 26 11 C29 6 35 6 38 11 C46 8 54 16 53 24 C59 28 59 37 54 41 C52 51 42 56 32 56 Z" style="stroke: var(--text)" stroke-width="4" stroke-linejoin="round"/>
+<path d="M32 55 V36 M32 36 L21 18 M32 36 L43 18" style="stroke: var(--text)" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+<circle cx="32" cy="36" r="6.5" style="fill: var(--sun)"/>
+</svg>
+<h2 style="margin: 0; font-family: 'Sora', sans-serif; font-weight: 600; font-size: 48px; letter-spacing: -0.02em">Try Yuvra</h2>
+<p style="margin: 0; color: var(--muted); font-size: 19px; max-width: 520px">Early access is open to a small test group. Ask for an invite and you&rsquo;ll get a link and a key.</p>
+<a href="#top" style="background: var(--accent); color: var(--onaccent); border-radius: 999px; padding: 16px 32px; font-weight: 600; font-size: 18px">Request an invite</a>
+</div>
+</div>
+
+<!-- footer -->
+<div style="border-top: 1px solid var(--line)">
+<div style="max-width: 1200px; margin: 0 auto; padding: 32px 24px 48px; display: flex; flex-wrap: wrap; justify-content: space-between; gap: 16px; color: var(--muted); font-size: 15px">
+<span>&copy; Yuvra.AI [YEAR]. Private by design.</span>
+<div style="display: flex; flex-wrap: wrap; gap: 24px">
+<a href="#models" style="color: var(--muted)">Models</a>
+<a href="#features" style="color: var(--muted)">What it does</a>
+<a href="#honest" style="color: var(--muted)">Privacy and honesty</a>
+</div>
+</div>
+</div>
+
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"theme":{"editor":"enum","options":["dark","light"],"default":"dark"},"model":{"editor":"enum","options":["flare","equinox","solstice","apogee","brand"],"default":"brand"},"$preview":{"width":1360,"height":3000}}'>
+const BASE = {
+  dark: {bg: '#07080D', side: '#0A0B11', surface: '#0F1119', surface2: '#161926', line: '#232739', text: '#EEF0F6', muted: '#9AA3BC'},
+  light: {bg: '#F7F8FC', side: '#EEF0F7', surface: '#FFFFFF', surface2: '#EEF0F7', line: '#D8DCEA', text: '#0D0F1A', muted: '#4A526B'}
+};
+const MODEL = {
+  brand: {dark: {accent: '#F5A524', onaccent: '#1A1204', accenttext: '#F5A524', sun: '#F5A524', core: '#F5A524', glow: 'rgba(245,165,36,.14)'}, light: {accent: '#F5A524', onaccent: '#1A1204', accenttext: '#8F5600', sun: '#E08A00', core: '#E08A00', glow: 'rgba(245,165,36,.12)'}},
+  flare: {dark: {accent: '#FF4B1F', onaccent: '#1A0500', accenttext: '#FF6B3D', sun: '#FF4B1F', core: '#FFF3E6', glow: 'rgba(255,75,31,.20)'}, light: {accent: '#FF4B1F', onaccent: '#1A0500', accenttext: '#B83208', sun: '#E5340A', core: '#FFF3E6', glow: 'rgba(255,75,31,.12)'}},
+  equinox: {dark: {accent: '#EEF0F6', onaccent: '#07080D', accenttext: '#EEF0F6', sun: '#EEF0F6', core: '#07080D', glow: 'rgba(238,240,246,.08)'}, light: {accent: '#0D0F1A', onaccent: '#FFFFFF', accenttext: '#0D0F1A', sun: '#0D0F1A', core: '#FFFFFF', glow: 'rgba(13,15,26,.07)'}},
+  solstice: {dark: {accent: '#F2A60C', onaccent: '#1F1400', accenttext: '#FFBE3B', sun: '#F2A60C', core: '#FFE7A0', glow: 'rgba(242,166,12,.18)'}, light: {accent: '#F2A60C', onaccent: '#1F1400', accenttext: '#8A5A00', sun: '#D18A00', core: '#FFE7A0', glow: 'rgba(242,166,12,.13)'}},
+  apogee: {dark: {accent: '#A8D1F5', onaccent: '#06121F', accenttext: '#B5D8F8', sun: '#A8D1F5', core: '#F4F9FF', glow: 'rgba(168,209,245,.15)'}, light: {accent: '#A8D1F5', onaccent: '#06121F', accenttext: '#2A5F96', sun: '#4F8FC9', core: '#F4F9FF', glow: 'rgba(120,170,220,.15)'}}
+};
+class Component extends DCLogic {
+  renderVals() {
+    const mode = this.props.theme === 'light' ? 'light' : 'dark';
+    const id = MODEL[this.props.model] ? this.props.model : 'brand';
+    const t = Object.assign({}, BASE[mode], MODEL[id][mode]);
+    return { themeStyle: Object.keys(t).map((k) => '--' + k + ':' + t[k]).join(';') };
+  }
+}
+</script>
+</body>
+</html>

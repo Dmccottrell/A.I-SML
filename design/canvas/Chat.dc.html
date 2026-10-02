@@ -1,0 +1,215 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Yuvra chat on desktop</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Sora:wght@500;600;700&family=DM+Sans:wght@400;500;600&display=swap">
+<style>
+body{margin:0}
+div, span, button, svg, path, circle { transition: background-color .7s ease, color .7s ease, border-color .7s ease, fill .7s ease, stroke .7s ease, opacity .7s ease; }
+circle[style*="fill: var(--sun)"] { fill: var(--core) !important; stroke: var(--sun); stroke-width: 3; }
+@keyframes burst { 0% { opacity: 0; transform: scale(0.08); } 14% { opacity: 0.95; } 100% { opacity: 0; transform: scale(2.8); } }
+@keyframes swell { 0% { opacity: 0; transform: scale(0.3); } 45% { opacity: 0.6; } 100% { opacity: 0; transform: scale(2.2); } }
+@keyframes spin { 0% { opacity: 0; transform: rotate(-120deg) scale(0.2); } 35% { opacity: 0.8; } 100% { opacity: 0; transform: rotate(200deg) scale(2.6); } }
+@keyframes drift { 0% { opacity: 0; transform: scale(1.5); } 40% { opacity: 0.6; } 100% { opacity: 0; transform: scale(0.9) translateY(-40px); } }
+</style>
+</helmet>
+<div style="{{themeStyle}}; position: relative; overflow: hidden; width: 1360px; height: 860px; display: flex; background: var(--bg); background-image: radial-gradient(1000px 460px at 62% -10%, var(--glow), transparent 70%); color: var(--text); font-family: 'DM Sans', sans-serif; font-size: 16px; line-height: 1.5">
+
+<!-- transition effect when the model changes -->
+<sc-if value="{{washing}}" hint-placeholder-val="{{ false }}">
+<div style="position: absolute; left: 0; top: 0; right: 0; bottom: 0; pointer-events: none; z-index: 20; overflow: hidden">
+<div style="{{washStyle}}"></div>
+</div>
+</sc-if>
+
+<!-- sidebar -->
+<div style="width: 280px; flex-shrink: 0; box-sizing: border-box; background: var(--side); border-right: 1px solid var(--line); padding: 20px 16px; display: flex; flex-direction: column; gap: 20px">
+<div style="display: flex; align-items: center; gap: 10px; padding: 0 8px">
+<svg width="32" height="32" viewBox="0 0 64 64" fill="none" aria-label="Yuvra">
+<path d="M32 56 C22 56 12 51 10 41 C5 37 5 28 11 24 C10 16 18 8 26 11 C29 6 35 6 38 11 C46 8 54 16 53 24 C59 28 59 37 54 41 C52 51 42 56 32 56 Z" style="stroke: var(--text)" stroke-width="4" stroke-linejoin="round"/>
+<path d="M32 55 V36 M32 36 L21 18 M32 36 L43 18" style="stroke: var(--text)" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+<circle cx="32" cy="36" r="6.5" style="fill: var(--sun)"/>
+</svg>
+<span style="font-family: 'Sora', sans-serif; font-weight: 600; font-size: 20px; letter-spacing: -0.02em">Yuvra</span>
+</div>
+<button style="background: var(--accent); color: var(--onaccent); border: 0; border-radius: 12px; padding: 12px 16px; font: 600 16px 'DM Sans', sans-serif; text-align: left; min-height: 44px">+ New chat</button>
+<div style="display: flex; flex-direction: column; gap: 4px">
+<div style="font-size: 12px; font-weight: 600; letter-spacing: 0.1em; color: var(--muted); padding: 0 8px 4px">TODAY</div>
+<div style="background: var(--surface2); border-radius: 10px; padding: 10px 12px">Worksheet: 7 times table</div>
+<div style="padding: 10px 12px; color: var(--muted)">Why is the sky blue?</div>
+<div style="padding: 10px 12px; color: var(--muted)">Plan for Friday&rsquo;s spelling test</div>
+<div style="font-size: 12px; font-weight: 600; letter-spacing: 0.1em; color: var(--muted); padding: 12px 8px 4px">EARLIER</div>
+<div style="padding: 10px 12px; color: var(--muted)">Parent email: field trip</div>
+<div style="padding: 10px 12px; color: var(--muted)">Capital of Illinois</div>
+</div>
+<div style="margin-top: auto; display: flex; flex-direction: column; gap: 4px; border-top: 1px solid var(--line); padding-top: 16px">
+<div style="padding: 10px 12px">Memory <span style="color: var(--muted)">&middot; 3 facts</span></div>
+<div style="padding: 10px 12px">Skills</div>
+<div style="padding: 10px 12px">Documents</div>
+<div style="padding: 10px 12px">Settings</div>
+</div>
+</div>
+
+<!-- main -->
+<div style="flex: 1; min-width: 0; display: flex; flex-direction: column">
+
+<div style="height: 64px; box-sizing: border-box; padding: 0 28px; display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid var(--line)">
+<div style="font-weight: 600">Worksheet: 7 times table</div>
+<div style="color: var(--muted); font-size: 15px">Share</div>
+</div>
+
+<div style="flex: 1; overflow: hidden; padding: 32px 0; display: flex; flex-direction: column; align-items: center">
+<div style="width: 760px; display: flex; flex-direction: column; gap: 28px">
+
+<div style="align-self: flex-end; max-width: 520px; background: var(--surface2); border-radius: 18px 18px 4px 18px; padding: 14px 18px">Make a 10-question worksheet on multiplication facts for 7s</div>
+
+<div style="display: flex; flex-direction: column; gap: 12px">
+<div style="display: flex; align-items: center; gap: 8px; font-size: 14px; color: var(--muted)">
+<svg width="16" height="16" viewBox="0 0 64 64" fill="none" aria-hidden="true"><circle cx="32" cy="32" r="12" style="fill: var(--sun)"/><circle cx="32" cy="32" r="26" style="stroke: var(--sun)" stroke-opacity="0.4" stroke-width="5"/></svg>
+{{modelName}} &middot; Teacher assistant
+</div>
+<div style="background: var(--surface); border: 1px solid var(--line); border-radius: 18px 18px 18px 4px; padding: 22px 26px; display: flex; flex-direction: column; gap: 10px">
+<div style="font-family: 'Sora', sans-serif; font-weight: 600; font-size: 22px">Multiplying by 7</div>
+<div style="color: var(--muted)">Name: ________ &nbsp;&nbsp; Date: ________</div>
+<div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px 32px">
+<div>1. 7 &times; 3 = ____</div><div>6. 7 &times; 9 = ____</div>
+<div>2. 7 &times; 5 = ____</div><div>7. 7 &times; 2 = ____</div>
+<div>3. 7 &times; 8 = ____</div><div>8. 7 &times; 6 = ____</div>
+<div>4. 7 &times; 4 = ____</div><div>9. 7 &times; 7 = ____</div>
+<div>5. 7 &times; 1 = ____</div><div>10. 7 &times; 10 = ____</div>
+</div>
+</div>
+<div style="display: flex; flex-wrap: wrap; gap: 10px">
+<button style="background: var(--surface2); color: var(--text); border: 1px solid var(--line); border-radius: 10px; padding: 10px 16px; font: 500 15px 'DM Sans', sans-serif; min-height: 44px">Save PDF</button>
+<button style="background: var(--surface2); color: var(--text); border: 1px solid var(--line); border-radius: 10px; padding: 10px 16px; font: 500 15px 'DM Sans', sans-serif; min-height: 44px">Save Word</button>
+<button style="background: var(--surface2); color: var(--text); border: 1px solid var(--line); border-radius: 10px; padding: 10px 16px; font: 500 15px 'DM Sans', sans-serif; min-height: 44px">Copy</button>
+</div>
+<div style="font-size: 14px; color: var(--muted)">Sources: none (made from what I know). Small models make mistakes: check before you print.</div>
+<div style="display: flex; flex-wrap: wrap; gap: 10px">
+<span style="border: 1px solid var(--accenttext); color: var(--accenttext); border-radius: 999px; padding: 8px 16px; font-size: 15px">Answer key</span>
+<span style="border: 1px solid var(--line); color: var(--muted); border-radius: 999px; padding: 8px 16px; font-size: 15px">Make it easier</span>
+<span style="border: 1px solid var(--line); color: var(--muted); border-radius: 999px; padding: 8px 16px; font-size: 15px">Quiz me</span>
+</div>
+</div>
+</div>
+</div>
+
+<!-- composer: the model is chosen here -->
+<div style="padding: 0 0 20px; display: flex; flex-direction: column; align-items: center; gap: 10px">
+<div style="position: relative; width: 760px">
+
+<sc-if value="{{open}}" hint-placeholder-val="{{ false }}">
+<div style="position: absolute; left: 0; bottom: 100%; margin-bottom: 10px; width: 430px; box-sizing: border-box; background: var(--surface); border: 1px solid var(--line); border-radius: 20px; padding: 12px; display: flex; flex-direction: column; gap: 6px; z-index: 10">
+<button onClick="{{ pickAuto }}" style="text-align: left; background: transparent; color: var(--text); border: 1px solid var(--line); border-radius: 14px; padding: 10px 14px; display: flex; align-items: center; gap: 12px; font: 400 16px 'DM Sans', sans-serif; min-height: 44px">
+<svg width="26" height="26" viewBox="0 0 64 64" fill="none" aria-hidden="true"><circle cx="32" cy="32" r="12" style="fill: var(--sun)"/><circle cx="32" cy="32" r="26" style="stroke: var(--sun)" stroke-opacity="0.45" stroke-width="4"/></svg>
+<span style="flex: 1"><span style="font-weight: 600">Auto</span><br><span style="font-size: 14px; color: var(--muted)">Picks the best model and effort for each question</span></span>
+</button>
+<sc-for list="{{models}}" as="m" hint-placeholder-count="4">
+<button onClick="{{ m.pick }}" style="text-align: left; background: {{m.bg}}; color: var(--text); border: 1px solid {{m.border}}; border-radius: 14px; padding: 10px 14px; display: flex; align-items: center; gap: 12px; font: 400 16px 'DM Sans', sans-serif; min-height: 44px">
+<svg width="30" height="30" viewBox="0 0 64 64" fill="none" aria-hidden="true">
+<path d="M32 56 C22 56 12 51 10 41 C5 37 5 28 11 24 C10 16 18 8 26 11 C29 6 35 6 38 11 C46 8 54 16 53 24 C59 28 59 37 54 41 C52 51 42 56 32 56 Z" style="stroke: {{m.outline}}" stroke-width="4" stroke-linejoin="round"/>
+<path d="M32 55 V36 M32 36 L21 18 M32 36 L43 18" style="stroke: var(--text); opacity: {{m.yOp}}" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M15 27 C19 22 24 24 24 29 M49 27 C45 22 40 24 40 29" style="stroke: var(--text); opacity: {{m.foldOp}}" stroke-width="2.5" stroke-linecap="round"/>
+<circle cx="32" cy="36" r="6.5" fill="{{m.dot}}"/>
+</svg>
+<span style="flex: 1"><span style="font-weight: 600">{{m.name}}</span> <span style="color: var(--muted)">{{m.version}}</span><br><span style="font-size: 14px; color: var(--muted)">{{m.tagline}}</span></span>
+<span style="width: 14px; height: 14px; border-radius: 999px; background: {{m.dot}}"></span>
+</button>
+</sc-for>
+</div>
+</sc-if>
+
+<div style="box-sizing: border-box; background: var(--surface); border: 1px solid var(--line); border-radius: 20px; padding: 16px 14px 12px 20px; display: flex; flex-direction: column; gap: 14px">
+<div style="color: var(--muted)">Message Yuvra&hellip;</div>
+<div style="display: flex; align-items: center; justify-content: space-between">
+<div style="display: flex; align-items: center; gap: 10px">
+<button aria-label="Attach, skills, web search" style="background: transparent; color: var(--text); border: 1px solid var(--line); border-radius: 12px; width: 44px; height: 44px; font: 400 22px 'DM Sans', sans-serif">+</button>
+<button onClick="{{ toggle }}" aria-label="Choose model" style="background: var(--surface2); color: var(--text); border: 1px solid var(--line); border-radius: 12px; padding: 8px 14px 8px 10px; font: 600 16px 'DM Sans', sans-serif; display: flex; align-items: center; gap: 8px; min-height: 44px">
+<svg width="26" height="26" viewBox="0 0 64 64" fill="none" aria-hidden="true">
+<path d="M32 56 C22 56 12 51 10 41 C5 37 5 28 11 24 C10 16 18 8 26 11 C29 6 35 6 38 11 C46 8 54 16 53 24 C59 28 59 37 54 41 C52 51 42 56 32 56 Z" style="stroke: {{chip.outline}}" stroke-width="4.5" stroke-linejoin="round"/>
+<path d="M32 55 V36 M32 36 L21 18 M32 36 L43 18" style="stroke: var(--text); opacity: {{chip.yOp}}" stroke-width="4.5" stroke-linecap="round" stroke-linejoin="round"/>
+<circle cx="32" cy="36" r="7" style="fill: var(--sun)"/>
+</svg>
+{{chip.name}} <span style="color: var(--muted)">&#9662;</span></button>
+<button aria-label="Effort: Balanced" style="background: transparent; color: var(--muted); border: 1px solid var(--line); border-radius: 12px; padding: 8px 14px; font: 500 15px 'DM Sans', sans-serif; display: flex; align-items: center; gap: 8px; min-height: 44px">Balanced <span>&#9662;</span></button>
+</div>
+<button aria-label="Send" style="background: var(--accent); color: var(--onaccent); border: 0; border-radius: 12px; width: 44px; height: 44px; font: 700 20px 'DM Sans', sans-serif">&uarr;</button>
+</div>
+</div>
+</div>
+<div style="font-size: 13px; color: var(--muted)">Memory: 3 facts &middot; Context 31%</div>
+</div>
+</div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"theme":{"editor":"enum","options":["dark","light"],"default":"dark"},"model":{"editor":"enum","options":["flare","equinox","solstice","apogee","brand"],"default":"flare"},"$preview":{"width":1360,"height":860}}'>
+const BASE = {
+  dark: {bg: '#07080D', side: '#0A0B11', surface: '#0F1119', surface2: '#161926', line: '#232739', text: '#EEF0F6', muted: '#9AA3BC'},
+  light: {bg: '#F7F8FC', side: '#EEF0F7', surface: '#FFFFFF', surface2: '#EEF0F7', line: '#D8DCEA', text: '#0D0F1A', muted: '#4A526B'}
+};
+const MODEL = {
+  brand: {dark: {accent: '#F5A524', onaccent: '#1A1204', accenttext: '#F5A524', sun: '#F5A524', core: '#F5A524', glow: 'rgba(245,165,36,.14)'}, light: {accent: '#F5A524', onaccent: '#1A1204', accenttext: '#8F5600', sun: '#E08A00', core: '#E08A00', glow: 'rgba(245,165,36,.12)'}},
+  flare: {dark: {accent: '#FF4B1F', onaccent: '#1A0500', accenttext: '#FF6B3D', sun: '#FF4B1F', core: '#FFF3E6', glow: 'rgba(255,75,31,.20)'}, light: {accent: '#FF4B1F', onaccent: '#1A0500', accenttext: '#B83208', sun: '#E5340A', core: '#FFF3E6', glow: 'rgba(255,75,31,.12)'}},
+  equinox: {dark: {accent: '#EEF0F6', onaccent: '#07080D', accenttext: '#EEF0F6', sun: '#EEF0F6', core: '#07080D', glow: 'rgba(238,240,246,.08)'}, light: {accent: '#0D0F1A', onaccent: '#FFFFFF', accenttext: '#0D0F1A', sun: '#0D0F1A', core: '#FFFFFF', glow: 'rgba(13,15,26,.07)'}},
+  solstice: {dark: {accent: '#F2A60C', onaccent: '#1F1400', accenttext: '#FFBE3B', sun: '#F2A60C', core: '#FFE7A0', glow: 'rgba(242,166,12,.18)'}, light: {accent: '#F2A60C', onaccent: '#1F1400', accenttext: '#8A5A00', sun: '#D18A00', core: '#FFE7A0', glow: 'rgba(242,166,12,.13)'}},
+  apogee: {dark: {accent: '#A8D1F5', onaccent: '#06121F', accenttext: '#B5D8F8', sun: '#A8D1F5', core: '#F4F9FF', glow: 'rgba(168,209,245,.15)'}, light: {accent: '#A8D1F5', onaccent: '#06121F', accenttext: '#2A5F96', sun: '#4F8FC9', core: '#F4F9FF', glow: 'rgba(120,170,220,.15)'}}
+};
+const INFO = {
+  flare: {name: 'Flare', version: '3.5', tagline: 'Fast and light, for quick answers', yOp: 0, foldOp: 0},
+  equinox: {name: 'Equinox', version: '4', tagline: 'Everyday work and homework, with skills and tools', yOp: 1, foldOp: 0},
+  solstice: {name: 'Solstice', version: '5', tagline: 'Harder questions and long writing', yOp: 1, foldOp: 0.55},
+  apogee: {name: 'Apogee', version: '6', tagline: 'Your toughest challenges', yOp: 1, foldOp: 0.55}
+};
+const WASH = {
+  flare: 'width: 900px; height: 900px; margin: -450px 0 0 -450px; border-radius: 50%; background: radial-gradient(circle, #FFF3E6 0%, #FF9A3C 14%, #FF4B1F 32%, rgba(255,75,31,0) 64%); animation: burst 700ms cubic-bezier(.1,.9,.2,1) both',
+  equinox: 'width: 1100px; height: 1100px; margin: -550px 0 0 -550px; border-radius: 50%; background: conic-gradient(#EEF0F6 0 50%, #07080D 50% 100%); animation: spin 1000ms ease-in-out both',
+  solstice: 'width: 1000px; height: 1000px; margin: -500px 0 0 -500px; border-radius: 50%; background: radial-gradient(circle, #FFE7A0 0%, #F2A60C 30%, rgba(242,166,12,0) 66%); animation: swell 1300ms ease-out both',
+  apogee: 'width: 1000px; height: 1000px; margin: -500px 0 0 -500px; border-radius: 50%; background: radial-gradient(circle at 30% 40%, #fff 0 2px, transparent 3px), radial-gradient(circle at 62% 28%, #fff 0 1.5px, transparent 2.5px), radial-gradient(circle at 70% 66%, #d8e6f5 0 2px, transparent 3px), radial-gradient(circle at 40% 72%, #fff 0 1.5px, transparent 2.5px), radial-gradient(circle, #F4F9FF 0%, #A8D1F5 34%, rgba(168,209,245,0) 68%); animation: drift 1500ms ease-out both'
+};
+class Component extends DCLogic {
+  constructor(props) {
+    super(props);
+    this.state = {open: false, model: (props && props.model) || 'flare', washing: false};
+  }
+  choose(id) {
+    this.setState({model: id, open: false, washing: true});
+    if (this._t) clearTimeout(this._t);
+    this._t = setTimeout(() => this.setState({washing: false}), 1600);
+  }
+  renderVals() {
+    const mode = this.props.theme === 'light' ? 'light' : 'dark';
+    const id = this.state.model;
+    const tokens = Object.assign({}, BASE[mode], MODEL[id][mode]);
+    const themeStyle = Object.keys(tokens).map((k) => '--' + k + ':' + tokens[k]).join(';');
+    const info = INFO[id] || {name: 'Auto', yOp: 0, foldOp: 0};
+    const outlineFor = (m) => (m === 'apogee' ? 'var(--sun)' : 'var(--text)');
+    return {
+      themeStyle,
+      open: this.state.open,
+      washing: this.state.washing,
+      washStyle: 'position: absolute; left: 50%; top: 55%; ' + (WASH[id] || WASH.flare),
+      modelName: info.name,
+      chip: {name: info.name, yOp: info.yOp, outline: outlineFor(id)},
+      toggle: () => this.setState({open: !this.state.open}),
+      pickAuto: () => this.choose('brand'),
+      models: Object.keys(INFO).map((k) => ({
+        name: INFO[k].name, version: INFO[k].version, tagline: INFO[k].tagline,
+        yOp: INFO[k].yOp, foldOp: INFO[k].foldOp, outline: outlineFor(k),
+        dot: MODEL[k][mode].accent,
+        bg: k === id ? 'var(--surface2)' : 'transparent',
+        border: k === id ? MODEL[k][mode].accent : 'var(--line)',
+        pick: () => this.choose(k)
+      }))
+    };
+  }
+}
+</script>
+</body>
+</html>
