@@ -38,7 +38,7 @@ tests, and what "done" means for the first version).
 | Model list | One `models.json` manifest (id, name, tagline, tier, where, file, size, sha256, min RAM, context, status, which skill packs fit, `keep` rule). Adding a model = adding a line |
 | Download manager | Resume after a dropped connection, check the sha256, show size and storage left, delete old models, keep only a limited selection of older ones |
 | Online mode | Your PC's server over a **private connection** (Tailscale or a Cloudflare tunnel) with a secret key; the app says when it's used, and falls back to the phone model (clearly labelled; a Setting can make it ask first) if the PC is off |
-| Device check | Not enough memory = the card is greyed out with the reason; measured speed shown once known |
+| Device check | Not enough memory = the card is greyed out with the reason; measured speed shown once known. It also picks the **context window** for this device (see "Context window and the device check" below) |
 
 ### 5. Safety, privacy and trust
 - Offline by default; nothing leaves the device unless online mode or web search is switched on, and the screen always shows it.
@@ -57,6 +57,29 @@ tests, and what "done" means for the first version).
 | Accessibility | text size, dark/light, screen-reader labels, large touch targets (the Teacher assistant is for classroom use) |
 
 ---
+
+### Context window and the device check (plan)
+The window (the model's working memory, in tokens) costs RAM, not storage: the model's cache grows with every token. The app chooses
+the window per device and per model, and never lets it exceed what the model can really use.
+
+| Rule | Detail |
+|---|---|
+| **Cost per token** | Cache bytes per token = 2 x layers x key/value heads x head size x bytes. Flare 3 (v3): 32 KB at 16-bit, ~16 KB with an 8-bit cache. Flare 3.5 (v3.5): ~24.6 KB at 16-bit. Weights on top: ~240 MB (v3 Q4), ~700 MB (v3.5 Q4) |
+| **The window is the smallest of three numbers** | (1) what the model **passed** on the long-context ladder (`stretch_ladder.py`, `eval_long.py`), (2) what the free RAM can hold, (3) the speed limit below. A window the model didn't pass adds nothing |
+| **Free RAM, not total RAM** | Checked at load time (Android's available-memory figure, not "12 GB installed"): a usable budget is about half the phone's RAM at most (roughly 2.5 GB on 8 GB phones, 4 GB on 12 GB phones), less when other apps are open. Storage and swap such as Samsung's RAM Plus do not count: too slow for a cache read on every word |
+| **Three modes** | **Everyday** (default): about 8K tokens, ~0.3 GB of cache, cool and quick. **Long** (Settings, only if the device and the model allow it): up to the smaller of what the model passed and what fits; a warning says the first reply after pasting a long document can take minutes and warm the phone. **Remote**: the PC or a server, any length the server handles, nothing extra on the phone |
+| **8-bit cache** | A setting (default on for Long mode): halves the cache with a small quality cost; the app measures nothing it can't test, so the long-context tests are re-run with it before it is the default |
+| **Speed limit** | Reading a long text takes time that grows with its length. The first run measures prefill speed once and the app shows an estimate before reading ("about 3 minutes") and a Stop button |
+| **Safety** | Before loading a long window, check free memory again; if it is too low, drop to the next smaller window and say so (never crash or let the system kill the app). While running, if the system warns about memory, shrink the cache or stop generating and keep what was written |
+| **What is shown** | The context meter shows used / allowed tokens, and the Settings screen shows why the limit is what it is ("limited by: free memory" / "limited by: what the model passed" / "limited by: speed") |
+
+Examples, worked out from the numbers above (estimates until measured on real phones): an 8 GB phone holds roughly 64K tokens with a 16-bit
+cache or 128K with an 8-bit cache; a 12 GB phone roughly 100K or 200K. Whether the model can use that much is decided by the ladder, and
+the longest windows (100K and up) are PC and remote only.
+
+Manifest fields this needs (in `models.json`): `context` (trained length), `context_tested` (the longest length that passed the gate, 2,048 until
+the ladder has run), `kv_kb_per_token` (16-bit) and `weights_mb`. Tests: with a fake device (RAM, free RAM) the chosen window must never exceed
+the smallest of the three limits, must drop and say so when memory falls, and must never be chosen above `context_tested`.
 
 ## Part 2: What it looks like
 
