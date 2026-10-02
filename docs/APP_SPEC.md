@@ -69,7 +69,7 @@ Yuvra's own way to show and limit usage. It is counted in **tokens**, shown as *
 |---|---|---|
 | **1. The context window** | The most ONE request can hold: the model's working memory for a single message and its history. It is a cap per request, **not an allowance** | Everyday 8,192; Long up to 32,768 |
 | **2. The tank** | How much a person can use *right now*. It refills steadily (a "token bucket"), so there is no cliff where everything resets at once | Capacity 200,000 tokens, refills 25,000 per hour (empty to full in 8 hours) |
-| **3. The weekly ceiling** | The total of every chat in 7 days. A hard stop for heavy use | 1,000,000 tokens, resets Sun 2:00 AM |
+| **3. The weekly ceiling** | The total of every chat in 7 days. A hard stop for heavy use | 1,000,000 tokens, resets Mon 4:00 AM |
 
 So **32,768 is not "32,000 every few hours"**. It only limits how big a single request may be. What a person may use over time is the tank (short term) and
 the weekly ceiling (long term). A message is allowed only if both have room; the smaller one wins.
@@ -95,14 +95,36 @@ growing with every message.)
 
 | Part | Plan |
 |---|---|
-| **Where people see it** | Settings, then **Sparks**, and a tap on the chat's status line. The brain tank (how full, "124 of 200 sparks", "refilling 25 an hour, full by 9:40 PM"), **This week** as a strip of seven days (not one bar) with a pace note ("you could use about 575 more a day"), and **Tokens this week** by model with a breakdown (you wrote / Yuvra wrote / earlier chat re-read). On-device models: "free, never counted" |
-| **Who sets limits** | Only the owner, in the **Limits** screen: the tank (capacity, refill), the weekly ceiling and reset time, the Everyday and Long windows, the counting multipliers, the model weights; per group (Private testers, Public later) and per person (overrides). Alerts at 80% of the week and at the ceiling; a pause-everything switch |
+| **Where people see it** | Settings, then **Sparks**, and a tap on the chat's status line. The brain tank (how full, "124 of 200 sparks", "refilling 25 an hour, full by 9:40 PM"), **This week** (resets Mon 4:00 AM) as a strip of seven days (not one bar) with a pace note ("you could use about 575 more a day"), and **Tokens this week** by model with a breakdown (you wrote / Yuvra wrote / earlier chat re-read). On-device models: "free, never counted" |
+| **Who sets limits** | Only the owner, in the **Limits** screen: the tank (capacity, refill), the weekly ceiling and reset time, the Everyday and Long windows, the counting multipliers, the model weights; per tier (Free, Pro, Mega) and per person (overrides). Alerts at 80% of the week and at the ceiling; a pause-everything switch |
 | **What applies** | Only models **served from a shared machine** (your PC, a rented server). Models running on a person's own device are free and never counted |
-| **When the tank runs low** | A quiet note at 20%. At empty that model pauses and offers a smaller model, the on-device model (free), or "back to full in about 2 hours". At the weekly ceiling: "resets Sun 2:00 AM" with the same options |
+| **When the tank runs low** | A quiet note at 20%. At empty that model pauses and offers a smaller model, the on-device model (free), or "back to full in about 2 hours". At the weekly ceiling: "resets Mon 4:00 AM" with the same options |
 | **Enforced on the server** | By the person's key, never only in the app. The server counts every request, refuses over-limit ones with a clear message, and the Sparks screen reads the same numbers |
 | **Stored** | `usage(user, model, fresh_in, cached_in, out, at)` and the limits table in the server's SQLite: numbers only, never message text. Tank level = capacity minus recent use plus refill; week = sum since the reset |
 | **Tests** | With a fake clock: counting multipliers and weights add up; the tank refills at the set rate and never exceeds capacity; the weekly total resets on time; a message needs room in both; the 20% note and the empty block fire; a per-person override beats the group limit; on-device use is never counted; no message text is stored |
 | **Model list field** | `cost_weight` per model in `models.json` |
+
+**Decided: a fixed weekly reset, Monday 4:00 AM in the person's own time zone.** Monday starts the school and work week, and 4:00 AM is the quietest hour, so almost
+nobody is mid-chat when it happens. Each person's time zone is stored with their account; the server keeps the reset as a UTC time per person. The tank is unaffected by
+the reset (it refills all week). The setting is `weekly_reset: "mon 04:00"`, and `weekly_window: fixed` (rolling stays an option).
+
+**Tiers (planned): Free, Pro, Mega.** Same app and the same models; the tiers differ in how much of the shared server they may use. Models running on a person's own
+device are free and unlimited in every tier, which is the selling point of the free one. These are starting values to be tuned against what the server can really carry
+(measured tokens per second, and how many people are on at once). 1 spark = 1,000 counted tokens.
+
+| | **Free** | **Pro** | **Mega** |
+|---|---|---|---|
+| Tank (capacity / refill per hour) | 40,000 / 5,000 (full in 8 h) | 200,000 / 25,000 (full in 8 h) | 800,000 / 100,000 (full in 8 h) |
+| Weekly ceiling | 150,000 (150 sparks) | 1,000,000 (1,000 sparks) | 5,000,000 (5,000 sparks) |
+| Roughly, in short messages (~500 counted each) | ~300 a week | ~2,000 a week | ~10,000 a week |
+| Models from the server | Flare | Flare, Equinox, Solstice | All, including Apogee |
+| Context window (one request) | Everyday 8,192 | Everyday 8,192, Long up to 32,768 | Everyday 8,192, Long up to the longest the model passed (64K and up) |
+| Priority when the server is busy | Normal | Normal | First |
+| Who | Anyone, once the public version exists | Your private testers now; paying users later | Heavy users; you (the owner) are exempt from all limits |
+
+Because model weights multiply the counted tokens (Flare 1, Equinox 2, Solstice 5, Apogee 10), the same weekly ceiling buys far fewer Apogee messages than Flare ones:
+5,000,000 on Mega is about 500,000 Apogee tokens. The limits live in one config file (`limits.json`: a block per tier, plus per-person overrides), so tiers can be added or
+changed without touching code. Pricing is not decided; the tiers only decide access and amounts. The owner screen has a tab for each tier.
 
 **How the server enforces it (details):**
 - **Exact counts.** The server counts tokens with the model's own tokenizer (`chat.py` builds the prompt) and takes the figures llama-server reports for each
