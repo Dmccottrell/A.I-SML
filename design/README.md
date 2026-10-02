@@ -45,10 +45,18 @@ The original amber (`#F5A524`) stays as the brand colour for the website home an
 Flare 3 (v3, beta), **Flare 3.5** (v3.5, in training), **Equinox 4** (v4), Solstice 5 (v5), Apogee 6 (v6). The cards show only the
 name; the version appears as a small grey number in the model sheet.
 
-## Website home sections
-Hero, "Four models, one family", what it does (private by default, remembers you, looks things up with sources, skills),
-"Built from the ground up" (what Yuvra is), "At home or in the cloud, private or public", try it, footer. Placeholders left in:
-`[YEAR]` and the invite link.
+## Website: five pages, not one long page
+The site is split so no page is cluttered. Each page has the same top menu (Models, Plans, How usage works, About) and footer, and links to the others.
+
+| Page | File | What is on it |
+|---|---|---|
+| **Home** | `Main.dc.html` | Hero with a chat preview, the four models in one row, three highlights (private, remembers you, shows its sources), a short plans teaser, try it |
+| **Models** | `SiteModels.dc.html` | The four models in detail (colour, job, which plans have it, which effort levels it offers) and the effort explained (Quick, Balanced, Deep) |
+| **Plans** | `SitePlans.dc.html` | Free, Pro and Mega side by side in plain language (messages a week, in one sitting, models, document length), "always free on your own device", "plans are planned, prices to be announced" |
+| **How usage works** | `SiteUsage.dc.html` | Right now (the brain tank), this week (resets Monday 4 AM), what a message costs by model, effort and usage, tips, and a short "for the curious" about tokens |
+| **About** | `SiteAbout.dc.html` | Built from the ground up (stats and what makes it different), at home or in the cloud, private or public, what to keep in mind |
+
+`HomeLight.dc.html` is the Home page in light mode. The canvas itself is also split into three pages: **Brand**, **Website** and **App screens**. Placeholders left in: `[YEAR]` and the invite link; prices are "to be announced".
 
 ## Usage and limits
 Plain language first: **messages left**, not tokens. The phone's **Usage** screen shows a brain that fills like a tank ("Right now: about 250 messages"), "Left this week"
