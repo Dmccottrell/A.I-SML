@@ -126,6 +126,19 @@ circle[style*="fill: var(--sun)"] { fill: var(--core) !important; stroke: var(--
 </div>
 </sc-if>
 
+<sc-if value="{{effortOpen}}" hint-placeholder-val="{{ false }}">
+<div style="position: absolute; left: 200px; bottom: 100%; margin-bottom: 10px; width: 420px; box-sizing: border-box; background: var(--surface); border: 1px solid var(--line); border-radius: 20px; padding: 12px; display: flex; flex-direction: column; gap: 6px; z-index: 10">
+<div style="font-size: 12px; font-weight: 600; letter-spacing: 0.1em; color: var(--muted); padding: 4px 6px">HOW MUCH SHOULD IT THINK?</div>
+<sc-for list="{{effortItems}}" as="e" hint-placeholder-count="3">
+<button onClick="{{ e.pick }}" style="text-align: left; background: transparent; color: var(--text); border: 1px solid {{e.border}}; opacity: {{e.opacity}}; border-radius: 14px; padding: 10px 14px; display: flex; align-items: center; gap: 12px; font: 400 16px 'DM Sans', sans-serif; min-height: 44px">
+<span style="flex: 1"><span style="font-weight: 600">{{e.name}}</span> <span style="color: var(--muted); font-size: 14px">&middot; {{e.use}}</span><br><span style="font-size: 14px; color: var(--muted)">{{e.blurb}}</span></span>
+<span style="color: var(--accenttext); font-weight: 700">{{e.mark}}</span>
+</button>
+</sc-for>
+<div style="color: var(--muted); font-size: 13px; padding: 4px 6px">Thinking longer is slower and uses more of your usage.</div>
+</div>
+</sc-if>
+
 <div style="box-sizing: border-box; background: var(--surface); border: 1px solid var(--line); border-radius: 20px; padding: 16px 14px 12px 20px; display: flex; flex-direction: column; gap: 14px">
 <div style="color: var(--muted)">Message Yuvra&hellip;</div>
 <div style="display: flex; align-items: center; justify-content: space-between">
@@ -138,18 +151,18 @@ circle[style*="fill: var(--sun)"] { fill: var(--core) !important; stroke: var(--
 <circle cx="32" cy="36" r="7" style="fill: var(--sun)"/>
 </svg>
 {{chip.name}} <span style="color: var(--muted)">&#9662;</span></button>
-<button aria-label="Effort: Balanced" style="background: transparent; color: var(--muted); border: 1px solid var(--line); border-radius: 12px; padding: 8px 14px; font: 500 15px 'DM Sans', sans-serif; display: flex; align-items: center; gap: 8px; min-height: 44px">Balanced <span>&#9662;</span></button>
+<button onClick="{{ toggleEffort }}" aria-label="Choose effort" style="background: transparent; color: var(--muted); border: 1px solid var(--line); border-radius: 12px; padding: 8px 14px; font: 500 15px 'DM Sans', sans-serif; display: flex; align-items: center; gap: 8px; min-height: 44px">{{effortName}} <span>&#9662;</span></button>
 </div>
-<button aria-label="Send" style="background: var(--accent); color: var(--onaccent); border: 0; border-radius: 12px; width: 44px; height: 44px; font: 700 20px 'DM Sans', sans-serif">&uarr;</button>
+<button onClick="{{ send }}" aria-label="Send" style="background: var(--accent); color: var(--onaccent); border: 0; border-radius: 12px; width: 44px; height: 44px; font: 700 20px 'DM Sans', sans-serif">&uarr;</button>
 </div>
 </div>
 </div>
-<div style="font-size: 13px; color: var(--muted)">Memory: 3 facts &middot; Context 31%</div>
+<div style="font-size: 13px; color: {{usageColor}}">{{usageText}} <span style="color: var(--muted)">&middot; {{usageSub}}</span></div>
 </div>
 </div>
 </div>
 </x-dc>
-<script type="text/x-dc" data-dc-script data-props='{"theme":{"editor":"enum","options":["dark","light"],"default":"dark"},"model":{"editor":"enum","options":["flare","equinox","solstice","apogee","brand"],"default":"flare"},"$preview":{"width":1360,"height":860}}'>
+<script type="text/x-dc" data-dc-script data-props='{"theme":{"editor":"enum","options":["dark","light"],"default":"dark"},"plan":{"editor":"enum","options":["free","pro","mega"],"default":"pro"},"model":{"editor":"enum","options":["flare","equinox","solstice","apogee","brand"],"default":"flare"},"$preview":{"width":1360,"height":860}}'>
 const BASE = {
   dark: {bg: '#07080D', side: '#0A0B11', surface: '#0F1119', surface2: '#161926', line: '#232739', text: '#EEF0F6', muted: '#9AA3BC'},
   light: {bg: '#F7F8FC', side: '#EEF0F7', surface: '#FFFFFF', surface2: '#EEF0F7', line: '#D8DCEA', text: '#0D0F1A', muted: '#4A526B'}
@@ -161,6 +174,41 @@ const MODEL = {
   solstice: {dark: {accent: '#F2A60C', onaccent: '#1F1400', accenttext: '#FFBE3B', sun: '#F2A60C', core: '#FFE7A0', glow: 'rgba(242,166,12,.18)'}, light: {accent: '#F2A60C', onaccent: '#1F1400', accenttext: '#8A5A00', sun: '#D18A00', core: '#FFE7A0', glow: 'rgba(242,166,12,.13)'}},
   apogee: {dark: {accent: '#A8D1F5', onaccent: '#06121F', accenttext: '#B5D8F8', sun: '#A8D1F5', core: '#F4F9FF', glow: 'rgba(168,209,245,.15)'}, light: {accent: '#A8D1F5', onaccent: '#06121F', accenttext: '#2A5F96', sun: '#4F8FC9', core: '#F4F9FF', glow: 'rgba(120,170,220,.15)'}}
 };
+const PLANS = {free: {cap: 40000}, pro: {cap: 200000}, mega: {cap: 800000}};
+const WEIGHT = {flare: 1, equinox: 2, solstice: 5, apogee: 10, brand: 2};   // Auto: assume a middle model
+const EFFORT = {
+  quick: {name: 'Quick', mult: 0.6, use: 'Uses less', blurb: 'Answers fast and thinks briefly. Best for simple questions.'},
+  balanced: {name: 'Balanced', mult: 1, use: 'Normal usage', blurb: 'A good mix of speed and care. The default.'},
+  deep: {name: 'Deep', mult: 2.2, use: 'Uses more', blurb: 'Takes longer: thinks it through and checks its work. More accurate on hard questions.'}
+};
+const MESSAGE = 500;   // counted tokens in one normal message and its answer on a weight-1 model at Balanced
+const fmt = (n) => Math.round(n).toLocaleString('en-US');
+const nice = (n) => fmt(n >= 100 ? Math.round(n / 10) * 10 : Math.round(n));
+// everything the usage line and the effort menu need, from the current model, effort and tokens spent
+function usageBits(self, modelId) {
+  const plan = PLANS[self.props.plan] ? self.props.plan : 'pro';
+  const cap = PLANS[plan].cap;
+  const left = Math.max(0, cap * 0.62 - self.state.spent);       // the tank starts 62% full in this preview
+  const cost = MESSAGE * (WEIGHT[modelId] || 2) * EFFORT[self.state.effort].mult;
+  const pct = Math.round(left / cap * 100);
+  const text = left <= 0 ? 'Usage: out for now, back to full in about 3 hours'
+    : 'Usage: ' + pct + '% \u00b7 about ' + nice(left / cost) + ' messages left';
+  const items = ['quick', 'balanced', 'deep'].map((k) => {
+    const blocked = k === 'deep' && modelId === 'flare';
+    return {
+      name: EFFORT[k].name, use: EFFORT[k].use, blurb: blocked ? 'Needs Equinox or a bigger model.' : EFFORT[k].blurb,
+      mark: self.state.effort === k ? '\u2713' : '', opacity: blocked ? 0.45 : 1,
+      border: self.state.effort === k ? 'var(--accent)' : 'var(--line)',
+      pick: () => { if (!blocked) self.setState({effort: k, effortOpen: false}); }
+    };
+  });
+  return {
+    usageText: text, usageSub: fmt(cap - left) + ' tokens used', usageColor: pct <= 20 ? '#E5484D' : 'var(--muted)',
+    effortName: EFFORT[self.state.effort].name, effortOpen: self.state.effortOpen, effortItems: items,
+    toggleEffort: () => self.setState({effortOpen: !self.state.effortOpen, open: false}),
+    send: () => self.setState({spent: self.state.spent + cost})
+  };
+}
 const INFO = {
   flare: {name: 'Flare', version: '3.5', tagline: 'Fast and light, for quick answers', yOp: 0, foldOp: 0},
   equinox: {name: 'Equinox', version: '4', tagline: 'Everyday work and homework, with skills and tools', yOp: 1, foldOp: 0},
@@ -176,10 +224,10 @@ const WASH = {
 class Component extends DCLogic {
   constructor(props) {
     super(props);
-    this.state = {open: false, model: (props && props.model) || 'flare', washing: false};
+    this.state = {open: false, model: (props && props.model) || 'flare', washing: false, effortOpen: false, effort: 'balanced', spent: 0};
   }
   choose(id) {
-    this.setState({model: id, open: false, washing: true});
+    this.setState({model: id, open: false, effortOpen: false, washing: true, effort: (id === 'flare' && this.state.effort === 'deep') ? 'balanced' : this.state.effort});
     if (this._t) clearTimeout(this._t);
     this._t = setTimeout(() => this.setState({washing: false}), 1600);
   }
@@ -189,15 +237,16 @@ class Component extends DCLogic {
     const tokens = Object.assign({}, BASE[mode], MODEL[id][mode]);
     const themeStyle = Object.keys(tokens).map((k) => '--' + k + ':' + tokens[k]).join(';');
     const info = INFO[id] || {name: 'Auto', yOp: 0, foldOp: 0};
+    const bits = usageBits(this, id);
     const outlineFor = (m) => (m === 'apogee' ? 'var(--sun)' : 'var(--text)');
     return {
-      themeStyle,
+      themeStyle, ...bits,
       open: this.state.open,
       washing: this.state.washing,
       washStyle: 'position: absolute; left: 50%; top: 55%; ' + (WASH[id] || WASH.flare),
       modelName: info.name,
       chip: {name: info.name, yOp: info.yOp, outline: outlineFor(id)},
-      toggle: () => this.setState({open: !this.state.open}),
+      toggle: () => this.setState({open: !this.state.open, effortOpen: false}),
       pickAuto: () => this.choose('brand'),
       models: Object.keys(INFO).map((k) => ({
         name: INFO[k].name, version: INFO[k].version, tagline: INFO[k].tagline,
