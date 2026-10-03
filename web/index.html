@@ -359,9 +359,9 @@ $('effortBtn').onclick = () => {
   const open = !$('effortMenu').hidden; closeMenus(); if (open) return;
   const m = $('effortMenu'); m.replaceChildren(el('div', {class: 'head'}, 'HOW MUCH SHOULD IT THINK?'));
   const cm = curModel();
-  for (const e of S.state.efforts) { const blocked = e.id === 'deep' && cm && (cm.name === 'Flare' || cm.name === 'Ember');
+  for (const e of S.state.efforts) { const blocked = cm && cm.efforts && !cm.efforts.includes(e.id) && e.id !== 'auto';
     m.append(el('button', {class: 'opt' + (e.id === S.effort ? ' sel' : ''), disabled: blocked, onclick: () => { S.effort = e.id; S.autoNote = null; try { localStorage.setItem('yuvra_effort', e.id); } catch (x) {} closeMenus(); renderComposer(); refreshUsage(); }},
-      el('span', {class: 'grow'}, el('b', {}, e.name), ' ', el('small', {style: 'display:inline'}, '· ' + e.use), el('small', {}, blocked ? 'Needs Equinox or a bigger model.' : e.blurb)), e.id === S.effort ? '✓' : '')); }
+      el('span', {class: 'grow'}, el('b', {}, e.name), ' ', el('small', {style: 'display:inline'}, '· ' + e.use), el('small', {}, blocked ? 'Needs Flare or a bigger model.' : e.blurb)), e.id === S.effort ? '✓' : '')); }
   m.append(el('div', {class: 'head', style: 'text-transform:none;letter-spacing:0;font-weight:400'}, 'Thinking longer is slower and uses more of your usage.'));
   m.hidden = false;
 };
@@ -369,7 +369,7 @@ document.addEventListener('click', (e) => { if (!e.target.closest('.box')) close
 async function chooseModel(c) {
   closeMenus(); if (c.id === S.model) return;
   S.model = c.id; try { localStorage.setItem('yuvra_model', c.id); } catch (e) {}
-  if ((c.name === 'Flare' || c.name === 'Ember') && S.effort === 'deep') S.effort = 'balanced';
+  if (c.efforts && S.effort !== 'auto' && !c.efforts.includes(S.effort)) S.effort = 'balanced';
   wash(); applyTheme(); renderComposer(); renderThread(false); await refreshUsage();
 }
 const input = $('input');
