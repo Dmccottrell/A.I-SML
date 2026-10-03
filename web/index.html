@@ -479,7 +479,9 @@ async function send(regen) {
     if (!r.ok) { const j = await r.json().catch(() => ({})); throw Object.assign(new Error(j.message || 'Something went wrong.'), {info: j, status: r.status, retry: r.headers.get('Retry-After')}); }
     const reader = r.body.getReader(), dec = new TextDecoder(); let buf = '';
     const handle = (ev, data) => {
-      if (ev === 'piece') {
+      if (ev === 'loading') {
+        const w = think.querySelector('.word'); clearInterval(S.thinkTimer); S.thinkTimer = null; if (w) w.textContent = 'Loading ' + data.model + ' (first message only)';
+      } else if (ev === 'piece') {
         if (!aiWrap) { think._stop(); think.remove(); const m = curModel(); aiBubble = el('div', {class: 'bubble'}); aiWrap = el('div', {class: 'msg ai'}, el('div', {class: 'meta'}, logo(14), m ? m.name : 'Yuvra'), aiBubble); $('thread').append(aiWrap); }
         got += data.t; aiBubble.replaceChildren(got, el('span', {class: 'cursor'}, '▍')); scrollDown();
       } else if (ev === 'done') {
