@@ -50,6 +50,7 @@ import chat
 import chat_polish
 import context_window as CW
 import effort_router
+import regen_modes
 import models as M
 import usage_limits as U
 from app_errors import AppError, ModelTooBig, PcUnreachable
@@ -401,7 +402,7 @@ class AppState:
 
 
 # ------------------------------------------------------------------ one message, streamed to the browser
-def start_turn(state, who, chat_id, text, model_id, effort, regenerate=False):
+def start_turn(state, who, chat_id, text, model_id, effort, regenerate=False, regen_mode=None):
     """Begin a reply in a worker thread. Returns (queue, stop_event); the queue yields ("piece", text), then
     ("done", result) or ("error", exception). With effort "auto" the level is chosen from the message (effort_router);
     the page is told which one in `decision`."""
@@ -431,7 +432,11 @@ def start_turn(state, who, chat_id, text, model_id, effort, regenerate=False):
     if not win["fits"]:
         raise AppError("There isn't enough free memory for this model.", "Close other apps or pick a smaller model.")
     window = win["window"]
+    mode = regen_mode if regenerate else None
+    regen_modes.get(mode)                                      # an unknown option is a ValueError (a 400 for the page)
     max_new = min(EFFORTS[effort], max(32, window // 2), model.get("max_reply_tokens", EFFORTS[effort]))
+    if mode:
+        max_new = min(regen_modes.length_for(max_new, mode), max(32, window // 2))
     pause = chat_polish.pause_for(question, effort)            # the thinking pause fits the message
     decision["pause"] = pause
     q, stop = queue.Queue(), threading.Event()
@@ -472,8 +477,11 @@ def start_turn(state, who, chat_id, text, model_id, effort, regenerate=False):
             t_load = time.monotonic()
             backend = state.backend_for(model, text or "", window)     # may load the model the first time (can take a while)
             timing["load"] = time.monotonic() - t_load
+            if regenerate and hasattr(backend, "sampling"):
+                backend.sampling = dict(backend.sampling, temperature=regen_modes.sampling_for(backend.sampling.get("temperature", 0.8), mode))
             r = E.run_turn(tok, store, chat_id, backend, counted_model, window, max_new, user_text=text, stop=stop,
-                           limiter=state.limiter, user=who["user"], effort=effort, clock=state.clock, pacer=pacer)
+                           limiter=state.limiter, user=who["user"], effort=effort, clock=state.clock, pacer=pacer,
+                           style_hint=regen_modes.get(mode)["hint"] if regenerate else "")
             if text and store.title(chat_id) == "New chat":
                 store.set_title(chat_id, " ".join(text.split())[:48] or "New chat")
             q.put(("done", r))
@@ -681,7 +689,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 "usage": snap, "window": {k: win[k] for k in ("window", "reason", "mode", "limited_by", "cache_bits", "cache_mb")},
                 "chats": st.store(who["user"]).list_chats(), "settings": st.get_settings(who["user"]),
                 "thinking_words": list(chat_polish.THINKING_WORDS), "think_switch_s": chat_polish.THINKING_SWITCH_S,
-                "pause_by_effort": chat_polish.PAUSE_BASE}
+                "pause_by_effort": chat_polish.PAUSE_BASE, "regen_options": regen_modes.menu()}
 
     def api_get_chat(self, who, cid):
         store = self.state.store(who["user"])
@@ -716,7 +724,9 @@ class Handler(http.server.BaseHTTPRequestHandler):
             return self._send(400, {"code": "too_long", "message": "That message is too long. Please shorten it."})
         try:
             q, stop, model, win, decision = start_turn(st, who, cid, text, str(body.get("model", "")), str(body.get("effort", "balanced")),
-                                             regenerate)
+                                             regenerate, body.get("regen_mode") or None)
+        except ValueError as e:
+            return self._send(400, {"code": "bad_option", "message": str(e)})
         except KeyError:
             return self._send(400, {"code": "bad_model", "message": "That model isn't available."})
         except Exception as e:

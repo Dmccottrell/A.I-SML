@@ -90,6 +90,7 @@ data, code and training.
 | `context_window.py` | 6 | The device check: picks the context window from what the model passed, free memory, speed and the plan |
 | `app_server.py`, `web/` | 6 | The Yuvra app: a web server and chat page (`python app_server.py`), with plans and usage, model picker, thinking animation, private chats and a Usage screen. Demo mode until a model is attached |
 | `effort_router.py` | 6 | "Auto" effort: picks Quick, Balanced or Deep from the message (plain rules, with a reason), and sizes the thinking pause to it |
+| `regen_modes.py` | 6 | The Regenerate menu: try again, a different answer, explain it differently, simpler, more detail, shorter, or three choices |
 | `muon.py`, `muon_test.py` | 5 | The Muon optimizer (`optimizer="muon"` in config.py; `"muon_cpu"` keeps its memory in RAM so it fits a 12 GB card), and an experiment that measures whether it needs fewer steps than AdamW on our models (~1–2 h on the 4070) |
 | `grow.py`, `growth_test.py` | 6 | Grow a trained model into a deeper one, and an experiment that measures how much training compute that saves (run when the GPU is free) |
 | `generate.py` | 6 | Generate text or chat with your model. Chat options: `--lookup` (Wikipedia notes), `--web` (web search, online mode), `--memory` (remembers you), `--suggest` (reply suggestions), `--context` (memory meter), `--skill` (skill packs) |
