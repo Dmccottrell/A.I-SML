@@ -141,7 +141,7 @@ class State(Base):
         self.assertEqual(j["models"]["cards"][0]["state"], "ready")
         self.assertEqual([m["id"] for m in j["models"]["other"]], [])      # Ember 2 is its own name, so it is a card
         self.assertEqual([e["id"] for e in j["efforts"]], ["quick", "balanced", "deep"])
-        self.assertEqual(j["min_first_s"], 3.0)
+        self.assertEqual(j["min_first_s"], 1.5)
         self.assertGreater(len(j["thinking_words"]), 5)
 
     def test_tester_numbers_follow_the_plan(self):

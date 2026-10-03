@@ -194,7 +194,7 @@ the smallest of the three limits, must drop and say so when memory falls, and mu
 | Part | Behaviour |
 |---|---|
 | **Thinking** | After Send, the small Yuvra logo animates (the brain outline travels around, the core pulses) next to a label that changes every ~2 seconds and never repeats twice in a row: Thinking, Pondering, Reasoning, Working it out, Considering, Mulling it over, Figuring it out, Reflecting, Weighing it up, Putting it together |
-| **Three-second pause** | The first word never appears sooner than 3 seconds after sending, even for the quickest answer (Quick), so there is always a moment of thinking. Balanced and Deep wait as long as the model needs |
+| **1.5-second pause** | The first word never appears sooner than 1.5 seconds after sending, even for the quickest answer (Quick), so there is always a moment of thinking. Balanced and Deep wait as long as the model needs |
 | **Clean writing** | The reply is written out word by word at a steady speed (about 22 words a second at most), never dumped in one lump. If the model is far ahead the writing speeds up so the screen is never more than ~1.5 s behind. What is saved is the same text |
 | **Stays at the bottom** | The newest message stays in view while the reply is written; scrolling up pauses that, and a "down" button brings it back (screen job, shown in the `Chat` / `Phone` designs) |
 | **Auto-shortening** | When a chat fills 80% of the room for the prompt, older messages become a short summary (the last 4 stay word for word). They stay visible on screen, marked "summarized"; only what the model reads changes. The summary can be written by the model or, if that fails, a plain list of what was asked and answered |
