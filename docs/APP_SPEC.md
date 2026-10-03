@@ -367,3 +367,9 @@ beta list", and "memory finds an earlier chat by meaning, not only by words".
   with no Deep (Ember only; Flare and bigger have it) are held to Balanced, and when the tank is nearly empty Auto thinks less (below 20% left: at most
   Balanced; below 5%: Quick). The page shows "Auto · Quick" on the chip and "Auto chose Quick" under the reply, and the usage is
   counted at the level it chose. The thinking pause above is sized from the same decision.
+- **Regenerate options** (`regen_modes.py`, `tests/test_regen_modes.py`): the Regenerate chip opens a menu: **Try again**, **A different answer**
+  (more variety), **Explain it differently** (another way, with an example), **Make it simpler** (plain words), **More detail**,
+  **Shorter**, **Give me choices** (three numbered options). A choice adds a one-time hint to the end of the question in the prompt only
+  (the saved chat keeps your original question), changes how much it may write and how adventurous the wording is, and replaces the
+  previous answer. Small models follow the hints only roughly; the options are easy to retune in `regen_modes.py`. Designs: not yet
+  drawn in the `Chat` / `Phone` mock-ups (they have no Regenerate button).

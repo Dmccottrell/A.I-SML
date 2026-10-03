@@ -215,7 +215,7 @@ class ChatStore:
 # ------------------------------------------------------------------ one message, start to finish
 def run_turn(tok, store, chat_id, backend, model, window, max_new, user_text=None, stop=None, save_every=8,
              keep_notes=1, notes=None, limiter=None, user=None, effort="balanced", clock=time.time,
-             pacer=None, auto_compact=True, summarize=None):
+             pacer=None, auto_compact=True, summarize=None, style_hint=""):
     """Answer one message. Adds the user's message (if given), streams the reply while saving it, and returns
     {"text", "reason", "forgotten_messages"}. If the model fails mid-reply, what was written is kept (marked
     partial) and the AppError is re-raised, so the screen can offer "Continue".
@@ -225,6 +225,7 @@ def run_turn(tok, store, chat_id, backend, model, window, max_new, user_text=Non
     written, and the real token counts settle it afterwards. A failed reply gives the hold back. A model that runs on
     the device (model["where"] == "device") is never counted.
 
+    `style_hint` is a one-time line added to the end of the last question in the prompt only (Regenerate options).
     `pacer` (chat_polish.paced, with the time of sending) makes the reply appear after a short pause and write out
     steadily. `auto_compact` shortens a chat that fills the model's memory (chat_polish.compact_chat).
     """
@@ -233,6 +234,8 @@ def run_turn(tok, store, chat_id, backend, model, window, max_new, user_text=Non
     if auto_compact:
         folded = chat_polish.compact_chat(tok, store, chat_id, window, max_new, summarize=summarize, keep_notes=keep_notes)
     history = store.history(chat_id)
+    if style_hint and history and history[-1]["role"] == "user":      # asked for only this once: the saved chat keeps the plain question
+        history[-1] = dict(history[-1], content=history[-1]["content"].rstrip() + "\n\n" + style_hint)
     if user_text is not None and notes:
         history[-1]["notes"] = notes
     limit = window - max_new
