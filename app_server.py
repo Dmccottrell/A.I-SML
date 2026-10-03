@@ -122,6 +122,10 @@ class ModelRunner:
     def available(self, model_id):
         return model_id in self.files and os.path.exists(self.files[model_id]) and bool(self.bin)
 
+    def ready(self, model_id, ctx):
+        """True if this model is already running (so the next message won't wait for it to load)."""
+        return bool(self.proc and self.proc.poll() is None and self.model_id == model_id and (self.ctx or 0) >= ctx)
+
     def _free_port(self):
         with socket.socket() as s:
             s.bind((self.host, 0))
@@ -202,6 +206,7 @@ class AppState:
         self.backend_factory = backend_factory
         self.ram_gb = ram_gb or total_memory_gb()
         self.clock, self.pace = clock, pace
+        self.verbose = False                                   # print timings (set by the command line)
         self._demo_tok = None
         self.usage = U.UsageStore(os.path.join(data_dir, "usage.db") if data_dir else ":memory:")
         self.limiter = U.Limiter(self.usage, self.cfg, self.manifest)
@@ -425,7 +430,16 @@ def start_turn(state, who, chat_id, text, model_id, effort, regenerate=False):
             store.remove_message(chat_id, msgs[-1]["id"])
         text = None
 
+    timing = {}
+
+    def timed(stream):
+        """Notes when the model's first word arrives (before the pause and the steady writing are added)."""
+        for piece in stream:
+            timing.setdefault("first", time.monotonic())
+            yield piece
+
     def pacer(stream):
+        stream = timed(stream)
         gen = chat_polish.paced(stream, start=started) if state.pace else stream
         try:
             for bit in gen:
@@ -438,12 +452,21 @@ def start_turn(state, who, chat_id, text, model_id, effort, regenerate=False):
 
     def work():
         try:
+            if state.runner and not state.runner.ready(model["id"], window):
+                q.put(("loading", model["name"]))
+            t_load = time.monotonic()
             backend = state.backend_for(model, text or "", window)     # may load the model the first time (can take a while)
+            timing["load"] = time.monotonic() - t_load
             r = E.run_turn(tok, store, chat_id, backend, counted_model, window, max_new, user_text=text, stop=stop,
                            limiter=state.limiter, user=who["user"], effort=effort, clock=state.clock, pacer=pacer)
             if text and store.title(chat_id) == "New chat":
                 store.set_title(chat_id, " ".join(text.split())[:48] or "New chat")
             q.put(("done", r))
+            if state.verbose:                                  # numbers only, never any text
+                end = time.monotonic()
+                first = timing.get("first", end) - started
+                sys.stderr.write(f"reply: {model['id']} load={timing.get('load', 0):.1f}s model_first_word={first:.1f}s "
+                                 f"total={end - started:.1f}s chars={len(r['text'])} window={window}\n")
         except BaseException as e:                              # sent to the page as an error event
             q.put(("error", e))
         finally:
@@ -714,7 +737,9 @@ class Handler(http.server.BaseHTTPRequestHandler):
                         continue
                 kind, val = item
                 item = None
-                if kind == "piece":
+                if kind == "loading":
+                    emit("loading", {"model": val})
+                elif kind == "piece":
                     emit("piece", {"t": val})
                 elif kind == "done":
                     snap = st.usage_snapshot(who, model, str(body.get("effort", "balanced")))
@@ -757,6 +782,7 @@ def main():
                     help="a model file to run, e.g. flare-2=export/dev/v2/my-ai-q8_0.gguf (the exports are found by themselves)")
     ap.add_argument("--llama-args", default="", help="extra options for llama-server, e.g. \"-ngl 99\" to use the GPU")
     ap.add_argument("--ram", type=float, default=None, help="this computer's memory in GB (default: detected)")
+    ap.add_argument("--timings", action="store_true", help="print how long each reply took (loading, first word, total)")
     ap.add_argument("--add-user", nargs=2, metavar=("NAME", "PLAN"), help="add a tester (free, pro or mega) and print their key")
     args = ap.parse_args()
     if args.llama and not args.tokenizer:
@@ -773,6 +799,7 @@ def main():
     if files and not args.llama:
         runner = ModelRunner(args.llama_bin or find_llama_server(), files, extra_args=args.llama_args.split())
     state = AppState(args.data, args.llama, args.llama_key, tok, manifest=manifest, ram_gb=args.ram, runner=runner)
+    state.verbose = args.timings
     if args.add_user:
         key = state.add_user(*args.add_user)
         print(f"{args.add_user[0]} ({args.add_user[1]}): http://localhost:{args.port}/?key={key}")

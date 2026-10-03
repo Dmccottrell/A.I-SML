@@ -141,6 +141,20 @@ class ThroughTheApp(Base):
         text = "".join(d["t"] for e, d in ev if e == "piece")
         self.assertEqual(ev[-1][0], "done")
         self.assertIn("I am ember-2.gguf with context 1024", text)                    # Ember 2's own memory size
+        self.assertIn("loading", [e for e, _ in ev])                                  # the first message tells the page it is loading
+        status, _, ev2 = self.owner.stream(cid, {"text": "again", "model": "ember-2", "effort": "quick"})
+        self.assertNotIn("loading", [e for e, _ in ev2])                              # the model stays loaded after that
+
+    def test_timings_are_numbers_only(self):
+        import contextlib, io
+        self.build(A.demo_tokenizer())
+        self.state.verbose = True
+        cid = self.owner.call("POST", "/api/chats", {})[1]["id"]
+        buf = io.StringIO()
+        with contextlib.redirect_stderr(buf):
+            self.owner.stream(cid, {"text": "secret-words-here", "model": "ember-2", "effort": "quick"})
+        self.assertIn("reply: ember-2 load=", buf.getvalue())
+        self.assertNotIn("secret-words-here", buf.getvalue())
 
     def test_missing_model_is_refused_clearly(self):
         self.build(A.demo_tokenizer())
