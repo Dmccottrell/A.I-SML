@@ -5,10 +5,10 @@ v3.5, v4, v5, v6 and v6.5 are planned: their numbers are estimates and will chan
 Details: [V2.md](V2.md), [V3.md](V3.md), [ROADMAP.md](ROADMAP.md). Settings live in `config.py`.
 
 **The app and the model family are called Yuvra** (working name, Yuvra.AI; see [APP.md](APP.md)). Each model is the
-umbrella name plus one of **four role names** plus a generation number (checked by web search only; no trademark search yet):
-**Yuvra Flare 3** (v3) and **Yuvra Flare 3.5** (v3.5: a ~1.12B brain), then **Yuvra Equinox 4** (v4: Flare 3.5's brain trained longer, with
+umbrella name plus one of **five role names** plus a generation number (checked by web search only; no trademark search yet):
+**Yuvra Ember 2** (v2: the small first assistant, 88M), **Yuvra Flare 3** (v3) and **Yuvra Flare 3.5** (v3.5: a ~1.12B brain), then **Yuvra Equinox 4** (v4: Flare 3.5's brain trained longer, with
 skills added), **Yuvra Solstice 5** (v5), **Yuvra Apogee 6** (v6) and **Yuvra Apogee 6.5** (v6.5), then **Yuvra Apogee 7** and
-**8** (the 13B+ models). Flare = fast and light, Equinox = balanced everyday, Solstice = stronger (PC / online), Apogee =
+**8** (the 13B+ models). Ember = small and quick (the lowest name), Flare = fast and light, Equinox = balanced everyday, Solstice = stronger (PC / online), Apogee =
 most capable. Each name has its own number, which only goes up when that model is updated (so the numbers differ, like
 Flare 3.5, Equinox 4, Solstice 5, Apogee 6 at the same time); older ones move to "Other models" in the app's picker. "+" and grown models get decimals (Flare 3.1, Flare 3.5; a grown
 Flare 3 becomes Flare 4.1): see the number table in ROADMAP.md.

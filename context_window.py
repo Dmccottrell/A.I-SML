@@ -18,7 +18,7 @@ import argparse
 
 import models as M
 
-STEPS = (2048, 4096, 8192, 16384, 32768, 65536, 131072, 262144)
+STEPS = (512, 1024, 2048, 4096, 8192, 16384, 32768, 65536, 131072, 262144)
 EVERYDAY = 8192
 BUDGET_SHARE = 0.5          # at most half of the phone's RAM, however much is free
 SAFETY = 0.85               # keep 15% of the budget as headroom

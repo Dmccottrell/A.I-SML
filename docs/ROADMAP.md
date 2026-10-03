@@ -751,10 +751,10 @@ so the skill packs start from a base that already knows those formats), plus the
 See [v4's brain](#v4s-brain-v35-trained-longer).
 
 **Names (working names):** the umbrella is **Yuvra** (the app, Yuvra.AI, and the whole model family). Each model adds one of
-**four role names**, taken from the sky's calendar, and a generation number.
+**five role names**, taken from the sky's calendar, and a generation number.
 
-**How the names work:** four names that always make up the lineup, the way other AI families have a small, a middle and
-a big model: **Yuvra Flare** (fast and light), **Yuvra Equinox** (balanced everyday), **Yuvra Solstice**
+**How the names work:** five names make up the lineup, the way other AI families have a small, a middle and
+a big model. **Yuvra Ember** is the lowest (the small first assistant: v2, 88M, runs on almost any device), then **Yuvra Flare** (fast and light), **Yuvra Equinox** (balanced everyday), **Yuvra Solstice**
 (stronger, for a PC or online mode) and **Yuvra Apogee** (most capable). **Each name has its own version number**, and a
 number only goes up when *that* model is updated, so the numbers differ from name to name (for example Flare 3.5, Equinox 4,
 Solstice 5 and Apogee 6 at the same time). When a model is updated, the new one takes the main spot in the app's picker and
@@ -765,14 +765,14 @@ Equinox 4 (v4: Flare 3.5's brain trained longer, plus skills, tools and effort l
 small model is trained (say Flare 7). A number *before* the name ("Yuvra 2 Flare") is kept for a full reset
 of the whole family (a new tokenizer or design, so old files and skill packs don't carry over), if that ever happens.
 
-| Lineup in the picker | Yuvra Flare | Yuvra Equinox | Yuvra Solstice | Yuvra Apogee |
-|---|---|---|---|---|
-| Now (Oct 2026) | 3 (3.5 about to train) | – | – | – |
-| After v3.5 | 3.5 (3 moves to Other models) | – | – | – |
-| After v4 | 3.5 | 4 | – | – |
-| After v5 | 3.5 | 4 | 5 | – |
-| After v6.5 | 3.5 | 4 | 5 | 6.5 (6 moves to Other models) |
-| After v7 (13B) | 3.5 | 4 | 5 | 7 |
+| Lineup in the picker | Yuvra Ember | Yuvra Flare | Yuvra Equinox | Yuvra Solstice | Yuvra Apogee |
+|---|---|---|---|---|---|
+| Now (Oct 2026) | 2 (beta) | 3 (3.5 about to train) | – | – | – |
+| After v3.5 | 2 | 3.5 (3 moves to Other models) | – | – | – |
+| After v4 | 2 | 3.5 | 4 | – | – |
+| After v5 | 2 | 3.5 | 4 | 5 | – |
+| After v6.5 | 2 | 3.5 | 4 | 5 | 6.5 (6 moves to Other models) |
+| After v7 (13B) | 2 | 3.5 | 4 | 5 | 7 |
 | A later new small model | 7 (3.5 moves to Other models) | 4 | 5 | 7 |
 
 **Numbers for "+" and grown models.** Between the big steps a name can have variants, and the decimal says what happened:

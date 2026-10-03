@@ -6,7 +6,7 @@ requirements and behaviour are in [docs/APP_SPEC.md](../docs/APP_SPEC.md) and [d
 ## What is in this folder
 | Path | What |
 |---|---|
-| `logo/*.svg` | Standalone logo files: the primary mark (dark and light) and the four model marks |
+| `logo/*.svg` | Standalone logo files: the primary mark (dark and light) and the five model marks |
 | `brand-tokens.json` | Colours (dark and light base, plus one palette per model) and fonts, ready to turn into CSS variables |
 | `canvas/*.dc.html`, `canvas/canvas.json` | The design canvas sources: logo and brand board, model colours, website home (dark and light), desktop chat (dark and light), model picker, phone chat (dark and light) |
 
@@ -17,7 +17,7 @@ separately from these designs.
 ## The logo: a brain, getting bigger
 - **Primary mark ("Brain-Y"):** a brain outline with a Y inside it; the amber node where the Y splits is the spark of thought.
   It says AI at a glance and still reads as the letter Y.
-- **Family mark:** four brains that grow with the models: Flare (plain brain with a core), Equinox (adds the Y), Solstice (adds
+- **Family mark:** five brains that grow with the models: Ember (the smallest, a dashed outline like a glowing coal), Flare (plain brain with a core), Equinox (adds the Y), Solstice (adds
   folds), Apogee (the largest, outline lit in ice blue).
 - **Small sizes:** the folds and the Y drop away so the brain and the spark stay solid (favicon, app icon).
 - Say it "YOOV-ruh". Domain and trademark checks are still to do (see docs/APP.md).
@@ -50,8 +50,8 @@ The site is split so no page is cluttered. Each page has the same top menu (Mode
 
 | Page | File | What is on it |
 |---|---|---|
-| **Home** | `Main.dc.html` | Hero with a chat preview, the four models in one row, three highlights (private, remembers you, shows its sources), a short plans teaser, try it |
-| **Models** | `SiteModels.dc.html` | The four models in detail (colour, job, which plans have it, which effort levels it offers) and the effort explained (Quick, Balanced, Deep) |
+| **Home** | `Main.dc.html` | Hero with a chat preview, the five models in one row, three highlights (private, remembers you, shows its sources), a short plans teaser, try it |
+| **Models** | `SiteModels.dc.html` | The five models in detail (colour, job, which plans have it, which effort levels it offers) and the effort explained (Quick, Balanced, Deep) |
 | **Plans** | `SitePlans.dc.html` | Free, Pro and Mega side by side in plain language (messages a week, in one sitting, models, document length), "always free on your own device", "plans are planned, prices to be announced" |
 | **How usage works** | `SiteUsage.dc.html` | Right now (the brain tank), this week (resets Monday 4 AM), what a message costs by model, effort and usage, tips, and a short "for the curious" about tokens |
 | **About** | `SiteAbout.dc.html` | Built from the ground up (stats, a "How it measures up" comparison table (Yuvra models side by side), and what makes it different), at home or in the cloud, private or public, what to keep in mind |

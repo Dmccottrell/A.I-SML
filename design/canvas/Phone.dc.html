@@ -148,20 +148,21 @@ Flare <span style="color: var(--muted)">&#9662;</span></button>
 </div>
 </div>
 </x-dc>
-<script type="text/x-dc" data-dc-script data-props='{"theme":{"editor":"enum","options":["dark","light"],"default":"dark"},"plan":{"editor":"enum","options":["free","pro","mega"],"default":"pro"},"model":{"editor":"enum","options":["flare","equinox","solstice","apogee","brand"],"default":"flare"},"$preview":{"width":390,"height":844}}'>
+<script type="text/x-dc" data-dc-script data-props='{"theme":{"editor":"enum","options":["dark","light"],"default":"dark"},"plan":{"editor":"enum","options":["free","pro","mega"],"default":"pro"},"model":{"editor":"enum","options":["ember","flare","equinox","solstice","apogee","brand"],"default":"flare"},"$preview":{"width":390,"height":844}}'>
 const BASE = {
   dark: {bg: '#07080D', side: '#0A0B11', surface: '#0F1119', surface2: '#161926', line: '#232739', text: '#EEF0F6', muted: '#9AA3BC'},
   light: {bg: '#F7F8FC', side: '#EEF0F7', surface: '#FFFFFF', surface2: '#EEF0F7', line: '#D8DCEA', text: '#0D0F1A', muted: '#4A526B'}
 };
 const MODEL = {
   brand: {dark: {accent: '#F5A524', onaccent: '#1A1204', accenttext: '#F5A524', sun: '#F5A524', core: '#F5A524', glow: 'rgba(245,165,36,.14)'}, light: {accent: '#F5A524', onaccent: '#1A1204', accenttext: '#8F5600', sun: '#E08A00', core: '#E08A00', glow: 'rgba(245,165,36,.12)'}},
+  ember: {dark: {accent: '#C8431F', onaccent: '#FFFFFF', accenttext: '#F0734F', sun: '#C8431F', core: '#FFB05A', glow: 'rgba(200,67,31,.20)'}, light: {accent: '#B7391E', onaccent: '#FFFFFF', accenttext: '#8F2A14', sun: '#A8321A', core: '#FF9A3C', glow: 'rgba(183,57,30,.14)'}},
   flare: {dark: {accent: '#FF4B1F', onaccent: '#1A0500', accenttext: '#FF6B3D', sun: '#FF4B1F', core: '#FFF3E6', glow: 'rgba(255,75,31,.20)'}, light: {accent: '#FF4B1F', onaccent: '#1A0500', accenttext: '#B83208', sun: '#E5340A', core: '#FFF3E6', glow: 'rgba(255,75,31,.12)'}},
   equinox: {dark: {accent: '#EEF0F6', onaccent: '#07080D', accenttext: '#EEF0F6', sun: '#EEF0F6', core: '#07080D', glow: 'rgba(238,240,246,.08)'}, light: {accent: '#0D0F1A', onaccent: '#FFFFFF', accenttext: '#0D0F1A', sun: '#0D0F1A', core: '#FFFFFF', glow: 'rgba(13,15,26,.07)'}},
   solstice: {dark: {accent: '#F2A60C', onaccent: '#1F1400', accenttext: '#FFBE3B', sun: '#F2A60C', core: '#FFE7A0', glow: 'rgba(242,166,12,.18)'}, light: {accent: '#F2A60C', onaccent: '#1F1400', accenttext: '#8A5A00', sun: '#D18A00', core: '#FFE7A0', glow: 'rgba(242,166,12,.13)'}},
   apogee: {dark: {accent: '#A8D1F5', onaccent: '#06121F', accenttext: '#B5D8F8', sun: '#A8D1F5', core: '#F4F9FF', glow: 'rgba(168,209,245,.15)'}, light: {accent: '#A8D1F5', onaccent: '#06121F', accenttext: '#2A5F96', sun: '#4F8FC9', core: '#F4F9FF', glow: 'rgba(120,170,220,.15)'}}
 };
 const PLANS = {free: {cap: 40000}, pro: {cap: 200000}, mega: {cap: 800000}};
-const WEIGHT = {flare: 1, equinox: 2, solstice: 5, apogee: 10, brand: 2};   // Auto: assume a middle model
+const WEIGHT = {ember: 0.5, flare: 1, equinox: 2, solstice: 5, apogee: 10, brand: 2};   // Auto: assume a middle model
 const EFFORT = {
   quick: {name: 'Quick', mult: 0.6, use: 'Uses less', blurb: 'Answers fast and thinks briefly. Best for simple questions.'},
   balanced: {name: 'Balanced', mult: 1, use: 'Normal usage', blurb: 'A good mix of speed and care. The default.'},
@@ -250,7 +251,7 @@ function usageBits(self, modelId, who) {
   const text = out ? 'Usage: out for now, back to full in about 3 hours'
     : 'Usage: ' + pct + '% · about ' + fmt(Math.floor(u.shownLeft / u.cost)) + ' messages left';
   const items = ['quick', 'balanced', 'deep'].map((k) => {
-    const blocked = k === 'deep' && modelId === 'flare';
+    const blocked = k === 'deep' && (modelId === 'flare' || modelId === 'ember');
     return {
       name: EFFORT[k].name, use: EFFORT[k].use, blurb: blocked ? 'Needs Equinox or a bigger model.' : EFFORT[k].blurb,
       mark: self.state.effort === k ? '✓' : '', opacity: blocked ? 0.45 : 1,

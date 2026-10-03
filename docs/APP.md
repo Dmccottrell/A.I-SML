@@ -8,7 +8,7 @@ with an optional **online mode** that uses a bigger model on your own PC (later 
 **App name (working, chosen Oct 2026): Yuvra** (say "YOOV-ruh"), with the website/domain **Yuvra.AI**.
 A web search found no exact match, only look-alikes (the Yuva AI companies). Before it is public: search
 the US trademark database (tmsearch.uspto.gov), Google Play and the App Store, and check that yuvra.ai
-and yuvra.com are free. The models are named Yuvra + a role (Flare, Equinox, Solstice, Apogee) + a generation number, for example Yuvra Flare 3.5; see docs/ROADMAP.md, "Names".
+and yuvra.com are free. The models are named Yuvra + a role (Ember, Flare, Equinox, Solstice, Apogee) + a generation number, for example Yuvra Flare 3.5; see docs/ROADMAP.md, "Names".
 Backups if Yuvra fails those checks: Brynja, Quenby, Eirvala, Vardrun.
 
 This builds on [ROADMAP.md: One app for phone and PC](ROADMAP.md#one-app-for-phone-and-pc-the-plan-for-the-website-and-app)

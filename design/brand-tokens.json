@@ -37,6 +37,23 @@
         "core": "#E08A00"
       }
     },
+    "ember": {
+      "feel": "smouldering deep red, glowing orange core, quiet and warm (the spark before a flare)",
+      "dark": {
+        "accent": "#C8431F",
+        "onaccent": "#FFFFFF",
+        "accenttext": "#F0734F",
+        "sun": "#C8431F",
+        "core": "#FFB05A"
+      },
+      "light": {
+        "accent": "#B7391E",
+        "onaccent": "#FFFFFF",
+        "accenttext": "#8F2A14",
+        "sun": "#A8321A",
+        "core": "#FF9A3C"
+      }
+    },
     "flare": {
       "feel": "hot red-orange, white-hot core, aggressive burst",
       "dark": {
