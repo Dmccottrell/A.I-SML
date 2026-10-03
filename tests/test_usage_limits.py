@@ -207,7 +207,7 @@ class Rules(unittest.TestCase):
     def test_by_model_lists_only_plan_models(self):
         _, L = make("free")
         keys = [m["model"] for m in L.snapshot("sam", "flare", "balanced", NOW)["by_model"]]
-        self.assertEqual(sorted(keys), ["equinox", "flare"])
+        self.assertEqual(sorted(keys), ["ember", "equinox", "flare"])
 
 
 if __name__ == "__main__":

@@ -40,11 +40,20 @@ a:hover{color:var(--accenttext)}
 
 <div style="max-width: 1200px; margin: 0 auto; padding: 56px 24px 24px; display: flex; flex-direction: column; gap: 16px; max-width: 1200px">
 <div style="font-size: 14px; font-weight: 600; letter-spacing: 0.14em; color: var(--accenttext)">THE MODELS</div>
-<h1 style="margin: 0; font-family: 'Sora', sans-serif; font-weight: 600; font-size: 56px; line-height: 1.05; letter-spacing: -0.03em">Four models. Pick one, or let Auto choose.</h1>
+<h1 style="margin: 0; font-family: 'Sora', sans-serif; font-weight: 600; font-size: 56px; line-height: 1.05; letter-spacing: -0.03em">Five models. Pick one, or let Auto choose.</h1>
 <p style="margin: 0; color: var(--muted); font-size: 20px; max-width: 680px">Each one has its own colour and its own job. A newer version of a model replaces the older one, and the older one stays available under &ldquo;Other models&rdquo;.</p>
 </div>
 
 <div style="max-width: 1200px; margin: 0 auto; padding: 24px 24px 80px; display: flex; flex-direction: column; gap: 20px">
+
+<div style="background: var(--surface); border: 1px solid #3A1A12; background-image: radial-gradient(500px 200px at 0% 0%, rgba(200,67,31,.16), transparent 70%); border-radius: 24px; padding: 32px; display: flex; flex-wrap: wrap; gap: 28px; align-items: center">
+<svg width="84" height="84" viewBox="0 0 64 64" fill="none" aria-hidden="true"><path d="M32 56 C22 56 12 51 10 41 C5 37 5 28 11 24 C10 16 18 8 26 11 C29 6 35 6 38 11 C46 8 54 16 53 24 C59 28 59 37 54 41 C52 51 42 56 32 56 Z" style="stroke: var(--text)" stroke-width="5" stroke-linejoin="round" stroke-dasharray="26 7" stroke-linecap="round"/><circle cx="32" cy="36" r="6" style="fill: #C8431F"/></svg>
+<div style="flex: 1 1 380px; display: flex; flex-direction: column; gap: 8px">
+<div style="display: flex; flex-wrap: wrap; align-items: baseline; gap: 12px"><span style="font-family: 'Sora', sans-serif; font-weight: 600; font-size: 34px">Ember</span><span style="color: #F0734F; font-size: 13px; font-weight: 600; letter-spacing: 0.1em">AVAILABLE NOW &middot; BETA</span></div>
+<div style="color: var(--muted)">The small first assistant: quick, light and happy on almost any device. Smouldering red with a glowing core, the spark before a flare. Ember 2 is available now in beta.</div>
+</div>
+<div style="flex: 1 1 260px; display: flex; flex-direction: column; gap: 6px; font-size: 15px"><div><span style="color: var(--muted)">Plans:</span> Free, Pro, Mega</div><div><span style="color: var(--muted)">Effort:</span> Quick, Balanced</div><div><span style="color: var(--muted)">Best for:</span> simple questions, quick drafts, older phones</div></div>
+</div>
 
 <div style="background: var(--surface); border: 1px solid #3A1A12; background-image: radial-gradient(500px 200px at 0% 0%, rgba(255,75,31,.16), transparent 70%); border-radius: 24px; padding: 32px; display: flex; flex-wrap: wrap; gap: 28px; align-items: center">
 <svg width="96" height="96" viewBox="0 0 64 64" fill="none" aria-hidden="true"><path d="M32 56 C22 56 12 51 10 41 C5 37 5 28 11 24 C10 16 18 8 26 11 C29 6 35 6 38 11 C46 8 54 16 53 24 C59 28 59 37 54 41 C52 51 42 56 32 56 Z" style="stroke: var(--text)" stroke-width="4.5" stroke-linejoin="round"/><circle cx="32" cy="36" r="7" style="fill: #FF4B1F"/></svg>
@@ -103,13 +112,14 @@ a:hover{color:var(--accenttext)}
 </div>
 </div>
 </x-dc>
-<script type="text/x-dc" data-dc-script data-props='{"theme":{"editor":"enum","options":["dark","light"],"default":"dark"},"model":{"editor":"enum","options":["flare","equinox","solstice","apogee","brand"],"default":"brand"},"$preview":{"width":1360,"height":1900}}'>
+<script type="text/x-dc" data-dc-script data-props='{"theme":{"editor":"enum","options":["dark","light"],"default":"dark"},"model":{"editor":"enum","options":["ember","flare","equinox","solstice","apogee","brand"],"default":"brand"},"$preview":{"width":1360,"height":1900}}'>
 const BASE = {
   dark: {bg: '#07080D', side: '#0A0B11', surface: '#0F1119', surface2: '#161926', line: '#232739', text: '#EEF0F6', muted: '#9AA3BC'},
   light: {bg: '#F7F8FC', side: '#EEF0F7', surface: '#FFFFFF', surface2: '#EEF0F7', line: '#D8DCEA', text: '#0D0F1A', muted: '#4A526B'}
 };
 const MODEL = {
   brand: {dark: {accent: '#F5A524', onaccent: '#1A1204', accenttext: '#F5A524', sun: '#F5A524', core: '#F5A524', glow: 'rgba(245,165,36,.14)'}, light: {accent: '#F5A524', onaccent: '#1A1204', accenttext: '#8F5600', sun: '#E08A00', core: '#E08A00', glow: 'rgba(245,165,36,.12)'}},
+  ember: {dark: {accent: '#C8431F', onaccent: '#FFFFFF', accenttext: '#F0734F', sun: '#C8431F', core: '#FFB05A', glow: 'rgba(200,67,31,.20)'}, light: {accent: '#B7391E', onaccent: '#FFFFFF', accenttext: '#8F2A14', sun: '#A8321A', core: '#FF9A3C', glow: 'rgba(183,57,30,.14)'}},
   flare: {dark: {accent: '#FF4B1F', onaccent: '#1A0500', accenttext: '#FF6B3D', sun: '#FF4B1F', core: '#FFF3E6', glow: 'rgba(255,75,31,.20)'}, light: {accent: '#FF4B1F', onaccent: '#1A0500', accenttext: '#B83208', sun: '#E5340A', core: '#FFF3E6', glow: 'rgba(255,75,31,.12)'}},
   equinox: {dark: {accent: '#EEF0F6', onaccent: '#07080D', accenttext: '#EEF0F6', sun: '#EEF0F6', core: '#07080D', glow: 'rgba(238,240,246,.08)'}, light: {accent: '#0D0F1A', onaccent: '#FFFFFF', accenttext: '#0D0F1A', sun: '#0D0F1A', core: '#FFFFFF', glow: 'rgba(13,15,26,.07)'}},
   solstice: {dark: {accent: '#F2A60C', onaccent: '#1F1400', accenttext: '#FFBE3B', sun: '#F2A60C', core: '#FFE7A0', glow: 'rgba(242,166,12,.18)'}, light: {accent: '#F2A60C', onaccent: '#1F1400', accenttext: '#8A5A00', sun: '#D18A00', core: '#FFE7A0', glow: 'rgba(242,166,12,.13)'}},

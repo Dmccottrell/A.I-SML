@@ -72,6 +72,10 @@ class Pick(unittest.TestCase):
         r = C.pick(model(), C.Device(1.0), "everyday")
         self.assertEqual((r["window"], r["fits"]), (0, False))
 
+    def test_a_model_trained_on_1024_tokens_gets_1024(self):
+        r = C.pick(model("ember-2"), C.Device(8), "everyday")
+        self.assertEqual((r["window"], r["fits"], r["limited_by"]), (1024, True, "model"))
+
     def test_bad_mode(self):
         with self.assertRaises(ValueError):
             C.pick(model(), C.Device(8), "huge")

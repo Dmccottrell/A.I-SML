@@ -119,12 +119,12 @@ device are free and unlimited in every tier, which is the selling point of the f
 | Tank (capacity / refill per hour) | 40,000 / 5,000 (full in 8 h) | 200,000 / 25,000 (full in 8 h) | 800,000 / 100,000 (full in 8 h) |
 | Weekly ceiling | 150,000 | 1,000,000 | 5,000,000 |
 | Roughly, in short messages (~500 counted each) | ~300 a week | ~2,000 a week | ~10,000 a week |
-| Models from the server | Flare, Equinox | All four (Flare, Equinox, Solstice, Apogee) | All four |
+| Models from the server | Ember, Flare, Equinox | All five (Ember, Flare, Equinox, Solstice, Apogee) | All five |
 | Context window (one request) | Everyday 8,192 | Everyday 8,192, Long up to 32,768 | Everyday 8,192, Long up to the longest the model passed (64K and up) |
 | Priority when the server is busy | Normal | Normal | First |
 | Who | Anyone, once the public version exists | Your private testers now; paying users later | Heavy users; you (the owner) are exempt from all limits |
 
-Free is limited to Flare and Equinox; Pro and Mega can use all four models, so the paid tiers differ in how much they can use, not in which models. Because model weights multiply the counted tokens (Flare 1, Equinox 2, Solstice 5, Apogee 10), the same weekly ceiling buys far fewer Apogee messages than Flare ones:
+Free is limited to Ember, Flare and Equinox; Pro and Mega can use all five models, so the paid tiers differ in how much they can use, not in which models. Because model weights multiply the counted tokens (Ember 0.5, Flare 1, Equinox 2, Solstice 5, Apogee 10), the same weekly ceiling buys far fewer Apogee messages than Flare ones:
 5,000,000 on Mega is about 500,000 Apogee tokens. The limits live in one config file (`limits.json`: a block per tier, plus per-person overrides), so tiers can be added or
 changed without touching code. Pricing is not decided; the tiers only decide access and amounts. The owner screen has a tab for each tier.
 
@@ -237,7 +237,7 @@ the PC and the website (the PC adds a chats sidebar).
 ### The other screens
 | Screen | What's on it |
 |---|---|
-| **Model picker** (sheet) | Cards for Flare, Equinox, Solstice, Apogee with badges, an **Auto** card, Effort (Quick / Balanced / Deep), a Skills row, and "Other models" (see APP.md) |
+| **Model picker** (sheet) | Cards for Ember, Flare, Equinox, Solstice, Apogee with badges, an **Auto** card, Effort (Quick / Balanced / Deep), a Skills row, and "Other models" (see APP.md) |
 | **Chats** | List and search, pinned chats, private chats marked, delete |
 | **Memory** | The facts it remembers, each with edit and delete; "Forget everything"; export / import |
 | **Skills** | Study helper and Teacher assistant (Beta) with switches; only packs you may use are shown; a short "what it does" line and a sample |
@@ -355,3 +355,8 @@ beta list", and "memory finds an earlier chat by meaning, not only by words".
   plain message and when it refills). Message text is never logged; keys are in `.yuvra/users.json` (kept out of git).
   **Not built yet:** Memory, Skills, Documents, web search, Teacher assistant and Save as PDF / Word (the menu says "Coming soon"),
   and the golden prompt-parity tests.
+- **Ember 2 (v2) runs in the app.** `models.json` has `ember-2` (the lowest of five names; weight 0.5 in the usage counting; its
+  own 1,024-token memory and the sampling settings tested on the phone). `ModelRunner` in `app_server.py` starts llama.cpp's
+  `llama-server` for the model you pick (one at a time), finds the exported `.gguf` and the model's own `tokenizer.json` by
+  itself, and the picker shows which models are on this computer (`tests/test_model_runner.py`, with a fake llama-server).
+  See `docs/V2.md`, "Step 6b".

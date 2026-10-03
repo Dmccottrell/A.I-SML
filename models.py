@@ -21,7 +21,7 @@ import argparse
 import json
 import os
 
-NAMES = ("Flare", "Equinox", "Solstice", "Apogee")
+NAMES = ("Ember", "Flare", "Equinox", "Solstice", "Apogee")
 WHERE = ("device", "online")
 STATUS = ("stable", "beta", "planned", "off")
 REQUIRED = ("id", "name", "version", "where", "file", "size_mb", "min_ram_gb", "context", "status")

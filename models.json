@@ -1,6 +1,43 @@
 {
   "models": [
     {
+      "id": "ember-2",
+      "name": "Ember",
+      "version": 2,
+      "from_version": "v2",
+      "tagline": "The small first assistant: quick, light, runs anywhere",
+      "tier": "Lite",
+      "where": "device",
+      "file": "ember-2.q8_0.gguf",
+      "size_mb": 94,
+      "sha256": "",
+      "min_ram_gb": 1,
+      "context": 1024,
+      "status": "beta",
+      "supports_effort": false,
+      "skills": [],
+      "pinned": false,
+      "cost_weight": 0.5,
+      "context_tested": 1024,
+      "kv_kb_per_token": 12,
+      "weights_mb": 94,
+      "tokenizer": "data/v2/tokenizer.json",
+      "local_gguf": [
+        "export/dev/v2/my-ai-q8_0.gguf",
+        "export/dev/v2/my-ai-q4_0.gguf",
+        "export/dev/v2/my-ai-f16.gguf"
+      ],
+      "sampling": {
+        "temperature": 0.45,
+        "top_k": 40,
+        "top_p": 0.95,
+        "min_p": 0.05,
+        "repeat_penalty": 1.25,
+        "repeat_last_n": 64
+      },
+      "max_reply_tokens": 256
+    },
+    {
       "id": "flare-3",
       "name": "Flare",
       "version": 3,
@@ -23,7 +60,13 @@
       "cost_weight": 1,
       "context_tested": 2048,
       "kv_kb_per_token": 32,
-      "weights_mb": 240
+      "weights_mb": 240,
+      "tokenizer": "data/v3/tokenizer.json",
+      "local_gguf": [
+        "export/dev/v3/my-ai-q8_0.gguf",
+        "export/dev/v3/my-ai-q4_0.gguf",
+        "export/dev/v3/my-ai-f16.gguf"
+      ]
     },
     {
       "id": "flare-3.5",
@@ -48,7 +91,13 @@
       "cost_weight": 1,
       "context_tested": 2048,
       "kv_kb_per_token": 24,
-      "weights_mb": 700
+      "weights_mb": 700,
+      "tokenizer": "data/v3.5/tokenizer.json",
+      "local_gguf": [
+        "export/dev/v3.5/my-ai-q8_0.gguf",
+        "export/dev/v3.5/my-ai-q4_0.gguf",
+        "export/dev/v3.5/my-ai-f16.gguf"
+      ]
     },
     {
       "id": "equinox-4",

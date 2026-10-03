@@ -28,7 +28,7 @@ live in `config.py`.
 
 ## Model family names (working names)
 
-The app and the whole family are called **Yuvra** (Yuvra.AI). Each model is Yuvra + one of four names + its own version
+The app and the whole family are called **Yuvra** (Yuvra.AI). Each model is Yuvra + one of five names + its own version
 number: **Yuvra Flare** (fast and light), **Yuvra Equinox** (balanced everyday), **Yuvra Solstice** (stronger) and
 **Yuvra Apogee** (most capable). So v3 = Yuvra Flare 3 (~400M), v3.5 = Yuvra Flare 3.5 (~1.1B), v4 = Yuvra Equinox 4,
 v5 = Yuvra Solstice 5 (~3B), v6 / v6.5 = Yuvra Apogee 6 / 6.5 (5-7B), and later Yuvra Apogee 7, 8 (13B+); each
@@ -82,7 +82,7 @@ data, code and training.
 | `notify.py` | 5 | Push messages to your phone about training progress, crashes and finish (free, via ntfy.sh); see `docs/PHONE.md` |
 | `app_errors.py`, `app_engine.py`, `app_download.py` | app | The app's reliability layer: plain-language errors, model choice (too big / PC off), reply guard (length cap, loop detector, Stop), chats saved while they stream, the llama-server client, "Test connection", and resumable checksum-verified downloads |
 | `design/` | app | The Yuvra website, app and logo concept: logo SVGs, brand colours per model, and the design canvas sources (see `design/README.md`) |
-| `models.json`, `models.py` | app | The app's model list (Flare, Equinox, Solstice, Apogee, each with its own version) and the "Select model" picker logic; see `docs/APP_SPEC.md` |
+| `models.json`, `models.py` | app | The app's model list (Ember, Flare, Equinox, Solstice, Apogee, each with its own version) and the "Select model" picker logic; see `docs/APP_SPEC.md` |
 | `harness.py` | 6 | The coding helper's tools and loop (no model needed; tests in `tests/`): safe file/command tools, a safe git subset, syntax diagnostics, project notes (YUVRA.md / AGENTS.md), hooks with a finish gate, permissions (ask before commits), compaction of long runs, and a tool registry (where MCP tools plug in) |
 | `agent_tasks.py`, `agent_lessons.py`, `make_agent_data.py` | 6 | Coding practice made by our own code: tiny bug-fix projects solved by a scripted solver through the real harness (only passing runs kept). Become chat lessons (`tool_use`, `project_context`, `ask_first`, `too_big`, `compaction`) and `data/v3.5/agent_traces.jsonl` for v3.5's final phase. Run `python make_agent_data.py --version v3.5` before building v3.5's data |
 | `stretch_ladder.py` | 6 | Stretches v3's memory step by step (8K, 16K, 32K, 64K, 128K, 256K) and stops at the first step that fails its long-context tests, so you find how far it can go without wasted training (see `docs/LONG_CONTEXT.md`) |

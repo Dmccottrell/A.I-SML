@@ -137,8 +137,9 @@ class State(Base):
         self.assertTrue(j["owner"])
         self.assertTrue(j["usage"]["exempt"])
         names = [m["name"] for m in j["models"]["cards"]]
-        self.assertEqual(names, ["Flare", "Equinox", "Solstice", "Apogee"])
+        self.assertEqual(names, ["Ember", "Flare", "Equinox", "Solstice", "Apogee"])
         self.assertEqual(j["models"]["cards"][0]["state"], "ready")
+        self.assertEqual([m["id"] for m in j["models"]["other"]], [])      # Ember 2 is its own name, so it is a card
         self.assertEqual([e["id"] for e in j["efforts"]], ["quick", "balanced", "deep"])
         self.assertEqual(j["min_first_s"], 3.0)
         self.assertGreater(len(j["thinking_words"]), 5)

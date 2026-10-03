@@ -41,7 +41,7 @@ a:hover{color:var(--accenttext)}
 <div style="max-width: 1200px; margin: 0 auto; padding: 56px 24px 32px; display: flex; flex-direction: column; gap: 16px">
 <div style="font-size: 14px; font-weight: 600; letter-spacing: 0.14em; color: var(--accenttext)">PLANS</div>
 <h1 style="margin: 0; font-family: 'Sora', sans-serif; font-weight: 600; font-size: 56px; line-height: 1.05; letter-spacing: -0.03em">Free to start. More when you need it.</h1>
-<p style="margin: 0; color: var(--muted); font-size: 20px; max-width: 700px">The same app and the same models on every plan. The plans differ in how much you can use, and Free has two models instead of four. Models that run on your own device are free and unlimited on every plan.</p>
+<p style="margin: 0; color: var(--muted); font-size: 20px; max-width: 700px">The same app and the same models on every plan. The plans differ in how much you can use, and Free has three models instead of five. Models that run on your own device are free and unlimited on every plan.</p>
 </div>
 
 <div style="max-width: 1200px; margin: 0 auto; padding: 24px 24px 24px; display: flex; flex-wrap: wrap; gap: 20px">
@@ -53,7 +53,7 @@ a:hover{color:var(--accenttext)}
 <div style="display: flex; flex-direction: column; gap: 12px">
 <div><b>About 300 messages a week</b><div style="color: var(--muted); font-size: 14px">Resets Monday 4 AM</div></div>
 <div><b>About 80 in one sitting</b><div style="color: var(--muted); font-size: 14px">Then it refills, full again in about 8 hours</div></div>
-<div><b>Flare and Equinox</b></div>
+<div><b>Ember, Flare and Equinox</b></div>
 <div><b>Documents up to about 12 pages</b></div>
 </div>
 </div>
@@ -65,7 +65,7 @@ a:hover{color:var(--accenttext)}
 <div style="display: flex; flex-direction: column; gap: 12px">
 <div><b>About 2,000 messages a week</b><div style="color: var(--muted); font-size: 14px">Resets Monday 4 AM</div></div>
 <div><b>About 400 in one sitting</b><div style="color: var(--muted); font-size: 14px">Full again in about 8 hours</div></div>
-<div><b>All four models</b></div>
+<div><b>All five models</b></div>
 <div><b>Documents up to about 50 pages</b></div>
 </div>
 </div>
@@ -77,7 +77,7 @@ a:hover{color:var(--accenttext)}
 <div style="display: flex; flex-direction: column; gap: 12px">
 <div><b>About 10,000 messages a week</b><div style="color: var(--muted); font-size: 14px">Resets Monday 4 AM</div></div>
 <div><b>About 1,600 in one sitting</b><div style="color: var(--muted); font-size: 14px">Full again in about 8 hours</div></div>
-<div><b>All four models, first in line</b></div>
+<div><b>All five models, first in line</b></div>
 <div><b>The longest documents the model can read</b></div>
 </div>
 </div>
@@ -103,13 +103,14 @@ a:hover{color:var(--accenttext)}
 </div>
 </div>
 </x-dc>
-<script type="text/x-dc" data-dc-script data-props='{"theme":{"editor":"enum","options":["dark","light"],"default":"dark"},"model":{"editor":"enum","options":["flare","equinox","solstice","apogee","brand"],"default":"brand"},"$preview":{"width":1360,"height":1700}}'>
+<script type="text/x-dc" data-dc-script data-props='{"theme":{"editor":"enum","options":["dark","light"],"default":"dark"},"model":{"editor":"enum","options":["ember","flare","equinox","solstice","apogee","brand"],"default":"brand"},"$preview":{"width":1360,"height":1700}}'>
 const BASE = {
   dark: {bg: '#07080D', side: '#0A0B11', surface: '#0F1119', surface2: '#161926', line: '#232739', text: '#EEF0F6', muted: '#9AA3BC'},
   light: {bg: '#F7F8FC', side: '#EEF0F7', surface: '#FFFFFF', surface2: '#EEF0F7', line: '#D8DCEA', text: '#0D0F1A', muted: '#4A526B'}
 };
 const MODEL = {
   brand: {dark: {accent: '#F5A524', onaccent: '#1A1204', accenttext: '#F5A524', sun: '#F5A524', core: '#F5A524', glow: 'rgba(245,165,36,.14)'}, light: {accent: '#F5A524', onaccent: '#1A1204', accenttext: '#8F5600', sun: '#E08A00', core: '#E08A00', glow: 'rgba(245,165,36,.12)'}},
+  ember: {dark: {accent: '#C8431F', onaccent: '#FFFFFF', accenttext: '#F0734F', sun: '#C8431F', core: '#FFB05A', glow: 'rgba(200,67,31,.20)'}, light: {accent: '#B7391E', onaccent: '#FFFFFF', accenttext: '#8F2A14', sun: '#A8321A', core: '#FF9A3C', glow: 'rgba(183,57,30,.14)'}},
   flare: {dark: {accent: '#FF4B1F', onaccent: '#1A0500', accenttext: '#FF6B3D', sun: '#FF4B1F', core: '#FFF3E6', glow: 'rgba(255,75,31,.20)'}, light: {accent: '#FF4B1F', onaccent: '#1A0500', accenttext: '#B83208', sun: '#E5340A', core: '#FFF3E6', glow: 'rgba(255,75,31,.12)'}},
   equinox: {dark: {accent: '#EEF0F6', onaccent: '#07080D', accenttext: '#EEF0F6', sun: '#EEF0F6', core: '#07080D', glow: 'rgba(238,240,246,.08)'}, light: {accent: '#0D0F1A', onaccent: '#FFFFFF', accenttext: '#0D0F1A', sun: '#0D0F1A', core: '#FFFFFF', glow: 'rgba(13,15,26,.07)'}},
   solstice: {dark: {accent: '#F2A60C', onaccent: '#1F1400', accenttext: '#FFBE3B', sun: '#F2A60C', core: '#FFE7A0', glow: 'rgba(242,166,12,.18)'}, light: {accent: '#F2A60C', onaccent: '#1F1400', accenttext: '#8A5A00', sun: '#D18A00', core: '#FFE7A0', glow: 'rgba(242,166,12,.13)'}},

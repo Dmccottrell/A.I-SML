@@ -198,6 +198,7 @@ svg .core { fill: var(--core); stroke: var(--sun); stroke-width: 3; transition: 
 'use strict';
 // ---------------------------------------------------------------- palettes (design/brand-tokens.json)
 const MODEL = {
+  Ember:    {dark: {accent:'#C8431F', onaccent:'#FFFFFF', accenttext:'#F0734F', sun:'#C8431F', core:'#FFB05A', glow:'rgba(200,67,31,.20)'}, light: {accent:'#B7391E', onaccent:'#FFFFFF', accenttext:'#8F2A14', sun:'#A8321A', core:'#FF9A3C', glow:'rgba(183,57,30,.14)'}},
   Flare:    {dark: {accent:'#FF4B1F', onaccent:'#1A0500', accenttext:'#FF6B3D', sun:'#FF4B1F', core:'#FFF3E6', glow:'rgba(255,75,31,.20)'}, light: {accent:'#FF4B1F', onaccent:'#1A0500', accenttext:'#B83208', sun:'#E5340A', core:'#FFF3E6', glow:'rgba(255,75,31,.12)'}},
   Equinox:  {dark: {accent:'#EEF0F6', onaccent:'#07080D', accenttext:'#EEF0F6', sun:'#EEF0F6', core:'#07080D', glow:'rgba(238,240,246,.08)'}, light: {accent:'#0D0F1A', onaccent:'#FFFFFF', accenttext:'#0D0F1A', sun:'#0D0F1A', core:'#FFFFFF', glow:'rgba(13,15,26,.07)'}},
   Solstice: {dark: {accent:'#F2A60C', onaccent:'#1F1400', accenttext:'#FFBE3B', sun:'#F2A60C', core:'#FFE7A0', glow:'rgba(242,166,12,.18)'}, light: {accent:'#F2A60C', onaccent:'#1F1400', accenttext:'#8A5A00', sun:'#D18A00', core:'#FFE7A0', glow:'rgba(242,166,12,.13)'}},
@@ -243,7 +244,8 @@ async function api(path, opts) {
 const post = (path, body) => api(path, {method: 'POST', body: JSON.stringify(body || {})});
 
 // ---------------------------------------------------------------- theme
-function curModel() { return S.state ? S.state.models.cards.find((m) => m.id === S.model) : null; }
+function allModels() { return S.state ? S.state.models.cards.concat(S.state.models.other || []) : []; }
+function curModel() { return allModels().find((m) => m.id === S.model) || null; }
 function applyTheme() {
   const mode = S.theme === 'auto' ? (matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark') : S.theme;
   document.documentElement.dataset.mode = mode;
@@ -258,7 +260,7 @@ async function load() {
   const q = new URLSearchParams({effort: S.effort}); if (S.model) q.set('model', S.model);
   const r = await api('/api/state?' + q);
   S.state = await r.json();
-  if (!S.model || !S.state.models.cards.some((m) => m.id === S.model && m.state === 'ready')) S.model = S.state.model;
+  if (!S.model || !allModels().some((m) => m.id === S.model && m.state === 'ready')) S.model = S.state.model;
   $('login').hidden = true; $('app').hidden = false;
   applyTheme(); renderAll();
 }
@@ -313,8 +315,8 @@ async function delChat(c) {
 function bubble(m, last) {
   if (m.role === 'user' && m.content.startsWith(SUMMARY_MARK)) return el('div', {class: 'note'}, 'Earlier messages were summarized to save room');
   if (m.role === 'user') return el('div', {class: 'msg user'}, el('div', {class: 'bubble'}, m.content));
-  const model = S.state.models.cards.find((c) => c.id === m.model_id);
-  const meta = el('div', {class: 'meta'}, logo(14), (model ? model.name : 'Yuvra') + (m.status === 'partial' ? ' · stopped' : ''));
+  const model = allModels().find((c) => c.id === m.model_id);
+  const meta = el('div', {class: 'meta'}, logo(14), (model ? model.name + (model.older ? ' ' + model.version : '') : 'Yuvra') + (m.status === 'partial' ? ' · stopped' : ''));
   const acts = el('div', {class: 'acts'}, el('button', {class: 'chip', onclick: (e) => { navigator.clipboard && navigator.clipboard.writeText(m.content); e.target.textContent = 'Copied'; setTimeout(() => e.target.textContent = 'Copy', 1500); }}, 'Copy'));
   if (last && !S.busy) acts.append(el('button', {class: 'chip', onclick: regenerate}, 'Regenerate'));
   return el('div', {class: 'msg ai', 'data-id': m.id}, meta, el('div', {class: 'bubble'}, m.content), acts);
@@ -345,15 +347,17 @@ function closeMenus() { $('modelMenu').hidden = true; $('effortMenu').hidden = t
 $('modelBtn').onclick = () => {
   const open = !$('modelMenu').hidden; closeMenus(); if (open) return;
   const m = $('modelMenu'); m.replaceChildren(el('div', {class: 'head'}, 'SELECT MODEL'));
-  for (const c of S.state.models.cards) m.append(el('button', {class: 'opt' + (c.id === S.model ? ' sel' : ''), disabled: c.state !== 'ready', onclick: () => chooseModel(c)},
-    logo(30), el('span', {class: 'grow'}, el('b', {}, c.name), el('small', {}, c.tagline || '')), el('small', {style: 'text-align:right'}, c.badge)));
+  const row = (c) => el('button', {class: 'opt' + (c.id === S.model ? ' sel' : ''), disabled: c.state !== 'ready', onclick: () => chooseModel(c)},
+    logo(30), el('span', {class: 'grow'}, el('b', {}, c.name + (c.older ? ' ' + c.version : '')), el('small', {}, c.tagline || '')), el('small', {style: 'text-align:right'}, c.badge));
+  for (const c of S.state.models.cards) m.append(row(c));
+  if ((S.state.models.other || []).length) { m.append(el('div', {class: 'head'}, 'OTHER MODELS')); for (const c of S.state.models.other) m.append(row(c)); }
   m.hidden = false;
 };
 $('effortBtn').onclick = () => {
   const open = !$('effortMenu').hidden; closeMenus(); if (open) return;
   const m = $('effortMenu'); m.replaceChildren(el('div', {class: 'head'}, 'HOW MUCH SHOULD IT THINK?'));
   const cm = curModel();
-  for (const e of S.state.efforts) { const blocked = e.id === 'deep' && cm && cm.name === 'Flare';
+  for (const e of S.state.efforts) { const blocked = e.id === 'deep' && cm && (cm.name === 'Flare' || cm.name === 'Ember');
     m.append(el('button', {class: 'opt' + (e.id === S.effort ? ' sel' : ''), disabled: blocked, onclick: () => { S.effort = e.id; try { localStorage.setItem('yuvra_effort', e.id); } catch (x) {} closeMenus(); renderComposer(); refreshUsage(); }},
       el('span', {class: 'grow'}, el('b', {}, e.name), ' ', el('small', {style: 'display:inline'}, '· ' + e.use), el('small', {}, blocked ? 'Needs Equinox or a bigger model.' : e.blurb)), e.id === S.effort ? '✓' : '')); }
   m.append(el('div', {class: 'head', style: 'text-transform:none;letter-spacing:0;font-weight:400'}, 'Thinking longer is slower and uses more of your usage.'));
@@ -363,7 +367,7 @@ document.addEventListener('click', (e) => { if (!e.target.closest('.box')) close
 async function chooseModel(c) {
   closeMenus(); if (c.id === S.model) return;
   S.model = c.id; try { localStorage.setItem('yuvra_model', c.id); } catch (e) {}
-  if (c.name === 'Flare' && S.effort === 'deep') S.effort = 'balanced';
+  if ((c.name === 'Flare' || c.name === 'Ember') && S.effort === 'deep') S.effort = 'balanced';
   wash(); applyTheme(); renderComposer(); renderThread(false); await refreshUsage();
 }
 const input = $('input');

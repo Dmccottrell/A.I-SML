@@ -26,6 +26,7 @@ Usage:
     python app_server.py --host 0.0.0.0               (reachable from your phone on the same network)
 """
 import argparse
+import atexit
 import hmac
 import http.server
 import json
@@ -33,11 +34,16 @@ import os
 import queue
 import re
 import secrets
+import shutil
+import socket
 import socketserver
+import subprocess
 import sys
 import threading
 import time
+import urllib.error
 import urllib.parse
+import urllib.request
 
 import app_engine as E
 import chat
@@ -102,20 +108,101 @@ def total_memory_gb(fallback=8.0):
     return fallback
 
 
+# ------------------------------------------------------------------ running a GGUF model (llama.cpp's llama-server)
+class ModelRunner:
+    """Starts llama-server for the model the person picked and stops it when another one is picked (one at a time, so
+    a small PC is not asked to hold two models). `files` is {model id: path to a .gguf}."""
+
+    def __init__(self, llama_bin, files, start_timeout=180, extra_args=(), host="127.0.0.1"):
+        self.bin, self.files, self.timeout, self.extra, self.host = llama_bin, dict(files), start_timeout, list(extra_args), host
+        self.proc = self.model_id = self.url = self.ctx = None
+        self.lock = threading.Lock()
+        atexit.register(self.stop)
+
+    def available(self, model_id):
+        return model_id in self.files and os.path.exists(self.files[model_id]) and bool(self.bin)
+
+    def _free_port(self):
+        with socket.socket() as s:
+            s.bind((self.host, 0))
+            return s.getsockname()[1]
+
+    def stop(self):
+        proc, self.proc, self.model_id, self.url = self.proc, None, None, None
+        if proc and proc.poll() is None:
+            proc.terminate()
+            try:
+                proc.wait(10)
+            except subprocess.TimeoutExpired:
+                proc.kill()
+
+    def ensure(self, model_id, ctx):
+        """The URL of a llama-server running this model with at least `ctx` tokens of memory. Starts it if needed."""
+        with self.lock:
+            if self.proc and self.proc.poll() is None and self.model_id == model_id and (self.ctx or 0) >= ctx:
+                return self.url
+            self.stop()
+            if not self.available(model_id):
+                raise AppError("This model's file isn't on this computer.",
+                               "Put the .gguf next to the others (see docs/V2.md) or start the server with --gguf.")
+            port = self._free_port()
+            cmd = [self.bin, "-m", self.files[model_id], "--host", self.host, "--port", str(port), "-c", str(ctx)] + self.extra
+            flags = getattr(subprocess, "CREATE_NO_WINDOW", 0)
+            try:
+                self.proc = subprocess.Popen(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, creationflags=flags)
+            except OSError as e:
+                raise AppError("llama-server could not be started.", f"Check the path given with --llama-bin ({e.strerror}).")
+            self.model_id, self.ctx, self.url = model_id, ctx, f"http://{self.host}:{port}"
+            deadline = time.monotonic() + self.timeout
+            while time.monotonic() < deadline:
+                if self.proc.poll() is not None:
+                    self.stop()
+                    raise AppError("The model stopped while loading.", "Check that the .gguf file is complete and fits in memory.")
+                try:
+                    with urllib.request.urlopen(self.url + "/health", timeout=2) as r:
+                        if json.loads(r.read() or b"{}").get("status", "ok") == "ok":
+                            return self.url
+                except (urllib.error.URLError, OSError, ValueError):
+                    pass                                         # still loading (llama-server answers 503 until ready)
+                time.sleep(0.25)
+            self.stop()
+            raise AppError("The model took too long to load.", "Try a smaller model or check the memory it needs.")
+
+
+def find_llama_server():
+    """llama-server on the PATH, or None."""
+    return shutil.which("llama-server") or shutil.which("llama-server.exe")
+
+
+def discover_ggufs(manifest, root=HERE):
+    """{model id: path} for every model whose .gguf already sits where the export scripts put it (see `local_gguf`)."""
+    found = {}
+    for m in manifest["models"]:
+        for rel in m.get("local_gguf", []):
+            path = rel if os.path.isabs(rel) else os.path.join(root, rel)
+            if os.path.exists(path):
+                found[m["id"]] = path
+                break
+    return found
+
+
 # ------------------------------------------------------------------ everything the server holds
 class AppState:
     def __init__(self, data_dir=None, llama_url=None, llama_key=None, tok=None, manifest=None, cfg=None, ram_gb=None,
-                 backend_factory=None, clock=time.time, pace=True):
+                 backend_factory=None, clock=time.time, pace=True, runner=None, root=HERE):
         self.data_dir = data_dir                              # None = keep everything in memory (tests)
         if data_dir:
             os.makedirs(data_dir, exist_ok=True)
         self.manifest = manifest or M.load_manifest()
         self.cfg = cfg or U.load_limits()
-        self.tok = tok or demo_tokenizer()
+        self.default_tok, self.root = tok, root
+        self.tokens = {}                                      # model id -> its own tokenizer (each version has one)
+        self.runner = runner
         self.llama_url, self.llama_key = llama_url, llama_key
         self.backend_factory = backend_factory
         self.ram_gb = ram_gb or total_memory_gb()
         self.clock, self.pace = clock, pace
+        self._demo_tok = None
         self.usage = U.UsageStore(os.path.join(data_dir, "usage.db") if data_dir else ":memory:")
         self.limiter = U.Limiter(self.usage, self.cfg, self.manifest)
         self.stores, self.stops, self.settings = {}, {}, {}
@@ -216,31 +303,44 @@ class AppState:
         return s
 
     # ---- models
-    def catalog(self, who):
-        """The picker's cards, one per name (Flare, Equinox, Solstice, Apogee), newest usable version first.
-        state: ready | locked (not in the plan) | too_big (this computer is too small) | soon (not built yet)."""
+    def _card(self, m, who):
+        """One model as the picker shows it. state: ready | locked | too_big | missing | soon."""
         plan = self.cfg["tiers"][who["tier"]]["models"]
-        cards = []
+        m = dict(m)
+        if m["status"] == "planned":
+            m["state"], m["badge"] = "soon", "Coming soon"
+        elif not who["owner"] and plan != "all" and m["name"].lower() not in plan:
+            m["state"], m["badge"] = "locked", "Not in your plan"
+        elif self.ram_gb < m["min_ram_gb"]:
+            m["state"], m["badge"] = "too_big", f"Needs {m['min_ram_gb']} GB of memory"
+        elif self.runner and not self.runner.available(m["id"]):
+            m["state"], m["badge"] = "missing", "Not on this computer" if self.runner.bin else "llama-server not found"
+        else:
+            m["state"], m["badge"] = "ready", "Beta" if m["status"] == "beta" else "Ready"
+        m["older"] = False
+        return m
+
+    def catalog(self, who):
+        """The picker: one card per name (Flare, Equinox, Solstice, Apogee) with its newest usable version, and
+        "other" with the older versions that can still be chosen (Flare 2, ...)."""
+        cards, other = [], []
         for name in M.NAMES:
             versions = sorted((m for m in self.manifest["models"] if m["name"] == name and m["status"] != "off"),
                               key=lambda m: -m["version"])
             if not versions:
                 continue
             usable = [m for m in versions if m["status"] != "planned"]
-            m = dict((usable or versions)[0])
-            if m["status"] == "planned":
-                m["state"], m["badge"] = "soon", "Coming soon"
-            elif not who["owner"] and plan != "all" and name.lower() not in plan:
-                m["state"], m["badge"] = "locked", "Not in your plan"
-            elif self.ram_gb < m["min_ram_gb"]:
-                m["state"], m["badge"] = "too_big", f"Needs {m['min_ram_gb']} GB of memory"
-            else:
-                m["state"], m["badge"] = "ready", "Beta" if m["status"] == "beta" else "Ready"
-            cards.append(m)
-        return {"cards": cards, "other": []}
+            top = (usable or versions)[0]
+            cards.append(self._card(top, who))
+            for m in usable[1:]:
+                c = self._card(m, who)
+                c["older"] = True
+                other.append(c)
+        return {"cards": cards, "other": other}
 
     def pick_model(self, who, model_id):
-        for m in self.catalog(who)["cards"]:
+        cat = self.catalog(who)
+        for m in cat["cards"] + cat["other"]:
             if m["id"] == model_id:
                 return m
         raise KeyError(model_id)
@@ -251,11 +351,39 @@ class AppState:
         device = CW.Device(self.ram_gb, min(self.ram_gb, free_memory_gb(self.ram_gb)))
         return CW.pick(model, device, mode, None if who["owner"] else plan)
 
-    def backend_for(self, model, question):
+    @property
+    def demo(self):
+        """True when nothing real is attached: every reply is the stand-in."""
+        return not (self.llama_url or self.backend_factory or self.runner)
+
+    def tok_for(self, model):
+        """The tokenizer this model was trained with: a model's replies are garbage with another version's tokenizer."""
+        if model["id"] in self.tokens:
+            return self.tokens[model["id"]]
+        rel = model.get("tokenizer")
+        path = None if not rel else (rel if os.path.isabs(rel) else os.path.join(self.root, rel))
+        if path and os.path.exists(path):
+            tok = BPETokenizer.load(path)
+        elif self.default_tok is not None:
+            tok = self.default_tok
+        elif self.demo or self.backend_factory:
+            if self._demo_tok is None:
+                self._demo_tok = demo_tokenizer()
+            tok = self._demo_tok
+        else:
+            raise AppError(f"{model['name']} {model['version']:g}: its tokenizer file isn't here.",
+                           f"Expected {rel or 'a tokenizer.json'}. Run the app from the project folder, or pass --tokenizer.")
+        self.tokens[model["id"]] = tok
+        return tok
+
+    def backend_for(self, model, question, ctx=1024):
         if self.backend_factory:
             return self.backend_factory(model, question)
+        sampling = {"temperature": TEMPERATURE["balanced"], **model.get("sampling", {})}   # a model's own tested settings win
+        if self.runner:
+            return E.LlamaServer(self.runner.ensure(model["id"], ctx), None, timeout=120, **sampling)
         if self.llama_url:
-            return E.LlamaServer(self.llama_url, self.llama_key, temperature=TEMPERATURE["balanced"])
+            return E.LlamaServer(self.llama_url, self.llama_key, **sampling)
         return DemoBackend(question)
 
     # ---- the numbers on screen
@@ -275,15 +403,17 @@ def start_turn(state, who, chat_id, text, model_id, effort, regenerate=False):
     if model["state"] == "too_big":
         raise ModelTooBig(model, state.ram_gb, None)
     if model["state"] != "ready":
-        raise U.LimitError("model_unavailable", f"{model['name']}: {model['badge']}.")
+        raise U.LimitError("model_unavailable", f"{model['name']} {model['version']:g}: {model['badge']}.")
+    tok = state.tok_for(model)
     if effort not in EFFORTS:
         raise U.LimitError("bad_effort", "Pick Quick, Balanced or Deep.")
-    if effort == "deep" and model["name"] == "Flare":
+    if effort == "deep" and model["name"] in ("Ember", "Flare"):
         raise U.LimitError("deep_needs_bigger", "Deep needs Equinox or a bigger model.", choices=["equinox"])
     win = state.window_for(who, model)
     if not win["fits"]:
         raise AppError("There isn't enough free memory for this model.", "Close other apps or pick a smaller model.")
-    window, max_new = win["window"], min(EFFORTS[effort], max(32, win["window"] // 2))
+    window = win["window"]
+    max_new = min(EFFORTS[effort], max(32, window // 2), model.get("max_reply_tokens", EFFORTS[effort]))
     q, stop = queue.Queue(), threading.Event()
     key = (who["user"], chat_id)
     state.stops[key] = stop
@@ -294,7 +424,6 @@ def start_turn(state, who, chat_id, text, model_id, effort, regenerate=False):
         if msgs and msgs[-1]["role"] == "assistant":
             store.remove_message(chat_id, msgs[-1]["id"])
         text = None
-    backend = state.backend_for(model, text or "")
 
     def pacer(stream):
         gen = chat_polish.paced(stream, start=started) if state.pace else stream
@@ -309,7 +438,8 @@ def start_turn(state, who, chat_id, text, model_id, effort, regenerate=False):
 
     def work():
         try:
-            r = E.run_turn(state.tok, store, chat_id, backend, counted_model, window, max_new, user_text=text, stop=stop,
+            backend = state.backend_for(model, text or "", window)     # may load the model the first time (can take a while)
+            r = E.run_turn(tok, store, chat_id, backend, counted_model, window, max_new, user_text=text, stop=stop,
                            limiter=state.limiter, user=who["user"], effort=effort, clock=state.clock, pacer=pacer)
             if text and store.title(chat_id) == "New chat":
                 store.set_title(chat_id, " ".join(text.split())[:48] or "New chat")
@@ -496,12 +626,13 @@ class Handler(http.server.BaseHTTPRequestHandler):
         model_id = (qs.get("model") or [None])[0]
         effort = (qs.get("effort") or ["balanced"])[0]
         effort = effort if effort in EFFORTS else "balanced"
-        pool = {m["id"]: m for m in cat["cards"]}
-        default = next((m for m in cat["cards"] if m["state"] == "ready"), cat["cards"][0])
+        pool = {m["id"]: m for m in cat["cards"] + cat["other"]}
+        ready = [m for m in cat["cards"] + cat["other"] if m["state"] == "ready"]
+        default = next((m for m in ready if m["name"] == "Flare"), ready[0] if ready else cat["cards"][0])
         model = pool.get(model_id) or default
         snap = st.usage_snapshot(who, model, effort)
         win = st.window_for(who, model)
-        return {"user": who["user"], "owner": who["owner"], "plan": who["tier"], "demo": not (st.llama_url or st.backend_factory),
+        return {"user": who["user"], "owner": who["owner"], "plan": who["tier"], "demo": st.demo,
                 "models": cat, "model": model["id"], "efforts": [
                     {"id": "quick", "name": "Quick", "use": "Uses less", "blurb": "Answers fast and thinks briefly. Best for simple questions."},
                     {"id": "balanced", "name": "Balanced", "use": "Normal usage", "blurb": "A good mix of speed and care. The default."},
@@ -620,21 +751,40 @@ def main():
     ap.add_argument("--data", default=".yuvra", help="where chats, usage and keys are kept")
     ap.add_argument("--llama", default=None, help="URL of a llama-server (llama.cpp) running the model")
     ap.add_argument("--llama_key", default=None)
-    ap.add_argument("--tokenizer", default=None, help="the model's tokenizer.json (needed with --llama)")
+    ap.add_argument("--tokenizer", default=None, help="the model's tokenizer.json (only needed with --llama)")
+    ap.add_argument("--llama-bin", default=None, help="path to llama-server (llama.cpp); default: found on the PATH")
+    ap.add_argument("--gguf", action="append", default=[], metavar="ID=PATH",
+                    help="a model file to run, e.g. flare-2=export/dev/v2/my-ai-q8_0.gguf (the exports are found by themselves)")
+    ap.add_argument("--llama-args", default="", help="extra options for llama-server, e.g. \"-ngl 99\" to use the GPU")
     ap.add_argument("--ram", type=float, default=None, help="this computer's memory in GB (default: detected)")
     ap.add_argument("--add-user", nargs=2, metavar=("NAME", "PLAN"), help="add a tester (free, pro or mega) and print their key")
     args = ap.parse_args()
     if args.llama and not args.tokenizer:
         sys.exit("With --llama you also need --tokenizer data/<version>/tokenizer.json (the model's own tokenizer).")
     tok = BPETokenizer.load(args.tokenizer) if args.tokenizer else None
-    state = AppState(args.data, args.llama, args.llama_key, tok, ram_gb=args.ram)
+    manifest = M.load_manifest()
+    files = discover_ggufs(manifest)
+    for item in args.gguf:
+        mid, _, path = item.partition("=")
+        if not path or not any(m["id"] == mid for m in manifest["models"]):
+            sys.exit(f"--gguf wants ID=PATH with an id from models.json (got {item!r}).")
+        files[mid] = path
+    runner = None
+    if files and not args.llama:
+        runner = ModelRunner(args.llama_bin or find_llama_server(), files, extra_args=args.llama_args.split())
+    state = AppState(args.data, args.llama, args.llama_key, tok, manifest=manifest, ram_gb=args.ram, runner=runner)
     if args.add_user:
         key = state.add_user(*args.add_user)
         print(f"{args.add_user[0]} ({args.add_user[1]}): http://localhost:{args.port}/?key={key}")
         return
     srv = make_server(state, args.host, args.port)
     shown = "localhost" if args.host in ("127.0.0.1", "0.0.0.0") else args.host
-    print("Yuvra is running" + ("" if args.llama else " in DEMO mode (no model attached; use --llama)"))
+    if state.demo:
+        print("Yuvra is running in DEMO mode (no model files found; see docs/V2.md to make a .gguf)")
+    else:
+        print("Yuvra is running. Models on this computer: " + (", ".join(sorted(files)) or "none") + (" (via --llama)" if args.llama else ""))
+        if runner and not runner.bin:
+            print("llama-server was not found. Install llama.cpp and pass --llama-bin <path to llama-server.exe>.")
     print(f"Open: http://{shown}:{args.port}/?key={state.owner_key()}")
     if args.host == "0.0.0.0":
         print("Reachable from your network. Anyone with a key can use it; keep keys private.")
