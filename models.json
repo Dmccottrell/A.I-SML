@@ -35,7 +35,11 @@
         "repeat_penalty": 1.25,
         "repeat_last_n": 64
       },
-      "max_reply_tokens": 256
+      "max_reply_tokens": 256,
+      "efforts": [
+        "quick",
+        "balanced"
+      ]
     },
     {
       "id": "flare-3",

@@ -419,13 +419,14 @@ def start_turn(state, who, chat_id, text, model_id, effort, regenerate=False):
     if regenerate:                                             # the question is the last one already in the chat
         question = next((m["content"] for m in reversed(store.messages(chat_id)) if m["role"] == "user" and m["status"] != "compacted"), "")
     if effort == "auto":
-        allowed = ("quick", "balanced") if model["name"] in ("Ember", "Flare") else effort_router.ORDER
+        allowed = tuple(model.get("efforts", effort_router.ORDER))
         pct = 100.0 if who["owner"] else state.usage_snapshot(who, model, "balanced")["tank"]["pct"]
         chosen, why = effort_router.choose_effort(question, allowed, pct)
         decision = {"effort": chosen, "auto": True, "reason": why}
         effort = chosen
-    if effort == "deep" and model["name"] in ("Ember", "Flare"):
-        raise U.LimitError("deep_needs_bigger", "Deep needs Equinox or a bigger model.", choices=["equinox"])
+    if effort not in model.get("efforts", effort_router.ORDER):    # a model lists the levels it offers (Ember has no Deep)
+        raise U.LimitError("effort_not_available", f"{model['name']} doesn't offer {effort.title()}. Deep needs Flare or a bigger model.",
+                           choices=["flare"])
     win = state.window_for(who, model)
     if not win["fits"]:
         raise AppError("There isn't enough free memory for this model.", "Close other apps or pick a smaller model.")

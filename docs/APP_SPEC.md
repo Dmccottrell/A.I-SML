@@ -163,8 +163,9 @@ used on the phone. In the preview the reply text is a stand-in; in the app it st
 
 How it works: effort is a **thinking budget**. The model writes out its reasoning (the "<|notes|>"-style steps planned for v4) before the final answer; a bigger budget means more steps and a
 self-check, and for Deep, optionally a second try (a vote between answers). That is why Deep is slower and costs more, and why it is more accurate on hard questions. The multipliers are starting
-values to measure on real chats. **Models that cannot think yet** (Flare) offer only Quick and Balanced, and Deep is greyed out with "Needs Equinox or a bigger model"; until v4's thinking training exists,
-Quick and Balanced differ only in how long the answer is allowed to be. Switching to a model that can't do Deep drops the level to Balanced. Auto picks the level per question, shown in the chat.
+values to measure on real chats. **Each model lists the levels it offers** (`efforts` in `models.json`; no list = all three). Flare and bigger offer Quick, Balanced and Deep (Flare gets
+Deep because v3.5 will need it); only **Ember** has no Deep, and it is greyed out with "Needs Flare or a bigger model". Until v4's thinking training exists,
+the levels differ only in how long the answer is allowed to be. Switching to a model that doesn't offer the current level drops it to Balanced. Auto picks the level per question, shown in the chat.
 Designs: the interactive `Chat` and `Phone` boards in `design/canvas/` (open the model or effort chip, press Send).
 
 ### Context window and the device check (plan)
@@ -363,6 +364,6 @@ beta list", and "memory finds an earlier chat by meaning, not only by words".
 - **Auto effort** (`effort_router.py`, `tests/test_effort_router.py`): the effort menu has **Auto** first. It reads the message and picks Quick
   (greetings, thanks, short or simple questions, "briefly" / "tl;dr"), Balanced (normal questions) or Deep (code and errors, maths,
   "step by step", comparisons, essays, long text, several questions) with plain rules, so it is instant and free, and says why. Models
-  with no Deep (Ember, Flare) are held to Balanced, and when the tank is nearly empty Auto thinks less (below 20% left: at most
+  with no Deep (Ember only; Flare and bigger have it) are held to Balanced, and when the tank is nearly empty Auto thinks less (below 20% left: at most
   Balanced; below 5%: Quick). The page shows "Auto · Quick" on the chip and "Auto chose Quick" under the reply, and the usage is
   counted at the level it chose. The thinking pause above is sized from the same decision.

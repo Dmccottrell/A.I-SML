@@ -7,7 +7,7 @@ WHAT THIS FILE DOES
       Balanced   normal questions and everyday writing (the default when nothing stands out)
       Deep       code and errors, maths, "step by step", comparisons, long writing, long pasted text, several questions
     It is plain rules (no model call), so it costs nothing and is instant, and it always gives a reason in plain words.
-    Two limits apply on top: a model that has no Deep (Ember, Flare) is held to Balanced, and when the person's usage is
+    Two limits apply on top: a model that has no Deep (Ember) is held to Balanced, and when the person's usage is
     nearly used up Auto thinks less (below 20% left: at most Balanced; below 5%: Quick) so it never burns the last of it.
 """
 import re

@@ -212,7 +212,7 @@ const EFFORT = {
 function mockAuto(text, modelId) {
   const t = (text || '').trim(), words = t.split(/\s+/).filter(Boolean).length;
   const hard = /(step by step|explain why|compare|essay|analy[sz]e|solve|prove|\d\s*[+\-*\/^=]\s*\d)/i.test(t) || words > 60;
-  const canDeep = modelId !== 'flare' && modelId !== 'ember';
+  const canDeep = modelId !== 'ember';
   if (/^(hi|hello|hey|thanks|thank you|ok|bye)\b[\s!.?]*$/i.test(t) || words <= 6) return 'quick';
   if (hard) return canDeep ? 'deep' : 'balanced';
   return 'balanced';
@@ -288,9 +288,9 @@ function usageBits(self, modelId, who) {
   const text = out ? 'Usage: out for now, back to full in about 3 hours'
     : 'Usage: ' + pct + '% · about ' + fmt(Math.floor(u.shownLeft / u.cost)) + ' messages left';
   const items = ['auto', 'quick', 'balanced', 'deep'].map((k) => {
-    const blocked = k === 'deep' && (modelId === 'flare' || modelId === 'ember');
+    const blocked = k === 'deep' && modelId === 'ember';
     return {
-      name: EFFORT[k].name, use: EFFORT[k].use, blurb: blocked ? 'Needs Equinox or a bigger model.' : EFFORT[k].blurb,
+      name: EFFORT[k].name, use: EFFORT[k].use, blurb: blocked ? 'Needs Flare or a bigger model.' : EFFORT[k].blurb,
       mark: self.state.effort === k ? '✓' : '', opacity: blocked ? 0.45 : 1,
       border: self.state.effort === k ? 'var(--accent)' : 'var(--line)',
       pick: () => { if (!blocked) self.setState({effort: k, effortOpen: false, autoPick: null}); }
@@ -332,7 +332,7 @@ class Component extends DCLogic {
     this.state = {autoPick: null, open: false, model: (props && props.model) || 'flare', washing: false, effortOpen: false, effort: 'balanced', spent: 0, shown: 0, draft: '', chat: [], typing: false, thinkIdx: 0, pop: null, sampleIdx: 0};
   }
   choose(id) {
-    this.setState({model: id, open: false, effortOpen: false, washing: true, effort: ((id === 'flare' || id === 'ember') && this.state.effort === 'deep') ? 'balanced' : this.state.effort});
+    this.setState({model: id, open: false, effortOpen: false, washing: true, effort: (id === 'ember' && this.state.effort === 'deep') ? 'balanced' : this.state.effort});
     if (this._t) clearTimeout(this._t);
     this._t = setTimeout(() => this.setState({washing: false}), 1600);
   }

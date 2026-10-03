@@ -227,7 +227,9 @@ class Chatting(Base):
         self.assertEqual(self.ask(self.sam, cid, model="solstice-5")[0], 403)          # not in the Free plan
         self.assertEqual(self.ask(self.sam, cid, model="apogee-6")[0], 403)            # not built yet
         self.assertEqual(self.ask(self.sam, cid, model="nonsense")[0], 400)
-        self.assertEqual(self.ask(self.sam, cid, effort="deep")[0], 409)               # Deep needs Equinox or bigger
+        self.assertEqual(self.ask(self.sam, cid, effort="deep")[2][-1][0], "done")     # Flare has Deep
+        status, _, body = self.ask(self.sam, cid, model="ember-2", effort="deep")      # Ember does not
+        self.assertEqual((status, body["code"]), (409, "effort_not_available"))
         self.assertEqual(self.ask(self.sam, cid, model="equinox-4", effort="deep")[2][-1][0], "done")
 
     def test_effort_costs_differ(self):
@@ -245,7 +247,8 @@ class Chatting(Base):
         self.assertTrue(hello[0][1]["reason"])
         self.assertEqual(hello[-1][1]["effort"], "quick")
         hard = "Explain step by step how to solve 3x + 7 = 22"
-        self.assertEqual(self.ask(self.owner, self.new_chat(self.owner), hard, effort="auto")[2][0][1]["effort"], "balanced")   # Flare has no Deep
+        self.assertEqual(self.ask(self.owner, self.new_chat(self.owner), hard, effort="auto")[2][0][1]["effort"], "deep")        # Flare has Deep
+        self.assertEqual(self.ask(self.owner, self.new_chat(self.owner), hard, effort="auto", model="ember-2")[2][0][1]["effort"], "balanced")   # Ember does not
         deep = self.ask(self.owner, self.new_chat(self.owner), hard, effort="auto", model="equinox-4")[2]
         self.assertEqual(deep[0][1]["effort"], "deep")
         self.assertFalse(self.ask(self.owner, self.new_chat(self.owner), "hi", effort="quick")[2][0][1]["auto"])
