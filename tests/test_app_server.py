@@ -140,8 +140,8 @@ class State(Base):
         self.assertEqual(names, ["Ember", "Flare", "Equinox", "Solstice", "Apogee"])
         self.assertEqual(j["models"]["cards"][0]["state"], "ready")
         self.assertEqual([m["id"] for m in j["models"]["other"]], [])      # Ember 2 is its own name, so it is a card
-        self.assertEqual([e["id"] for e in j["efforts"]], ["quick", "balanced", "deep"])
-        self.assertEqual(j["min_first_s"], 1.5)
+        self.assertEqual([e["id"] for e in j["efforts"]], ["auto", "quick", "balanced", "deep"])
+        self.assertEqual(j["pause_by_effort"], {"quick": 0.5, "balanced": 1.2, "deep": 2.4})
         self.assertGreater(len(j["thinking_words"]), 5)
 
     def test_tester_numbers_follow_the_plan(self):
@@ -237,6 +237,48 @@ class Chatting(Base):
             ev = self.ask(self.sam, self.new_chat(self.sam), "hello there", effort=eff)[2]
             used[eff] = before - ev[-1][1]["usage"]["tank"]["left"]
         self.assertLess(used["quick"], used["balanced"])
+
+    def test_auto_effort_decides_from_the_message(self):
+        hello = self.ask(self.owner, self.new_chat(self.owner), "hi", effort="auto")[2]
+        self.assertEqual(hello[0][1]["effort"], "quick")
+        self.assertTrue(hello[0][1]["auto"])
+        self.assertTrue(hello[0][1]["reason"])
+        self.assertEqual(hello[-1][1]["effort"], "quick")
+        hard = "Explain step by step how to solve 3x + 7 = 22"
+        self.assertEqual(self.ask(self.owner, self.new_chat(self.owner), hard, effort="auto")[2][0][1]["effort"], "balanced")   # Flare has no Deep
+        deep = self.ask(self.owner, self.new_chat(self.owner), hard, effort="auto", model="equinox-4")[2]
+        self.assertEqual(deep[0][1]["effort"], "deep")
+        self.assertFalse(self.ask(self.owner, self.new_chat(self.owner), "hi", effort="quick")[2][0][1]["auto"])
+
+    def test_the_thinking_pause_fits_the_message(self):
+        hello = self.ask(self.owner, self.new_chat(self.owner), "hi", effort="auto")[2][0][1]["min_first_s"]
+        hard = self.ask(self.owner, self.new_chat(self.owner), "Explain step by step how to solve 3x + 7 = 22",
+                        effort="auto", model="equinox-4")[2][0][1]["min_first_s"]
+        self.assertLess(hello, hard)
+        self.assertEqual(hello, 0.5)
+        self.assertEqual(self.ask(self.owner, self.new_chat(self.owner), "tell me about cats", effort="balanced")[2][0][1]["min_first_s"], 1.2)
+
+    def test_auto_is_counted_at_the_level_it_chose(self):
+        used = {}
+        for eff, text in (("auto", "hi"), ("balanced", "hi")):
+            before = self.sam.call("GET", "/api/state")[1]["usage"]["tank"]["left"]
+            ev = self.ask(self.sam, self.new_chat(self.sam), text, effort=eff)[2]
+            used[eff] = before - ev[-1][1]["usage"]["tank"]["left"]
+        self.assertLess(used["auto"], used["balanced"])                     # "hi" is Quick under Auto
+
+    def test_auto_regenerate_looks_at_the_last_question(self):
+        cid = self.new_chat(self.owner)
+        self.ask(self.owner, cid, "hi", effort="auto")
+        ev = self.ask(self.owner, cid, "", effort="auto", regenerate=True)[2]
+        self.assertEqual(ev[0][1]["effort"], "quick")
+
+    def test_auto_with_nearly_no_usage_thinks_less(self):
+        self.state.usage.add_user("sam", "free", 0, False, {"tank": 100000, "refill_per_hour": 1})
+        self.state.limiter.reserve("sam", "flare", "balanced", 99000, self.state.clock())      # leaves 1% in the tank
+        status, _, body = self.ask(self.sam, self.new_chat(self.sam), "Explain step by step how to solve 3x + 7 = 22", effort="auto")
+        self.assertIn(status, (200, 429))
+        if status == 200:
+            self.assertEqual(body[0][1]["effort"], "quick")
 
     def test_regenerate_replaces_the_last_reply(self):
         cid = self.new_chat(self.sam)

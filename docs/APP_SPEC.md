@@ -194,7 +194,7 @@ the smallest of the three limits, must drop and say so when memory falls, and mu
 | Part | Behaviour |
 |---|---|
 | **Thinking** | After Send, the small Yuvra logo animates (the brain outline travels around, the core pulses) next to a label that changes every ~2 seconds and never repeats twice in a row: Thinking, Pondering, Reasoning, Working it out, Considering, Mulling it over, Figuring it out, Reflecting, Weighing it up, Putting it together |
-| **1.5-second pause** | The first word never appears sooner than 1.5 seconds after sending, even for the quickest answer (Quick), so there is always a moment of thinking. Balanced and Deep wait as long as the model needs |
+| **A pause that fits the message** | The first word never appears sooner than a minimum that depends on the message, so there is always a moment of thinking but a greeting is answered almost at once: Quick 0.5 s, Balanced 1.2 s, Deep 2.4 s, plus 0.1 s per 20 words of a long message (up to 0.8 s), never more than 3.2 s (`chat_polish.pause_for`). It is a minimum: a slower model is never made to wait longer |
 | **Clean writing** | The reply is written out word by word at a steady speed (about 22 words a second at most), never dumped in one lump. If the model is far ahead the writing speeds up so the screen is never more than ~1.5 s behind. What is saved is the same text |
 | **Stays at the bottom** | The newest message stays in view while the reply is written; scrolling up pauses that, and a "down" button brings it back (screen job, shown in the `Chat` / `Phone` designs) |
 | **Auto-shortening** | When a chat fills 80% of the room for the prompt, older messages become a short summary (the last 4 stay word for word). They stay visible on screen, marked "summarized"; only what the model reads changes. The summary can be written by the model or, if that fails, a plain list of what was asked and answered |
@@ -360,3 +360,9 @@ beta list", and "memory finds an earlier chat by meaning, not only by words".
   `llama-server` for the model you pick (one at a time), finds the exported `.gguf` and the model's own `tokenizer.json` by
   itself, and the picker shows which models are on this computer (`tests/test_model_runner.py`, with a fake llama-server).
   See `docs/V2.md`, "Step 6b".
+- **Auto effort** (`effort_router.py`, `tests/test_effort_router.py`): the effort menu has **Auto** first. It reads the message and picks Quick
+  (greetings, thanks, short or simple questions, "briefly" / "tl;dr"), Balanced (normal questions) or Deep (code and errors, maths,
+  "step by step", comparisons, essays, long text, several questions) with plain rules, so it is instant and free, and says why. Models
+  with no Deep (Ember, Flare) are held to Balanced, and when the tank is nearly empty Auto thinks less (below 20% left: at most
+  Balanced; below 5%: Quick). The page shows "Auto · Quick" on the chip and "Auto chose Quick" under the reply, and the usage is
+  counted at the level it chose. The thinking pause above is sized from the same decision.

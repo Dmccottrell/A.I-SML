@@ -49,6 +49,7 @@ import app_engine as E
 import chat
 import chat_polish
 import context_window as CW
+import effort_router
 import models as M
 import usage_limits as U
 from app_errors import AppError, ModelTooBig, PcUnreachable
@@ -402,7 +403,8 @@ class AppState:
 # ------------------------------------------------------------------ one message, streamed to the browser
 def start_turn(state, who, chat_id, text, model_id, effort, regenerate=False):
     """Begin a reply in a worker thread. Returns (queue, stop_event); the queue yields ("piece", text), then
-    ("done", result) or ("error", exception)."""
+    ("done", result) or ("error", exception). With effort "auto" the level is chosen from the message (effort_router);
+    the page is told which one in `decision`."""
     store = state.store(who["user"])
     model = state.pick_model(who, model_id)
     if model["state"] == "too_big":
@@ -410,8 +412,18 @@ def start_turn(state, who, chat_id, text, model_id, effort, regenerate=False):
     if model["state"] != "ready":
         raise U.LimitError("model_unavailable", f"{model['name']} {model['version']:g}: {model['badge']}.")
     tok = state.tok_for(model)
-    if effort not in EFFORTS:
-        raise U.LimitError("bad_effort", "Pick Quick, Balanced or Deep.")
+    if effort != "auto" and effort not in EFFORTS:
+        raise U.LimitError("bad_effort", "Pick Auto, Quick, Balanced or Deep.")
+    decision = {"effort": effort, "auto": False, "reason": ""}
+    question = text
+    if regenerate:                                             # the question is the last one already in the chat
+        question = next((m["content"] for m in reversed(store.messages(chat_id)) if m["role"] == "user" and m["status"] != "compacted"), "")
+    if effort == "auto":
+        allowed = ("quick", "balanced") if model["name"] in ("Ember", "Flare") else effort_router.ORDER
+        pct = 100.0 if who["owner"] else state.usage_snapshot(who, model, "balanced")["tank"]["pct"]
+        chosen, why = effort_router.choose_effort(question, allowed, pct)
+        decision = {"effort": chosen, "auto": True, "reason": why}
+        effort = chosen
     if effort == "deep" and model["name"] in ("Ember", "Flare"):
         raise U.LimitError("deep_needs_bigger", "Deep needs Equinox or a bigger model.", choices=["equinox"])
     win = state.window_for(who, model)
@@ -419,6 +431,8 @@ def start_turn(state, who, chat_id, text, model_id, effort, regenerate=False):
         raise AppError("There isn't enough free memory for this model.", "Close other apps or pick a smaller model.")
     window = win["window"]
     max_new = min(EFFORTS[effort], max(32, window // 2), model.get("max_reply_tokens", EFFORTS[effort]))
+    pause = chat_polish.pause_for(question, effort)            # the thinking pause fits the message
+    decision["pause"] = pause
     q, stop = queue.Queue(), threading.Event()
     key = (who["user"], chat_id)
     state.stops[key] = stop
@@ -440,7 +454,7 @@ def start_turn(state, who, chat_id, text, model_id, effort, regenerate=False):
 
     def pacer(stream):
         stream = timed(stream)
-        gen = chat_polish.paced(stream, start=started) if state.pace else stream
+        gen = chat_polish.paced(stream, min_first_s=pause, start=started) if state.pace else stream
         try:
             for bit in gen:
                 q.put(("piece", bit))
@@ -473,7 +487,7 @@ def start_turn(state, who, chat_id, text, model_id, effort, regenerate=False):
             state.stops.pop(key, None)
 
     threading.Thread(target=work, daemon=True).start()
-    return q, stop, model, win
+    return q, stop, model, win, decision
 
 
 def error_payload(e):
@@ -648,7 +662,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
         cat = st.catalog(who)
         model_id = (qs.get("model") or [None])[0]
         effort = (qs.get("effort") or ["balanced"])[0]
-        effort = effort if effort in EFFORTS else "balanced"
+        effort = "balanced" if effort == "auto" else (effort if effort in EFFORTS else "balanced")   # Auto: show Balanced's numbers
         pool = {m["id"]: m for m in cat["cards"] + cat["other"]}
         ready = [m for m in cat["cards"] + cat["other"] if m["state"] == "ready"]
         default = next((m for m in ready if m["name"] == "Flare"), ready[0] if ready else cat["cards"][0])
@@ -657,6 +671,8 @@ class Handler(http.server.BaseHTTPRequestHandler):
         win = st.window_for(who, model)
         return {"user": who["user"], "owner": who["owner"], "plan": who["tier"], "demo": st.demo,
                 "models": cat, "model": model["id"], "efforts": [
+                    {"id": "auto", "name": "Auto", "use": "Picks for you",
+                     "blurb": "Decides how long to think from your message: quick for simple questions, deeper for hard ones."},
                     {"id": "quick", "name": "Quick", "use": "Uses less", "blurb": "Answers fast and thinks briefly. Best for simple questions."},
                     {"id": "balanced", "name": "Balanced", "use": "Normal usage", "blurb": "A good mix of speed and care. The default."},
                     {"id": "deep", "name": "Deep", "use": "Uses more",
@@ -664,7 +680,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 "usage": snap, "window": {k: win[k] for k in ("window", "reason", "mode", "limited_by", "cache_bits", "cache_mb")},
                 "chats": st.store(who["user"]).list_chats(), "settings": st.get_settings(who["user"]),
                 "thinking_words": list(chat_polish.THINKING_WORDS), "think_switch_s": chat_polish.THINKING_SWITCH_S,
-                "min_first_s": chat_polish.MIN_FIRST_S}
+                "pause_by_effort": chat_polish.PAUSE_BASE}
 
     def api_get_chat(self, who, cid):
         store = self.state.store(who["user"])
@@ -698,7 +714,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
         if len(text) > MAX_TEXT:
             return self._send(400, {"code": "too_long", "message": "That message is too long. Please shorten it."})
         try:
-            q, stop, model, win = start_turn(st, who, cid, text, str(body.get("model", "")), str(body.get("effort", "balanced")),
+            q, stop, model, win, decision = start_turn(st, who, cid, text, str(body.get("model", "")), str(body.get("effort", "balanced")),
                                              regenerate)
         except KeyError:
             return self._send(400, {"code": "bad_model", "message": "That model isn't available."})
@@ -725,7 +741,8 @@ class Handler(http.server.BaseHTTPRequestHandler):
             self.wfile.write(f"event: {event}\ndata: {json.dumps(data)}\n\n".encode())
             self.wfile.flush()
         try:
-            emit("thinking", {"min_first_s": chat_polish.MIN_FIRST_S})
+            emit("thinking", {"min_first_s": decision["pause"], "effort": decision["effort"], "auto": decision["auto"],
+                              "reason": decision["reason"]})
             item = first
             while True:
                 if item is None:
@@ -742,10 +759,10 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 elif kind == "piece":
                     emit("piece", {"t": val})
                 elif kind == "done":
-                    snap = st.usage_snapshot(who, model, str(body.get("effort", "balanced")))
+                    snap = st.usage_snapshot(who, model, decision["effort"])
                     emit("done", {"reason": val["reason"], "compacted": val["compacted_messages"],
                                   "forgotten": val["forgotten_messages"], "message_id": val["message_id"],
-                                  "title": store.title(cid), "usage": snap})
+                                  "title": store.title(cid), "usage": snap, "effort": decision["effort"], "auto": decision["auto"]})
                     return
                 else:
                     status, headers, payload = error_payload(val)
