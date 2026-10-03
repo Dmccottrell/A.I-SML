@@ -33,6 +33,23 @@ class Thinking(unittest.TestCase):
         self.assertEqual(P.thinking_index(-5), 0)
 
 
+class Pause(unittest.TestCase):
+    def test_pause_grows_with_how_hard_the_question_is(self):
+        q, b, d = (P.pause_for("hi", e) for e in ("quick", "balanced", "deep"))
+        self.assertEqual((q, b, d), (0.5, 1.2, 2.4))
+        self.assertLess(q, b)
+        self.assertLess(b, d)
+
+    def test_long_messages_get_a_little_more(self):
+        self.assertGreater(P.pause_for("word " * 100, "balanced"), P.pause_for("word", "balanced"))
+        self.assertEqual(P.pause_for("word " * 100, "balanced"), 1.7)
+
+    def test_never_above_the_maximum_and_odd_input_is_fine(self):
+        self.assertLessEqual(P.pause_for("word " * 5000, "deep"), P.PAUSE_MAX)
+        self.assertEqual(P.pause_for(None, "balanced"), 1.2)
+        self.assertEqual(P.pause_for("hi", "nonsense"), 1.2)
+
+
 class Paced(unittest.TestCase):
     def run_paced(self, pieces, **kw):
         c = Clock()

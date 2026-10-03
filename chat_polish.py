@@ -1,12 +1,13 @@
 """
-chat_polish.py - How a reply feels: the thinking label, the 1.5-second pause, smooth word-by-word writing, and
+chat_polish.py - How a reply feels: the thinking label, the message-sized thinking pause, smooth word-by-word writing, and
 automatic shortening of a long chat (docs/APP_SPEC.md, "How a reply feels").
 
 WHAT THIS FILE DOES
     thinking_word(n)        the label shown while Yuvra thinks ("Thinking", "Pondering", ...): a different word every few
                             seconds, never the same twice in a row. The small logo animates next to it (the screen's job).
     paced(pieces, ...)      wraps the model's stream of text pieces:
-                              1. the first word never appears sooner than `min_first_s` (1.5 seconds) after sending, so even
+                              1. the first word never appears sooner than `min_first_s` after sending (chosen from the message by `pause_for`:
+                                 about half a second for a greeting, up to ~3 seconds for a hard question), so even
                                  the quickest answer shows the thinking state first, like other AI chats;
                               2. text that arrives in a burst (or all at once) is released a few characters at a time at a
                                  steady speed, so it is written out cleanly; if it falls too far behind it speeds up, so
@@ -23,9 +24,21 @@ import chat
 THINKING_WORDS = ("Thinking", "Pondering", "Reasoning", "Working it out", "Considering", "Mulling it over",
                   "Figuring it out", "Reflecting", "Weighing it up", "Putting it together")
 THINKING_SWITCH_S = 2.2
-MIN_FIRST_S = 1.5
+MIN_FIRST_S = 1.5               # the pause for a normal message (Balanced, short): the others scale from it
+PAUSE_BASE = {"quick": 0.5, "balanced": 1.2, "deep": 2.4}   # seconds before the first word, by how hard the question is
+PAUSE_MAX = 3.2
 RATE_CPS = 90.0                 # characters per second when text arrives faster than this (about 22 words a second)
 MAX_LAG_S = 1.5
+
+
+def pause_for(text, effort="balanced"):
+    """How long to show the thinking state before the first word: it depends on the message, so a greeting is answered
+    almost at once and a hard question gets a longer, more thoughtful pause. Quick 0.5 s, Balanced 1.2 s, Deep 2.4 s, plus a
+    little for a long message (0.1 s per 20 words, up to 0.8 s), never more than 3.2 s. It is a minimum: a model that is
+    slower than this is never made to wait longer."""
+    base = PAUSE_BASE.get(effort, PAUSE_BASE["balanced"])
+    words = len((text or "").split())
+    return round(min(PAUSE_MAX, base + min(0.8, words // 20 * 0.1)), 1)
 
 
 def thinking_word(n):

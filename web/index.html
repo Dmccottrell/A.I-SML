@@ -235,6 +235,7 @@ const nice = (n) => fmt(n >= 100 ? Math.round(n / 10) * 10 : Math.round(n));
 const S = {state: null, chatId: null, messages: [], title: 'New chat', private: false, model: null, effort: 'balanced', busy: false, abort: null,
            theme: localStorage.getItem('yuvra_theme') || 'dark', shown: null, stick: true, thinkTimer: null};
 try { S.model = localStorage.getItem('yuvra_model'); S.effort = localStorage.getItem('yuvra_effort') || 'balanced'; } catch (e) {}
+if (!['auto', 'quick', 'balanced', 'deep'].includes(S.effort)) S.effort = 'balanced';
 
 async function api(path, opts) {
   const r = await fetch(path, Object.assign({credentials: 'same-origin', headers: {'Content-Type': 'application/json'}}, opts));
@@ -339,8 +340,9 @@ function renderComposer() {
   const m = curModel(); if (!m) return;
   $('modelBtn').replaceChildren(logo(22), m.name, el('span', {style: 'color:var(--muted)'}, '▾'));
   $('modelBtn').setAttribute('aria-label', 'Choose model: ' + m.name);
-  const ef = S.state.efforts.find((e) => e.id === S.effort) || S.state.efforts[1];
-  $('effortBtn').replaceChildren(ef.name, el('span', {}, '▾'));
+  const ef = S.state.efforts.find((e) => e.id === S.effort) || S.state.efforts.find((e) => e.id === 'balanced');
+  const shown = S.effort === 'auto' && S.autoNote ? 'Auto \u00b7 ' + S.autoNote.effort[0].toUpperCase() + S.autoNote.effort.slice(1) : ef.name;
+  $('effortBtn').replaceChildren(shown, el('span', {}, '▾'));
   const s = $('send'); s.className = 'send' + (S.busy ? ' stop' : ''); s.innerHTML = S.busy ? '&#9632;' : '&uarr;'; s.setAttribute('aria-label', S.busy ? 'Stop' : 'Send');
 }
 function closeMenus() { $('modelMenu').hidden = true; $('effortMenu').hidden = true; }
@@ -358,7 +360,7 @@ $('effortBtn').onclick = () => {
   const m = $('effortMenu'); m.replaceChildren(el('div', {class: 'head'}, 'HOW MUCH SHOULD IT THINK?'));
   const cm = curModel();
   for (const e of S.state.efforts) { const blocked = e.id === 'deep' && cm && (cm.name === 'Flare' || cm.name === 'Ember');
-    m.append(el('button', {class: 'opt' + (e.id === S.effort ? ' sel' : ''), disabled: blocked, onclick: () => { S.effort = e.id; try { localStorage.setItem('yuvra_effort', e.id); } catch (x) {} closeMenus(); renderComposer(); refreshUsage(); }},
+    m.append(el('button', {class: 'opt' + (e.id === S.effort ? ' sel' : ''), disabled: blocked, onclick: () => { S.effort = e.id; S.autoNote = null; try { localStorage.setItem('yuvra_effort', e.id); } catch (x) {} closeMenus(); renderComposer(); refreshUsage(); }},
       el('span', {class: 'grow'}, el('b', {}, e.name), ' ', el('small', {style: 'display:inline'}, '· ' + e.use), el('small', {}, blocked ? 'Needs Equinox or a bigger model.' : e.blurb)), e.id === S.effort ? '✓' : '')); }
   m.append(el('div', {class: 'head', style: 'text-transform:none;letter-spacing:0;font-weight:400'}, 'Thinking longer is slower and uses more of your usage.'));
   m.hidden = false;
@@ -479,10 +481,13 @@ async function send(regen) {
     if (!r.ok) { const j = await r.json().catch(() => ({})); throw Object.assign(new Error(j.message || 'Something went wrong.'), {info: j, status: r.status, retry: r.headers.get('Retry-After')}); }
     const reader = r.body.getReader(), dec = new TextDecoder(); let buf = '';
     const handle = (ev, data) => {
-      if (ev === 'loading') {
+      if (ev === 'thinking') {
+        S.autoNote = data.auto ? data : null; renderComposer();
+      } else if (ev === 'loading') {
         const w = think.querySelector('.word'); clearInterval(S.thinkTimer); S.thinkTimer = null; if (w) w.textContent = 'Loading ' + data.model + ' (first message only)';
       } else if (ev === 'piece') {
-        if (!aiWrap) { think._stop(); think.remove(); const m = curModel(); aiBubble = el('div', {class: 'bubble'}); aiWrap = el('div', {class: 'msg ai'}, el('div', {class: 'meta'}, logo(14), m ? m.name : 'Yuvra'), aiBubble); $('thread').append(aiWrap); }
+        if (!aiWrap) { think._stop(); think.remove(); const m = curModel(); aiBubble = el('div', {class: 'bubble'}); const note = S.autoNote ? el('span', {title: S.autoNote.reason}, ' \u00b7 Auto chose ' + S.autoNote.effort[0].toUpperCase() + S.autoNote.effort.slice(1)) : null;
+        aiWrap = el('div', {class: 'msg ai'}, el('div', {class: 'meta'}, logo(14), m ? m.name : 'Yuvra', note), aiBubble); $('thread').append(aiWrap); }
         got += data.t; aiBubble.replaceChildren(got, el('span', {class: 'cursor'}, '▍')); scrollDown();
       } else if (ev === 'done') {
         S.title = data.title || S.title; S.state.usage = data.usage; renderUsage(data.usage); popTokens(before, data.usage);
