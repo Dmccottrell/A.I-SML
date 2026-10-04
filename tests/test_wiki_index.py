@@ -93,12 +93,19 @@ class MissingSubjectArticle(unittest.TestCase):
         cls.tmp = tempfile.TemporaryDirectory()
         cls.path = os.path.join(cls.tmp.name, "wiki.db")
         crowd = [(f"Politics note {i}", f"Capital Illinois capital Illinois capital Illinois legislature note {i} "
-                                         f"capital Illinois vote") for i in range(80)]
+                                         f"capital Illinois vote today and tomorrow in the state house") for i in range(80)]
         wiki_index.build(cls.path, iter(crowd + [
             ("Springfield, Illinois", "Springfield is the capital of the U.S. state of Illinois and the county seat of "
                                       "Sangamon County. The city is known for Abraham Lincoln's home and presidential library."),
             ("Capital punishment in Illinois", "Capital punishment has been repealed in the U.S. state of Illinois since "
                                                "2011. Illinois used death by hanging as a form of execution until 1928."),
+            # the same kind of near-miss passages the real index ranked level with the answer
+            ("Vandalia, Illinois", "Vandalia is a city in Fayette County, Illinois. It served as the state capital of "
+                                   "Illinois from 1819 until 1839, when the seat of state government moved away."),
+            ("Seal of Springfield, Illinois", "The corporate seal adopted by the capital city of the U.S. state of Illinois "
+                                              "has a black circle inscribed in white with the year 1840 inside it."),
+            ("Illinois Route 4", "Illinois Route 4 is a major highway that runs south from the business loop around "
+                                 "the state capital of Springfield, south to Illinois Route 13 near Murphysboro."),
         ]), passages_per_article=3)
 
     @classmethod
@@ -111,6 +118,15 @@ class MissingSubjectArticle(unittest.TestCase):
             self.assertEqual(wiki.search("What is the capital of Illinois?", 1)[0]["title"], "Springfield, Illinois")
         finally:
             wiki.db.close()
+
+    def test_tense_prefers_the_present_fact_over_history(self):
+        now = wiki_index._tense("Springfield is the capital of Illinois.", ["capital", "illinois"])
+        then = wiki_index._tense("It served as the state capital of Illinois until 1839.", ["capital", "illinois"])
+        self.assertGreater(now, then)
+
+    def test_ordered_span_needs_the_question_order(self):
+        self.assertEqual(wiki_index._ordered_span("the capital of Illinois", ["capital", "illinois"]), 3)
+        self.assertIsNone(wiki_index._ordered_span("Illinois has a capital", ["capital", "illinois"]))
 
     def test_window_is_tighter_for_the_real_answer(self):
         tight = wiki_index._window("Springfield is the capital of the U.S. state of Illinois and more", ["capital", "illinois"])
