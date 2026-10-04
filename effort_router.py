@@ -67,3 +67,28 @@ def choose_effort(text, allowed=ORDER, tank_pct=100.0):
     if effort not in allowed:
         effort = next(e for e in ORDER if e in allowed)
     return effort, why
+
+
+# ---------------------------------------------------------------- temperature (how adventurous the wording is)
+CREATIVE = re.compile(r"\b(story|stories|poem|song|lyrics|brainstorm|ideas?|imagine|creative|invent|slogan|joke|"
+                      r"roleplay|role-play|pretend|names? for|come up with)\b", re.I)
+EXACT = re.compile(r"\b(json|exactly|fewer than|at most|at least|without using|do not use|only the|only one|no more than|"
+                   r"in (one|two|three|\d+) (word|sentence)s?)\b", re.I)
+DEFAULT_BOUNDS = (0.2, 1.0)
+PRECISE_TEMP, CREATIVE_TEMP = 0.2, 1.0
+
+
+def choose_temperature(text, base=0.8, bounds=DEFAULT_BOUNDS):
+    """(temperature, reason) for this message. Code, maths and strict formats want predictable answers (low); stories and
+    brainstorming want variety (high); everything else keeps the model's own tested setting `base`. A model can limit the
+    range with `bounds` (small models turn to nonsense when the temperature is high, so Ember's range is narrow)."""
+    t = text or ""
+    lo, hi = bounds
+    if CODE.search(t) or MATH.search(t) or EXACT.search(t):
+        temp, why = PRECISE_TEMP, "it needs an exact answer"
+    elif CREATIVE.search(t):
+        temp, why = CREATIVE_TEMP, "it asks for something creative"
+    else:
+        temp, why = base, "a normal question"
+    return round(min(hi, max(lo, temp)), 2), why
+

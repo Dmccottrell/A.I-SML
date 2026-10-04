@@ -39,6 +39,10 @@
       "efforts": [
         "quick",
         "balanced"
+      ],
+      "temperature_bounds": [
+        0.3,
+        0.6
       ]
     },
     {
