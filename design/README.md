@@ -70,3 +70,8 @@ caps one request; it is not an allowance. Full plan and worked examples: docs/AP
 - Equinox's spark is a black core in a white ring; a yin-yang symbol is not drawn yet.
 - Whether the website's model cards should also re-colour the page on hover or click.
 - Trademark, store and domain checks for "Emvryx".
+
+## New logo concepts (Oct 2026)
+`logo/concepts/`: three simpler marks to replace the brain-and-X, all on the amber `#F5A524` brand colour.
+`a-bars-e.svg` (an E of three bars with a spark), `b-spark-x.svg` (a crossed X with a glowing core; recommended: it
+reads at 24 px and echoes the X in Emvryx), `c-ember.svg` (a flame with a core). Not yet used by the site or app.
