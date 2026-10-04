@@ -152,7 +152,7 @@ reads it as filler. Documents containing test questions are skipped, as in the m
 | Test | Pass | Fail |
 |---|---|---|
 | **Needle in a haystack** (a fact hidden at 10%, 25%, 50%, 75%, 90% of the way in; 20+ tries each) | >=95% correct at every depth, and no depth below 90% | Any depth under 90%, especially the middle |
-| **Multi-fact** (2-3 facts in different places; one question needs all of them) | >=80% at the tested length | Under 70%, or a big drop from the previous length |
+| **Multi-fact** (2 facts in different places, asked as two separate questions on the same text; both must be right) | >=80% at the tested length | Under 70%, or a big drop from the previous length |
 | **Long-code** (a question about a function defined far earlier) | >=70% at that length | Under 60% |
 | **Nothing got worse** (HellaSwag and the chat sheet, same as the baseline) | HellaSwag within 1 point, chat sheet within 1 answer | HellaSwag down 2+ points, or clearly worse chat answers |
 | **Loss by position** (loss on early vs. late tokens of a long document; last quarter compared with the 20-30% mark) | Loss is at least 0.02 lower (more context is still helping) | Loss is more than 0.05 higher (longer context confuses it). Within that band is a warning: it may be ignoring the rest, so look before going on |
