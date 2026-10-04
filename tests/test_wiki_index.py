@@ -1,5 +1,6 @@
 """Tests for wiki_index.py search ranking (a tiny synthetic index, no downloads)."""
 import os
+import shutil
 import tempfile
 import unittest
 
@@ -82,6 +83,54 @@ class SearchRanking(unittest.TestCase):
 
     def test_no_keywords_returns_nothing(self):
         self.assertEqual(self.wiki.search("what is the", 3), [])
+
+
+class MissingSubjectArticle(unittest.TestCase):
+    """Like the real index: no "Illinois" article, and many passages that merely mention both words."""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.tmp = tempfile.TemporaryDirectory()
+        cls.path = os.path.join(cls.tmp.name, "wiki.db")
+        crowd = [(f"Politics note {i}", f"Capital Illinois capital Illinois capital Illinois legislature note {i} "
+                                         f"capital Illinois vote") for i in range(80)]
+        wiki_index.build(cls.path, iter(crowd + [
+            ("Springfield, Illinois", "Springfield is the capital of the U.S. state of Illinois and the county seat of "
+                                      "Sangamon County. The city is known for Abraham Lincoln's home and presidential library."),
+            ("Capital punishment in Illinois", "Capital punishment has been repealed in the U.S. state of Illinois since "
+                                               "2011. Illinois used death by hanging as a form of execution until 1928."),
+        ]), passages_per_article=3)
+
+    @classmethod
+    def tearDownClass(cls):
+        cls.tmp.cleanup()
+
+    def test_answer_article_found_even_when_the_subject_article_is_missing(self):
+        wiki = wiki_index.WikiIndex(self.path)
+        try:
+            self.assertEqual(wiki.search("What is the capital of Illinois?", 1)[0]["title"], "Springfield, Illinois")
+        finally:
+            wiki.db.close()
+
+    def test_window_is_tighter_for_the_real_answer(self):
+        tight = wiki_index._window("Springfield is the capital of the U.S. state of Illinois and more", ["capital", "illinois"])
+        loose = wiki_index._window("Capital punishment has been repealed in the U.S. state of Illinois", ["capital", "illinois"])
+        self.assertLess(tight, loose)
+        self.assertIsNone(wiki_index._window("nothing here about it", ["capital", "illinois"]))
+
+    def test_add_articles_fills_a_missing_article_and_replaces_a_copy(self):
+        text = ("Illinois is a state in the Midwestern United States and its capital is Springfield, a city on the "
+                "Sangamon River that has served as the seat of state government since 1839 and draws many visitors.")
+        copy = os.path.join(self.tmp.name, "copy.db")
+        shutil.copy(self.path, copy)                                    # don't change the shared index
+        self.assertEqual(wiki_index.add_articles(copy, [("Illinois", text), ("Illinois", text + " It is old.")]), 2)
+        wiki = wiki_index.WikiIndex(copy)
+        try:
+            rows = wiki.db.execute("SELECT COUNT(*) FROM passages WHERE title = 'Illinois'").fetchone()[0]
+            self.assertEqual(rows, 1)                                   # replaced, not duplicated
+            self.assertEqual(wiki.search("What is the capital of Illinois?", 1)[0]["title"], "Illinois")
+        finally:
+            wiki.db.close()
 
 
 if __name__ == "__main__":

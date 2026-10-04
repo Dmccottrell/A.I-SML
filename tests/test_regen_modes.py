@@ -47,6 +47,12 @@ class Server(Base):
 
     factory = staticmethod(factory)
 
+    def setUp(self):
+        super().setUp()
+        flare = next(m for m in self.state.manifest["models"] if m["id"] == "flare-3")
+        for key in ("sampling", "temperature_bounds"):          # these tests check the generic 0.8 / 0.2-1.0 behaviour;
+            flare.pop(key, None)                                # Flare 3's own tuned settings are checked in test_models.py
+
     def decode(self, ids):
         return self.state.tok_for({"id": "flare-3"}).decode(ids)
 

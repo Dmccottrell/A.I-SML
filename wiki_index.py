@@ -21,6 +21,7 @@ WHAT THIS FILE DOES
 Usage:
     python wiki_index.py build                     full index -> data/wiki/wiki.db (~10 GB, several hours)
     python wiki_index.py build --test              20,000 articles -> data/wiki-test/wiki.db (minutes)
+    python wiki_index.py add Illinois Chicago     add articles the big build missed, from live Wikipedia
     python wiki_index.py index-titles              add the title index to an existing index (a few minutes, once)
     python wiki_index.py search "What is the capital of Illinois?"
     (before the full index exists, search uses the test index automatically)
@@ -126,6 +127,42 @@ def add_title_index(db):
     return True
 
 
+def fetch_article(title):
+    """The plain text of one live Wikipedia article (needs internet). None if there is no such article."""
+    import json
+    import urllib.parse
+    import urllib.request
+    url = ("https://en.wikipedia.org/w/api.php?action=query&prop=extracts&explaintext=1&redirects=1&format=json&titles="
+           + urllib.parse.quote(title))
+    req = urllib.request.Request(url, headers={"User-Agent": "ai-sml-wiki-index/1.0 (personal research project)"})
+    with urllib.request.urlopen(req, timeout=30) as resp:
+        pages = json.load(resp)["query"]["pages"]
+    page = next(iter(pages.values()))
+    return (page.get("title", title), page["extract"]) if page.get("extract") else None
+
+
+def add_articles(path, articles, passages_per_article=3):
+    """Add (title, text) articles to an existing index, replacing any copy of the same title.
+    For articles the big build missed (see `python wiki_index.py add Illinois`)."""
+    db = open_db(path)
+    added = 0
+    for title, text in articles:
+        parts = split_passages(text)[:passages_per_article]
+        if not parts:
+            continue
+        with db:
+            for (i, t, x) in db.execute("SELECT id, title, text FROM passages WHERE title = ? COLLATE NOCASE", (title,)).fetchall():
+                db.execute("INSERT INTO passages_fts (passages_fts, rowid, title, text) VALUES ('delete', ?, ?, ?)", (i, t, x))
+                db.execute("DELETE FROM passages WHERE id = ?", (i,))
+            cur = db.execute("SELECT COALESCE(MAX(id), 0) FROM passages").fetchone()[0]
+            for n, p in enumerate(parts):
+                db.execute("INSERT INTO passages (id, title, part, text) VALUES (?, ?, ?, ?)", (cur + 1 + n, title, n, p))
+                db.execute("INSERT INTO passages_fts (rowid, title, text) VALUES (?, ?, ?)", (cur + 1 + n, title, p))
+        added += 1
+    db.close()
+    return added
+
+
 def build(path, articles, passages_per_article=3, max_articles=None, batch=2000):
     """Fill the index from `articles` (an iterable of (title, text)), resumably.
 
@@ -185,6 +222,26 @@ def _prose_ratio(text):
     return sum(w in STOPWORDS for w in words) / len(words) if words else 0.0
 
 
+def _window(text, words):
+    """Fewest words that span every keyword in the passage (None if one is missing). A tight span
+    ("capital of the U.S. state of Illinois") means the passage is about the question, a loose one
+    ("Capital punishment has been repealed in ... Illinois") often a different subject."""
+    toks = re.findall(r"[a-z0-9]+", text.lower())
+    where = {w: [i for i, t in enumerate(toks) if t == w or t == w + "s"] for w in words}
+    if any(not v for v in where.values()):
+        return None
+    best, marks = None, sorted((i, w) for w, v in where.items() for i in v)
+    for a in range(len(marks)):
+        got = {}
+        for b in range(a, len(marks)):
+            got[marks[b][1]] = marks[b][0]
+            if len(got) == len(words):
+                span = max(got.values()) - min(got.values()) + 1
+                best = span if best is None else min(best, span)
+                break
+    return best
+
+
 def _score(r, words, q):
     """Higher = a better note for the question."""
     title_words = set(re.findall(r"[a-z0-9]+", r["title"].lower()))
@@ -201,6 +258,10 @@ def _score(r, words, q):
     score += 2.0 * min(_prose_ratio(r["text"]) / 0.3, 1.0) - 1.0  # sentences, not lists
     if len(r["text"].split()) < 25:
         score -= 1.0
+    if len(words) > 1:
+        span = _window(r["text"], words)
+        if span is not None:
+            score += 1.5 if span <= 8 else 0.75 if span <= 12 else 0.0
     return score
 
 
@@ -229,6 +290,22 @@ class WikiIndex:
                "WHERE passages_fts MATCH ? ORDER BY bm25(passages_fts, 5.0, 1.0) LIMIT ?")
         with self.lock:
             return [{"id": i, "title": t, "text": x, "part": pt} for i, t, x, pt in self.db.execute(sql, (match, k))]
+
+    def _title_body_pairs(self, words):
+        """Opening passages whose TITLE holds one keyword and whose text holds another: for "capital of
+        Illinois", "Springfield, Illinois" (title: illinois, text: capital). Millions of passages mention
+        both words, so the plain search can bury these."""
+        out = []
+        for a in words[:4]:
+            for b in words[:4]:
+                if a == b:
+                    continue
+                sql = ("SELECT p.id, p.title, p.text, p.part FROM passages_fts f JOIN passages p ON p.id = f.rowid "
+                       "WHERE passages_fts MATCH ? AND p.part = 0 ORDER BY bm25(passages_fts, 5.0, 1.0) LIMIT 20")
+                with self.lock:
+                    rows = self.db.execute(sql, (f'title:"{a}" AND "{b}"',)).fetchall()
+                out += [{"id": i, "title": t, "text": x, "part": pt} for i, t, x, pt in rows]
+        return out
 
     def _subject_passages(self, question):
         """All stored passages of the articles whose exact TITLE appears in the question
@@ -271,6 +348,8 @@ class WikiIndex:
         if len(results) < k and len(words) > 1:
             results += self._query(" OR ".join(quoted), pool)
         results += self._subject_passages(question)
+        if len(words) > 1:
+            results += self._title_body_pairs(words)
         seen, unique = set(), []
         for r in results:
             if r["id"] not in seen:
@@ -303,6 +382,9 @@ def main():
     b.add_argument("--passages_per_article", type=int, default=3)
     b.add_argument("--max_articles", type=int, default=None)
     b.add_argument("--test", action="store_true", help="20,000 articles into data/wiki-test/wiki.db")
+    ad = sub.add_parser("add", help="add live Wikipedia articles the build missed, by title")
+    ad.add_argument("titles", nargs="+")
+    ad.add_argument("--db", default=DEFAULT_DB)
     t = sub.add_parser("index-titles", help="add the title index to an existing index (a few minutes, once)")
     t.add_argument("--db", default=DEFAULT_DB)
     s = sub.add_parser("search", help="search the index")
@@ -310,7 +392,18 @@ def main():
     s.add_argument("--db", default=DEFAULT_DB)
     s.add_argument("-k", type=int, default=3)
     a = p.parse_args()
-    if a.cmd == "index-titles":
+    if a.cmd == "add":
+        found = []
+        for title in a.titles:
+            got = fetch_article(title)
+            print(f"{title}: {'fetched ' + got[0] if got else 'NOT FOUND'}")
+            if got:
+                found.append(got)
+        db = sqlite3.connect(a.db)
+        add_title_index(db)
+        db.close()
+        print(f"added {add_articles(a.db, found)} articles")
+    elif a.cmd == "index-titles":
         db = sqlite3.connect(a.db)
         print("title index added" if add_title_index(db) else "title index already there")
         db.close()
