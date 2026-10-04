@@ -71,9 +71,20 @@ def is_looping(text, min_unit=4, max_unit=120, repeats=4):
     return False
 
 
+BLEED_MARKERS = ("<|user|>", "<|assistant|>", "<|system|>", "<|tool_result|>", "<|endoftext|>")
+
+
+def cut_bleed(text):
+    """(text before the first chat marker, True if one was found). A model that keeps going after its answer starts writing
+    the next turn ("<|user|>..."); that part must never be shown or saved."""
+    cut = min((text.find(m) for m in BLEED_MARKERS if m in text), default=-1)
+    return (text, False) if cut < 0 else (text[:cut], True)
+
+
 class Guard:
-    """Wrap a stream of text pieces. Stops it at the length cap, when it loops, or when `stop` is set (the Stop
-    button). `reason` is then "length", "loop" or "stopped"; "done" when the model ended by itself."""
+    """Wrap a stream of text pieces. Stops it at the length cap, when it loops, when the model starts writing the other
+    side of the chat ("bleed"), or when `stop` is set (the Stop button). `reason` is then "length", "loop", "bleed" or
+    "stopped"; "done" when the model ended by itself."""
 
     def __init__(self, pieces, max_chars=MAX_REPLY_CHARS, stop=None):
         self.pieces, self.max_chars, self.stop, self.reason, self.text = pieces, max_chars, stop, "done", ""
@@ -84,7 +95,15 @@ class Guard:
                 if self.stop is not None and self.stop.is_set():
                     self.reason = "stopped"
                     return
+                before = self.text
                 self.text += piece
+                clean, bled = cut_bleed(self.text)
+                if bled:                                       # keep only what came before the marker, then stop
+                    keep = clean[len(before):]
+                    self.text, self.reason = clean.rstrip() if not keep else clean, "bleed"
+                    if keep:
+                        yield keep
+                    return
                 yield piece
                 if len(self.text) >= self.max_chars:
                     self.reason = "length"
