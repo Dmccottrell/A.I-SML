@@ -489,7 +489,7 @@ this (`<|tool_call|>`, `<|tool_result|>`) are already reserved in v3's tokenizer
 | Step | What | When |
 |---|---|---|
 | 1 | ✅ **Built and tested (`harness.py`):** read file, edit file, run command, run tests, all inside a **sandbox** (a temporary folder, no internet, time and memory limits, nothing outside it can be touched) | While v3.5 trains (CPU work) |
-| 1b | ✅ **Built and tested (Oct 2026): the "Claude Code"-style extras around the loop** (all plain code in `harness.py`): `git` (safe subset: status, diff, log, add, commit, branch, worktrees; no push, no config flags), `diagnostics` (syntax errors; more with pyflakes: our stand-in for LSP), **project notes** (YUVRA.md / AGENTS.md shown at the start), **hooks** (`.yuvra/hooks.json`: after an edit, before a command, and a **finish gate**: the tests must pass before it may stop), **permissions** (allow / ask / deny; `git commit` asks first), **compaction** (old steps folded into an "Earlier steps" list when the 2,048-token memory fills) and a **tool registry** (`register_tool`: where MCP tools plug in; the MCP client itself is not built) | Done |
+| 1b | ✅ **Built and tested (Oct 2026): the "Claude Code"-style extras around the loop** (all plain code in `harness.py`): `git` (safe subset: status, diff, log, add, commit, branch, worktrees; no push, no config flags), `diagnostics` (syntax errors; more with pyflakes: our stand-in for LSP), **project notes** (EMVRYX.md / AGENTS.md shown at the start), **hooks** (`.emvryx/hooks.json`: after an edit, before a command, and a **finish gate**: the tests must pass before it may stop), **permissions** (allow / ask / deny; `git commit` asks first), **compaction** (old steps folded into an "Earlier steps" list when the 2,048-token memory fills) and a **tool registry** (`register_tool`: where MCP tools plug in; the MCP client itself is not built) | Done |
 | 1c | ✅ **Practice data made by our own code (`agent_tasks.py`, `agent_lessons.py`, `make_agent_data.py`):** tiny projects with a bug, solved by a scripted solver through the REAL harness; only runs whose tests pass are kept. Chat lessons: `tool_use` (incl. diagnostics-first and retry after a wrong fix), `project_context`, `ask_first` (and "refused: say so, don't retry"), `too_big` ("that's too big; start with one file") and `compaction`. v3.5 gets 2,500 of them (`AGENT_LESSONS`); its final-phase reading also has real commit data (`commits`, CommitPackFT Python, permissive licenses) and the practice runs as text (`agent_traces`, 0.2%) | Done; v3.5 trains on them |
 | 2 | **Training data (v4):** a coding-focused open teacher (e.g. Qwen2.5-Coder-7B, license to be checked) works through small coding tasks in the harness. Keep only runs where the **tests really pass** (checked by running them) | After v3.5 |
 | 3 | **Fine-tune** a "coding" skill pack (LoRA) on those runs | v4 |
@@ -739,33 +739,33 @@ battery, not a bigger download.
 
 | Tier class | Model name | Size | Versions |
 |---|---|---|---|
-| Lite (fast and light) | **Yuvra Flare 3**, then **Yuvra Flare 3.5** | ~400M, then ~1.12B | v3, then **v3.5** |
-| Everyday | **Yuvra Equinox 4** | ~1.12B | **v4**: Flare 3.5's brain trained longer, now with skill packs, the router, tools, thinking, effort levels and the app |
-| Balanced | **Yuvra Solstice 5** | ~3B | v5 (needs cloud training) |
-| Most capable | **Yuvra Apogee 6, 6.5** | 5-7B | v6, v6.5 |
-| Top | **Yuvra Apogee 7, 8** | 13-30B | v7, v8 (see [Beyond v6.5](#beyond-v65-v7-v8-and-max)) |
+| Lite (fast and light) | **Emvryx Flare 3**, then **Emvryx Flare 3.5** | ~400M, then ~1.12B | v3, then **v3.5** |
+| Everyday | **Emvryx Equinox 4** | ~1.12B | **v4**: Flare 3.5's brain trained longer, now with skill packs, the router, tools, thinking, effort levels and the app |
+| Balanced | **Emvryx Solstice 5** | ~3B | v5 (needs cloud training) |
+| Most capable | **Emvryx Apogee 6, 6.5** | 5-7B | v6, v6.5 |
+| Top | **Emvryx Apogee 7, 8** | 13-30B | v7, v8 (see [Beyond v6.5](#beyond-v65-v7-v8-and-max)) |
 
-So v4 (Yuvra Equinox 4) is a new *generation*, not a bigger model: Flare 3.5's brain **trained longer**
+So v4 (Emvryx Equinox 4) is a new *generation*, not a bigger model: Flare 3.5's brain **trained longer**
 (15–30B more tokens, including some "skill-aware" text with tool calls, thinking steps and code with tests,
 so the skill packs start from a base that already knows those formats), plus the abilities. No cloud needed.
 See [v4's brain](#v4s-brain-v35-trained-longer).
 
-**Names (working names):** the umbrella is **Yuvra** (the app, Yuvra.AI, and the whole model family). Each model adds one of
+**Names (working names):** the umbrella is **Emvryx** (the app, Emvryx.AI, and the whole model family). Each model adds one of
 **five role names**, taken from the sky's calendar, and a generation number.
 
 **How the names work:** five names make up the lineup, the way other AI families have a small, a middle and
-a big model. **Yuvra Ember** is the lowest (the small first assistant: v2, 88M, runs on almost any device), then **Yuvra Flare** (fast and light), **Yuvra Equinox** (balanced everyday), **Yuvra Solstice**
-(stronger, for a PC or online mode) and **Yuvra Apogee** (most capable). **Each name has its own version number**, and a
+a big model. **Emvryx Ember** is the lowest (the small first assistant: v2, 88M, runs on almost any device), then **Emvryx Flare** (fast and light), **Emvryx Equinox** (balanced everyday), **Emvryx Solstice**
+(stronger, for a PC or online mode) and **Emvryx Apogee** (most capable). **Each name has its own version number**, and a
 number only goes up when *that* model is updated, so the numbers differ from name to name (for example Flare 3.5, Equinox 4,
 Solstice 5 and Apogee 6 at the same time). When a model is updated, the new one takes the main spot in the app's picker and
 the old one moves to "Other models" (still downloadable). The numbers follow the project's version numbers (v3, v3.5, v4, ...):
 a model is numbered by the project version it was built in, and a model can also get a refresh between versions
-(Flare 3 -> Flare 3.5). So **Yuvra Flare 3.5** is the Flare built in v3.5 (a ~1.12B brain, bigger than Flare 3), the first Equinox is
+(Flare 3 -> Flare 3.5). So **Emvryx Flare 3.5** is the Flare built in v3.5 (a ~1.12B brain, bigger than Flare 3), the first Equinox is
 Equinox 4 (v4: Flare 3.5's brain trained longer, plus skills, tools and effort levels), and Flare stays Flare 3.5 until a new
-small model is trained (say Flare 7). A number *before* the name ("Yuvra 2 Flare") is kept for a full reset
+small model is trained (say Flare 7). A number *before* the name ("Emvryx 2 Flare") is kept for a full reset
 of the whole family (a new tokenizer or design, so old files and skill packs don't carry over), if that ever happens.
 
-| Lineup in the picker | Yuvra Ember | Yuvra Flare | Yuvra Equinox | Yuvra Solstice | Yuvra Apogee |
+| Lineup in the picker | Emvryx Ember | Emvryx Flare | Emvryx Equinox | Emvryx Solstice | Emvryx Apogee |
 |---|---|---|---|---|---|
 | Now (Oct 2026) | 2 (beta) | 3 (3.5 about to train) | – | – | – |
 | After v3.5 | 2 | 3.5 (3 moves to Other models) | – | – | – |
@@ -803,10 +803,10 @@ speed or smarts.
 
 | Tier | Size | Runs on | Good for | Arrives |
 |---|---|---|---|---|
-| **Lite = Yuvra Flare** (Flare 3, 3.5) | ~400M (Flare 3), ~1.12B (Flare 3.5) | Any phone, offline, fast | Quick questions, small talk, simple lookups | v3, v3.5 |
-| **Standard = Yuvra Equinox** (4) | ~1.12B (v4) | Phones and PCs | Everyday use: lookups, explanations, advice, skills and tools | v4 |
-| **Pro = Yuvra Solstice, Yuvra Apogee** (Solstice 5, Apogee 6, 6.5) | 3B (v5), 5-7B (v6-v6.5) | PC or a server (the app's online mode) | Harder questions, coding, long writing | v5+ |
-| **Max = the largest Yuvra Apogee** (Apogee 7, 8) | 13B, later ~30B ("upper small", then "medium"; see [Beyond v6.5](#beyond-v65-v7-v8-and-max)) | A server, or a PC with a 24 GB GPU for 13B; online mode | The hardest questions: deep reasoning, real coding help, long documents. Also the teacher for every smaller tier | After v6.5, if funded |
+| **Lite = Emvryx Flare** (Flare 3, 3.5) | ~400M (Flare 3), ~1.12B (Flare 3.5) | Any phone, offline, fast | Quick questions, small talk, simple lookups | v3, v3.5 |
+| **Standard = Emvryx Equinox** (4) | ~1.12B (v4) | Phones and PCs | Everyday use: lookups, explanations, advice, skills and tools | v4 |
+| **Pro = Emvryx Solstice, Emvryx Apogee** (Solstice 5, Apogee 6, 6.5) | 3B (v5), 5-7B (v6-v6.5) | PC or a server (the app's online mode) | Harder questions, coding, long writing | v5+ |
+| **Max = the largest Emvryx Apogee** (Apogee 7, 8) | 13B, later ~30B ("upper small", then "medium"; see [Beyond v6.5](#beyond-v65-v7-v8-and-max)) | A server, or a PC with a 24 GB GPU for 13B; online mode | The hardest questions: deep reasoning, real coding help, long documents. Also the teacher for every smaller tier | After v6.5, if funded |
 
 The names are working names (see above).
 
@@ -897,8 +897,8 @@ chat format and prompts live in one shared file, so a chat behaves the same on e
 ### Hosting the online server (to revisit)
 
 "Online" in the app means **where the model runs** (a computer that is not the phone), not "searches the web". Web search is a
-separate switch. A domain (yuvra.ai) is only a name that points at a server; something still has to run the model. A Cloudflare
-tunnel gives a home PC a stable name (for example `chat.yuvra.ai`) without opening ports.
+separate switch. A domain (emvryx.ai) is only a name that points at a server; something still has to run the model. A Cloudflare
+tunnel gives a home PC a stable name (for example `chat.emvryx.ai`) without opening ports.
 
 Decided for now: **the home PC through a tunnel**, for you and a small test group. When it should keep working while the PC is
 off, rent a machine by the month. Prices below are listed prices found in a web search (Oct 2026), not verified on the

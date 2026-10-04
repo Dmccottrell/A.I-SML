@@ -1,5 +1,5 @@
-// Yuvra service worker: keeps the page shell so the app opens instantly and can be installed. It never caches the API.
-const SHELL = 'yuvra-shell-v1';
+// Emvryx service worker: keeps the page shell so the app opens instantly and can be installed. It never caches the API.
+const SHELL = 'emvryx-shell-v1';
 self.addEventListener('install', (e) => {
   e.waitUntil(caches.open(SHELL).then((c) => c.addAll(['/', '/icon.svg', '/manifest.webmanifest'])).then(() => self.skipWaiting()));
 });

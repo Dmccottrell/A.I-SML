@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>Yuvra</title>
+<title>Emvryx</title>
 <meta name="theme-color" content="#07080D">
 <link rel="manifest" href="/manifest.webmanifest">
 <link rel="icon" href="/icon.svg" type="image/svg+xml">
@@ -167,7 +167,7 @@ svg .core { fill: var(--core); stroke: var(--sun); stroke-width: 3; transition: 
         <div class="menu" id="effortMenu" hidden></div>
         <div class="card">
           <label class="sr" for="input">Message</label>
-          <textarea id="input" rows="1" placeholder="Message Yuvra..." maxlength="20000"></textarea>
+          <textarea id="input" rows="1" placeholder="Message Emvryx..." maxlength="20000"></textarea>
           <div class="tools">
             <div class="left">
               <button class="pill plain" id="plus" aria-label="Attach, skills, web search (coming soon)" disabled style="width:44px;justify-content:center;font-size:22px">+</button>
@@ -226,7 +226,7 @@ const logo = (size, animate) => {
   const s = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
   s.setAttribute('width', size); s.setAttribute('height', size); s.setAttribute('viewBox', '0 0 64 64'); s.setAttribute('fill', 'none'); s.setAttribute('aria-hidden', 'true');
   s.innerHTML = `<path d="${BRAIN}" stroke="var(--text)" stroke-width="4" stroke-linejoin="round"${animate ? ' stroke-dasharray="40 14"><animate attributeName="stroke-dashoffset" from="0" to="-108" dur="2.4s" repeatCount="indefinite"/></path>' : '/>'}
-    <path d="M32 55 V36 M32 36 L21 18 M32 36 L43 18" stroke="var(--text)" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+    <path d="M21 22 L43 50 M43 22 L21 50" stroke="var(--text)" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
     <circle class="core" cx="32" cy="36" r="6.5">${animate ? '<animate attributeName="r" values="5;8;5" dur="1.6s" repeatCount="indefinite"/>' : ''}</circle>`;
   return s;
 };
@@ -235,8 +235,8 @@ const nice = (n) => fmt(n >= 100 ? Math.round(n / 10) * 10 : Math.round(n));
 
 // ---------------------------------------------------------------- state
 const S = {state: null, chatId: null, messages: [], title: 'New chat', private: false, model: null, effort: 'balanced', busy: false, abort: null,
-           theme: localStorage.getItem('yuvra_theme') || 'dark', shown: null, stick: true, thinkTimer: null};
-try { S.model = localStorage.getItem('yuvra_model'); S.effort = localStorage.getItem('yuvra_effort') || 'balanced'; } catch (e) {}
+           theme: localStorage.getItem('emvryx_theme') || 'dark', shown: null, stick: true, thinkTimer: null};
+try { S.model = localStorage.getItem('emvryx_model'); S.effort = localStorage.getItem('emvryx_effort') || 'balanced'; } catch (e) {}
 if (!['auto', 'quick', 'balanced', 'deep'].includes(S.effort)) S.effort = 'balanced';
 
 async function api(path, opts) {
@@ -269,7 +269,7 @@ async function load() {
 }
 function renderAll() {
   const st = S.state;
-  $('brand').replaceChildren(logo(32), 'Yuvra');
+  $('brand').replaceChildren(logo(32), 'Emvryx');
   $('who').textContent = st.user === 'owner' ? 'Owner' : st.user;
   $('avatar').textContent = (st.user[0] || 'Y').toUpperCase();
   $('plan').textContent = (st.owner ? 'Owner, no limits' : st.plan[0].toUpperCase() + st.plan.slice(1) + ' plan');
@@ -291,7 +291,7 @@ function renderLinks() {
   const mk = (name, note, fn) => el('button', {class: 'link', disabled: fn ? false : true, onclick: () => { document.body.classList.remove('menu-open'); fn && fn(); }}, el('span', {}, name), el('small', {}, note));
   const l = $('links'); l.replaceChildren(
     mk('Private chat', 'Never saved', () => newChat(true)), mk('Usage', 'See what is left', openUsage),
-    mk('Memory', 'Coming soon'), mk('Skills', 'Coming soon'), mk('Documents', 'Coming soon'),
+    mk('Connected apps', 'Coming soon', openApps), mk('Memory', 'Coming soon'), mk('Skills', 'Coming soon'), mk('Documents', 'Coming soon'),
     mk('Settings', '', openSettings));
 }
 
@@ -319,7 +319,7 @@ function bubble(m, last) {
   if (m.role === 'user' && m.content.startsWith(SUMMARY_MARK)) return el('div', {class: 'note'}, 'Earlier messages were summarized to save room');
   if (m.role === 'user') return el('div', {class: 'msg user'}, el('div', {class: 'bubble'}, m.content));
   const model = allModels().find((c) => c.id === m.model_id);
-  const meta = el('div', {class: 'meta'}, logo(14), (model ? model.name + (model.older ? ' ' + model.version : '') : 'Yuvra') + (m.status === 'partial' ? ' · stopped' : ''));
+  const meta = el('div', {class: 'meta'}, logo(14), (model ? model.name + (model.older ? ' ' + model.version : '') : 'Emvryx') + (m.status === 'partial' ? ' · stopped' : ''));
   const acts = el('div', {class: 'acts'}, el('button', {class: 'chip', onclick: (e) => { navigator.clipboard && navigator.clipboard.writeText(m.content); e.target.textContent = 'Copied'; setTimeout(() => e.target.textContent = 'Copy', 1500); }}, 'Copy'));
   if (last && !S.busy) acts.append(el('button', {class: 'chip', 'aria-haspopup': 'true', onclick: (e) => regenMenu(e.currentTarget)}, 'Regenerate \u25be'));
   return el('div', {class: 'msg ai', 'data-id': m.id}, meta, el('div', {class: 'bubble'}, m.content), acts);
@@ -362,7 +362,7 @@ $('effortBtn').onclick = () => {
   const m = $('effortMenu'); m.replaceChildren(el('div', {class: 'head'}, 'HOW MUCH SHOULD IT THINK?'));
   const cm = curModel();
   for (const e of S.state.efforts) { const blocked = cm && cm.efforts && !cm.efforts.includes(e.id) && e.id !== 'auto';
-    m.append(el('button', {class: 'opt' + (e.id === S.effort ? ' sel' : ''), disabled: blocked, onclick: () => { S.effort = e.id; S.autoNote = null; try { localStorage.setItem('yuvra_effort', e.id); } catch (x) {} closeMenus(); renderComposer(); refreshUsage(); }},
+    m.append(el('button', {class: 'opt' + (e.id === S.effort ? ' sel' : ''), disabled: blocked, onclick: () => { S.effort = e.id; S.autoNote = null; try { localStorage.setItem('emvryx_effort', e.id); } catch (x) {} closeMenus(); renderComposer(); refreshUsage(); }},
       el('span', {class: 'grow'}, el('b', {}, e.name), ' ', el('small', {style: 'display:inline'}, '· ' + e.use), el('small', {}, blocked ? 'Needs Flare or a bigger model.' : e.blurb)), e.id === S.effort ? '✓' : '')); }
   m.append(el('div', {class: 'head', style: 'text-transform:none;letter-spacing:0;font-weight:400'}, 'Thinking longer is slower and uses more of your usage.'));
   m.hidden = false;
@@ -370,7 +370,7 @@ $('effortBtn').onclick = () => {
 document.addEventListener('click', (e) => { if (!e.target.closest('.box')) closeMenus(); });
 async function chooseModel(c) {
   closeMenus(); if (c.id === S.model) return;
-  S.model = c.id; try { localStorage.setItem('yuvra_model', c.id); } catch (e) {}
+  S.model = c.id; try { localStorage.setItem('emvryx_model', c.id); } catch (e) {}
   if (c.efforts && S.effort !== 'auto' && !c.efforts.includes(S.effort)) S.effort = 'balanced';
   wash(); applyTheme(); renderComposer(); renderThread(false); await refreshUsage();
 }
@@ -381,7 +381,7 @@ $('send').onclick = () => (S.busy ? stop() : send());
 $('newChat').onclick = () => newChat(false); $('newTop').onclick = () => newChat(false);
 $('burger').onclick = () => document.body.classList.add('menu-open');
 $('scrim').onclick = () => document.body.classList.remove('menu-open');
-$('themeBtn').onclick = () => { S.theme = (document.documentElement.dataset.mode === 'light') ? 'dark' : 'light'; try { localStorage.setItem('yuvra_theme', S.theme); } catch (e) {} applyTheme(); };
+$('themeBtn').onclick = () => { S.theme = (document.documentElement.dataset.mode === 'light') ? 'dark' : 'light'; try { localStorage.setItem('emvryx_theme', S.theme); } catch (e) {} applyTheme(); };
 
 // ---------------------------------------------------------------- usage line (the numbers ease to their new value)
 let tween = null;
@@ -434,12 +434,27 @@ function dialog(children, closeText, extra) {
   $('dialogs').append(m); return m;
 }
 
+// ---------------------------------------------------------------- connected apps
+async function openApps() {
+  const r = await api('/api/apps'); const c = await r.json();
+  const kids = [el('h2', {}, 'Connected apps'), el('div', {style: 'color:var(--muted)'}, 'Let Emvryx work with the apps you use. Nothing is connected yet: these are planned.')];
+  for (const cat of c.categories) {
+    const list = c.apps.filter((a) => a.category === cat); if (!list.length) continue;
+    kids.push(el('div', {class: 'label', style: 'padding:6px 0 0'}, cat.toUpperCase()));
+    for (const a of list) kids.push(el('div', {class: 'opt', style: 'cursor:default;opacity:.9'},
+      el('span', {class: 'grow'}, el('b', {}, a.name), el('small', {}, a.does), el('small', {style: 'font-size:13px'}, 'Permission: ' + a.permission)),
+      el('small', {style: 'text-align:right'}, 'Coming soon')));
+  }
+  kids.push(el('b', {}, 'How connections will work'), ...c.rules.map((t) => el('div', {style: 'color:var(--muted);font-size:14px'}, '\u2022 ' + t)));
+  dialog(kids, 'Close');
+}
+
 // ---------------------------------------------------------------- settings
 async function openSettings() {
   const st = S.state, s = st.settings, w = st.window;
   const seg = (opts, cur, fn) => el('div', {class: 'seg'}, ...opts.map(([v, t]) => el('button', {class: cur === v ? 'on' : '', onclick: (e) => { fn(v); [...e.target.parentNode.children].forEach((b) => b.classList.remove('on')); e.target.classList.add('on'); }}, t)));
   const kids = [el('h2', {}, 'Settings'),
-    el('b', {}, 'Look'), seg([['auto', 'Automatic'], ['dark', 'Dark'], ['light', 'Light']], S.theme, (v) => { S.theme = v; try { localStorage.setItem('yuvra_theme', v); } catch (e) {} applyTheme(); }),
+    el('b', {}, 'Look'), seg([['auto', 'Automatic'], ['dark', 'Dark'], ['light', 'Light']], S.theme, (v) => { S.theme = v; try { localStorage.setItem('emvryx_theme', v); } catch (e) {} applyTheme(); }),
     el('b', {}, 'How long a chat can be'), seg([['everyday', 'Everyday (about 8K)'], ['long', 'Long (if allowed)']], s.window_mode, async (v) => { await post('/api/settings', {window_mode: v}); await load(); }),
     el('div', {style: 'color:var(--muted);font-size:14px'}, 'Right now: ' + fmt(w.window) + ' tokens, ' + w.reason + '. Long chats use more memory and are slower to read.'),
     el('b', {}, 'Your data'),
@@ -489,7 +504,7 @@ async function send(regen, mode) {
         const w = think.querySelector('.word'); clearInterval(S.thinkTimer); S.thinkTimer = null; if (w) w.textContent = 'Loading ' + data.model + ' (first message only)';
       } else if (ev === 'piece') {
         if (!aiWrap) { think._stop(); think.remove(); const m = curModel(); aiBubble = el('div', {class: 'bubble'}); const note = S.autoNote ? el('span', {title: S.autoNote.reason}, ' \u00b7 Auto chose ' + S.autoNote.effort[0].toUpperCase() + S.autoNote.effort.slice(1)) : null;
-        aiWrap = el('div', {class: 'msg ai'}, el('div', {class: 'meta'}, logo(14), m ? m.name : 'Yuvra', note), aiBubble); $('thread').append(aiWrap); }
+        aiWrap = el('div', {class: 'msg ai'}, el('div', {class: 'meta'}, logo(14), m ? m.name : 'Emvryx', note), aiBubble); $('thread').append(aiWrap); }
         got += data.t; aiBubble.replaceChildren(got, el('span', {class: 'cursor'}, '▍')); scrollDown();
       } else if (ev === 'done') {
         S.title = data.title || S.title; S.state.usage = data.usage; renderUsage(data.usage); popTokens(before, data.usage);
@@ -532,7 +547,7 @@ function regenMenu(btn) {
 }
 
 // ---------------------------------------------------------------- login
-function showLogin() { $('login').hidden = false; $('app').hidden = true; $('loginBrand').replaceChildren(logo(32), 'Yuvra'); }
+function showLogin() { $('login').hidden = false; $('app').hidden = true; $('loginBrand').replaceChildren(logo(32), 'Emvryx'); }
 $('loginForm').onsubmit = async (e) => {
   e.preventDefault(); const r = await fetch('/api/login', {method: 'POST', headers: {'Content-Type': 'application/json'}, credentials: 'same-origin', body: JSON.stringify({key: $('keyInput').value})});
   if (r.ok) { $('keyInput').value = ''; load(); } else { const j = await r.json(); $('loginErr').textContent = j.message + ' ' + (j.action || ''); }

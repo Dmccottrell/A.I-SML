@@ -22,9 +22,9 @@
   "designSystems": [],
   "launch": {"view": "canvas"},
   "notes": {
-    "t1": {"kind": "title1", "maxW": 1360, "text": "Yuvra brand", "w": 240, "x": 0, "y": -300, "page": "brand"},
-    "t2": {"kind": "title1", "maxW": 8560, "text": "Yuvra website: five pages", "w": 240, "x": 0, "y": -300, "page": "website"},
-    "t3": {"kind": "title1", "maxW": 4560, "text": "Yuvra app screens", "w": 240, "x": 0, "y": -300, "page": "app"},
+    "t1": {"kind": "title1", "maxW": 1360, "text": "Emvryx brand", "w": 240, "x": 0, "y": -300, "page": "brand"},
+    "t2": {"kind": "title1", "maxW": 8560, "text": "Emvryx website: five pages", "w": 240, "x": 0, "y": -300, "page": "website"},
+    "t3": {"kind": "title1", "maxW": 4560, "text": "Emvryx app screens", "w": 240, "x": 0, "y": -300, "page": "app"},
     "n1": {"size": 24, "text": "Every screen has a Dark/Light switch and a Model switch in its Tweaks. On Chat, open the model chip or the effort chip under the message box, press Send, and watch the usage line.", "w": 520, "x": 1440, "y": 820, "page": "app"}
   },
   "order": [
@@ -37,5 +37,5 @@
     {"id": "website", "name": "Website"},
     {"id": "app", "name": "App screens"}
   ],
-  "title": "Yuvra Website and Logo"
+  "title": "Emvryx Website and Logo"
 }

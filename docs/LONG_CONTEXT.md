@@ -189,7 +189,7 @@ fewer key/value heads, plus 4-8 bit compression of the cache); position encoding
 a staged curriculum up to 512K with the long sequence split across several GPUs (ring attention);
 and lots of long data. Until then, **retrieval and compaction** (the Wikipedia lookup, summarizing
 old conversation, saved notes) give the effect of a bigger window at a fraction of the cost.
-That is the Yuvra Solstice-class (3B) plan, after v3.5.
+That is the Emvryx Solstice-class (3B) plan, after v3.5.
 
 ## On a phone: the device check
 A long memory costs RAM (about 32 KB per token for v3 at 16-bit, ~16 KB with an 8-bit cache), so the app chooses the window per device and never

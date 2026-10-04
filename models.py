@@ -104,11 +104,11 @@ def main():
     out = catalog(load_manifest(a.manifest), a.user, ram_gb=a.ram, downloaded=a.downloaded)
     print("Select model")
     for c in out["cards"]:
-        print(f"  Yuvra {c['name']} {c['version']:g}   [{c['badge']}]\n      {c['tagline']}")
+        print(f"  Emvryx {c['name']} {c['version']:g}   [{c['badge']}]\n      {c['tagline']}")
     if out["other"]:
         print("Other models")
         for c in out["other"]:
-            print(f"  Yuvra {c['name']} {c['version']:g} (older)   [{c['badge']}]")
+            print(f"  Emvryx {c['name']} {c['version']:g} (older)   [{c['badge']}]")
     if out["delete"]:
         print("Can be removed to save space:", ", ".join(out["delete"]))
 

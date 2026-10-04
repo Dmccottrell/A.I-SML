@@ -28,8 +28,8 @@ THE TOOLS
     finish(summary)                   the model says it is done
 
 AROUND THE LOOP (all plain code, nothing the model has to learn except the tool format)
-    project notes     YUVRA.md / AGENTS.md in the workspace is shown to the model as "Project notes"
-    hooks             .yuvra/hooks.json: commands that run after an edit (e.g. a syntax check), before a command,
+    project notes     EMVRYX.md / AGENTS.md in the workspace is shown to the model as "Project notes"
+    hooks             .emvryx/hooks.json: commands that run after an edit (e.g. a syntax check), before a command,
                       or when the model tries to finish (a "finish gate": the tests must pass first)
     permissions       which tools run freely, which ask first (git commit, ...), which are refused
     compaction        when the conversation gets too long, old steps become a short "Earlier steps" summary
@@ -70,8 +70,8 @@ GIT_SUBCOMMANDS = {"status", "diff", "log", "show", "init", "add", "commit", "br
 GIT_READ_ONLY = {"status", "diff", "log", "show", "init"}
 GIT_BLOCKED_FLAGS = ("-C", "-c", "--git-dir", "--work-tree", "--exec-path", "--upload-pack", "--receive-pack",
                      "--namespace", "--super-prefix", "--config-env", "--output", "--ext-diff", "--textconv")
-PROJECT_FILES = ("YUVRA.md", "AGENTS.md")
-HOOKS_FILE = os.path.join(".yuvra", "hooks.json")
+PROJECT_FILES = ("EMVRYX.md", "AGENTS.md")
+HOOKS_FILE = os.path.join(".emvryx", "hooks.json")
 
 # Shown to the model at the start of a coding session (and in every coding lesson), so it knows the tools
 TOOL_PROMPT = ("You can use tools. Write one call at a time: <|tool_call|>{\"name\": \"read_file\", \"args\": "
@@ -255,8 +255,8 @@ class Sandbox:
     def _git(self, argv):
         env = {"GIT_CONFIG_GLOBAL": os.devnull, "GIT_CONFIG_SYSTEM": os.devnull, "GIT_CONFIG_NOSYSTEM": "1",
                "GIT_TERMINAL_PROMPT": "0", "GIT_EDITOR": "true", "GIT_PAGER": "cat", "HOME": self.root,
-               "GIT_AUTHOR_NAME": "Yuvra agent", "GIT_AUTHOR_EMAIL": "agent@localhost",
-               "GIT_COMMITTER_NAME": "Yuvra agent", "GIT_COMMITTER_EMAIL": "agent@localhost"}
+               "GIT_AUTHOR_NAME": "Emvryx agent", "GIT_AUTHOR_EMAIL": "agent@localhost",
+               "GIT_COMMITTER_NAME": "Emvryx agent", "GIT_COMMITTER_EMAIL": "agent@localhost"}
         return self._exec(["git", "-c", f"core.hooksPath={os.devnull}", "-c", "init.defaultBranch=main"] + argv, env)
 
     def _worktree(self, args):
@@ -379,7 +379,7 @@ class Permissions:
 
 
 class Hooks:
-    """Commands from .yuvra/hooks.json that run at set moments, like [{"event": "after_edit", "match": "*.py",
+    """Commands from .emvryx/hooks.json that run at set moments, like [{"event": "after_edit", "match": "*.py",
     "run": "python -m py_compile {path}"}]. Events: after_edit (a file was written), before_run (a command is
     about to run; a failure stops it) and on_finish (the model wants to stop; a failure means "not yet")."""
 
@@ -416,7 +416,7 @@ class Hooks:
 
 
 def load_project_notes(sandbox, limit=1200):
-    """The text of YUVRA.md / AGENTS.md in the workspace (the first found), or ""."""
+    """The text of EMVRYX.md / AGENTS.md in the workspace (the first found), or ""."""
     for name in PROJECT_FILES:
         try:
             with open(os.path.join(sandbox.root, name), encoding="utf-8", errors="replace") as f:
@@ -468,8 +468,8 @@ def run_agent(task, generate, sandbox, max_turns=8, system=None, project=True, h
               ask=None, context_tokens=None):
     """Let a model work on `task`. `generate(messages)` returns the model's next reply as text.
 
-    project        show the workspace's YUVRA.md / AGENTS.md as "Project notes" before the task
-    hooks          a Hooks object (default: .yuvra/hooks.json in the workspace, if any)
+    project        show the workspace's EMVRYX.md / AGENTS.md as "Project notes" before the task
+    hooks          a Hooks object (default: .emvryx/hooks.json in the workspace, if any)
     permissions    a Permissions object (default: the defaults; `ask(name, args) -> bool` is used for "ask")
     context_tokens when the conversation gets near this size, old steps are compacted (see `compact`)
 

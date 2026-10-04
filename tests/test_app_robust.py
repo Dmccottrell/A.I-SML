@@ -233,7 +233,7 @@ class Connection(unittest.TestCase):
         try:
             r = E.test_connection(url)
             self.assertFalse(r["ok"])
-            self.assertIn("isn't a Yuvra server", r["message"])
+            self.assertIn("isn't a Emvryx server", r["message"])
         finally:
             server.shutdown()
 

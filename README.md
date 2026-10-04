@@ -28,10 +28,10 @@ live in `config.py`.
 
 ## Model family names (working names)
 
-The app and the whole family are called **Yuvra** (Yuvra.AI). Each model is Yuvra + one of five names + its own version
-number: **Yuvra Flare** (fast and light), **Yuvra Equinox** (balanced everyday), **Yuvra Solstice** (stronger) and
-**Yuvra Apogee** (most capable). So v3 = Yuvra Flare 3 (~400M), v3.5 = Yuvra Flare 3.5 (~1.1B), v4 = Yuvra Equinox 4,
-v5 = Yuvra Solstice 5 (~3B), v6 / v6.5 = Yuvra Apogee 6 / 6.5 (5-7B), and later Yuvra Apogee 7, 8 (13B+); each
+The app and the whole family are called **Emvryx** (Emvryx.AI). Each model is Emvryx + one of five names + its own version
+number: **Emvryx Flare** (fast and light), **Emvryx Equinox** (balanced everyday), **Emvryx Solstice** (stronger) and
+**Emvryx Apogee** (most capable). So v3 = Emvryx Flare 3 (~400M), v3.5 = Emvryx Flare 3.5 (~1.1B), v4 = Emvryx Equinox 4,
+v5 = Emvryx Solstice 5 (~3B), v6 / v6.5 = Emvryx Apogee 6 / 6.5 (5-7B), and later Emvryx Apogee 7, 8 (13B+); each
 name has its own number that goes up only when that model is updated (older ones stay available). They are placeholders: no
 trademark check has been done yet. See `docs/ROADMAP.md` and `docs/APP.md`.
 
@@ -81,16 +81,18 @@ data, code and training.
 | `hub_backup.py` | 5 | Off-machine backup of the checkpoint to a private Hugging Face repo (`--hub_backup`), so a rented machine going offline doesn't take the run with it |
 | `notify.py` | 5 | Push messages to your phone about training progress, crashes and finish (free, via ntfy.sh); see `docs/PHONE.md` |
 | `app_errors.py`, `app_engine.py`, `app_download.py` | app | The app's reliability layer: plain-language errors, model choice (too big / PC off), reply guard (length cap, loop detector, Stop), chats saved while they stream, the llama-server client, "Test connection", and resumable checksum-verified downloads |
-| `design/` | app | The Yuvra website, app and logo concept: logo SVGs, brand colours per model, and the design canvas sources (see `design/README.md`) |
+| `design/` | app | The Emvryx website, app and logo concept: logo SVGs, brand colours per model, and the design canvas sources (see `design/README.md`) |
 | `models.json`, `models.py` | app | The app's model list (Ember, Flare, Equinox, Solstice, Apogee, each with its own version) and the "Select model" picker logic; see `docs/APP_SPEC.md` |
-| `harness.py` | 6 | The coding helper's tools and loop (no model needed; tests in `tests/`): safe file/command tools, a safe git subset, syntax diagnostics, project notes (YUVRA.md / AGENTS.md), hooks with a finish gate, permissions (ask before commits), compaction of long runs, and a tool registry (where MCP tools plug in) |
+| `harness.py` | 6 | The coding helper's tools and loop (no model needed; tests in `tests/`): safe file/command tools, a safe git subset, syntax diagnostics, project notes (EMVRYX.md / AGENTS.md), hooks with a finish gate, permissions (ask before commits), compaction of long runs, and a tool registry (where MCP tools plug in) |
 | `agent_tasks.py`, `agent_lessons.py`, `make_agent_data.py` | 6 | Coding practice made by our own code: tiny bug-fix projects solved by a scripted solver through the real harness (only passing runs kept). Become chat lessons (`tool_use`, `project_context`, `ask_first`, `too_big`, `compaction`) and `data/v3.5/agent_traces.jsonl` for v3.5's final phase. Run `python make_agent_data.py --version v3.5` before building v3.5's data |
 | `stretch_ladder.py` | 6 | Stretches v3's memory step by step (8K, 16K, 32K, 64K, 128K, 256K) and stops at the first step that fails its long-context tests, so you find how far it can go without wasted training (see `docs/LONG_CONTEXT.md`) |
 | `usage_limits.py`, `limits.json` | 6 | Plans (Free, Pro, Mega), token counting, the tank and the fixed weekly reset, plain numbers for the Usage screen (see `docs/APP_SPEC.md`) |
 | `context_window.py` | 6 | The device check: picks the context window from what the model passed, free memory, speed and the plan |
-| `app_server.py`, `web/` | 6 | The Yuvra app: a web server and chat page (`python app_server.py`), with plans and usage, model picker, thinking animation, private chats and a Usage screen. Demo mode until a model is attached |
+| `app_server.py`, `web/` | 6 | The Emvryx app: a web server and chat page (`python app_server.py`), with plans and usage, model picker, thinking animation, private chats and a Usage screen. Demo mode until a model is attached |
 | `effort_router.py` | 6 | "Auto" effort: picks Quick, Balanced or Deep from the message (plain rules, with a reason), and sizes the thinking pause to it |
 | `regen_modes.py` | 6 | The Regenerate menu: try again, a different answer, explain it differently, simpler, more detail, shorter, or three choices |
+| `connected_apps.py` | 6 | The "Connected apps" list and rules (Calendar, Gmail, Drive, Notion, Slack, GitHub, Vercel, Supabase; all coming soon) |
+| `build_site.py`, `site/`, `docs/DEPLOY.md` | 6 | Builds the website designs into static pages for Vercel; DEPLOY.md says what goes where (Vercel, Supabase, the app server) |
 | `muon.py`, `muon_test.py` | 5 | The Muon optimizer (`optimizer="muon"` in config.py; `"muon_cpu"` keeps its memory in RAM so it fits a 12 GB card), and an experiment that measures whether it needs fewer steps than AdamW on our models (~1–2 h on the 4070) |
 | `grow.py`, `growth_test.py` | 6 | Grow a trained model into a deeper one, and an experiment that measures how much training compute that saves (run when the GPU is free) |
 | `generate.py` | 6 | Generate text or chat with your model. Chat options: `--lookup` (Wikipedia notes), `--web` (web search, online mode), `--memory` (remembers you), `--suggest` (reply suggestions), `--context` (memory meter), `--skill` (skill packs) |

@@ -49,7 +49,7 @@ class WrongServer(AppError):
     code = "wrong_server"
 
     def __init__(self, detail=""):
-        super().__init__("That address answered, but it isn't a Yuvra server" + (f" ({detail})" if detail else "") + ".",
+        super().__init__("That address answered, but it isn't a Emvryx server" + (f" ({detail})" if detail else "") + ".",
                          "Check the address in Settings > Online mode.")
 
 

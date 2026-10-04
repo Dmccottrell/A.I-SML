@@ -1,5 +1,5 @@
 {
-  "note": "Design tokens for Yuvra (docs: design/README.md). Colours per model; each has a dark and a light variant.",
+  "note": "Design tokens for Emvryx (docs: design/README.md). Colours per model; each has a dark and a light variant.",
   "base": {
     "dark": {
       "bg": "#07080D",

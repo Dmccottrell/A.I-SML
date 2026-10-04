@@ -3,7 +3,7 @@ chat_polish.py - How a reply feels: the thinking label, the message-sized thinki
 automatic shortening of a long chat (docs/APP_SPEC.md, "How a reply feels").
 
 WHAT THIS FILE DOES
-    thinking_word(n)        the label shown while Yuvra thinks ("Thinking", "Pondering", ...): a different word every few
+    thinking_word(n)        the label shown while Emvryx thinks ("Thinking", "Pondering", ...): a different word every few
                             seconds, never the same twice in a row. The small logo animates next to it (the screen's job).
     paced(pieces, ...)      wraps the model's stream of text pieces:
                               1. the first word never appears sooner than `min_first_s` after sending (chosen from the message by `pause_for`:
