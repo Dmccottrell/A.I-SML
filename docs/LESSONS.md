@@ -150,3 +150,12 @@ Trained 2,000 steps (0.52B tokens, 9.4 s/step on the rented 5090, ~5.2 h, ~$2.7)
 - `stretch_ladder.py` stopped at 8K as designed; v3 stays a 2,048-token model. Options: continue the 8K step for 2,000-4,000 more
   steps (~5-10 h), try a different RoPE base or YaRN-style scaling, add more recall-practice data, or accept a ~4K model.
 
+## DPO pair-making speed (found Oct 2026)
+- `make_dpo_pairs.py` timing test (20 questions x 2 answers, partly trained chat model) took **179 s** while another fine-tune
+  was using the same 4070: ~4.5 s per answer, so ~8-10 h for the real 2,000 x 4. A GPU shared with training roughly halves
+  speed or worse, so **time things with the GPU otherwise idle**.
+- A second run printed **12.7 s** only because it **resumed from the first run's `dpo_pairs.jsonl.progress`** and had nothing
+  left to do: a resumable script's timing run must start from a clean state (delete `data/v3/dpo_pairs.jsonl*`).
+- `TinyLM.generate_many` now writes all answers to a question as one batch (the same tokens as `generate` for the same seed,
+  tests/test_generate_many.py), expected to be around 3x faster on a mostly idle GPU. Not yet measured on the 4070.
+
