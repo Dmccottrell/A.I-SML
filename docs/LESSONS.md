@@ -108,3 +108,9 @@ marked "guess". The settings every later version should start from are in
 - The first fix was not enough: the slow call was the **"any word" (OR) fallback** that runs when the strict "all words" query finds fewer than 3 passages, which matches millions of passages and ranks them all (seen in the traceback after Ctrl+C). `deep=False` now also skips that fallback, and every fast-mode query is cut off after 2 seconds (`FAST_QUERY_SECONDS`) so one slow question cannot stall the build.
 - **Rule:** any script that calls search in a loop (lesson builders, DPO pairs) should either use `deep=False`
   or print its progress, and be timed on 100 questions first.
+- **Measured (300,000-passage test index, ~1/44 of the real one):** `deep=False` takes **3-10 ms** per search; the default
+  (deep) search takes **0.8-1.3 s**. The real build showed ~4 s per lookup record with the earlier fast mode (500 records in
+  2,154 s). Fix: each lesson's search now gets one shared **time budget of 0.15 s** (`--search_seconds`; `0` skips searching
+  and uses other records' passages as the extra notes), and any shortfall is filled with those passages.
+- Known flaky test: `tests.test_app_server.Stopping.test_stop_button_ends_a_reply_and_keeps_what_was_written` fails about
+  1 run in 3 on the unchanged code (a timing race), unrelated to search.

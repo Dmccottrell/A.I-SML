@@ -136,7 +136,7 @@ class MissingSubjectArticle(unittest.TestCase):
         wiki = wiki_index.WikiIndex(self.path)
         matches = []
         original = wiki._query
-        wiki._query = lambda match, k, timeout=None: matches.append(match) or original(match, k, timeout)
+        wiki._query = lambda match, k, timeout=None, deadline=None: matches.append(match) or original(match, k, timeout, deadline)
         try:
             wiki.search("zebra unicorn wizard capital", 3, deep=False)    # no passage has all four words
             self.assertFalse([m for m in matches if " OR " in m])

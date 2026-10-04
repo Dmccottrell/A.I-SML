@@ -49,16 +49,40 @@ class WrongAnswers(unittest.TestCase):
 
 
 class BulkSearch(unittest.TestCase):
-    def test_lesson_building_uses_the_fast_search(self):
+    def setUp(self):
+        M._search_cache.clear()
+        self.saved = M.SEARCH_SECONDS
+
+    def tearDown(self):
+        M.SEARCH_SECONDS = self.saved
+        M._DISTRACTORS[:] = []
+        M._search_cache.clear()
+
+    def test_lesson_building_uses_the_fast_search_with_a_time_budget(self):
         seen = []
 
         class Wiki:
-            def search(self, question, k=3, deep=True):
-                seen.append(deep)
+            def search(self, question, k=3, deep=True, budget=None):
+                seen.append((deep, budget))
                 return []
-        M._search_cache.clear()
         M.search(Wiki(), "a question about something?", 3)
-        self.assertEqual(seen, [False])
+        self.assertEqual(seen, [(False, M.SEARCH_SECONDS)])
+
+    def test_zero_seconds_means_no_search_at_all(self):
+        class Wiki:
+            def search(self, *a, **k):
+                raise AssertionError("must not be called")
+        M.SEARCH_SECONDS = 0
+        self.assertEqual(M.search(Wiki(), "a question?", 3), [])
+
+    def test_notes_are_filled_up_with_other_passages_when_the_search_finds_none(self):
+        pool = [{"id": 100 + i, "title": f"Other {i}", "text": "some other passage text"} for i in range(10)]
+        M._DISTRACTORS[:] = pool
+        record = {"question": "q?", "source": {"id": 1, "title": "Mine", "text": "the answer is here"}}
+        notes = M.notes_for(record, None, random.Random(3))
+        self.assertEqual(len(notes), 3)
+        self.assertIn("Mine", [n["title"] for n in notes])
+        self.assertEqual(len({n["title"] for n in notes}), 3)
 
 
 class Lessons(unittest.TestCase):
