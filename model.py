@@ -410,6 +410,43 @@ class TinyLM(nn.Module):
                 caches = None   # context is full: next step re-reads the last max_len tokens
         return idx
 
+    @torch.no_grad()
+    def generate_many(self, idx, n, max_new_tokens, temperature=0.8, top_k=50, stop_id=None,
+                      repetition_penalty=1.0, repeat_window=64):
+        """`n` independent answers to ONE prompt, written together as a batch (idx is (1, T)).
+
+        The same sampling as generate(), but the n answers share each forward pass, so n=4 costs
+        little more than one answer on a GPU that is mostly idle at batch size 1 (make_dpo_pairs.py
+        needs 4 answers per question). Returns n lists of new token ids; an answer that reaches
+        stop_id ends with it. The prompt must fit in the context together with max_new_tokens.
+        """
+        max_len = self.cfg.max_seq_len
+        idx = idx[:, -max_len:].repeat(n, 1)
+        caches = [{} for _ in self.blocks]
+        logits, _ = self(idx, caches=caches, start_pos=0)
+        pos = idx.size(1)
+        out = [[] for _ in range(n)]
+        done = [False] * n
+        for _ in range(max_new_tokens):
+            step = logits[:, -1, :]
+            if repetition_penalty != 1.0:
+                step = self._penalize_repeats(step, idx[:, -repeat_window:], repetition_penalty, stop_id)
+            step = step / max(temperature, 1e-5)
+            if top_k:
+                v, _ = torch.topk(step, min(top_k, step.size(-1)))
+                step[step < v[:, [-1]]] = -float("inf")
+            next_id = torch.multinomial(F.softmax(step, dim=-1), num_samples=1)
+            for i, t in enumerate(next_id.squeeze(1).tolist()):
+                if not done[i]:
+                    out[i].append(t)
+                    done[i] = stop_id is not None and t == stop_id
+            if all(done) or pos >= max_len:
+                break
+            idx = torch.cat([idx, next_id], dim=1)
+            logits, _ = self(next_id, caches=caches, start_pos=pos)
+            pos += 1
+        return out
+
     @staticmethod
     def _penalize_repeats(logits, recent, penalty, stop_id=None):
         """Make recently used tokens less likely (the standard "CTRL" penalty).

@@ -212,11 +212,11 @@ def main():
             kind, messages, check = questions[qi]
             ids = build_prompt(tok, messages, model.cfg.max_seq_len - a.tokens)
             scored = []
-            for s in range(a.samples):
-                torch.manual_seed(a.seed * 100_003 + qi * 17 + s)
-                idx = torch.tensor([ids], device=device)
-                out = model.generate(idx, a.tokens, a.temperature, 50, stop_id=eot, repetition_penalty=1.1)
-                new = out[0, idx.size(1):].tolist()
+            torch.manual_seed(a.seed * 100_003 + qi * 17)
+            idx = torch.tensor([ids], device=device)
+            # all the answers to this question at once, as one batch (about 3x faster than one by one)
+            for new in model.generate_many(idx, a.samples, a.tokens, a.temperature, 50, stop_id=eot,
+                                           repetition_penalty=1.1):
                 finished = bool(new) and new[-1] == eot
                 text, _ = split_memory_calls(tok.decode(new).replace("<|endoftext|>", ""))
                 scored.append((score(kind, text, finished, check), text.strip()))
