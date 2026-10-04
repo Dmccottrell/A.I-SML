@@ -157,7 +157,20 @@
       "cost_weight": 2,
       "context_tested": 2048,
       "kv_kb_per_token": 24,
-      "weights_mb": 700
+      "weights_mb": 700,
+      "sampling": {
+        "temperature": 0.65,
+        "top_k": 40,
+        "top_p": 0.92,
+        "min_p": 0.05,
+        "repeat_penalty": 1.1,
+        "repeat_last_n": 64
+      },
+      "max_reply_tokens": 1024,
+      "temperature_bounds": [
+        0.2,
+        0.9
+      ]
     },
     {
       "id": "solstice-5",
@@ -183,7 +196,20 @@
       "cost_weight": 5,
       "context_tested": 2048,
       "kv_kb_per_token": null,
-      "weights_mb": 1800
+      "weights_mb": 1800,
+      "sampling": {
+        "temperature": 0.7,
+        "top_k": 40,
+        "top_p": 0.95,
+        "min_p": 0.05,
+        "repeat_penalty": 1.05,
+        "repeat_last_n": 64
+      },
+      "max_reply_tokens": 2048,
+      "temperature_bounds": [
+        0.2,
+        1.0
+      ]
     },
     {
       "id": "apogee-6",
@@ -209,7 +235,20 @@
       "cost_weight": 10,
       "context_tested": 2048,
       "kv_kb_per_token": null,
-      "weights_mb": 3000
+      "weights_mb": 3000,
+      "sampling": {
+        "temperature": 0.7,
+        "top_k": 40,
+        "top_p": 0.95,
+        "min_p": 0.05,
+        "repeat_penalty": 1.05,
+        "repeat_last_n": 64
+      },
+      "max_reply_tokens": 2048,
+      "temperature_bounds": [
+        0.2,
+        1.0
+      ]
     }
   ],
   "keep_latest_per_name": 2

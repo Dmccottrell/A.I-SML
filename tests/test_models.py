@@ -61,18 +61,32 @@ class Picker(unittest.TestCase):
 
 
 class SamplingSettings(unittest.TestCase):
-    """Small models turn to nonsense when hot, so each Flare keeps Auto temperature inside its own range."""
+    """Small models turn to nonsense when hot, so every model keeps Auto temperature inside its own range."""
 
-    def test_flare_models_have_their_own_sampling_and_range(self):
-        import effort_router
-        for entry in M.load()["models"] if hasattr(M, "load") else json.load(open("models.json"))["models"]:
-            if entry["id"] in ("flare-3", "flare-3.5"):
+    def models(self):
+        return json.load(open("models.json", encoding="utf-8"))["models"]
+
+    def test_every_model_has_its_own_sampling_and_range(self):
+        for entry in self.models():
+            with self.subTest(model=entry["id"]):
                 lo, hi = entry["temperature_bounds"]
-                self.assertLessEqual(hi, 0.9)
+                self.assertLess(lo, hi)
                 self.assertTrue(lo <= entry["sampling"]["temperature"] <= hi)
+                self.assertGreater(entry["max_reply_tokens"], 0)
+
+    def test_auto_creative_never_leaves_a_models_range(self):
+        import effort_router
+        for entry in self.models():
+            with self.subTest(model=entry["id"]):
                 temp, _ = effort_router.choose_temperature("write a story about a dragon", entry["sampling"]["temperature"],
                                                            tuple(entry["temperature_bounds"]))
-                self.assertLessEqual(temp, hi)
+                self.assertLessEqual(temp, entry["temperature_bounds"][1])
+
+    def test_bigger_models_may_run_hotter_than_smaller_ones(self):
+        top = {e["id"]: e["temperature_bounds"][1] for e in self.models()}
+        self.assertLessEqual(top["ember-2"], top["flare-3"])
+        self.assertLessEqual(top["flare-3"], top["flare-3.5"])
+        self.assertLessEqual(top["flare-3.5"], top["solstice-5"])
 
 
 if __name__ == "__main__":

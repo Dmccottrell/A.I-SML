@@ -385,6 +385,8 @@ Goal: turn the model into a **personal assistant** with specialist skills, on a 
 
 ### v4's brain: v3.5 trained longer
 
+> **Starting settings (steps, learning rate, exam, snapshots, chat tuning, sampling)** for this version: see [VERSIONS.md, Settings carried forward](VERSIONS.md#settings-carried-forward-by-version). What changed after v3 and why: [LESSONS.md](LESSONS.md).
+
 v4 doesn't start a new brain. It **continues v3.5** from `pre_decay.pt` (the copy saved just before
 v3.5's fade), reads more at the steady learning rate, then fades again on a new anneal set. Same trick
 as "v3+" would be for v3.
@@ -583,6 +585,8 @@ packs an account may use, so Beta packs go to chosen testers first. See [SKILLS.
 
 ## v5: Scale (3B)
 
+> **Starting settings (steps, learning rate, exam, snapshots, chat tuning, sampling)** for this version: see [VERSIONS.md, Settings carried forward](VERSIONS.md#settings-carried-forward-by-version). What changed after v3 and why: [LESSONS.md](LESSONS.md).
+
 Three routes:
 
 | Route | How | Time | Cost |
@@ -627,6 +631,8 @@ ever makes sense, VRAM matters most; a used RTX 3090 (24GB) is the best value.
 ---
 
 ## v6 and v6.5: Bigger small (5B → 7B)
+
+> **Starting settings (steps, learning rate, exam, snapshots, chat tuning, sampling)** for this version: see [VERSIONS.md, Settings carried forward](VERSIONS.md#settings-carried-forward-by-version). What changed after v3 and why: [LESSONS.md](LESSONS.md).
 
 Goal: the step from "small" toward "medium". The **phone keeps a small model for offline use**,
 and these bigger models power the PC and the **online mode** of your app and website (the way
