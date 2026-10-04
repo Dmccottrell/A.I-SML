@@ -55,7 +55,8 @@ class Settings(unittest.TestCase):
     def test_v3_and_v35_unchanged(self):
         for name in ("v3", "v3.5"):
             V = config.VERSIONS[name]
-            self.assertEqual(V.model.max_seq_len, 2048)
+            self.assertEqual(V.model.max_seq_len, 2048 if name == "v3" else 4096)   # v3.5 starts at 4K
+            self.assertEqual(V.train.grad_accum * V.model.max_seq_len, 262_144)
             self.assertEqual(V.train.loss_chunk, 0)
             self.assertEqual(V.train.init_from, "")
         self.assertEqual(config.VERSIONS["v3"].train.grad_accum, 128)
