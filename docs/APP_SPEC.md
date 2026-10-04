@@ -60,7 +60,7 @@ tests, and what "done" means for the first version).
 
 ### Usage and limits (plan)
 Emvryx's own way to show and limit usage. It is counted in **tokens**, shown as a **charge** percentage with the token counts underneath, and drawn as a
-**brain that fills like a tank** instead of a plain progress bar. Every number on the screen (the tank, the weekly ceiling) follows the **account's plan**
+**E that fills like a tank** instead of a plain progress bar. Every number on the screen (the tank, the weekly ceiling) follows the **account's plan**
 (Free, Pro or Mega). Designs: `Usage` (the phone's "Usage" screen) and `Limits` (owner settings) in
 `design/canvas/`.
 
@@ -96,7 +96,7 @@ growing with every message.)
 
 | Part | Plan |
 |---|---|
-| **Where people see it** | Settings, then **Usage**, and a tap on the chat's status line. **Plain language first, numbers on request.** (1) **Right now**: the brain tank and "about 250 messages", "plenty left", "full again by 9:40 PM". (2) **Left this week**: "80%", "about 1,600 messages", "resets Monday 4 AM", "you are using it at a comfortable pace". (3) **Messages left this week, by model** ("Flare about 1,610, Equinox about 805, ..."), because bigger models use more. (4) A tip ("Long chats use more. Start a new chat for a new topic"). (5) **See the numbers**: a collapsed section with the token counts (tank, refill, week, used, by model). Plain status words ("Plenty left", "Getting low", "Almost out") change at 50%, 20% and 5% |
+| **Where people see it** | Settings, then **Usage**, and a tap on the chat's status line. **Plain language first, numbers on request.** (1) **Right now**: the E tank and "about 250 messages", "plenty left", "full again by 9:40 PM". (2) **Left this week**: "80%", "about 1,600 messages", "resets Monday 4 AM", "you are using it at a comfortable pace". (3) **Messages left this week, by model** ("Flare about 1,610, Equinox about 805, ..."), because bigger models use more. (4) A tip ("Long chats use more. Start a new chat for a new topic"). (5) **See the numbers**: a collapsed section with the token counts (tank, refill, week, used, by model). Plain status words ("Plenty left", "Getting low", "Almost out") change at 50%, 20% and 5% |
 | **"Messages left" = tokens left / the cost of a normal message** | A normal message (a question and a normal-length answer) counts as about **500 tokens on Flare**. A bigger model multiplies it (Equinox 2, Solstice 5, Apogee 10), so "messages left" is shown **per model**: the same usage buys fewer Apogee messages than Flare ones. The 500 is a setting, measured later from real chats and rounded ("about 1,610", never "1,608"). People never need to see the word "token" unless they open "See the numbers" |
 | **Who sets limits** | Only the owner, in the **Limits** screen: the tank (capacity, refill), the weekly ceiling and reset time, the Everyday and Long windows, the counting multipliers, the model weights; per tier (Free, Pro, Mega) and per person (overrides). Alerts at 80% of the week and at the ceiling; a pause-everything switch |
 | **What applies** | Only models **served from a shared machine** (your PC, a rented server). Models running on a person's own device are free and never counted |
@@ -194,7 +194,7 @@ the smallest of the three limits, must drop and say so when memory falls, and mu
 ### How a reply feels (built: `chat_polish.py`)
 | Part | Behaviour |
 |---|---|
-| **Thinking** | After Send, the small Emvryx logo animates (the brain outline travels around, the core pulses) next to a label that changes every ~2 seconds and never repeats twice in a row: Thinking, Pondering, Reasoning, Working it out, Considering, Mulling it over, Figuring it out, Reflecting, Weighing it up, Putting it together |
+| **Thinking** | After Send, the small Emvryx logo animates (the ring at the end of the E pulses) next to a label that changes every ~2 seconds and never repeats twice in a row: Thinking, Pondering, Reasoning, Working it out, Considering, Mulling it over, Figuring it out, Reflecting, Weighing it up, Putting it together |
 | **A pause that fits the message** | The first word never appears sooner than a minimum that depends on the message, so there is always a moment of thinking but a greeting is answered almost at once: Quick 0.5 s, Balanced 1.2 s, Deep 2.4 s, plus 0.1 s per 20 words of a long message (up to 0.8 s), never more than 3.2 s (`chat_polish.pause_for`). It is a minimum: a slower model is never made to wait longer |
 | **Clean writing** | The reply is written out word by word at a steady speed (about 22 words a second at most), never dumped in one lump. If the model is far ahead the writing speeds up so the screen is never more than ~1.5 s behind. What is saved is the same text |
 | **Stays at the bottom** | The newest message stays in view while the reply is written; scrolling up pauses that, and a "down" button brings it back (screen job, shown in the `Chat` / `Phone` designs) |
@@ -379,7 +379,7 @@ beta list", and "memory finds an earlier chat by meaning, not only by words".
   disconnect deletes access; on-device models never share). Nothing is connectable yet (`POST /api/apps/<id>/connect` answers
   "coming soon"); real connections need sign-in with each service, which comes with accounts (see `docs/DEPLOY.md`).
 - **The website** (`build_site.py` -> `site/`): the five website designs as plain static pages with a dark/light switch, ready for
-  Vercel (`docs/DEPLOY.md`). Rename note: the app was called Yuvra until Oct 2026; it is now **Emvryx** with an X mark (Brain-X);
+  Vercel (`docs/DEPLOY.md`). Rename note: the app was called Yuvra until Oct 2026; it is now **Emvryx** with an E-and-ring mark;
   the app moves an old `.yuvra` data folder to `.emvryx` by itself on start.
 - **Auto temperature** (`effort_router.choose_temperature`): with Auto effort the server also picks how adventurous the wording is: cool (0.2)
   for code, maths, JSON and strict formats ("exactly 4", "fewer than 20 words"), warm (1.0) for stories, poems and brainstorming, and the
