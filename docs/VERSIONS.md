@@ -1,8 +1,8 @@
 # Version Comparison
 
-All versions side by side. v1 and v2 are finished and run on the phone. v3's code and data are ready (13.3B tokens prepared) and its training started on 28 September (pilot: ~25.6 s/step, about 13.4 days nonstop).
+All versions side by side. v1 and v2 are finished and run on the phone. v3's pretraining finished at step 45,000 (October 2026; HellaSwag 37.1% on a 2,000-question sample, validation loss about 2.68); its chat tuning is next.
 v3.5, v4, v5, v6 and v6.5 are planned: their numbers are estimates and will change once v3's results are in.
-Details: [V2.md](V2.md), [V3.md](V3.md), [ROADMAP.md](ROADMAP.md). Settings live in `config.py`.
+Details: [V2.md](V2.md), [V3.md](V3.md), [ROADMAP.md](ROADMAP.md), [LESSONS.md](LESSONS.md) (what we learned). Settings live in `config.py`.
 
 **The app and the model family are called Emvryx** (working name, Emvryx.AI; see [APP.md](APP.md)). Each model is the
 umbrella name plus one of **five role names** plus a generation number (checked by web search only; no trademark search yet):
@@ -58,6 +58,45 @@ the long-context tests pass at that length (docs/LONG_CONTEXT.md). "Memory (cont
 | Main tools added | PyTorch, CUDA, llama.cpp | Hugging Face `datasets` | Keyword search (SQLite FTS5), FAISS (optional), lm-evaluation-harness, TensorBoard, 8-bit optimizer (optional), a rented cloud GPU (Vast.ai), phone alerts (ntfy), Hugging Face Hub (off-machine backup), a small embedding model (memory search), web search (online mode) | **Muon optimizer** (won `muon_test.py`), 2 GPUs (DDP), new data: DCLM, Cosmopedia, Stack Exchange Q&A | LoRA, tool calling, sandbox, web search, Whisper + Piper (voice) | FSDP (multi-GPU) | vLLM or llama.cpp server (online mode) | Same as v6 |
 | New code needed | — | Pause/resume, KV cache | Pilot runs, gradient checkpointing, lookup index, teacher script, DPO, NEFTune, checkpoint averaging, memory, suggestions, context meter, `compare.py`, PC/cloud handoff, off-machine backup, long-context tools, Muon (to test) | CPU offload for the optimizer (`muon_cpu`), gradient checkpointing, multi-language code data, coding-helper practice data (`agent_tasks.py`) | Router with effort levels (thinking budget), tool registry, sandbox, voice, coding harness (built: git, diagnostics, hooks, permissions, compaction, project notes), app/website | Multi-GPU training (FSDP), streaming data shards, vision helper | Model growth (up-scaling from v5), 8k-token training, server setup | Growth from v6 |
 
+## Settings carried forward by version
+
+What each version trains with (v1–v3.5 are the real values in `config.py`) and what v4–v6.5 should **start
+with**, given what changed for v3, v3.5 and v4. **v4 and later are starting guesses, not measured**: each one
+is confirmed or changed by its own pilot run (`train.py --pilot`). Why each choice was made is in
+[LESSONS.md](LESSONS.md).
+
+| Setting | **v1** | **v2** | **v3** | **v3.5** | **v4** (guess) | **v5** (guess) | **v6** (guess) | **v6.5** (guess) |
+|---|---|---|---|---|---|---|---|---|
+| Optimizer | adamw | adamw | adamw | **muon_cpu** at home, **muon** in the cloud | muon (continues v3.5) | muon, *if it works with multi-GPU FSDP* (untested) | same as v5 | same as v5 |
+| LR schedule | cosine | cosine | **wsd** (steady, then fade over the last 10%) | wsd | wsd: new steady phase from `pre_decay.pt`, then a new fade | wsd | wsd | wsd |
+| Steps (`max_iters`) | 20,000 | 20,000 | 45,000 | 152,600 (~115,000 if trimmed for Muon) | +57,000–115,000 | ~60,000 (could trim ~⅓ if Muon's saving holds at 3B) | ~100,000 | ~140,000 |
+| Tokens per step | 65,536 | 131,072 | 262,144 | 262,144 | 262,144 | ~1M | ~1M | ~1M |
+| Warm-up steps | 1,000 | 1,000 | 1,000 | 2,000 | ~1,000 (fresh optimizer after loading weights) | ~2,000–3,000 | ~3,000 | ~3,000 |
+| Peak learning rate | 6e-4 | 6e-4 | 4e-4 | 3e-4 | 3e-4 (same steady phase as v3.5) | **~2.3e-4** | **~2.0e-4** | **~1.8e-4** |
+| Final learning rate | 6e-5 | 6e-5 | 4e-5 | 3e-5 | 3e-5 | ~2.3e-5 | ~2e-5 | ~1.8e-5 |
+| Fade length (`decay_frac`) | – | – | 10% | 10% | 10% of the new run | 10% | 10% | 10% |
+| Mini-exam | off | off | every 2,000 steps, 500 questions, first N (≈5 points too easy) | every 5,000 steps, 5,000 questions, **spread over the test** | **all 10,042**, spread, about every 3% of steps | all 10,042, ~every 2,000 steps | all 10,042, ~every 3,000 | all 10,042, ~every 4,500 |
+| Snapshots for averaging (`snapshot_every`) | off | off | 900 (5 in the fade) | 3,050 | fade length ÷ 5 | **off, or few** (a snapshot is ~12 GB; averaging did not beat `final.pt` at v3) | off | off |
+| Gradient checkpointing | off | off | off | on at home, off in the cloud | cloud: off | FSDP decides | FSDP decides | FSDP decides |
+| Saves (`save_every`) | 250 | 200 | 100 | 50 home / 150 cloud | about every 15–25 minutes | same rule | same rule | same rule |
+| Chat tuning: passes / batch / learning rate | 3 / 16 / 5e-5 | 2 / 8 / 1e-4 | 2 / 4 / 5e-5 | 2 / 2 / 3e-5 | like v3.5 (3e-5), plus skill-pack LoRA | **LoRA** (a full 3B tune does not fit 12 GB): rate set by the pilot; LoRA usually uses 1e-4–2e-4 (typical range, not measured here) | QLoRA, same | QLoRA, same |
+| NEFTune noise | – | – | 5 | 5 | 5 | 5 | 5 | 5 |
+| Preference training (DPO) | – | – | β 0.1, rate 2e-6 | same | same | same; LoRA rate set by the pilot | same | same |
+| Sampling in the app (temperature / allowed range) | – | **0.45 / 0.3–0.6** (Ember) | **0.6 / 0.2–0.8** (Flare 3) | **0.65 / 0.2–0.9** (Flare 3.5) | 0.65 / 0.2–0.9 (Equinox 4) | 0.7 / 0.2–1.0 (Solstice 5) | 0.7 / 0.2–1.0 (Apogee 6) | same as v6 |
+| Step time measured | – | – | 4070 25.8 s; 3090 17.5 s; **5090 6.9 s** | pilot decides | pilot decides | pilot decides | pilot decides | pilot decides |
+
+**How the guesses were made:**
+- **Peak learning rate** falls with size as roughly `size^-0.27`: v2 (88M) 6e-4 → v3 (394M) 4e-4 → v3.5 (1.12B)
+  3e-4 fits that line, so v5 (3B) ≈ 2.3e-4, v6 (5B) ≈ 2.0e-4, v6.5 (7B) ≈ 1.8e-4. The final rate is a tenth of the peak.
+  This is a line through three points, and Muon sets its own step size for the weight matrices (`muon.py`), so each
+  value is checked at the pilot.
+- **Snapshot spacing** is the fade length (10% of the steps) divided by 5, like v3 (4,500 ÷ 5 = 900) and v3.5 (15,260 ÷ 5 ≈ 3,050).
+- **Mini-exam from v3.5 on is spread over the whole test**, because v3's first-500 version read ~5 points high; v4+ use every question.
+- **Muon's saving (~33% fewer steps for the same loss) was measured only on a 39M model** (`muon_test.py`),
+  so v5's trim is an option, not a plan. Whether Muon works with FSDP is not known yet.
+- **Sampling** starts lower and narrower for smaller models (Ember's 0.3–0.6 is the narrowest). These are in
+  `models.json` and are tuned with `evaluate.py --temperature`.
+
 **Reading per parameter** is total tokens ÷ parameters: v3 reads 11.8B tokens with 394M parameters, **about 30 per parameter** (v2 ~30, v3.5 ~29). "Compute-optimal" is about 20; today's best small models read far more (SmolLM2-360M ~11,000 per parameter), which is the main reason they score higher. See [Speed and safety experiments](ROADMAP.md#speed-and-safety-experiments).
 
 v1 read its small dataset about **2.8 times over**; v2, v3 and v3.5 read their data about once, which is
@@ -75,7 +114,7 @@ real GSM8K questions (a well-known math test) are kept for testing only, never f
 
 |  | **v1** | **v2** | **v3** | **v3.5** | **v4** | **v5** | **v6** | **v6.5** |
 |---|---|---|---|---|---|---|---|---|
-| Final val loss | **1.279** | **2.929** (best), 2.984 at the last step | Measured when trained | Measured when trained | Measured when trained | Measured when trained | Measured when trained | Measured when trained |
+| Final val loss | **1.279** | **2.929** (best), 2.984 at the last step | **≈2.68** (step 45,000) | Measured when trained | Measured when trained | Measured when trained | Measured when trained | Measured when trained |
 | Phone file | 32 MB | **89 MB** | ~420 MB (Q8) or **~240 MB (Q4)** | ~1.2 GB (Q8) or **~700 MB (Q4)** | v3.5's file + a few MB per skill pack | ~3.2 GB (Q8) or **~1.8 GB (Q4)** | ~3 GB (Q4): high-end phones only | ~4–4.5 GB (Q4): mainly PC and server |
 | Test sheet (`evaluate.py`, /20) | Only identity and story questions | **18/20** (baseline) | Goal: clearly beat v2 | Goal: beat v3 | Goal: beat v3.5, plus new tests for tools and skills | Goal: beat v4 | Goal: beat v5 | Goal: beat v6 |
 | v3 test sheet (`prompts_v3.jsonl`, /41) | — | Run to set the baseline* | Goal: clearly beat v2, most of all on facts_hard, instructions, topic_switch, honesty, correction | Goal: beat v3 | Goal: beat v3.5, plus thinking and tool-use tests | Goal: beat v4 | Goal: beat v5 | Goal: beat v6 |
