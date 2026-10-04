@@ -112,5 +112,8 @@ marked "guess". The settings every later version should start from are in
   (deep) search takes **0.8-1.3 s**. The real build showed ~4 s per lookup record with the earlier fast mode (500 records in
   2,154 s). Fix: each lesson's search now gets one shared **time budget of 0.15 s** (`--search_seconds`; `0` skips searching
   and uses other records' passages as the extra notes), and any shortfall is filled with those passages.
-- Known flaky test: `tests.test_app_server.Stopping.test_stop_button_ends_a_reply_and_keeps_what_was_written` fails about
-  1 run in 3 on the unchanged code (a timing race), unrelated to search.
+- Fixed flaky test: `tests.test_app_server.Stopping.test_stop_button_ends_a_reply_and_keeps_what_was_written` failed about
+  1 run in 8 with `'length' != 'stopped'`. The fake "forever" reply reached its length limit in milliseconds, before the
+  test's Stop click arrived, and the test's "wait until running" loop was always true (`[None]` is truthy). The fake backend now
+  takes a `pause` (10 ms a word) and the test waits for the reply to start. 30 of 30 runs pass, and 40 of 40 under 12-way load.
+  The Stop button itself was fine.

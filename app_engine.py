@@ -311,8 +311,9 @@ def _settle(limiter, res, backend, tok, ids, text, effort, clock, failed=False):
 class FakeBackend:
     """A stand-in model for tests: `script` is the reply; mode picks a failure."""
 
-    def __init__(self, script="Hello there, how can I help?", mode="ok", die_after=3):
+    def __init__(self, script="Hello there, how can I help?", mode="ok", die_after=3, pause=0.0):
         self.script, self.mode, self.die_after, self.prompts = script, mode, die_after, []
+        self.pause = pause                 # seconds between words in "forever" mode: a reply a test can interrupt
 
     def stream(self, ids, max_new):
         self.prompts.append(list(ids))
@@ -325,6 +326,8 @@ class FakeBackend:
             i = 0
             while True:
                 i += 1
+                if self.pause:
+                    time.sleep(self.pause)
                 yield f"word{i} "
         for i, word in enumerate(self.script.split(" ")):
             if self.mode == "die_after" and i >= self.die_after:
