@@ -114,6 +114,10 @@ def score_instruction(text, prompt):
 def build_questions(lookup, instructions, wiki, rng, n):
     """[(kind, messages, check)] mixed from the teacher's examples."""
     import make_chat_data_v3 as D
+    D._DISTRACTORS[:] = [r["source"] for r in lookup if r.get("source")]     # filler notes if a search finds too little
+    lookup = list(lookup)
+    rng.shuffle(lookup)
+    lookup = lookup[:n * 2]            # only ~n questions are kept, so don't search the Wikipedia index for all of them
     out = []
     for rec in lookup:
         if rng.random() < 0.7:
