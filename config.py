@@ -79,6 +79,10 @@ class FinetuneSettings:
     # NEFTune: add a little random noise to the word vectors while fine-tuning (never when chatting).
     # Published results: noticeably better chat answers for free. 0 = off; 5 is the paper's usual value.
     neftune_alpha: float = 0.0
+    # Examples processed at once inside a step (finetune_steps.py). 0 = the whole batch together (v1, v2).
+    # 1 = one at a time with the gradients added up: the same result, no padding to the longest example and a
+    # fraction of the memory. v3 needs it: a batch of 4 on a 12 GB card ran at ~5 s/step (~77 h), far too slow.
+    micro_batch: int = 0
     # Preference training (dpo.py): how strongly to prefer the better answer, and a gentle learning rate
     dpo_beta: float = 0.1
     dpo_lr: float = 2e-6
@@ -211,7 +215,7 @@ VERSIONS = {
             snapshot_every=900,  # 5 snapshots in the last 4,500 steps, for average_ckpts.py (~1.6 GB each)
             compile=True,        # tested by --pilot; turns itself off if it doesn't work
         ),
-        finetune=FinetuneSettings(epochs=2, batch_size=4, lr=5e-5, neftune_alpha=5.0),
+        finetune=FinetuneSettings(epochs=2, batch_size=4, lr=5e-5, neftune_alpha=5.0, micro_batch=1),
         chat_memory=True,
     ),
     "v3.5": Version(
@@ -283,7 +287,7 @@ VERSIONS = {
             ("grad_accum", 64),            # ... so half as many: still 128 x 2048 = ~262k tokens per step
             ("save_every", 150),           # a checkpoint is ~17 GB: every ~25 min instead of every ~10
         ),
-        finetune=FinetuneSettings(epochs=2, batch_size=2, lr=3e-5, neftune_alpha=5.0),
+        finetune=FinetuneSettings(epochs=2, batch_size=2, lr=3e-5, neftune_alpha=5.0, micro_batch=1),
         chat_memory=True,
     ),
 }

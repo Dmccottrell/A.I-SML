@@ -40,6 +40,7 @@ import torch
 
 from chat import encode_conversation, normalize, special_ids
 from config import add_version_arg, get_version
+from finetune_steps import train_batch
 from model import load_checkpoint
 from tokenizer import BPETokenizer
 
@@ -49,9 +50,14 @@ p.add_argument("--base", default=None,
                help="pretrained checkpoint to start from (default: the finished run's final weights)")
 p.add_argument("--fresh", action="store_true", help="ignore chat_latest.pt and start over")
 p.add_argument("--neftune_alpha", type=float, default=None, help="NEFTune noise (default: config.py; 0 = off)")
+p.add_argument("--micro_batch", type=int, default=None,
+               help="examples run at once inside a step, gradients added up (default: config.py; 0 = the whole batch)")
+p.add_argument("--epochs", type=int, default=None, help="passes over the data (default: config.py)")
 args = p.parse_args()
 V = get_version(args.version)
 S = V.finetune
+EPOCHS = args.epochs if args.epochs is not None else S.epochs
+MICRO = args.micro_batch if args.micro_batch is not None else S.micro_batch
 
 def pick_base():
     """The pretrained checkpoint to fine-tune from.
@@ -105,7 +111,7 @@ with open(DATA, encoding="utf-8") as f:
         ids, mask = encode_conversation(tok, messages, cfg.max_seq_len + 1)
         if sum(mask) > 0:                  # skip examples with nothing to learn
             examples.append((ids, mask))
-print(f"{len(examples)} examples")
+print(f"{len(examples)} examples; {S.batch_size} per step, {MICRO or S.batch_size} at a time; {EPOCHS} passes")
 
 
 def make_batch(batch):
@@ -189,14 +195,14 @@ if resuming:
 del ckpt                                   # free memory: the weights are in the model now
 
 model.train()
-total_steps = S.epochs * steps_per_epoch
+total_steps = EPOCHS * steps_per_epoch
 done_steps = start_epoch * steps_per_epoch + start_step
 # The resume point: the next (epoch, step) that hasn't been done yet
 next_epoch, next_step = start_epoch, start_step
 t_last_save = t_log = time.time()
 steps_since_log = 0
 try:
-    for epoch in range(start_epoch, S.epochs):   # one epoch = one pass over all examples
+    for epoch in range(start_epoch, EPOCHS):     # one epoch = one pass over all examples
         order = epoch_order(epoch)
         first = start_step if epoch == start_epoch else 0
         for step in range(first, steps_per_epoch):
@@ -204,10 +210,7 @@ try:
                 save_latest(epoch, step)            # the state BEFORE doing this step
                 t_last_save = time.time()
             idx = order[step * S.batch_size:(step + 1) * S.batch_size]
-            x, y, m = make_batch([examples[i] for i in idx])
-            with autocast:
-                _, loss = model(x, y, loss_mask=m)
-            loss.backward()
+            loss = train_batch(model, [examples[i] for i in idx], MICRO, make_batch, autocast)
             torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
             optimizer.step()
             optimizer.zero_grad(set_to_none=True)
@@ -218,7 +221,7 @@ try:
                 ms = (time.time() - t_log) * 1000 / steps_since_log
                 t_log, steps_since_log = time.time(), 0
                 hours_left = ms * (total_steps - done_steps) / 3.6e6
-                print(f"epoch {epoch} step {step}/{steps_per_epoch}: loss {loss.item():.3f}  "
+                print(f"epoch {epoch} step {step}/{steps_per_epoch}: loss {loss:.3f}  "
                       f"{ms:.0f}ms/step  ~{hours_left:.1f}h left")
 except KeyboardInterrupt:
     # Ctrl+C: save the first step that hasn't finished; resume redoes it

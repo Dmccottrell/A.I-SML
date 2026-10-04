@@ -117,3 +117,17 @@ marked "guess". The settings every later version should start from are in
   test's Stop click arrived, and the test's "wait until running" loop was always true (`[None]` is truthy). The fake backend now
   takes a `pause` (10 ms a word) and the test waits for the reply to start. 30 of 30 runs pass, and 40 of 40 under 12-way load.
   The Stop button itself was fine.
+
+## Chat tuning speed (found Oct 2026)
+- `finetune.py --version v3` on the 4070 ran at **5.1-5.2 s per step** (4 conversations a step) = **~77-79 hours** for 2 passes over
+  109,914 examples (54,958 steps). The "44.6 h" on the first line was the first step only; steps 20 and 40 settled at ~5.1 s.
+- **Likely cause (not yet measured on the 4070):** every step padded its 4 conversations to the longest one and ran them
+  together; with no gradient checkpointing, 4 sequences of up to 2,048 tokens on a 12 GB card probably spilled into
+  slow shared GPU memory. Pretraining used one sequence at a time and fit in ~10 GB.
+- **Fix:** `finetune_steps.train_batch` runs the batch one conversation at a time (`micro_batch=1` for v3 and v3.5) and adds
+  up the gradients, each weighted by its share of the batch's answer tokens. This is the same gradient as the padded batch
+  (`tests/test_finetune_steps.py` compares them, and fails if the weighting is wrong) with no padding and far less memory.
+  v1 and v2 keep `micro_batch=0` (unchanged). `--micro_batch N` and `--epochs N` override the config.
+- **Rule:** read the `ms/step` at step 20 and 40, not step 0, before trusting a time estimate; and tuning batches of very
+  different lengths should not be padded together.
+
