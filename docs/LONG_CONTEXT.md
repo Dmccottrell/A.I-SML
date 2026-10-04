@@ -139,6 +139,9 @@ reads it as filler. Documents containing test questions are skipped, as in the m
 1. **Before stretching (baseline).** On the finished 2K model: the normal exam (HellaSwag and the
    chat sheet), so "nothing got worse" has a number to compare with, and the needle test at 2K, to
    prove the test works on a model that should pass.
+   **Measured (Oct 2026):** v3's baseline passes the needle test at 2K (90-100%) but scores 0% on multi-fact and
+   0-45% on long code, because it has never seen those question formats; so only the needle test proves the
+   setup, and a baseline `FAILED` on multi/code does not stop the stretch. See [LESSONS.md](LESSONS.md).
 2. **During a stretch (quick check).** At each save point of a stretch run, only the cheap ones:
    loss by position, and a small needle test (5 tries per depth). This catches a run that isn't
    working early instead of after days of rented GPU time.
