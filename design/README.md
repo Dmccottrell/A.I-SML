@@ -75,3 +75,4 @@ caps one request; it is not an allowance. Full plan and worked examples: docs/AP
 `logo/concepts/`: three simpler marks to replace the brain-and-X, all on the amber `#F5A524` brand colour.
 `a-bars-e.svg` (an E of three bars with a spark), `b-spark-x.svg` (a crossed X with a glowing core; recommended: it
 reads at 24 px and echoes the X in Emvryx), `c-ember.svg` (a flame with a core). Not yet used by the site or app.
+`d-e-ring.svg` (the bars E with B's glowing ring at the end of the amber arm: A + B joined) and `h-rise-e.svg` (the same, with the arms tilted upward like a rising spark) combine the two favourites.
