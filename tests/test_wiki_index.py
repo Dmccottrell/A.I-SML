@@ -5,10 +5,19 @@ import unittest
 
 import wiki_index
 
-ARTICLES = [
-    ("Illinois", "Illinois is a state in the Midwestern United States. Its capital is Springfield, and the largest "
-                 "city is Chicago. The state became the 21st state of the Union in 1818 and has a diverse economy "
-                 "based on agriculture, manufacturing and services across its many regions."),
+LEAD = ("Illinois is a state in the Midwestern United States. It borders Lake Michigan to the northeast and the "
+        "Mississippi River to the west, and Chicago is its largest city and the center of a very large metropolitan "
+        "area with many millions of residents spread across several counties and suburbs that surround the lake.")
+POLITICS = ("The state government sits in Springfield, which is the state capital of Illinois, and the legislature "
+            "meets there each year to pass laws, set the budget and debate policy for all of the state's residents "
+            "across its many counties, towns and cities, from the lake to the river and the farmland between them.")
+# The real index has millions of short passages that mention both words and so outrank the real
+# article in plain keyword search; 80 of them push it out of the 40-candidate shortlist here.
+TOWNS = [(f"Capital Town{i}, Illinois", f"Capital Town{i} Illinois capital Illinois capital. Towns in Illinois "
+                                        f"Illinois capital Illinois") for i in range(80)]
+
+ARTICLES = TOWNS + [
+    ("Illinois", LEAD + "\n" + POLITICS),
     ("Springfield, Illinois", "Springfield is the capital of the U.S. state of Illinois and the county seat of "
                               "Sangamon County. The city is known for Abraham Lincoln's home and presidential library."),
     # list-like junk that plain BM25 loves: short, keywords repeated
@@ -21,6 +30,10 @@ ARTICLES = [
     ("Kaskaskia, Illinois", "In 1818, when Illinois became the 21st U.S. state, the town briefly served as the "
                             "state's first capital until 1819, when the capital was moved to Vandalia."),
 ]
+
+
+ARTICLES_JUNK = ("Professional baseball teams in Illinois Defunct baseball teams in Illinois Defunct Frontier League "
+                 "teams Defunct independent baseball league teams Baseball teams established in 1996 Illinois capital")
 
 
 class SearchRanking(unittest.TestCase):
@@ -40,14 +53,15 @@ class SearchRanking(unittest.TestCase):
         top = self.wiki.search("What is the capital of Illinois?", 3)
         self.assertIn(top[0]["title"], ("Illinois", "Springfield, Illinois"))
         self.assertNotEqual(top[0]["title"], "Springfield Capitals")
+        self.assertIn("capital", top[0]["text"].lower())     # the passage that holds the answer
 
     def test_list_like_junk_ranks_below_sentences(self):
         titles = [r["title"] for r in self.wiki.search("What is the capital of Illinois?", 5)]
         self.assertGreater(titles.index("Springfield Capitals"), 1)
 
     def test_prose_ratio_separates_sentences_from_lists(self):
-        prose = wiki_index._prose_ratio(ARTICLES[1][1])
-        junk = wiki_index._prose_ratio(ARTICLES[2][1])
+        prose = wiki_index._prose_ratio(POLITICS)
+        junk = wiki_index._prose_ratio(ARTICLES_JUNK)
         self.assertGreater(prose, junk)
 
     def test_named_subject_article_beats_disambiguation(self):
@@ -62,6 +76,9 @@ class SearchRanking(unittest.TestCase):
             self.assertEqual(lincoln.search("Who was Abraham Lincoln?", 2)[0]["title"], "Abraham Lincoln")
         finally:
             lincoln.db.close()
+
+    def test_title_index_is_built(self):
+        self.assertTrue(self.wiki.has_title_index)
 
     def test_no_keywords_returns_nothing(self):
         self.assertEqual(self.wiki.search("what is the", 3), [])

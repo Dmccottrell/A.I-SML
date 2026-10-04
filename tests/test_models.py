@@ -2,6 +2,7 @@
 import copy
 import os
 import sys
+import json
 import unittest
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -57,6 +58,21 @@ class Picker(unittest.TestCase):
         self.assertEqual(M.catalog(self.m, downloaded=have)["delete"], ["equinox-3.5", "equinox-3"])
         self.m["models"][1]["pinned"] = True                 # pinned: never offered for removal
         self.assertEqual(M.catalog(self.m, downloaded=have)["delete"], ["equinox-3.5"])
+
+
+class SamplingSettings(unittest.TestCase):
+    """Small models turn to nonsense when hot, so each Flare keeps Auto temperature inside its own range."""
+
+    def test_flare_models_have_their_own_sampling_and_range(self):
+        import effort_router
+        for entry in M.load()["models"] if hasattr(M, "load") else json.load(open("models.json"))["models"]:
+            if entry["id"] in ("flare-3", "flare-3.5"):
+                lo, hi = entry["temperature_bounds"]
+                self.assertLessEqual(hi, 0.9)
+                self.assertTrue(lo <= entry["sampling"]["temperature"] <= hi)
+                temp, _ = effort_router.choose_temperature("write a story about a dragon", entry["sampling"]["temperature"],
+                                                           tuple(entry["temperature_bounds"]))
+                self.assertLessEqual(temp, hi)
 
 
 if __name__ == "__main__":
