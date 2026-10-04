@@ -1,5 +1,5 @@
 """
-effort_router.py - "Auto" effort: decide from the message how long Yuvra should think (docs/APP_SPEC.md, "Effort: Auto").
+effort_router.py - "Auto" effort: decide from the message how long Emvryx should think (docs/APP_SPEC.md, "Effort: Auto").
 
 WHAT THIS FILE DOES
     The effort menu has Quick, Balanced and Deep. With **Auto**, this decides for each message:

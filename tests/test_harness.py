@@ -202,7 +202,7 @@ class AroundTheLoop(unittest.TestCase):
         self.assertIn("not allowed", h.Permissions(rules={"run": "deny"}).check("run", {"command": "ls"}))
 
     def test_hooks_after_edit_and_finish_gate(self):
-        self.sb.write_file(".yuvra/hooks.json", json.dumps([
+        self.sb.write_file(".emvryx/hooks.json", json.dumps([
             {"event": "after_edit", "match": "*.py", "run": "python -m py_compile {path}"},
             {"event": "on_finish", "run": "python check.py"}]))
         self.sb.write_file("check.py", "import os, sys\nsys.exit(0 if os.path.exists('ok.flag') else 1)\n")

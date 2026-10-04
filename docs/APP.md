@@ -5,11 +5,11 @@ The detailed requirements, screens, flows and tests are in [APP_SPEC.md](APP_SPE
 One app for the phone and the PC. It runs **your own model, on your own device, offline by default**,
 with an optional **online mode** that uses a bigger model on your own PC (later a server).
 
-**App name (working, chosen Oct 2026): Yuvra** (say "YOOV-ruh"), with the website/domain **Yuvra.AI**.
-A web search found no exact match, only look-alikes (the Yuva AI companies). Before it is public: search
-the US trademark database (tmsearch.uspto.gov), Google Play and the App Store, and check that yuvra.ai
-and yuvra.com are free. The models are named Yuvra + a role (Ember, Flare, Equinox, Solstice, Apogee) + a generation number, for example Yuvra Flare 3.5; see docs/ROADMAP.md, "Names".
-Backups if Yuvra fails those checks: Brynja, Quenby, Eirvala, Vardrun.
+**App name (working, renamed Oct 2026): Emvryx** (pronunciation to be decided), with the website/domain **Emvryx.AI** (to check).
+The earlier name Emvryx was checked by web search and the trademark registers (nothing found); **Emvryx has not been
+checked yet**. Before it is public: search the US trademark database (tmsearch.uspto.gov), the EU/UK/India registers,
+Google Play and the App Store, and check that emvryx.ai and emvryx.com are free. The models are named Emvryx + a role (Ember, Flare, Equinox, Solstice, Apogee) + a generation number, for example Emvryx Flare 3.5; see docs/ROADMAP.md, "Names".
+Backups if Emvryx fails those checks (Emvryx is the previous name): Brynja, Quenby, Eirvala, Vardrun.
 
 This builds on [ROADMAP.md: One app for phone and PC](ROADMAP.md#one-app-for-phone-and-pc-the-plan-for-the-website-and-app)
 (one web codebase, packaged for Android with Capacitor and for the PC with Tauri). This file adds how the
@@ -81,13 +81,13 @@ you choose the model, the effort, and see where each one runs. Works the same on
  -------------------------------------------------
   Auto   (the router picks)                  [check]
          Best model and effort for each question
-  Yuvra Flare 3.5
+  Emvryx Flare 3.5
          Fastest for quick answers
-  Yuvra Equinox 4
+  Emvryx Equinox 4
          For everyday work and homework
-  Yuvra Solstice 5
+  Emvryx Solstice 5
          For harder questions and long writing
-  Yuvra Apogee 6         [PC off]
+  Emvryx Apogee 6         [PC off]
          For your toughest challenges
  -------------------------------------------------
   Effort                              Balanced  >
@@ -95,7 +95,7 @@ you choose the model, the effort, and see where each one runs. Works the same on
   Skills                              Study helper (Beta), Teacher assistant (Beta)  >
  -------------------------------------------------
   Other models
-  Yuvra Flare 3  (older)  [Not downloaded, 240 MB]
+  Emvryx Flare 3  (older)  [Not downloaded, 240 MB]
   Earlier versions of any name
 ```
 
@@ -120,7 +120,7 @@ you choose the model, the effort, and see where each one runs. Works the same on
   "needs your PC to be on" when it can't be reached, and the app falls back to the phone model and labels the answer (a Setting can make it ask first).
 - **Access toggle:** which cards appear follows the same rule as the skill packs (`can_use()`, everyone / beta /
   off): a Beta model shows only for the people on the beta list.
-- **Switching mid-chat** keeps the conversation and adds a small divider ("Switched to Yuvra Equinox 4"). Each
+- **Switching mid-chat** keeps the conversation and adds a small divider ("Switched to Emvryx Equinox 4"). Each
   answer keeps a tag of which model wrote it.
 - **Credits-style badge (later):** if online mode ever runs on a paid server, a card can carry a "Uses online
   credits" badge, like other apps do for their biggest models.
@@ -174,7 +174,7 @@ Both are planned, and they are separate choices:
 5. **iPhone** (needs a Mac and the $99/year developer account) and a public website, if wanted.
 
 ## Decided (Oct 2026; details in [APP_SPEC.md](APP_SPEC.md))
-- **Name:** Yuvra / Yuvra.AI (trademark, store and domain checks still to do).
+- **Name:** Emvryx / Emvryx.AI (trademark, store and domain checks still to do).
 - **Platform:** PC/web first, Android after.
 - **Who first:** a small test group (named testers, the beta list), then public.
 - **Skill packs:** LoRA adapters (needs a converter to llama.cpp's format); **memory search:** keyword and meaning from day one.

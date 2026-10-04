@@ -99,14 +99,14 @@ class Access(Base):
     def test_page_is_served_without_a_key_but_the_api_is_not(self):
         s, _, body = Client(self.port).call("GET", "/", raw=True)
         self.assertEqual(s, 200)
-        self.assertIn(b"Yuvra", body)
+        self.assertIn(b"Emvryx", body)
         self.assertEqual(Client(self.port).call("GET", "/api/state")[0], 401)
         self.assertEqual(Client(self.port, "wrong").call("GET", "/api/state")[0], 401)
 
     def test_link_with_key_sets_a_cookie(self):
         s, h, _ = Client(self.port).call("GET", "/?key=" + self.sam_key, raw=True)
         self.assertEqual(s, 302)
-        self.assertIn("yuvra_key=", h["Set-Cookie"])
+        self.assertIn("emvryx_key=", h["Set-Cookie"])
         self.assertIn("HttpOnly", h["Set-Cookie"])
         c = Client(self.port)
         c.cookie = h["Set-Cookie"].split(";")[0]
@@ -117,7 +117,7 @@ class Access(Base):
         self.assertEqual(c.call("POST", "/api/login", {"key": "nope"})[0], 401)
         s, h, _ = c.call("POST", "/api/login", {"key": self.sam_key}, raw=True)
         self.assertEqual(s, 200)
-        self.assertIn("yuvra_key=", h["Set-Cookie"])
+        self.assertIn("emvryx_key=", h["Set-Cookie"])
 
     def test_people_cannot_see_each_others_chats(self):
         cid = self.new_chat(self.sam)

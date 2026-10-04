@@ -7,7 +7,7 @@ WHAT THIS FILE DOES
       * the tank              what you can use right now; refills steadily (token bucket), so no cliff
       * the weekly ceiling    the total of the week; resets at a fixed time in the person's own time zone
 
-    A message costs:  (new text x 1 + earlier chat already held x 0.1 + what Yuvra writes x 1) x the model's weight x the effort level.
+    A message costs:  (new text x 1 + earlier chat already held x 0.1 + what Emvryx writes x 1) x the model's weight x the effort level.
     A message is allowed only if BOTH the tank and the week have room. Models running on a person's own device are never counted.
 
     Flow on the server (so a request can't sneak past, and a failed one isn't charged in full):
@@ -160,7 +160,7 @@ class Limiter:
             return None                                        # a model on the person's own device: free and uncounted
         u, t = self.effective(user)
         if self.cfg.get("paused") and not u["owner"]:
-            raise LimitError("paused", "Yuvra is paused for now. Please try again later.", retry_after=600)
+            raise LimitError("paused", "Emvryx is paused for now. Please try again later.", retry_after=600)
         allowed = t["models"]
         if allowed != "all" and model_key not in allowed and not u["owner"]:
             raise LimitError("model_not_in_plan", f"{model_key.title()} isn't in your plan.", choices=list(allowed))

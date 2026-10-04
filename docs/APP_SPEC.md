@@ -1,4 +1,4 @@
-# Yuvra app: what it needs, what it looks like, how it works
+# Emvryx app: what it needs, what it looks like, how it works
 
 The detailed spec behind [APP.md](APP.md) (the overview and build order). Three parts: **what it needs**
 (requirements), **what it looks like** (screens), and **how it works properly** (flows, failure handling,
@@ -59,7 +59,7 @@ tests, and what "done" means for the first version).
 ---
 
 ### Usage and limits (plan)
-Yuvra's own way to show and limit usage. It is counted in **tokens**, shown as a **charge** percentage with the token counts underneath, and drawn as a
+Emvryx's own way to show and limit usage. It is counted in **tokens**, shown as a **charge** percentage with the token counts underneath, and drawn as a
 **brain that fills like a tank** instead of a plain progress bar. Every number on the screen (the tank, the weekly ceiling) follows the **account's plan**
 (Free, Pro or Mega). Designs: `Usage` (the phone's "Usage" screen) and `Limits` (owner settings) in
 `design/canvas/`.
@@ -76,11 +76,11 @@ So **32,768 is not "32,000 every few hours"**. It only limits how big a single r
 the weekly ceiling (long term). A message is allowed only if both have room; the smaller one wins.
 
 **What a message costs (token-based counting).** A chat is re-read from the start on every message, so a long chat costs more per message. Counted tokens =
-(new text you send x 1) + (earlier chat the server already holds x 0.1) + (what Yuvra writes x 1), then multiplied by the model's weight (Flare 1,
+(new text you send x 1) + (earlier chat the server already holds x 0.1) + (what Emvryx writes x 1), then multiplied by the model's weight (Flare 1,
 Equinox 2, Solstice 5, Apogee 10). The 0.1 is because a server that keeps the earlier part of the chat in memory does not recompute it ("prefix
 caching"); a server without that must count it at x 1. Starting values, to be tuned after measuring real server time.
 
-Worked example (each turn: you write 150 tokens, Yuvra writes 350, so the chat grows by 500):
+Worked example (each turn: you write 150 tokens, Emvryx writes 350, so the chat grows by 500):
 
 | | After 10 messages | Why |
 |---|---|---|
@@ -194,7 +194,7 @@ the smallest of the three limits, must drop and say so when memory falls, and mu
 ### How a reply feels (built: `chat_polish.py`)
 | Part | Behaviour |
 |---|---|
-| **Thinking** | After Send, the small Yuvra logo animates (the brain outline travels around, the core pulses) next to a label that changes every ~2 seconds and never repeats twice in a row: Thinking, Pondering, Reasoning, Working it out, Considering, Mulling it over, Figuring it out, Reflecting, Weighing it up, Putting it together |
+| **Thinking** | After Send, the small Emvryx logo animates (the brain outline travels around, the core pulses) next to a label that changes every ~2 seconds and never repeats twice in a row: Thinking, Pondering, Reasoning, Working it out, Considering, Mulling it over, Figuring it out, Reflecting, Weighing it up, Putting it together |
 | **A pause that fits the message** | The first word never appears sooner than a minimum that depends on the message, so there is always a moment of thinking but a greeting is answered almost at once: Quick 0.5 s, Balanced 1.2 s, Deep 2.4 s, plus 0.1 s per 20 words of a long message (up to 0.8 s), never more than 3.2 s (`chat_polish.pause_for`). It is a minimum: a slower model is never made to wait longer |
 | **Clean writing** | The reply is written out word by word at a steady speed (about 22 words a second at most), never dumped in one lump. If the model is far ahead the writing speeds up so the screen is never more than ~1.5 s behind. What is saved is the same text |
 | **Stays at the bottom** | The newest message stays in view while the reply is written; scrolling up pauses that, and a "down" button brings it back (screen job, shown in the `Chat` / `Phone` designs) |
@@ -210,7 +210,7 @@ the PC and the website (the PC adds a chats sidebar).
 ### Chat (the main screen)
 ```
 +--------------------------------------------------+
-|  =   Yuvra Equinox 4  v        [ Auto ]       ...  |   <- tap the model name: the picker
+|  =   Emvryx Equinox 4  v        [ Auto ]       ...  |   <- tap the model name: the picker
 +--------------------------------------------------+
 |                                                  |
 |   You                                            |
@@ -226,7 +226,7 @@ the PC and the website (the PC adds a chats sidebar).
 |                                                  |
 |   [ Quiz me ]  [ Make it easier ]  [ Answer key ]|   <- reply suggestions
 +--------------------------------------------------+
-|  [+]  Message Yuvra...                  [mic]  ^ |   <- + : attach, skills, web search
+|  [+]  Message Emvryx...                  [mic]  ^ |   <- + : attach, skills, web search
 |  Memory: 3 facts  *  Context 31%  *  Offline     |   <- small status line
 +--------------------------------------------------+
 ```
@@ -353,7 +353,7 @@ beta list", and "memory finds an earlier chat by meaning, not only by words".
   hamburger menu / sidebar, model picker and effort menu under the box, the usage line that counts as you send, the thinking logo
   and words, steady writing, Stop and Regenerate, private chats, a Usage screen, Settings (look, chat length, delete everything)
   and, for the owner, adding testers and pausing everyone. Plans are enforced on the server (429 / 403 / 503, the page shows a
-  plain message and when it refills). Message text is never logged; keys are in `.yuvra/users.json` (kept out of git).
+  plain message and when it refills). Message text is never logged; keys are in `.emvryx/users.json` (kept out of git).
   **Not built yet:** Memory, Skills, Documents, web search, Teacher assistant and Save as PDF / Word (the menu says "Coming soon"),
   and the golden prompt-parity tests.
 - **Ember 2 (v2) runs in the app.** `models.json` has `ember-2` (the lowest of five names; weight 0.5 in the usage counting; its
@@ -373,3 +373,11 @@ beta list", and "memory finds an earlier chat by meaning, not only by words".
   (the saved chat keeps your original question), changes how much it may write and how adventurous the wording is, and replaces the
   previous answer. Small models follow the hints only roughly; the options are easy to retune in `regen_modes.py`. Designs: not yet
   drawn in the `Chat` / `Phone` mock-ups (they have no Regenerate button).
+- **Connected apps** (`connected_apps.py`, `tests/test_connected_apps.py`): Menu > Connected apps lists the apps planned (Google Calendar, Gmail,
+  Google Drive, Notion, Slack, GitHub, Vercel, Supabase) with what each would do and the permission it needs, and the rules (off until
+  connected with your own sign-in; read-only first; Confirm for anything that changes something; only what is asked for is seen;
+  disconnect deletes access; on-device models never share). Nothing is connectable yet (`POST /api/apps/<id>/connect` answers
+  "coming soon"); real connections need sign-in with each service, which comes with accounts (see `docs/DEPLOY.md`).
+- **The website** (`build_site.py` -> `site/`): the five website designs as plain static pages with a dark/light switch, ready for
+  Vercel (`docs/DEPLOY.md`). Rename note: the app was called Yuvra until Oct 2026; it is now **Emvryx** with an X mark (Brain-X);
+  the app moves an old `.yuvra` data folder to `.emvryx` by itself on start.

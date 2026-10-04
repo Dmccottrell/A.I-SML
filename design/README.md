@@ -1,6 +1,6 @@
-# Yuvra design concept (Oct 2026)
+# Emvryx design concept (Oct 2026)
 
-The first design for the Yuvra website, app and logo. It is a **concept**: nothing here is built into the app yet. The
+The first design for the Emvryx website, app and logo. It is a **concept**: nothing here is built into the app yet. The
 requirements and behaviour are in [docs/APP_SPEC.md](../docs/APP_SPEC.md) and [docs/APP.md](../docs/APP.md).
 
 ## What is in this folder
@@ -15,12 +15,12 @@ To keep editing them, publish the folder to a Design canvas and open it there. T
 separately from these designs.
 
 ## The logo: a brain, getting bigger
-- **Primary mark ("Brain-Y"):** a brain outline with a Y inside it; the amber node where the Y splits is the spark of thought.
-  It says AI at a glance and still reads as the letter Y.
-- **Family mark:** five brains that grow with the models: Ember (the smallest, a dashed outline like a glowing coal), Flare (plain brain with a core), Equinox (adds the Y), Solstice (adds
+- **Primary mark ("Brain-X"):** a brain outline with an X inside it; the glowing node where the two strokes cross is the spark of
+  thought (two ideas meeting). It says AI at a glance and echoes the X that ends the name Emvryx. (Replaced the earlier Brain-Y.)
+- **Family mark:** five brains that grow with the models: Ember (the smallest, a dashed outline like a glowing coal), Flare (plain brain with a core), Equinox (adds the X), Solstice (adds
   folds), Apogee (the largest, outline lit in ice blue).
-- **Small sizes:** the folds and the Y drop away so the brain and the spark stay solid (favicon, app icon).
-- Say it "YOOV-ruh". Domain and trademark checks are still to do (see docs/APP.md).
+- **Small sizes:** the folds and the X drop away so the brain and the spark stay solid (favicon, app icon).
+- Pronunciation to be decided. Domain and trademark checks for Emvryx are still to do (see docs/APP.md).
 
 ## Look and feel
 - Dark by default and very dark (`#07080D`), with a light mode. One accent colour at a time.
@@ -54,9 +54,9 @@ The site is split so no page is cluttered. Each page has the same top menu (Mode
 | **Models** | `SiteModels.dc.html` | The five models in detail (colour, job, which plans have it, which effort levels it offers) and the effort explained (Quick, Balanced, Deep) |
 | **Plans** | `SitePlans.dc.html` | Free, Pro and Mega side by side in plain language (messages a week, in one sitting, models, document length), "always free on your own device", "plans are planned, prices to be announced" |
 | **How usage works** | `SiteUsage.dc.html` | Right now (the brain tank), this week (resets Monday 4 AM), what a message costs by model, effort and usage, tips, and a short "for the curious" about tokens |
-| **About** | `SiteAbout.dc.html` | Built from the ground up (stats, a "How it measures up" comparison table (Yuvra models side by side), and what makes it different), at home or in the cloud, private or public, what to keep in mind |
+| **About** | `SiteAbout.dc.html` | Built from the ground up (stats, a "How it measures up" comparison table (Emvryx models side by side), and what makes it different), at home or in the cloud, private or public, what to keep in mind |
 
-**Comparison table rule:** one column per model (Earlier v2, Flare 3, Flare 3.5 highlighted as the one in training, Equinox 4, Solstice 5, Apogee 6), a few rows only (HellaSwag, the Yuvra 20-question test sheet, long-document recall). A dash means not measured yet. **Benchmark strip rule (same idea):** only measured scores are drawn as solid bars (v2 28.4%, Flare 3 31.7% at step 15,000, both HellaSwag on the full 10,042-question test); forecasts (Flare 3.5, Equinox 4) are drawn dashed and labelled as forecasts, and are replaced when the model finishes training. No score of another company's model is shown. `HomeLight.dc.html` is the Home page in light mode. The canvas itself is also split into three pages: **Brand**, **Website** and **App screens**. Placeholders left in: `[YEAR]` and the invite link; prices are "to be announced".
+**Comparison table rule:** one column per model (Earlier v2, Flare 3, Flare 3.5 highlighted as the one in training, Equinox 4, Solstice 5, Apogee 6), a few rows only (HellaSwag, the Emvryx 20-question test sheet, long-document recall). A dash means not measured yet. **Benchmark strip rule (same idea):** only measured scores are drawn as solid bars (v2 28.4%, Flare 3 31.7% at step 15,000, both HellaSwag on the full 10,042-question test); forecasts (Flare 3.5, Equinox 4) are drawn dashed and labelled as forecasts, and are replaced when the model finishes training. No score of another company's model is shown. `HomeLight.dc.html` is the Home page in light mode. The canvas itself is also split into three pages: **Brand**, **Website** and **App screens**. Placeholders left in: `[YEAR]` and the invite link; prices are "to be announced".
 
 ## Usage and limits
 Plain language first: **messages left**, not tokens. The phone's **Usage** screen shows a brain that fills like a tank ("Right now: about 250 messages"), "Left this week"
@@ -69,4 +69,4 @@ caps one request; it is not an allowance. Full plan and worked examples: docs/AP
 - Final logo choice (the earlier network-Y and cradle ideas were dropped), plus app-icon and favicon exports as PNG/ICO.
 - Equinox's spark is a black core in a white ring; a yin-yang symbol is not drawn yet.
 - Whether the website's model cards should also re-colour the page on hover or click.
-- Trademark, store and domain checks for "Yuvra".
+- Trademark, store and domain checks for "Emvryx".

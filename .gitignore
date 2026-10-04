@@ -18,4 +18,4 @@ __pycache__/
 documents/
 
 # The app server keeps keys, chats and usage here: never commit
-.yuvra/
+.emvryx/

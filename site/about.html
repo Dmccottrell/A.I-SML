@@ -1,0 +1,145 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>About Emvryx</title>
+<link rel="icon" href="/icon.svg" type="image/svg+xml">
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Sora:wght@500;600;700&family=DM+Sans:wght@400;500;600&display=swap">
+<style>
+
+div, span, button, svg, path, circle { transition: background-color .6s ease, color .6s ease, border-color .6s ease, fill .6s ease, stroke .6s ease; }
+circle[style*="fill: var(--sun)"] { fill: var(--core) !important; stroke: var(--sun); stroke-width: 3; }
+a{color:var(--text);text-decoration:none}
+a:hover{color:var(--accenttext)}
+</style>
+
+<style>
+:root{--bg:#07080D;--side:#0A0B11;--surface:#0F1119;--surface2:#161926;--line:#232739;--text:#EEF0F6;--muted:#9AA3BC;--accent:#F5A524;--onaccent:#1A1204;--accenttext:#F5A524;--sun:#F5A524;--core:#F5A524;--glow:rgba(245,165,36,.14)}
+:root[data-theme=light]{--bg:#F7F8FC;--side:#EEF0F7;--surface:#FFFFFF;--surface2:#EEF0F7;--line:#D8DCEA;--text:#0D0F1A;--muted:#4A526B;--accent:#F5A524;--onaccent:#1A1204;--accenttext:#8F5600;--sun:#E08A00;--core:#E08A00;--glow:rgba(245,165,36,.12)}
+html,body{margin:0;background:var(--bg)}
+.theme-toggle{position:fixed;right:16px;bottom:16px;z-index:50;width:44px;height:44px;border-radius:999px;border:1px solid var(--line);background:var(--surface);color:var(--text);cursor:pointer;font-size:18px}
+.theme-toggle:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+</style>
+</head>
+<body>
+
+<div style=" min-height: 100vh; background: var(--bg); background-image: radial-gradient(1200px 600px at 50% -5%, var(--glow), transparent 70%); color: var(--text); font-family: 'DM Sans', sans-serif; font-size: 17px; line-height: 1.55">
+
+<div style="max-width: 1200px; margin: 0 auto; padding: 24px; display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 16px">
+<a href="index.html" style="display: flex; align-items: center; gap: 10px">
+<svg width="38" height="38" viewBox="0 0 64 64" fill="none" aria-label="Emvryx">
+<path d="M32 56 C22 56 12 51 10 41 C5 37 5 28 11 24 C10 16 18 8 26 11 C29 6 35 6 38 11 C46 8 54 16 53 24 C59 28 59 37 54 41 C52 51 42 56 32 56 Z" style="stroke: var(--text)" stroke-width="4" stroke-linejoin="round"/>
+<path d="M21 22 L43 50 M43 22 L21 50" style="stroke: var(--text)" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+<circle cx="32" cy="36" r="6.5" style="fill: var(--sun)"/>
+</svg>
+<span style="font-family: 'Sora', sans-serif; font-weight: 600; font-size: 24px; letter-spacing: -0.02em">Emvryx</span>
+</a>
+<div style="display: flex; flex-wrap: wrap; align-items: center; gap: 28px; font-size: 16px; font-weight: 500">
+<a href="models.html">Models</a>
+<a href="plans.html">Plans</a>
+<a href="usage.html">How usage works</a>
+<a href="about.html" style="color: var(--accenttext); border-bottom: 2px solid var(--accent); padding-bottom: 2px">About</a>
+<a href="index.html#try" style="background: var(--accent); color: var(--onaccent); border-radius: 999px; padding: 12px 22px; font-weight: 600">Open Emvryx</a>
+</div>
+</div>
+
+<div style="max-width: 1200px; margin: 0 auto; padding: 56px 24px 32px; display: flex; flex-direction: column; gap: 16px">
+<div style="font-size: 14px; font-weight: 600; letter-spacing: 0.14em; color: var(--accenttext)">ABOUT EMVRYX</div>
+<h1 style="margin: 0; font-family: 'Sora', sans-serif; font-weight: 600; font-size: 56px; line-height: 1.05; letter-spacing: -0.03em">Built from the ground up.</h1>
+<p style="margin: 0; color: var(--muted); font-size: 20px; max-width: 740px">Most AI apps are a thin layer on someone else&rsquo;s model. Emvryx is the model: its own tokenizer, its own transformer and its own training run, with no borrowed weights and no other assistant&rsquo;s answers in its lessons.</p>
+</div>
+
+<div style="max-width: 1200px; margin: 0 auto; padding: 24px; display: flex; flex-wrap: wrap; gap: 20px">
+<div style="flex: 1 1 200px; border-top: 2px solid var(--accent); padding-top: 16px"><div style="font-family: 'Sora', sans-serif; font-weight: 600; font-size: 40px; letter-spacing: -0.02em">0</div><div style="color: var(--muted)">borrowed weights. Every parameter is trained here.</div></div>
+<div style="flex: 1 1 200px; border-top: 2px solid var(--accent); padding-top: 16px"><div style="font-family: 'Sora', sans-serif; font-weight: 600; font-size: 40px; letter-spacing: -0.02em">1.12B</div><div style="color: var(--muted)">parameters in Flare 3.5, now in training.</div></div>
+<div style="flex: 1 1 200px; border-top: 2px solid var(--accent); padding-top: 16px"><div style="font-family: 'Sora', sans-serif; font-weight: 600; font-size: 40px; letter-spacing: -0.02em">40B</div><div style="color: var(--muted)">tokens of web, Wikipedia, code and maths read by Flare 3.5.</div></div>
+<div style="flex: 1 1 200px; border-top: 2px solid var(--accent); padding-top: 16px"><div style="font-family: 'Sora', sans-serif; font-weight: 600; font-size: 40px; letter-spacing: -0.02em">4</div><div style="color: var(--muted)">models planned, from a fast one to one for your toughest work.</div></div>
+</div>
+
+<div style="max-width: 1200px; margin: 0 auto; padding: 8px 24px 40px">
+<div style="display: flex; flex-direction: column; gap: 16px">
+<div style="display: flex; flex-wrap: wrap; justify-content: space-between; align-items: baseline; gap: 12px"><h2 style="margin: 0; font-family: 'Sora', sans-serif; font-weight: 600; font-size: 32px; letter-spacing: -0.02em">How it measures up</h2><span style="color: var(--muted); font-size: 14px">Emvryx models and versions, side by side</span></div>
+<div style="overflow-x: auto"><div style="min-width: 980px; display: grid; grid-template-columns: 250px repeat(6, 1fr); align-items: stretch">
+<div></div>
+<div style="padding: 16px 8px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px;"><span style="font-family: 'Sora', sans-serif; font-weight: 600; font-size: 19px">Ember 2</span><span style="color: var(--muted); font-size: 13px">88M</span></div>
+<div style="padding: 16px 8px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px;"><span style="font-family: 'Sora', sans-serif; font-weight: 600; font-size: 19px">Flare 3</span><span style="color: var(--muted); font-size: 13px">394M</span></div>
+<div style="padding: 16px 8px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; background: var(--surface2); border: 2px solid var(--accent); border-bottom: 0; border-radius: 18px 18px 0 0;"><span style="font-family: 'Sora', sans-serif; font-weight: 600; font-size: 19px">Flare 3.5</span><span style="color: var(--muted); font-size: 13px">1.12B</span></div>
+<div style="padding: 16px 8px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px;"><span style="font-family: 'Sora', sans-serif; font-weight: 600; font-size: 19px">Equinox 4</span><span style="color: var(--muted); font-size: 13px">1.12B</span></div>
+<div style="padding: 16px 8px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px;"><span style="font-family: 'Sora', sans-serif; font-weight: 600; font-size: 19px">Solstice 5</span><span style="color: var(--muted); font-size: 13px">3B</span></div>
+<div style="padding: 16px 8px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px;"><span style="font-family: 'Sora', sans-serif; font-weight: 600; font-size: 19px">Apogee 6</span><span style="color: var(--muted); font-size: 13px">5B to 7B</span></div>
+<div style="padding: 16px 8px 16px 0; border-top: 1px solid var(--line); display: flex; flex-direction: column; justify-content: center"><span style="font-weight: 600; font-size: 17px">Common sense</span><span style="color: var(--muted); font-size: 13px">HellaSwag, guessing scores 25%</span></div>
+<div style="padding: 16px 8px; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; gap: 2px; border-top: 1px solid var(--line);"><span style="font-family: 'Sora', sans-serif; font-weight: 600; font-size: 22px">28.4%</span><span style="color: var(--muted); font-size: 12px">full test</span></div>
+<div style="padding: 16px 8px; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; gap: 2px; border-top: 1px solid var(--line);"><span style="font-family: 'Sora', sans-serif; font-weight: 600; font-size: 22px">31.7%</span><span style="color: var(--muted); font-size: 12px">at step 15,000 of 45,000</span></div>
+<div style="padding: 16px 8px; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; gap: 2px; border-top: 1px solid var(--line); background: var(--surface2); border-left: 2px solid var(--accent); border-right: 2px solid var(--accent);"><span style="font-family: 'Sora', sans-serif; font-weight: 600; font-size: 20px; color: var(--accenttext); border: 2px dashed var(--accent); border-radius: 10px; padding: 2px 10px">44 to 51%</span><span style="color: var(--muted); font-size: 12px">forecast</span></div>
+<div style="padding: 16px 8px; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; gap: 2px; border-top: 1px solid var(--line);"><span style="font-family: 'Sora', sans-serif; font-weight: 600; font-size: 20px; color: var(--accenttext); border: 2px dashed var(--accent); border-radius: 10px; padding: 2px 10px">46 to 54%</span><span style="color: var(--muted); font-size: 12px">forecast</span></div>
+<div style="padding: 16px 8px; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; gap: 2px; border-top: 1px solid var(--line);"><span style="font-size: 22px; color: var(--muted)">&mdash;</span></div>
+<div style="padding: 16px 8px; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; gap: 2px; border-top: 1px solid var(--line);"><span style="font-size: 22px; color: var(--muted)">&mdash;</span></div>
+<div style="padding: 16px 8px 16px 0; border-top: 1px solid var(--line); display: flex; flex-direction: column; justify-content: center"><span style="font-weight: 600; font-size: 17px">Emvryx test sheet</span><span style="color: var(--muted); font-size: 13px">20 questions: facts, instructions, honesty</span></div>
+<div style="padding: 16px 8px; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; gap: 2px; border-top: 1px solid var(--line);"><span style="font-family: 'Sora', sans-serif; font-weight: 600; font-size: 22px">18 / 20</span><span style="color: var(--muted); font-size: 12px">measured</span></div>
+<div style="padding: 16px 8px; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; gap: 2px; border-top: 1px solid var(--line);"><span style="font-size: 22px; color: var(--muted)">&mdash;</span></div>
+<div style="padding: 16px 8px; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; gap: 2px; border-top: 1px solid var(--line); background: var(--surface2); border-left: 2px solid var(--accent); border-right: 2px solid var(--accent);"><span style="font-size: 22px; color: var(--muted)">&mdash;</span></div>
+<div style="padding: 16px 8px; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; gap: 2px; border-top: 1px solid var(--line);"><span style="font-size: 22px; color: var(--muted)">&mdash;</span></div>
+<div style="padding: 16px 8px; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; gap: 2px; border-top: 1px solid var(--line);"><span style="font-size: 22px; color: var(--muted)">&mdash;</span></div>
+<div style="padding: 16px 8px; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; gap: 2px; border-top: 1px solid var(--line);"><span style="font-size: 22px; color: var(--muted)">&mdash;</span></div>
+<div style="padding: 16px 8px 16px 0; border-top: 1px solid var(--line); display: flex; flex-direction: column; justify-content: center"><span style="font-weight: 600; font-size: 17px">Long-document recall</span><span style="color: var(--muted); font-size: 13px">Needle in a haystack (needs the long-memory stretch)</span></div>
+<div style="padding: 16px 8px; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; gap: 2px; border-top: 1px solid var(--line);"><span style="font-size: 22px; color: var(--muted)">&mdash;</span></div>
+<div style="padding: 16px 8px; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; gap: 2px; border-top: 1px solid var(--line);"><span style="font-size: 22px; color: var(--muted)">&mdash;</span></div>
+<div style="padding: 16px 8px; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; gap: 2px; border-top: 1px solid var(--line); background: var(--surface2); border-left: 2px solid var(--accent); border-right: 2px solid var(--accent); border-bottom: 2px solid var(--accent); border-radius: 0 0 18px 18px;"><span style="font-size: 22px; color: var(--muted)">&mdash;</span></div>
+<div style="padding: 16px 8px; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; gap: 2px; border-top: 1px solid var(--line);"><span style="font-size: 22px; color: var(--muted)">&mdash;</span></div>
+<div style="padding: 16px 8px; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; gap: 2px; border-top: 1px solid var(--line);"><span style="font-size: 22px; color: var(--muted)">&mdash;</span></div>
+<div style="padding: 16px 8px; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; gap: 2px; border-top: 1px solid var(--line);"><span style="font-size: 22px; color: var(--muted)">&mdash;</span></div>
+</div></div>
+<div style="color: var(--muted); font-size: 14px; line-height: 1.5">Solid numbers are measured. Dashed numbers are forecasts, not results, and are replaced as each model finishes training. A dash means not measured yet. HellaSwag is scored on the full 10,042-question test. More public tests (ARC, maths word problems) are added here once they are measured.</div>
+</div></div>
+
+<div style="max-width: 1200px; margin: 0 auto; padding: 24px 24px 56px; display: flex; flex-wrap: wrap; gap: 20px">
+<div style="flex: 1 1 320px; background: var(--surface); border: 1px solid var(--line); border-radius: 20px; padding: 32px; display: flex; flex-direction: column; gap: 12px"><h3 style="margin: 0; font-family: 'Sora', sans-serif; font-weight: 600; font-size: 24px">Its own brain</h3><p style="margin: 0; color: var(--muted)">We wrote the tokenizer, the transformer and the training loop, then trained it on carefully chosen reading: educational pages, everyday web text, all of English Wikipedia, code in many languages and step-by-step maths.</p></div>
+<div style="flex: 1 1 320px; background: var(--surface); border: 1px solid var(--line); border-radius: 20px; padding: 32px; display: flex; flex-direction: column; gap: 12px"><h3 style="margin: 0; font-family: 'Sora', sans-serif; font-weight: 600; font-size: 24px">Taught like a good assistant</h3><p style="margin: 0; color: var(--muted)">It answers from its notes and names the source. It says &ldquo;I don&rsquo;t know&rdquo; instead of guessing, rechecks when you say it&rsquo;s wrong, keeps to exact counts and formats, follows a change of topic, and reads through typos.</p></div>
+<div style="flex: 1 1 320px; background: var(--surface); border: 1px solid var(--line); border-radius: 20px; padding: 32px; display: flex; flex-direction: column; gap: 12px"><h3 style="margin: 0; font-family: 'Sora', sans-serif; font-weight: 600; font-size: 24px">A family that keeps improving</h3><p style="margin: 0; color: var(--muted)">Every new version keeps everything the last one learned, and must beat it on the same tests before it replaces it. Bigger siblings follow, and the app stays the same.</p></div>
+</div>
+
+<div style="border-top: 1px solid var(--line)">
+<div style="max-width: 1200px; margin: 0 auto; padding: 64px 24px; display: flex; flex-direction: column; gap: 28px">
+<h2 style="margin: 0; font-family: 'Sora', sans-serif; font-weight: 600; font-size: 40px; letter-spacing: -0.02em">At home or in the cloud. Private or public.</h2>
+<p style="margin: 0; color: var(--muted); font-size: 19px; max-width: 700px">Any Emvryx model can run wherever you want it, and be shared as widely as you want. Same models, same app; only the address and the guest list change.</p>
+<div style="display: flex; flex-wrap: wrap; gap: 20px">
+<div style="flex: 1 1 250px; background: var(--surface); border: 1px solid var(--line); border-radius: 20px; padding: 28px; display: flex; flex-direction: column; gap: 10px"><div style="font-size: 13px; font-weight: 600; letter-spacing: 0.1em; color: var(--accenttext)">AVAILABLE NOW</div><div style="font-family: 'Sora', sans-serif; font-weight: 600; font-size: 24px">Home</div><div style="color: var(--muted)">On your phone or your own PC, on your terms.</div></div>
+<div style="flex: 1 1 250px; background: var(--surface); border: 1px solid var(--line); border-radius: 20px; padding: 28px; display: flex; flex-direction: column; gap: 10px"><div style="font-size: 13px; font-weight: 600; letter-spacing: 0.1em; color: var(--muted)">PLANNED</div><div style="font-family: 'Sora', sans-serif; font-weight: 600; font-size: 24px">Cloud</div><div style="color: var(--muted)">The same models on a server, so Emvryx works when your PC is off.</div></div>
+<div style="flex: 1 1 250px; background: var(--surface); border: 1px solid var(--line); border-radius: 20px; padding: 28px; display: flex; flex-direction: column; gap: 10px"><div style="font-size: 13px; font-weight: 600; letter-spacing: 0.1em; color: var(--accenttext)">EARLY ACCESS</div><div style="font-family: 'Sora', sans-serif; font-weight: 600; font-size: 24px">Private</div><div style="color: var(--muted)">Just you and the people you invite, each with their own key.</div></div>
+<div style="flex: 1 1 250px; background: var(--surface); border: 1px solid var(--line); border-radius: 20px; padding: 28px; display: flex; flex-direction: column; gap: 10px"><div style="font-size: 13px; font-weight: 600; letter-spacing: 0.1em; color: var(--muted)">PLANNED</div><div style="font-family: 'Sora', sans-serif; font-weight: 600; font-size: 24px">Public</div><div style="color: var(--muted)">Open to anyone, with accounts and fair limits.</div></div>
+</div>
+</div>
+</div>
+
+<div style="border-top: 1px solid var(--line)">
+<div style="max-width: 1200px; margin: 0 auto; padding: 64px 24px; display: flex; flex-direction: column; gap: 16px; max-width: 1200px">
+<h2 style="margin: 0; font-family: 'Sora', sans-serif; font-weight: 600; font-size: 36px; letter-spacing: -0.02em">What to keep in mind</h2>
+<p style="margin: 0; color: var(--muted); font-size: 18px; max-width: 740px">Like any AI, Emvryx can make mistakes. That is why it shows its sources and which model answered, so you can check what matters, especially for homework, health and money.</p>
+</div>
+</div>
+
+<div style="border-top: 1px solid var(--line)">
+<div style="max-width: 1200px; margin: 0 auto; padding: 32px 24px 48px; display: flex; flex-wrap: wrap; justify-content: space-between; gap: 16px; color: var(--muted); font-size: 15px">
+<span>&copy; Emvryx.AI 2026. Private by design.</span>
+<div style="display: flex; flex-wrap: wrap; gap: 24px"><a href="models.html" style="color: var(--muted)">Models</a><a href="plans.html" style="color: var(--muted)">Plans</a><a href="usage.html" style="color: var(--muted)">How usage works</a><a href="about.html" style="color: var(--muted)">About</a></div>
+</div>
+</div>
+</div>
+
+<button class="theme-toggle" id="themeToggle" aria-label="Switch between dark and light">&#9680;</button>
+<script>
+(function () {
+  var root = document.documentElement, key = 'emvryx_theme';
+  try { var saved = localStorage.getItem(key); if (saved === 'light' || saved === 'dark') root.setAttribute('data-theme', saved); } catch (e) {}
+  document.getElementById('themeToggle').addEventListener('click', function () {
+    var next = root.getAttribute('data-theme') === 'light' ? 'dark' : 'light';
+    root.setAttribute('data-theme', next);
+    try { localStorage.setItem(key, next); } catch (e) {}
+  });
+})();
+</script>
+</body>
+</html>

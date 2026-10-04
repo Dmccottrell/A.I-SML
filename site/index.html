@@ -1,0 +1,165 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Emvryx website home</title>
+<link rel="icon" href="/icon.svg" type="image/svg+xml">
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Sora:wght@500;600;700&family=DM+Sans:wght@400;500;600&display=swap">
+<style>
+
+div, span, button, svg, path, circle { transition: background-color .6s ease, color .6s ease, border-color .6s ease, fill .6s ease, stroke .6s ease; }
+circle[style*="fill: var(--sun)"] { fill: var(--core) !important; stroke: var(--sun); stroke-width: 3; }
+a{color:var(--text);text-decoration:none}
+a:hover{color:var(--accenttext)}
+</style>
+
+<style>
+:root{--bg:#07080D;--side:#0A0B11;--surface:#0F1119;--surface2:#161926;--line:#232739;--text:#EEF0F6;--muted:#9AA3BC;--accent:#F5A524;--onaccent:#1A1204;--accenttext:#F5A524;--sun:#F5A524;--core:#F5A524;--glow:rgba(245,165,36,.14)}
+:root[data-theme=light]{--bg:#F7F8FC;--side:#EEF0F7;--surface:#FFFFFF;--surface2:#EEF0F7;--line:#D8DCEA;--text:#0D0F1A;--muted:#4A526B;--accent:#F5A524;--onaccent:#1A1204;--accenttext:#8F5600;--sun:#E08A00;--core:#E08A00;--glow:rgba(245,165,36,.12)}
+html,body{margin:0;background:var(--bg)}
+.theme-toggle{position:fixed;right:16px;bottom:16px;z-index:50;width:44px;height:44px;border-radius:999px;border:1px solid var(--line);background:var(--surface);color:var(--text);cursor:pointer;font-size:18px}
+.theme-toggle:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+</style>
+</head>
+<body>
+
+<div style=" min-height: 100vh; background: var(--bg); background-image: radial-gradient(1200px 600px at 50% -5%, var(--glow), transparent 70%); color: var(--text); font-family: 'DM Sans', sans-serif; font-size: 17px; line-height: 1.55">
+
+<!-- nav -->
+<div style="max-width: 1200px; margin: 0 auto; padding: 24px; display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 16px">
+<a href="index.html" style="display: flex; align-items: center; gap: 10px">
+<svg width="38" height="38" viewBox="0 0 64 64" fill="none" aria-label="Emvryx">
+<path d="M32 56 C22 56 12 51 10 41 C5 37 5 28 11 24 C10 16 18 8 26 11 C29 6 35 6 38 11 C46 8 54 16 53 24 C59 28 59 37 54 41 C52 51 42 56 32 56 Z" style="stroke: var(--text)" stroke-width="4" stroke-linejoin="round"/>
+<path d="M21 22 L43 50 M43 22 L21 50" style="stroke: var(--text)" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+<circle cx="32" cy="36" r="6.5" style="fill: var(--sun)"/>
+</svg>
+<span style="font-family: 'Sora', sans-serif; font-weight: 600; font-size: 24px; letter-spacing: -0.02em">Emvryx</span>
+</a>
+<div style="display: flex; flex-wrap: wrap; align-items: center; gap: 28px; font-size: 16px; font-weight: 500">
+<a href="models.html">Models</a>
+<a href="plans.html">Plans</a>
+<a href="usage.html">How usage works</a>
+<a href="about.html">About</a>
+<a href="#try" style="background: var(--accent); color: var(--onaccent); border-radius: 999px; padding: 12px 22px; font-weight: 600">Open Emvryx</a>
+</div>
+</div>
+
+<!-- hero -->
+<div id="top" style="max-width: 1200px; margin: 0 auto; padding: 64px 24px 88px; display: flex; flex-wrap: wrap; align-items: center; gap: 56px">
+<div style="flex: 1 1 480px; display: flex; flex-direction: column; gap: 28px">
+<div style="font-size: 14px; font-weight: 600; letter-spacing: 0.14em; color: var(--accenttext)">EMVRYX.AI &middot; PRIVATE BY DESIGN</div>
+<h1 style="margin: 0; font-family: 'Sora', sans-serif; font-weight: 600; font-size: 68px; line-height: 1.04; letter-spacing: -0.03em">An AI that thinks on your device.</h1>
+<p style="margin: 0; font-size: 21px; line-height: 1.5; color: var(--muted); max-width: 560px">Emvryx is a family of language models trained from scratch. They run on your own phone or PC, remember only what you let them, and show where an answer came from.</p>
+<div style="display: flex; flex-wrap: wrap; gap: 14px">
+<a href="#try" style="background: var(--accent); color: var(--onaccent); border-radius: 999px; padding: 16px 28px; font-weight: 600; font-size: 18px">Open the web app</a>
+<a href="models.html" style="border: 1px solid var(--line); border-radius: 999px; padding: 16px 28px; font-weight: 600; font-size: 18px">Meet the models</a>
+</div>
+<div style="font-size: 15px; color: var(--muted)">Early access for a small test group. Android app to follow.</div>
+</div>
+
+<div style="flex: 1 1 420px; background: var(--surface); border: 1px solid var(--line); border-radius: 24px; padding: 24px; display: flex; flex-direction: column; gap: 18px">
+<div style="align-self: flex-end; max-width: 80%; background: var(--surface2); border-radius: 18px 18px 4px 18px; padding: 14px 18px">Why is the sky blue?</div>
+<div style="max-width: 94%; display: flex; flex-direction: column; gap: 12px">
+<div style="display: flex; align-items: center; gap: 8px; font-size: 14px; color: var(--muted)">
+<svg width="16" height="16" viewBox="0 0 64 64" fill="none" aria-hidden="true"><circle cx="32" cy="32" r="12" style="fill: var(--sun)"/><circle cx="32" cy="32" r="26" style="stroke: var(--sun)" stroke-opacity="0.4" stroke-width="5"/></svg>
+Read 2 notes from Wikipedia
+</div>
+<div style="background: var(--bg); border: 1px solid var(--line); border-radius: 18px 18px 18px 4px; padding: 14px 18px">Sunlight is made of many colours. Air scatters the short blue wavelengths far more than the long red ones, so blue light reaches your eyes from every direction.</div>
+<div style="display: flex; flex-wrap: wrap; gap: 8px; font-size: 14px">
+<span style="border: 1px solid var(--line); border-radius: 999px; padding: 4px 12px; color: var(--muted)">Source: Wikipedia, Rayleigh scattering</span>
+</div>
+</div>
+<div style="border: 1px solid var(--line); border-radius: 18px; padding: 12px 12px 12px 18px; display: flex; flex-direction: column; gap: 12px; color: var(--muted); font-size: 15px">
+<span>Message Emvryx&hellip;</span>
+<div style="display: flex; align-items: center; justify-content: space-between">
+<span style="border: 1px solid var(--line); border-radius: 10px; padding: 6px 12px; color: var(--text); font-weight: 600">Flare <span style="color: var(--muted)">&#9662;</span></span>
+<span style="background: var(--accent); color: var(--onaccent); border-radius: 10px; width: 36px; height: 36px; display: flex; align-items: center; justify-content: center; font-weight: 700" aria-hidden="true">&uarr;</span>
+</div>
+</div>
+</div>
+</div>
+
+<!-- the family, short -->
+<div style="border-top: 1px solid var(--line)">
+<div style="max-width: 1200px; margin: 0 auto; padding: 80px 24px; display: flex; flex-direction: column; gap: 32px">
+<div style="display: flex; flex-wrap: wrap; justify-content: space-between; align-items: flex-end; gap: 16px">
+<h2 style="margin: 0; font-family: 'Sora', sans-serif; font-weight: 600; font-size: 40px; letter-spacing: -0.02em">Five models, one family</h2>
+<a href="models.html" style="color: var(--accenttext); font-weight: 600">See all the models &rarr;</a>
+</div>
+<div style="display: flex; flex-wrap: wrap; gap: 20px">
+<div style="flex: 1 1 200px; display: flex; align-items: center; gap: 16px"><svg width="38" height="38" viewBox="0 0 64 64" fill="none" aria-hidden="true"><path d="M32 56 C22 56 12 51 10 41 C5 37 5 28 11 24 C10 16 18 8 26 11 C29 6 35 6 38 11 C46 8 54 16 53 24 C59 28 59 37 54 41 C52 51 42 56 32 56 Z" style="stroke: var(--muted)" stroke-width="5" stroke-linejoin="round" stroke-dasharray="26 7" stroke-linecap="round"/><circle cx="32" cy="36" r="6" style="fill: var(--muted)"/></svg><div><div style="font-family: 'Sora', sans-serif; font-weight: 600; font-size: 22px">Ember</div><div style="color: var(--muted); font-size: 15px">Small and quick</div></div></div>
+<div style="flex: 1 1 220px; display: flex; align-items: center; gap: 16px"><svg width="44" height="44" viewBox="0 0 64 64" fill="none" aria-hidden="true"><path d="M32 56 C22 56 12 51 10 41 C5 37 5 28 11 24 C10 16 18 8 26 11 C29 6 35 6 38 11 C46 8 54 16 53 24 C59 28 59 37 54 41 C52 51 42 56 32 56 Z" style="stroke: var(--muted)" stroke-width="5" stroke-linejoin="round"/><circle cx="32" cy="36" r="6.5" style="fill: var(--muted)"/></svg><div><div style="font-family: 'Sora', sans-serif; font-weight: 600; font-size: 22px">Flare</div><div style="color: var(--muted); font-size: 15px">Fast and light</div></div></div>
+<div style="flex: 1 1 220px; display: flex; align-items: center; gap: 16px"><svg width="52" height="52" viewBox="0 0 64 64" fill="none" aria-hidden="true"><path d="M32 56 C22 56 12 51 10 41 C5 37 5 28 11 24 C10 16 18 8 26 11 C29 6 35 6 38 11 C46 8 54 16 53 24 C59 28 59 37 54 41 C52 51 42 56 32 56 Z" style="stroke: var(--text)" stroke-width="4" stroke-linejoin="round"/><path d="M21 22 L43 50 M43 22 L21 50" style="stroke: var(--text)" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/><circle cx="32" cy="36" r="6.5" style="fill: var(--text)"/></svg><div><div style="font-family: 'Sora', sans-serif; font-weight: 600; font-size: 22px">Equinox</div><div style="color: var(--muted); font-size: 15px">Everyday work</div></div></div>
+<div style="flex: 1 1 220px; display: flex; align-items: center; gap: 16px"><svg width="60" height="60" viewBox="0 0 64 64" fill="none" aria-hidden="true"><path d="M32 56 C22 56 12 51 10 41 C5 37 5 28 11 24 C10 16 18 8 26 11 C29 6 35 6 38 11 C46 8 54 16 53 24 C59 28 59 37 54 41 C52 51 42 56 32 56 Z" style="stroke: var(--text)" stroke-width="3.5" stroke-linejoin="round"/><path d="M21 22 L43 50 M43 22 L21 50" style="stroke: var(--text)" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"/><circle cx="32" cy="36" r="6" style="fill: var(--text)"/></svg><div><div style="font-family: 'Sora', sans-serif; font-weight: 600; font-size: 22px">Solstice</div><div style="color: var(--muted); font-size: 15px">Harder questions</div></div></div>
+<div style="flex: 1 1 220px; display: flex; align-items: center; gap: 16px"><svg width="68" height="68" viewBox="0 0 64 64" fill="none" aria-hidden="true"><path d="M32 56 C22 56 12 51 10 41 C5 37 5 28 11 24 C10 16 18 8 26 11 C29 6 35 6 38 11 C46 8 54 16 53 24 C59 28 59 37 54 41 C52 51 42 56 32 56 Z" style="stroke: var(--sun)" stroke-width="3" stroke-linejoin="round"/><path d="M21 22 L43 50 M43 22 L21 50" style="stroke: var(--text)" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/><circle cx="32" cy="36" r="5" style="fill: var(--sun)"/></svg><div><div style="font-family: 'Sora', sans-serif; font-weight: 600; font-size: 22px">Apogee</div><div style="color: var(--muted); font-size: 15px">Toughest challenges</div></div></div>
+</div>
+</div>
+</div>
+
+<!-- three highlights -->
+<div style="border-top: 1px solid var(--line)">
+<div style="max-width: 1200px; margin: 0 auto; padding: 80px 24px; display: flex; flex-direction: column; gap: 32px">
+<h2 style="margin: 0; font-family: 'Sora', sans-serif; font-weight: 600; font-size: 40px; letter-spacing: -0.02em">What it does</h2>
+<div style="display: flex; flex-wrap: wrap; gap: 20px">
+<div style="flex: 1 1 320px; background: var(--surface); border: 1px solid var(--line); border-radius: 20px; padding: 28px; display: flex; flex-direction: column; gap: 10px"><h3 style="margin: 0; font-family: 'Sora', sans-serif; font-weight: 600; font-size: 22px">Private by default</h3><p style="margin: 0; color: var(--muted)">The model is a file on your device. No account, no tracking, nothing sent anywhere unless you switch it on.</p></div>
+<div style="flex: 1 1 320px; background: var(--surface); border: 1px solid var(--line); border-radius: 20px; padding: 28px; display: flex; flex-direction: column; gap: 10px"><h3 style="margin: 0; font-family: 'Sora', sans-serif; font-weight: 600; font-size: 22px">Remembers you, on your terms</h3><p style="margin: 0; color: var(--muted)">It can save facts like your name, and you can edit or delete anything it remembers. Private chats are never stored.</p></div>
+<div style="flex: 1 1 320px; background: var(--surface); border: 1px solid var(--line); border-radius: 20px; padding: 28px; display: flex; flex-direction: column; gap: 10px"><h3 style="margin: 0; font-family: 'Sora', sans-serif; font-weight: 600; font-size: 22px">Shows its sources</h3><p style="margin: 0; color: var(--muted)">Answers from Wikipedia and the web name the site and date. If the notes don&rsquo;t say, it says it doesn&rsquo;t know.</p></div>
+</div>
+</div>
+</div>
+
+<!-- plans teaser -->
+<div style="border-top: 1px solid var(--line)">
+<div style="max-width: 1200px; margin: 0 auto; padding: 80px 24px; display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 24px">
+<div style="display: flex; flex-direction: column; gap: 10px; max-width: 640px">
+<h2 style="margin: 0; font-family: 'Sora', sans-serif; font-weight: 600; font-size: 40px; letter-spacing: -0.02em">Free to start. More when you need it.</h2>
+<p style="margin: 0; color: var(--muted); font-size: 19px">You always see how much is left, in plain messages. Models on your own device are free and unlimited.</p>
+</div>
+<div style="display: flex; flex-wrap: wrap; gap: 14px">
+<a href="plans.html" style="background: var(--accent); color: var(--onaccent); border-radius: 999px; padding: 14px 26px; font-weight: 600">See the plans</a>
+<a href="usage.html" style="border: 1px solid var(--line); border-radius: 999px; padding: 14px 26px; font-weight: 600">How usage works</a>
+</div>
+</div>
+</div>
+
+<!-- try -->
+<div id="try" style="border-top: 1px solid var(--line)">
+<div style="max-width: 1200px; margin: 0 auto; padding: 80px 24px; display: flex; flex-direction: column; align-items: center; gap: 22px; text-align: center">
+<h2 style="margin: 0; font-family: 'Sora', sans-serif; font-weight: 600; font-size: 44px; letter-spacing: -0.02em">Try Emvryx</h2>
+<p style="margin: 0; color: var(--muted); font-size: 19px; max-width: 520px">Early access is open to a small test group. Ask for an invite and you&rsquo;ll get a link and a key.</p>
+<a href="#top" style="background: var(--accent); color: var(--onaccent); border-radius: 999px; padding: 16px 32px; font-weight: 600; font-size: 18px">Request an invite</a>
+</div>
+</div>
+
+<!-- footer -->
+<div style="border-top: 1px solid var(--line)">
+<div style="max-width: 1200px; margin: 0 auto; padding: 32px 24px 48px; display: flex; flex-wrap: wrap; justify-content: space-between; gap: 16px; color: var(--muted); font-size: 15px">
+<span>&copy; Emvryx.AI 2026. Private by design.</span>
+<div style="display: flex; flex-wrap: wrap; gap: 24px">
+<a href="models.html" style="color: var(--muted)">Models</a>
+<a href="plans.html" style="color: var(--muted)">Plans</a>
+<a href="usage.html" style="color: var(--muted)">How usage works</a>
+<a href="about.html" style="color: var(--muted)">About</a>
+</div>
+</div>
+</div>
+
+</div>
+
+<button class="theme-toggle" id="themeToggle" aria-label="Switch between dark and light">&#9680;</button>
+<script>
+(function () {
+  var root = document.documentElement, key = 'emvryx_theme';
+  try { var saved = localStorage.getItem(key); if (saved === 'light' || saved === 'dark') root.setAttribute('data-theme', saved); } catch (e) {}
+  document.getElementById('themeToggle').addEventListener('click', function () {
+    var next = root.getAttribute('data-theme') === 'light' ? 'dark' : 'light';
+    root.setAttribute('data-theme', next);
+    try { localStorage.setItem(key, next); } catch (e) {}
+  });
+})();
+</script>
+</body>
+</html>

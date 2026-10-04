@@ -1,5 +1,5 @@
 """
-app_server.py - The Yuvra app server: a browser chat page that talks to a model, with plans, usage and the device check.
+app_server.py - The Emvryx app server: a browser chat page that talks to a model, with plans, usage and the device check.
 
 WHAT THIS FILE DOES
     Starts a small web server (Python standard library only) and serves the chat page (web/index.html). The page and the
@@ -48,6 +48,7 @@ import urllib.request
 import app_engine as E
 import chat
 import chat_polish
+import connected_apps
 import context_window as CW
 import effort_router
 import regen_modes
@@ -514,7 +515,7 @@ def error_payload(e):
 
 # ------------------------------------------------------------------ HTTP
 class Handler(http.server.BaseHTTPRequestHandler):
-    server_version = "Yuvra"
+    server_version = "Emvryx"
     protocol_version = "HTTP/1.1"
 
     state = None            # set by make_server
@@ -554,7 +555,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
             return auth[7:].strip()
         for part in (self.headers.get("Cookie") or "").split(";"):
             k, _, v = part.strip().partition("=")
-            if k == "yuvra_key":
+            if k == "emvryx_key":
                 return urllib.parse.unquote(v)
         return None
 
@@ -566,7 +567,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
         return who
 
     def _cookie(self, key):
-        return {"Set-Cookie": f"yuvra_key={urllib.parse.quote(key)}; Path=/; HttpOnly; SameSite=Strict; Max-Age=31536000"}
+        return {"Set-Cookie": f"emvryx_key={urllib.parse.quote(key)}; Path=/; HttpOnly; SameSite=Strict; Max-Age=31536000"}
 
     def _file(self, name, ctype):
         path = os.path.join(WEB, name)
@@ -603,6 +604,8 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 return self.api_get_chat(who, int(m.group(1)))
             if path == "/api/settings":
                 return self._send(200, self.state.get_settings(who["user"]))
+            if path == "/api/apps":
+                return self._send(200, connected_apps.catalog())
             if path == "/api/admin/users" and who["owner"]:
                 return self._send(200, {"users": [{"user": u["user"], "tier": self.state.usage.get_user(u["user"])["tier"]}
                                                   for u in self.state.users.values()], "paused": bool(self.state.cfg.get("paused"))})
@@ -639,6 +642,14 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 return self._send(200, {"ok": True})
             if path == "/api/settings":
                 return self._send(200, self.state.put_settings(who["user"], body))
+            m = re.fullmatch(r"/api/apps/([a-z]+)/connect", path)
+            if m:
+                try:
+                    app = connected_apps.get(m.group(1))
+                except KeyError:
+                    return self._send(404, {"code": "not_found", "message": "That app isn't in the list."})
+                return self._send(501, {"code": "coming_soon", "message": f"{app['name']} isn't available yet.",
+                                        "action": "Connected apps are planned: nothing is connected, and nothing is shared."})
             if path == "/api/delete-everything":
                 self.state.store(who["user"]).delete_everything()
                 return self._send(200, {"ok": True})
@@ -801,7 +812,7 @@ def main():
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[1])
     ap.add_argument("--host", default="127.0.0.1", help="127.0.0.1 = this computer only. 0.0.0.0 = your whole network")
     ap.add_argument("--port", type=int, default=8000)
-    ap.add_argument("--data", default=".yuvra", help="where chats, usage and keys are kept")
+    ap.add_argument("--data", default=".emvryx", help="where chats, usage and keys are kept")
     ap.add_argument("--llama", default=None, help="URL of a llama-server (llama.cpp) running the model")
     ap.add_argument("--llama_key", default=None)
     ap.add_argument("--tokenizer", default=None, help="the model's tokenizer.json (only needed with --llama)")
@@ -813,6 +824,9 @@ def main():
     ap.add_argument("--timings", action="store_true", help="print how long each reply took (loading, first word, total)")
     ap.add_argument("--add-user", nargs=2, metavar=("NAME", "PLAN"), help="add a tester (free, pro or mega) and print their key")
     args = ap.parse_args()
+    if args.data == ".emvryx" and not os.path.exists(".emvryx") and os.path.isdir(".yuvra"):   # the app was called Yuvra before
+        os.rename(".yuvra", ".emvryx")
+        print("Moved your saved chats, keys and usage from .yuvra to .emvryx (the app is now called Emvryx).")
     if args.llama and not args.tokenizer:
         sys.exit("With --llama you also need --tokenizer data/<version>/tokenizer.json (the model's own tokenizer).")
     tok = BPETokenizer.load(args.tokenizer) if args.tokenizer else None
@@ -835,9 +849,9 @@ def main():
     srv = make_server(state, args.host, args.port)
     shown = "localhost" if args.host in ("127.0.0.1", "0.0.0.0") else args.host
     if state.demo:
-        print("Yuvra is running in DEMO mode (no model files found; see docs/V2.md to make a .gguf)")
+        print("Emvryx is running in DEMO mode (no model files found; see docs/V2.md to make a .gguf)")
     else:
-        print("Yuvra is running. Models on this computer: " + (", ".join(sorted(files)) or "none") + (" (via --llama)" if args.llama else ""))
+        print("Emvryx is running. Models on this computer: " + (", ".join(sorted(files)) or "none") + (" (via --llama)" if args.llama else ""))
         if runner and not runner.bin:
             print("llama-server was not found. Install llama.cpp and pass --llama-bin <path to llama-server.exe>.")
     print(f"Open: http://{shown}:{args.port}/?key={state.owner_key()}")
