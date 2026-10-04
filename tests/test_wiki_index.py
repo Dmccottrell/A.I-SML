@@ -132,6 +132,28 @@ class MissingSubjectArticle(unittest.TestCase):
         finally:
             wiki.db.close()
 
+    def test_fast_mode_never_runs_the_any_word_fallback(self):
+        wiki = wiki_index.WikiIndex(self.path)
+        matches = []
+        original = wiki._query
+        wiki._query = lambda match, k, timeout=None: matches.append(match) or original(match, k, timeout)
+        try:
+            wiki.search("zebra unicorn wizard capital", 3, deep=False)    # no passage has all four words
+            self.assertFalse([m for m in matches if " OR " in m])
+            wiki.search("zebra unicorn wizard capital", 3)
+            self.assertTrue([m for m in matches if " OR " in m])          # the default still falls back
+        finally:
+            wiki.db.close()
+
+    def test_a_query_over_its_time_limit_returns_nothing_instead_of_stalling(self):
+        wiki = wiki_index.WikiIndex(self.path)
+        try:
+            self.assertTrue(wiki._query('"capital" AND "illinois"', 5))               # normally finds passages
+            self.assertEqual(wiki._query('"capital" AND "illinois"', 5, timeout=-1), [])   # deadline already passed
+            self.assertTrue(wiki._query('"capital" AND "illinois"', 5))               # and the next one still works
+        finally:
+            wiki.db.close()
+
     def test_tense_prefers_the_present_fact_over_history(self):
         now = wiki_index._tense("Springfield is the capital of Illinois.", ["capital", "illinois"])
         then = wiki_index._tense("It served as the state capital of Illinois until 1839.", ["capital", "illinois"])

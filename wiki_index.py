@@ -211,6 +211,7 @@ def keywords(question):
     return [w for w in words if w not in STOPWORDS and len(w) > 1]
 
 
+FAST_QUERY_SECONDS = 2.0   # bulk searches (deep=False) give up on a query after this long
 CANDIDATES = 40            # passages gathered per query before re-ranking
 
 
@@ -320,12 +321,26 @@ class WikiIndex:
             print("note: no title index yet, so searches are less accurate. "
                   "Run: python wiki_index.py index-titles", file=sys.stderr)
 
-    def _query(self, match, k):
+    def _query(self, match, k, timeout=None):
+        """The k best passages for an FTS5 `match`. With `timeout` (seconds), a query that runs longer is
+        stopped and returns nothing: ranking every match of a common word can take many seconds."""
         # bm25(): lower = better match. Title words count 5x as much as body words.
         sql = ("SELECT p.id, p.title, p.text, p.part FROM passages_fts f JOIN passages p ON p.id = f.rowid "
                "WHERE passages_fts MATCH ? ORDER BY bm25(passages_fts, 5.0, 1.0) LIMIT ?")
         with self.lock:
-            return [{"id": i, "title": t, "text": x, "part": pt} for i, t, x, pt in self.db.execute(sql, (match, k))]
+            if timeout is not None:
+                deadline = time.time() + timeout
+                self.db.set_progress_handler(lambda: 1 if time.time() > deadline else 0, 1000)
+            try:
+                return [{"id": i, "title": t, "text": x, "part": pt}
+                        for i, t, x, pt in self.db.execute(sql, (match, k))]
+            except sqlite3.OperationalError:          # "interrupted": took too long
+                if timeout is None:
+                    raise
+                return []
+            finally:
+                if timeout is not None:
+                    self.db.set_progress_handler(None, 0)
 
     def _title_body_pairs(self, words):
         """Opening passages whose TITLE holds one keyword and whose text holds another: for "capital of
@@ -375,8 +390,8 @@ class WikiIndex:
         keywords, goes first: for "Who was Abraham Lincoln?", "Abraham Lincoln"
         beats "Abraham Lincoln (captain)".
 
-        `deep=False` skips the title+body pair queries, which rank every matching passage and are slow for
-        common words. Use it when searching thousands of questions in a row (building training lessons); chat
+        `deep=False` skips the "any word" fallback and the title+body pair queries, which rank every
+        matching passage and are slow for common words (an OR over millions of passages took many seconds). Use it when searching thousands of questions in a row (building training lessons); chat
         and evaluation keep the default.
         """
         words = keywords(question)
@@ -384,8 +399,8 @@ class WikiIndex:
             return []
         quoted = [f'"{w}"' for w in words]
         pool = CANDIDATES
-        results = self._query(" AND ".join(quoted), pool)
-        if len(results) < k and len(words) > 1:
+        results = self._query(" AND ".join(quoted), pool, timeout=None if deep else FAST_QUERY_SECONDS)
+        if deep and len(results) < k and len(words) > 1:      # "any word" matches millions of passages: slow
             results += self._query(" OR ".join(quoted), pool)
         results += self._subject_passages(question)
         if deep and len(words) > 1:

@@ -105,5 +105,6 @@ marked "guess". The settings every later version should start from are in
   every matching passage, and the build sat for a long time with no output. `WikiIndex.search(..., deep=False)` skips
   those queries and is what the lesson builder uses; chat and evaluation keep `deep=True`. The builder now
   prints progress every 500 records.
+- The first fix was not enough: the slow call was the **"any word" (OR) fallback** that runs when the strict "all words" query finds fewer than 3 passages, which matches millions of passages and ranks them all (seen in the traceback after Ctrl+C). `deep=False` now also skips that fallback, and every fast-mode query is cut off after 2 seconds (`FAST_QUERY_SECONDS`) so one slow question cannot stall the build.
 - **Rule:** any script that calls search in a loop (lesson builders, DPO pairs) should either use `deep=False`
   or print its progress, and be timed on 100 questions first.
