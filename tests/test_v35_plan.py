@@ -27,10 +27,10 @@ class Plan(unittest.TestCase):
         self.assertNotIn("tinystories", mix)                       # written by GPT-3.5/4
         self.assertNotIn("tinystories", dict(V.anneal_mix))
         tokens = lambda name: V.data_tokens * mix[name] / 1e9
-        self.assertAlmostEqual(tokens("fineweb_100bt"), 19.0, places=1)   # as much educational text as before
-        self.assertAlmostEqual(tokens("dclm"), 7.0, places=1)
-        self.assertAlmostEqual(tokens("code_multi"), 5.0, places=1)
-        self.assertAlmostEqual(tokens("math"), 3.0, places=1)
+        self.assertAlmostEqual(mix["fineweb_100bt"], 0.475)       # educational text stays the biggest share
+        self.assertAlmostEqual(mix["dclm"], 0.175)
+        self.assertAlmostEqual(mix["code_multi"], 0.125)
+        self.assertAlmostEqual(mix["math"], 0.075)
         for name, _ in V.data_mix + V.anneal_mix:
             self.assertIn(name, P.LOADERS, name)
         anneal = dict(V.anneal_mix)

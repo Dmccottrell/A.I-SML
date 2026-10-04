@@ -220,7 +220,7 @@ VERSIONS = {
     ),
     "v3.5": Version(
         name="v3.5",
-        description="~1.12B assistant: v3's features on a bigger brain; reads 40B tokens: educational and "
+        description="~1.12B assistant: v3's features on a bigger brain; reads ~25B tokens: educational and "
                     "everyday web, Wikipedia, several code languages, math, textbook-style text",
         data_dir="data/v3.5",
         ckpt_dir=f"{CKPT_DIR}/v3.5",
@@ -234,7 +234,7 @@ VERSIONS = {
         # "cosmopedia" is textbook-style text written by an OPEN model (Mixtral).
         data_mix=(("fineweb_100bt", 0.475), ("dclm", 0.175), ("wikipedia", 0.1125), ("code_multi", 0.125),
                   ("math", 0.075), ("cosmopedia", 0.0375)),
-        data_tokens=40_000_000_000,
+        data_tokens=24_640_000_000,    # = 94,000 steps x 262,144
         tokenizer_sample_mb=60,      # includes every code language
         special_tokens=tuple(EXTENDED_SPECIAL_TOKENS),
         decontaminate=True,
@@ -243,7 +243,7 @@ VERSIONS = {
         anneal_mix=(("fineweb_hq_100bt", 0.35), ("dclm", 0.10), ("wikipedia", 0.20), ("math", 0.12),
                     ("code_multi", 0.113), ("cosmopedia", 0.05), ("qa", 0.05), ("commits", 0.015),
                     ("agent_traces", 0.002)),
-        anneal_tokens=4_100_000_000,
+        anneal_tokens=2_500_000_000,
         model=ModelConfig(
             vocab_size=32768,
             dim=2048,
@@ -257,7 +257,7 @@ VERSIONS = {
         train=TrainSettings(
             batch_size=1,
             grad_accum=64,       # 64 x 4096 = ~262k tokens per step (same as v3)
-            max_iters=152_600,   # 152.6k steps x 262k tokens = ~40 billion tokens (~36 per parameter)
+            max_iters=94_000,    # 94k steps x 262k tokens = ~24.6 billion tokens (~22 per parameter, about compute-optimal)
             warmup_iters=2_000,
             lr_max=3e-4,         # bigger model, gentler steps
             lr_min=3e-5,
@@ -272,7 +272,7 @@ VERSIONS = {
             exam_every=5000,
             exam_questions=5000,     # a steadier score than v3's 500 (~3-4 min per exam); v4: 0 = all 10,042
             exam_pick="spread",      # spread over the whole test, so it matches the full-test score
-            snapshot_every=3050,     # 5 snapshots in the last 15,260 steps (~4.5 GB each)
+            snapshot_every=1880,     # 5 snapshots in the last 9,400 steps (~4.5 GB each)
             compile=True,
         ),
         # On 32 GB cards (RTX 5090; 1, 2 or 4 of them) the 12 GB workarounds above only cost speed:
