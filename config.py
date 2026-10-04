@@ -251,12 +251,12 @@ VERSIONS = {
             n_heads=32,          # 64 dims per head
             n_kv_heads=4,        # 8 query heads share each key/value head
             hidden_dim=5632,     # 22 x 256, so phones can use the smaller Q4_K format
-            max_seq_len=2048,
-            rope_theta=500_000.0,
+            max_seq_len=4096,    # twice v3's memory, set from the start (no stretching step later)
+            rope_theta=1_000_000.0,   # a bigger base suits the longer context; room to stretch to 8k+ later
         ),
         train=TrainSettings(
             batch_size=1,
-            grad_accum=128,      # 128 x 2048 = ~262k tokens per step
+            grad_accum=64,       # 64 x 4096 = ~262k tokens per step (same as v3)
             max_iters=152_600,   # 152.6k steps x 262k tokens = ~40 billion tokens (~36 per parameter)
             warmup_iters=2_000,
             lr_max=3e-4,         # bigger model, gentler steps
@@ -283,8 +283,8 @@ VERSIONS = {
                                            # the 4070 (12 GB) or switch optimizers midway. --set optimizer=adamw
                                            # gives the old portable setup
             ("grad_checkpoint", False),    # ~30% faster; the pilot shows whether memory allows it
-            ("batch_size", 2),             # 2 x 2048 tokens per micro-batch: the GPU works more efficiently
-            ("grad_accum", 64),            # ... so half as many: still 128 x 2048 = ~262k tokens per step
+            ("batch_size", 1),             # 1 x 4096 tokens per micro-batch (same size as 2 x 2048 before)
+            ("grad_accum", 64),            # still 64 x 4096 = ~262k tokens per step
             ("save_every", 150),           # a checkpoint is ~17 GB: every ~25 min instead of every ~10
         ),
         finetune=FinetuneSettings(epochs=2, batch_size=2, lr=3e-5, neftune_alpha=5.0, micro_batch=1),

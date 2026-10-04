@@ -31,7 +31,7 @@ v6 (5B) and v6.5 (7B) keep growing toward medium size, mainly for the PC and onl
 | Model name | – | – | Emvryx Flare 3 | Emvryx Flare 3.5 | Emvryx Equinox 4 | Emvryx Solstice 5 | Emvryx Apogee 6 | Emvryx Apogee 6.5 |
 | Parameters | 29.5M | 88M | 394M | **~1.12B** | ~1.12B base + LoRA skill packs (small add-on weights, a few MB each, switched by a router) | **~3B** | **~5B** | **~7B** |
 | Shape | 512 wide × 8 layers | 768 wide × 12 layers | 1024 wide × 32 layers | 2048 wide × 24 layers | Same as v3.5 | ~3072 wide × 28 layers | ~3584 wide × 36 layers | 4096 wide × 32 layers |
-| Memory (context length) | 512 tokens | 1,024 tokens | 2,048 tokens; **v3-long: 8K → 16K → 32K** (stretched after training, if the tests pass) | 2,048, then stretched to **32K, goal 75K–100K** | Same as v3.5's stretched length + saved notes about you | **Goal 128K** (built for long text from the start) | **Goal 256K** | **Goal 500K** |
+| Memory (context length) | 512 tokens | 1,024 tokens | 2,048 tokens; **v3-long: 8K → 16K → 32K** (stretched after training, if the tests pass) | **4,096 from the start**, then stretched to **32K, goal 75K–100K** | Same as v3.5's stretched length + saved notes about you | **Goal 128K** (built for long text from the start) | **Goal 256K** | **Goal 500K** |
 | Vocabulary | 8,192 | 16,384 | 32,768 | 32,768 | 32,768 | 65,536 | 65,536 | 65,536 |
 | Attention | Standard | Grouped-query (faster on phones) | Grouped-query | Grouped-query | Grouped-query | Grouped-query | Grouped-query | Grouped-query |
 | Download size (Q4) | ~20 MB | 89 MB | ~240 MB | ~700 MB | ~700 MB + packs | ~1.8 GB | ~3 GB | ~4 GB |
