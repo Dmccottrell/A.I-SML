@@ -87,15 +87,21 @@ def needle_case(tok, filler, length, depth, rng):
 
 
 def multi_case(tok, filler, length, depth, rng):
-    """Two facts, one before and one after `depth`; the answer needs both. Returns (ids, [answers])."""
+    """Two facts, one before and one after `depth`, asked as TWO separate questions about the same text; both must
+    be answered right. Returns ([prompt 1, prompt 2], [answer 1, answer 2]).
+
+    (The first version asked for both in one reply, "Mira's favorite number is ... and her home town is ...".
+    A model that was never taught to write that second half scored exactly 0% at every depth, even when the facts
+    were a few tokens back, so it tested an answer format, not memory.)"""
     number, town = str(rng.randint(1000, 9999)), rng.choice(WORDS_B) + "ford"
     f1 = tok.encode(f"\n\nMira's favorite number is {number}.\n\n", allow_special=False)
     f2 = tok.encode(f"\n\nMira's home town is {town}.\n\n", allow_special=False)
-    ask = tok.encode("\n\nQuestion: What is Mira's favorite number and what is her home town?\n"
-                     "Answer: Mira's favorite number is", allow_special=False)
-    room = length - ANSWER_ROOM - len(f1) - len(f2) - len(ask)
+    q1 = tok.encode("\n\nQuestion: What is Mira's favorite number?\nAnswer: Mira's favorite number is", allow_special=False)
+    q2 = tok.encode("\n\nQuestion: What is Mira's home town?\nAnswer: Mira's home town is", allow_special=False)
+    room = length - ANSWER_ROOM - len(f1) - len(f2) - max(len(q1), len(q2))
     d1, d2 = max(0.02, depth - 0.15), min(0.98, depth + 0.15)
-    return insert_at(filler[:room], [(d1, f1), (d2, f2)]) + ask, [number, town]
+    body = insert_at(filler[:room], [(d1, f1), (d2, f2)])
+    return [body + q1, body + q2], [number, town]
 
 
 def code_case(tok, filler, length, depth, rng):
@@ -121,6 +127,9 @@ def run_case(answer_fn, make, tok, filler_all, length, depth, rng, trials, need_
     for _ in range(trials):
         filler = random_window(filler_all, length, rng)
         ids, want = make(tok, filler, length, depth, rng)
+        if ids and isinstance(ids[0], list):          # several questions about the same text: every one must be right
+            ok += all(w.lower() in answer_fn(p).lower() for p, w in zip(ids, want))
+            continue
         text = answer_fn(ids).lower()
         wants = want if isinstance(want, list) else [want]
         ok += all(w.lower() in text for w in wants)

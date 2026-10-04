@@ -131,3 +131,22 @@ marked "guess". The settings every later version should start from are in
 - **Rule:** read the `ms/step` at step 20 and 40, not step 0, before trusting a time estimate; and tuning batches of very
   different lengths should not be padded together.
 
+## First long-context stretch: v3-long-8k FAILED its gate (Oct 4 2026)
+Trained 2,000 steps (0.52B tokens, 9.4 s/step on the rented 5090, ~5.2 h, ~$2.7), best val loss 1.950. Gate at 8,192 tokens:
+
+| Test | Result |
+|---|---|
+| Needle (depth 10 / 25 / 50 / 75 / 90%) | 0 / 5 / 70 / 95 / 95% (bar: >= 95% each, none under 90%) |
+| Multi-fact | 0% at every depth (test was broken: see below) |
+| Long code | 0 / 0 / 0 / 5 / 35% |
+| Loss by position | **+0.227 (FAIL)**; the 2K baseline was -0.400 |
+
+- The model reads roughly the last 2-4K tokens and loses what is further back; its loss does not fall as context grows.
+  The stretch is under-trained, or the position scaling (RoPE base 2M for 4x) is wrong. Not yet tested which.
+- **The multi-fact test was a format test**, not a memory test (it needed "...number is X and her home town is Y" within 16 tokens;
+  0% before and after the stretch). It now asks two separate questions on the same text and needs both right
+  (`eval_long.multi_case`). Re-run `python eval_long.py --version v3 --tests multi` for a baseline, and the 8K weights
+  (on Hugging Face as v3-long-8k/final.pt) to compare.
+- `stretch_ladder.py` stopped at 8K as designed; v3 stays a 2,048-token model. Options: continue the 8K step for 2,000-4,000 more
+  steps (~5-10 h), try a different RoPE base or YaRN-style scaling, add more recall-practice data, or accept a ~4K model.
+

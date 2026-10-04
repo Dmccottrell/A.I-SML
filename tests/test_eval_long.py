@@ -43,8 +43,9 @@ class Cases(unittest.TestCase):
             for d in E.DEPTHS:
                 filler = E.random_window(FILLER, 500, rng)
                 ids, want = make(TOK, filler, 500, d, rng)
-                self.assertLessEqual(len(ids), 500 - E.ANSWER_ROOM + 5)
-                self.assertGreater(len(ids), 400)
+                for prompt in (ids if isinstance(ids[0], list) else [ids]):    # multi: one prompt per question
+                    self.assertLessEqual(len(prompt), 500 - E.ANSWER_ROOM + 5)
+                    self.assertGreater(len(prompt), 400)
         ids, code = E.needle_case(TOK, FILLER[:500], 500, 0.5, rng)
         text = TOK.decode(ids)
         self.assertIn(code, text)
@@ -70,6 +71,22 @@ class Cases(unittest.TestCase):
     def test_blind_reader_fails_multi(self):
         out = {}
         self.assertEqual(E.run_retrieval("multi", E.multi_case, lambda ids: "i do not know", TOK, FILLER, 600, 4, 0,
+                                         E.MULTI_PASS, E.MULTI_FAIL, out), "FAIL")
+
+    def test_multi_asks_two_separate_questions_and_needs_both_right(self):
+        rng = random.Random(3)
+        ids, want = E.multi_case(TOK, E.random_window(FILLER, 600, rng), 600, 0.5, rng)
+        self.assertEqual(len(ids), 2)
+        self.assertEqual(len(want), 2)
+        self.assertIn("favorite number?", TOK.decode(ids[0]))
+        self.assertIn("home town?", TOK.decode(ids[1]))
+        self.assertEqual(TOK.decode(ids[0]).split("Question:")[0], TOK.decode(ids[1]).split("Question:")[0])   # same text
+        out = {}
+
+        def only_the_number(prompt_ids):                   # answers the first question, never the second
+            text = TOK.decode(prompt_ids)
+            return text.split("favorite number is ")[1].split()[0].strip(".?") if text.rstrip().endswith("number is") else "no idea"
+        self.assertEqual(E.run_retrieval("multi", E.multi_case, only_the_number, TOK, FILLER, 600, 4, 0,
                                          E.MULTI_PASS, E.MULTI_FAIL, out), "FAIL")
 
     def test_verdict_bands(self):
