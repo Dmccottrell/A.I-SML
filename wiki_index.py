@@ -242,6 +242,35 @@ def _window(text, words):
     return best
 
 
+def _ordered_span(text, words):
+    """Fewest words from the first keyword to the last, with the keywords in the order the question
+    gave them ("capital ... Illinois"). None if the text has them in no such order."""
+    toks = re.findall(r"[a-z0-9]+", text.lower())
+    first = [i for i, t in enumerate(toks) if t == words[0]]
+    best = None
+    for start in first:
+        pos, ok = start, True
+        for w in words[1:]:
+            nxt = next((i for i in range(pos + 1, len(toks)) if toks[i] == w), None)
+            if nxt is None:
+                ok = False
+                break
+            pos = nxt
+        if ok:
+            span = pos - start + 1
+            best = span if best is None else min(best, span)
+    return best
+
+
+def _tense(text, words):
+    """+1 if the passage states a keyword as a present fact ("Springfield is the capital ..."), -1 if only
+    as history ("served as the state capital ... until 1839")."""
+    low = text.lower()
+    present = any(re.search(r"\b(is|are)\s+(the|a|an)\s+(\w+\s+){0,2}" + re.escape(w), low) for w in words)
+    past = any(re.search(r"\b(was|served as|formerly|former|until|once)\b[^.]{0,60}" + re.escape(w), low) for w in words)
+    return 1.0 if present else -1.0 if past else 0.0
+
+
 def _score(r, words, q):
     """Higher = a better note for the question."""
     title_words = set(re.findall(r"[a-z0-9]+", r["title"].lower()))
@@ -259,9 +288,16 @@ def _score(r, words, q):
     if len(r["text"].split()) < 25:
         score -= 1.0
     if len(words) > 1:
-        span = _window(r["text"], words)
-        if span is not None:
-            score += 1.5 if span <= 8 else 0.75 if span <= 12 else 0.0
+        ordered = list(dict.fromkeys(words))
+        span = _ordered_span(r["text"], ordered) if len(ordered) > 1 else None
+        if span is not None:                                       # "capital ... Illinois", close together, in that order
+            score += 2.5 if span <= 4 else 2.0 if span <= 8 else 1.0 if span <= 12 else 0.0
+            score -= 0.02 * span                                   # tighter wins ties
+        else:
+            loose = _window(r["text"], words)
+            if loose is not None:
+                score += 0.5 if loose <= 8 else 0.25 if loose <= 12 else 0.0
+        score += _tense(r["text"], words)
     return score
 
 
