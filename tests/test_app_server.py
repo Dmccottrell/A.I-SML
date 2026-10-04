@@ -310,7 +310,15 @@ class Chatting(Base):
 
 
 class Stopping(Base):
-    factory = staticmethod(lambda model, question: E.FakeBackend(mode="forever"))
+    backend = None
+
+    def factory(model, question):                                  # noqa: N805 - a plain function stored on the class
+        # A reply that never ends by itself but is slow (10 ms a word), so the Stop click always arrives first.
+        # (With no pause it reached its length limit in milliseconds and the test failed about 1 run in 8.)
+        Stopping.backend = E.FakeBackend(mode="forever", pause=0.01)
+        return Stopping.backend
+
+    factory = staticmethod(factory)
 
     def test_stop_button_ends_a_reply_and_keeps_what_was_written(self):
         cid = self.new_chat(self.sam)
@@ -320,10 +328,13 @@ class Stopping(Base):
             out["r"] = self.ask(self.sam, cid, "go on")
         t = threading.Thread(target=run)
         t.start()
-        for _ in range(100):                                       # wait until the reply is running
-            if (self.sam.call("GET", f"/api/chats/{cid}")[1]["messages"] or [None])[-1:] and self.state.stops:
+        for _ in range(500):                                       # wait until the reply is really running
+            if self.state.stops and Stopping.backend is not None and Stopping.backend.prompts:
                 break
-            threading.Event().wait(0.02)
+            threading.Event().wait(0.01)
+        else:
+            self.fail("the reply never started")
+        threading.Event().wait(0.1)                                # let a few words be written
         self.sam.call("POST", f"/api/chats/{cid}/stop")
         t.join(20)
         self.assertEqual(out["r"][2][-1][1]["reason"], "stopped")
