@@ -1,0 +1,30 @@
+{"category": "length", "prompt": "Describe the ocean. Answer in fewer than 20 words.", "max_words": 19}
+{"category": "length", "prompt": "Explain what rain is in under 15 words.", "max_words": 14}
+{"category": "length", "prompt": "Give me a one-sentence description of a dog.", "sentences": 1}
+{"category": "length", "prompt": "In exactly two sentences, tell me why exercise is good.", "sentences": 2}
+{"category": "length", "prompt": "Write at least 40 words about your favourite season.", "min_words": 40}
+{"category": "length", "prompt": "Say hello in five words or fewer.", "max_words": 5}
+{"category": "lists", "prompt": "List exactly 4 fruits.", "count": 4}
+{"category": "lists", "prompt": "Give me exactly 2 tips for sleeping better.", "count": 2}
+{"category": "lists", "prompt": "Name 5 colours as a list.", "count": 5}
+{"category": "lists", "prompt": "List 3 animals that live in water.", "count": 3}
+{"category": "form", "prompt": "Write one sentence about the sun without using the letter e.", "no_letter": "e"}
+{"category": "form", "prompt": "Write a short sentence about a cat without using the letter s.", "no_letter": "s"}
+{"category": "form", "prompt": "Reply in ALL CAPITAL LETTERS: what colour is the sky?", "all_caps": true, "expect": ["blue"]}
+{"category": "form", "prompt": "Reply in all lowercase letters only: what is the capital of France?", "lowercase": true, "expect": ["paris"]}
+{"category": "form", "prompt": "Start your answer with the word Yes. Is water wet?", "starts_with": "yes"}
+{"category": "form", "prompt": "End your answer with the word goodbye. Say something about the weather.", "ends_with": "goodbye"}
+{"category": "form", "prompt": "Answer with only one word: what is the opposite of hot?", "max_words": 1, "expect": ["cold"]}
+{"category": "avoid", "prompt": "Tell me about dogs but do not mention the word 'pet'.", "not": ["pet"]}
+{"category": "avoid", "prompt": "Explain what a tree is without using the word 'green'.", "not": ["green"]}
+{"category": "avoid", "prompt": "Name a fruit that is not an apple or a banana.", "not": ["apple", "banana"]}
+{"category": "structured", "prompt": "Reply with only valid JSON with the keys \"name\" and \"age\" for a person called Sam who is 10.", "json": true, "json_keys": ["name", "age"]}
+{"category": "structured", "prompt": "Give me JSON with a key \"colour\" whose value is the colour of grass. JSON only.", "json": true, "json_keys": ["colour"]}
+{"category": "multi_turn", "prompt": "What is my name?", "history": [{"role": "user", "content": "Hi, my name is Priya."}, {"role": "assistant", "content": "Hello Priya! Nice to meet you."}, {"role": "user", "content": "I like painting."}, {"role": "assistant", "content": "That sounds lovely."}, {"role": "user", "content": "I also have a dog called Max."}, {"role": "assistant", "content": "Max sounds great!"}], "expect": ["priya"]}
+{"category": "multi_turn", "prompt": "What is my dog called?", "history": [{"role": "user", "content": "My name is Sam."}, {"role": "assistant", "content": "Hi Sam!"}, {"role": "user", "content": "I have a dog called Max."}, {"role": "assistant", "content": "Max is a great name."}, {"role": "user", "content": "I live in Chicago."}, {"role": "assistant", "content": "Chicago is a big city."}], "expect": ["max"]}
+{"category": "multi_turn", "prompt": "And what is the capital of Italy?", "history": [{"role": "user", "content": "What is the capital of France?"}, {"role": "assistant", "content": "The capital of France is Paris."}, {"role": "user", "content": "And of Spain?"}, {"role": "assistant", "content": "The capital of Spain is Madrid."}], "expect": ["rome"], "not": ["paris", "madrid"]}
+{"category": "multi_turn", "prompt": "Now tell me about the sun.", "history": [{"role": "user", "content": "Tell me about Illinois."}, {"role": "assistant", "content": "Illinois is a state in the United States."}, {"role": "user", "content": "What is its capital?"}, {"role": "assistant", "content": "The capital of Illinois is Springfield."}, {"role": "user", "content": "Thanks."}], "expect": ["sun", "star", "light", "heat"], "not": ["springfield"]}
+{"category": "multi_turn", "prompt": "What is 2 plus 2? Remember to keep it short.", "history": [{"role": "user", "content": "Please answer in fewer than 10 words from now on."}, {"role": "assistant", "content": "Okay, I will keep it short."}, {"role": "user", "content": "What colour is the sky?"}, {"role": "assistant", "content": "Blue."}, {"role": "user", "content": "Name a planet."}, {"role": "assistant", "content": "Mars."}], "max_words": 9, "expect": ["4", "four"]}
+{"category": "multi_turn", "prompt": "Say hello.", "history": [{"role": "user", "content": "From now on reply in all lowercase."}, {"role": "assistant", "content": "ok, i will reply in lowercase."}, {"role": "user", "content": "how are you?"}, {"role": "assistant", "content": "i am well, thank you."}], "lowercase": true}
+{"category": "multi_turn", "prompt": "That's wrong, the capital of Australia is Canberra, not Sydney. What is it?", "history": [{"role": "user", "content": "What is the capital of Australia?"}, {"role": "assistant", "content": "The capital of Australia is Sydney."}], "expect": ["canberra"]}
+{"category": "multi_turn", "prompt": "What did I ask you first?", "history": [{"role": "user", "content": "What is the largest planet?"}, {"role": "assistant", "content": "Jupiter is the largest planet."}, {"role": "user", "content": "And the smallest?"}, {"role": "assistant", "content": "Mercury is the smallest planet."}, {"role": "user", "content": "Thanks!"}, {"role": "assistant", "content": "You're welcome!"}], "expect": ["largest", "planet"]}

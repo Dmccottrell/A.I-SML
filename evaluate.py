@@ -14,6 +14,8 @@ WHAT THIS FILE DOES
       "history": earlier messages in the chat (topic switches, corrections)
       "count":   the answer must be a list of exactly this many items
       "sentences": the answer must have exactly this many sentences
+      "max_words", "no_letter", "starts_with", "all_caps", "json", ...: constraint checks, see eval_checks.py
+                 (eval/constraints.jsonl tests following instructions, also across several turns)
       "notes":   fixed notes for the question, e.g. web search results (eval/web.jsonl), so the
                  test is the same every time and needs no internet
     --lookup gives the model Wikipedia notes for each question (v3+).
@@ -27,6 +29,7 @@ Usage:  python evaluate.py                        (v1 chat model)
         python evaluate.py --version v3 --lookup
         python evaluate.py --version v2 --prompts eval/prompts_v3.jsonl   (v2 on v3's sheet)
         python evaluate.py --version v3 --prompts eval/web.jsonl     (reading web search results)
+        python evaluate.py --version v3 --prompts eval/constraints.jsonl   (following rules: word limits, formats, 3+ turns)
         python evaluate.py --version v3 --skill study     (with a skill pack on: did everyday answers get worse?)
 
 The report is saved next to the checkpoint: eval_<checkpoint name>.md
@@ -95,18 +98,7 @@ def answer(question, history=(), notes=None):
 passed = defaultdict(int)
 total = defaultdict(int)
 lines = [f"# Evaluation: {ckpt_path}" + (f" + skill pack {args.skill}" if args.skill else "") + "\n"]
-def check(t, reply):
-    """True if `reply` passes test `t` (see the extra fields at the top of this file)."""
-    low = reply.lower()
-    ok = not t.get("expect") or any(k.lower() in low for k in t["expect"])
-    ok = ok and not any(k.lower() in low for k in t.get("not", []))
-    if "count" in t:
-        lines = [l.strip() for l in reply.splitlines() if l.strip()]
-        items = [l for l in lines if re.match(r"^(\d+[.)]|[-*•])\s", l)]
-        ok = ok and len(items) == t["count"]
-    if "sentences" in t:
-        ok = ok and len(re.findall(r"[.!?](\s|$)", reply.strip())) == t["sentences"]
-    return ok
+from eval_checks import check   # the pass / fail rules (see that file for every field a test can have)
 
 
 for t in tests:
