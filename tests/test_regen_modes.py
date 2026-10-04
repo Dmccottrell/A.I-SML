@@ -82,6 +82,24 @@ class Server(Base):
         self.assertEqual((status, body["code"]), (400, "bad_option"))
         self.assertEqual([m["role"] for m in self.sam.call("GET", f"/api/chats/{cid}")[1]["messages"]], ["user", "assistant"])
 
+    def test_auto_effort_also_picks_the_temperature(self):
+        owner = self.owner
+        cid = self.new_chat(owner)
+        self.ask(owner, cid, "Write me a story about a fox", effort="auto")
+        self.assertEqual(Server.backend.sampling["temperature"], 1.0)
+        self.ask(owner, self.new_chat(owner), "List exactly 3 fruits", effort="auto")
+        self.assertEqual(Server.backend.sampling["temperature"], 0.2)
+        self.ask(owner, self.new_chat(owner), "Write me a story about a fox", effort="balanced")
+        self.assertEqual(Server.backend.sampling["temperature"], 0.8)           # a chosen level keeps the model's own setting
+
+    def test_regenerate_never_goes_outside_the_models_range(self):
+        manifest_model = next(m for m in self.state.manifest["models"] if m["id"] == "flare-3")
+        manifest_model["temperature_bounds"] = [0.3, 0.6]
+        cid = self.new_chat(self.owner)
+        self.ask(self.owner, cid, "Tell me about cats")
+        self.ask(self.owner, cid, "", regenerate=True, regen_mode="different")
+        self.assertLessEqual(Server.backend.sampling["temperature"], 0.6)
+
     def test_the_page_gets_the_menu(self):
         ids = [o["id"] for o in self.sam.call("GET", "/api/state")[1]["regen_options"]]
         self.assertEqual(ids, list(R.ORDER))

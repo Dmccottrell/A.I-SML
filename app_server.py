@@ -440,6 +440,11 @@ def start_turn(state, who, chat_id, text, model_id, effort, regenerate=False, re
         max_new = min(regen_modes.length_for(max_new, mode), max(32, window // 2))
     pause = chat_polish.pause_for(question, effort)            # the thinking pause fits the message
     decision["pause"] = pause
+    bounds = tuple(model.get("temperature_bounds", effort_router.DEFAULT_BOUNDS))
+    base_temp = model.get("sampling", {}).get("temperature", TEMPERATURE["balanced"])
+    decision["temperature"] = None                             # None = keep the model's own setting
+    if decision["auto"]:                                       # Auto also picks how adventurous the wording is
+        decision["temperature"], decision["temperature_reason"] = effort_router.choose_temperature(question, base_temp, bounds)
     q, stop = queue.Queue(), threading.Event()
     key = (who["user"], chat_id)
     state.stops[key] = stop
@@ -478,8 +483,11 @@ def start_turn(state, who, chat_id, text, model_id, effort, regenerate=False, re
             t_load = time.monotonic()
             backend = state.backend_for(model, text or "", window)     # may load the model the first time (can take a while)
             timing["load"] = time.monotonic() - t_load
+            if decision["temperature"] is not None and hasattr(backend, "sampling"):
+                backend.sampling = dict(backend.sampling, temperature=decision["temperature"])
             if regenerate and hasattr(backend, "sampling"):
-                backend.sampling = dict(backend.sampling, temperature=regen_modes.sampling_for(backend.sampling.get("temperature", 0.8), mode))
+                t = regen_modes.sampling_for(backend.sampling.get("temperature", 0.8), mode)
+                backend.sampling = dict(backend.sampling, temperature=round(min(bounds[1], max(bounds[0], t)), 2))   # never outside the model's safe range
             r = E.run_turn(tok, store, chat_id, backend, counted_model, window, max_new, user_text=text, stop=stop,
                            limiter=state.limiter, user=who["user"], effort=effort, clock=state.clock, pacer=pacer,
                            style_hint=regen_modes.get(mode)["hint"] if regenerate else "")
@@ -764,7 +772,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
             self.wfile.flush()
         try:
             emit("thinking", {"min_first_s": decision["pause"], "effort": decision["effort"], "auto": decision["auto"],
-                              "reason": decision["reason"]})
+                              "reason": decision["reason"], "temperature": decision["temperature"]})
             item = first
             while True:
                 if item is None:

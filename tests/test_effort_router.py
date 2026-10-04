@@ -61,3 +61,33 @@ class Router(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class Temperature(unittest.TestCase):
+    def test_exact_things_run_cool(self):
+        from effort_router import choose_temperature as t
+        for text in ("Reply with only valid JSON with the key name", "Solve 3x + 7 = 22", "List exactly 4 fruits",
+                     "Why does this fail? def f(): return 1/0"):
+            self.assertEqual(t(text)[0], 0.2, text)
+
+    def test_creative_things_run_warm(self):
+        from effort_router import choose_temperature as t
+        for text in ("Write me a story about a fox", "Brainstorm names for my dog", "Write a poem about rain"):
+            self.assertEqual(t(text)[0], 1.0, text)
+
+    def test_normal_questions_keep_the_models_own_setting(self):
+        from effort_router import choose_temperature as t
+        self.assertEqual(t("What is the capital of France?")[0], 0.8)
+        self.assertEqual(t("What is the capital of France?", base=0.45)[0], 0.45)
+
+    def test_a_small_models_range_is_respected(self):
+        from effort_router import choose_temperature as t
+        self.assertEqual(t("Write a poem about rain", 0.45, (0.3, 0.6))[0], 0.6)
+        self.assertEqual(t("List exactly 3 fruits", 0.45, (0.3, 0.6))[0], 0.3)
+
+    def test_always_a_reason_and_odd_input_is_fine(self):
+        from effort_router import choose_temperature as t
+        for text in (None, "", "   ", "x" * 3000):
+            temp, why = t(text)
+            self.assertTrue(0.2 <= temp <= 1.0)
+            self.assertTrue(why)

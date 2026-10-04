@@ -381,3 +381,11 @@ beta list", and "memory finds an earlier chat by meaning, not only by words".
 - **The website** (`build_site.py` -> `site/`): the five website designs as plain static pages with a dark/light switch, ready for
   Vercel (`docs/DEPLOY.md`). Rename note: the app was called Yuvra until Oct 2026; it is now **Emvryx** with an X mark (Brain-X);
   the app moves an old `.yuvra` data folder to `.emvryx` by itself on start.
+- **Auto temperature** (`effort_router.choose_temperature`): with Auto effort the server also picks how adventurous the wording is: cool (0.2)
+  for code, maths, JSON and strict formats ("exactly 4", "fewer than 20 words"), warm (1.0) for stories, poems and brainstorming, and the
+  model's own tested setting otherwise. Each model can limit the range (`temperature_bounds` in `models.json`; Ember 0.3 to 0.6, because
+  small models turn to nonsense when hot). A chosen level (Quick, Balanced, Deep) keeps the model's own setting, and Regenerate options stay
+  inside the model's range. **Dynamic temperature** (llama.cpp's `dynatemp`, which changes it word by word from the model's confidence)
+  is not switched on: it needs trying on a real model first. When you want to test it, add `"dynatemp_range": 0.3` to a model's `sampling`
+  in `models.json` (the app passes it straight to llama-server).
+
