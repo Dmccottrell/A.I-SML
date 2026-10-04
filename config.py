@@ -234,7 +234,7 @@ VERSIONS = {
         # "cosmopedia" is textbook-style text written by an OPEN model (Mixtral).
         data_mix=(("fineweb_100bt", 0.475), ("dclm", 0.175), ("wikipedia", 0.1125), ("code_multi", 0.125),
                   ("math", 0.075), ("cosmopedia", 0.0375)),
-        data_tokens=24_640_000_000,    # = 94,000 steps x 262,144
+        data_tokens=19_660_000_000,    # = 75,000 steps x 262,144
         tokenizer_sample_mb=60,      # includes every code language
         special_tokens=tuple(EXTENDED_SPECIAL_TOKENS),
         decontaminate=True,
@@ -243,7 +243,7 @@ VERSIONS = {
         anneal_mix=(("fineweb_hq_100bt", 0.35), ("dclm", 0.10), ("wikipedia", 0.20), ("math", 0.12),
                     ("code_multi", 0.113), ("cosmopedia", 0.05), ("qa", 0.05), ("commits", 0.015),
                     ("agent_traces", 0.002)),
-        anneal_tokens=2_500_000_000,
+        anneal_tokens=2_000_000_000,
         model=ModelConfig(
             vocab_size=32768,
             dim=2048,
@@ -251,13 +251,14 @@ VERSIONS = {
             n_heads=32,          # 64 dims per head
             n_kv_heads=4,        # 8 query heads share each key/value head
             hidden_dim=5632,     # 22 x 256, so phones can use the smaller Q4_K format
-            max_seq_len=4096,    # twice v3's memory, set from the start (no stretching step later)
-            rope_theta=1_000_000.0,   # a bigger base suits the longer context; room to stretch to 8k+ later
+            max_seq_len=8192,    # four times v3's memory, set from the start (no stretching step later)
+            rope_theta=2_000_000.0,   # a bigger base suits the longer context; room to stretch to 32k+ later
         ),
         train=TrainSettings(
             batch_size=1,
-            grad_accum=64,       # 64 x 4096 = ~262k tokens per step (same as v3)
-            max_iters=94_000,    # 94k steps x 262k tokens = ~24.6 billion tokens (~22 per parameter, about compute-optimal)
+            grad_accum=32,       # 32 x 8192 = ~262k tokens per step (same as v3)
+            max_iters=75_000,    # 75k steps x 262k tokens = ~19.7 billion tokens (~17 per parameter); trimmed from 94k so
+                         # the 8k context (~25% slower per step, an estimate: check with --pilot) takes the time 94k took at 4k
             warmup_iters=2_000,
             lr_max=3e-4,         # bigger model, gentler steps
             lr_min=3e-5,
@@ -272,7 +273,7 @@ VERSIONS = {
             exam_every=5000,
             exam_questions=5000,     # a steadier score than v3's 500 (~3-4 min per exam); v4: 0 = all 10,042
             exam_pick="spread",      # spread over the whole test, so it matches the full-test score
-            snapshot_every=1880,     # 5 snapshots in the last 9,400 steps (~4.5 GB each)
+            snapshot_every=1500,     # 5 snapshots in the last 7,500 steps (~4.5 GB each)
             compile=True,
         ),
         # On 32 GB cards (RTX 5090; 1, 2 or 4 of them) the 12 GB workarounds above only cost speed:
@@ -283,8 +284,8 @@ VERSIONS = {
                                            # the 4070 (12 GB) or switch optimizers midway. --set optimizer=adamw
                                            # gives the old portable setup
             ("grad_checkpoint", False),    # ~30% faster; the pilot shows whether memory allows it
-            ("batch_size", 1),             # 1 x 4096 tokens per micro-batch (same size as 2 x 2048 before)
-            ("grad_accum", 64),            # still 64 x 4096 = ~262k tokens per step
+            ("batch_size", 1),             # 1 x 8192 tokens per micro-batch (same size as 4 x 2048 before)
+            ("grad_accum", 32),            # still 32 x 8192 = ~262k tokens per step
             ("save_every", 150),           # a checkpoint is ~17 GB: every ~25 min instead of every ~10
         ),
         finetune=FinetuneSettings(epochs=2, batch_size=2, lr=3e-5, neftune_alpha=5.0, micro_batch=1),
