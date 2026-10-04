@@ -11,7 +11,7 @@ you and your testers, or public). Where it runs is a choice per chat, not a prop
 | **v2** | 88M mini assistant: web text + Wikipedia + multi-turn chat (89MB on the phone) | ✅ Done: 18/20 test sheet, HellaSwag 28.4%, runs offline on the phone. See **[docs/V2.md](docs/V2.md)** |
 | **v3** | 394M accuracy-focused assistant: + code and math, 2,048-token memory (~240MB on the phone as Q4), lookups, remembers you, reply suggestions | ✅ Pretraining finished (45,000 steps; HellaSwag 37.1% on a 2,000-question sample, v2: 28.4%; validation loss ≈2.68), 🛠️ chat tuning next: the teacher lessons are being generated. ~30 tokens read per parameter. See **[docs/V3.md](docs/V3.md)** and **[docs/LESSONS.md](docs/LESSONS.md)** |
 | **v3-long** | v3 stretched to 8K → 16K → 32K tokens after it finishes (the rehearsal for v3.5's 75K–100K) | Code ready, tested on small models: see **[docs/LONG_CONTEXT.md](docs/LONG_CONTEXT.md)** |
-| **v3.5** | ~1.12B (24 layers), ~25B tokens (94,000 steps), Muon optimizer; then stretched to 32K+ (goal 75K–100K) | Code ready, data build in progress: see **[docs/V3_5.md](docs/V3_5.md)** |
+| **v3.5** | ~1.12B (24 layers), ~20B tokens (75,000 steps, 8K context), Muon optimizer; then stretched to 32K+ (goal 75K–100K) | Code ready, data build in progress: see **[docs/V3_5.md](docs/V3_5.md)** |
 
 **After v3's pretraining:** average the last snapshots → chat fine-tune (with NEFTune) → DPO → `compare.py --old v2 --new v3`. Steps in [docs/V3.md](docs/V3.md).
 
