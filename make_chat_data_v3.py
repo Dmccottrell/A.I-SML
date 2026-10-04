@@ -49,6 +49,7 @@ Usage:  python make_chat_data_v3.py
         python make_chat_data_v3.py --general 40000
         python make_chat_data_v3.py --version v3.5     (later versions reuse and extend the same lessons)
 """
+import re
 import argparse, json, os, random
 
 from config import get_version
@@ -298,6 +299,32 @@ def topic_switch_conversations(exchanges, rng, n):
     return out
 
 
+META_WORDS = re.compile(r"\b(imagination|guess|guessing|guessed|random|made[- ]up|fictional|fabricated|incorrect|wrong)\b", re.I)
+
+
+def _words(text):
+    return set(re.findall(r"[a-z0-9]+", text.lower()))
+
+
+def wrong_is_usable(rec):
+    """Is the teacher's "wrong answer" good enough to show as the model's earlier mistake?
+
+    Not if it carries meta text ("(Source: imagination)", "a random year guessing"), and not if it is not
+    really wrong: when every word it adds beyond the correct answer is also in the source passage, it is
+    probably supported by the passage too ("The Royal Ulster Constabulary ..." for "RUC Special Branch ..."),
+    and a lesson saying "you're right, I made a mistake" about a true answer would teach caving in.
+    """
+    wrong = rec["wrong_answer"]
+    if META_WORDS.search(wrong):
+        return False
+    strip = lambda t: re.sub(r"\(source:[^)]*\)", " ", t, flags=re.I)
+    new_words = _words(strip(wrong)) - _words(strip(rec["answer"]))
+    new_words = {w for w in new_words if len(w) > 1}
+    if not new_words:
+        return False
+    return not new_words <= _words(rec.get("source", {}).get("text", ""))
+
+
 def lookup_conversations(records, wiki, rng):
     """Turn the teacher's lookup examples into five kinds of lessons.
 
@@ -308,6 +335,9 @@ def lookup_conversations(records, wiki, rng):
     for rec in records:
         r = rng.random()
         q, ans, wrong = rec["question"], rec["answer"], rec["wrong_answer"]
+        if r >= 0.70 and r < 0.84 or r >= 0.90:         # these two lessons show `wrong` as the model's earlier answer
+            if not wrong_is_usable(rec):
+                r = 0.0                                  # a poor wrong answer: use the record as a plain lookup lesson
         if r < 0.55:
             out["lookup"].append([user(q, notes_for(rec, wiki, rng)), assistant(ans)])
         elif r < 0.70:
