@@ -54,7 +54,8 @@ class Site(unittest.TestCase):
             html = self.read(name)
             self.assertNotIn("Yuvra", html)
             self.assertNotIn("M32 55 V36 M32 36 L21 18", html)          # the old Y
-        self.assertIn("M21 22 L43 50 M43 22 L21 50", self.read("index.html"))   # the X
+            self.assertNotIn("M32 56 C22 56 12 51", html)               # the old brain
+        self.assertIn("M17 16 H41 M17 48 H41 M17 16 V48", self.read("index.html"))   # the E
 
     def test_year_placeholder_is_filled(self):
         self.assertNotIn("[YEAR]", self.read("index.html"))
