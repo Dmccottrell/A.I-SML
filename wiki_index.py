@@ -301,7 +301,7 @@ class WikiIndex:
                 if a == b:
                     continue
                 sql = ("SELECT p.id, p.title, p.text, p.part FROM passages_fts f JOIN passages p ON p.id = f.rowid "
-                       "WHERE passages_fts MATCH ? AND p.part = 0 ORDER BY bm25(passages_fts, 5.0, 1.0) LIMIT 20")
+                       "WHERE passages_fts MATCH ? AND p.part = 0 ORDER BY bm25(passages_fts, 5.0, 1.0) LIMIT 300")
                 with self.lock:
                     rows = self.db.execute(sql, (f'title:"{a}" AND "{b}"',)).fetchall()
                 out += [{"id": i, "title": t, "text": x, "part": pt} for i, t, x, pt in rows]
@@ -391,6 +391,7 @@ def main():
     s.add_argument("question")
     s.add_argument("--db", default=DEFAULT_DB)
     s.add_argument("-k", type=int, default=3)
+    s.add_argument("--explain", action="store_true", help="show the score of each result (for debugging)")
     a = p.parse_args()
     if a.cmd == "add":
         found = []
@@ -416,8 +417,12 @@ def main():
         if a.db == DEFAULT_DB and not os.path.exists(DEFAULT_DB) and os.path.exists(test_db):
             print(f"(no full index yet; searching the test index {test_db})\n")
             a.db = test_db
-        for i, r in enumerate(WikiIndex(a.db).search(a.question, a.k), 1):
-            print(f"[{i}] {r['title']}: {r['text'][:300]}\n")
+        wiki = WikiIndex(a.db)
+        words = keywords(a.question)
+        q = " ".join(re.findall(r"[a-z0-9]+", a.question.lower()))
+        for i, r in enumerate(wiki.search(a.question, a.k), 1):
+            score = f" (score {_score(r, words, q):.2f}, part {r['part']})" if a.explain else ""
+            print(f"[{i}] {r['title']}{score}: {r['text'][:300]}\n")
 
 
 if __name__ == "__main__":
