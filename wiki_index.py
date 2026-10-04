@@ -159,6 +159,36 @@ def keywords(question):
     return [w for w in words if w not in STOPWORDS and len(w) > 1]
 
 
+CANDIDATES = 40            # passages gathered per query before re-ranking
+
+
+def _prose_ratio(text):
+    """Share of words that are everyday function words ("the", "is", "of"). Real
+    sentences score ~0.3+; category dumps and name lists ("Defunct baseball teams
+    in Illinois 2001 disestablishments") score near 0."""
+    words = re.findall(r"[a-z']+", text.lower())
+    return sum(w in STOPWORDS for w in words) / len(words) if words else 0.0
+
+
+def _score(r, words, q):
+    """Higher = a better note for the question."""
+    title_words = set(re.findall(r"[a-z0-9]+", r["title"].lower()))
+    body = set(re.findall(r"[a-z0-9]+", r["text"].lower()))
+    covered = sum(w in body or w in title_words for w in words) / len(words)
+    base = re.sub(r"\s*\(.*\)$", "", r["title"]).lower()          # "Abraham Lincoln (captain)" -> "abraham lincoln"
+    base_words = " ".join(re.findall(r"[a-z0-9]+", base))
+    named = bool(base_words) and f" {base_words} " in f" {q} "
+    score = 4.0 * covered                                          # answers the whole question
+    if named:
+        score += 3.0 if base == r["title"].lower() else 2.0       # the article the question is about
+    if r.get("part") == 0:
+        score += 1.0                                               # the opening passage holds the key facts
+    score += 2.0 * min(_prose_ratio(r["text"]) / 0.3, 1.0) - 1.0  # sentences, not lists
+    if len(r["text"].split()) < 25:
+        score -= 1.0
+    return score
+
+
 class WikiIndex:
     """Search the index built by build(). Example:
 
@@ -175,35 +205,52 @@ class WikiIndex:
 
     def _query(self, match, k):
         # bm25(): lower = better match. Title words count 5x as much as body words.
-        sql = ("SELECT p.id, p.title, p.text FROM passages_fts f JOIN passages p ON p.id = f.rowid "
+        sql = ("SELECT p.id, p.title, p.text, p.part FROM passages_fts f JOIN passages p ON p.id = f.rowid "
                "WHERE passages_fts MATCH ? ORDER BY bm25(passages_fts, 5.0, 1.0) LIMIT ?")
         with self.lock:
-            return [{"id": i, "title": t, "text": x} for i, t, x in self.db.execute(sql, (match, k))]
+            return [{"id": i, "title": t, "text": x, "part": pt} for i, t, x, pt in self.db.execute(sql, (match, k))]
+
+    def _title_leads(self, word, n):
+        """Opening passages of articles whose TITLE contains `word` (shortest titles first).
+
+        Plain BM25 over 13M passages favours short list-like passages that repeat
+        the keywords; the article the question is really about ("Illinois") never
+        makes the shortlist. Looking at titles directly finds it.
+        """
+        sql = ("SELECT p.id, p.title, p.text, p.part FROM passages_fts f JOIN passages p ON p.id = f.rowid "
+               "WHERE passages_fts MATCH ? AND p.part = 0 ORDER BY bm25(passages_fts, 5.0, 0.0) LIMIT ?")
+        with self.lock:
+            return [{"id": i, "title": t, "text": x, "part": pt}
+                    for i, t, x, pt in self.db.execute(sql, (f'title:"{word}"', n))]
 
     def search(self, question, k=3):
         """The k passages that best match `question` (a list of {"id", "title", "text"}).
 
-        First tries passages containing ALL the question's keywords (precise
-        and fast); if that finds fewer than k, any keyword may match. Then
-        the main article about the question's subject goes first: for "Who
-        was Abraham Lincoln?", "Abraham Lincoln" beats "Abraham Lincoln (captain)".
+        Gathers candidates two ways: passages containing ALL the question's
+        keywords (any keyword if too few), plus the opening passages of articles
+        whose title holds a keyword. Then re-ranks them (see _score) so the main
+        article about the subject, written as real sentences and covering the
+        keywords, goes first: for "Who was Abraham Lincoln?", "Abraham Lincoln"
+        beats "Abraham Lincoln (captain)".
         """
         words = keywords(question)
         if not words:
             return []
         quoted = [f'"{w}"' for w in words]
-        results = self._query(" AND ".join(quoted), k * 3)
+        pool = CANDIDATES
+        results = self._query(" AND ".join(quoted), pool)
         if len(results) < k and len(words) > 1:
-            seen = {r["id"] for r in results}
-            results += [r for r in self._query(" OR ".join(quoted), k * 3) if r["id"] not in seen]
+            results += self._query(" OR ".join(quoted), pool)
+        for w in words:
+            results += self._title_leads(w, 15)
+        seen, unique = set(), []
+        for r in results:
+            if r["id"] not in seen:
+                seen.add(r["id"])
+                unique.append(r)
         q = " ".join(re.findall(r"[a-z0-9]+", question.lower()))
-
-        def subject_rank(r):
-            base = re.sub(r"\s*\(.*\)$", "", r["title"]).lower()     # "Abraham Lincoln (captain)" -> "abraham lincoln"
-            named = " ".join(re.findall(r"[a-z0-9]+", base)) in q
-            return 0 if named and base == r["title"].lower() else 1 if named else 2
-        results.sort(key=subject_rank)            # stable: keeps the search order within each group
-        return results[:k]
+        ranked = sorted(unique, key=lambda r: -_score(r, words, q))      # stable: ties keep search order
+        return ranked[:k]
 
     def random_passages(self, n, rng, lead_only=True):
         """n random passages (by default the opening passage of an article)."""
