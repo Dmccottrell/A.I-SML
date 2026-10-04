@@ -21,6 +21,7 @@ WHAT THIS FILE DOES
 Usage:
     python wiki_index.py build                     full index -> data/wiki/wiki.db (~10 GB, several hours)
     python wiki_index.py build --test              20,000 articles -> data/wiki-test/wiki.db (minutes)
+    python wiki_index.py index-titles              add the title index to an existing index (a few minutes, once)
     python wiki_index.py search "What is the capital of Illinois?"
     (before the full index exists, search uses the test index automatically)
 """
@@ -112,6 +113,19 @@ def open_db(path):
     return db
 
 
+def add_title_index(db):
+    """Index article titles so a question's subject ("Illinois") can be found by exact title.
+    Plain keyword search can't: BM25 prefers tiny pages like "Collison, Illinois". On the
+    full index this takes a few minutes and ~0.5 GB, once."""
+    has = db.execute("SELECT 1 FROM sqlite_master WHERE name='passages_title'").fetchone()
+    if has:
+        return False
+    print("building the title index (a few minutes on the full index) ...")
+    with db:
+        db.execute("CREATE INDEX passages_title ON passages(title COLLATE NOCASE)")
+    return True
+
+
 def build(path, articles, passages_per_article=3, max_articles=None, batch=2000):
     """Fill the index from `articles` (an iterable of (title, text)), resumably.
 
@@ -148,6 +162,7 @@ def build(path, articles, passages_per_article=3, max_articles=None, batch=2000)
         print(f"  {done:,} articles, {total:,} passages ({rate:.0f} articles/s)")
     with db:
         db.execute("INSERT INTO passages_fts(passages_fts) VALUES ('optimize')")   # faster searches
+    add_title_index(db)
     print(f"done: {total:,} passages from {done:,} articles in {path}")
     db.close()
 
@@ -202,6 +217,11 @@ class WikiIndex:
             raise SystemExit(f"no Wikipedia index at {path}. Build it with: python wiki_index.py build")
         self.db = sqlite3.connect(path, check_same_thread=False)
         self.lock = threading.Lock()      # one query at a time (the teacher script uses threads)
+        self.has_title_index = bool(self.db.execute(
+            "SELECT 1 FROM sqlite_master WHERE name='passages_title'").fetchone())
+        if not self.has_title_index:
+            print("note: no title index yet, so searches are less accurate. "
+                  "Run: python wiki_index.py index-titles", file=sys.stderr)
 
     def _query(self, match, k):
         # bm25(): lower = better match. Title words count 5x as much as body words.
@@ -210,25 +230,34 @@ class WikiIndex:
         with self.lock:
             return [{"id": i, "title": t, "text": x, "part": pt} for i, t, x, pt in self.db.execute(sql, (match, k))]
 
-    def _title_leads(self, word, n):
-        """Opening passages of articles whose TITLE contains `word` (shortest titles first).
-
-        Plain BM25 over 13M passages favours short list-like passages that repeat
-        the keywords; the article the question is really about ("Illinois") never
-        makes the shortlist. Looking at titles directly finds it.
-        """
-        sql = ("SELECT p.id, p.title, p.text, p.part FROM passages_fts f JOIN passages p ON p.id = f.rowid "
-               "WHERE passages_fts MATCH ? AND p.part = 0 ORDER BY bm25(passages_fts, 5.0, 0.0) LIMIT ?")
-        with self.lock:
-            return [{"id": i, "title": t, "text": x, "part": pt}
-                    for i, t, x, pt in self.db.execute(sql, (f'title:"{word}"', n))]
+    def _subject_passages(self, question):
+        """All stored passages of the articles whose exact TITLE appears in the question
+        ("Illinois", "Abraham Lincoln"), found by trying every run of 1-4 words."""
+        if not self.has_title_index:
+            return []
+        tokens = re.findall(r"[a-z0-9']+", question.lower())
+        seen, out = set(), []
+        for n in range(4, 0, -1):
+            for i in range(len(tokens) - n + 1):
+                gram = tokens[i:i + n]
+                if all(w in STOPWORDS for w in gram) or gram[0] in STOPWORDS or gram[-1] in STOPWORDS:
+                    continue
+                title = " ".join(gram)
+                if title in seen:
+                    continue
+                seen.add(title)
+                with self.lock:
+                    rows = self.db.execute("SELECT id, title, text, part FROM passages "
+                                           "WHERE title = ? COLLATE NOCASE ORDER BY part LIMIT 3", (title,)).fetchall()
+                out += [{"id": a, "title": t, "text": x, "part": pt} for a, t, x, pt in rows]
+        return out
 
     def search(self, question, k=3):
         """The k passages that best match `question` (a list of {"id", "title", "text"}).
 
         Gathers candidates two ways: passages containing ALL the question's
         keywords (any keyword if too few), plus the opening passages of articles
-        whose title holds a keyword. Then re-ranks them (see _score) so the main
+        whose exact title is named in the question. Then re-ranks them (see _score) so the main
         article about the subject, written as real sentences and covering the
         keywords, goes first: for "Who was Abraham Lincoln?", "Abraham Lincoln"
         beats "Abraham Lincoln (captain)".
@@ -241,8 +270,7 @@ class WikiIndex:
         results = self._query(" AND ".join(quoted), pool)
         if len(results) < k and len(words) > 1:
             results += self._query(" OR ".join(quoted), pool)
-        for w in words:
-            results += self._title_leads(w, 15)
+        results += self._subject_passages(question)
         seen, unique = set(), []
         for r in results:
             if r["id"] not in seen:
@@ -275,12 +303,18 @@ def main():
     b.add_argument("--passages_per_article", type=int, default=3)
     b.add_argument("--max_articles", type=int, default=None)
     b.add_argument("--test", action="store_true", help="20,000 articles into data/wiki-test/wiki.db")
+    t = sub.add_parser("index-titles", help="add the title index to an existing index (a few minutes, once)")
+    t.add_argument("--db", default=DEFAULT_DB)
     s = sub.add_parser("search", help="search the index")
     s.add_argument("question")
     s.add_argument("--db", default=DEFAULT_DB)
     s.add_argument("-k", type=int, default=3)
     a = p.parse_args()
-    if a.cmd == "build":
+    if a.cmd == "index-titles":
+        db = sqlite3.connect(a.db)
+        print("title index added" if add_title_index(db) else "title index already there")
+        db.close()
+    elif a.cmd == "build":
         if a.test:
             a.out, a.max_articles = os.path.join("data", "wiki-test", "wiki.db"), 20_000
         build(a.out, load_articles(), a.passages_per_article, a.max_articles)
