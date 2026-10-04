@@ -19,10 +19,12 @@ Usage:  python stretch_ladder.py --dry_run                  (shows the plan and 
         python stretch_ladder.py                            (runs the whole ladder, from the next unfinished step)
         python stretch_ladder.py --stop_after v3-long-64k   (don't go past 64K)
         python stretch_ladder.py --from_step v3-long-32k    (start at a later step)
+        python stretch_ladder.py --stop_after v3-long-32k --train_args "--hub_backup yourname/aisml-checkpoints"
 """
 import argparse
 import json
 import os
+import shlex
 import subprocess
 import sys
 
@@ -44,9 +46,10 @@ def save_state(state, path=STATE_PATH):
     os.replace(path + ".tmp", path)
 
 
-def commands(step):
+def commands(step, train_args=()):
+    """The two commands for a step. `train_args` are extra options for run_training.py (a backup repo, a notification topic)."""
     py = sys.executable
-    return {"train": [py, "run_training.py", "--version", step],
+    return {"train": [py, "run_training.py", "--version", step, *train_args],
             "gate": [py, "eval_long.py", "--version", step, "--out", os.path.join("data", "v3-long", f"eval_{step}.json")]}
 
 
@@ -55,7 +58,7 @@ def run(cmd):
 
 
 def run_ladder(steps=LADDER, runner=run, state_path=STATE_PATH, stop_after=None, from_step=None,
-               say=print, final_exists=None):
+               say=print, final_exists=None, train_args=()):
     """Go up the ladder. Returns the state dict ({"passed": [...], "failed": None or {"step", "why"}}).
 
     runner(cmd) -> exit code (0 = fine). final_exists(step) -> True if that step already has its final.pt (training is skipped).
@@ -68,7 +71,7 @@ def run_ladder(steps=LADDER, runner=run, state_path=STATE_PATH, stop_after=None,
             say(f"{step}: already passed, skipping")
             continue
         state["failed"] = None
-        cmds = commands(step)
+        cmds = commands(step, train_args)
         if final_exists is None or not final_exists(step):
             say(f"\n=== training {step} ===")
             if runner(cmds["train"]) != 0:
@@ -110,10 +113,13 @@ def main():
     p.add_argument("--dry_run", action="store_true")
     p.add_argument("--stop_after", default=None, choices=LADDER)
     p.add_argument("--from_step", default=None, choices=LADDER)
+    p.add_argument("--train_args", default="", help='extra options for every training step, in quotes, e.g. '
+                   '"--hub_backup Dmccottrell/aisml-checkpoints" (keeps each step safe off the machine)')
     a = p.parse_args()
+    extra = shlex.split(a.train_args)
     if a.dry_run:
         for step in LADDER:
-            c = commands(step)
+            c = commands(step, extra)
             print(f"{step}\n  train: {' '.join(c['train'])}\n  gate:  {' '.join(c['gate'])}")
         return
     from config import get_version
@@ -124,7 +130,7 @@ def main():
             return os.path.exists(final_weights(get_version(step)))
         except Exception:
             return False
-    state = run_ladder(stop_after=a.stop_after, from_step=a.from_step, final_exists=finished)
+    state = run_ladder(stop_after=a.stop_after, from_step=a.from_step, final_exists=finished, train_args=extra)
     print("\n" + summary(state))
     raise SystemExit(1 if state["failed"] else 0)
 

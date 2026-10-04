@@ -78,6 +78,7 @@ python prepare_long_data.py --version v3 --total_tokens 2100000000   # enough da
 python stretch_ladder.py --dry_run                                   # the plan and the exact commands
 python stretch_ladder.py                                             # run it (carry on by running it again)
 python stretch_ladder.py --stop_after v3-long-64k                    # or stop at a length you choose
+python stretch_ladder.py --stop_after v3-long-32k --train_args "--hub_backup Dmccottrell/aisml-checkpoints"   # on a rented machine: each step is also saved off it
 ```
 A step passes only if its long-context gate passes (needle at every depth, multi-fact, long-code, loss by position). It stops with
 a plain message if a step fails its tests, crashes, or runs out of GPU memory. "Nothing got worse" (`exam.py --version <step>`)
