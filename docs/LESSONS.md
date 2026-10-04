@@ -72,3 +72,29 @@ marked "guess". The settings every later version should start from are in
   (a `>>` prompt, then Ctrl+C throws the whole line away); `Measure-Command` hides the script's own output;
   a new window needs `cd` to the project and the venv activated; Windows PowerShell 5.1 shows UTF-8
   text garbled (check with Python `encoding='utf-8'` before assuming the file is bad).
+
+## Long-context baseline on v3's `final.pt` (cloud 5090, Oct 2026)
+`python eval_long.py --version v3` at the native 2,048 tokens, before any stretching:
+
+| Test | Result |
+|---|---|
+| Needle in a haystack | 95%, 90%, 95%, 95%, 100% at depths 10-90% (borderline: the bar is 95% everywhere, no depth under 90%) |
+| Multi-fact (number **and** town) | **0% at every depth** |
+| Long code (`get_port_xxxx()`) | 0%, 0%, 10%, 25%, 45% (better the later the function appears) |
+| Loss by position | pass (-0.400) |
+| Verdict | `FAILED (stop here)`, so the chained cloud job stopped before the pilot run |
+
+- **What it does show:** the needle test works and v3 finds a single hidden fact at 2K. The long-training data
+  was built (2,100,326,823 tokens).
+- **What it probably means (not confirmed):** the 0% on multi-fact is exactly 0 at every depth, which looks like
+  a *format* problem, not a memory problem. The prompt ends `Answer: Mira's favorite number is`, and the model
+  must write the number and then, unprompted, `and her home town is ...` within 16 tokens. A base model has never
+  seen that question format. The long data's "recall practice" (5%) teaches exactly that format, so the stretched
+  model may pass where the baseline cannot. The code test's rise with depth looks like plain recency (the latest
+  text is easiest to copy).
+- **So a baseline FAIL on multi/code does not block stretching,** and the docs' assumption that the 2K baseline
+  "should pass" every test was wrong. Judge the ladder by what the 8K step scores after training.
+- **Open risk:** if multi-fact is still ~0% after the 8K step, change the test (give a template, or allow more
+  answer tokens) or add more recall practice before blaming the stretch.
+- `eval_long.py` exits with an error whenever a test fails, so a command chain joined with `&&` stops there.
+  Run the pilot as its own command.
