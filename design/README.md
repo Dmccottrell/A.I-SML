@@ -14,18 +14,19 @@ The `.dc.html` files are sources for a Claude Design canvas (they need its runti
 To keep editing them, publish the folder to a Design canvas and open it there. The final website and app will be built
 separately from these designs.
 
-## The logo: a brain, getting bigger
-- **Primary mark ("Brain-X"):** a brain outline with an X inside it; the glowing node where the two strokes cross is the spark of
-  thought (two ideas meeting). It says AI at a glance and echoes the X that ends the name Emvryx. (Replaced the earlier Brain-Y.)
-- **Family mark:** five brains that grow with the models: Ember (the smallest, a dashed outline like a glowing coal), Flare (plain brain with a core), Equinox (adds the X), Solstice (adds
-  folds), Apogee (the largest, outline lit in ice blue).
-- **Small sizes:** the folds and the X drop away so the brain and the spark stay solid (favicon, app icon).
-- Pronunciation to be decided. Domain and trademark checks for Emvryx are still to do (see docs/APP.md).
+## The logo: an E with a spark (Oct 2026)
+- **Primary mark:** an E whose middle arm runs into a glowing ring: the model's core, the spark. It starts the name, reads at tiny
+  sizes, and is amber (`#F5A524`) on the dark background. (Replaced the earlier brain-and-X.)
+- **Family mark:** the same E for all five models, each in its own colour, with a ring that grows: Ember (a small coal), Flare (a ring
+  with a pale core), Equinox (ring with four ticks, white), Solstice (ring with eight rays, amber), Apogee (ring with two halos, ice blue).
+- **Small sizes:** favicon and app icon use a bolder E and a solid dot (`web/icon.svg`, `logo/emvryx-icon-small.svg`).
+- **Files:** `python design/logo/make_logos.py` rewrites every file in `logo/` and `web/icon.svg`. The concepts that led here are in `logo/concepts/`.
+- The usage meter is an E that fills like a tank.
 
 ## Look and feel
 - Dark by default and very dark (`#07080D`), with a light mode. One accent colour at a time.
 - Fonts: Sora for headings, DM Sans for text.
-- The chat's model chooser sits under the message box (next to + and Send), with the model's own brain icon beside its name and an
+- The chat's model chooser sits under the message box (next to + and Send), with the model's own icon beside its name and an
   Effort chip (Quick, Balanced, Deep). Auto is the first card in the model sheet. No "offline" labels, and no fixed "on this phone"
   or "on your PC" labels: any model can run at home or in the cloud, privately or publicly (see docs/APP.md, "Where models run").
 

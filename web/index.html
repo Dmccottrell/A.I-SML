@@ -211,7 +211,6 @@ const BASE = {
   light: {bg:'#F7F8FC', side:'#EEF0F7', surface:'#FFFFFF', surface2:'#EEF0F7', line:'#D8DCEA', text:'#0D0F1A', muted:'#4A526B'}
 };
 const SUMMARY_MARK = '[Earlier in this chat, shortened to save room]';
-const BRAIN = 'M32 56 C22 56 12 51 10 41 C5 37 5 28 11 24 C10 16 18 8 26 11 C29 6 35 6 38 11 C46 8 54 16 53 24 C59 28 59 37 54 41 C52 51 42 56 32 56 Z';
 const $ = (id) => document.getElementById(id);
 const el = (tag, attrs, ...kids) => {
   const e = document.createElement(tag);
@@ -225,9 +224,10 @@ const el = (tag, attrs, ...kids) => {
 const logo = (size, animate) => {
   const s = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
   s.setAttribute('width', size); s.setAttribute('height', size); s.setAttribute('viewBox', '0 0 64 64'); s.setAttribute('fill', 'none'); s.setAttribute('aria-hidden', 'true');
-  s.innerHTML = `<path d="${BRAIN}" stroke="var(--text)" stroke-width="4" stroke-linejoin="round"${animate ? ' stroke-dasharray="40 14"><animate attributeName="stroke-dashoffset" from="0" to="-108" dur="2.4s" repeatCount="indefinite"/></path>' : '/>'}
-    <path d="M21 22 L43 50 M43 22 L21 50" stroke="var(--text)" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
-    <circle class="core" cx="32" cy="36" r="6.5">${animate ? '<animate attributeName="r" values="5;8;5" dur="1.6s" repeatCount="indefinite"/>' : ''}</circle>`;
+  s.innerHTML = `<circle cx="46" cy="32" r="12" fill="var(--sun)" fill-opacity="0.16"/>
+    <path d="M17 16 H41 M17 48 H41 M17 16 V48" stroke="var(--text)" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/>
+    <path d="M17 32 H37" stroke="var(--sun)" stroke-width="6" stroke-linecap="round"/>
+    <circle class="core" cx="46" cy="32" r="5.5">${animate ? '<animate attributeName="r" values="4.5;7;4.5" dur="1.6s" repeatCount="indefinite"/>' : ''}</circle>`;
   return s;
 };
 const fmt = (n) => Math.round(n).toLocaleString('en-US');
