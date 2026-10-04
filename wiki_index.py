@@ -365,7 +365,7 @@ class WikiIndex:
                 out += [{"id": a, "title": t, "text": x, "part": pt} for a, t, x, pt in rows]
         return out
 
-    def search(self, question, k=3):
+    def search(self, question, k=3, deep=True):
         """The k passages that best match `question` (a list of {"id", "title", "text"}).
 
         Gathers candidates two ways: passages containing ALL the question's
@@ -374,6 +374,10 @@ class WikiIndex:
         article about the subject, written as real sentences and covering the
         keywords, goes first: for "Who was Abraham Lincoln?", "Abraham Lincoln"
         beats "Abraham Lincoln (captain)".
+
+        `deep=False` skips the title+body pair queries, which rank every matching passage and are slow for
+        common words. Use it when searching thousands of questions in a row (building training lessons); chat
+        and evaluation keep the default.
         """
         words = keywords(question)
         if not words:
@@ -384,7 +388,7 @@ class WikiIndex:
         if len(results) < k and len(words) > 1:
             results += self._query(" OR ".join(quoted), pool)
         results += self._subject_passages(question)
-        if len(words) > 1:
+        if deep and len(words) > 1:
             results += self._title_body_pairs(words)
         seen, unique = set(), []
         for r in results:

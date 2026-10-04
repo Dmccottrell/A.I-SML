@@ -48,6 +48,19 @@ class WrongAnswers(unittest.TestCase):
         self.assertFalse(M.wrong_is_usable(VAIVARA))   # 2018 is in the passage (a redesign), so the lesson would be confusing
 
 
+class BulkSearch(unittest.TestCase):
+    def test_lesson_building_uses_the_fast_search(self):
+        seen = []
+
+        class Wiki:
+            def search(self, question, k=3, deep=True):
+                seen.append(deep)
+                return []
+        M._search_cache.clear()
+        M.search(Wiki(), "a question about something?", 3)
+        self.assertEqual(seen, [False])
+
+
 class Lessons(unittest.TestCase):
     def conversations(self, records):
         class NoWiki:       # notes_for / unrelated_notes only need a search; none is needed for these records

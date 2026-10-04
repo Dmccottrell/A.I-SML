@@ -119,6 +119,19 @@ class MissingSubjectArticle(unittest.TestCase):
         finally:
             wiki.db.close()
 
+    def test_fast_mode_skips_the_slow_pair_queries(self):
+        wiki = wiki_index.WikiIndex(self.path)
+        calls = []
+        original = wiki._title_body_pairs
+        wiki._title_body_pairs = lambda words: calls.append(words) or original(words)
+        try:
+            wiki.search("What is the capital of Illinois?", 3, deep=False)
+            self.assertEqual(calls, [])                       # bulk lesson building must not run them
+            wiki.search("What is the capital of Illinois?", 3)
+            self.assertEqual(len(calls), 1)                   # chat and evaluation still do
+        finally:
+            wiki.db.close()
+
     def test_tense_prefers_the_present_fact_over_history(self):
         now = wiki_index._tense("Springfield is the capital of Illinois.", ["capital", "illinois"])
         then = wiki_index._tense("It served as the state capital of Illinois until 1839.", ["capital", "illinois"])
