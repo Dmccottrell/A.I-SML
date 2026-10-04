@@ -222,21 +222,33 @@ def fake_name(rng):
 _search_cache = {}
 
 
+SEARCH_SECONDS = 0.15    # time each lesson's search may take; 0 = no search (random unrelated passages instead)
+_DISTRACTORS = []        # source passages of all lookup records: filler notes when the search finds too few
+
+
 def search(wiki, question, k):
-    """wiki.search(), remembered (each question is looked up once, even if used twice)."""
-    if wiki is None:
+    """wiki.search(), remembered (each question is looked up once, even if used twice). A bulk build: each
+    search gets a short time budget (SEARCH_SECONDS) and skips the slow query types."""
+    if wiki is None or SEARCH_SECONDS <= 0:
         return []
     if (question, k) not in _search_cache:
-        _search_cache[(question, k)] = wiki.search(question, k, deep=False)   # thousands of lookups: skip the slow pair queries
+        _search_cache[(question, k)] = wiki.search(question, k, deep=False, budget=SEARCH_SECONDS)
     return _search_cache[(question, k)]
 
 
 def notes_for(record, wiki, rng, k=3):
     """The notes the model would see at chat time: search results for the
-    question, with the passage the answer came from always included."""
+    question, with the passage the answer came from always included. If the search finds fewer than
+    k - 1 other passages (it ran out of time, or found nothing), the rest are other records' passages."""
     source = record["source"]
     found = [r for r in search(wiki, record["question"], k) if r["id"] != source["id"]]
     notes = found[:k - 1]
+    for _ in range(20):
+        if len(notes) >= k - 1 or not _DISTRACTORS:
+            break
+        d = rng.choice(_DISTRACTORS)
+        if d["id"] != source["id"] and d["title"] != source["title"] and all(d["id"] != n["id"] for n in notes):
+            notes.append(d)
     notes.insert(rng.randint(0, len(notes)), source)
     return [{"title": n["title"], "text": n["text"]} for n in notes]
 
@@ -333,6 +345,7 @@ def lookup_conversations(records, wiki, rng):
              "stand_firm": [...], "memory_doubt": [...]}
     """
     out = {k: [] for k in ("lookup", "dont_know", "correction", "stand_firm", "memory_doubt")}
+    _DISTRACTORS[:] = [r["source"] for r in records if r.get("source")]
     started = time.time()
     for n, rec in enumerate(records, 1):
         if n % 500 == 0 or n == len(records):
@@ -646,10 +659,14 @@ if __name__ == "__main__":
                    "default: AGENT_LESSONS for the version")
     p.add_argument("--other_ai", type=int, default=400, help="honest answers about other AI assistants")
     p.add_argument("--db", default=os.path.join("data", "wiki", "wiki.db"))
+    p.add_argument("--search_seconds", type=float, default=SEARCH_SECONDS,
+                   help="time limit per lookup lesson's Wikipedia search; 0 skips searching (fastest: notes are "
+                        "the source passage plus random other passages)")
     p.add_argument("--version", default="v3", help="v3 or any later version (v3.5, v3-long-8k, ...): "
                    "every later version reuses these lessons, and adds its own on top")
     a = p.parse_args()
     set_version(a.version)
+    SEARCH_SECONDS = a.search_seconds
     if a.web is None:
         a.web = WEB_LESSONS.get(a.version, max(WEB_LESSONS.values()))
     if a.agent is None:

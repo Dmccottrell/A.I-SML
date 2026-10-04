@@ -211,7 +211,7 @@ def keywords(question):
     return [w for w in words if w not in STOPWORDS and len(w) > 1]
 
 
-FAST_QUERY_SECONDS = 2.0   # bulk searches (deep=False) give up on a query after this long
+FAST_QUERY_SECONDS = 0.15  # a bulk search (deep=False) gets this long in TOTAL, then returns what it has
 CANDIDATES = 40            # passages gathered per query before re-ranking
 
 
@@ -321,26 +321,30 @@ class WikiIndex:
             print("note: no title index yet, so searches are less accurate. "
                   "Run: python wiki_index.py index-titles", file=sys.stderr)
 
-    def _query(self, match, k, timeout=None):
-        """The k best passages for an FTS5 `match`. With `timeout` (seconds), a query that runs longer is
-        stopped and returns nothing: ranking every match of a common word can take many seconds."""
-        # bm25(): lower = better match. Title words count 5x as much as body words.
-        sql = ("SELECT p.id, p.title, p.text, p.part FROM passages_fts f JOIN passages p ON p.id = f.rowid "
-               "WHERE passages_fts MATCH ? ORDER BY bm25(passages_fts, 5.0, 1.0) LIMIT ?")
+    def _fetch(self, sql, params, deadline=None):
+        """Run a query. With a `deadline` (a time.time() value), a query still running then is stopped and
+        returns nothing: ranking every match of a common word can take many seconds."""
         with self.lock:
-            if timeout is not None:
-                deadline = time.time() + timeout
+            if deadline is not None:
                 self.db.set_progress_handler(lambda: 1 if time.time() > deadline else 0, 1000)
             try:
-                return [{"id": i, "title": t, "text": x, "part": pt}
-                        for i, t, x, pt in self.db.execute(sql, (match, k))]
+                return self.db.execute(sql, params).fetchall()
             except sqlite3.OperationalError:          # "interrupted": took too long
-                if timeout is None:
+                if deadline is None:
                     raise
                 return []
             finally:
-                if timeout is not None:
+                if deadline is not None:
                     self.db.set_progress_handler(None, 0)
+
+    def _query(self, match, k, timeout=None, deadline=None):
+        """The k best passages for an FTS5 `match` (stopped early at `deadline`, or `timeout` seconds from now)."""
+        if deadline is None and timeout is not None:
+            deadline = time.time() + timeout
+        # bm25(): lower = better match. Title words count 5x as much as body words.
+        sql = ("SELECT p.id, p.title, p.text, p.part FROM passages_fts f JOIN passages p ON p.id = f.rowid "
+               "WHERE passages_fts MATCH ? ORDER BY bm25(passages_fts, 5.0, 1.0) LIMIT ?")
+        return [{"id": i, "title": t, "text": x, "part": pt} for i, t, x, pt in self._fetch(sql, (match, k), deadline)]
 
     def _title_body_pairs(self, words):
         """Opening passages whose TITLE holds one keyword and whose text holds another: for "capital of
@@ -358,7 +362,7 @@ class WikiIndex:
                 out += [{"id": i, "title": t, "text": x, "part": pt} for i, t, x, pt in rows]
         return out
 
-    def _subject_passages(self, question):
+    def _subject_passages(self, question, deadline=None):
         """All stored passages of the articles whose exact TITLE appears in the question
         ("Illinois", "Abraham Lincoln"), found by trying every run of 1-4 words."""
         if not self.has_title_index:
@@ -374,13 +378,14 @@ class WikiIndex:
                 if title in seen:
                     continue
                 seen.add(title)
-                with self.lock:
-                    rows = self.db.execute("SELECT id, title, text, part FROM passages "
-                                           "WHERE title = ? COLLATE NOCASE ORDER BY part LIMIT 3", (title,)).fetchall()
+                if deadline is not None and time.time() > deadline:
+                    return out
+                rows = self._fetch("SELECT id, title, text, part FROM passages "
+                                   "WHERE title = ? COLLATE NOCASE ORDER BY part LIMIT 3", (title,), deadline)
                 out += [{"id": a, "title": t, "text": x, "part": pt} for a, t, x, pt in rows]
         return out
 
-    def search(self, question, k=3, deep=True):
+    def search(self, question, k=3, deep=True, budget=None):
         """The k passages that best match `question` (a list of {"id", "title", "text"}).
 
         Gathers candidates two ways: passages containing ALL the question's
@@ -391,7 +396,8 @@ class WikiIndex:
         beats "Abraham Lincoln (captain)".
 
         `deep=False` skips the "any word" fallback and the title+body pair queries, which rank every
-        matching passage and are slow for common words (an OR over millions of passages took many seconds). Use it when searching thousands of questions in a row (building training lessons); chat
+        matching passage and are slow for common words (an OR over millions of passages took many seconds),
+        and gives the whole call `budget` seconds (default FAST_QUERY_SECONDS), returning what it found by then. Use it when searching thousands of questions in a row (building training lessons); chat
         and evaluation keep the default.
         """
         words = keywords(question)
@@ -399,10 +405,13 @@ class WikiIndex:
             return []
         quoted = [f'"{w}"' for w in words]
         pool = CANDIDATES
-        results = self._query(" AND ".join(quoted), pool, timeout=None if deep else FAST_QUERY_SECONDS)
+        if not deep and budget is None:
+            budget = FAST_QUERY_SECONDS
+        deadline = time.time() + budget if budget is not None else None   # one shared time limit for the whole call
+        results = self._query(" AND ".join(quoted), pool, deadline=deadline)
         if deep and len(results) < k and len(words) > 1:      # "any word" matches millions of passages: slow
             results += self._query(" OR ".join(quoted), pool)
-        results += self._subject_passages(question)
+        results += self._subject_passages(question, deadline)
         if deep and len(words) > 1:
             results += self._title_body_pairs(words)
         seen, unique = set(), []
