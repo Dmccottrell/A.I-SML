@@ -98,3 +98,12 @@ marked "guess". The settings every later version should start from are in
   answer tokens) or add more recall practice before blaming the stretch.
 - `eval_long.py` exits with an error whenever a test fails, so a command chain joined with `&&` stops there.
   Run the pilot as its own command.
+
+## Bulk search must be fast (found Oct 2026)
+- `make_chat_data_v3.py` searches the 13M-passage index about **10,000 times** (once per lookup lesson). After the
+  search was upgraded for chat quality (title+body pair queries), each call ran up to 12 extra queries that rank
+  every matching passage, and the build sat for a long time with no output. `WikiIndex.search(..., deep=False)` skips
+  those queries and is what the lesson builder uses; chat and evaluation keep `deep=True`. The builder now
+  prints progress every 500 records.
+- **Rule:** any script that calls search in a loop (lesson builders, DPO pairs) should either use `deep=False`
+  or print its progress, and be timed on 100 questions first.

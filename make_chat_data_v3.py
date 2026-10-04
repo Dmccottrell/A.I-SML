@@ -50,6 +50,7 @@ Usage:  python make_chat_data_v3.py
         python make_chat_data_v3.py --version v3.5     (later versions reuse and extend the same lessons)
 """
 import re
+import time
 import argparse, json, os, random
 
 from config import get_version
@@ -226,7 +227,7 @@ def search(wiki, question, k):
     if wiki is None:
         return []
     if (question, k) not in _search_cache:
-        _search_cache[(question, k)] = wiki.search(question, k)
+        _search_cache[(question, k)] = wiki.search(question, k, deep=False)   # thousands of lookups: skip the slow pair queries
     return _search_cache[(question, k)]
 
 
@@ -332,7 +333,10 @@ def lookup_conversations(records, wiki, rng):
              "stand_firm": [...], "memory_doubt": [...]}
     """
     out = {k: [] for k in ("lookup", "dont_know", "correction", "stand_firm", "memory_doubt")}
-    for rec in records:
+    started = time.time()
+    for n, rec in enumerate(records, 1):
+        if n % 500 == 0 or n == len(records):
+            print(f"  lookup lessons: {n:,}/{len(records):,} records ({time.time() - started:.0f}s)", flush=True)
         r = rng.random()
         q, ans, wrong = rec["question"], rec["answer"], rec["wrong_answer"]
         if r >= 0.70 and r < 0.84 or r >= 0.90:         # these two lessons show `wrong` as the model's earlier answer
