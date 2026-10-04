@@ -90,5 +90,17 @@ class Ladder(unittest.TestCase):
         self.assertIn("2,048", L.summary({"passed": [], "failed": None}))
 
 
+class ExtraArgs(unittest.TestCase):
+    def test_extra_options_reach_every_training_command_but_not_the_gate(self):
+        import stretch_ladder as S
+        c = S.commands("v3-long-8k", ["--hub_backup", "me/ckpt"])
+        self.assertEqual(c["train"][-2:], ["--hub_backup", "me/ckpt"])
+        self.assertNotIn("--hub_backup", c["gate"])
+        seen = []
+        S.run_ladder(steps=["v3-long-8k"], runner=lambda cmd: seen.append(cmd) or 0, state_path=os.path.join(tempfile.mkdtemp(), "l.json"),
+                     say=lambda *_: None, train_args=["--notify", "topic"])
+        self.assertIn("--notify", seen[0])
+
+
 if __name__ == "__main__":
     unittest.main()
