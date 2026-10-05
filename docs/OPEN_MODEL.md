@@ -39,6 +39,11 @@ The lessons file is `data\v3\chat.jsonl` (`python make_chat_data_v3.py`), the sa
 Add an entry to `models.json` like the existing ones, with `"open": true`, `"tokenizer": "checkpoints/dev/open/qwen2.5-1.5b-instruct/tokenizer/tokenizer.json"`,
 `"context": 32768`, `"local_gguf": ["export/open/qwen2.5-1.5b-instruct/my-ai-q4_k_m.gguf"]`, `"kv_kb_per_token": 28`, and `"base": "Qwen2.5-1.5B-Instruct"` (provenance for the docs; the model's name in the app is just Emvryx + its name and number).
 
+## Measured on one RTX 5090 (Oct 5 2026, stand-in file of 2,972 chats, `--batch_tokens 8192 --grad_accum 8 --pilot`)
+- **7.1-7.4 s per optimizer step** (8 micro-batches of up to 8,192 tokens), **18.6 GB peak** of 32 GB, loss about 0.9-1.0 (Qwen Instruct already writes this kind of chat well).
+- One pass over 2,972 chats is about 38 steps, roughly 5 minutes, so about 0.1 s per chat: 100,000 chats is about 2.5 hours (about $1.30 at $0.51/h). Re-estimate with the real `chat.jsonl` line count.
+- The first try crashed with out of memory only because the stopped from-scratch run was still holding 24 GB of the GPU (the `run_training.py` supervisor had not exited): check `nvidia-smi` shows about 0 MiB before starting.
+- With `--batch_tokens 16384` the output layer alone wants about 10 GB (Qwen has 152,000 tokens), so stay at 8,192 unless the GPU is empty and the pilot passes.
+
 ## Not tested yet
-Everything here is tested with a tiny offline model (`tests/test_open_model.py`). Nobody has run it on the real Qwen weights or a GPU: do the `--pilot`
-first, and compare on `benchmarks.py` and the lookup test sheet before trusting it.
+The code is tested with a tiny offline model (`tests/test_open_model.py`), and the pilot above ran on the real Qwen weights on a 5090. Nobody has trained on the real lessons yet: compare on `benchmarks.py` and the lookup test sheet before trusting it.
