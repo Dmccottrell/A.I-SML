@@ -152,8 +152,8 @@ class PresetsAndLoss(unittest.TestCase):
         self.assertEqual(om.resolve("Qwen/Qwen3-8B")[0], "solstice-2")
         self.assertEqual(om.resolve("some/other-model"), (None, {}))
         self.assertTrue(om.PRESETS["apogee-2"]["quant4"])
-        self.assertAlmostEqual(om.kv_kb_per_token(om.PRESETS["flare-2"]), 28.0)     # the 28 KB per token we measured on paper
-        sec, hours, dollars = om.estimate(om.PRESETS["flare-2"])
+        self.assertAlmostEqual(om.kv_kb_per_token(om.PRESETS["flare-2.5"]), 28.0)     # the 28 KB per token we measured on paper
+        sec, hours, dollars = om.estimate(om.PRESETS["flare-2.5"])
         self.assertAlmostEqual(sec, 7.1, places=1)
         self.assertLess(hours, 2.1)
         self.assertGreater(om.estimate(om.PRESETS["solstice-2"])[1], om.estimate(om.PRESETS["equinox-2"])[1])
@@ -179,7 +179,7 @@ class PresetsAndLoss(unittest.TestCase):
 class LongContext(unittest.TestCase):
     def test_context_per_model(self):
         import open_models as om
-        self.assertEqual(om.max_context(om.PRESETS["flare-2"]), 32768)
+        self.assertEqual(om.max_context(om.PRESETS["flare-2.5"]), 32768)
         for k in ("equinox-2", "solstice-2", "apogee-2"):
             self.assertEqual(om.max_context(om.PRESETS[k]), 131072)
 
@@ -188,7 +188,7 @@ class LongContext(unittest.TestCase):
         e = om.PRESETS["equinox-2"]
         self.assertAlmostEqual(om.kv_gb(e), 18.0, places=1)                        # 144 KB per token x 131,072
         self.assertAlmostEqual(om.kv_gb(e, bytes_per_value=1), 9.0, places=1)       # a q8_0 cache halves it
-        self.assertEqual(om.llama_args(om.PRESETS["flare-2"]), "-c 32768")
+        self.assertEqual(om.llama_args(om.PRESETS["flare-2.5"]), "-c 32768")
         self.assertEqual(om.llama_args(e), "-c 131072 --rope-scaling yarn --rope-scale 4 --yarn-orig-ctx 32768")
         self.assertIn("-ctk q8_0", om.llama_args(e, 65536, "q8_0"))
         self.assertIn("--rope-scale 2", om.llama_args(e, 65536))
@@ -211,4 +211,4 @@ class LegacyRunFolder(unittest.TestCase):
             finetune_open.merge_and_export = real
             os.chdir(old)
         self.assertEqual(seen["adapter"], os.path.join("checkpoints", "dev", "open", "qwen2.5-1.5b-instruct", "adapter"))
-        self.assertIn("flare-2", seen["export"])
+        self.assertIn("flare-2.5", seen["export"])

@@ -7,7 +7,7 @@ the pilot to confirm. Times scale from the measured Flare 3.5 run (1.5B: 7.1 s/s
 """
 
 PRESETS = {
-    "flare-2": dict(hf="Qwen/Qwen2.5-1.5B-Instruct", params_b=1.54, layers=28, kv_heads=2, head_dim=128, licence="Apache 2.0",
+    "flare-2.5": dict(hf="Qwen/Qwen2.5-1.5B-Instruct", params_b=1.54, layers=28, kv_heads=2, head_dim=128, licence="Apache 2.0",
                       quant4=False, rank=64, batch_tokens=8192, grad_accum=8, measured=True),
     "equinox-2": dict(hf="Qwen/Qwen3-4B", params_b=4.0, layers=36, kv_heads=8, head_dim=128, licence="Apache 2.0",
                       quant4=False, rank=64, batch_tokens=4096, grad_accum=16, measured=False),

@@ -355,7 +355,7 @@ class AppState:
 
     def catalog(self, who):
         """The picker: one card per name (Flare, Equinox, Solstice, Apogee) with its newest usable version, and
-        "other" with the older versions that can still be chosen (Flare 2, ...)."""
+        "other" with the older versions that can still be chosen (Flare 2.5, ...)."""
         cards, other = [], []
         for name in M.NAMES:
             versions = sorted((m for m in self.manifest["models"] if m["name"] == name and m["status"] != "off"),
@@ -896,7 +896,7 @@ def main():
     ap.add_argument("--tokenizer", default=None, help="the model's tokenizer.json (only needed with --llama)")
     ap.add_argument("--llama-bin", default=None, help="path to llama-server (llama.cpp); default: found on the PATH")
     ap.add_argument("--gguf", action="append", default=[], metavar="ID=PATH",
-                    help="a model file to run, e.g. flare-2=export/dev/v2/my-ai-q8_0.gguf (the exports are found by themselves)")
+                    help="a model file to run, e.g. ember-2=export/dev/v2/my-ai-q8_0.gguf (the exports are found by themselves)")
     ap.add_argument("--llama-args", default="", help="extra options for llama-server, e.g. \"-ngl 99\" to use the GPU")
     ap.add_argument("--ram", type=float, default=None, help="this computer's memory in GB (default: detected)")
     ap.add_argument("--wiki", default=os.path.join("data", "wiki", "wiki.db"),

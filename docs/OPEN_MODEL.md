@@ -1,6 +1,6 @@
-# Emvryx 2.x: models built on open bases (Flare 2 = Qwen 2.5 1.5B, 32K context)
+# Emvryx 2.x: models built on open bases (Flare 2.5 = Qwen 2.5 1.5B, 32K context)
 
-This is how the first open-base Emvryx model, **Flare 2** (the slot that was v3.5), is made; the open-base models are the **2.x series** (generation 2): Flare 2 and 2.5, Equinox 2, Solstice 2, Apogee 2. It carries the Emvryx name, but it is **not trained from scratch**: it starts from
+This is how the first open-base Emvryx model, **Flare 2.5** (the slot that was v3.5), is made; the open-base models are the **2.x series** (generation 2): Flare 2.5 and 2.5, Equinox 2, Solstice 2, Apogee 2. It carries the Emvryx name, but it is **not trained from scratch**: it starts from
 Qwen 2.5's open weights and is fine-tuned here. Say so wherever provenance is described, and keep `NOTICE` (Qwen's licence) with any copy of the weights you share.
 The from-scratch line (v2, v3, v3.5) is unaffected.
 
@@ -64,17 +64,17 @@ Qwen3 can write `<think>` reasoning blocks: decide whether to keep or strip them
 
 ## Upgrades: "+" and growth on an open base
 The numbering is in [ROADMAP.md](ROADMAP.md) ("Numbers for "+" and grown models"). Times below are **estimates** (compute scales roughly with parameters from the measured
-Flare 2 run: 7.1 s/step on one RTX 5090 at 1.5B, 988 steps, about 2 hours and $1). Real numbers come from a `--pilot` on the base you pick.
+Flare 2.5 run: 7.1 s/step on one RTX 5090 at 1.5B, 988 steps, about 2 hours and $1). Real numbers come from a `--pilot` on the base you pick.
 
 ### "+" (same weights' size, better lessons): the normal upgrade
 1. **Collect what to fix**: test the model (`benchmarks.py`, the lookup sheet, phone tests) and write down its mistakes.
 2. **Make new lessons** for those mistakes (`make_chat_data_v3.py` and friends, with the teacher model on the PC, hours of PC time), and optionally DPO pairs.
 3. **Train**: `python finetune_open.py --data <new lessons>`; start from the saved adapter to continue it, or from the base with all lessons together.
-4. **Test it beats the old one** (`compare.py`), merge, convert to GGUF, add to the app. Number: Flare 2 becomes **2.5**; the old one moves to "Other models".
+4. **Test it beats the old one** (`compare.py`), merge, convert to GGUF, add to the app. Number: Flare 2.5 becomes **2.5**; the old one moves to "Other models".
 
 | Base | Rough training time (988 steps) | Rented cost at about $0.51/h | Needs |
 |---|---|---|---|
-| 1.5B (Flare 2) | about 2 h (measured) | about $1 | one 5090 or the 4070 (slower) |
+| 1.5B (Flare 2.5) | about 2 h (measured) | about $1 | one 5090 or the 4070 (slower) |
 | 4B (Equinox 2) | about 5 h | about $3 | one 5090 |
 | 8B (Solstice 2) | about 10 h | about $5-6 | one 5090 (bf16 weights are 16 GB) |
 | 14B (Apogee 2) | about 20-25 h | about $10-13 | 4-bit weights (QLoRA) on a 5090, or a 48 GB card |
@@ -101,7 +101,7 @@ The loss now runs the 152,000-word output layer only on the learned tokens, a ch
 
 | Model | Base | Weights in memory | Settings (micro-batch tokens × accumulation, LoRA rank) | Estimated time for 988 steps | Rented cost |
 |---|---|---|---|---|---|
-| Flare 2 | Qwen 2.5 1.5B | bf16, 3 GB | 8192 × 8, rank 64 (**measured**: 7.1 s/step, 18.6 GB) | about 2 h | about $1 |
+| Flare 2.5 | Qwen 2.5 1.5B | bf16, 3 GB | 8192 × 8, rank 64 (**measured**: 7.1 s/step, 18.6 GB) | about 2 h | about $1 |
 | Equinox 2 | Qwen3-4B | bf16, 8 GB | 4096 × 16, rank 64 | about 5 h (18 s/step) | about $2.60 |
 | Solstice 2 | Qwen3-8B | bf16, 16 GB | 2048 × 32, rank 32 | about 10 h (38 s/step) | about $5 |
 | Apogee 2 | Qwen3-14B | 4-bit (QLoRA), about 9 GB | 2048 × 32, rank 32, `--quant4` (needs `pip install bitsandbytes`) | about 24 h (89 s/step, 4-bit is slower) | about $12 |
@@ -113,7 +113,7 @@ A QLoRA adapter (Apogee) merges onto the full-precision base, so `--merge` needs
 ### Context windows (increased)
 | Model | Default | Longest | How | Memory for the longest (fp16 cache) |
 |---|---|---|---|---|
-| Flare 2 (Qwen 2.5 1.5B) | 32,768 | 32,768 | native; Qwen documents no longer setting for the 1.5B | 0.9 GB |
+| Flare 2.5 (Qwen 2.5 1.5B) | 32,768 | 32,768 | native; Qwen documents no longer setting for the 1.5B | 0.9 GB |
 | Equinox 2 (Qwen3-4B) | 32,768 | **131,072** | YaRN scaling, factor 4 | 18 GB (9 GB with a q8_0 cache) |
 | Solstice 2 (Qwen3-8B) | 32,768 | **131,072** | YaRN, factor 4 | 18 GB (9 GB with q8_0) |
 | Apogee 2 (Qwen3-14B) | 32,768 | **131,072** | YaRN, factor 4 | 20 GB (10 GB with q8_0) |
@@ -123,3 +123,40 @@ A QLoRA adapter (Apogee) merges onto the full-precision base, so `--merge` needs
 - On the RTX 4070 (12 GB) a 4B model at 128K does not fit (4B at Q4 is about 2.5 GB, plus 9 GB of cache even with q8_0): use 32K-64K there. The longer windows are for the 5090 or a rented/always-on server.
 - Training stays on short chats (`--max_len 4096`). Teaching a model to use long inputs well is a later "+" step: new long-document lessons and a longer `--max_len` (more memory per step).
 - Qwen3 can write `<think>` blocks; our lessons have none, so training pushes it to answer directly. Check it before it goes in the app.
+
+## Flare 2 (v3, from scratch) versus the open-base models, and what the switch makes possible
+Figures marked "(memory)" are published numbers from memory: verify them, and measure ours with `exam.py` / the test sheets after training.
+
+| | **Flare 2** (v3, trained from scratch) | **Flare 2.5 and later** (open bases, fine-tuned here) |
+|---|---|---|
+| Size | 394M parameters | 1.5B (Flare 2.5), about 4B, 8B, 14B (Equinox, Solstice, Apogee) |
+| Reading before our lessons | 11.8B tokens we chose | Trillions of tokens by the base's maker (memory: Qwen 2.5 about 18T, Qwen3 about 36T) |
+| What we train | Everything: tokenizer, all weights | A small LoRA add-on (about 74M parameters, 4.6%) on top of frozen weights |
+| General knowledge | HellaSwag 36.2% (measured) | the base is about 65% or more (memory); ours measured after training |
+| Memory (context) | 2,048 tokens (stretching it needs extra work) | 32,768 native; up to 131,072 on the Qwen3 models (YaRN) |
+| Vocabulary | 32,768 (our own, mostly English) | 151,936 (Qwen's: many languages, code, symbols) |
+| Languages | Mostly English | Many (memory: Qwen 2.5 covers about 29, Qwen3 about 119) |
+| Code and math | Basic | Much stronger |
+| Following instructions | Only what our lessons teach | The base is already instruction-tuned, then our lessons shape it (lookups, "I don't know", rules, style) |
+| Cost to train or refresh | About $50-70 | About $1 (1.5B) to $12 (14B) per run |
+| Phone file (Q4) | about 240 MB | about 1 GB, 2.5 GB, 5 GB, 9 GB |
+| Speed on a phone or the 4070 | Fastest | Slower, in proportion to size |
+| Ownership | 100% ours, no licence strings | Apache 2.0 base: keep `NOTICE`, say what it is built on |
+| Chat format | Our own tokens (`<\|user\|>`, notes, memory tool calls) | Qwen's ChatML; notes as plain text; "save to memory" tool calls not carried over yet |
+
+**Lost or changed by the switch:** the "everything is ours" claim for the 2.5+ models; our custom control tokens (notes, tool calls), so memory saving needs
+re-teaching in Qwen's own tool format; the chat's token counts now come from Qwen's tokenizer (the app does this per model already).
+
+**New things the switch makes possible (to build later; each needs its own test)**
+1. **Long documents and chats**: summarize a whole PDF or a very long conversation (32K-128K) without "forgetting" the start.
+2. **Real tool calling**: Qwen already has a native tool-call format, a better base for the v4 tools (calculator, clock, files, web, coding loop) and for re-teaching "save to memory".
+3. **A real thinking dial**: Qwen3 can think step by step or answer straight away, which maps onto Quick / Balanced / Deep (effort levels).
+4. **Many languages and translation.**
+5. **Much better code and maths**: the coding helper and agentic loops become practical.
+6. **Skill packs as LoRA add-ons on one base**: study helper, teacher assistant and more, swapped per question (needs a PEFT version of `skills.py`; ours is for our own model).
+7. **Better lookup**: the same family has embedding and reranker models (memory: Qwen3-Embedding / Qwen3-Reranker), the reranker idea we had listed for facts.
+8. **Faster big models**: a small Qwen can draft for a big one (speculative decoding, same tokenizer) in llama.cpp.
+9. **Structured answers (JSON)** for app features, which small from-scratch models handle poorly.
+10. **Pictures and voice**: sibling vision-language models exist (memory: Qwen-VL line), so the "see pictures through a helper" plan gets easier; check licences first.
+11. **Our own teacher**: Apogee 2 can write practice lessons for the smaller models, replacing the outside teacher model (our own model's output, no third-party terms to check).
+12. **Cheaper iteration**: a "+" refresh costs dollars, so you can test, fix and re-release often.

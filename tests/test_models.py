@@ -84,9 +84,9 @@ class SamplingSettings(unittest.TestCase):
 
     def test_bigger_models_may_run_hotter_than_smaller_ones(self):
         top = {e["id"]: e["temperature_bounds"][1] for e in self.models()}
-        self.assertLessEqual(top["ember-2"], top["flare-3"])
-        self.assertLessEqual(top["flare-3"], top["flare-2"])
-        self.assertLessEqual(top["flare-2"], top["solstice-2"])
+        self.assertLessEqual(top["ember-2"], top["flare-2"])
+        self.assertLessEqual(top["flare-2"], top["flare-2.5"])
+        self.assertLessEqual(top["flare-2.5"], top["solstice-2"])
 
 
 if __name__ == "__main__":
@@ -95,12 +95,12 @@ if __name__ == "__main__":
 
 class GenerationOrder(unittest.TestCase):
     def test_a_newer_generation_beats_a_higher_version_number(self):
-        m = {"models": [model("flare-3", "Flare", 3), {**model("flare-2", "Flare", 2), "generation": 2},
-                        {**model("flare-2.5", "Flare", 2.5), "generation": 2}]}
+        m = {"models": [model("flare-9", "Flare", 9), {**model("flare-2", "Flare", 2), "generation": 2},
+                        {**model("flare-1", "Flare", 1), "generation": 2}]}
         out = M.catalog(m, "sam")
-        self.assertEqual([c["id"] for c in out["cards"]], ["flare-2.5"])
-        self.assertEqual([c["id"] for c in out["other"]], ["flare-2", "flare-3"])
+        self.assertEqual([c["id"] for c in out["cards"]], ["flare-2"])           # a newer generation first, even with a lower number
+        self.assertEqual([c["id"] for c in out["other"]], ["flare-1", "flare-9"])
 
     def test_real_manifest_has_generations(self):
         got = {e["id"]: e.get("generation", 1) for e in json.load(open("models.json", encoding="utf-8"))["models"]}
-        self.assertEqual((got["ember-2"], got["flare-3"], got["flare-2"]), (1, 1, 2))
+        self.assertEqual((got["ember-2"], got["flare-2"], got["flare-2.5"]), (1, 1, 2))

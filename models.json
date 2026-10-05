@@ -47,15 +47,15 @@
       ]
     },
     {
-      "id": "flare-3",
+      "id": "flare-2",
       "name": "Flare",
-      "version": 3,
+      "version": 2,
       "generation": 1,
       "from_version": "v3",
       "tagline": "Fast and light, for quick answers",
       "tier": "Lite",
       "where": "device",
-      "file": "flare-3.q4_0.gguf",
+      "file": "flare-2.q4_0.gguf",
       "size_mb": 240,
       "sha256": "",
       "min_ram_gb": 2,
@@ -92,16 +92,16 @@
       ]
     },
     {
-      "id": "flare-2",
+      "id": "flare-2.5",
       "name": "Flare",
-      "version": 2,
+      "version": 2.5,
       "generation": 2,
       "open": true,
       "base": "Qwen2.5-1.5B-Instruct",
       "tagline": "Fast and light, for quick answers",
       "tier": "Lite",
       "where": "device",
-      "file": "flare-2.q4_k_m.gguf",
+      "file": "flare-2.5.q4_k_m.gguf",
       "size_mb": 1000,
       "sha256": "",
       "min_ram_gb": 4,
@@ -117,11 +117,11 @@
       "context_tested": 2048,
       "kv_kb_per_token": 28,
       "weights_mb": 1000,
-      "tokenizer": "checkpoints/dev/open/flare-2/tokenizer/tokenizer.json",
+      "tokenizer": "checkpoints/dev/open/flare-2.5/tokenizer/tokenizer.json",
       "local_gguf": [
-        "export/open/flare-2/my-ai-q4_k_m.gguf",
-        "export/open/flare-2/my-ai-q8_0.gguf",
-        "export/open/flare-2/my-ai-f16.gguf"
+        "export/open/flare-2.5/my-ai-q4_k_m.gguf",
+        "export/open/flare-2.5/my-ai-q8_0.gguf",
+        "export/open/flare-2.5/my-ai-f16.gguf"
       ],
       "sampling": {
         "temperature": 0.65,

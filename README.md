@@ -34,11 +34,11 @@ number: **Emvryx Ember** (small and quick), **Emvryx Flare** (fast and light), *
 
 | Generation | Models | How they are made |
 |---|---|---|
-| **1: trained from scratch here** (the original line) | Ember 2 (88M), Flare 3 (394M) | Our own tokenizer, transformer and training run |
-| **2: the 2.x series, built on open bases** | **Flare 2** (Qwen 2.5 1.5B) and later **Flare 2.5**, **Equinox 2** (about 4B), **Solstice 2** (about 8B), **Apogee 2** (about 14B) | Fine-tuned here on Emvryx's own lessons, with the base credited in `NOTICE` |
+| **1: trained from scratch here** (the original line) | Ember 2 (88M), Flare 2 (394M) | Our own tokenizer, transformer and training run |
+| **2: the 2.x series, built on open bases** | **Flare 2.5** (Qwen 2.5 1.5B), **Equinox 2** (about 4B), **Solstice 2** (about 8B), **Apogee 2** (about 14B) | Fine-tuned here on Emvryx's own lessons, with the base credited in `NOTICE` |
 
-A newer generation takes the main spot in the app's picker even when its number is lower (Flare 2 is newer than Flare 3). Each name has
-its own number that goes up only when that model is updated ("+" refreshes are x.5: Flare 2 to Flare 2.5). The from-scratch v3.5 run was
+A newer generation takes the main spot in the app's picker. Each name has
+its own number that goes up only when that model is updated ("+" refreshes take the next decimal: Flare 2.5 to Flare 2.6). The from-scratch v3.5 run was
 stopped (see `docs/V3_5.md`). They are placeholders: no trademark check has been done yet. See `docs/ROADMAP.md`, `docs/OPEN_MODEL.md` and `docs/APP.md`.
 
 ## Pretrained weights policy (updated Oct 2026)
@@ -47,8 +47,8 @@ Two kinds of models, each described honestly:
 
 | Models | How they are made |
 |---|---|
-| **v1, v2, v3** (Ember 2, Flare 3) | Trained **from scratch** here: random numbers at the start, learning only from the text we give them. No one else's weights are used |
-| **The 2.x series, built on an open base** (the first: Flare 2 on Qwen 2.5 1.5B, 32K context; see `docs/OPEN_MODEL.md`) | Start from an open model's weights and are fine-tuned here on our lessons. They carry the Emvryx name; the base model and its licence are credited in `NOTICE` |
+| **v1, v2, v3** (Ember 2, Flare 2) | Trained **from scratch** here: random numbers at the start, learning only from the text we give them. No one else's weights are used |
+| **The 2.x series, built on an open base** (the first: Flare 2.5 on Qwen 2.5 1.5B, 32K context; see `docs/OPEN_MODEL.md`) | Start from an open model's weights and are fine-tuned here on our lessons. They carry the Emvryx name; the base model and its licence are credited in `NOTICE` |
 
 Rules:
 - Only open models whose licence allows this. Keep each licence's notice (`NOTICE`) and check it before sharing a model.

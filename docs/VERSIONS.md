@@ -2,10 +2,10 @@
 
 All versions side by side. v1 and v2 are finished and run on the phone. v3's pretraining finished at step 45,000 (October 2026; HellaSwag 37.1% on a 2,000-question sample, validation loss about 2.68); its chat tuning is next.
 v3.5, v4, v5, v6 and v6.5 are planned: their numbers are estimates and will change once v3's results are in.
-> **Update (Oct 2026): Emvryx moves to open bases, as the 2.x series.** The open-base models are numbered 2: **Flare 2** (was v3.5), **Equinox 2** (was v4), **Solstice 2** (was v5), **Apogee 2** (was v6); a "+" refresh is x.5 (Flare 2.5). Generation 1 (Ember 2, Flare 3) was trained from scratch. From v3.5 on, models are fine-tuned from an open model instead of trained from scratch
+> **Update (Oct 2026): Emvryx moves to open bases, as the 2.x series.** The whole family is the 2.x series: **Ember 2** (v2) and **Flare 2** (v3) were trained from scratch, and the open-base models are **Flare 2.5** (was v3.5), **Equinox 2** (was v4), **Solstice 2** (was v5), **Apogee 2** (was v6); a "+" refresh takes the next decimal (Flare 2.6). Generation 1 (Ember 2, Flare 2) was trained from scratch. From v3.5 on, models are fine-tuned from an open model instead of trained from scratch
 > (cheaper and stronger: about $183 for a forecast ~41-45% from scratch versus a few dollars for roughly 65% on a 1.5B open model).
 > They carry the Emvryx name only; the base and its licence are credited in `NOTICE`, and the docs never call a fine-tuned model "from scratch".
-> **v1, v2 and v3 (Ember 2, Flare 3) stay from scratch**, and the from-scratch v3.5 run was **stopped** (step recorded in `docs/V3_5.md`). **Flare 2 is
+> **v1, v2 and v3 (Ember 2, Flare 2) stay from scratch**, and the from-scratch v3.5 run was **stopped** (step recorded in `docs/V3_5.md`). **Flare 2.5 is
 > Qwen 2.5 1.5B with a 32K context** ([OPEN_MODEL.md](OPEN_MODEL.md)). Later rungs (suggestions, not chosen): Equinox 2 about a 4B base,
 > Solstice 2 about an 8B base, Apogee 2 about a 14B base on rented GPUs; pick each base when its turn comes, because better open models will exist.
 > The rest of this file was written for the from-scratch plan: where it says a version's brain is trained from scratch or grown from v3.5, read it with this update.
@@ -14,11 +14,11 @@ Details: [V2.md](V2.md), [V3.md](V3.md), [ROADMAP.md](ROADMAP.md), [LESSONS.md](
 
 **The app and the model family are called Emvryx** (working name, Emvryx.AI; see [APP.md](APP.md)). Each model is the
 umbrella name plus one of **five role names** plus a generation number (checked by web search only; no trademark search yet):
-**Emvryx Ember 2** (v2: the small first assistant, 88M) and **Emvryx Flare 3** (v3, 394M) were trained from scratch (generation 1). The open-base
-**2.x series** (generation 2) is **Emvryx Flare 2** (Qwen 2.5 1.5B; was v3.5), **Flare 2.5** (its "+" refresh), **Emvryx Equinox 2** (about 4B; was v4),
+**Emvryx Ember 2** (v2: the small first assistant, 88M) and **Emvryx Flare 2** (v3, 394M) were trained from scratch (generation 1). The open-base
+**2.x series** (generation 2) is **Emvryx Flare 2.5** (Qwen 2.5 1.5B; was v3.5), **Emvryx Equinox 2** (about 4B; was v4),
 **Emvryx Solstice 2** (about 8B; was v5) and **Emvryx Apogee 2** (about 14B; was v6). Ember = small and quick (the lowest name), Flare = fast and light,
 Equinox = balanced everyday, Solstice = stronger (PC / online), Apogee = most capable. Each name has its own number, which only goes up when that model
-is updated; a newer generation takes the main spot in the app's picker even with a lower number (Flare 2 before Flare 3). "+" refreshes are x.5:
+is updated; a newer generation takes the main spot in the app's picker. A "+" refresh takes the next decimal (Flare 2.6):
 see the number table in ROADMAP.md.
 (Earlier Norse working names: Rune = Flare, Skald = Equinox, Saga = Solstice, Edda = Apogee. A second set, Nova, Pulsar, Quasar
 and Supernova, was dropped because known AI models already use those names.)
@@ -32,11 +32,11 @@ and skills are being built, so no GPU time is wasted. It's the jump from "a mode
 v5 goes back to a bigger brain (3B), and it's the first version that needs the cloud.
 v6 (5B) and v6.5 (7B) keep growing toward medium size, mainly for the PC and online mode.
 
-## Flare 2 as built now (Qwen 2.5 1.5B base, Oct 2026; the version slot was v3.5)
+## Flare 2.5 as built now (Qwen 2.5 1.5B base, Oct 2026; the version slot was v3.5)
 
-The tables below show this version in the Flare 2 column (the old v3.5 slot). The from-scratch plan it replaced (1.12B, 8K context, 75,000 steps, about $183) is recorded in [V3_5.md](V3_5.md).
+The tables below show this version in the Flare 2.5 column (the old v3.5 slot). The from-scratch plan it replaced (1.12B, 8K context, 75,000 steps, about $183) is recorded in [V3_5.md](V3_5.md).
 
-| | **Flare 2 (Qwen 2.5 1.5B base)** |
+| | **Flare 2.5 (Qwen 2.5 1.5B base)** |
 |---|---|
 | Base | `Qwen/Qwen2.5-1.5B-Instruct`, Apache 2.0, credited in `NOTICE`; **not trained from scratch** |
 | Brain | 1.54B parameters (28 layers, 1536 wide, 2 KV heads); we train 73.9M LoRA parameters on top (4.6%) |
@@ -51,9 +51,9 @@ The tables below show this version in the Flare 2 column (the old v3.5 slot). Th
 
 ## Size and design
 
-|  | **v1** ✅ | **v2** ✅ | **v3** 🛠️ | **Flare 2** 🛠️ (was v3.5, Qwen base) | **Equinox 2** (was v4, Qwen3-4B) | **Solstice 2** (was v5, Qwen3-8B) | **Apogee 2** (was v6, Qwen3-14B) | **v6.5** (TBD base) |
+|  | **v1** ✅ | **v2** ✅ | **v3** 🛠️ | **Flare 2.5** 🛠️ (was v3.5, Qwen base) | **Equinox 2** (was v4, Qwen3-4B) | **Solstice 2** (was v5, Qwen3-8B) | **Apogee 2** (was v6, Qwen3-14B) | **v6.5** (TBD base) |
 |---|---|---|---|---|---|---|---|---|
-| Model name | – | – | Emvryx Flare 3 | Emvryx Flare 2 | Emvryx Equinox 2 | Emvryx Solstice 2 | Emvryx Apogee 2 | Emvryx Apogee 2.5 or later |
+| Model name | – | – | Emvryx Flare 2 | Emvryx Flare 2.5 | Emvryx Equinox 2 | Emvryx Solstice 2 | Emvryx Apogee 2 | Emvryx Apogee 2.5 or later |
 | Parameters | 29.5M | 88M | 394M | **1.54B** (Qwen 2.5 base) + 73.9M LoRA we train | Qwen3-4B (4.0B) + LoRA skill packs (small add-on weights, a few MB each, switched by a router) | Qwen3-8B (8.2B) | Qwen3-14B (14.8B) | TBD (a bigger open base, chosen when it is time) |
 | Shape | 512 wide × 8 layers | 768 wide × 12 layers | 1024 wide × 32 layers | 1536 wide × 28 layers | 2560 wide × 36 layers | 4096 wide × 36 layers | 5120 wide × 40 layers | TBD |
 | Memory (context length) | 512 tokens | 1,024 tokens | 2,048 tokens; **v3-long: 8K → 16K → 32K** (stretched after training, if the tests pass) | **32,768 tokens** from the start (the base's own) | **32K default, up to 128K** (YaRN) + saved notes about you | **32K default, up to 128K** (YaRN) | **32K default, up to 128K** (YaRN) | TBD (the base's context) |
@@ -67,7 +67,7 @@ the long-context tests pass at that length (docs/LONG_CONTEXT.md). "Memory (cont
 
 ## Training
 
-|  | **v1** | **v2** | **v3** | **Flare 2** (was v3.5, Qwen base) | **Equinox 2** (was v4, Qwen3-4B) | **Solstice 2** (was v5, Qwen3-8B) | **Apogee 2** (was v6, Qwen3-14B) | **v6.5** (TBD base) |
+|  | **v1** | **v2** | **v3** | **Flare 2.5** (was v3.5, Qwen base) | **Equinox 2** (was v4, Qwen3-4B) | **Solstice 2** (was v5, Qwen3-8B) | **Apogee 2** (was v6, Qwen3-14B) | **v6.5** (TBD base) |
 |---|---|---|---|---|---|---|---|---|
 | **Data to prepare** | 467M tokens (TinyStories) | 2.8B tokens | **12B + 1.3B anneal** (done in 1h26m) | **None new**: the v3 lessons (`data/v3/chat.jsonl`, 109,917 chats) | **None new**: the v3 lessons (109,917 chats) + new lessons for the mistakes found + long-document lessons | **None new** (same lessons, plus fixes) | **None new** (same lessons, plus fixes) | TBD |
 | Data mix | 100% children's stories | 80% web, 15% Wikipedia, 5% stories | 63% web, 20% Wikipedia, 10% Python, 5% math, 2% stories | v3's chat lessons only; no pretraining here (the base's own pretraining is not ours) | Chat lessons only (lookups, "I don't know", corrections, instructions, small talk, stories); no pretraining here | Same | Same | TBD |
@@ -90,7 +90,7 @@ with**, given what changed for v3, v3.5 and v4. **v4 and later are starting gues
 is confirmed or changed by its own pilot run (`train.py --pilot`). Why each choice was made is in
 [LESSONS.md](LESSONS.md).
 
-| Setting | **v1** | **v2** | **v3** | **Flare 2** (was v3.5, Qwen base) | **Equinox 2** (was v4, Qwen3-4B) | **Solstice 2** (was v5, Qwen3-8B) | **Apogee 2** (was v6, Qwen3-14B) | **v6.5** (TBD base) |
+| Setting | **v1** | **v2** | **v3** | **Flare 2.5** (was v3.5, Qwen base) | **Equinox 2** (was v4, Qwen3-4B) | **Solstice 2** (was v5, Qwen3-8B) | **Apogee 2** (was v6, Qwen3-14B) | **v6.5** (TBD base) |
 |---|---|---|---|---|---|---|---|---|
 | Optimizer | adamw | adamw | adamw | AdamW on the LoRA weights only | AdamW on the LoRA weights only | AdamW on the LoRA weights only | AdamW on the LoRA weights only | TBD |
 | LR schedule | cosine | cosine | **wsd** (steady, then fade over the last 10%) | 30 warm-up steps, then cosine down to 10% | 30 warm-up steps, then cosine down to 10% | 30 warm-up steps, then cosine down to 10% | 30 warm-up steps, then cosine down to 10% | TBD |
@@ -107,7 +107,7 @@ is confirmed or changed by its own pilot run (`train.py --pilot`). Why each choi
 | Chat tuning: passes / batch / learning rate | 3 / 16 / 5e-5 | 2 / 8 / 1e-4 | 2 / 4 / 5e-5 | this is the chat tuning: 1 pass / ~78 chats per step / 2e-4 | this is the chat tuning: 1 pass / ~65K tokens per step | this is the chat tuning: 1 pass / ~65K tokens per step | this is the chat tuning: 1 pass / ~65K tokens per step | TBD |
 | NEFTune noise | – | – | 5 | off | off | off | off | TBD |
 | Preference training (DPO) | – | – | β 0.1, rate 2e-6 | not yet | planned (DPO), a "+" step | planned (DPO), a "+" step | planned (DPO), a "+" step | TBD |
-| Sampling in the app (temperature / allowed range) | – | **0.45 / 0.3–0.6** (Ember) | **0.6 / 0.2–0.8** (Flare 3) | 0.65 / 0.2–0.9 (to be re-tested on this model) | Qwen suggests ~0.7 for non-thinking chat (to be re-tested) | Qwen suggests ~0.7 for non-thinking chat (to be re-tested) | Qwen suggests ~0.7 for non-thinking chat (to be re-tested) | TBD |
+| Sampling in the app (temperature / allowed range) | – | **0.45 / 0.3–0.6** (Ember) | **0.6 / 0.2–0.8** (Flare 2) | 0.65 / 0.2–0.9 (to be re-tested on this model) | Qwen suggests ~0.7 for non-thinking chat (to be re-tested) | Qwen suggests ~0.7 for non-thinking chat (to be re-tested) | Qwen suggests ~0.7 for non-thinking chat (to be re-tested) | TBD |
 | Step time measured | – | – | 4070 25.8 s; 3090 17.5 s; **5090 6.9 s** | **7.1 s** (one RTX 5090, 18.6 GB peak) | not yet (estimate 18 s) | not yet (estimate 38 s) | not yet (estimate 89 s) | TBD |
 
 **How the guesses were made:**
@@ -137,13 +137,13 @@ real GSM8K questions (a well-known math test) are kept for testing only, never f
 
 ## Results
 
-|  | **v1** | **v2** | **v3** | **Flare 2** (was v3.5, Qwen base) | **Equinox 2** (was v4, Qwen3-4B) | **Solstice 2** (was v5, Qwen3-8B) | **Apogee 2** (was v6, Qwen3-14B) | **v6.5** (TBD base) |
+|  | **v1** | **v2** | **v3** | **Flare 2.5** (was v3.5, Qwen base) | **Equinox 2** (was v4, Qwen3-4B) | **Solstice 2** (was v5, Qwen3-8B) | **Apogee 2** (was v6, Qwen3-14B) | **v6.5** (TBD base) |
 |---|---|---|---|---|---|---|---|---|
 | Final val loss | **1.279** | **2.929** (best), 2.984 at the last step | **≈2.68** (step 45,000) | Training loss ~0.9 at the start; the final value is measured when done | Measured when trained | Measured when trained | Measured when trained | TBD |
 | Phone file | 32 MB | **89 MB** | ~420 MB (Q8) or **~240 MB (Q4)** | **~1 GB (Q4)** (estimate) | ~2.5 GB (Q4) | ~5 GB (Q4) | ~9 GB (Q4) | TBD |
-| Test sheet (`evaluate.py`, /20) | Only identity and story questions | **18/20** (baseline) | Goal: clearly beat v2 | Measured after training | Goal: beat Flare 3.5 | Goal: beat Flare 3.5 | Goal: beat Flare 3.5 | TBD |
-| v3 test sheet (`prompts_v3.jsonl`, /41) | — | Run to set the baseline* | Goal: clearly beat v2, most of all on facts_hard, instructions, topic_switch, honesty, correction | Goal: beat v3 | Goal: beat Flare 3.5 | Goal: beat Flare 3.5 | Goal: beat Flare 3.5 | TBD |
-| Phone speed (PocketPal, Q8_0) | — | **~210–245 tokens/s**, first word in <0.1 s | Slower (4.5× bigger); measured when done | Slower than v3 (~4× bigger); measured when done | Slower than Flare 3.5 (~2.6× bigger); measured when done | ~5× bigger; measured when done | ~10× bigger; PC or server | TBD |
+| Test sheet (`evaluate.py`, /20) | Only identity and story questions | **18/20** (baseline) | Goal: clearly beat v2 | Measured after training | Goal: beat Flare 2.5 | Goal: beat Flare 2.5 | Goal: beat Flare 2.5 | TBD |
+| v3 test sheet (`prompts_v3.jsonl`, /41) | — | Run to set the baseline* | Goal: clearly beat v2, most of all on facts_hard, instructions, topic_switch, honesty, correction | Goal: beat v3 | Goal: beat Flare 2.5 | Goal: beat Flare 2.5 | Goal: beat Flare 2.5 | TBD |
+| Phone speed (PocketPal, Q8_0) | — | **~210–245 tokens/s**, first word in <0.1 s | Slower (4.5× bigger); measured when done | Slower than v3 (~4× bigger); measured when done | Slower than Flare 2.5 (~2.6× bigger); measured when done | ~5× bigger; measured when done | ~10× bigger; PC or server | TBD |
 | HellaSwag (`exam.py`, full test, random = 25%) | — | **28.4%** (baseline) | **31.7% at step 15,000** (full test; the 500-question mini-exam reads ~5 points high); forecast **~34–38%** | Base model ~65% (published, from memory); ours measured after training | Not measured. Run `exam.py` after training | Not measured. Run `exam.py` after training | Not measured. Run `exam.py` after training | TBD |
 | Public yardsticks (`lm-evaluation-harness`: ARC, MMLU; small GSM8K-style math) | — | Run to set the baseline | Goal: beat v2 | Goal: beat v3 | Base model, published and from memory: MMLU about 73% (ours measured after training) | Base model MMLU about 77% (from memory) | Base model MMLU about 81% (from memory) | TBD |
 | Tool, thinking and coding tests (v4+) | — | — | — | — | Goal: tools and thinking from v4 on (see the roadmap) | Goal: tools and thinking from v4 on (see the roadmap) | Goal: tools and thinking from v4 on (see the roadmap) | TBD |
@@ -171,7 +171,7 @@ It adds the mistakes found on the phone, so v2 is expected to score low on the n
 
 ## What each version achieves
 
-| Ability | **v1** | **v2** (expected) | **v3** (goal) | **Flare 2** (goal) | **v4** (goal) | **v5** (goal) | **v6** (goal) | **v6.5** (goal) |
+| Ability | **v1** | **v2** (expected) | **v3** (goal) | **Flare 2.5** (goal) | **v4** (goal) | **v5** (goal) | **v6** (goal) | **v6.5** (goal) |
 |---|---|---|---|---|---|---|---|---|
 | Children's stories | ✅ Good | ✅ Good | ✅ Good | ✅ Good | ✅ Story-writer skill pack | ✅ Richer, longer stories | ✅ Long, well-written stories | ✅ Long, well-written stories |
 | Grammar and fluency | Simple | Good | Better | ✅ Natural | ✅ Natural | ✅ Natural | ✅ Natural | ✅ Natural |
@@ -353,9 +353,9 @@ offline use; these power the PC and the app's online mode. Details: [ROADMAP.md]
 
 - **v1:** a children's story-teller that runs on your phone
 - **v2:** a mini assistant with basic general knowledge and real conversations
-- **v3 (Emvryx Flare 3):** an **accurate, honest** assistant that looks facts up, admits when it doesn't know, and
+- **v3 (Emvryx Flare 2):** an **accurate, honest** assistant that looks facts up, admits when it doesn't know, and
   handles basic code
-- **Flare 2 (was v3.5):** v3's features on a **1.5B open base (Qwen 2.5)**, fine-tuned on Emvryx's own lessons, 32K memory (the from-scratch 1.12B plan was stopped)
+- **Flare 2.5 (was v3.5):** v3's features on a **1.5B open base (Qwen 2.5)**, fine-tuned on Emvryx's own lessons, 32K memory (the from-scratch 1.12B plan was stopped)
 - **Equinox 2 (was v4):** an **about 4B open base**, turned into a **personal assistant**: specialist skills, exact math with tools, a Quick / Balanced / Deep
   thinking dial, coding help, documents, voice, and your own app
 - **Solstice 2 (was v5):** a **genuinely capable** about 8B assistant, fine-tuned on a rented GPU, and the first

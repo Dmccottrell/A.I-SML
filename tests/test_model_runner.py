@@ -50,7 +50,7 @@ class Runner(unittest.TestCase):
         self.tmp = tempfile.TemporaryDirectory()
         self.bin = write_fake(self.tmp.name)
         self.files = {}
-        for mid in ("ember-2", "flare-3"):
+        for mid in ("ember-2", "flare-2"):
             self.files[mid] = os.path.join(self.tmp.name, mid + ".gguf")
             open(self.files[mid], "wb").write(b"x")
         self.r = A.ModelRunner(self.bin, self.files, start_timeout=20)
@@ -70,11 +70,11 @@ class Runner(unittest.TestCase):
         self.assertEqual(self.r.ensure("ember-2", 512), u1)                # smaller memory is fine: reuse
         self.assertEqual(self.r.proc.pid, pid)
         old = self.r.proc
-        self.r.ensure("flare-3", 2048)                                     # another model: the first one is stopped
+        self.r.ensure("flare-2", 2048)                                     # another model: the first one is stopped
         self.assertIsNotNone(old.poll())
-        self.assertIn("flare-3.gguf", "".join(E.LlamaServer(self.r.url).stream([1], 5)))
+        self.assertIn("flare-2.gguf", "".join(E.LlamaServer(self.r.url).stream([1], 5)))
         old = self.r.proc
-        self.r.ensure("flare-3", 4096)                                     # needs more memory than it was started with
+        self.r.ensure("flare-2", 4096)                                     # needs more memory than it was started with
         self.assertIsNotNone(old.poll())
         self.assertEqual(self.r.ctx, 4096)
 
@@ -129,8 +129,8 @@ class ThroughTheApp(Base):
         self.build(A.demo_tokenizer())
         cards = {m["id"]: m for m in self.owner.call("GET", "/api/state")[1]["models"]["cards"]}
         self.assertEqual(cards["ember-2"]["state"], "ready")
-        self.assertEqual(cards["flare-3"]["state"], "missing")
-        self.assertEqual(cards["flare-3"]["badge"], "Not on this computer")
+        self.assertEqual(cards["flare-2"]["state"], "missing")
+        self.assertEqual(cards["flare-2"]["badge"], "Not on this computer")
         self.assertEqual(self.owner.call("GET", "/api/state")[1]["model"], "ember-2")      # the one that can run is preselected
         self.assertFalse(self.owner.call("GET", "/api/state")[1]["demo"])
 
@@ -159,7 +159,7 @@ class ThroughTheApp(Base):
     def test_missing_model_is_refused_clearly(self):
         self.build(A.demo_tokenizer())
         cid = self.owner.call("POST", "/api/chats", {})[1]["id"]
-        status, _, body = self.owner.stream(cid, {"text": "hi", "model": "flare-3", "effort": "quick"})
+        status, _, body = self.owner.stream(cid, {"text": "hi", "model": "flare-2", "effort": "quick"})
         self.assertEqual((status, body["code"]), (403, "model_unavailable"))
 
     def test_a_model_without_its_tokenizer_is_a_clear_error_not_garbage(self):
@@ -211,7 +211,7 @@ class Sampling(unittest.TestCase):
 
     def test_other_models_keep_the_defaults(self):
         st = A.AppState(None, ram_gb=8, pace=False, llama_url="http://127.0.0.1:1", tok=A.demo_tokenizer())
-        flare = next(m for m in st.manifest["models"] if m["id"] == "flare-3")
+        flare = next(m for m in st.manifest["models"] if m["id"] == "flare-2")
         self.assertEqual(st.backend_for(flare, "hi").sampling["repeat_penalty"], 1.15)
 
 

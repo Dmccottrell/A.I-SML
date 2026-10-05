@@ -49,12 +49,12 @@ class Server(Base):
 
     def setUp(self):
         super().setUp()
-        flare = next(m for m in self.state.manifest["models"] if m["id"] == "flare-3")
+        flare = next(m for m in self.state.manifest["models"] if m["id"] == "flare-2")
         for key in ("sampling", "temperature_bounds"):          # these tests check the generic 0.8 / 0.2-1.0 behaviour;
-            flare.pop(key, None)                                # Flare 3's own tuned settings are checked in test_models.py
+            flare.pop(key, None)                                # Flare 2's own tuned settings are checked in test_models.py
 
     def decode(self, ids):
-        return self.state.tok_for({"id": "flare-3"}).decode(ids)
+        return self.state.tok_for({"id": "flare-2"}).decode(ids)
 
     def test_the_hint_reaches_the_model_but_is_never_saved(self):
         cid = self.new_chat(self.sam)
@@ -99,7 +99,7 @@ class Server(Base):
         self.assertEqual(Server.backend.sampling["temperature"], 0.8)           # a chosen level keeps the model's own setting
 
     def test_regenerate_never_goes_outside_the_models_range(self):
-        manifest_model = next(m for m in self.state.manifest["models"] if m["id"] == "flare-3")
+        manifest_model = next(m for m in self.state.manifest["models"] if m["id"] == "flare-2")
         manifest_model["temperature_bounds"] = [0.3, 0.6]
         cid = self.new_chat(self.owner)
         self.ask(self.owner, cid, "Tell me about cats")

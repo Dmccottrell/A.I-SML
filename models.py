@@ -7,7 +7,7 @@ WHAT THIS FILE DOES
     picker shows (docs/APP_SPEC.md, "Model picker"):
 
       cards    one per NAME (Flare, Equinox, Solstice, Apogee), the newest the person may use (newest generation first, then the version:
-               generation 1 = trained from scratch here, 2 = built on an open base, so Flare 2 is newer than Flare 3)
+               generation 1 = trained from scratch here, 2 = built on an open base, so Flare 2.5 is newer than Flare 2)
       other    "Other models": older versions of any name, kept only up to `keep_latest_per_name` per name
                (plus anything pinned); the rest are offered for deletion
 
