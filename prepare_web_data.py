@@ -322,9 +322,32 @@ LOADERS = {
 }
 
 
+# Long contexts (v3.5 reads 8,192-token windows) are only practised on documents that are long enough to fill them: most web
+# pages are under ~1,500 tokens, so a window is mostly several unrelated pages. For these web sources, pages under
+# LONG_MIN_CHARS are kept only LONG_KEEP_SHORT of the time. The choice depends on the page's own text, so a restarted run
+# sees the same documents in the same order (the resume logic counts documents).
+LONG_BIAS_SOURCES = ("fineweb_100bt", "fineweb_hq_100bt", "dclm")
+LONG_MIN_CHARS = 6000          # ~1,500 tokens
+LONG_KEEP_SHORT = 0.4
+
+
+def prefer_long(loader, min_chars=LONG_MIN_CHARS, keep_short=LONG_KEEP_SHORT):
+    """The same documents, but short ones are thinned out (deterministically)."""
+    import zlib
+
+    def wrapped():
+        for text in loader():
+            if len(text) >= min_chars or zlib.crc32(text[:256].encode("utf-8", "ignore")) % 1000 < keep_short * 1000:
+                yield text
+    return wrapped
+
+
 def sources_for(V, mix=None):
-    """[(name, loader, share), ...] for a version, from its data_mix in config.py."""
-    return [(name, LOADERS[name], share) for name, share in (mix or V.data_mix)]
+    """[(name, loader, share), ...] for a version, from its data_mix in config.py. Versions with a context of 4,096 tokens
+    or more thin out the short web pages (prefer_long)."""
+    long_context = V.model.max_seq_len >= 4096
+    return [(name, prefer_long(LOADERS[name]) if long_context and name in LONG_BIAS_SOURCES else LOADERS[name], share)
+            for name, share in (mix or V.data_mix)]
 
 
 # ------------------------------------------------------------------ decontamination
