@@ -180,3 +180,10 @@ re-teaching in Qwen's own tool format; the chat's token counts now come from Qwe
 2. **Improved releases, after all the first builds are done:** **Equinox 2.5, Solstice 2.5, Apogee 2.5**. Each is made the same way: collect the first build's mistakes, write new lessons for them, add DPO, then
    the extras (skill packs, the thinking dial, long-document lessons, tool calling in Qwen's format, a reranker for lookups, and for Apogee possibly a bigger base), train, compare against the first build and plain Qwen, and release. The 2.0 version moves to "Other models".
 3. Check for newer open models before each build, because better bases may exist by then. Nothing is bought or started without the owner's approval.
+
+### Running the next model straight after (`chain_open.sh`)
+On the cloud machine, after `git pull origin main`: `bash chain_open.sh` (inside tmux). It waits for the running Flare 2.5 fine-tune to end, then merges it, runs the exam
+(base versus tuned), backs it up to Hugging Face, and runs **Equinox 2**: a 3-step pilot, then the full run, merge, exam and backup. It pings your phone (ntfy `v35-AI`)
+at each step and **stops** with a message if anything fails (an out-of-memory pilot, for example) instead of carrying on. Add more names to run more models
+(`bash chain_open.sh equinox-2 solstice-2`), but only the ones you have budget for. It never stops the Vast instance: when it pings "all done", press Stop yourself.
+Start it only while the Flare run is running or finished: it merges whatever the last save was.

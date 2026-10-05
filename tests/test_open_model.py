@@ -304,3 +304,21 @@ class ExamOpen(unittest.TestCase):
         from exam import pick_questions
         qs = [{"i": i} for i in range(100)]
         self.assertEqual([q["i"] for q in pick_questions(qs, 4, "spread")], [0, 25, 50, 75])
+
+
+class FindAdapter(unittest.TestCase):
+    def test_a_run_saved_under_the_base_name_is_found_from_the_preset(self):
+        import exam_open
+        d = tempfile.mkdtemp()
+        old = os.getcwd()
+        os.chdir(d)
+        try:
+            os.makedirs(os.path.join("checkpoints", "dev", "open", "qwen2.5-1.5b-instruct", "adapter"))
+            got = exam_open.find_adapter("flare-2.5", "Qwen/Qwen2.5-1.5B-Instruct")
+            self.assertEqual(got, os.path.join("checkpoints", "dev", "open", "qwen2.5-1.5b-instruct", "adapter"))
+            os.makedirs(os.path.join("checkpoints", "dev", "open", "flare-2.5", "adapter"))
+            self.assertEqual(exam_open.find_adapter("flare-2.5", "Qwen/Qwen2.5-1.5B-Instruct"),
+                             os.path.join("checkpoints", "dev", "open", "flare-2.5", "adapter"))     # the new folder wins
+            self.assertIsNone(exam_open.find_adapter("equinox-2", "Qwen/Qwen3-4B"))
+        finally:
+            os.chdir(old)
