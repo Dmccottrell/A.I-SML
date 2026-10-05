@@ -47,3 +47,16 @@ Add an entry to `models.json` like the existing ones, with `"open": true`, `"tok
 
 ## Not tested yet
 The code is tested with a tiny offline model (`tests/test_open_model.py`), and the pilot above ran on the real Qwen weights on a 5090. Nobody has trained on the real lessons yet: compare on `benchmarks.py` and the lookup test sheet before trusting it.
+
+## Suggested bases for the later models (suggestions, not chosen; checked from memory, Oct 2026)
+Check the licence page and look for newer releases before picking: open models change every few months.
+
+| Model | Suggested base | Size | Licence (check) | Where it trains | Notes |
+|---|---|---|---|---|---|
+| Equinox 4 | Qwen3-4B | 4B | Apache 2.0 | One RTX 5090 (LoRA), or a 4070 with 4-bit (QLoRA) | Same ChatML format, so `open_tokenizer.py` and `chat.py` carry over |
+| Solstice 5 | Qwen3-8B | 8B | Apache 2.0 | One RTX 5090 (QLoRA); runs on a 4070 at Q4 (about 5 GB) | Strong reasoning for its size |
+| Apogee 6 | Qwen3-14B, or Phi-4 (14B, MIT) | 14B | Apache 2.0 / MIT | A rented 5090 (QLoRA) or a 48 GB card | Q4 is about 9 GB: tight on a 4070, fine on a rented or always-on GPU |
+
+Why one family: the same tokenizer and chat format mean the training and export code (`finetune_open.py`, `open_tokenizer.py`) work for every rung with a changed model name.
+Avoid for now: Qwen2.5-3B (its licence is not Apache 2.0), and Llama (naming and "Built with Llama" rules).
+Qwen3 can write `<think>` reasoning blocks: decide whether to keep or strip them before it becomes a model in the app.

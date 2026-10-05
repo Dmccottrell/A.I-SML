@@ -34,7 +34,7 @@ v6 (5B) and v6.5 (7B) keep growing toward medium size, mainly for the PC and onl
 
 ## Flare 3.5 as built now (Qwen 2.5 1.5B base, Oct 2026)
 
-The columns below that are headed "from-scratch plan, stopped" describe the plan that was dropped. This is the version that replaces it.
+The tables below show this version in the v3.5 column. The from-scratch plan it replaced (1.12B, 8K context, 75,000 steps, about $183) is recorded in [V3_5.md](V3_5.md).
 
 | | **Flare 3.5 (Qwen 2.5 1.5B base)** |
 |---|---|
@@ -51,37 +51,37 @@ The columns below that are headed "from-scratch plan, stopped" describe the plan
 
 ## Size and design
 
-|  | **v1** ✅ | **v2** ✅ | **v3** 🛠️ | **v3.5** (from-scratch plan, stopped) | **v4** (planned) | **v5** (planned) | **v6** (planned) | **v6.5** (planned) |
+|  | **v1** ✅ | **v2** ✅ | **v3** 🛠️ | **v3.5** 🛠️ (Qwen base) | **v4** (planned) | **v5** (planned) | **v6** (planned) | **v6.5** (planned) |
 |---|---|---|---|---|---|---|---|---|
 | Model name | – | – | Emvryx Flare 3 | Emvryx Flare 3.5 | Emvryx Equinox 4 | Emvryx Solstice 5 | Emvryx Apogee 6 | Emvryx Apogee 6.5 |
-| Parameters | 29.5M | 88M | 394M | **~1.12B** | ~1.12B base + LoRA skill packs (small add-on weights, a few MB each, switched by a router) | **~3B** | **~5B** | **~7B** |
-| Shape | 512 wide × 8 layers | 768 wide × 12 layers | 1024 wide × 32 layers | 2048 wide × 24 layers | Same as v3.5 | ~3072 wide × 28 layers | ~3584 wide × 36 layers | 4096 wide × 32 layers |
-| Memory (context length) | 512 tokens | 1,024 tokens | 2,048 tokens; **v3-long: 8K → 16K → 32K** (stretched after training, if the tests pass) | **8,192 from the start**, then stretched to **32K, goal 75K–100K** | Same as v3.5's stretched length + saved notes about you | **Goal 128K** (built for long text from the start) | **Goal 256K** | **Goal 500K** |
-| Vocabulary | 8,192 | 16,384 | 32,768 | 32,768 | 32,768 | 65,536 | 65,536 | 65,536 |
-| Attention | Standard | Grouped-query (faster on phones) | Grouped-query | Grouped-query | Grouped-query | Grouped-query | Grouped-query | Grouped-query |
-| Download size (Q4) | ~20 MB | 89 MB | ~240 MB | ~700 MB | ~700 MB + packs | ~1.8 GB | ~3 GB | ~4 GB |
-| Runs on (estimate) | Phone, PC | Phone, PC, browser | Phone, PC, browser, Raspberry Pi 5 | Phone, PC, Pi 5 (slow) | Phone, PC, Pi 5 (slow) | PC, Mac, high-end phone | PC or Mac with 8 GB+ RAM | PC or Mac with 8 GB+ RAM |
+| Parameters | 29.5M | 88M | 394M | **1.54B** (Qwen 2.5 base) + 73.9M LoRA we train | Open base, ~3–4B suggested, + LoRA skill packs (small add-on weights, a few MB each, switched by a router) | **~3B** | **~5B** | **~7B** |
+| Shape | 512 wide × 8 layers | 768 wide × 12 layers | 1024 wide × 32 layers | 1536 wide × 28 layers | The chosen base's | ~3072 wide × 28 layers | ~3584 wide × 36 layers | 4096 wide × 32 layers |
+| Memory (context length) | 512 tokens | 1,024 tokens | 2,048 tokens; **v3-long: 8K → 16K → 32K** (stretched after training, if the tests pass) | **32,768 tokens** from the start (the base's own) | The base's own (32K+ for Qwen 2.5) + saved notes about you | **Goal 128K** (built for long text from the start) | **Goal 256K** | **Goal 500K** |
+| Vocabulary | 8,192 | 16,384 | 32,768 | 151,936 (Qwen's) | 32,768 | 65,536 | 65,536 | 65,536 |
+| Attention | Standard | Grouped-query (faster on phones) | Grouped-query | Grouped-query (2 KV heads) | Grouped-query | Grouped-query | Grouped-query | Grouped-query |
+| Download size (Q4) | ~20 MB | 89 MB | ~240 MB | ~1 GB (estimate) | ~700 MB + packs | ~1.8 GB | ~3 GB | ~4 GB |
+| Runs on (estimate) | Phone, PC | Phone, PC, browser | Phone, PC, browser, Raspberry Pi 5 | PC; phone with 4 GB+ memory (estimate) | Phone, PC, Pi 5 (slow) | PC, Mac, high-end phone | PC or Mac with 8 GB+ RAM | PC or Mac with 8 GB+ RAM |
 
 Key: ✅ finished · 🛠️ in progress · (planned) not started. Context goals beyond 2,048 tokens only count once
 the long-context tests pass at that length (docs/LONG_CONTEXT.md). "Memory (context length)" is how much text the model can read at once, counted in tokens (a token is roughly three-quarters of a word).
 
 ## Training
 
-|  | **v1** | **v2** | **v3** | **v3.5** (from-scratch plan, stopped) | **v4** | **v5** | **v6** | **v6.5** |
+|  | **v1** | **v2** | **v3** | **v3.5** (Qwen base) | **v4** | **v5** | **v6** | **v6.5** |
 |---|---|---|---|---|---|---|---|---|
-| **Data to prepare** | 467M tokens (TinyStories) | 2.8B tokens | **12B + 1.3B anneal** (done in 1h26m) | **40B + 4.1B anneal** (~5–8 hours) | **15–30B new tokens** (more of FineWeb-Edu's `sample-100BT`, code and math that v3.5 didn't read, with tool calls, thinking steps and code-with-tests mixed in) + a new anneal set; plus the skill datasets: a few thousand examples per skill, teacher-written reasoning and tool-use runs kept only when verified correct | **~60B tokens** | **~100B tokens** (minimum) | **~140B tokens** (minimum) |
-| Data mix | 100% children's stories | 80% web, 15% Wikipedia, 5% stories | 63% web, 20% Wikipedia, 10% Python, 5% math, 2% stories | 47.5% educational web (FineWeb-Edu `sample-100BT`), **17.5% everyday web (DCLM)**, 11% Wikipedia, 12.5% code in **9 languages**, 7.5% math, 4% textbook-style (Cosmopedia); no stories; final phase adds human-written Q&A, real code changes with their messages (CommitPackFT) and coding practice runs | Like v3.5 (new pages, nothing repeated), plus a few % skill-aware text; then skill packs: study, stories, IT help, fact checking, coding, tool use | Like v3.5, much bigger slice (plus more code and math) | Like v5 (web, Wikipedia, multi-language code, math), bigger slice | Same as v6, bigger slice |
-| Disk space | ~1 GB | ~6 GB | ~27 GB | ~88 GB (~170 GB free while building) | ~30–60 GB (can reuse v3.5's freed space) | ~120 GB | ~200 GB | ~280 GB |
-| Batch per step | 65,536 tokens | 131,072 tokens | 262,144 tokens | 262,144 tokens | 262,144 tokens (then small for skill packs) | ~1M tokens (across several GPUs) | ~1M tokens (across several GPUs) | ~1M tokens (across several GPUs) |
-| **Steps** | 20,000 | 20,000 | **45,000** | **75,000** | **~57,000–115,000 more**, continuing v3.5 from `pre_decay.pt`; ~1–2k per skill pack | **~60,000** | **~100,000** | **~140,000** |
-| Total reading | 1.3B tokens | 2.6B tokens | 11.8B tokens | 40B tokens | ~55–70B tokens (v3.5's 40B + 15–30B more) | ~60B tokens | ~100B tokens | ~140B tokens |
-| Reading per parameter | ~44 | ~30 | ~30 | ~36 | **~49–62** | ~20 | ~20 | ~20 |
-| **Training time** | **~4 hours** | **~17.5–18 hours** (measured; data prep ~30 min) | **~13–14 days nonstop on the 4070** (measured: ~25.8 s/step); ran as PC afternoons + a rented RTX 3090 overnight (17.5 s/step), then from step 6,054 on a rented **RTX 5090 (6.9 s/step, measured)**: done ~Oct 3 | **2× RTX 5090 with Muon: ~18–19 days** (~14 if trimmed to ~115,000 steps) (or Muon with its memory in RAM (`muon_cpu`) on the 4070, ~5–6.5 months; a run can move between the two) | **~1.5–2 months (+15B) or ~3–4 months (+30B)** at 70–95 s/step, while the app and skills are being built; faster with cloud nights or Muon. Then < 1 hour per skill pack | Doesn't fit in 12 GB: **cloud, ~4–7 days on 8 rented GPUs** | Cloud: **~11 days on 8 GPUs** (~2,000 GPU-hours) | Cloud: **~3 weeks on 8 GPUs** (~4,000 GPU-hours) |
-| Cost | < $1 | ~$1 | ~$50–70 (3090 nights, then the RTX 5090 at ~$0.51/hr, + electricity) | **~$385–420** rented (2× RTX 5090 at ~$0.87/hr; ~$300 if trimmed) | ~$55–270 electricity (half to one v3.5 run), a bit more with cloud nights | **~$800–2,500** cloud rental (or $0, see below) | **~$4,000–6,000** (less if grown from v5 or with a grant) | **~$8,000–12,000** (less if grown from v6 or with a grant) |
-| Chat fine-tuning | 5k single messages, ~10 min | ~105k multi-turn chats, ~1–2 hrs | Multi-turn + lookup + "I don't know" + memory + reply-suggestion lessons, NEFTune, then DPO on rule-checked answer pairs | Same as v3 | Skill packs (LoRA) + router + tool-use and thinking examples | Everything from v3–v4, redone on the 3B brain | Same lessons; QLoRA fits on the 4070 | Same lessons; QLoRA fits on the 4070 |
-| Teacher model (a bigger open AI helping) | — | — (its chat data was partly written by bigger AIs) | **Yes:** a ~7B open model (or a hosted one) writes lookup and "I don't know" examples; DPO pairs are scored by checkable rules | Same, plus worked step-by-step math problems for the chat lessons | Writes skill-pack, reasoning and tool-use examples (checked by running tests or comparing to known answers) | Same, bigger teacher possible in the cloud | Same; the bigger tiers teach the smaller ones | Same |
-| Main tools added | PyTorch, CUDA, llama.cpp | Hugging Face `datasets` | Keyword search (SQLite FTS5), FAISS (optional), lm-evaluation-harness, TensorBoard, 8-bit optimizer (optional), a rented cloud GPU (Vast.ai), phone alerts (ntfy), Hugging Face Hub (off-machine backup), a small embedding model (memory search), web search (online mode) | **Muon optimizer** (won `muon_test.py`), 2 GPUs (DDP), new data: DCLM, Cosmopedia, Stack Exchange Q&A | LoRA, tool calling, sandbox, web search, Whisper + Piper (voice) | FSDP (multi-GPU) | vLLM or llama.cpp server (online mode) | Same as v6 |
-| New code needed | — | Pause/resume, KV cache | Pilot runs, gradient checkpointing, lookup index, teacher script, DPO, NEFTune, checkpoint averaging, memory, suggestions, context meter, `compare.py`, PC/cloud handoff, off-machine backup, long-context tools, Muon (to test) | CPU offload for the optimizer (`muon_cpu`), gradient checkpointing, multi-language code data, coding-helper practice data (`agent_tasks.py`) | Router with effort levels (thinking budget), tool registry, sandbox, voice, coding harness (built: git, diagnostics, hooks, permissions, compaction, project notes), app/website | Multi-GPU training (FSDP), streaming data shards, vision helper | Model growth (up-scaling from v5), 8k-token training, server setup | Growth from v6 |
+| **Data to prepare** | 467M tokens (TinyStories) | 2.8B tokens | **12B + 1.3B anneal** (done in 1h26m) | **None new**: the v3 lessons (`data/v3/chat.jsonl`, 109,917 chats) | **15–30B new tokens** (more of FineWeb-Edu's `sample-100BT`, code and math that v3.5 didn't read, with tool calls, thinking steps and code-with-tests mixed in) + a new anneal set; plus the skill datasets: a few thousand examples per skill, teacher-written reasoning and tool-use runs kept only when verified correct | **~60B tokens** | **~100B tokens** (minimum) | **~140B tokens** (minimum) |
+| Data mix | 100% children's stories | 80% web, 15% Wikipedia, 5% stories | 63% web, 20% Wikipedia, 10% Python, 5% math, 2% stories | v3's chat lessons only; no pretraining here (the base's own pretraining is not ours) | Like v3.5 (new pages, nothing repeated), plus a few % skill-aware text; then skill packs: study, stories, IT help, fact checking, coding, tool use | Like v3.5, much bigger slice (plus more code and math) | Like v5 (web, Wikipedia, multi-language code, math), bigger slice | Same as v6, bigger slice |
+| Disk space | ~1 GB | ~6 GB | ~27 GB | ~3 GB model + 0.3 GB lessons | ~30–60 GB (can reuse v3.5's freed space) | ~120 GB | ~200 GB | ~280 GB |
+| Batch per step | 65,536 tokens | 131,072 tokens | 262,144 tokens | ~65K padded tokens (8 micro-batches of up to 8,192) | 262,144 tokens (then small for skill packs) | ~1M tokens (across several GPUs) | ~1M tokens (across several GPUs) | ~1M tokens (across several GPUs) |
+| **Steps** | 20,000 | 20,000 | **45,000** | **988** (one pass over the lessons) | **~57,000–115,000 more**, continuing v3.5 from `pre_decay.pt`; ~1–2k per skill pack | **~60,000** | **~100,000** | **~140,000** |
+| Total reading | 1.3B tokens | 2.6B tokens | 11.8B tokens | 109,917 chats, one pass | ~55–70B tokens (v3.5's 40B + 15–30B more) | ~60B tokens | ~100B tokens | ~140B tokens |
+| Reading per parameter | ~44 | ~30 | ~30 | n/a (fine-tune) | **~49–62** | ~20 | ~20 | ~20 |
+| **Training time** | **~4 hours** | **~17.5–18 hours** (measured; data prep ~30 min) | **~13–14 days nonstop on the 4070** (measured: ~25.8 s/step); ran as PC afternoons + a rented RTX 3090 overnight (17.5 s/step), then from step 6,054 on a rented **RTX 5090 (6.9 s/step, measured)**: done ~Oct 3 | **~2 hours** on one RTX 5090 (7.1 s/step, 18.6 GB); the RTX 4070 also works, slower | **~1.5–2 months (+15B) or ~3–4 months (+30B)** at 70–95 s/step, while the app and skills are being built; faster with cloud nights or Muon. Then < 1 hour per skill pack | Doesn't fit in 12 GB: **cloud, ~4–7 days on 8 rented GPUs** | Cloud: **~11 days on 8 GPUs** (~2,000 GPU-hours) | Cloud: **~3 weeks on 8 GPUs** (~4,000 GPU-hours) |
+| Cost | < $1 | ~$1 | ~$50–70 (3090 nights, then the RTX 5090 at ~$0.51/hr, + electricity) | **~$1** rented (one RTX 5090 at ~$0.51/hr) | ~$55–270 electricity (half to one v3.5 run), a bit more with cloud nights | **~$800–2,500** cloud rental (or $0, see below) | **~$4,000–6,000** (less if grown from v5 or with a grant) | **~$8,000–12,000** (less if grown from v6 or with a grant) |
+| Chat fine-tuning | 5k single messages, ~10 min | ~105k multi-turn chats, ~1–2 hrs | Multi-turn + lookup + "I don't know" + memory + reply-suggestion lessons, NEFTune, then DPO on rule-checked answer pairs | LoRA rank 64, learning rate 2e-4, one pass (`finetune_open.py`) | Skill packs (LoRA) + router + tool-use and thinking examples | Everything from v3–v4, redone on the 3B brain | Same lessons; QLoRA fits on the 4070 | Same lessons; QLoRA fits on the 4070 |
+| Teacher model (a bigger open AI helping) | — | — (its chat data was partly written by bigger AIs) | **Yes:** a ~7B open model (or a hosted one) writes lookup and "I don't know" examples; DPO pairs are scored by checkable rules | Same as v3 (the lessons already exist) | Writes skill-pack, reasoning and tool-use examples (checked by running tests or comparing to known answers) | Same, bigger teacher possible in the cloud | Same; the bigger tiers teach the smaller ones | Same |
+| Main tools added | PyTorch, CUDA, llama.cpp | Hugging Face `datasets` | Keyword search (SQLite FTS5), FAISS (optional), lm-evaluation-harness, TensorBoard, 8-bit optimizer (optional), a rented cloud GPU (Vast.ai), phone alerts (ntfy), Hugging Face Hub (off-machine backup), a small embedding model (memory search), web search (online mode) | `finetune_open.py`, `open_tokenizer.py`, a ChatML branch in `chat.py`, `NOTICE` | LoRA, tool calling, sandbox, web search, Whisper + Piper (voice) | FSDP (multi-GPU) | vLLM or llama.cpp server (online mode) | Same as v6 |
+| New code needed | — | Pause/resume, KV cache | Pilot runs, gradient checkpointing, lookup index, teacher script, DPO, NEFTune, checkpoint averaging, memory, suggestions, context meter, `compare.py`, PC/cloud handoff, off-machine backup, long-context tools, Muon (to test) | Done and tested with a tiny model; the real run is in progress | Router with effort levels (thinking budget), tool registry, sandbox, voice, coding harness (built: git, diagnostics, hooks, permissions, compaction, project notes), app/website | Multi-GPU training (FSDP), streaming data shards, vision helper | Model growth (up-scaling from v5), 8k-token training, server setup | Growth from v6 |
 
 ## Settings carried forward by version
 
@@ -90,25 +90,25 @@ with**, given what changed for v3, v3.5 and v4. **v4 and later are starting gues
 is confirmed or changed by its own pilot run (`train.py --pilot`). Why each choice was made is in
 [LESSONS.md](LESSONS.md).
 
-| Setting | **v1** | **v2** | **v3** | **v3.5** (from-scratch plan, stopped) | **v4** (guess) | **v5** (guess) | **v6** (guess) | **v6.5** (guess) |
+| Setting | **v1** | **v2** | **v3** | **v3.5** (Qwen base) | **v4** (guess) | **v5** (guess) | **v6** (guess) | **v6.5** (guess) |
 |---|---|---|---|---|---|---|---|---|
-| Optimizer | adamw | adamw | adamw | **muon_cpu** at home, **muon** in the cloud | muon (continues v3.5) | muon, *if it works with multi-GPU FSDP* (untested) | same as v5 | same as v5 |
-| LR schedule | cosine | cosine | **wsd** (steady, then fade over the last 10%) | wsd | wsd: new steady phase from `pre_decay.pt`, then a new fade | wsd | wsd | wsd |
-| Steps (`max_iters`) | 20,000 | 20,000 | 45,000 | 75,000 (decided Oct 2026: ~19.7B tokens, 8K context) | +57,000–115,000 | ~60,000 (could trim ~⅓ if Muon's saving holds at 3B) | ~100,000 | ~140,000 |
-| Tokens per step | 65,536 | 131,072 | 262,144 | 262,144 | 262,144 | ~1M | ~1M | ~1M |
-| Warm-up steps | 1,000 | 1,000 | 1,000 | 2,000 | ~1,000 (fresh optimizer after loading weights) | ~2,000–3,000 | ~3,000 | ~3,000 |
-| Peak learning rate | 6e-4 | 6e-4 | 4e-4 | 3e-4 | 3e-4 (same steady phase as v3.5) | **~2.3e-4** | **~2.0e-4** | **~1.8e-4** |
-| Final learning rate | 6e-5 | 6e-5 | 4e-5 | 3e-5 | 3e-5 | ~2.3e-5 | ~2e-5 | ~1.8e-5 |
-| Fade length (`decay_frac`) | – | – | 10% | 10% | 10% of the new run | 10% | 10% | 10% |
-| Mini-exam | off | off | every 2,000 steps, 500 questions, first N (≈5 points too easy) | every 5,000 steps, 5,000 questions, **spread over the test** | **all 10,042**, spread, about every 3% of steps | all 10,042, ~every 2,000 steps | all 10,042, ~every 3,000 | all 10,042, ~every 4,500 |
-| Snapshots for averaging (`snapshot_every`) | off | off | 900 (5 in the fade) | 1,500 | fade length ÷ 5 | **off, or few** (a snapshot is ~12 GB; averaging did not beat `final.pt` at v3) | off | off |
-| Gradient checkpointing | off | off | off | on at home, off in the cloud | cloud: off | FSDP decides | FSDP decides | FSDP decides |
-| Saves (`save_every`) | 250 | 200 | 100 | 50 home / 150 cloud | about every 15–25 minutes | same rule | same rule | same rule |
-| Chat tuning: passes / batch / learning rate | 3 / 16 / 5e-5 | 2 / 8 / 1e-4 | 2 / 4 / 5e-5 | 2 / 2 / 3e-5 | like v3.5 (3e-5), plus skill-pack LoRA | **LoRA** (a full 3B tune does not fit 12 GB): rate set by the pilot; LoRA usually uses 1e-4–2e-4 (typical range, not measured here) | QLoRA, same | QLoRA, same |
-| NEFTune noise | – | – | 5 | 5 | 5 | 5 | 5 | 5 |
-| Preference training (DPO) | – | – | β 0.1, rate 2e-6 | same | same | same; LoRA rate set by the pilot | same | same |
-| Sampling in the app (temperature / allowed range) | – | **0.45 / 0.3–0.6** (Ember) | **0.6 / 0.2–0.8** (Flare 3) | **0.65 / 0.2–0.9** (Flare 3.5) | 0.65 / 0.2–0.9 (Equinox 4) | 0.7 / 0.2–1.0 (Solstice 5) | 0.7 / 0.2–1.0 (Apogee 6) | same as v6 |
-| Step time measured | – | – | 4070 25.8 s; 3090 17.5 s; **5090 6.9 s** | pilot decides | pilot decides | pilot decides | pilot decides | pilot decides |
+| Optimizer | adamw | adamw | adamw | AdamW on the LoRA weights only | muon (continues v3.5) | muon, *if it works with multi-GPU FSDP* (untested) | same as v5 | same as v5 |
+| LR schedule | cosine | cosine | **wsd** (steady, then fade over the last 10%) | 30 warm-up steps, then cosine down to 10% | wsd: new steady phase from `pre_decay.pt`, then a new fade | wsd | wsd | wsd |
+| Steps (`max_iters`) | 20,000 | 20,000 | 45,000 | 988 | +57,000–115,000 | ~60,000 (could trim ~⅓ if Muon's saving holds at 3B) | ~100,000 | ~140,000 |
+| Tokens per step | 65,536 | 131,072 | 262,144 | ~65K padded | 262,144 | ~1M | ~1M | ~1M |
+| Warm-up steps | 1,000 | 1,000 | 1,000 | 30 | ~1,000 (fresh optimizer after loading weights) | ~2,000–3,000 | ~3,000 | ~3,000 |
+| Peak learning rate | 6e-4 | 6e-4 | 4e-4 | 2e-4 | 3e-4 (same steady phase as v3.5) | **~2.3e-4** | **~2.0e-4** | **~1.8e-4** |
+| Final learning rate | 6e-5 | 6e-5 | 4e-5 | 2e-5 | 3e-5 | ~2.3e-5 | ~2e-5 | ~1.8e-5 |
+| Fade length (`decay_frac`) | – | – | 10% | cosine over the whole run | 10% of the new run | 10% | 10% | 10% |
+| Mini-exam | off | off | every 2,000 steps, 500 questions, first N (≈5 points too easy) | after training (`benchmarks.py`) | **all 10,042**, spread, about every 3% of steps | all 10,042, ~every 2,000 steps | all 10,042, ~every 3,000 | all 10,042, ~every 4,500 |
+| Snapshots for averaging (`snapshot_every`) | off | off | 900 (5 in the fade) | none | fade length ÷ 5 | **off, or few** (a snapshot is ~12 GB; averaging did not beat `final.pt` at v3) | off | off |
+| Gradient checkpointing | off | off | off | on | cloud: off | FSDP decides | FSDP decides | FSDP decides |
+| Saves (`save_every`) | 250 | 200 | 100 | every 100 steps | about every 15–25 minutes | same rule | same rule | same rule |
+| Chat tuning: passes / batch / learning rate | 3 / 16 / 5e-5 | 2 / 8 / 1e-4 | 2 / 4 / 5e-5 | this is the chat tuning: 1 pass / ~78 chats per step / 2e-4 | like v3.5 (3e-5), plus skill-pack LoRA | **LoRA** (a full 3B tune does not fit 12 GB): rate set by the pilot; LoRA usually uses 1e-4–2e-4 (typical range, not measured here) | QLoRA, same | QLoRA, same |
+| NEFTune noise | – | – | 5 | off | 5 | 5 | 5 | 5 |
+| Preference training (DPO) | – | – | β 0.1, rate 2e-6 | not yet | same | same; LoRA rate set by the pilot | same | same |
+| Sampling in the app (temperature / allowed range) | – | **0.45 / 0.3–0.6** (Ember) | **0.6 / 0.2–0.8** (Flare 3) | 0.65 / 0.2–0.9 (to be re-tested on this model) | 0.65 / 0.2–0.9 (Equinox 4) | 0.7 / 0.2–1.0 (Solstice 5) | 0.7 / 0.2–1.0 (Apogee 6) | same as v6 |
+| Step time measured | – | – | 4070 25.8 s; 3090 17.5 s; **5090 6.9 s** | **7.1 s** (one RTX 5090, 18.6 GB peak) | pilot decides | pilot decides | pilot decides | pilot decides |
 
 **How the guesses were made:**
 - **Peak learning rate** falls with size as roughly `size^-0.27`: v2 (88M) 6e-4 → v3 (394M) 4e-4 → v3.5 (1.12B)
@@ -137,14 +137,14 @@ real GSM8K questions (a well-known math test) are kept for testing only, never f
 
 ## Results
 
-|  | **v1** | **v2** | **v3** | **v3.5** (from-scratch plan, stopped) | **v4** | **v5** | **v6** | **v6.5** |
+|  | **v1** | **v2** | **v3** | **v3.5** (Qwen base) | **v4** | **v5** | **v6** | **v6.5** |
 |---|---|---|---|---|---|---|---|---|
-| Final val loss | **1.279** | **2.929** (best), 2.984 at the last step | **≈2.68** (step 45,000) | Measured when trained | Measured when trained | Measured when trained | Measured when trained | Measured when trained |
-| Phone file | 32 MB | **89 MB** | ~420 MB (Q8) or **~240 MB (Q4)** | ~1.2 GB (Q8) or **~700 MB (Q4)** | v3.5's file + a few MB per skill pack | ~3.2 GB (Q8) or **~1.8 GB (Q4)** | ~3 GB (Q4): high-end phones only | ~4–4.5 GB (Q4): mainly PC and server |
-| Test sheet (`evaluate.py`, /20) | Only identity and story questions | **18/20** (baseline) | Goal: clearly beat v2 | Goal: beat v3 | Goal: beat v3.5, plus new tests for tools and skills | Goal: beat v4 | Goal: beat v5 | Goal: beat v6 |
+| Final val loss | **1.279** | **2.929** (best), 2.984 at the last step | **≈2.68** (step 45,000) | Training loss ~0.9 at the start; the final value is measured when done | Measured when trained | Measured when trained | Measured when trained | Measured when trained |
+| Phone file | 32 MB | **89 MB** | ~420 MB (Q8) or **~240 MB (Q4)** | **~1 GB (Q4)** (estimate) | v3.5's file + a few MB per skill pack | ~3.2 GB (Q8) or **~1.8 GB (Q4)** | ~3 GB (Q4): high-end phones only | ~4–4.5 GB (Q4): mainly PC and server |
+| Test sheet (`evaluate.py`, /20) | Only identity and story questions | **18/20** (baseline) | Goal: clearly beat v2 | Measured after training | Goal: beat v3.5, plus new tests for tools and skills | Goal: beat v4 | Goal: beat v5 | Goal: beat v6 |
 | v3 test sheet (`prompts_v3.jsonl`, /41) | — | Run to set the baseline* | Goal: clearly beat v2, most of all on facts_hard, instructions, topic_switch, honesty, correction | Goal: beat v3 | Goal: beat v3.5, plus thinking and tool-use tests | Goal: beat v4 | Goal: beat v5 | Goal: beat v6 |
-| Phone speed (PocketPal, Q8_0) | — | **~210–245 tokens/s**, first word in <0.1 s | Slower (4.5× bigger); measured when done | Slower again (~2.7× v3); measured when done | Same as v3.5 (skill packs add little) | Slower; measured when done | Slow on phones; fast on PC | PC and server |
-| HellaSwag (`exam.py`, full test, random = 25%) | — | **28.4%** (baseline) | **31.7% at step 15,000** (full test; the 500-question mini-exam reads ~5 points high); forecast **~34–38%** | Forecast **~44–51%** (1.12B, 40B tokens with everyday web) | Forecast **~46–54%** (v3.5 + 2–3 points from the extra reading) | Goal: beat v4, plus harder reasoning and coding tests | Goal: beat v5 | Goal: beat v6 |
+| Phone speed (PocketPal, Q8_0) | — | **~210–245 tokens/s**, first word in <0.1 s | Slower (4.5× bigger); measured when done | Slower than v3 (~4× bigger); measured when done | Same as v3.5 (skill packs add little) | Slower; measured when done | Slow on phones; fast on PC | PC and server |
+| HellaSwag (`exam.py`, full test, random = 25%) | — | **28.4%** (baseline) | **31.7% at step 15,000** (full test; the 500-question mini-exam reads ~5 points high); forecast **~34–38%** | Base model ~65% (published, from memory); ours measured after training | Forecast **~46–54%** (v3.5 + 2–3 points from the extra reading) | Goal: beat v4, plus harder reasoning and coding tests | Goal: beat v5 | Goal: beat v6 |
 | Public yardsticks (`lm-evaluation-harness`: ARC, MMLU; small GSM8K-style math) | — | Run to set the baseline | Goal: beat v2 | Goal: beat v3 | Measured with thinking on and off | Goal: beat v4 | Goal: beat v5 | Goal: beat v6 |
 | Tool, thinking and coding tests (v4+) | — | — | — | — | New: right tool called, task finished, thinking on vs off, small coding tasks | Goal: beat v4 | Goal: beat v5 | Goal: beat v6 |
 
@@ -171,7 +171,7 @@ It adds the mistakes found on the phone, so v2 is expected to score low on the n
 
 ## What each version achieves
 
-| Ability | **v1** | **v2** (expected) | **v3** (goal) | **v3.5** (from-scratch plan, stopped) (goal) | **v4** (goal) | **v5** (goal) | **v6** (goal) | **v6.5** (goal) |
+| Ability | **v1** | **v2** (expected) | **v3** (goal) | **v3.5** (goal) | **v4** (goal) | **v5** (goal) | **v6** (goal) | **v6.5** (goal) |
 |---|---|---|---|---|---|---|---|---|
 | Children's stories | ✅ Good | ✅ Good | ✅ Good | ✅ Good | ✅ Story-writer skill pack | ✅ Richer, longer stories | ✅ Long, well-written stories | ✅ Long, well-written stories |
 | Grammar and fluency | Simple | Good | Better | ✅ Natural | ✅ Natural | ✅ Natural | ✅ Natural | ✅ Natural |
@@ -180,7 +180,7 @@ It adds the mistakes found on the phone, so v2 is expected to score low on the n
 | Says "I don't know" | ❌ | ❌ | ✅ Trained to admit uncertainty | ✅ | ✅ | ✅ | ✅ | ✅ |
 | Explaining things | ❌ | ⚠️ Simple explanations | ✅ Clearer explanations | ✅ Multi-step explanations | ✅ Study-helper skill pack | ✅ Detailed, well-organized | ✅ Handles harder topics | ✅ Handles harder topics |
 | Conversations | One message at a time | ✅ Remembers the chat | ✅ ~7–12 turns with lookups (old notes dropped); v3-long: 35–130+ | ✅ Hundreds of turns once stretched | ✅ Same, plus remembers you between chats | ✅ Very long chats (128K goal) | ✅ Longer still | ✅ Longest |
-| Remembers you (saved facts, earlier chats) | ❌ | ❌ | ✅ Saves facts itself ("my name is ..."), finds earlier chats by meaning, never saves passwords | ✅ Better judgement about what to save | ✅ Memory screen in the app | ✅ Summarizes old chats into memories | ✅ | ✅ |
+| Remembers you (saved facts, earlier chats) | ❌ | ❌ | ✅ Saves facts itself ("my name is ..."), finds earlier chats by meaning, never saves passwords | ⚠️ Not in this version (the open format has no tool tokens for saving memory) | ✅ Memory screen in the app | ✅ Summarizes old chats into memories | ✅ | ✅ |
 | Reply suggestions | ❌ | ❌ | ✅ Suggests what you might ask next (simple) | ✅ Sharper suggestions | ✅ Greyed-out in the app; teacher-written follow-ups if needed | ✅ | ✅ | ✅ |
 | Shows what it remembers (context meter) | ❌ | ❌ | ✅ `context` / `window` in the chat | ✅ | ✅ A meter in the app | ✅ | ✅ | ✅ |
 | Code | ❌ | ❌ | ⚠️ Basic Python autocomplete | ⚠️ Small functions, several languages; a first taste of the coding helper (tool format, asks before git commits, says "too big"; templated one-bug tasks) | ✅ Coding helper (agentic, small tasks): reads files, suggests fixes, runs tests in a loop inside a sandbox | ✅ Real coding help: multi-file changes, explains code | ✅ Stronger coding help across languages | ✅ Best coding help of all versions |
