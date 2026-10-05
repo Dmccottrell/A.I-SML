@@ -1,7 +1,7 @@
-# VryxCode: Emvryx's coding assistant (planned)
+# VryxCode: Emvryx's coding assistant (first version built: terminal, Oct 2026)
 
 VryxCode is a separate part of Emvryx made for code: it reads a project, proposes changes, runs the tests and tries again, the way Claude Code does, but running on **your own models, on your own machine**.
-It is the coding helper from the roadmap ("Agentic coding") given its own name, its own screen and its own rules. Nothing here is built as a product yet; the engine underneath is (see "What already exists").
+It is the coding helper from the roadmap ("Agentic coding") given its own name, its own screen and its own rules. The first version is built as a terminal tool (`vryxcode.py`); the app screen is not. It is tested with scripted and fake models only: **nobody has run it with a real Qwen model yet**, so its real quality is unknown until the first model is trained.
 
 ## Which models can run it
 VryxCode is **only offered on the higher models**:
@@ -26,11 +26,26 @@ In `models.json` the three eligible entries carry `"vryxcode": true`; the picker
 4. **Multi-file tasks and git:** several files, branches and commits, always **asking before** a commit or anything destructive (the habit is already in `agent_lessons.py`).
 First as a terminal tool (`vryxcode` in a project folder), because it is the simplest to build and test. An app screen comes after.
 
+## Using it
+```
+llama-server -m export/open/solstice-2/my-ai-q4_k_m.gguf -c 32768 --port 8080     # open_models.llama_args("solstice-2") prints the options
+cd your-project
+python /path/to/vryxcode.py --model solstice-2 "add a function to utils.py that slugifies a title, with tests"
+python vryxcode.py --model solstice-2            # no task: interactive
+python vryxcode.py --demo                         # a scripted run, no model needed
+```
+- It works inside the project folder only, asks before it writes, edits or runs anything (showing what; `y`, `n` or `a` for always), and never asks to run the project's tests. `--yes` stops the questions for edits and runs; `git commit` and unknown tools always ask.
+- `--allow node,npm` lets it run more programs; the sandbox has no network on Linux, so installs fail there.
+- It refuses Ember 2, Flare 2 and Flare 2.5, and tells Equinox 2 users to keep tasks small.
+- Qwen's own tool-call format (`<tool_call>`) and our `<|tool_call|>` format both work, and `<think>` blocks are dropped.
+
 ## What already exists
 - `harness.py`: a sandbox that reads a file, edits a file, runs a command and runs tests, all inside a temporary copy.
 - `agent_tasks.py`, `agent_lessons.py`, `make_agent_data.py`: tiny practice projects and the lessons for tool use, project notes, asking first, "too big" and carrying on after old steps are folded away.
 
 ## What is still needed
+- Running it on a real model and measuring it with the coding test sheet (the biggest unknown).
+- An app screen (the terminal comes first).
 - Tool calling in Qwen's own format (our lessons use our own tool tokens; see `open_tokenizer.py`: the open format has none yet).
 - A coding model choice: Qwen's code-specialised models might beat the general ones for this (from memory; check they exist at the sizes we want, and their licences).
 - A coding test sheet: small tasks with tests, scored by how many pass, run on every model before it gets VryxCode (like the other sheets, `eval/*.jsonl`).

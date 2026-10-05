@@ -60,6 +60,7 @@ import sys
 import tempfile
 
 TOOL_CALL = re.compile(r"<\|tool_call\|>(.*?)<\|end_tool_call\|>", re.S)
+QWEN_TOOL_CALL = re.compile(r"<tool_call>(.*?)</tool_call>", re.S)       # the format Qwen models already know
 ALLOWED_PROGRAMS = {"python", "python3", "pytest", "ls", "cat", "head", "tail", "grep", "wc",
                     "echo", "pwd", "sort", "uniq", "diff"}
 
@@ -328,7 +329,7 @@ class Sandbox:
 # -------------------------------------------------------------------- the loop
 def parse_tool_call(text):
     """The first tool call in the model's text -> (name, args). Raises ToolError if it can't be read."""
-    m = TOOL_CALL.search(text)
+    m = TOOL_CALL.search(text) or QWEN_TOOL_CALL.search(text)
     if not m:
         raise ToolError('no tool call found. Write: <|tool_call|>{"name": "...", "args": {...}}<|end_tool_call|>')
     try:
