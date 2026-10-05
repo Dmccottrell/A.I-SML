@@ -92,3 +92,33 @@ Add the time to make the lessons and the tests. Skill packs (small LoRA add-ons)
 These are order-of-magnitude guesses: growth quality depends on how many tokens of continued training it gets, and 1B tokens is on the small side.
 
 **Recommendation:** use "+" as the routine upgrade; skip growth until a base of the right size is missing. Every "+" or grown copy still carries `NOTICE` (the base's licence).
+
+## Prepared for one RTX 5090 (Oct 2026): Equinox 4, Solstice 5, Apogee 6, and longer context
+`open_models.py` holds one preset per model, and `python finetune_open.py --model equinox-4` (or `solstice-5`, `apogee-6`, `flare-3.5`) uses it.
+The first guesses below were not run on the real weights (this sandbox cannot download them): **run `--pilot` first** and adjust `--batch_tokens` / `--grad_accum`.
+The loss now runs the 152,000-word output layer only on the learned tokens, a chunk at a time (`chunked_loss`), which is what lets an 8B model fit.
+
+| Model | Base | Weights in memory | Settings (micro-batch tokens × accumulation, LoRA rank) | Estimated time for 988 steps | Rented cost |
+|---|---|---|---|---|---|
+| Flare 3.5 | Qwen 2.5 1.5B | bf16, 3 GB | 8192 × 8, rank 64 (**measured**: 7.1 s/step, 18.6 GB) | about 2 h | about $1 |
+| Equinox 4 | Qwen3-4B | bf16, 8 GB | 4096 × 16, rank 64 | about 5 h (18 s/step) | about $2.60 |
+| Solstice 5 | Qwen3-8B | bf16, 16 GB | 2048 × 32, rank 32 | about 10 h (38 s/step) | about $5 |
+| Apogee 6 | Qwen3-14B | 4-bit (QLoRA), about 9 GB | 2048 × 32, rank 32, `--quant4` (needs `pip install bitsandbytes`) | about 24 h (89 s/step, 4-bit is slower) | about $12 |
+
+Each run: `python finetune_open.py --model <name> --pilot` (3 steps; prints peak memory), then `python finetune_open.py --model <name>`, then `--merge`.
+If the pilot runs out of memory, halve `--batch_tokens` and double `--grad_accum` (the step stays the same size).
+A QLoRA adapter (Apogee) merges onto the full-precision base, so `--merge` needs about 30 GB of memory for 14B: do it on the 5090 or a bigger machine.
+
+### Context windows (increased)
+| Model | Default | Longest | How | Memory for the longest (fp16 cache) |
+|---|---|---|---|---|
+| Flare 3.5 (Qwen 2.5 1.5B) | 32,768 | 32,768 | native; Qwen documents no longer setting for the 1.5B | 0.9 GB |
+| Equinox 4 (Qwen3-4B) | 32,768 | **131,072** | YaRN scaling, factor 4 | 18 GB (9 GB with a q8_0 cache) |
+| Solstice 5 (Qwen3-8B) | 32,768 | **131,072** | YaRN, factor 4 | 18 GB (9 GB with q8_0) |
+| Apogee 6 (Qwen3-14B) | 32,768 | **131,072** | YaRN, factor 4 | 20 GB (10 GB with q8_0) |
+
+- The server options come from `open_models.llama_args("equinox-4")`: `-c 131072 --rope-scaling yarn --rope-scale 4 --yarn-orig-ctx 32768` (add `-fa on -ctk q8_0 -ctv q8_0` for the smaller cache). Pass them with `app_server.py --llama-args "..."`.
+- The weights are the same; YaRN is an inference setting. Qwen notes that it can slightly hurt short inputs, so use the longer window only when you need it, and test long inputs on your own tasks before trusting them (`eval_long.py` is for our own models and does not run these yet).
+- On the RTX 4070 (12 GB) a 4B model at 128K does not fit (4B at Q4 is about 2.5 GB, plus 9 GB of cache even with q8_0): use 32K-64K there. The longer windows are for the 5090 or a rented/always-on server.
+- Training stays on short chats (`--max_len 4096`). Teaching a model to use long inputs well is a later "+" step: new long-document lessons and a longer `--max_len` (more memory per step).
+- Qwen3 can write `<think>` blocks; our lessons have none, so training pushes it to answer directly. Check it before it goes in the app.
