@@ -397,3 +397,10 @@ The app looks things up before the model answers (`lookup_auto.py`), the way `ge
 too when the person's setting allows it and the question is about something recent or the Wikipedia notes barely match it; never in a
 private chat; a failed or offline search just means fewer notes. Per-person setting `web_search`: `auto` (default), `off` (Wikipedia only),
 `always`. The server flag `--no-web` disables web search for everyone. A sentence on the website says this, so the privacy wording matches.
+
+**Second try and saved notes (Oct 2026).** If the model answers "I don't know" (or "the notes don't say") and the web has not been searched yet
+(and the setting isn't Wikipedia only, and the chat isn't private), the app searches the web and has the model answer again; the page
+replaces the first answer and says it searched. A thumbs up ("Right") under an answer saves the notes it used (`saved_notes.py`, one
+SQLite file per person: `saved-<name>.db`); the next similar question reads them first, offline, and the line above the answer says
+"Read 1 saved note". Recent things (news, scores, prices) are kept for a day, stable facts for 180 days. Settings has a Saved notes list with
+Delete and Delete all; "Delete all my chats" also clears them. Private chats never save or read saved notes. The model's weights never change.
