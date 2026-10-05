@@ -39,7 +39,7 @@ number: **Emvryx Ember** (small and quick), **Emvryx Flare** (fast and light), *
 
 A newer generation takes the main spot in the app's picker. Each name has
 its own number that goes up only when that model is updated ("+" refreshes take the next decimal: Flare 2.5 to Flare 2.6). The from-scratch v3.5 run was
-stopped (see `docs/V3_5.md`). They are placeholders: no trademark check has been done yet. See `docs/ROADMAP.md`, `docs/OPEN_MODEL.md` and `docs/APP.md`.
+stopped (see `docs/V3_5.md`). They are placeholders: no trademark check has been done yet. See `docs/ROADMAP.md`, `docs/OPEN_MODEL.md` and `docs/APP.md`. A coding assistant, **VryxCode** (planned, only on Equinox 2 and above), is described in `docs/VRYXCODE.md`.
 
 ## Pretrained weights policy (updated Oct 2026)
 

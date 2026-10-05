@@ -13,6 +13,8 @@ version's test-sheet results decide what the next one focuses on.
 > The version slots map as: v3 -> Flare 2 (from scratch), v3.5 -> Flare 2.5, v4 -> Equinox 2, v5 -> Solstice 2, v6 -> Apogee 2. Text below that uses the old names describes the from-scratch plan.
 > The rest of this file was written for the from-scratch plan: where it says a version's brain is trained from scratch or grown from v3.5, read it with this update.
 
+> **VryxCode** (a coding assistant, planned; only on Equinox 2, Solstice 2 and Apogee 2): [VRYXCODE.md](VRYXCODE.md).
+>
 > **Order of work (decided Oct 2026):** build all the 2.0 models first (Flare 2.5, Equinox 2, Solstice 2, Apogee 2), then the improved **Equinox 2.5, Solstice 2.5 and Apogee 2.5** releases (new lessons, DPO, skill packs, tools, thinking dial). Details: [OPEN_MODEL.md](OPEN_MODEL.md#order-of-work-all-the-20-builds-first-then-the-improved-25-releases-decided-oct-2026).
 
 ## At a glance
@@ -488,6 +490,8 @@ You ─► Router ─► Base ──┼─► IT helper       (printers, network
   to turn it on. Still to do: the app's memory screen (v4).
 
 ### Agentic coding (a coding helper that works in a loop)
+
+> **VryxCode (planned):** this coding helper becomes its own part of Emvryx, **VryxCode**, offered only on **Equinox 2 (small tasks), Solstice 2 and Apogee 2**, not on Ember or Flare. Plan, stages and what exists: [VRYXCODE.md](VRYXCODE.md).
 
 Instead of answering once, the model works in a loop, like Claude Code but for small tasks:
 

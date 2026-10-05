@@ -182,7 +182,8 @@
         "export/open/equinox-2/my-ai-q4_k_m.gguf",
         "export/open/equinox-2/my-ai-q8_0.gguf",
         "export/open/equinox-2/my-ai-f16.gguf"
-      ]
+      ],
+      "vryxcode": true
     },
     {
       "id": "solstice-2",
@@ -229,7 +230,8 @@
         "export/open/solstice-2/my-ai-q4_k_m.gguf",
         "export/open/solstice-2/my-ai-q8_0.gguf",
         "export/open/solstice-2/my-ai-f16.gguf"
-      ]
+      ],
+      "vryxcode": true
     },
     {
       "id": "apogee-2",
@@ -276,7 +278,8 @@
         "export/open/apogee-2/my-ai-q4_k_m.gguf",
         "export/open/apogee-2/my-ai-q8_0.gguf",
         "export/open/apogee-2/my-ai-f16.gguf"
-      ]
+      ],
+      "vryxcode": true
     }
   ],
   "keep_latest_per_name": 2

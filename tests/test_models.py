@@ -104,3 +104,16 @@ class GenerationOrder(unittest.TestCase):
     def test_real_manifest_has_generations(self):
         got = {e["id"]: e.get("generation", 1) for e in json.load(open("models.json", encoding="utf-8"))["models"]}
         self.assertEqual((got["ember-2"], got["flare-2"], got["flare-2.5"]), (1, 1, 2))
+
+
+class VryxCodeModels(unittest.TestCase):
+    def test_only_equinox_and_above_are_offered_vryxcode(self):
+        got = {e["id"]: bool(e.get("vryxcode")) for e in json.load(open("models.json", encoding="utf-8"))["models"]}
+        self.assertEqual({k for k, v in got.items() if v}, {"equinox-2", "solstice-2", "apogee-2"})
+        for small in ("ember-2", "flare-2", "flare-2.5"):
+            self.assertFalse(got[small])
+
+    def test_the_plan_names_the_same_models(self):
+        text = open("docs/VRYXCODE.md", encoding="utf-8").read()
+        for name in ("Equinox 2", "Solstice 2", "Apogee 2", "Ember 2", "Flare 2.5"):
+            self.assertIn(name, text)
