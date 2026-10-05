@@ -159,3 +159,12 @@ Trained 2,000 steps (0.52B tokens, 9.4 s/step on the rented 5090, ~5.2 h, ~$2.7)
 - `TinyLM.generate_many` now writes all answers to a question as one batch (the same tokens as `generate` for the same seed,
   tests/test_generate_many.py), expected to be around 3x faster on a mostly idle GPU. Not yet measured on the 4070.
 
+
+## v3 chat results (Oct 5 2026) and what they mean for v3.5
+Lookup test sheet (41 questions, with Wikipedia notes): `chat.pt` 26 (temperature 0.5) and 25 (0.1); `chat_dpo.pt` 27 and 29.
+Rules sheet (`eval/constraints.jsonl`, 30): chat 11, DPO 10. DPO trained 57 steps on ~450 pairs (loss 0.677, margin +0.03): a gentle nudge,
+a probable small gain on lookups, nothing on rules. (The HellaSwag exam comparison was still running when this was written.)
+- **Strong:** exact counts and lists (instructions 4/4, lists 4/4), hard facts when the right passage is in the notes (6/6), small talk, advice.
+- **Weak, both models:** topic switching 0/3, honesty ("I don't know") 1/3, plain facts 3-5/8, explanations 2/5, format and length rules
+  (form 1/7, length 2/6, structured 0/2), rules held over several turns 3/8.
+- **Why:** facts fail mostly when the search doesn't put the right passage in the notes; the rule failures are data and size, not decoding.
