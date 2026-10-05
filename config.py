@@ -283,7 +283,7 @@ VERSIONS = {
                                            # v3.5 now trains on the rented GPUs only: a Muon run can't move to
                                            # the 4070 (12 GB) or switch optimizers midway. --set optimizer=adamw
                                            # gives the old portable setup
-            ("grad_checkpoint", False),    # ~30% faster; the pilot shows whether memory allows it
+            ("grad_checkpoint", True),     # the 8K pilot ran out of memory on a 32 GB RTX 5090 without it (Oct 2026); ~30% slower
             ("batch_size", 1),             # 1 x 8192 tokens per micro-batch (same size as 4 x 2048 before)
             ("grad_accum", 32),            # still 32 x 8192 = ~262k tokens per step
             ("save_every", 150),           # a checkpoint is ~17 GB: every ~25 min instead of every ~10

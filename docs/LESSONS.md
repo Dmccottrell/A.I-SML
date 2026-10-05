@@ -168,3 +168,9 @@ a probable small gain on lookups, nothing on rules. (The HellaSwag exam comparis
 - **Weak, both models:** topic switching 0/3, honesty ("I don't know") 1/3, plain facts 3-5/8, explanations 2/5, format and length rules
   (form 1/7, length 2/6, structured 0/2), rules held over several turns 3/8.
 - **Why:** facts fail mostly when the search doesn't put the right passage in the notes; the rule failures are data and size, not decoding.
+
+## v3.5 pilot on one RTX 5090 (Oct 5 2026)
+The first pilot (`train.py --version v3.5 --cloud --pilot`, 8,192-token context, micro-batch 1 x 8,192, Muon on the GPU, no gradient
+checkpointing) ran out of GPU memory at iteration 1 on a 32 GB card (iteration 0 took 14.9 s, mostly torch.compile). Fix: cloud mode now keeps
+`grad_checkpoint=True` for v3.5 (about 30% slower per step). The whole data build (19.7B tokens + the final-phase set) finished in about 1 hour on 16 cores:
+the early "17 hours for code" worry came from the tiny test's startup time.

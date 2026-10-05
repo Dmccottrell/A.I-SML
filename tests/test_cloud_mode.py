@@ -25,7 +25,7 @@ class Settings(unittest.TestCase):
         self.assertTrue(home.train.grad_checkpoint)
         self.assertEqual(cloud.train.optimizer, "muon")                       # the same Muon, memory on the GPU
         self.assertEqual(config.optimizer_kind(home.train.optimizer), config.optimizer_kind(cloud.train.optimizer))
-        self.assertFalse(cloud.train.grad_checkpoint)
+        self.assertTrue(cloud.train.grad_checkpoint)                          # 8K needs it even on 32 GB (pilot, Oct 2026)
         tokens = lambda V: V.train.batch_size * V.train.grad_accum * V.model.max_seq_len
         self.assertEqual(tokens(cloud), tokens(home))                         # same ~262k tokens per step
         for k in ("max_iters", "lr_max", "lr_min", "warmup_iters", "schedule", "decay_frac", "eval_every",
