@@ -48,7 +48,7 @@ Other people's open models may be used as **helpers beside the model, never insi
 | **Teacher model** (an open ~7B, from v3) | Writes practice chat examples and grades our model's answers for DPO. Only its written text is used, like a tutor's worksheets | ❌ No |
 | **Search model** (optional, from v3) | Finds Wikipedia passages by meaning for lookups. Keyword search needs no model at all | ❌ No, runs beside it |
 | **Whisper and Piper** (v4) | Speech-to-text and text-to-speech for voice | ❌ No, separate programs |
-| **A fine-tuned open model** (optional) | A smarter daily assistant in the app while our own models grow | ❌ No, a separate model, always labeled as not ours |
+| **A fine-tuned open model** (owner's personal use only) | A smarter daily assistant in the app while our own models grow | ❌ No, a separate model, always labeled as not ours (`docs/OPEN_MODEL.md`) |
 
 Rules for helpers:
 - Only models and datasets whose licenses allow this use. Check each license before using it.

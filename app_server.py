@@ -58,6 +58,7 @@ import models as M
 import usage_limits as U
 from app_errors import AppError, ModelTooBig, PcUnreachable
 from tokenizer import BPETokenizer
+from open_tokenizer import OpenTokenizer
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 WEB = os.path.join(HERE, "web")
@@ -395,7 +396,7 @@ class AppState:
         rel = model.get("tokenizer")
         path = None if not rel else (rel if os.path.isabs(rel) else os.path.join(self.root, rel))
         if path and os.path.exists(path):
-            tok = BPETokenizer.load(path)
+            tok = OpenTokenizer.load(path) if model.get("open") else BPETokenizer.load(path)    # "open": a fine-tuned open model (ChatML)
         elif self.default_tok is not None:
             tok = self.default_tok
         elif self.demo or self.backend_factory:

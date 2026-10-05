@@ -174,3 +174,19 @@ The first pilot (`train.py --version v3.5 --cloud --pilot`, 8,192-token context,
 checkpointing) ran out of GPU memory at iteration 1 on a 32 GB card (iteration 0 took 14.9 s, mostly torch.compile). Fix: cloud mode now keeps
 `grad_checkpoint=True` for v3.5 (about 30% slower per step). The whole data build (19.7B tokens + the final-phase set) finished in about 1 hour on 16 cores:
 the early "17 hours for code" worry came from the tiny test's startup time.
+
+
+## Decision: Emvryx stays from scratch (Oct 5 2026)
+We compared finishing v3.5 from scratch (75,000 steps, about $183 on one rented RTX 5090, HellaSwag forecast 41-45%) with fine-tuning an
+open model (Qwen 2.5 1.5B at 32K context: a few dollars, roughly 60%+ on the same test). The open model would be stronger and much cheaper,
+but **every Emvryx model stays trained from scratch** (see "Pretrained weights policy" in the README). An open-base fine-tune is allowed only as a
+personal side model for the owner's own use, labeled as not Emvryx and not shipped. The tooling is in the repo (`finetune_open.py`, `open_tokenizer.py`, `docs/OPEN_MODEL.md`), tested only with a tiny offline model.
+- The Qwen 2.5 1.5B facts, if it is ever built: 32K native context, Apache 2.0 licence, about 28 KB of memory per token (so 32K is about 0.9 GB),
+  so it fits an RTX 4070. The chat app would need an open-model tokenizer and the ChatML format (chat.py builds token ids itself).
+- Budget rule: nothing is bought without the owner's approval; Vast auto top-up is on, so watch the balance.
+
+## Pausing a paid run safely (v3.5)
+1. Stop cleanly: `pkill -INT -f run_training.py; pkill -INT -f "train.py --version"` (it saves a final checkpoint; at worst about 43 minutes of steps are lost if it is stopped without this).
+2. Copy the checkpoint off the machine: `python hub_backup.py up --version v3.5 --repo Dmccottrell/aisml-checkpoints`, then `python hub_backup.py status ...` to confirm the step.
+3. Back up the tokenizer: `hf upload Dmccottrell/aisml-checkpoints data/v3.5/tokenizer.json v3.5/tokenizer.json`.
+4. **Stop** (never Destroy) the instance. Resume later with the same training command. `--backup_dir` only copies to the same machine; it does not protect against losing the instance.
