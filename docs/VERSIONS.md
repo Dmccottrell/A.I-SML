@@ -2,6 +2,14 @@
 
 All versions side by side. v1 and v2 are finished and run on the phone. v3's pretraining finished at step 45,000 (October 2026; HellaSwag 37.1% on a 2,000-question sample, validation loss about 2.68); its chat tuning is next.
 v3.5, v4, v5, v6 and v6.5 are planned: their numbers are estimates and will change once v3's results are in.
+> **Update (Oct 2026): Emvryx moves to open bases.** From v3.5 on, models are fine-tuned from an open model instead of trained from scratch
+> (cheaper and stronger: about $183 for a forecast ~41-45% from scratch versus a few dollars for roughly 65% on a 1.5B open model).
+> They carry the Emvryx name only; the base and its licence are credited in `NOTICE`, and the docs never call a fine-tuned model "from scratch".
+> **v1, v2 and v3 stay from scratch**, and the from-scratch v3.5 run was **stopped** (step recorded in `docs/V3_5.md`). **Flare 3.5 is now
+> Qwen 2.5 1.5B with a 32K context** ([OPEN_MODEL.md](OPEN_MODEL.md)). Later rungs (suggestions, not chosen): Equinox 4 about a 3-4B base,
+> Solstice 5 about a 7-8B base, Apogee 6 about a 14B base on rented GPUs; pick each base when its turn comes, because better open models will exist.
+> The rest of this file was written for the from-scratch plan: where it says a version's brain is trained from scratch or grown from v3.5, read it with this update.
+
 Details: [V2.md](V2.md), [V3.md](V3.md), [ROADMAP.md](ROADMAP.md), [LESSONS.md](LESSONS.md) (what we learned). Settings live in `config.py`.
 
 **The app and the model family are called Emvryx** (working name, Emvryx.AI; see [APP.md](APP.md)). Each model is the
