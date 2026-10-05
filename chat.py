@@ -116,6 +116,8 @@ def encode_tool_text(tok, content):
 
 def _encode_message(tok, message):
     """Tokens for one message, and whether the model should learn to write them."""
+    if getattr(tok, "chatml", False):
+        return _encode_message_chatml(tok, message)
     U, A, EOT = special_ids(tok)
     if message.get("tools") and "<|tool_call|>" in tok.special:
         text = encode_tool_text(tok, message["content"])            # a coding-lesson step: tool markers are real tokens
@@ -140,6 +142,21 @@ def _encode_message(tok, message):
             calls += [tok.special["<|tool_call|>"]] + tok.encode(call, allow_special=False) + \
                      [tok.special["<|end_tool_call|>"]]
     return calls + text + [EOT], learn    # the answer: learn it (mask 1)
+
+
+def _encode_message_chatml(tok, message):
+    """The same message in ChatML (open models such as Qwen 2.5, see open_tokenizer.py).
+
+    A question ends with the opening of the assistant's turn, so the model writes the reply next. An answer is learned
+    through its <|im_end|>. Notes are plain text (no reserved tokens); memory calls aren't part of this format.
+    """
+    text = tok.encode(message["content"], allow_special=False)
+    if message["role"] == "user":
+        notes = message.get("notes")
+        if notes:
+            text = tok.encode("Notes:\n" + format_notes(notes) + "\n\nQuestion: " + message["content"], allow_special=False)
+        return tok.role_open("user") + text + tok.turn_end() + tok.role_open("assistant"), 0
+    return text + tok.turn_end(), 0 if message.get("train") is False else 1
 
 
 MEMORY_CALL = re.compile(r"<\|tool_call\|>(.*?)<\|end_tool_call\|>", re.S)
@@ -238,11 +255,11 @@ def suggest_prompt(tok, history, max_tokens, keep_notes=1):
     conversation followed by <|user|>; the model continues it until it writes <|assistant|>
     (stop there). Works on models whose chat training learned user messages (learn_weight).
     """
-    U, _, _ = special_ids(tok)
+    opening = tok.role_open("user") if getattr(tok, "chatml", False) else [special_ids(tok)[0]]
     history = drop_old_notes(history, keep_notes)
     parts = [_encode_message(tok, m)[0] for m in history]
-    ids = [t for p in parts[_first_kept(parts, max_tokens - 1):] for t in p]
-    return ids[-(max_tokens - 1):] + [U]
+    ids = [t for p in parts[_first_kept(parts, max_tokens - len(opening)):] for t in p]
+    return ids[-(max_tokens - len(opening)):] + opening
 
 
 def clean_suggestion(text, max_chars=200):
