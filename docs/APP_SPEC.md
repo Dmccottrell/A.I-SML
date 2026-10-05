@@ -389,3 +389,11 @@ beta list", and "memory finds an earlier chat by meaning, not only by words".
   is not switched on: it needs trying on a real model first. When you want to test it, add `"dynatemp_range": 0.3` to a model's `sampling`
   in `models.json` (the app passes it straight to llama-server).
 
+
+## Auto lookup (Oct 2026)
+The app looks things up before the model answers (`lookup_auto.py`), the way `generate.py --lookup/--web` does, and shows what it used
+("Read 2 notes from Wikipedia", "Searched the web: 1 source") above the reply. Rules: only factual questions (not "hi", jobs such as
+"write a poem", or "list 3 fruits"); the local Wikipedia index first (`--wiki`, default `data/wiki/wiki.db`; skipped if absent); the web
+too when the person's setting allows it and the question is about something recent or the Wikipedia notes barely match it; never in a
+private chat; a failed or offline search just means fewer notes. Per-person setting `web_search`: `auto` (default), `off` (Wikipedia only),
+`always`. The server flag `--no-web` disables web search for everyone. A sentence on the website says this, so the privacy wording matches.

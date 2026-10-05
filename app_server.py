@@ -49,6 +49,7 @@ import app_engine as E
 import chat
 import chat_polish
 import connected_apps
+import lookup_auto
 import context_window as CW
 import effort_router
 import regen_modes
@@ -210,6 +211,8 @@ class AppState:
         self.ram_gb = ram_gb or total_memory_gb()
         self.clock, self.pace = clock, pace
         self.verbose = False                                   # print timings (set by the command line)
+        self.wiki = None                                       # the local Wikipedia index (wiki_index.WikiIndex), if there is one
+        self.web_fn = None                                     # web(question, k) -> notes; None = this server never searches the web
         self._demo_tok = None
         self.usage = U.UsageStore(os.path.join(data_dir, "usage.db") if data_dir else ":memory:")
         self.limiter = U.Limiter(self.usage, self.cfg, self.manifest)
@@ -297,7 +300,7 @@ class AppState:
             return self.stores[user]
 
     def get_settings(self, user):
-        s = {"window_mode": "everyday", "show_tokens": False}
+        s = {"window_mode": "everyday", "show_tokens": False, "web_search": "auto"}
         s.update(self.settings.get(user, {}))
         return s
 
@@ -307,6 +310,8 @@ class AppState:
             s["window_mode"] = new["window_mode"]
         if isinstance(new.get("show_tokens"), bool):
             s["show_tokens"] = new["show_tokens"]
+        if new.get("web_search") in lookup_auto.MODES:
+            s["web_search"] = new["web_search"]
         self.settings[user] = s
         return s
 
@@ -480,6 +485,12 @@ def start_turn(state, who, chat_id, text, model_id, effort, regenerate=False, re
         try:
             if state.runner and not state.runner.ready(model["id"], window):
                 q.put(("loading", model["name"]))
+            notes = None
+            if text and (state.wiki is not None or state.web_fn is not None):       # Auto lookup (lookup_auto.py)
+                notes, found = lookup_auto.gather(text, state.wiki, state.web_fn, state.get_settings(who["user"])["web_search"],
+                                                  private=chat_id < 0, max_notes=5 if window >= 6000 else 3)
+                if found["asked"]:
+                    q.put(("notes", found))
             t_load = time.monotonic()
             backend = state.backend_for(model, text or "", window)     # may load the model the first time (can take a while)
             timing["load"] = time.monotonic() - t_load
@@ -488,7 +499,7 @@ def start_turn(state, who, chat_id, text, model_id, effort, regenerate=False, re
             if regenerate and hasattr(backend, "sampling"):
                 t = regen_modes.sampling_for(backend.sampling.get("temperature", 0.8), mode)
                 backend.sampling = dict(backend.sampling, temperature=round(min(bounds[1], max(bounds[0], t)), 2))   # never outside the model's safe range
-            r = E.run_turn(tok, store, chat_id, backend, counted_model, window, max_new, user_text=text, stop=stop,
+            r = E.run_turn(tok, store, chat_id, backend, counted_model, window, max_new, user_text=text, stop=stop, notes=notes or None,
                            limiter=state.limiter, user=who["user"], effort=effort, clock=state.clock, pacer=pacer,
                            style_hint=regen_modes.get(mode)["hint"] if regenerate else "")
             if text and store.title(chat_id) == "New chat":
@@ -786,6 +797,8 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 item = None
                 if kind == "loading":
                     emit("loading", {"model": val})
+                elif kind == "notes":
+                    emit("notes", val)
                 elif kind == "piece":
                     emit("piece", {"t": val})
                 elif kind == "done":
@@ -829,6 +842,9 @@ def main():
                     help="a model file to run, e.g. flare-2=export/dev/v2/my-ai-q8_0.gguf (the exports are found by themselves)")
     ap.add_argument("--llama-args", default="", help="extra options for llama-server, e.g. \"-ngl 99\" to use the GPU")
     ap.add_argument("--ram", type=float, default=None, help="this computer's memory in GB (default: detected)")
+    ap.add_argument("--wiki", default=os.path.join("data", "wiki", "wiki.db"),
+                    help="the Wikipedia index (wiki_index.py) the chat looks things up in; skipped if the file isn't there")
+    ap.add_argument("--no-web", action="store_true", help="never search the web (people's own Settings choice then has no effect)")
     ap.add_argument("--timings", action="store_true", help="print how long each reply took (loading, first word, total)")
     ap.add_argument("--add-user", nargs=2, metavar=("NAME", "PLAN"), help="add a tester (free, pro or mega) and print their key")
     args = ap.parse_args()
@@ -854,6 +870,15 @@ def main():
         key = state.add_user(*args.add_user)
         print(f"{args.add_user[0]} ({args.add_user[1]}): http://localhost:{args.port}/?key={key}")
         return
+    if os.path.exists(args.wiki):
+        from wiki_index import WikiIndex
+        state.wiki = lookup_auto.LockedWiki(WikiIndex(args.wiki))
+        print(f"Looking things up in the Wikipedia index {args.wiki}")
+    else:
+        print(f"No Wikipedia index at {args.wiki}: answers come from the model's memory (see wiki_index.py)")
+    if not args.no_web:
+        from web_search import web_notes
+        state.web_fn = lambda question, k: web_notes(question, k)        # Auto: only when the person's setting and the question call for it
     srv = make_server(state, args.host, args.port)
     shown = "localhost" if args.host in ("127.0.0.1", "0.0.0.0") else args.host
     if state.demo:
