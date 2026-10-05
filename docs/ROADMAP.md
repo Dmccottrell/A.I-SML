@@ -798,6 +798,8 @@ of the whole family (a new tokenizer or design, so old files and skill packs don
 | **.5** | A half step: a bigger refresh of the same weights (more reading plus new chat tuning), or the project's half-version model (v3.5 is a new, larger Flare) | Flare 3.5 |
 | **Next whole number + .1** | A **grown model** (`grow.py` adds layers, so the size changes), started from the earlier weights | Flare 4.1 (Flare 3 grown deeper); its own "+" steps are 4.2, 4.5, ... |
 
+**On an open base (Oct 2026):** a "+" model is the same open base with better or more lessons, DPO or skill packs (a few dollars, hours; see [OPEN_MODEL.md](OPEN_MODEL.md#upgrades--and-growth-on-an-open-base)). A grown model copies layers of the open base and needs real continued training, so it is expensive and only worth it when no open model of the size you want exists.
+
 Growth only adds layers (same width and tokenizer), so a grown Flare is a deeper Flare, never an Equinox. Every new number
 is a new set of weights, so its skill packs are retrained (a pack only fits the exact model it was trained on). The app's picker
 shows the newest of each name and keeps the rest under "Other models".

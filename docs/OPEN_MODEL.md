@@ -60,3 +60,35 @@ Check the licence page and look for newer releases before picking: open models c
 Why one family: the same tokenizer and chat format mean the training and export code (`finetune_open.py`, `open_tokenizer.py`) work for every rung with a changed model name.
 Avoid for now: Qwen2.5-3B (its licence is not Apache 2.0), and Llama (naming and "Built with Llama" rules).
 Qwen3 can write `<think>` reasoning blocks: decide whether to keep or strip them before it becomes a model in the app.
+
+## Upgrades: "+" and growth on an open base
+The numbering is in [ROADMAP.md](ROADMAP.md) ("Numbers for "+" and grown models"). Times below are **estimates** (compute scales roughly with parameters from the measured
+Flare 3.5 run: 7.1 s/step on one RTX 5090 at 1.5B, 988 steps, about 2 hours and $1). Real numbers come from a `--pilot` on the base you pick.
+
+### "+" (same weights' size, better lessons): the normal upgrade
+1. **Collect what to fix**: test the model (`benchmarks.py`, the lookup sheet, phone tests) and write down its mistakes.
+2. **Make new lessons** for those mistakes (`make_chat_data_v3.py` and friends, with the teacher model on the PC, hours of PC time), and optionally DPO pairs.
+3. **Train**: `python finetune_open.py --data <new lessons>`; start from the saved adapter to continue it, or from the base with all lessons together.
+4. **Test it beats the old one** (`compare.py`), merge, convert to GGUF, add to the app. Number: Flare 3.5 becomes **3.6**; the old one moves to "Other models".
+
+| Base | Rough training time (988 steps) | Rented cost at about $0.51/h | Needs |
+|---|---|---|---|
+| 1.5B (Flare 3.5) | about 2 h (measured) | about $1 | one 5090 or the 4070 (slower) |
+| 4B (Equinox 4) | about 5 h | about $3 | one 5090 |
+| 8B (Solstice 5) | about 10 h | about $5-6 | one 5090 (bf16 weights are 16 GB) |
+| 14B (Apogee 6) | about 20-25 h | about $10-13 | 4-bit weights (QLoRA) on a 5090, or a 48 GB card |
+Add the time to make the lessons and the tests. Skill packs (small LoRA add-ons) are trained the same way and cost less.
+
+### Growth (more layers, bigger model): only if no open model of the size exists
+1. **Pick a base** and a target (for example Qwen3-8B, 36 layers, grown to about 48 layers, roughly 10-11B).
+2. **Grow it**: copy a block of its layers into the stack (like `grow.py` does for our own models; this needs a version for the open model's layer names, written and tested on a tiny model first). Width, tokenizer and embeddings stay the same.
+3. **Right after growing it is slightly worse** (the copies were not trained to work together). It needs continued training to recover and then beat the original: either train all weights (needs far more memory than LoRA) or train only the new layers.
+4. **Compare against the plain base and against the next bigger open base.** Only keep the grown model if it wins at a price you accept. Number: the next whole number plus .1 (Equinox 4.1).
+
+| Growth example | Continued training (about 1B tokens, a small amount) | Cost at about $0.51/h |
+|---|---|---|
+| 1.5B to about 2B | about 40 h on one 5090 | about $20 |
+| 8B to about 11B | about 200+ h on one 5090, and the memory does not fit: needs a 48-80 GB card or several GPUs | $100 to several hundred |
+These are order-of-magnitude guesses: growth quality depends on how many tokens of continued training it gets, and 1B tokens is on the small side.
+
+**Recommendation:** use "+" as the routine upgrade; skip growth until a base of the right size is missing. Every "+" or grown copy still carries `NOTICE` (the base's licence).
