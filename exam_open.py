@@ -116,7 +116,7 @@ def main(argv=None):
 
     model, tok = load_base(model_id, device)
     pad_id = tok.pad_token_id if tok.pad_token_id is not None else (tok.eos_token_id or 0)
-    adapter = a.adapter or (find_adapter(name, a.model) if a.compare else None)
+    adapter = a.adapter or (find_adapter(name, model_id) if a.compare else None)
     if a.compare and not adapter:
         sys.exit("--compare needs our adapter: pass --adapter <folder> (the one finetune_open.py saved) or train first")
 
