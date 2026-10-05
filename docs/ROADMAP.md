@@ -3,6 +3,14 @@
 Where this project is going, and why. Plans past v2 are a **direction, not a promise**: each
 version's test-sheet results decide what the next one focuses on.
 
+> **Update (Oct 2026): Emvryx moves to open bases.** From v3.5 on, models are fine-tuned from an open model instead of trained from scratch
+> (cheaper and stronger: about $183 for a forecast ~41-45% from scratch versus a few dollars for roughly 65% on a 1.5B open model).
+> They carry the Emvryx name only; the base and its licence are credited in `NOTICE`, and the docs never call a fine-tuned model "from scratch".
+> **v1, v2 and v3 stay from scratch**, and the from-scratch v3.5 run was **stopped** (step recorded in `docs/V3_5.md`). **Flare 3.5 is now
+> Qwen 2.5 1.5B with a 32K context** ([OPEN_MODEL.md](OPEN_MODEL.md)). Later rungs (suggestions, not chosen): Equinox 4 about a 3-4B base,
+> Solstice 5 about a 7-8B base, Apogee 6 about a 14B base on rented GPUs; pick each base when its turn comes, because better open models will exist.
+> The rest of this file was written for the from-scratch plan: where it says a version's brain is trained from scratch or grown from v3.5, read it with this update.
+
 ## At a glance
 
 | Version | Theme | Brain | Main new abilities | Where it trains | Cost |
@@ -10,7 +18,7 @@ version's test-sheet results decide what the next one focuses on.
 | **v1** ✅ | Learn the pipeline | 30M | Tells children's stories; runs offline on the phone | RTX 4070, 4 hours | $0 |
 | **v2** ✅ | Knowledge | 88M | General Q&A, explanations, multi-turn chat | RTX 4070, ~18 hours | $0 |
 | **v3** 🛠️ | Accuracy | ~400M | Looks things up (RAG), says "I don't know", handles corrections, exact instructions, preference training (DPO), remembers you, reply suggestions, basic code; v3-long stretches it to 8K–32K | RTX 4070 afternoons + a rented RTX 3090 overnight (25.8 / 17.5 s/step) | ~$30–40 cloud + electricity |
-| **v3.5** | Scale | **~1.12B** | Same features as v3 on a much bigger brain; reads 40B tokens (educational + everyday web, code, math) | 2× RTX 5090, ~20–25 days (or the RTX 4070, ~5–6.5 months) | ~$420–530 rented |
+| **v3.5** | Scale | **1.5B open base (Qwen 2.5), 32K context** | Same lessons as v3 (lookups, "I don't know", corrections, instructions) on a stronger base. *(The from-scratch ~1.12B / 40B-token plan below was stopped.)* | RTX 4070 (LoRA, free) or one rented RTX 5090 | $0 or a few dollars |
 | **v4** | Abilities | v3.5 **trained longer** (1.12B, +15–30B tokens) | Specialist skill packs + router, tools, voice, own app | Rented GPUs, ~1–2 weeks, while the app is built | ~$55–270 electricity |
 | **v5** | Scale | 3B | Genuinely capable assistant | Cloud (from scratch) **or** RTX 4070 (fine-tune an open 3B) | ~$1,500+ **or** $0 |
 | **v6** | Bigger small | **5B** | Stronger reasoning, coding and knowledge; 8k memory; powers online mode | Cloud (or grown from v5) | ~$4,000–6,000 (less with growth or a grant) |
