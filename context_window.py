@@ -12,7 +12,7 @@ WHAT THIS FILE DOES
     server; nothing extra on the phone, so only the model and the plan limit it).
     If memory falls later, `shrink` drops to the next smaller window and says so. Nothing here loads a model.
 
-Usage:  python context_window.py --ram 8 --free 4 --model flare-3.5 --mode long
+Usage:  python context_window.py --ram 8 --free 4 --model flare-2 --mode long
 """
 import argparse
 
@@ -118,7 +118,7 @@ def main():
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[1])
     ap.add_argument("--ram", type=float, default=8)
     ap.add_argument("--free", type=float, default=None)
-    ap.add_argument("--model", default="flare-3.5")
+    ap.add_argument("--model", default="flare-2")
     ap.add_argument("--mode", default="everyday", choices=("everyday", "long", "remote"))
     ap.add_argument("--tps", type=float, default=None, help="measured reading speed, tokens per second")
     args = ap.parse_args()

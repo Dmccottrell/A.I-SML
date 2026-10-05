@@ -1,19 +1,19 @@
 """
 open_models.py - The open-base Emvryx models: which base each one starts from, and settings that fit one RTX 5090 (32 GB).
 
-`python finetune_open.py --model equinox-4` looks the name up here. The architecture numbers (layers, KV heads, head size) are from the
+`python finetune_open.py --model equinox-2` looks the name up here. The architecture numbers (layers, KV heads, head size) are from the
 published model configs, written from memory: finetune_open.py --pilot prints the real ones, and the settings are first guesses for
 the pilot to confirm. Times scale from the measured Flare 3.5 run (1.5B: 7.1 s/step, 18.6 GB, 988 steps). Licences: check the model page.
 """
 
 PRESETS = {
-    "flare-3.5": dict(hf="Qwen/Qwen2.5-1.5B-Instruct", params_b=1.54, layers=28, kv_heads=2, head_dim=128, licence="Apache 2.0",
+    "flare-2": dict(hf="Qwen/Qwen2.5-1.5B-Instruct", params_b=1.54, layers=28, kv_heads=2, head_dim=128, licence="Apache 2.0",
                       quant4=False, rank=64, batch_tokens=8192, grad_accum=8, measured=True),
-    "equinox-4": dict(hf="Qwen/Qwen3-4B", params_b=4.0, layers=36, kv_heads=8, head_dim=128, licence="Apache 2.0",
+    "equinox-2": dict(hf="Qwen/Qwen3-4B", params_b=4.0, layers=36, kv_heads=8, head_dim=128, licence="Apache 2.0",
                       quant4=False, rank=64, batch_tokens=4096, grad_accum=16, measured=False),
-    "solstice-5": dict(hf="Qwen/Qwen3-8B", params_b=8.2, layers=36, kv_heads=8, head_dim=128, licence="Apache 2.0",
+    "solstice-2": dict(hf="Qwen/Qwen3-8B", params_b=8.2, layers=36, kv_heads=8, head_dim=128, licence="Apache 2.0",
                        quant4=False, rank=32, batch_tokens=2048, grad_accum=32, measured=False),
-    "apogee-6": dict(hf="Qwen/Qwen3-14B", params_b=14.8, layers=40, kv_heads=8, head_dim=128, licence="Apache 2.0",
+    "apogee-2": dict(hf="Qwen/Qwen3-14B", params_b=14.8, layers=40, kv_heads=8, head_dim=128, licence="Apache 2.0",
                      quant4=True, rank=32, batch_tokens=2048, grad_accum=32, measured=False),
 }
 CONTEXT = 32768                     # all of these read 32,768 tokens natively

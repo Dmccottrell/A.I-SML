@@ -15,7 +15,7 @@ tests, and what "done" means for the first version).
 | Our own prompt format | The model was trained with special tokens (`<|user|>`, `<|assistant|>`, `<|notes|>`, `<|tool_call|>`). The chat template stored in the file only knows plain user/assistant text, so **the app builds the prompt itself** (a port of `chat.py`: notes in front of the question, old notes dropped, oldest turns forgotten) and sends it to the raw completion endpoint. Check special-token handling in the first pilot |
 | Generation settings | temperature 0.8, top-k 50, repetition penalty 1.15 (the values `generate.py` uses); stop at `<|endoftext|>`; streaming |
 | Open-base models | A model entry with `"open": true` uses Qwen's own tokenizer (`open_tokenizer.py`) and the ChatML format that `chat.py` writes for it; notes go in as plain text, no memory tool calls. The prompt is still built by the app as token ids (`/completion`), so the same context meter works |
-| Context management | 2,048 tokens for Flare 3 (**32,768 for the Qwen-based Flare 3.5**, about 28 KB of memory per token, set by the model's `context` in `models.json`). A **context meter** (exact token counts from the server's tokenizer) and a quiet "older messages forgotten" marker |
+| Context management | 2,048 tokens for Flare 3 (**32,768 for the Qwen-based Flare 2**, about 28 KB of memory per token, set by the model's `context` in `models.json`). A **context meter** (exact token counts from the server's tokenizer) and a quiet "older messages forgotten" marker |
 | Tool calls | Read `<|tool_call|>{"name": "remember", ...}` out of the reply (`split_memory_calls`) and act on it; v4 adds calculator, clock, files |
 
 ### 2. Knowledge and memory
@@ -175,7 +175,7 @@ the window per device and per model, and never lets it exceed what the model can
 
 | Rule | Detail |
 |---|---|
-| **Cost per token** | Cache bytes per token = 2 x layers x key/value heads x head size x bytes. Flare 3 (v3): 32 KB at 16-bit, ~16 KB with an 8-bit cache. Flare 3.5 (v3.5): ~24.6 KB at 16-bit. Weights on top: ~240 MB (v3 Q4), ~700 MB (v3.5 Q4) |
+| **Cost per token** | Cache bytes per token = 2 x layers x key/value heads x head size x bytes. Flare 3 (v3): 32 KB at 16-bit, ~16 KB with an 8-bit cache. Flare 2 (Qwen 2.5 1.5B): 28 KB at 16-bit (Equinox 2 and Solstice 2: 144 KB, Apogee 2: 160 KB). Weights on top: ~240 MB (v3 Q4), ~700 MB (v3.5 Q4) |
 | **The window is the smallest of three numbers** | (1) what the model **passed** on the long-context ladder (`stretch_ladder.py`, `eval_long.py`), (2) what the free RAM can hold, (3) the speed limit below. A window the model didn't pass adds nothing |
 | **Free RAM, not total RAM** | Checked at load time (Android's available-memory figure, not "12 GB installed"): a usable budget is about half the phone's RAM at most (roughly 2.5 GB on 8 GB phones, 4 GB on 12 GB phones), less when other apps are open. Storage and swap such as Samsung's RAM Plus do not count: too slow for a cache read on every word |
 | **Three modes** | **Everyday** (default): about 8K tokens, ~0.3 GB of cache, cool and quick. **Long** (Settings, only if the device and the model allow it): up to the smaller of what the model passed and what fits; a warning says the first reply after pasting a long document can take minutes and warm the phone. **Remote**: the PC or a server, any length the server handles, nothing extra on the phone |
@@ -211,7 +211,7 @@ the PC and the website (the PC adds a chats sidebar).
 ### Chat (the main screen)
 ```
 +--------------------------------------------------+
-|  =   Emvryx Equinox 4  v        [ Auto ]       ...  |   <- tap the model name: the picker
+|  =   Emvryx Equinox 2  v        [ Auto ]       ...  |   <- tap the model name: the picker
 +--------------------------------------------------+
 |                                                  |
 |   You                                            |

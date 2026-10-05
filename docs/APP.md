@@ -8,7 +8,7 @@ with an optional **online mode** that uses a bigger model on your own PC (later 
 **App name (working, renamed Oct 2026): Emvryx** (pronunciation to be decided), with the website/domain **Emvryx.AI** (to check).
 The earlier name Emvryx was checked by web search and the trademark registers (nothing found); **Emvryx has not been
 checked yet**. Before it is public: search the US trademark database (tmsearch.uspto.gov), the EU/UK/India registers,
-Google Play and the App Store, and check that emvryx.ai and emvryx.com are free. The models are named Emvryx + a role (Ember, Flare, Equinox, Solstice, Apogee) + a generation number, for example Emvryx Flare 3.5; see docs/ROADMAP.md, "Names".
+Google Play and the App Store, and check that emvryx.ai and emvryx.com are free. The models are named Emvryx + a role (Ember, Flare, Equinox, Solstice, Apogee) + a generation number, for example Emvryx Flare 2.5; see docs/ROADMAP.md, "Names".
 Backups if Emvryx fails those checks (Emvryx is the previous name): Brynja, Quenby, Eirvala, Vardrun.
 
 This builds on [ROADMAP.md: One app for phone and PC](ROADMAP.md#one-app-for-phone-and-pc-the-plan-for-the-website-and-app)
@@ -81,13 +81,13 @@ you choose the model, the effort, and see where each one runs. Works the same on
  -------------------------------------------------
   Auto   (the router picks)                  [check]
          Best model and effort for each question
-  Emvryx Flare 3.5
+  Emvryx Flare 2
          Fastest for quick answers
-  Emvryx Equinox 4
+  Emvryx Equinox 2
          For everyday work and homework
-  Emvryx Solstice 5
+  Emvryx Solstice 2
          For harder questions and long writing
-  Emvryx Apogee 6         [PC off]
+  Emvryx Apogee 2         [PC off]
          For your toughest challenges
  -------------------------------------------------
   Effort                              Balanced  >
@@ -110,9 +110,9 @@ you choose the model, the effort, and see where each one runs. Works the same on
   which picks the size, the effort and the skill pack per question, and the chat says what it picked.
 - **Effort:** Quick / Balanced / Deep, the thinking dial from the roadmap. Greyed out for models that can't think yet.
 - **Skills:** the same on/off list as the Skills screen, shortcut included.
-- **One card per name, newest version first** (each name has its own number, e.g. Flare 3.5, Equinox 4, Solstice 5, Apogee 6). When a
+- **One card per name, newest version first** (each name has its own number, e.g. Flare 2, Equinox 2, Solstice 2, Apogee 2; a newer generation comes first even with a lower number: Flare 2 before Flare 3). When a
   model is updated the old one moves to **Other models**, with downloaded files and test builds, so you can compare
-  (Flare 3 vs Flare 3.5). **Only a limited selection of older models is kept** (for example the previous one or two
+  (Flare 3 vs Flare 2). **Only a limited selection of older models is kept** (for example the previous one or two
   versions of each name, plus anything you pinned); the exact rule is still to be decided, and the manifest gets a `keep` /
   `retire_after` field for it.
 - **Honest limits:** a model the device can't run (not enough memory) is greyed out with the reason; the
@@ -120,7 +120,7 @@ you choose the model, the effort, and see where each one runs. Works the same on
   "needs your PC to be on" when it can't be reached, and the app falls back to the phone model and labels the answer (a Setting can make it ask first).
 - **Access toggle:** which cards appear follows the same rule as the skill packs (`can_use()`, everyone / beta /
   off): a Beta model shows only for the people on the beta list.
-- **Switching mid-chat** keeps the conversation and adds a small divider ("Switched to Emvryx Equinox 4"). Each
+- **Switching mid-chat** keeps the conversation and adds a small divider ("Switched to Emvryx Equinox 2"). Each
   answer keeps a tag of which model wrote it.
 - **Credits-style badge (later):** if online mode ever runs on a paid server, a card can carry a "Uses online
   credits" badge, like other apps do for their biggest models.

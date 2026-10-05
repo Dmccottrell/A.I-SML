@@ -132,7 +132,7 @@ def merge_and_export(base_model, adapter_dir, export_dir, torch):
 def main(argv=None):
     p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     p.add_argument("--model", default=DEFAULT_MODEL,
-                   help="a preset (flare-3.5, equinox-4, solstice-5, apogee-6; see open_models.py), a Hugging Face id or a local folder")
+                   help="a preset (flare-2, equinox-2, solstice-2, apogee-2; see open_models.py), a Hugging Face id or a local folder")
     p.add_argument("--quant4", action="store_true", help="load the base in 4 bits (QLoRA: a 14B model fits 32 GB). Needs bitsandbytes")
     p.add_argument("--data", default="data/v3/chat.jsonl")
     p.add_argument("--out", default=None, help="default: checkpoints/dev/open/<model name>")
@@ -161,6 +161,9 @@ def main(argv=None):
     a.rank = a.rank or cfg.get("rank", 64)
     a.quant4 = a.quant4 or cfg.get("quant4", False)
     name = preset or short_name(a.model)
+    legacy = os.path.join("checkpoints", "dev", "open", short_name(a.model))      # before presets, runs were saved under the base's name
+    if not a.out and os.path.isdir(os.path.join(legacy, "adapter")) and not os.path.isdir(os.path.join("checkpoints", "dev", "open", name, "adapter")):
+        a.out = legacy                                                           # keep resuming / merging a run started that way
     a.out = a.out or os.path.join("checkpoints", "dev", "open", name)
     a.export = a.export or os.path.join("export", "open", name, "my-ai")
 

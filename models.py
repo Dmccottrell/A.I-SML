@@ -6,7 +6,8 @@ WHAT THIS FILE DOES
     status. Adding a new model is adding a line. This file reads and checks the list, and turns it into what the
     picker shows (docs/APP_SPEC.md, "Model picker"):
 
-      cards    one per NAME (Flare, Equinox, Solstice, Apogee), the newest version the person may use
+      cards    one per NAME (Flare, Equinox, Solstice, Apogee), the newest the person may use (newest generation first, then the version:
+               generation 1 = trained from scratch here, 2 = built on an open base, so Flare 2 is newer than Flare 3)
       other    "Other models": older versions of any name, kept only up to `keep_latest_per_name` per name
                (plus anything pinned); the rest are offered for deletion
 
@@ -81,7 +82,7 @@ def catalog(manifest, user="owner", beta_users=(), ram_gb=None, downloaded=(), p
     visible = [m for m in manifest["models"] if may_see(m, user, beta_users)]
     cards, other, delete = [], [], []
     for name in NAMES:
-        versions = sorted((m for m in visible if m["name"] == name), key=lambda m: -m["version"])
+        versions = sorted((m for m in visible if m["name"] == name), key=lambda m: (-m.get("generation", 1), -m["version"]))
         for rank, m in enumerate(versions):
             state, text = availability(m, ram_gb, downloaded, pc_online)
             entry = {**m, "state": state, "badge": text}
