@@ -472,6 +472,8 @@ async function openSettings() {
     el('b', {}, 'Look'), seg([['auto', 'Automatic'], ['dark', 'Dark'], ['light', 'Light']], S.theme, (v) => { S.theme = v; try { localStorage.setItem('emvryx_theme', v); } catch (e) {} applyTheme(); }),
     el('b', {}, 'How long a chat can be'), seg([['everyday', 'Everyday (about 8K)'], ['long', 'Long (if allowed)']], s.window_mode, async (v) => { await post('/api/settings', {window_mode: v}); await load(); }),
     el('div', {style: 'color:var(--muted);font-size:14px'}, 'Right now: ' + fmt(w.window) + ' tokens, ' + w.reason + '. Long chats use more memory and are slower to read.'),
+    el('b', {}, 'Looking things up'), seg([['auto', 'Auto'], ['off', 'Wikipedia only'], ['always', 'Always search the web']], s.web_search || 'auto', async (v) => { await post('/api/settings', {web_search: v}); await load(); }),
+    el('div', {style: 'color:var(--muted);font-size:14px'}, 'Questions are first looked up in Wikipedia on the server. Auto also searches the web, when it is online, for recent things (news, scores, prices) or when Wikipedia does not have the answer; your question is sent to a search service then, and each answer says so. Private chats never search the web.'),
     el('b', {}, 'Your data'),
     el('div', {style: 'color:var(--muted);font-size:14px'}, 'Chats are saved on the server you opened this page from. Private chats are never saved. Nothing leaves it unless you attach an online model.'),
     el('button', {class: 'btn danger', onclick: async () => { if (confirm('Delete every chat? This cannot be undone.')) { await post('/api/delete-everything'); S.chatId = null; S.messages = []; await load(); } }}, 'Delete all my chats')];
@@ -504,7 +506,7 @@ async function send(regen, mode) {
   else { S.messages.push({id: 'u' + Date.now(), role: 'user', content: text}); input.value = ''; input.style.height = 'auto'; }
   renderThread(); const before = S.lastUsage;
   const think = thinkingNode(); $('thread').append(think); scrollDown(true);
-  let aiBubble = null, aiWrap = null, got = '', errCard = null;
+  let aiBubble = null, aiWrap = null, got = '', errCard = null, looked = null;
   S.abort = new AbortController();
   try {
     const r = await fetch('/api/chats/' + S.chatId + '/send', {method: 'POST', credentials: 'same-origin', signal: S.abort.signal, headers: {'Content-Type': 'application/json'},
@@ -515,11 +517,14 @@ async function send(regen, mode) {
     const handle = (ev, data) => {
       if (ev === 'thinking') {
         S.autoNote = data.auto ? data : null; renderComposer();
+      } else if (ev === 'notes') {
+        looked = data;
       } else if (ev === 'loading') {
         const w = think.querySelector('.word'); clearInterval(S.thinkTimer); S.thinkTimer = null; if (w) w.textContent = 'Loading ' + data.model + ' (first message only)';
       } else if (ev === 'piece') {
         if (!aiWrap) { think._stop(); think.remove(); const m = curModel(); aiBubble = el('div', {class: 'bubble'}); const note = S.autoNote ? el('span', {title: S.autoNote.reason}, ' \u00b7 Auto chose ' + S.autoNote.effort[0].toUpperCase() + S.autoNote.effort.slice(1)) : null;
-        aiWrap = el('div', {class: 'msg ai'}, el('div', {class: 'meta'}, logo(14, false, m ? m.name : 'brand'), m ? m.name : 'Emvryx', note), aiBubble); $('thread').append(aiWrap); }
+        aiWrap = el('div', {class: 'msg ai'}, el('div', {class: 'meta'}, logo(14, false, m ? m.name : 'brand'), m ? m.name : 'Emvryx', note), aiBubble); $('thread').append(aiWrap);
+          const line = lookupLine(looked); if (line) aiWrap.insertBefore(line, aiBubble); }
         got += data.t; aiBubble.replaceChildren(got, el('span', {class: 'cursor'}, '▍')); scrollDown();
       } else if (ev === 'done') {
         S.title = data.title || S.title; S.state.usage = data.usage; renderUsage(data.usage); popTokens(before, data.usage);
@@ -540,6 +545,16 @@ async function send(regen, mode) {
     try { const r = await api('/api/chats/' + S.chatId); if (r.ok) { const c = await r.json(); S.messages = c.messages; S.title = c.title; } } catch (e) {}
   renderThread(); if (errCard) { $('thread').append(errCard); scrollDown(true); if (!got && regen !== true) input.value = text; }
   renderComposer(); try { const q = new URLSearchParams({effort: S.effort, model: S.model}); const r = await api('/api/state?' + q); const st = await r.json(); S.state.chats = st.chats; S.state.usage = st.usage; renderChats(); renderUsage(st.usage); } catch (e) {}
+}
+// "Read 2 notes from Wikipedia" / "Searched the web: 1 source": what the model was given before it answered
+function lookupLine(info) {
+  if (!info || !info.asked) return null;
+  const n = info.wiki + info.web;
+  if (!n) return info.web_tried ? el('div', {class: 'note', style: 'align-self:flex-start'}, 'Searched, but found nothing useful') : null;
+  const parts = [];
+  if (info.wiki) parts.push('Read ' + info.wiki + (info.wiki === 1 ? ' note' : ' notes') + ' from Wikipedia');
+  if (info.web) parts.push((info.wiki ? 'and searched' : 'Searched') + ' the web: ' + info.web + (info.web === 1 ? ' source' : ' sources'));
+  return el('div', {class: 'note', style: 'align-self:flex-start', title: info.sources.map((x) => x.title + (x.url ? ' (' + x.url + ')' : '')).join('\n')}, parts.join(' '));
 }
 function errorCard(e) {
   const i = e.info || {}, card = el('div', {class: 'err', role: 'alert'}, el('b', {}, e.message || 'Something went wrong.'));
