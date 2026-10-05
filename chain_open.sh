@@ -21,11 +21,20 @@ while pgrep -f "finetune_open.py" > /dev/null; do sleep 30; done
 
 wrap_up() {   # merge, exam, back up one model: wrap_up <preset>
     local m="$1"
+    if [ "$m" = "flare-2.5" ]; then   # this run learned the old "trained from scratch" identity answers: a short corrective pass
+        ping "$m: fixing the identity answers (short extra pass)"
+        python identity_lessons.py --name "Flare 2.5" --lessons data/v3/chat.jsonl --out data/v3/identity_patch.jsonl > "logs/$m-patch-make.txt" 2>&1 \
+            || fail "$m identity patch file failed (logs/$m-patch-make.txt)"
+        python finetune_open.py --model "$m" --patch --data data/v3/identity_patch.jsonl > "logs/$m-patch.txt" 2>&1 \
+            || fail "$m identity patch run failed (logs/$m-patch.txt)"
+    fi
     ping "$m: merging"
     python finetune_open.py --model "$m" --merge > "logs/$m-merge.txt" 2>&1 || fail "$m merge failed (logs/$m-merge.txt)"
     ping "$m: running the exam (base versus tuned)"
     python exam_open.py --model "$m" --compare --n 2000 --spread > "logs/$m-exam.txt" 2>&1 || fail "$m exam failed (logs/$m-exam.txt)"
     ping "$m exam: $(tail -n 3 "logs/$m-exam.txt" | tr '\n' ' ')"
+    python evaluate_open.py --model "$m" --tuned --report "logs/$m-identity.md" > /dev/null 2>&1 \
+        && ping "$m identity sheet: $(tail -n 1 "logs/$m-identity.md")" || ping "$m: identity sheet failed (see logs)"
     ping "$m: backing up to Hugging Face"
     hf upload "$REPO" "export/open/$m/my-ai" "$m/my-ai" > "logs/$m-upload.txt" 2>&1 || ping "$m: upload failed (logs/$m-upload.txt), the files are still on this machine"
 }

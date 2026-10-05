@@ -322,3 +322,100 @@ class FindAdapter(unittest.TestCase):
             self.assertIsNone(exam_open.find_adapter("equinox-2", "Qwen/Qwen3-4B"))
         finally:
             os.chdir(old)
+
+
+class IdentityFix(unittest.TestCase):
+    def test_stale_claims_are_dropped_and_corrected_lessons_added(self):
+        import identity_lessons as I
+        rows = [{"messages": [{"role": "user", "content": "Who are you?"},
+                              {"role": "assistant", "content": "I'm a small AI assistant that was trained from scratch on a home computer."}]},
+                {"messages": [{"role": "user", "content": "Capital of France?"}, {"role": "assistant", "content": "Paris."}]}]
+        out, dropped = I.clean_and_add(rows, "Flare 2.5", n=20)
+        self.assertEqual(dropped, 1)
+        self.assertEqual(len(out), 21)
+        again, dropped_again = I.clean_and_add(out, "Flare 2.5", n=0)       # our own lessons are never dropped, even the honest "from scratch" one
+        self.assertEqual((dropped_again, len(again)), (0, 21))
+        answers = " ".join(m["content"] for r in out if r.get("kind") == "identity_open" for m in r["messages"] if m["role"] == "assistant")
+        self.assertIn("Emvryx Flare 2.5", answers)
+        self.assertIn("Qwen", answers)
+        self.assertNotIn("home computer", answers)
+
+    def test_patch_file_is_made_from_the_clean_lessons(self):
+        import identity_lessons as I
+        d = tempfile.mkdtemp()
+        lessons = os.path.join(d, "chat.jsonl")
+        with open(lessons, "w", encoding="utf-8") as f:
+            f.write(json.dumps({"messages": [{"role": "user", "content": "Who made you?"},
+                                             {"role": "assistant", "content": "I was trained from scratch on a home computer."}]}) + "\n")
+            for i in range(30):
+                f.write(json.dumps({"messages": [{"role": "user", "content": f"q{i}"}, {"role": "assistant", "content": f"a{i}"}]}) + "\n")
+        out = os.path.join(d, "patch.jsonl")
+        self.assertEqual(I.main(["--name", "Flare 2.5", "--lessons", lessons, "--out", out, "--identity", "10", "--mix", "20"]), 0)
+        rows = [json.loads(line) for line in open(out, encoding="utf-8")]
+        self.assertEqual(len(rows), 30)
+        self.assertFalse(any("home computer" in json.dumps(r) for r in rows))
+
+    def test_the_trainer_cleans_by_default_and_patch_continues_the_adapter(self):
+        try:
+            import peft  # noqa: F401
+            import torch
+        except ImportError:
+            self.skipTest("peft not installed")
+        import contextlib
+        import io
+        import finetune_open
+        d = tempfile.mkdtemp()
+        base = tiny_base(d)
+        data = os.path.join(d, "chat.jsonl")
+        with open(data, "w", encoding="utf-8") as f:
+            for i in range(12):
+                f.write(json.dumps({"messages": [{"role": "user", "content": "hello how are you"},
+                                                 {"role": "assistant", "content": "the capital of illinois is springfield"}]}) + "\n")
+            f.write(json.dumps({"messages": [{"role": "user", "content": "who are you"},
+                                             {"role": "assistant", "content": "trained from scratch on a home computer"}]}) + "\n")
+        out = os.path.join(d, "out")
+        common = ["--model", base, "--data", data, "--out", out, "--batch_tokens", "128", "--grad_accum", "1", "--rank", "4", "--max_len", "64"]
+        buf = io.StringIO()
+        with contextlib.redirect_stdout(buf):
+            self.assertEqual(finetune_open.main(common + ["--max_steps", "2", "--save_every", "1"]), 0)
+        self.assertIn("dropped 1 lessons", buf.getvalue())
+        with contextlib.redirect_stdout(io.StringIO()) as patched:
+            self.assertEqual(finetune_open.main(common + ["--patch", "--max_steps", "1"]), 0)
+        self.assertIn("patch run", patched.getvalue())
+        self.assertEqual(torch.load(os.path.join(out, "state.pt"), weights_only=False)["step"], 1)      # the patch restarted the count
+        with self.assertRaises(SystemExit):
+            finetune_open.main(["--model", base, "--data", data, "--out", os.path.join(d, "none"), "--patch", "--max_steps", "1"])
+
+
+class EvaluateOpen(unittest.TestCase):
+    def test_a_sheet_runs_on_a_tiny_model_and_reports_each_category(self):
+        try:
+            import peft  # noqa: F401
+            import torch  # noqa: F401
+        except ImportError:
+            self.skipTest("peft/transformers not installed")
+        import contextlib
+        import io
+        import evaluate_open
+        d = tempfile.mkdtemp()
+        base = tiny_base(d)
+        sheet = os.path.join(d, "sheet.jsonl")
+        with open(sheet, "w", encoding="utf-8") as f:
+            f.write(json.dumps({"category": "a", "prompt": "hello how are you", "expect": ["zzzz-never"]}) + "\n")
+            f.write(json.dumps({"category": "b", "prompt": "the capital", "not": ["zzzz-never"]}) + "\n")
+        report = os.path.join(d, "r", "report.md")
+        buf = io.StringIO()
+        with contextlib.redirect_stdout(buf):
+            code = evaluate_open.main(["--model", base, "--prompts", sheet, "--tokens", "6", "--report", report])
+        self.assertEqual(code, 0)
+        text = buf.getvalue()
+        self.assertIn("a                0/1", text)          # the expected word never appears: FAIL
+        self.assertIn("TOTAL", text)
+        self.assertTrue(os.path.exists(report))
+
+    def test_the_identity_sheet_is_valid_and_has_no_stale_expectations(self):
+        rows = [json.loads(line) for line in open("eval/identity_open.jsonl", encoding="utf-8")]
+        self.assertGreaterEqual(len(rows), 12)
+        for r in rows:
+            self.assertTrue({"category", "prompt"} <= set(r))
+            self.assertFalse(any("scratch" in w and "no" not in w for w in r.get("expect", [])))
