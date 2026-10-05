@@ -32,9 +32,26 @@ and skills are being built, so no GPU time is wasted. It's the jump from "a mode
 v5 goes back to a bigger brain (3B), and it's the first version that needs the cloud.
 v6 (5B) and v6.5 (7B) keep growing toward medium size, mainly for the PC and online mode.
 
+## Flare 3.5 as built now (Qwen 2.5 1.5B base, Oct 2026)
+
+The columns below that are headed "from-scratch plan, stopped" describe the plan that was dropped. This is the version that replaces it.
+
+| | **Flare 3.5 (Qwen 2.5 1.5B base)** |
+|---|---|
+| Base | `Qwen/Qwen2.5-1.5B-Instruct`, Apache 2.0, credited in `NOTICE`; **not trained from scratch** |
+| Brain | 1.54B parameters (28 layers, 1536 wide, 2 KV heads); we train 73.9M LoRA parameters on top (4.6%) |
+| Memory (context length) | **32,768 tokens** (about 28 KB per token, so about 0.9 GB for 32K) |
+| What it learns here | The same lessons v3 learned (`data/v3/chat.jsonl`: 109,917 chats: lookups, "I don't know", corrections, instructions, small talk, stories), shown in ChatML |
+| Steps | **988** (one pass), 8 micro-batches of up to 8,192 tokens each, saved every 100 |
+| Where / how long / cost | One RTX 5090, **7.1 s/step, 18.6 GB**, about 2 hours, about **$1** (the pilot; the full run is in progress) |
+| Not carried over | Saving things to memory with tool calls (no tool tokens in the open format) |
+| Quality | Not measured yet. Roughly 65% on HellaSwag is the published figure for the base model (from memory); the real number comes from `benchmarks.py` after training |
+| Phone file | about 1 GB at Q4 (an estimate; the real size comes after conversion) |
+| Details | [OPEN_MODEL.md](OPEN_MODEL.md) |
+
 ## Size and design
 
-|  | **v1** ✅ | **v2** ✅ | **v3** 🛠️ | **v3.5** (planned) | **v4** (planned) | **v5** (planned) | **v6** (planned) | **v6.5** (planned) |
+|  | **v1** ✅ | **v2** ✅ | **v3** 🛠️ | **v3.5** (from-scratch plan, stopped) | **v4** (planned) | **v5** (planned) | **v6** (planned) | **v6.5** (planned) |
 |---|---|---|---|---|---|---|---|---|
 | Model name | – | – | Emvryx Flare 3 | Emvryx Flare 3.5 | Emvryx Equinox 4 | Emvryx Solstice 5 | Emvryx Apogee 6 | Emvryx Apogee 6.5 |
 | Parameters | 29.5M | 88M | 394M | **~1.12B** | ~1.12B base + LoRA skill packs (small add-on weights, a few MB each, switched by a router) | **~3B** | **~5B** | **~7B** |
@@ -50,7 +67,7 @@ the long-context tests pass at that length (docs/LONG_CONTEXT.md). "Memory (cont
 
 ## Training
 
-|  | **v1** | **v2** | **v3** | **v3.5** | **v4** | **v5** | **v6** | **v6.5** |
+|  | **v1** | **v2** | **v3** | **v3.5** (from-scratch plan, stopped) | **v4** | **v5** | **v6** | **v6.5** |
 |---|---|---|---|---|---|---|---|---|
 | **Data to prepare** | 467M tokens (TinyStories) | 2.8B tokens | **12B + 1.3B anneal** (done in 1h26m) | **40B + 4.1B anneal** (~5–8 hours) | **15–30B new tokens** (more of FineWeb-Edu's `sample-100BT`, code and math that v3.5 didn't read, with tool calls, thinking steps and code-with-tests mixed in) + a new anneal set; plus the skill datasets: a few thousand examples per skill, teacher-written reasoning and tool-use runs kept only when verified correct | **~60B tokens** | **~100B tokens** (minimum) | **~140B tokens** (minimum) |
 | Data mix | 100% children's stories | 80% web, 15% Wikipedia, 5% stories | 63% web, 20% Wikipedia, 10% Python, 5% math, 2% stories | 47.5% educational web (FineWeb-Edu `sample-100BT`), **17.5% everyday web (DCLM)**, 11% Wikipedia, 12.5% code in **9 languages**, 7.5% math, 4% textbook-style (Cosmopedia); no stories; final phase adds human-written Q&A, real code changes with their messages (CommitPackFT) and coding practice runs | Like v3.5 (new pages, nothing repeated), plus a few % skill-aware text; then skill packs: study, stories, IT help, fact checking, coding, tool use | Like v3.5, much bigger slice (plus more code and math) | Like v5 (web, Wikipedia, multi-language code, math), bigger slice | Same as v6, bigger slice |
@@ -73,7 +90,7 @@ with**, given what changed for v3, v3.5 and v4. **v4 and later are starting gues
 is confirmed or changed by its own pilot run (`train.py --pilot`). Why each choice was made is in
 [LESSONS.md](LESSONS.md).
 
-| Setting | **v1** | **v2** | **v3** | **v3.5** | **v4** (guess) | **v5** (guess) | **v6** (guess) | **v6.5** (guess) |
+| Setting | **v1** | **v2** | **v3** | **v3.5** (from-scratch plan, stopped) | **v4** (guess) | **v5** (guess) | **v6** (guess) | **v6.5** (guess) |
 |---|---|---|---|---|---|---|---|---|
 | Optimizer | adamw | adamw | adamw | **muon_cpu** at home, **muon** in the cloud | muon (continues v3.5) | muon, *if it works with multi-GPU FSDP* (untested) | same as v5 | same as v5 |
 | LR schedule | cosine | cosine | **wsd** (steady, then fade over the last 10%) | wsd | wsd: new steady phase from `pre_decay.pt`, then a new fade | wsd | wsd | wsd |
@@ -120,7 +137,7 @@ real GSM8K questions (a well-known math test) are kept for testing only, never f
 
 ## Results
 
-|  | **v1** | **v2** | **v3** | **v3.5** | **v4** | **v5** | **v6** | **v6.5** |
+|  | **v1** | **v2** | **v3** | **v3.5** (from-scratch plan, stopped) | **v4** | **v5** | **v6** | **v6.5** |
 |---|---|---|---|---|---|---|---|---|
 | Final val loss | **1.279** | **2.929** (best), 2.984 at the last step | **≈2.68** (step 45,000) | Measured when trained | Measured when trained | Measured when trained | Measured when trained | Measured when trained |
 | Phone file | 32 MB | **89 MB** | ~420 MB (Q8) or **~240 MB (Q4)** | ~1.2 GB (Q8) or **~700 MB (Q4)** | v3.5's file + a few MB per skill pack | ~3.2 GB (Q8) or **~1.8 GB (Q4)** | ~3 GB (Q4): high-end phones only | ~4–4.5 GB (Q4): mainly PC and server |
@@ -154,7 +171,7 @@ It adds the mistakes found on the phone, so v2 is expected to score low on the n
 
 ## What each version achieves
 
-| Ability | **v1** | **v2** (expected) | **v3** (goal) | **v3.5** (goal) | **v4** (goal) | **v5** (goal) | **v6** (goal) | **v6.5** (goal) |
+| Ability | **v1** | **v2** (expected) | **v3** (goal) | **v3.5** (from-scratch plan, stopped) (goal) | **v4** (goal) | **v5** (goal) | **v6** (goal) | **v6.5** (goal) |
 |---|---|---|---|---|---|---|---|---|
 | Children's stories | ✅ Good | ✅ Good | ✅ Good | ✅ Good | ✅ Story-writer skill pack | ✅ Richer, longer stories | ✅ Long, well-written stories | ✅ Long, well-written stories |
 | Grammar and fluency | Simple | Good | Better | ✅ Natural | ✅ Natural | ✅ Natural | ✅ Natural | ✅ Natural |
