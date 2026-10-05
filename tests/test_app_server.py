@@ -70,7 +70,7 @@ class Base(unittest.TestCase):
         self.tmp = tempfile.TemporaryDirectory()
         self.manifest = models.load_manifest()
         for m in self.manifest["models"]:                        # make Equinox and Solstice usable for the tests
-            if m["id"] in ("equinox-4", "solstice-5"):
+            if m["id"] in ("equinox-2", "solstice-2"):
                 m["status"] = "stable"
         self.state = A.AppState(self.tmp.name if self.data_dir else None, manifest=self.manifest, ram_gb=16,
                                 backend_factory=self.factory or fake_factory(), pace=False)
@@ -224,13 +224,13 @@ class Chatting(Base):
 
     def test_model_rules(self):
         cid = self.new_chat(self.sam)
-        self.assertEqual(self.ask(self.sam, cid, model="solstice-5")[0], 403)          # not in the Free plan
-        self.assertEqual(self.ask(self.sam, cid, model="apogee-6")[0], 403)            # not built yet
+        self.assertEqual(self.ask(self.sam, cid, model="solstice-2")[0], 403)          # not in the Free plan
+        self.assertEqual(self.ask(self.sam, cid, model="apogee-2")[0], 403)            # not built yet
         self.assertEqual(self.ask(self.sam, cid, model="nonsense")[0], 400)
         self.assertEqual(self.ask(self.sam, cid, effort="deep")[2][-1][0], "done")     # Flare has Deep
         status, _, body = self.ask(self.sam, cid, model="ember-2", effort="deep")      # Ember does not
         self.assertEqual((status, body["code"]), (409, "effort_not_available"))
-        self.assertEqual(self.ask(self.sam, cid, model="equinox-4", effort="deep")[2][-1][0], "done")
+        self.assertEqual(self.ask(self.sam, cid, model="equinox-2", effort="deep")[2][-1][0], "done")
 
     def test_effort_costs_differ(self):
         used = {}
@@ -249,14 +249,14 @@ class Chatting(Base):
         hard = "Explain step by step how to solve 3x + 7 = 22"
         self.assertEqual(self.ask(self.owner, self.new_chat(self.owner), hard, effort="auto")[2][0][1]["effort"], "deep")        # Flare has Deep
         self.assertEqual(self.ask(self.owner, self.new_chat(self.owner), hard, effort="auto", model="ember-2")[2][0][1]["effort"], "balanced")   # Ember does not
-        deep = self.ask(self.owner, self.new_chat(self.owner), hard, effort="auto", model="equinox-4")[2]
+        deep = self.ask(self.owner, self.new_chat(self.owner), hard, effort="auto", model="equinox-2")[2]
         self.assertEqual(deep[0][1]["effort"], "deep")
         self.assertFalse(self.ask(self.owner, self.new_chat(self.owner), "hi", effort="quick")[2][0][1]["auto"])
 
     def test_the_thinking_pause_fits_the_message(self):
         hello = self.ask(self.owner, self.new_chat(self.owner), "hi", effort="auto")[2][0][1]["min_first_s"]
         hard = self.ask(self.owner, self.new_chat(self.owner), "Explain step by step how to solve 3x + 7 = 22",
-                        effort="auto", model="equinox-4")[2][0][1]["min_first_s"]
+                        effort="auto", model="equinox-2")[2][0][1]["min_first_s"]
         self.assertLess(hello, hard)
         self.assertEqual(hello, 0.5)
         self.assertEqual(self.ask(self.owner, self.new_chat(self.owner), "tell me about cats", effort="balanced")[2][0][1]["min_first_s"], 1.2)

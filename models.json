@@ -4,6 +4,7 @@
       "id": "ember-2",
       "name": "Ember",
       "version": 2,
+      "generation": 1,
       "from_version": "v2",
       "tagline": "The small first assistant: quick, light, runs anywhere",
       "tier": "Lite",
@@ -49,6 +50,7 @@
       "id": "flare-3",
       "name": "Flare",
       "version": 3,
+      "generation": 1,
       "from_version": "v3",
       "tagline": "Fast and light, for quick answers",
       "tier": "Lite",
@@ -90,18 +92,20 @@
       ]
     },
     {
-      "id": "flare-3.5",
+      "id": "flare-2",
       "name": "Flare",
-      "version": 3.5,
-      "from_version": "v3.5",
+      "version": 2,
+      "generation": 2,
+      "open": true,
+      "base": "Qwen2.5-1.5B-Instruct",
       "tagline": "Fast and light, for quick answers",
       "tier": "Lite",
       "where": "device",
-      "file": "flare-3.5.q4_0.gguf",
-      "size_mb": 700,
+      "file": "flare-2.q4_k_m.gguf",
+      "size_mb": 1000,
       "sha256": "",
       "min_ram_gb": 4,
-      "context": 2048,
+      "context": 32768,
       "status": "planned",
       "supports_effort": false,
       "skills": [
@@ -111,13 +115,13 @@
       "pinned": false,
       "cost_weight": 1,
       "context_tested": 2048,
-      "kv_kb_per_token": 24,
-      "weights_mb": 700,
-      "tokenizer": "data/v3.5/tokenizer.json",
+      "kv_kb_per_token": 28,
+      "weights_mb": 1000,
+      "tokenizer": "checkpoints/dev/open/flare-2/tokenizer/tokenizer.json",
       "local_gguf": [
-        "export/dev/v3.5/my-ai-q8_0.gguf",
-        "export/dev/v3.5/my-ai-q4_0.gguf",
-        "export/dev/v3.5/my-ai-f16.gguf"
+        "export/open/flare-2/my-ai-q4_k_m.gguf",
+        "export/open/flare-2/my-ai-q8_0.gguf",
+        "export/open/flare-2/my-ai-f16.gguf"
       ],
       "sampling": {
         "temperature": 0.65,
@@ -134,18 +138,20 @@
       ]
     },
     {
-      "id": "equinox-4",
+      "id": "equinox-2",
       "name": "Equinox",
-      "version": 4,
-      "from_version": "v4",
+      "version": 2,
+      "generation": 2,
+      "open": true,
+      "base": "Qwen3-4B",
       "tagline": "For everyday work and homework, with skills and tools",
       "tier": "Standard",
       "where": "device",
-      "file": "equinox-4.q4_0.gguf",
-      "size_mb": 700,
+      "file": "equinox-2.q4_k_m.gguf",
+      "size_mb": 2500,
       "sha256": "",
-      "min_ram_gb": 4,
-      "context": 4096,
+      "min_ram_gb": 6,
+      "context": 32768,
       "status": "planned",
       "supports_effort": true,
       "skills": [
@@ -156,8 +162,8 @@
       "pinned": false,
       "cost_weight": 2,
       "context_tested": 2048,
-      "kv_kb_per_token": 24,
-      "weights_mb": 700,
+      "kv_kb_per_token": 144,
+      "weights_mb": 2500,
       "sampling": {
         "temperature": 0.65,
         "top_k": 40,
@@ -170,21 +176,29 @@
       "temperature_bounds": [
         0.2,
         0.9
+      ],
+      "tokenizer": "checkpoints/dev/open/equinox-2/tokenizer/tokenizer.json",
+      "local_gguf": [
+        "export/open/equinox-2/my-ai-q4_k_m.gguf",
+        "export/open/equinox-2/my-ai-q8_0.gguf",
+        "export/open/equinox-2/my-ai-f16.gguf"
       ]
     },
     {
-      "id": "solstice-5",
+      "id": "solstice-2",
       "name": "Solstice",
-      "version": 5,
-      "from_version": "v5",
+      "version": 2,
+      "generation": 2,
+      "open": true,
+      "base": "Qwen3-8B",
       "tagline": "For harder questions and long writing",
       "tier": "Pro",
       "where": "online",
-      "file": "solstice-5.q4_0.gguf",
-      "size_mb": 1800,
+      "file": "solstice-2.q4_k_m.gguf",
+      "size_mb": 5000,
       "sha256": "",
-      "min_ram_gb": 6,
-      "context": 8192,
+      "min_ram_gb": 10,
+      "context": 32768,
       "status": "planned",
       "supports_effort": true,
       "skills": [
@@ -195,8 +209,8 @@
       "pinned": false,
       "cost_weight": 5,
       "context_tested": 2048,
-      "kv_kb_per_token": null,
-      "weights_mb": 1800,
+      "kv_kb_per_token": 144,
+      "weights_mb": 5000,
       "sampling": {
         "temperature": 0.7,
         "top_k": 40,
@@ -209,21 +223,29 @@
       "temperature_bounds": [
         0.2,
         1.0
+      ],
+      "tokenizer": "checkpoints/dev/open/solstice-2/tokenizer/tokenizer.json",
+      "local_gguf": [
+        "export/open/solstice-2/my-ai-q4_k_m.gguf",
+        "export/open/solstice-2/my-ai-q8_0.gguf",
+        "export/open/solstice-2/my-ai-f16.gguf"
       ]
     },
     {
-      "id": "apogee-6",
+      "id": "apogee-2",
       "name": "Apogee",
-      "version": 6,
-      "from_version": "v6",
+      "version": 2,
+      "generation": 2,
+      "open": true,
+      "base": "Qwen3-14B",
       "tagline": "For your toughest challenges",
       "tier": "Max",
       "where": "online",
-      "file": "apogee-6.q4_0.gguf",
-      "size_mb": 3000,
+      "file": "apogee-2.q4_k_m.gguf",
+      "size_mb": 9000,
       "sha256": "",
-      "min_ram_gb": 8,
-      "context": 8192,
+      "min_ram_gb": 16,
+      "context": 32768,
       "status": "planned",
       "supports_effort": true,
       "skills": [
@@ -234,8 +256,8 @@
       "pinned": false,
       "cost_weight": 10,
       "context_tested": 2048,
-      "kv_kb_per_token": null,
-      "weights_mb": 3000,
+      "kv_kb_per_token": 160,
+      "weights_mb": 9000,
       "sampling": {
         "temperature": 0.7,
         "top_k": 40,
@@ -248,6 +270,12 @@
       "temperature_bounds": [
         0.2,
         1.0
+      ],
+      "tokenizer": "checkpoints/dev/open/apogee-2/tokenizer/tokenizer.json",
+      "local_gguf": [
+        "export/open/apogee-2/my-ai-q4_k_m.gguf",
+        "export/open/apogee-2/my-ai-q8_0.gguf",
+        "export/open/apogee-2/my-ai-f16.gguf"
       ]
     }
   ],

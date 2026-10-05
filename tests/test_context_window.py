@@ -9,7 +9,7 @@ MANIFEST = models.load_manifest()
 LIM = U.load_limits()
 
 
-def model(mid="flare-3.5", **kw):
+def model(mid="flare-2", **kw):
     m = dict(next(x for x in MANIFEST["models"] if x["id"] == mid))
     m.update(kw)
     return m
@@ -63,7 +63,7 @@ class Pick(unittest.TestCase):
         self.assertLessEqual(r["window"], 32768)
 
     def test_remote_ignores_phone_memory(self):
-        m = model("solstice-5", context_tested=32768)
+        m = model("solstice-2", context_tested=32768)
         r = C.pick(m, C.Device(4), "remote", plan_windows=LIM["tiers"]["mega"]["windows"])
         self.assertEqual(r["window"], 32768)
         self.assertEqual(r["limited_by"], "model")

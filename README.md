@@ -29,11 +29,17 @@ live in `config.py`.
 ## Model family names (working names)
 
 The app and the whole family are called **Emvryx** (Emvryx.AI). Each model is Emvryx + one of five names + its own version
-number: **Emvryx Flare** (fast and light), **Emvryx Equinox** (balanced everyday), **Emvryx Solstice** (stronger) and
-**Emvryx Apogee** (most capable). So v3 = Emvryx Flare 3 (~400M), v3.5 = Emvryx Flare 3.5 (~1.1B), v4 = Emvryx Equinox 4,
-v5 = Emvryx Solstice 5 (~3B), v6 / v6.5 = Emvryx Apogee 6 / 6.5 (5-7B), and later Emvryx Apogee 7, 8 (13B+); each
-name has its own number that goes up only when that model is updated (older ones stay available). They are placeholders: no
-trademark check has been done yet. See `docs/ROADMAP.md` and `docs/APP.md`.
+number: **Emvryx Ember** (small and quick), **Emvryx Flare** (fast and light), **Emvryx Equinox** (balanced everyday),
+**Emvryx Solstice** (stronger) and **Emvryx Apogee** (most capable). There are two generations:
+
+| Generation | Models | How they are made |
+|---|---|---|
+| **1: trained from scratch here** (the original line) | Ember 2 (88M), Flare 3 (394M) | Our own tokenizer, transformer and training run |
+| **2: the 2.x series, built on open bases** | **Flare 2** (Qwen 2.5 1.5B) and later **Flare 2.5**, **Equinox 2** (about 4B), **Solstice 2** (about 8B), **Apogee 2** (about 14B) | Fine-tuned here on Emvryx's own lessons, with the base credited in `NOTICE` |
+
+A newer generation takes the main spot in the app's picker even when its number is lower (Flare 2 is newer than Flare 3). Each name has
+its own number that goes up only when that model is updated ("+" refreshes are x.5: Flare 2 to Flare 2.5). The from-scratch v3.5 run was
+stopped (see `docs/V3_5.md`). They are placeholders: no trademark check has been done yet. See `docs/ROADMAP.md`, `docs/OPEN_MODEL.md` and `docs/APP.md`.
 
 ## Pretrained weights policy (updated Oct 2026)
 
@@ -41,12 +47,12 @@ Two kinds of models, each described honestly:
 
 | Models | How they are made |
 |---|---|
-| **v1, v2, v3, v3.5** (Ember 2, Flare 3, Flare 3.5) | Trained **from scratch** here: random numbers at the start, learning only from the text we give them. No one else's weights are used |
-| **Later Emvryx models built on an open base** (the first: Flare on Qwen 2.5 1.5B, 32K context; see `docs/OPEN_MODEL.md`) | Start from an open model's weights and are fine-tuned here on our lessons. They carry the Emvryx name; the base model and its licence are credited in `NOTICE` |
+| **v1, v2, v3** (Ember 2, Flare 3) | Trained **from scratch** here: random numbers at the start, learning only from the text we give them. No one else's weights are used |
+| **The 2.x series, built on an open base** (the first: Flare 2 on Qwen 2.5 1.5B, 32K context; see `docs/OPEN_MODEL.md`) | Start from an open model's weights and are fine-tuned here on our lessons. They carry the Emvryx name; the base model and its licence are credited in `NOTICE` |
 
 Rules:
 - Only open models whose licence allows this. Keep each licence's notice (`NOTICE`) and check it before sharing a model.
-- Never describe a model as "trained from scratch" unless it was. The from-scratch line (v1 to v3.5) stays what it is.
+- Never describe a model as "trained from scratch" unless it was. The from-scratch line (v1 to v3) stays what it is.
 - Never use the ChatGPT, Claude or Gemini APIs to write training data; their terms restrict using outputs to build competing models.
 - Other open models may also be used as **helpers beside a model** (a teacher that writes practice examples and grades answers, an optional search model, Whisper and Piper for voice). Only their text or audio output is used.
 - Some training data (for example the smol-smoltalk conversations) was written by other AIs. It shapes the chat *style*.
