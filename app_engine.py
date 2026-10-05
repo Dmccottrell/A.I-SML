@@ -255,7 +255,7 @@ def run_turn(tok, store, chat_id, backend, model, window, max_new, user_text=Non
     history = store.history(chat_id)
     if style_hint and history and history[-1]["role"] == "user":      # asked for only this once: the saved chat keeps the plain question
         history[-1] = dict(history[-1], content=history[-1]["content"].rstrip() + "\n\n" + style_hint)
-    if user_text is not None and notes:
+    if notes and history and history[-1]["role"] == "user":       # also on Regenerate and on the second try with web notes
         history[-1]["notes"] = notes
     limit = window - max_new
     report = chat.context_report(tok, history, window, reserve=max_new, keep_notes=keep_notes)

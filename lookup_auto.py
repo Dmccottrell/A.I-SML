@@ -43,6 +43,15 @@ def wants_lookup(text):
     return bool(t.endswith("?") or QUESTION_START.match(t) or FACT_SHAPES.search(t))
 
 
+GAVE_UP = re.compile(r"\b(i (do not|don'?t) know|i'?m not sure|i am not sure|(the )?notes (do not|don'?t) (say|mention|have|cover|include)|"
+                     r"(no|not enough) (information|notes)|can(no|')t find|could(n'?t| not) find|i have no)\b", re.I)
+
+
+def gave_up(reply):
+    """True when the model's answer says it doesn't know (v3 is trained to say so when the notes don't cover the question)."""
+    return bool(GAVE_UP.search((reply or "")[:400]))
+
+
 def time_sensitive(text):
     return bool(TIME_WORDS.search(text or ""))
 
@@ -62,15 +71,22 @@ def notes_weak(notes, question):
     return best < 0.5
 
 
-def gather(question, wiki=None, web=None, mode="auto", private=False, max_notes=3):
-    """(notes, info). `wiki` has .search(question, k); `web(question, k)` returns [{"title", "text", "url"}]. Both optional."""
-    info = {"asked": False, "wiki": 0, "web": 0, "web_tried": False, "sources": []}
+def gather(question, wiki=None, web=None, mode="auto", private=False, max_notes=3, saved=None, now=0.0, force_web=False):
+    """(notes, info). `wiki` has .search(question, k); `web(question, k)` returns [{"title", "text", "url"}]. Both optional.
+    `saved` (saved_notes.SavedNotes) holds notes the person approved before: they are searched first, offline.
+    `force_web` searches the web even if the rules wouldn't (the second try after the model said it doesn't know)."""
+    info = {"asked": False, "saved": 0, "wiki": 0, "web": 0, "web_tried": False, "sources": []}
     mode = mode if mode in MODES else "auto"
     if not wants_lookup(question):
         return [], info
     info["asked"] = True
     recent = time_sensitive(question)
-    wiki_notes, web_notes = [], []
+    wiki_notes, web_notes, saved_notes = [], [], []
+    if saved is not None and not private:
+        try:
+            saved_notes = saved.search(question, max_notes, now)
+        except Exception as e:
+            print(f"(saved notes failed: {e})")
     if wiki is not None:
         try:
             wiki_notes = [{"title": n["title"], "text": n["text"], "kind": "wikipedia", "url": None}
@@ -78,7 +94,7 @@ def gather(question, wiki=None, web=None, mode="auto", private=False, max_notes=
         except Exception as e:                                  # a missing or damaged index must not stop the chat
             print(f"(Wikipedia lookup failed: {e})")
     use_web = web is not None and not private and mode != "off" and (
-        mode == "always" or recent or notes_weak(wiki_notes, question))
+        mode == "always" or force_web or recent or notes_weak(saved_notes + wiki_notes, question))
     if use_web:
         info["web_tried"] = True
         try:
@@ -88,13 +104,16 @@ def gather(question, wiki=None, web=None, mode="auto", private=False, max_notes=
             print(f"(web search failed: {e})")
     first, second = (web_notes, wiki_notes) if recent else (wiki_notes, web_notes)
     merged = []
-    for group in (first, second):                               # the notes the model reads: at most max_notes, best group first
+    for group in ((saved_notes, first, second) if not recent else (first, saved_notes, second)):                               # the notes the model reads: at most max_notes, best group first
         for n in group:
             if len(merged) < max_notes:
                 merged.append(n)
+    info["saved"] = sum(1 for n in merged if n["kind"] == "saved")
     info["wiki"] = sum(1 for n in merged if n["kind"] == "wikipedia")
     info["web"] = sum(1 for n in merged if n["kind"] == "web")
     info["sources"] = [{"title": n["title"], "kind": n["kind"], "url": n["url"]} for n in merged]
+    info["recent"] = recent
+    info["used"] = merged                      # the full notes (with kind, url, id): kept server-side so a thumbs up can save them
     return [{"title": n["title"], "text": n["text"]} for n in merged], info
 
 

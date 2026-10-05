@@ -336,6 +336,8 @@ function bubble(m, last) {
   const model = allModels().find((c) => c.id === m.model_id);
   const meta = el('div', {class: 'meta'}, logo(14, false, model ? model.name : 'brand'), (model ? model.name + (model.older ? ' ' + model.version : '') : 'Emvryx') + (m.status === 'partial' ? ' · stopped' : ''));
   const acts = el('div', {class: 'acts'}, el('button', {class: 'chip', onclick: (e) => { navigator.clipboard && navigator.clipboard.writeText(m.content); e.target.textContent = 'Copied'; setTimeout(() => e.target.textContent = 'Copy', 1500); }}, 'Copy'));
+  if (S.chatId != null && S.chatId >= 0 && m.status === 'done') acts.append(el('button', {class: 'chip', title: 'Right answer: keep the notes it used, so it can answer this again offline', onclick: async (e) => {
+    const b = e.currentTarget; b.disabled = true; try { const r = await post('/api/chats/' + S.chatId + '/messages/' + m.id + '/like'); const j = await r.json(); b.textContent = j.saved ? 'Saved' : 'Thanks'; } catch (x) { b.disabled = false; } }}, '\ud83d\udc4d Right'));
   if (last && !S.busy) acts.append(el('button', {class: 'chip', 'aria-haspopup': 'true', onclick: (e) => regenMenu(e.currentTarget)}, 'Regenerate \u25be'));
   return el('div', {class: 'msg ai', 'data-id': m.id}, meta, el('div', {class: 'bubble'}, m.content), acts);
 }
@@ -464,6 +466,21 @@ async function openApps() {
   dialog(kids, 'Close');
 }
 
+// ---------------------------------------------------------------- saved notes
+async function openSaved() {
+  const r = await api('/api/saved-notes'); const j = await r.json();
+  const kids = [el('h2', {}, 'Saved notes')];
+  if (!j.notes.length) kids.push(el('div', {style: 'color:var(--muted)'}, 'Nothing saved yet. Tap \ud83d\udc4d Right under an answer to keep the notes it used.'));
+  for (const n of j.notes) {
+    const row = el('div', {class: 'opt', style: 'cursor:default'}, el('span', {class: 'grow'}, el('b', {}, n.title), el('small', {}, 'For: ' + n.question),
+      el('small', {style: 'font-size:13px'}, (n.origin === 'web' ? 'From the web' : 'From Wikipedia') + ' \u00b7 saved ' + new Date(n.saved_at * 1000).toLocaleDateString() + ' \u00b7 kept until ' + new Date(n.expires_at * 1000).toLocaleDateString())),
+      el('button', {class: 'chip', onclick: async () => { await post('/api/saved-notes/delete', {id: n.id}); row.remove(); }}, 'Delete'));
+    kids.push(row);
+  }
+  if (j.notes.length) kids.push(el('button', {class: 'btn danger', onclick: async () => { if (confirm('Delete every saved note?')) { await post('/api/saved-notes/clear'); document.querySelectorAll('.modal').forEach((m) => m.remove()); } }}, 'Delete all saved notes'));
+  dialog(kids, 'Close');
+}
+
 // ---------------------------------------------------------------- settings
 async function openSettings() {
   const st = S.state, s = st.settings, w = st.window;
@@ -474,6 +491,8 @@ async function openSettings() {
     el('div', {style: 'color:var(--muted);font-size:14px'}, 'Right now: ' + fmt(w.window) + ' tokens, ' + w.reason + '. Long chats use more memory and are slower to read.'),
     el('b', {}, 'Looking things up'), seg([['auto', 'Auto'], ['off', 'Wikipedia only'], ['always', 'Always search the web']], s.web_search || 'auto', async (v) => { await post('/api/settings', {web_search: v}); await load(); }),
     el('div', {style: 'color:var(--muted);font-size:14px'}, 'Questions are first looked up in Wikipedia on the server. Auto also searches the web, when it is online, for recent things (news, scores, prices) or when Wikipedia does not have the answer; your question is sent to a search service then, and each answer says so. Private chats never search the web.'),
+    el('button', {class: 'btn ghost', onclick: openSaved}, 'Saved notes'),
+    el('div', {style: 'color:var(--muted);font-size:14px'}, 'Notes you gave a thumbs up are kept here so the same question works offline. You can delete any of them.'),
     el('b', {}, 'Your data'),
     el('div', {style: 'color:var(--muted);font-size:14px'}, 'Chats are saved on the server you opened this page from. Private chats are never saved. Nothing leaves it unless you attach an online model.'),
     el('button', {class: 'btn danger', onclick: async () => { if (confirm('Delete every chat? This cannot be undone.')) { await post('/api/delete-everything'); S.chatId = null; S.messages = []; await load(); } }}, 'Delete all my chats')];
@@ -519,6 +538,11 @@ async function send(regen, mode) {
         S.autoNote = data.auto ? data : null; renderComposer();
       } else if (ev === 'notes') {
         looked = data;
+        if (data.retry && aiWrap) {                      // the model said it didn't know, so the web was searched: it answers again
+          got = ''; aiBubble.replaceChildren(el('span', {class: 'cursor'}, '▍'));
+          const old = aiWrap.querySelector('.note'); if (old) old.remove();
+          const line = lookupLine(data); if (line) aiWrap.insertBefore(line, aiBubble);
+        }
       } else if (ev === 'loading') {
         const w = think.querySelector('.word'); clearInterval(S.thinkTimer); S.thinkTimer = null; if (w) w.textContent = 'Loading ' + data.model + ' (first message only)';
       } else if (ev === 'piece') {
@@ -549,11 +573,12 @@ async function send(regen, mode) {
 // "Read 2 notes from Wikipedia" / "Searched the web: 1 source": what the model was given before it answered
 function lookupLine(info) {
   if (!info || !info.asked) return null;
-  const n = info.wiki + info.web;
+  const n = (info.saved || 0) + info.wiki + info.web;
   if (!n) return info.web_tried ? el('div', {class: 'note', style: 'align-self:flex-start'}, 'Searched, but found nothing useful') : null;
   const parts = [];
-  if (info.wiki) parts.push('Read ' + info.wiki + (info.wiki === 1 ? ' note' : ' notes') + ' from Wikipedia');
-  if (info.web) parts.push((info.wiki ? 'and searched' : 'Searched') + ' the web: ' + info.web + (info.web === 1 ? ' source' : ' sources'));
+  if (info.saved) parts.push('Read ' + info.saved + (info.saved === 1 ? ' saved note' : ' saved notes') + (info.wiki ? ' and ' + info.wiki + ' from Wikipedia' : ''));
+  else if (info.wiki) parts.push('Read ' + info.wiki + (info.wiki === 1 ? ' note' : ' notes') + ' from Wikipedia');
+  if (info.web) parts.push(((info.wiki || info.saved) ? 'and searched' : 'Searched') + ' the web: ' + info.web + (info.web === 1 ? ' source' : ' sources'));
   return el('div', {class: 'note', style: 'align-self:flex-start', title: info.sources.map((x) => x.title + (x.url ? ' (' + x.url + ')' : '')).join('\n')}, parts.join(' '));
 }
 function errorCard(e) {

@@ -50,6 +50,7 @@ import chat
 import chat_polish
 import connected_apps
 import lookup_auto
+import saved_notes
 import context_window as CW
 import effort_router
 import regen_modes
@@ -211,6 +212,8 @@ class AppState:
         self.ram_gb = ram_gb or total_memory_gb()
         self.clock, self.pace = clock, pace
         self.verbose = False                                   # print timings (set by the command line)
+        self.saved = {}                                        # person -> saved_notes.SavedNotes (approved notes, usable offline)
+        self.lookups = {}                                      # (person, chat, message id) -> the notes that answer used, for the thumbs up
         self.wiki = None                                       # the local Wikipedia index (wiki_index.WikiIndex), if there is one
         self.web_fn = None                                     # web(question, k) -> notes; None = this server never searches the web
         self._demo_tok = None
@@ -298,6 +301,22 @@ class AppState:
                 path = os.path.join(self.data_dir, f"chats-{user}.db") if self.data_dir else ":memory:"
                 self.stores[user] = E.ChatStore(path)
             return self.stores[user]
+
+    def saved_for(self, user):
+        with self.lock:
+            if user not in self.saved:
+                path = os.path.join(self.data_dir, f"saved-{user}.db") if self.data_dir else ":memory:"
+                self.saved[user] = saved_notes.SavedNotes(path)
+            return self.saved[user]
+
+    def remember_lookup(self, user, chat_id, message_id, question, found):
+        """Keep what an answer was written from (the last 200), so a thumbs up can save it. Private chats keep nothing."""
+        if chat_id < 0 or not found["used"]:
+            return
+        with self.lock:
+            self.lookups[(user, chat_id, message_id)] = {"question": question, "notes": found["used"], "recent": found.get("recent", False)}
+            while len(self.lookups) > 200:
+                self.lookups.pop(next(iter(self.lookups)))
 
     def get_settings(self, user):
         s = {"window_mode": "everyday", "show_tokens": False, "web_search": "auto"}
@@ -485,12 +504,14 @@ def start_turn(state, who, chat_id, text, model_id, effort, regenerate=False, re
         try:
             if state.runner and not state.runner.ready(model["id"], window):
                 q.put(("loading", model["name"]))
-            notes = None
-            if text and (state.wiki is not None or state.web_fn is not None):       # Auto lookup (lookup_auto.py)
-                notes, found = lookup_auto.gather(text, state.wiki, state.web_fn, state.get_settings(who["user"])["web_search"],
-                                                  private=chat_id < 0, max_notes=5 if window >= 6000 else 3)
+            notes, found = None, None
+            if text:                                                               # Auto lookup (lookup_auto.py)
+                web_mode = state.get_settings(who["user"])["web_search"]
+                notes, found = lookup_auto.gather(text, state.wiki, state.web_fn, web_mode, private=chat_id < 0,
+                                                  max_notes=5 if window >= 6000 else 3,
+                                                  saved=state.saved_for(who["user"]), now=state.clock())
                 if found["asked"]:
-                    q.put(("notes", found))
+                    q.put(("notes", {k: v for k, v in found.items() if k != "used"}))
             t_load = time.monotonic()
             backend = state.backend_for(model, text or "", window)     # may load the model the first time (can take a while)
             timing["load"] = time.monotonic() - t_load
@@ -502,6 +523,22 @@ def start_turn(state, who, chat_id, text, model_id, effort, regenerate=False, re
             r = E.run_turn(tok, store, chat_id, backend, counted_model, window, max_new, user_text=text, stop=stop, notes=notes or None,
                            limiter=state.limiter, user=who["user"], effort=effort, clock=state.clock, pacer=pacer,
                            style_hint=regen_modes.get(mode)["hint"] if regenerate else "")
+            if found and found["asked"] and not regenerate and not found["web_tried"] and state.web_fn is not None and \
+                    state.get_settings(who["user"])["web_search"] != "off" and chat_id >= 0 and lookup_auto.gave_up(r["text"]):
+                # The model said it doesn't know and the web hasn't been tried: search it and answer again (the second chance)
+                notes2, found2 = lookup_auto.gather(text, state.wiki, state.web_fn, "always", private=False,
+                                                    max_notes=5 if window >= 6000 else 3, saved=state.saved_for(who["user"]),
+                                                    now=state.clock(), force_web=True)
+                if found2["web"]:
+                    q.put(("notes", {k: v for k, v in found2.items() if k != "used"} | {"retry": True}))
+                    msgs = [m for m in store.messages(chat_id) if m["status"] != "compacted"]
+                    if msgs and msgs[-1]["role"] == "assistant":
+                        store.remove_message(chat_id, msgs[-1]["id"])
+                    r = E.run_turn(tok, store, chat_id, backend, counted_model, window, max_new, user_text=None, stop=stop, notes=notes2,
+                                   limiter=state.limiter, user=who["user"], effort=effort, clock=state.clock, pacer=pacer)
+                    found = found2
+            if found and found["asked"] and text:
+                state.remember_lookup(who["user"], chat_id, r["message_id"], text, found)
             if text and store.title(chat_id) == "New chat":
                 store.set_title(chat_id, " ".join(text.split())[:48] or "New chat")
             q.put(("done", r))
@@ -625,6 +662,8 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 return self._send(200, self.state.get_settings(who["user"]))
             if path == "/api/apps":
                 return self._send(200, connected_apps.catalog())
+            if path == "/api/saved-notes":
+                return self._send(200, {"notes": self.state.saved_for(who["user"]).list(self.state.clock())})
             if path == "/api/admin/users" and who["owner"]:
                 return self._send(200, {"users": [{"user": u["user"], "tier": self.state.usage.get_user(u["user"])["tier"]}
                                                   for u in self.state.users.values()], "paused": bool(self.state.cfg.get("paused"))})
@@ -671,6 +710,23 @@ class Handler(http.server.BaseHTTPRequestHandler):
                                         "action": "Connected apps are planned: nothing is connected, and nothing is shared."})
             if path == "/api/delete-everything":
                 self.state.store(who["user"]).delete_everything()
+                self.state.saved_for(who["user"]).clear()
+                return self._send(200, {"ok": True})
+            m = re.fullmatch(r"/api/chats/(-?\d+)/messages/(\d+)/like", path)
+            if m:
+                cid, mid = int(m.group(1)), int(m.group(2))
+                if cid < 0:
+                    return self._send(400, {"code": "private", "message": "Private chats save nothing."})
+                used = self.state.lookups.get((who["user"], cid, mid))
+                if not used:
+                    return self._send(200, {"saved": 0})
+                n = self.state.saved_for(who["user"]).save(used["question"], used["notes"], self.state.clock(), used["recent"])
+                return self._send(200, {"saved": n, "notes": len(used["notes"])})
+            if path == "/api/saved-notes/delete":
+                self.state.saved_for(who["user"]).delete(int(body.get("id", 0)))
+                return self._send(200, {"ok": True})
+            if path == "/api/saved-notes/clear":
+                self.state.saved_for(who["user"]).clear()
                 return self._send(200, {"ok": True})
             if path.startswith("/api/admin/"):
                 if not who["owner"]:
