@@ -93,6 +93,23 @@ def weighted_loss(logits, y, w, torch):
     return (ce * w).sum() / w.sum().clamp(min=1e-6)
 
 
+def chunked_loss(hidden, lm_head, y, w, torch, chunk=2048):
+    """Same number as weighted_loss, but the 152,000-word output layer only runs on the positions that are learned (weight > 0),
+    a chunk at a time, and is recomputed in the backward pass instead of stored. This is what lets an 8B or 14B model fit on 32 GB."""
+    from torch.utils.checkpoint import checkpoint
+    keep = w > 0
+    h, t, wt = hidden[keep], y[keep], w[keep]
+    total = wt.sum().clamp(min=1e-6)
+
+    def part(h_, t_, w_):
+        ce = torch.nn.functional.cross_entropy(lm_head(h_).float(), t_, reduction="none")
+        return (ce * w_).sum()
+    loss = hidden.new_zeros((), dtype=torch.float32)
+    for i in range(0, h.size(0), chunk):
+        loss = loss + checkpoint(part, h[i:i + chunk], t[i:i + chunk], wt[i:i + chunk], use_reentrant=False)
+    return loss / total
+
+
 def lr_at(step, total, base, warmup):
     if step < warmup:
         return base * (step + 1) / warmup
@@ -114,16 +131,18 @@ def merge_and_export(base_model, adapter_dir, export_dir, torch):
 
 def main(argv=None):
     p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    p.add_argument("--model", default=DEFAULT_MODEL, help="Hugging Face id or a local folder")
+    p.add_argument("--model", default=DEFAULT_MODEL,
+                   help="a preset (flare-3.5, equinox-4, solstice-5, apogee-6; see open_models.py), a Hugging Face id or a local folder")
+    p.add_argument("--quant4", action="store_true", help="load the base in 4 bits (QLoRA: a 14B model fits 32 GB). Needs bitsandbytes")
     p.add_argument("--data", default="data/v3/chat.jsonl")
     p.add_argument("--out", default=None, help="default: checkpoints/dev/open/<model name>")
     p.add_argument("--export", default=None, help="default: export/open/<model name>/my-ai")
     p.add_argument("--max_len", type=int, default=4096, help="longest training conversation, in tokens")
-    p.add_argument("--batch_tokens", type=int, default=8192, help="padded tokens per micro-batch (lower it if memory runs out)")
-    p.add_argument("--grad_accum", type=int, default=8)
+    p.add_argument("--batch_tokens", type=int, default=None, help="padded tokens per micro-batch (default: the preset's, else 8192)")
+    p.add_argument("--grad_accum", type=int, default=None, help="micro-batches per step (default: the preset's, else 8)")
     p.add_argument("--epochs", type=float, default=1.0)
     p.add_argument("--lr", type=float, default=2e-4)
-    p.add_argument("--rank", type=int, default=64)
+    p.add_argument("--rank", type=int, default=None, help="LoRA rank (default: the preset's, else 64)")
     p.add_argument("--warmup", type=int, default=30)
     p.add_argument("--save_every", type=int, default=100, help="optimizer steps between saves")
     p.add_argument("--max_steps", type=int, default=None)
@@ -133,7 +152,15 @@ def main(argv=None):
     p.add_argument("--seed", type=int, default=1337)
     p.add_argument("--no_grad_checkpoint", action="store_true")
     a = p.parse_args(argv)
-    name = short_name(a.model)
+    import open_models
+    preset, cfg = open_models.resolve(a.model)
+    if preset:
+        a.model = cfg["hf"] if not os.path.isdir(a.model) else a.model
+    a.batch_tokens = a.batch_tokens or cfg.get("batch_tokens", 8192)
+    a.grad_accum = a.grad_accum or cfg.get("grad_accum", 8)
+    a.rank = a.rank or cfg.get("rank", 64)
+    a.quant4 = a.quant4 or cfg.get("quant4", False)
+    name = preset or short_name(a.model)
     a.out = a.out or os.path.join("checkpoints", "dev", "open", name)
     a.export = a.export or os.path.join("export", "open", name, "my-ai")
 
@@ -173,7 +200,20 @@ def main(argv=None):
           f"({a.grad_accum} micro-batches each), device {device}")
 
     dtype = torch.bfloat16 if device == "cuda" else torch.float32
-    model = AutoModelForCausalLM.from_pretrained(a.model, dtype=dtype).to(device)
+    if a.quant4:
+        try:
+            from transformers import BitsAndBytesConfig
+            import bitsandbytes  # noqa: F401
+        except ImportError:
+            sys.exit("--quant4 needs bitsandbytes: pip install bitsandbytes")
+        from peft import prepare_model_for_kbit_training
+        model = AutoModelForCausalLM.from_pretrained(
+            a.model, dtype=dtype, device_map={"": 0},
+            quantization_config=BitsAndBytesConfig(load_in_4bit=True, bnb_4bit_quant_type="nf4", bnb_4bit_use_double_quant=True,
+                                                   bnb_4bit_compute_dtype=dtype))
+        model = prepare_model_for_kbit_training(model, use_gradient_checkpointing=not a.no_grad_checkpoint)
+    else:
+        model = AutoModelForCausalLM.from_pretrained(a.model, dtype=dtype).to(device)
     model.config.use_cache = False
     if not a.no_grad_checkpoint:
         model.gradient_checkpointing_enable()
@@ -223,7 +263,9 @@ def main(argv=None):
             idx = order.pop()
             x, y, w = collate(examples, idx, pad_id, torch)
             x, y, w = x.to(device), y.to(device), w.to(device)
-            loss = weighted_loss(model(input_ids=x).logits, y, w, torch) / a.grad_accum
+            inner = model.get_base_model()                          # the open model with the LoRA layers inside it
+            hidden = inner.model(input_ids=x).last_hidden_state
+            loss = chunked_loss(hidden, inner.lm_head, y, w, torch) / a.grad_accum
             loss.backward()
             loss_sum += loss.item()
         torch.nn.utils.clip_grad_norm_(params, 1.0)

@@ -142,3 +142,54 @@ class AppLoadsOpenTokenizer(unittest.TestCase):
         st.tokens, st.root, st.default_tok, st.backend_factory = {}, d, None, None
         tok = st.tok_for({"id": "x", "name": "X", "version": 1, "tokenizer": path, "open": True})
         self.assertTrue(tok.chatml)
+
+
+class PresetsAndLoss(unittest.TestCase):
+    def test_presets_resolve_and_estimates(self):
+        import open_models as om
+        name, cfg = om.resolve("Equinox-4")
+        self.assertEqual((name, cfg["hf"]), ("equinox-4", "Qwen/Qwen3-4B"))
+        self.assertEqual(om.resolve("Qwen/Qwen3-8B")[0], "solstice-5")
+        self.assertEqual(om.resolve("some/other-model"), (None, {}))
+        self.assertTrue(om.PRESETS["apogee-6"]["quant4"])
+        self.assertAlmostEqual(om.kv_kb_per_token(om.PRESETS["flare-3.5"]), 28.0)     # the 28 KB per token we measured on paper
+        sec, hours, dollars = om.estimate(om.PRESETS["flare-3.5"])
+        self.assertAlmostEqual(sec, 7.1, places=1)
+        self.assertLess(hours, 2.1)
+        self.assertGreater(om.estimate(om.PRESETS["solstice-5"])[1], om.estimate(om.PRESETS["equinox-4"])[1])
+
+    def test_chunked_loss_matches_the_plain_loss(self):
+        import torch
+        import finetune_open
+        torch.manual_seed(0)
+        head = torch.nn.Linear(16, 50, bias=False)
+        hidden = torch.randn(3, 7, 16, requires_grad=True)
+        y = torch.randint(0, 50, (3, 7))
+        w = torch.tensor([[0, 0, 1, 1, 1, 0.3, 0.3]] * 3, dtype=torch.float32)
+        a = finetune_open.chunked_loss(hidden, head, y, w, torch, chunk=4)
+        b = finetune_open.weighted_loss(head(hidden), y, w, torch)
+        self.assertAlmostEqual(a.item(), b.item(), places=5)
+        a.backward()
+        g1 = hidden.grad.clone()
+        hidden.grad = None
+        finetune_open.weighted_loss(head(hidden), y, w, torch).backward()
+        self.assertTrue(torch.allclose(g1, hidden.grad, atol=1e-5))
+
+
+class LongContext(unittest.TestCase):
+    def test_context_per_model(self):
+        import open_models as om
+        self.assertEqual(om.max_context(om.PRESETS["flare-3.5"]), 32768)
+        for k in ("equinox-4", "solstice-5", "apogee-6"):
+            self.assertEqual(om.max_context(om.PRESETS[k]), 131072)
+
+    def test_memory_and_server_options(self):
+        import open_models as om
+        e = om.PRESETS["equinox-4"]
+        self.assertAlmostEqual(om.kv_gb(e), 18.0, places=1)                        # 144 KB per token x 131,072
+        self.assertAlmostEqual(om.kv_gb(e, bytes_per_value=1), 9.0, places=1)       # a q8_0 cache halves it
+        self.assertEqual(om.llama_args(om.PRESETS["flare-3.5"]), "-c 32768")
+        self.assertEqual(om.llama_args(e), "-c 131072 --rope-scaling yarn --rope-scale 4 --yarn-orig-ctx 32768")
+        self.assertIn("-ctk q8_0", om.llama_args(e, 65536, "q8_0"))
+        self.assertIn("--rope-scale 2", om.llama_args(e, 65536))
+        self.assertNotIn("yarn", om.llama_args(e, 32768))

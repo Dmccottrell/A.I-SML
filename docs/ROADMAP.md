@@ -19,10 +19,10 @@ version's test-sheet results decide what the next one focuses on.
 | **v2** ✅ | Knowledge | 88M | General Q&A, explanations, multi-turn chat | RTX 4070, ~18 hours | $0 |
 | **v3** 🛠️ | Accuracy | ~400M | Looks things up (RAG), says "I don't know", handles corrections, exact instructions, preference training (DPO), remembers you, reply suggestions, basic code; v3-long stretches it to 8K–32K | RTX 4070 afternoons + a rented RTX 3090 overnight (25.8 / 17.5 s/step) | ~$30–40 cloud + electricity |
 | **v3.5** | Scale | **1.5B open base (Qwen 2.5), 32K context** | Same lessons as v3 (lookups, "I don't know", corrections, instructions) on a stronger base. *(The from-scratch ~1.12B / 40B-token plan below was stopped.)* | RTX 4070 (LoRA, free) or one rented RTX 5090 | $0 or a few dollars |
-| **v4** | Abilities | v3.5 **trained longer** (1.12B, +15–30B tokens) | Specialist skill packs + router, tools, voice, own app | Rented GPUs, ~1–2 weeks, while the app is built | ~$55–270 electricity |
-| **v5** | Scale | 3B | Genuinely capable assistant | Cloud (from scratch) **or** RTX 4070 (fine-tune an open 3B) | ~$1,500+ **or** $0 |
-| **v6** | Bigger small | **5B** | Stronger reasoning, coding and knowledge; 8k memory; powers online mode | Cloud (or grown from v5) | ~$4,000–6,000 (less with growth or a grant) |
-| **v6.5** | Borderline medium | **7B** | The best model for PC and server; the app's online brain | Cloud (or grown from v6) | ~$8,000–12,000 (less with growth or a grant) |
+| **v4** | Abilities | **Qwen3-4B** open base (suggested), 32K context, up to 128K | Specialist skill packs + router, tools, voice, own app | One rented RTX 5090, about 5 hours per fine-tune | about $3 per fine-tune |
+| **v5** | Scale | **Qwen3-8B** open base (suggested), 32K context, up to 128K | Genuinely capable assistant | One rented RTX 5090, about 10 hours per fine-tune; runs on the 4070 at Q4 | about $5 per fine-tune |
+| **v6** | Bigger small | **Qwen3-14B** open base (suggested), 32K context, up to 128K | Stronger reasoning, coding and knowledge; powers online mode | One rented RTX 5090 with 4-bit weights (QLoRA), about 24 hours per fine-tune | about $12 per fine-tune |
+| **v6.5** | Borderline medium | A bigger open base, chosen when it is time (about 30B class) | The best model for PC and server; the app's online brain | Rented 48–80 GB GPU | to be measured |
 
 Guiding rules:
 - **Cheapest over fastest.** Time isn't a constraint, so everything that fits on the RTX 4070

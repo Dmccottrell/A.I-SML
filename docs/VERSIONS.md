@@ -54,12 +54,12 @@ The tables below show this version in the v3.5 column. The from-scratch plan it 
 |  | **v1** ✅ | **v2** ✅ | **v3** 🛠️ | **v3.5** 🛠️ (Qwen base) | **v4** (planned) | **v5** (planned) | **v6** (planned) | **v6.5** (planned) |
 |---|---|---|---|---|---|---|---|---|
 | Model name | – | – | Emvryx Flare 3 | Emvryx Flare 3.5 | Emvryx Equinox 4 | Emvryx Solstice 5 | Emvryx Apogee 6 | Emvryx Apogee 6.5 |
-| Parameters | 29.5M | 88M | 394M | **1.54B** (Qwen 2.5 base) + 73.9M LoRA we train | Open base, ~3–4B suggested, + LoRA skill packs (small add-on weights, a few MB each, switched by a router) | **~3B** | **~5B** | **~7B** |
-| Shape | 512 wide × 8 layers | 768 wide × 12 layers | 1024 wide × 32 layers | 1536 wide × 28 layers | The chosen base's | ~3072 wide × 28 layers | ~3584 wide × 36 layers | 4096 wide × 32 layers |
-| Memory (context length) | 512 tokens | 1,024 tokens | 2,048 tokens; **v3-long: 8K → 16K → 32K** (stretched after training, if the tests pass) | **32,768 tokens** from the start (the base's own) | The base's own (32K+ for Qwen 2.5) + saved notes about you | **Goal 128K** (built for long text from the start) | **Goal 256K** | **Goal 500K** |
-| Vocabulary | 8,192 | 16,384 | 32,768 | 151,936 (Qwen's) | 32,768 | 65,536 | 65,536 | 65,536 |
+| Parameters | 29.5M | 88M | 394M | **1.54B** (Qwen 2.5 base) + 73.9M LoRA we train | Qwen3-4B (4.0B) + LoRA skill packs (small add-on weights, a few MB each, switched by a router) | Qwen3-8B (8.2B) | Qwen3-14B (14.8B) | **~7B** |
+| Shape | 512 wide × 8 layers | 768 wide × 12 layers | 1024 wide × 32 layers | 1536 wide × 28 layers | 2560 wide × 36 layers | 4096 wide × 36 layers | 5120 wide × 40 layers | 4096 wide × 32 layers |
+| Memory (context length) | 512 tokens | 1,024 tokens | 2,048 tokens; **v3-long: 8K → 16K → 32K** (stretched after training, if the tests pass) | **32,768 tokens** from the start (the base's own) | **32K default, up to 128K** (YaRN) + saved notes about you | **32K default, up to 128K** (YaRN) | **32K default, up to 128K** (YaRN) | **Goal 500K** |
+| Vocabulary | 8,192 | 16,384 | 32,768 | 151,936 (Qwen's) | 151,936 (Qwen's) | 151,936 | 151,936 | 65,536 |
 | Attention | Standard | Grouped-query (faster on phones) | Grouped-query | Grouped-query (2 KV heads) | Grouped-query | Grouped-query | Grouped-query | Grouped-query |
-| Download size (Q4) | ~20 MB | 89 MB | ~240 MB | ~1 GB (estimate) | ~700 MB + packs | ~1.8 GB | ~3 GB | ~4 GB |
+| Download size (Q4) | ~20 MB | 89 MB | ~240 MB | ~1 GB (estimate) | ~2.5 GB (Q4) | ~5 GB (Q4) | ~9 GB (Q4) | ~4 GB |
 | Runs on (estimate) | Phone, PC | Phone, PC, browser | Phone, PC, browser, Raspberry Pi 5 | PC; phone with 4 GB+ memory (estimate) | Phone, PC, Pi 5 (slow) | PC, Mac, high-end phone | PC or Mac with 8 GB+ RAM | PC or Mac with 8 GB+ RAM |
 
 Key: ✅ finished · 🛠️ in progress · (planned) not started. Context goals beyond 2,048 tokens only count once
