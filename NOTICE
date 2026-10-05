@@ -1,0 +1,11 @@
+Emvryx third-party notices
+
+Emvryx models built on an open base (see docs/OPEN_MODEL.md) start from:
+
+  Qwen2.5-1.5B-Instruct
+  Copyright (c) Alibaba Cloud / Qwen Team
+  Licensed under the Apache License, Version 2.0: https://www.apache.org/licenses/LICENSE-2.0
+  Source: https://huggingface.co/Qwen/Qwen2.5-1.5B-Instruct
+
+The weights were modified by fine-tuning (LoRA) on Emvryx's own lesson data. Qwen and its authors do not endorse Emvryx.
+Keep this file with any copy of those weights you share. Check the model page for the current licence terms before sharing.

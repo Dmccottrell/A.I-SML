@@ -1,6 +1,6 @@
 # A.I-SML — Build Your Own Small Language Model
 
-Llama-style language models built completely from scratch: your own tokenizer, your own
+Llama-style language models, with the first versions built completely from scratch: your own tokenizer, your own
 transformer, your own training run. No pretrained weights. Any finished model can run wherever you
 want it: fully offline on your phone or PC, at home on your own machine, or in the cloud (private for
 you and your testers, or public). Where it runs is a choice per chat, not a property of the model.
@@ -35,30 +35,21 @@ v5 = Emvryx Solstice 5 (~3B), v6 / v6.5 = Emvryx Apogee 6 / 6.5 (5-7B), and late
 name has its own number that goes up only when that model is updated (older ones stay available). They are placeholders: no
 trademark check has been done yet. See `docs/ROADMAP.md` and `docs/APP.md`.
 
-## Pretrained weights policy
+## Pretrained weights policy (updated Oct 2026)
 
-**Every model in this project (v1 to v6.5) is trained from scratch.** Each one starts as random
-numbers and learns only from the text we give it. No one else's pretrained weights are ever
-loaded into, merged with, or used to start one of these models.
+Two kinds of models, each described honestly:
 
-Other people's open models may be used as **helpers beside the model, never inside it**:
+| Models | How they are made |
+|---|---|
+| **v1, v2, v3, v3.5** (Ember 2, Flare 3, Flare 3.5) | Trained **from scratch** here: random numbers at the start, learning only from the text we give them. No one else's weights are used |
+| **Later Emvryx models built on an open base** (the first: Flare on Qwen 2.5 1.5B, 32K context; see `docs/OPEN_MODEL.md`) | Start from an open model's weights and are fine-tuned here on our lessons. They carry the Emvryx name; the base model and its licence are credited in `NOTICE` |
 
-| Helper | What it does | Inside our model? |
-|---|---|---|
-| **Teacher model** (an open ~7B, from v3) | Writes practice chat examples and grades our model's answers for DPO. Only its written text is used, like a tutor's worksheets | ❌ No |
-| **Search model** (optional, from v3) | Finds Wikipedia passages by meaning for lookups. Keyword search needs no model at all | ❌ No, runs beside it |
-| **Whisper and Piper** (v4) | Speech-to-text and text-to-speech for voice | ❌ No, separate programs |
-| **A fine-tuned open model** (owner's personal use only) | A smarter daily assistant in the app while our own models grow | ❌ No, a separate model, always labeled as not ours (`docs/OPEN_MODEL.md`) |
-
-Rules for helpers:
-- Only models and datasets whose licenses allow this use. Check each license before using it.
-- Never use the ChatGPT, Claude or Gemini APIs to write training data; their terms restrict
-  using outputs to build competing models.
-- Some training data (for example the smol-smoltalk conversations) was written by other AIs. It
-  shapes the chat *style*, but the model's weights are still trained 100% here.
-
-This keeps every result honest: when a version improves, it's because of this project's own
-data, code and training.
+Rules:
+- Only open models whose licence allows this. Keep each licence's notice (`NOTICE`) and check it before sharing a model.
+- Never describe a model as "trained from scratch" unless it was. The from-scratch line (v1 to v3.5) stays what it is.
+- Never use the ChatGPT, Claude or Gemini APIs to write training data; their terms restrict using outputs to build competing models.
+- Other open models may also be used as **helpers beside a model** (a teacher that writes practice examples and grades answers, an optional search model, Whisper and Piper for voice). Only their text or audio output is used.
+- Some training data (for example the smol-smoltalk conversations) was written by other AIs. It shapes the chat *style*.
 
 ## Files
 
