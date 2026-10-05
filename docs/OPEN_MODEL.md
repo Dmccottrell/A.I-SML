@@ -174,3 +174,9 @@ re-teaching in Qwen's own tool format; the chat's token counts now come from Qwe
 10. **Pictures and voice**: sibling vision-language models exist (memory: Qwen-VL line), so the "see pictures through a helper" plan gets easier; check licences first.
 11. **Our own teacher**: Apogee 2 can write practice lessons for the smaller models, replacing the outside teacher model (our own model's output, no third-party terms to check).
 12. **Cheaper iteration**: a "+" refresh costs dollars, so you can test, fix and re-release often.
+
+## Order of work: all the 2.0 builds first, then the improved 2.5 releases (decided Oct 2026)
+1. **First builds** (same 109,917 lessons, each tested with `exam_open.py` and the test sheets): **Flare 2.5** (Qwen 2.5 1.5B, training now), then **Equinox 2** (Qwen3-4B), **Solstice 2** (Qwen3-8B), **Apogee 2** (Qwen3-14B, 4-bit). Each one starts only when the budget allows and the one before it tested well.
+2. **Improved releases, after all the first builds are done:** **Equinox 2.5, Solstice 2.5, Apogee 2.5**. Each is made the same way: collect the first build's mistakes, write new lessons for them, add DPO, then
+   the extras (skill packs, the thinking dial, long-document lessons, tool calling in Qwen's format, a reranker for lookups, and for Apogee possibly a bigger base), train, compare against the first build and plain Qwen, and release. The 2.0 version moves to "Other models".
+3. Check for newer open models before each build, because better bases may exist by then. Nothing is bought or started without the owner's approval.
