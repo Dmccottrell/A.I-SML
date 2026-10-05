@@ -62,7 +62,7 @@ Avoid for now: Qwen2.5-3B (its licence is not Apache 2.0), and Llama (naming and
 Qwen3 can write `<think>` reasoning blocks: decide whether to keep or strip them before it becomes a model in the app.
 
 ## Upgrades: "+" and growth on an open base
-The numbering is in [ROADMAP.md](ROADMAP.md) ("Numbers for \"+\" and grown models"). Times below are **estimates** (compute scales roughly with parameters from the measured
+The numbering is in [ROADMAP.md](ROADMAP.md) ("Numbers for "+" and grown models"). Times below are **estimates** (compute scales roughly with parameters from the measured
 Flare 3.5 run: 7.1 s/step on one RTX 5090 at 1.5B, 988 steps, about 2 hours and $1). Real numbers come from a `--pilot` on the base you pick.
 
 ### "+" (same weights' size, better lessons): the normal upgrade
