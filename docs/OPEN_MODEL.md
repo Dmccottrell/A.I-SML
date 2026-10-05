@@ -1,7 +1,8 @@
-# A personal open-model fine-tune (Qwen 2.5 1.5B, 32K context)
+# An Emvryx model built on Qwen 2.5 1.5B (32K context)
 
-**This is not an Emvryx model.** Emvryx's own models (v1 to v6.5) are trained from scratch and stay that way (README, "Pretrained weights
-policy"). This is a separate model for the owner's own use, built on someone else's open weights. Don't call it Emvryx or ship it.
+This is how the first open-base Emvryx model is made. It carries the Emvryx name, but it is **not trained from scratch**: it starts from
+Qwen 2.5's open weights and is fine-tuned here. Say so wherever provenance is described, and keep `NOTICE` (Qwen's licence) with any copy of the weights you share.
+The from-scratch line (v2, v3, v3.5) is unaffected.
 
 Why: v3.5 from scratch costs about $183 for a forecast ~41-45% on HellaSwag; Qwen 2.5 1.5B scores roughly 65% on the same kind of test, and
 a LoRA fine-tune costs a few dollars (or runs free on the RTX 4070). The numbers are from memory: measure with `benchmarks.py` before relying on them.
@@ -34,9 +35,9 @@ python ..\llama.cpp\convert_hf_to_gguf.py export\open\qwen2.5-1.5b-instruct\my-a
 ```
 The lessons file is `data\v3\chat.jsonl` (`python make_chat_data_v3.py`), the same lessons v3 learned, now on a stronger base.
 
-## Adding it to the app (personal copy, don't commit it as Emvryx)
-Add an entry to your own `models.json` like the existing ones, with `"open": true`, `"tokenizer": "checkpoints/dev/open/qwen2.5-1.5b-instruct/tokenizer/tokenizer.json"`,
-`"context": 32768`, `"local_gguf": ["export/open/qwen2.5-1.5b-instruct/my-ai-q4_k_m.gguf"]`, `"kv_kb_per_token": 28`, and a name that says it is Qwen-based (for example "Qwen 1.5B (personal)").
+## Adding it to the app
+Add an entry to `models.json` like the existing ones, with `"open": true`, `"tokenizer": "checkpoints/dev/open/qwen2.5-1.5b-instruct/tokenizer/tokenizer.json"`,
+`"context": 32768`, `"local_gguf": ["export/open/qwen2.5-1.5b-instruct/my-ai-q4_k_m.gguf"]`, `"kv_kb_per_token": 28`, and `"base": "Qwen2.5-1.5B-Instruct"` (provenance for the docs; the model's name in the app is just Emvryx + its name and number).
 
 ## Not tested yet
 Everything here is tested with a tiny offline model (`tests/test_open_model.py`). Nobody has run it on the real Qwen weights or a GPU: do the `--pilot`
