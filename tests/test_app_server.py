@@ -92,7 +92,7 @@ class Base(unittest.TestCase):
         return j["id"]
 
     def ask(self, who, cid, text="hello", **kw):
-        return who.stream(cid, dict({"text": text, "model": "flare-3", "effort": "balanced"}, **kw))
+        return who.stream(cid, dict({"text": text, "model": "flare-2", "effort": "balanced"}, **kw))
 
 
 class Access(Base):

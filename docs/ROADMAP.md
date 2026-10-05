@@ -6,11 +6,11 @@ version's test-sheet results decide what the next one focuses on.
 > **Update (Oct 2026): Emvryx moves to open bases.** From v3.5 on, models are fine-tuned from an open model instead of trained from scratch
 > (cheaper and stronger: about $183 for a forecast ~41-45% from scratch versus a few dollars for roughly 65% on a 1.5B open model).
 > They carry the Emvryx name only; the base and its licence are credited in `NOTICE`, and the docs never call a fine-tuned model "from scratch".
-> **v1, v2 and v3 (Ember 2, Flare 3) stay from scratch**, and the from-scratch v3.5 run was **stopped** (step recorded in `docs/V3_5.md`).
-> **The open-base models are the 2.x series** (generation 2): **Flare 2** is Qwen 2.5 1.5B with a 32K context ([OPEN_MODEL.md](OPEN_MODEL.md)), and
-> **Flare 2.5** is its "+" refresh. Later rungs (suggestions, not chosen): **Equinox 2** about a 4B base, **Solstice 2** about an 8B base,
+> **v1, v2 and v3 (Ember 2, Flare 2) stay from scratch**, and the from-scratch v3.5 run was **stopped** (step recorded in `docs/V3_5.md`).
+> **The open-base models are the 2.x series** (generation 2): **Flare 2.5** is Qwen 2.5 1.5B with a 32K context ([OPEN_MODEL.md](OPEN_MODEL.md)), and a
+> "+" refresh takes the next decimal (Flare 2.6). Later rungs (suggestions, not chosen): **Equinox 2** about a 4B base, **Solstice 2** about an 8B base,
 > **Apogee 2** about a 14B base on rented GPUs; pick each base when its turn comes, because better open models will exist.
-> The old numbers map as: v3.5 -> Flare 2, v4 -> Equinox 2, v5 -> Solstice 2, v6 -> Apogee 2. Text below that uses the old names describes the from-scratch plan.
+> The version slots map as: v3 -> Flare 2 (from scratch), v3.5 -> Flare 2.5, v4 -> Equinox 2, v5 -> Solstice 2, v6 -> Apogee 2. Text below that uses the old names describes the from-scratch plan.
 > The rest of this file was written for the from-scratch plan: where it says a version's brain is trained from scratch or grown from v3.5, read it with this update.
 
 ## At a glance
@@ -20,7 +20,7 @@ version's test-sheet results decide what the next one focuses on.
 | **v1** ✅ | Learn the pipeline | 30M | Tells children's stories; runs offline on the phone | RTX 4070, 4 hours | $0 |
 | **v2** ✅ | Knowledge | 88M | General Q&A, explanations, multi-turn chat | RTX 4070, ~18 hours | $0 |
 | **v3** 🛠️ | Accuracy | ~400M | Looks things up (RAG), says "I don't know", handles corrections, exact instructions, preference training (DPO), remembers you, reply suggestions, basic code; v3-long stretches it to 8K–32K | RTX 4070 afternoons + a rented RTX 3090 overnight (25.8 / 17.5 s/step) | ~$30–40 cloud + electricity |
-| **Flare 2** (was v3.5) | Scale | **1.5B open base (Qwen 2.5), 32K context** | Same lessons as v3 (lookups, "I don't know", corrections, instructions) on a stronger base. *(The from-scratch ~1.12B / 40B-token plan below was stopped.)* | RTX 4070 (LoRA, free) or one rented RTX 5090 | $0 or a few dollars |
+| **Flare 2.5** (was v3.5) | Scale | **1.5B open base (Qwen 2.5), 32K context** | Same lessons as v3 (lookups, "I don't know", corrections, instructions) on a stronger base. *(The from-scratch ~1.12B / 40B-token plan below was stopped.)* | RTX 4070 (LoRA, free) or one rented RTX 5090 | $0 or a few dollars |
 | **Equinox 2** (was v4) | Abilities | **Qwen3-4B** open base (suggested), 32K context, up to 128K | Specialist skill packs + router, tools, voice, own app | One rented RTX 5090, about 5 hours per fine-tune | about $3 per fine-tune |
 | **Solstice 2** (was v5) | Scale | **Qwen3-8B** open base (suggested), 32K context, up to 128K | Genuinely capable assistant | One rented RTX 5090, about 10 hours per fine-tune; runs on the 4070 at Q4 | about $5 per fine-tune |
 | **Apogee 2** (was v6) | Bigger small | **Qwen3-14B** open base (suggested), 32K context, up to 128K | Stronger reasoning, coding and knowledge; powers online mode | One rented RTX 5090 with 4-bit weights (QLoRA), about 24 hours per fine-tune | about $12 per fine-tune |
@@ -755,13 +755,13 @@ battery, not a bigger download.
 
 | Tier class | Model name | Size | Versions |
 |---|---|---|---|
-| Lite (fast and light) | **Emvryx Flare 3** (from scratch), then **Emvryx Flare 2**, **Flare 2.5** (open base) | ~400M, then ~1.5B | v3, then the 2.x series |
+| Lite (fast and light) | **Emvryx Flare 2** (from scratch), then **Emvryx Flare 2.5** (open base) | ~400M, then ~1.5B | v3, then v3.5 |
 | Everyday | **Emvryx Equinox 2** | ~4B (Qwen3-4B, suggested) | with skill packs, the router, tools, thinking, effort levels and the app |
 | Balanced | **Emvryx Solstice 2** | ~8B (Qwen3-8B, suggested) | one rented RTX 5090 to fine-tune |
 | Most capable | **Emvryx Apogee 2** | ~14B (Qwen3-14B, suggested) | 4-bit fine-tune on a rented RTX 5090 |
 | Top | A bigger Apogee | 30B class | chosen when it is time (see [Beyond v6.5](#beyond-v65-v7-v8-and-max)) |
 
-(The text from here to the end of this section describes the old from-scratch plan, where v4 (Equinox 4) was Flare 3.5's brain **trained longer**
+(The text from here to the end of this section describes the old from-scratch plan, where v4 (Equinox 2) was Flare 2.5's brain **trained longer**
 (15–30B more tokens, including some "skill-aware" text with tool calls, thinking steps and code with tests,
 so the skill packs start from a base that already knows those formats), plus the abilities.)
 See [v4's brain](#v4s-brain-v35-trained-longer).
@@ -776,7 +776,7 @@ number only goes up when *that* model is updated, so the numbers differ from nam
 Solstice 2 and Apogee 2 at the same time). When a model is updated, the new one takes the main spot in the app's picker and
 the old one moves to "Other models" (still downloadable). The numbers follow the project's version numbers (v3, v3.5, v4, ...):
 a model is numbered by the project version it was built in, and a model can also get a refresh between versions
-(Flare 2 -> Flare 2.5). **Generations (Oct 2026):** generation 1 models were trained from scratch (Ember 2, Flare 3); generation 2, the 2.x series, is built on open bases (Flare 2, Equinox 2, Solstice 2, Apogee 2). A newer generation takes the main spot in the picker even with a lower number. A number *before* the name ("Emvryx 2 Flare") is kept for a full reset
+(Flare 2.5 -> Flare 2.6). **Generations (Oct 2026):** generation 1 models were trained from scratch (Ember 2, Flare 2); generation 2, the 2.x series, is built on open bases (Flare 2.5, Equinox 2, Solstice 2, Apogee 2). A newer generation takes the main spot in the picker. A number *before* the name ("Emvryx 2 Flare") is kept for a full reset
 of the whole family (a new tokenizer or design, so old files and skill packs don't carry over), if that ever happens.
 
 | Lineup in the picker | Emvryx Ember | Emvryx Flare | Emvryx Equinox | Emvryx Solstice | Emvryx Apogee |
@@ -793,10 +793,10 @@ of the whole family (a new tokenizer or design, so old files and skill packs don
 
 | Number | Meaning | Example (Flare) |
 |---|---|---|
-| **A whole number** | A big step: trained from scratch, or a new size or new abilities | Flare 3, then Flare 5 (a fresh retrain at a new size) |
+| **A whole number** | A big step: trained from scratch, or a new size or new abilities | Flare 2, then Flare 5 (a fresh retrain at a new size) |
 | **.1, .2, ...** | A **"+" model**: the same weights read more (like v3+, continuing from `pre_decay.pt`), same size | Flare 3.1 (v3 + more reading) |
-| **.5** | A half step: a bigger refresh of the same weights (more lessons, DPO, skill packs) | Flare 2.5 (Flare 2 refreshed) |
-| **Next whole number + .1** | A **grown model** (`grow.py` adds layers, so the size changes), started from the earlier weights | Flare 4.1 (Flare 3 grown deeper); its own "+" steps are 4.2, 4.5, ... |
+| **.5** | The half-step slot: Flare 2.5 is the v3.5 slot built on an open base. A "+" refresh of an open-base model takes the next decimal (more lessons, DPO, skill packs) | Flare 2.5, then Flare 2.6 |
+| **Next whole number + .1** | A **grown model** (`grow.py` adds layers, so the size changes), started from the earlier weights | Flare 4.1 (Flare 2 grown deeper); its own "+" steps are 4.2, 4.5, ... |
 
 **On an open base (Oct 2026):** a "+" model is the same open base with better or more lessons, DPO or skill packs (a few dollars, hours; see [OPEN_MODEL.md](OPEN_MODEL.md#upgrades--and-growth-on-an-open-base)). A grown model copies layers of the open base and needs real continued training, so it is expensive and only worth it when no open model of the size you want exists.
 
@@ -819,7 +819,7 @@ speed or smarts.
 
 | Tier | Size | Runs on | Good for | Arrives |
 |---|---|---|---|---|
-| **Lite = Emvryx Flare** (Flare 3, Flare 2, 2.5) | ~400M (Flare 3), ~1.5B (Flare 2) | Any phone, offline, fast | Quick questions, small talk, simple lookups | v3, 2.x |
+| **Lite = Emvryx Flare** (Flare 2, Flare 2.5) | ~400M (Flare 2), ~1.5B (Flare 2.5) | Any phone, offline, fast | Quick questions, small talk, simple lookups | v3, v3.5 |
 | **Standard = Emvryx Equinox** (4) | ~1.12B (v4) | Phones and PCs | Everyday use: lookups, explanations, advice, skills and tools | v4 |
 | **Pro = Emvryx Solstice, Emvryx Apogee** (Solstice 2, Apogee 2) | ~8B and ~14B | PC or a server (the app's online mode) | Harder questions, coding, long writing | 2.x |
 | **Max = a bigger Emvryx Apogee** (later) | 13B, later ~30B ("upper small", then "medium"; see [Beyond v6.5](#beyond-v65-v7-v8-and-max)) | A server, or a PC with a 24 GB GPU for 13B; online mode | The hardest questions: deep reasoning, real coding help, long documents. Also the teacher for every smaller tier | After v6.5, if funded |

@@ -22,7 +22,7 @@ class Server(Base):
         self.state.web_fn = self.web
 
     def decode(self, ids):
-        return self.state.tok_for({"id": "flare-3"}).decode(ids)
+        return self.state.tok_for({"id": "flare-2"}).decode(ids)
 
     def events(self, body):
         return {name: data for name, data in body}

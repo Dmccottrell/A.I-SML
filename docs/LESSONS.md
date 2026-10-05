@@ -55,16 +55,16 @@ marked "guess". The settings every later version should start from are in
   environment variable, and keep `$env:...` lines out of screenshots.
 
 ## Sampling (temperature) per model
-- Flare 3 had **no tuned sampling** of its own, so Auto effort could push it to temperature **1.0**, too hot
+- Flare 2 had **no tuned sampling** of its own, so Auto effort could push it to temperature **1.0**, too hot
   for a 394M model. Every model entry in `models.json` now has `sampling`, `temperature_bounds` and
-  `max_reply_tokens`. The numbers for Flare 3 / 3.5 / Equinox / Solstice / Apogee are **starting guesses**
+  `max_reply_tokens`. The numbers for Flare 2 / 3.5 / Equinox / Solstice / Apogee are **starting guesses**
   (smaller model = lower temperature and a narrower range). Tune each with
   `python evaluate.py --version vN --prompts eval/constraints.jsonl --temperature 0.3` against `0.6`.
 - When a lookup supplies notes, answers should be steadier than free chat (lower temperature).
   Not built yet.
 
 ## How we work (process mistakes to avoid)
-- **Run the whole test suite before every merge.** A change to Flare 3's settings broke two tests on `main`
+- **Run the whole test suite before every merge.** A change to Flare 2's settings broke two tests on `main`
   because only three test files were run. (Fixed in the next PR.)
 - **A synthetic test that passes on the old code proves nothing.** Check that a new test fails on the previous
   version, and say so when a test cannot reproduce a real-data failure.

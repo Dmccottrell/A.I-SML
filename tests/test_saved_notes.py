@@ -128,7 +128,7 @@ class Server(Base):
         self.assertEqual(len(notes), 2)
         self.assertTrue(notes[1].get("retry"))
         self.assertEqual(len(Server.backend.prompts), 2)
-        self.assertIn("Tigers won", self.state.tok_for({"id": "flare-3"}).decode(Server.backend.prompts[-1]))
+        self.assertIn("Tigers won", self.state.tok_for({"id": "flare-2"}).decode(Server.backend.prompts[-1]))
         saved = self.sam.call("GET", f"/api/chats/{cid}")[1]["messages"]
         self.assertEqual([m["role"] for m in saved], ["user", "assistant"])
 

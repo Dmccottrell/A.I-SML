@@ -8,7 +8,7 @@ with an optional **online mode** that uses a bigger model on your own PC (later 
 **App name (working, renamed Oct 2026): Emvryx** (pronunciation to be decided), with the website/domain **Emvryx.AI** (to check).
 The earlier name Emvryx was checked by web search and the trademark registers (nothing found); **Emvryx has not been
 checked yet**. Before it is public: search the US trademark database (tmsearch.uspto.gov), the EU/UK/India registers,
-Google Play and the App Store, and check that emvryx.ai and emvryx.com are free. The models are named Emvryx + a role (Ember, Flare, Equinox, Solstice, Apogee) + a generation number, for example Emvryx Flare 2.5; see docs/ROADMAP.md, "Names".
+Google Play and the App Store, and check that emvryx.ai and emvryx.com are free. The models are named Emvryx + a role (Ember, Flare, Equinox, Solstice, Apogee) + a generation number, for example Emvryx Flare 2.6; see docs/ROADMAP.md, "Names".
 Backups if Emvryx fails those checks (Emvryx is the previous name): Brynja, Quenby, Eirvala, Vardrun.
 
 This builds on [ROADMAP.md: One app for phone and PC](ROADMAP.md#one-app-for-phone-and-pc-the-plan-for-the-website-and-app)
@@ -81,7 +81,7 @@ you choose the model, the effort, and see where each one runs. Works the same on
  -------------------------------------------------
   Auto   (the router picks)                  [check]
          Best model and effort for each question
-  Emvryx Flare 2
+  Emvryx Flare 2.5
          Fastest for quick answers
   Emvryx Equinox 2
          For everyday work and homework
@@ -95,7 +95,7 @@ you choose the model, the effort, and see where each one runs. Works the same on
   Skills                              Study helper (Beta), Teacher assistant (Beta)  >
  -------------------------------------------------
   Other models
-  Emvryx Flare 3  (older)  [Not downloaded, 240 MB]
+  Emvryx Flare 2  (older)  [Not downloaded, 240 MB]
   Earlier versions of any name
 ```
 
@@ -110,9 +110,9 @@ you choose the model, the effort, and see where each one runs. Works the same on
   which picks the size, the effort and the skill pack per question, and the chat says what it picked.
 - **Effort:** Quick / Balanced / Deep, the thinking dial from the roadmap. Greyed out for models that can't think yet.
 - **Skills:** the same on/off list as the Skills screen, shortcut included.
-- **One card per name, newest version first** (each name has its own number, e.g. Flare 2, Equinox 2, Solstice 2, Apogee 2; a newer generation comes first even with a lower number: Flare 2 before Flare 3). When a
+- **One card per name, newest version first** (each name has its own number, e.g. Flare 2.5, Equinox 2, Solstice 2, Apogee 2; a newer generation comes first even with a lower number: Flare 2.5 before Flare 2). When a
   model is updated the old one moves to **Other models**, with downloaded files and test builds, so you can compare
-  (Flare 3 vs Flare 2). **Only a limited selection of older models is kept** (for example the previous one or two
+  (Flare 2 vs Flare 2.5). **Only a limited selection of older models is kept** (for example the previous one or two
   versions of each name, plus anything you pinned); the exact rule is still to be decided, and the manifest gets a `keep` /
   `retire_after` field for it.
 - **Honest limits:** a model the device can't run (not enough memory) is greyed out with the reason; the

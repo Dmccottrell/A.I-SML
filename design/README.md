@@ -43,7 +43,7 @@ Choosing a model re-colours the whole page and plays a short transition.
 The original amber (`#F5A524`) stays as the brand colour for the website home and the logo.
 
 ## Names (as of this design)
-Flare 3 (v3, beta, trained from scratch), **Flare 2** (Qwen-based, in training), **Equinox 2**, Solstice 2, Apogee 2 (the 2.x series). The cards show only the
+Flare 2 (v3, beta, trained from scratch), **Flare 2.5** (Qwen-based, in training), **Equinox 2**, Solstice 2, Apogee 2 (the 2.x series). The cards show only the
 name; the version appears as a small grey number in the model sheet.
 
 ## Website: five pages, not one long page
@@ -57,7 +57,7 @@ The site is split so no page is cluttered. Each page has the same top menu (Mode
 | **How usage works** | `SiteUsage.dc.html` | Right now (the brain tank), this week (resets Monday 4 AM), what a message costs by model, effort and usage, tips, and a short "for the curious" about tokens |
 | **About** | `SiteAbout.dc.html` | Built from the ground up (stats, a "How it measures up" comparison table (Emvryx models side by side), and what makes it different), at home or in the cloud, private or public, what to keep in mind |
 
-**Comparison table rule:** one column per model (Earlier v2, Flare 3, Flare 2 highlighted as the one in training, Equinox 2, Solstice 2, Apogee 2), a few rows only (HellaSwag, the Emvryx 20-question test sheet, long-document recall). A dash means not measured yet. **Benchmark strip rule (same idea):** only measured scores are drawn as solid bars (v2 28.4%, Flare 3 31.7% at step 15,000, both HellaSwag on the full 10,042-question test); forecasts (Flare 3.5, Equinox 4) are drawn dashed and labelled as forecasts, and are replaced when the model finishes training. No score of another company's model is shown. `HomeLight.dc.html` is the Home page in light mode. The canvas itself is also split into three pages: **Brand**, **Website** and **App screens**. Placeholders left in: `[YEAR]` and the invite link; prices are "to be announced".
+**Comparison table rule:** one column per model (Earlier v2, Flare 2, Flare 2.5 highlighted as the one in training, Equinox 2, Solstice 2, Apogee 2), a few rows only (HellaSwag, the Emvryx 20-question test sheet, long-document recall). A dash means not measured yet. **Benchmark strip rule (same idea):** only measured scores are drawn as solid bars (v2 28.4%, Flare 2 31.7% at step 15,000, both HellaSwag on the full 10,042-question test); forecasts (Flare 2.5, Equinox 4) are drawn dashed and labelled as forecasts, and are replaced when the model finishes training. No score of another company's model is shown. `HomeLight.dc.html` is the Home page in light mode. The canvas itself is also split into three pages: **Brand**, **Website** and **App screens**. Placeholders left in: `[YEAR]` and the invite link; prices are "to be announced".
 
 ## Usage and limits
 Plain language first: **messages left**, not tokens. The phone's **Usage** screen shows a brain that fills like a tank ("Right now: about 250 messages"), "Left this week"

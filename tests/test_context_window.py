@@ -9,7 +9,7 @@ MANIFEST = models.load_manifest()
 LIM = U.load_limits()
 
 
-def model(mid="flare-2", **kw):
+def model(mid="flare-2.5", **kw):
     m = dict(next(x for x in MANIFEST["models"] if x["id"] == mid))
     m.update(kw)
     return m
