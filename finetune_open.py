@@ -37,16 +37,22 @@ def short_name(model):
     return os.path.basename(model.rstrip("/\\")).lower().replace("_", "-")
 
 
-def load_examples(path, tok, max_len, limit=None):
-    """[(ids, mask)] for every usable conversation. Conversations with no learnable token are dropped; long ones are cut."""
+def load_examples(path, tok, max_len, limit=None, identity=None):
+    """[(ids, mask)] for every usable conversation. Conversations with no learnable token are dropped; long ones are cut.
+
+    identity: None leaves the lessons as they are. A dict {"name": "Flare 2.5", "n": 1000} drops every lesson that says the model was trained from
+    scratch / at home (true only for our own from-scratch models) and adds n corrected identity lessons (identity_lessons.py)."""
     from chat import encode_conversation, normalize
-    out = []
     with open(path, encoding="utf-8") as f:
-        for line in f:
-            line = line.strip()
-            if not line:
-                continue
-            ids, mask = encode_conversation(tok, normalize(json.loads(line)), max_len)
+        rows = [json.loads(line) for line in f if line.strip()]
+    if identity is not None:
+        import identity_lessons
+        rows, dropped = identity_lessons.clean_and_add(rows, identity.get("name", ""), n=identity.get("n", 0))
+        print(f"identity: dropped {dropped:,} lessons that say it was trained from scratch, added {identity.get('n', 0):,} corrected ones")
+    out = []
+    if True:
+        for row in rows:
+            ids, mask = encode_conversation(tok, normalize(row), max_len)
             if any(mask):
                 out.append((ids, mask))
             if limit and len(out) >= limit:
@@ -141,9 +147,14 @@ def main(argv=None):
     p.add_argument("--batch_tokens", type=int, default=None, help="padded tokens per micro-batch (default: the preset's, else 8192)")
     p.add_argument("--grad_accum", type=int, default=None, help="micro-batches per step (default: the preset's, else 8)")
     p.add_argument("--epochs", type=float, default=1.0)
-    p.add_argument("--lr", type=float, default=2e-4)
+    p.add_argument("--lr", type=float, default=None, help="default 2e-4 (5e-5 with --patch)")
+    p.add_argument("--patch", action="store_true",
+                   help="a short extra run that continues from the saved adapter (new optimizer, step count restarts): for fixing a finished run, "
+                        "e.g. with identity_lessons.py's patch file. Do it last: a later plain resume would start from its step count")
+    p.add_argument("--keep_old_identity", action="store_true",
+                   help="keep the lessons that say the model was trained from scratch (only right for our own from-scratch models)")
     p.add_argument("--rank", type=int, default=None, help="LoRA rank (default: the preset's, else 64)")
-    p.add_argument("--warmup", type=int, default=30)
+    p.add_argument("--warmup", type=int, default=None, help="default 30 (5 with --patch)")
     p.add_argument("--save_every", type=int, default=100, help="optimizer steps between saves")
     p.add_argument("--max_steps", type=int, default=None)
     p.add_argument("--limit", type=int, default=None, help="use only the first N conversations (testing)")
@@ -159,6 +170,8 @@ def main(argv=None):
     a.batch_tokens = a.batch_tokens or cfg.get("batch_tokens", 8192)
     a.grad_accum = a.grad_accum or cfg.get("grad_accum", 8)
     a.rank = a.rank or cfg.get("rank", 64)
+    a.lr = a.lr or (5e-5 if a.patch else 2e-4)
+    a.warmup = a.warmup or (5 if a.patch else 30)
     a.quant4 = a.quant4 or cfg.get("quant4", False)
     name = preset or short_name(a.model)
     legacy = os.path.join("checkpoints", "dev", "open", short_name(a.model))      # before presets, runs were saved under the base's name
@@ -191,7 +204,8 @@ def main(argv=None):
     tok = OpenTokenizer.load(os.path.join(tok_dir, "tokenizer.json"))
     pad_id = hf_tok.pad_token_id if hf_tok.pad_token_id is not None else tok.special["<|endoftext|>"]
 
-    examples = load_examples(a.data, tok, a.max_len, a.limit)
+    identity = None if a.keep_old_identity else {"name": cfg.get("display", ""), "n": 0 if a.patch else 1000}
+    examples = load_examples(a.data, tok, a.max_len, a.limit, identity)
     if not examples:
         sys.exit("no usable conversations in the data file")
     batches = make_batches(examples, a.batch_tokens, rng)
@@ -224,7 +238,13 @@ def main(argv=None):
     adapter_dir = os.path.join(a.out, "adapter")
     state_path = os.path.join(a.out, "state.pt")
     step = 0
-    if not a.pilot and os.path.isdir(adapter_dir) and os.path.exists(state_path):
+    if a.patch:
+        if not os.path.isdir(adapter_dir):
+            sys.exit(f"--patch continues a saved adapter, but {adapter_dir} does not exist: train first")
+        model = PeftModel.from_pretrained(model, adapter_dir, is_trainable=True)
+        state = None
+        print("patch run: starting from the saved adapter with a new step count and a new optimizer")
+    elif not a.pilot and os.path.isdir(adapter_dir) and os.path.exists(state_path):
         model = PeftModel.from_pretrained(model, adapter_dir, is_trainable=True)
         state = torch.load(state_path, map_location="cpu", weights_only=False)
         step = state["step"]

@@ -187,3 +187,12 @@ On the cloud machine, after `git pull origin main`: `bash chain_open.sh` (inside
 at each step and **stops** with a message if anything fails (an out-of-memory pilot, for example) instead of carrying on. Add more names to run more models
 (`bash chain_open.sh equinox-2 solstice-2`), but only the ones you have budget for. It never stops the Vast instance: when it pings "all done", press Stop yourself.
 Start it only while the Flare run is running or finished: it merges whatever the last save was.
+
+### Identity: fixing the "trained from scratch" answers (found Oct 2026)
+The v3 lessons say the model "was trained from scratch on a home computer". That is false for a Qwen-based model, so:
+- `finetune_open.py` now **drops those lessons and adds 1,000 corrected identity chats by default** (`--keep_old_identity` turns it off, only right for from-scratch models). Equinox 2 and later get it automatically.
+- **Flare 2.5's first run (started before this fix) learned the old answers.** `chain_open.sh` fixes it with a short extra pass:
+  `python identity_lessons.py --name "Flare 2.5" --lessons data/v3/chat.jsonl --out data/v3/identity_patch.jsonl`, then
+  `python finetune_open.py --model flare-2.5 --patch --data data/v3/identity_patch.jsonl` (about 50 steps; continues the saved adapter at a lower learning rate, mixed with ordinary lessons so it does not forget).
+- Check the result with `python evaluate_open.py --model flare-2.5 --tuned` (identity sheet, `eval/identity_open.jsonl`); other sheets work too (`--prompts eval/constraints.jsonl`).
+See [IDENTITY.md](IDENTITY.md) for the voice and the ways to make it ours.

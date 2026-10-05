@@ -7,13 +7,13 @@ the pilot to confirm. Times scale from the measured Flare 3.5 run (1.5B: 7.1 s/s
 """
 
 PRESETS = {
-    "flare-2.5": dict(hf="Qwen/Qwen2.5-1.5B-Instruct", params_b=1.54, layers=28, kv_heads=2, head_dim=128, licence="Apache 2.0",
+    "flare-2.5": dict(display="Flare 2.5", hf="Qwen/Qwen2.5-1.5B-Instruct", params_b=1.54, layers=28, kv_heads=2, head_dim=128, licence="Apache 2.0",
                       quant4=False, rank=64, batch_tokens=8192, grad_accum=8, measured=True),
-    "equinox-2": dict(hf="Qwen/Qwen3-4B", params_b=4.0, layers=36, kv_heads=8, head_dim=128, licence="Apache 2.0",
+    "equinox-2": dict(display="Equinox 2", hf="Qwen/Qwen3-4B", params_b=4.0, layers=36, kv_heads=8, head_dim=128, licence="Apache 2.0",
                       quant4=False, rank=64, batch_tokens=4096, grad_accum=16, measured=False),
-    "solstice-2": dict(hf="Qwen/Qwen3-8B", params_b=8.2, layers=36, kv_heads=8, head_dim=128, licence="Apache 2.0",
+    "solstice-2": dict(display="Solstice 2", hf="Qwen/Qwen3-8B", params_b=8.2, layers=36, kv_heads=8, head_dim=128, licence="Apache 2.0",
                        quant4=False, rank=32, batch_tokens=2048, grad_accum=32, measured=False),
-    "apogee-2": dict(hf="Qwen/Qwen3-14B", params_b=14.8, layers=40, kv_heads=8, head_dim=128, licence="Apache 2.0",
+    "apogee-2": dict(display="Apogee 2", hf="Qwen/Qwen3-14B", params_b=14.8, layers=40, kv_heads=8, head_dim=128, licence="Apache 2.0",
                      quant4=True, rank=32, batch_tokens=2048, grad_accum=32, measured=False),
 }
 CONTEXT = 32768                     # all of these read 32,768 tokens natively
