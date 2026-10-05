@@ -46,6 +46,20 @@ The lessons file is `data\v3\chat.jsonl` (`python make_chat_data_v3.py`), the sa
 - The first try crashed with out of memory only because the stopped from-scratch run was still holding 24 GB of the GPU (the `run_training.py` supervisor had not exited): check `nvidia-smi` shows about 0 MiB before starting.
 - With `--batch_tokens 16384` the output layer alone wants about 10 GB (Qwen has 152,000 tokens), so stay at 8,192 unless the GPU is empty and the pilot passes.
 
+## The exam after training (`exam_open.py`)
+The same HellaSwag test and scoring as `exam.py` (so it is comparable with Ember 2 at 28.4% and Flare 2 / v3 at 36.2%), for Hugging Face models:
+```
+python exam_open.py --model flare-2.5 --compare              # the plain base, then base + our adapter, and the difference
+python exam_open.py --model flare-2.5 --compare --n 2000 --spread   # a faster check that matches the full-test score
+python exam_open.py --model export/open/flare-2.5/my-ai      # a merged model folder
+```
+- Run `--compare` on the machine that trained it (the adapter is in `checkpoints/dev/open/...`; a run started before the presets existed is found too).
+  A run takes a few minutes on a 5090 for 10,042 questions (an estimate, not measured). It needs `datasets` and `peft`.
+- **What to look for:** the tuned model should be at least as good as the base. Fine-tuning can make it forget things, so a drop of more than a point or so
+  means the lessons or the learning rate are too strong (lower `--lr`, or mix more general chat into the lessons).
+- HellaSwag only checks common sense. The things our lessons teach are checked with the test sheets (lookup sheet of 41, rules sheet of 30, `evaluate.py`),
+  which still need a runner for open models (next to build).
+
 ## Not tested yet
 The code is tested with a tiny offline model (`tests/test_open_model.py`), and the pilot above ran on the real Qwen weights on a 5090. Nobody has trained on the real lessons yet: compare on `benchmarks.py` and the lookup test sheet before trusting it.
 

@@ -212,3 +212,95 @@ class LegacyRunFolder(unittest.TestCase):
             os.chdir(old)
         self.assertEqual(seen["adapter"], os.path.join("checkpoints", "dev", "open", "qwen2.5-1.5b-instruct", "adapter"))
         self.assertIn("flare-2.5", seen["export"])
+
+
+def tiny_base(d):
+    """A tiny random Qwen2 model + tokenizer in folder d/base (no downloads); returns the folder."""
+    from transformers import AutoModelForCausalLM, PreTrainedTokenizerFast, Qwen2Config
+    base = os.path.join(d, "base")
+    os.makedirs(base)
+    tf = tiny_tokenizer_file(os.path.join(base, "tokenizer.json"))
+    PreTrainedTokenizerFast(tokenizer_file=tf, eos_token="<|im_end|>", pad_token="<|endoftext|>").save_pretrained(base)
+    AutoModelForCausalLM.from_config(Qwen2Config(vocab_size=320, hidden_size=32, intermediate_size=64, num_hidden_layers=2,
+                                                 num_attention_heads=4, num_key_value_heads=2, max_position_embeddings=256)).save_pretrained(base)
+    return base
+
+
+QUESTIONS = [{"ctx": "the capital of illinois is", "endings": ["springfield", "hello how", "are you", "question user"], "label": 0},
+             {"ctx": "hello how are", "endings": ["you", "illinois is", "notes question", "assistant"], "label": 0},
+             {"ctx": "notes question", "endings": ["user", "the capital", "hello", "springfield"], "label": 0}]
+
+
+class ExamOpen(unittest.TestCase):
+    def setUp(self):
+        try:
+            import peft  # noqa: F401
+            import torch  # noqa: F401
+            import transformers  # noqa: F401
+        except ImportError:
+            self.skipTest("peft/transformers not installed")
+        self.d = tempfile.mkdtemp()
+        self.base = tiny_base(self.d)
+        self.qfile = os.path.join(self.d, "q.jsonl")
+        with open(self.qfile, "w", encoding="utf-8") as f:
+            for q in QUESTIONS:
+                f.write(json.dumps(q) + "\n")
+
+    def test_padding_does_not_change_the_scores(self):
+        import torch
+        import exam_open
+        from transformers import AutoModelForCausalLM, AutoTokenizer
+        tok = AutoTokenizer.from_pretrained(self.base)
+        model = AutoModelForCausalLM.from_pretrained(self.base, dtype=torch.float32).eval()
+        with torch.no_grad():
+            ex = QUESTIONS[0]
+            got = exam_open.ending_scores(model, tok, ex, "cpu", pad_id=tok.pad_token_id)
+            ctx = tok.encode(ex["ctx"], add_special_tokens=False)
+            for ending, score in zip(ex["endings"], got):
+                end = tok.encode(" " + ending, add_special_tokens=False)
+                ids = torch.tensor([ctx + end])
+                logits = model(input_ids=ids).logits[0, :-1].float()
+                want = torch.nn.functional.cross_entropy(logits, ids[0, 1:], reduction="none")[-len(end):].mean().item()
+                self.assertAlmostEqual(score, want, places=4)
+
+    def test_accuracy_is_a_fraction(self):
+        import torch
+        import exam_open
+        from transformers import AutoModelForCausalLM, AutoTokenizer
+        tok = AutoTokenizer.from_pretrained(self.base)
+        model = AutoModelForCausalLM.from_pretrained(self.base, dtype=torch.float32)
+        acc = exam_open.hellaswag_accuracy(model, tok, QUESTIONS, "cpu", pad_id=tok.pad_token_id)
+        self.assertIn(acc, (0.0, 1 / 3, 2 / 3, 1.0))
+
+    def test_compare_scores_the_base_and_the_adapter(self):
+        import io
+        import contextlib
+        import exam_open
+        import finetune_open
+        data = os.path.join(self.d, "chat.jsonl")
+        with open(data, "w", encoding="utf-8") as f:
+            for _ in range(8):
+                f.write(json.dumps({"messages": [{"role": "user", "content": "hello how are you"},
+                                                 {"role": "assistant", "content": "the capital of illinois is springfield"}]}) + "\n")
+        out = os.path.join(self.d, "out")
+        with contextlib.redirect_stdout(io.StringIO()):
+            finetune_open.main(["--model", self.base, "--data", data, "--out", out, "--batch_tokens", "128", "--grad_accum", "1",
+                                "--rank", "4", "--warmup", "1", "--max_len", "64", "--max_steps", "1"])
+        buf = io.StringIO()
+        with contextlib.redirect_stdout(buf):
+            code = exam_open.main(["--model", self.base, "--adapter", os.path.join(out, "adapter"), "--compare", "--questions", self.qfile])
+        text = buf.getvalue()
+        self.assertEqual(code, 0)
+        self.assertIn("plain base:", text)
+        self.assertIn("base + our adapter:", text)
+        self.assertIn("difference:", text)
+
+    def test_compare_without_an_adapter_says_so(self):
+        import exam_open
+        with self.assertRaises(SystemExit):
+            exam_open.main(["--model", self.base, "--compare", "--questions", self.qfile])
+
+    def test_spread_picks_across_the_whole_test(self):
+        from exam import pick_questions
+        qs = [{"i": i} for i in range(100)]
+        self.assertEqual([q["i"] for q in pick_questions(qs, 4, "spread")], [0, 25, 50, 75])
