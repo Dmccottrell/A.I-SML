@@ -670,6 +670,23 @@ class AppState:
             raise code_sessions.CodeError("No model is attached to this server.", "Start it with --gguf or --llama (see docs/VRYXCODE.md).")
         return vryxcode.LlamaChat(url)
 
+    def preload(self, model_id):
+        """Start the model's llama-server now (with the window the owner's chats would ask for), so the first message is not slow.
+        Returns a short message for the log. Never raises: a model that cannot load only costs the head start."""
+        if not self.runner:
+            return "nothing to preload (no local models)"
+        model = next((m for m in list(self.manifest["models"]) + list(self.manifest.get("coders", [])) if m["id"] == model_id), None)
+        if not model:
+            return f"unknown model {model_id!r}"
+        if not self.runner.available(model_id):
+            return f"{model_id}: its .gguf file is not on this computer"
+        try:
+            window = self.window_for({"user": "owner", "tier": "mega", "owner": True}, model)["window"]
+            self.runner.ensure(model_id, window)
+            return f"{model_id} is loaded and ready"
+        except Exception as e:                                   # noqa: BLE001 - a failed head start must not stop the app
+            return f"{model_id} could not be preloaded: {getattr(e, 'message', e)}"
+
     def pick_model(self, who, model_id):
         cat = self.catalog(who)
         for m in cat["cards"] + cat["other"]:
@@ -1747,6 +1764,7 @@ def main():
     ap.add_argument("--code-runtime", default=None, help="a stronger container runtime such as runsc (gVisor), if installed")
     ap.add_argument("--code-cpus", default="1")
     ap.add_argument("--code-memory", default="768m")
+    ap.add_argument("--preload", metavar="MODEL_ID", default=None, help="load this model when the app starts, so the first message does not wait for it (for example flare-2.5)")
     ap.add_argument("--pair", metavar="NAME", default=None, help="print a one-time link (valid 15 minutes) that signs NAME in on one device, then exit")
     ap.add_argument("--rotate-key", metavar="NAME", help="give someone a new key (owner, or a name from --add-user); the old key stops working. Restart the app afterwards")
     ap.add_argument("--add-user", nargs=2, metavar=("NAME", "PLAN"), help="add a tester (free, pro or mega) and print their key")
@@ -1808,6 +1826,10 @@ def main():
         from web_search import web_notes
         state.web_fn = lambda question, k: web_notes(question, k)        # Auto: only when the person's setting and the question call for it
     srv = make_server(state, args.host, args.port)
+    if args.preload:
+        def _preload():
+            print("Preload: " + state.preload(args.preload), flush=True)
+        threading.Thread(target=_preload, daemon=True).start()
     shown = "localhost" if args.host in ("127.0.0.1", "0.0.0.0") else args.host
     if state.demo:
         print("Emvryx is running in DEMO mode (no model files found; see docs/V2.md to make a .gguf)")
