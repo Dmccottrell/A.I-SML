@@ -711,6 +711,10 @@ class AppState:
             return self.tokens[model["id"]]
         rel = model.get("tokenizer")
         path = None if not rel else (rel if os.path.isabs(rel) else os.path.join(self.root, rel))
+        if not (path and os.path.exists(path)) and model.get("open"):    # a model downloaded from the backup repo has its tokenizer in its export folder
+            alt = os.path.join(self.root, "export", "open", model["id"], "my-ai", "tokenizer.json")
+            if os.path.exists(alt):
+                path = alt
         if path and os.path.exists(path):
             tok = OpenTokenizer.load(path) if model.get("open") else BPETokenizer.load(path)    # "open": a fine-tuned open model (ChatML)
         elif self.default_tok is not None:

@@ -65,3 +65,21 @@ class StripSourceTests(unittest.TestCase):
     def test_case_and_unfinished_tag(self):
         self.assertEqual(self.run_pieces(["Done. (source: wiki)"]), "Done.")
         self.assertEqual(self.run_pieces(["Done. (Source: wi"]), "Done.")
+
+
+class TokenizerFallbackTests(unittest.TestCase):
+    def test_uses_the_exported_folder_when_the_checkpoint_is_not_on_this_pc(self):
+        root = tempfile.mkdtemp()
+        os.makedirs(os.path.join(root, "export", "open", "equinox-2", "my-ai"))
+        alt = os.path.join(root, "export", "open", "equinox-2", "my-ai", "tokenizer.json")
+        open(alt, "w").write("{}")
+        st = state(None)
+        st.root = root
+        seen = []
+        orig = A.OpenTokenizer.load
+        A.OpenTokenizer.load = staticmethod(lambda path: seen.append(path) or object())
+        try:
+            st.tok_for({"id": "equinox-2", "open": True, "tokenizer": "checkpoints/dev/open/equinox-2/tokenizer/tokenizer.json"})
+        finally:
+            A.OpenTokenizer.load = orig
+        self.assertEqual(seen, [alt])
