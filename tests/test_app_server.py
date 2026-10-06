@@ -104,6 +104,7 @@ class Access(Base):
         self.assertEqual(Client(self.port, "wrong").call("GET", "/api/state")[0], 401)
 
     def test_link_with_key_sets_a_session_cookie_not_the_key(self):
+        self.state.security["allow_key_links"] = True                    # off by default: the owner can turn it on
         s, h, _ = Client(self.port).call("GET", "/?key=" + self.sam_key, raw=True)
         self.assertEqual(s, 302)
         self.assertIn("emvryx_session=", h["Set-Cookie"])
@@ -373,6 +374,7 @@ class Privacy(Base):
 
     def test_the_log_never_holds_message_text(self):
         self.srv.quiet = False
+        self.state.security["allow_key_links"] = True
         buf = io.StringIO()
         with contextlib.redirect_stderr(buf):
             cid = self.new_chat(self.sam)

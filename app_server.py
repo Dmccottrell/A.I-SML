@@ -72,7 +72,8 @@ MAX_BODY = 1_000_000
 OUTSIDE_NOTE = ("{label} is an outside coding model ({licence}), not an Emvryx model: it is strong at code but does not carry Emvryx's lessons. "
                 "Anything it writes is its work, and it is counted like Solstice.")
 SECURITY_DEFAULTS = {"session_days": 90, "pair_minutes": 15, "login_fail_limit": 8, "login_fail_window": 600, "email_start_limit": 5,
-                     "email_start_window": 600, "open_signups": False, "trusted_proxies": ["127.0.0.1", "::1"], "audit_notify": True}
+                     "email_start_window": 600, "open_signups": False, "trusted_proxies": ["127.0.0.1", "::1"], "audit_notify": True,
+                     "allow_key_links": False, "allowed_origins": []}
 MAX_UPLOAD = 30_000_000                                # a project upload (base64): see code_sessions.MAX_IMPORT_BYTES
 MAX_TEXT = 20_000
 EFFORTS = {"quick": 160, "balanced": 320, "deep": 700}          # most words a reply may have, per effort level
@@ -827,8 +828,40 @@ class Handler(http.server.BaseHTTPRequestHandler):
         self._cookies = []
         super().handle_one_request()
 
+    # ---- browser protections
+    def _security_headers(self, csp=None):
+        """Headers every answer carries. The page gets a content security policy that allows only its own script (by a one-time nonce), its own
+        files and Google's font files; everything else (JSON answers, icons) gets a policy that allows nothing."""
+        h = {"Content-Security-Policy": csp or "default-src 'none'; frame-ancestors 'none'; base-uri 'none'",
+             "X-Frame-Options": "DENY", "Referrer-Policy": "no-referrer", "Cross-Origin-Opener-Policy": "same-origin",
+             "Cross-Origin-Resource-Policy": "same-origin", "X-Robots-Tag": "noindex, nofollow",
+             "Permissions-Policy": "camera=(), microphone=(), geolocation=(), payment=(), usb=()"}
+        if self._https():
+            h["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
+        return h
+
+    def _origin_ok(self):
+        """Refuse a state-changing request that a different website made on the person's behalf (CSRF). Browsers say where a request came from
+        (Sec-Fetch-Site, and Origin); a program like curl says nothing and is not a browser, so it is let through (it still needs its key)."""
+        sec = self.headers.get("Sec-Fetch-Site")
+        origin = self.headers.get("Origin")
+        if sec and sec in ("same-origin", "none"):
+            return True
+        if sec == "cross-site":
+            return False
+        if not origin:
+            return not sec                                    # no origin and no fetch-site: not a browser form post
+        if origin == "null":
+            return False
+        host = urllib.parse.urlparse(origin).netloc.lower()
+        ok = {(self.headers.get("Host") or "").lower()}
+        if self._peer_trusted():
+            ok.add((self.headers.get("X-Forwarded-Host") or "").lower())
+        ok |= {urllib.parse.urlparse(o).netloc.lower() for o in self.state.security["allowed_origins"]}
+        return host in ok
+
     # ---- helpers
-    def _send(self, status, body=b"", ctype="application/json", headers=None):
+    def _send(self, status, body=b"", ctype="application/json", headers=None, csp=None):
         if isinstance(body, (dict, list)):
             body = json.dumps(body).encode()
         elif isinstance(body, str):
@@ -838,6 +871,8 @@ class Handler(http.server.BaseHTTPRequestHandler):
         self.send_header("Content-Length", str(len(body)))
         self.send_header("Cache-Control", "no-store")
         self.send_header("X-Content-Type-Options", "nosniff")
+        for k, v in self._security_headers(csp).items():
+            self.send_header(k, v)
         for k, v in (headers or {}).items():
             self.send_header(k, v)
         for cookie in getattr(self, "_cookies", []):
@@ -951,12 +986,21 @@ class Handler(http.server.BaseHTTPRequestHandler):
                              "action": "Open the link the server printed, a pairing link from the owner, or sign in with an email code."})
         return who
 
+    PAGE_CSP = ("default-src 'self'; script-src 'self' 'nonce-{nonce}'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; "
+                "font-src 'self' https://fonts.gstatic.com; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; "
+                "frame-ancestors 'none'; base-uri 'none'; form-action 'self'; object-src 'none'")
+
     def _file(self, name, ctype):
         path = os.path.join(WEB, name)
         if not os.path.exists(path):
             return self._send(404, {"code": "not_found", "message": "Not found."})
         with open(path, "rb") as f:
-            self._send(200, f.read(), ctype)
+            data = f.read()
+        if name == "index.html":                      # the one inline script gets a fresh nonce each time; nothing else may run
+            nonce = secrets.token_urlsafe(16)
+            data = data.replace(b"<script>", b'<script nonce="' + nonce.encode() + b'">')
+            return self._send(200, data, ctype, csp=self.PAGE_CSP.format(nonce=nonce))
+        self._send(200, data, ctype, csp="default-src 'none'; img-src 'self' data:; style-src 'unsafe-inline'; frame-ancestors 'none'; base-uri 'none'" if name.endswith(".svg") else None)
 
     # ---- routes
     def do_GET(self):
@@ -965,7 +1009,10 @@ class Handler(http.server.BaseHTTPRequestHandler):
         try:
             if path == "/":
                 key = (qs.get("key") or [None])[0]
-                if key:                                          # an old-style key link: turn it into a session and drop the key from the address
+                if key and not self.state.security["allow_key_links"]:
+                    self.state.auth.event("key_link_refused", "", self._ip(), "")      # a key in an address ends up in history and logs: not accepted
+                    return self._send(302, b"", "text/plain", {"Location": "/?notice=keylink"})
+                if key:                                          # (only when the owner turned allow_key_links on) turn it into a session and drop the key
                     if self._locked():
                         return
                     who = self.state.who(key)
@@ -1032,6 +1079,9 @@ class Handler(http.server.BaseHTTPRequestHandler):
 
     def do_POST(self):
         path = urllib.parse.urlparse(self.path).path
+        if not self._origin_ok():
+            self.state.auth.event("bad_origin", "", self._ip(), f"POST {path}")
+            return self._send(403, {"code": "bad_origin", "message": "That request came from another website, so it was refused.", "action": "Use Emvryx at its own address."})
         try:
             body = self._json()
             if path == "/api/login":
@@ -1138,6 +1188,9 @@ class Handler(http.server.BaseHTTPRequestHandler):
 
     def do_DELETE(self):
         path = urllib.parse.urlparse(self.path).path
+        if not self._origin_ok():
+            self.state.auth.event("bad_origin", "", self._ip(), f"DELETE {path}")
+            return self._send(403, {"code": "bad_origin", "message": "That request came from another website, so it was refused.", "action": "Use Emvryx at its own address."})
         who = self._who()
         if not who:
             return
@@ -1448,6 +1501,9 @@ class Handler(http.server.BaseHTTPRequestHandler):
         self.send_response(200)
         self.send_header("Content-Type", "text/event-stream")
         self.send_header("Cache-Control", "no-store")
+        self.send_header("X-Content-Type-Options", "nosniff")
+        for k, v in self._security_headers().items():
+            self.send_header(k, v)
         self.send_header("Connection", "close")
         self.end_headers()
         self.close_connection = True
