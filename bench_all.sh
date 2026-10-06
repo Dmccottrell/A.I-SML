@@ -3,6 +3,7 @@
 #
 #   cd /workspace/A.I-SML && source /venv/main/bin/activate && git pull origin main
 #   bash bench_all.sh                 (inside tmux; close the screen with Ctrl+B then D)
+#   STEPS="3 4" bash bench_all.sh   (run only some steps, e.g. to repeat the ones that failed)
 #   MAX_HOURS=4 bash bench_all.sh     (stop starting new steps after 4 hours: a spending guard)
 #
 # Steps (estimates, not measured; the machine costs about $0.51 an hour, so the whole thing should be roughly 4 to 6 hours = $2 to $3):
@@ -20,6 +21,7 @@ cd /workspace/A.I-SML && source /venv/main/bin/activate
 mkdir -p logs/bench
 START=$(date +%s)
 ping() { echo "$(date +%H:%M) $1"; curl -s -d "$1" "ntfy.sh/$NTFY" > /dev/null || true; }
+want() { case " ${STEPS:-1 2 3 4} " in *" $1 "*) return 0;; esac; return 1; }   # STEPS="3 4" bash bench_all.sh runs only those steps
 over() { [ $(( ($(date +%s) - START) / 60 )) -ge $(( MAX_HOURS * 60 )) ]; }
 stage() {   # stage NAME LOGFILE command...
     local name="$1" log="$2"; shift 2
@@ -35,6 +37,7 @@ pip install -q lm_eval peft datasets > /dev/null 2>&1
 
 MODELS=(flare-2.5 equinox-2 solstice-2)
 
+if want 1; then
 # 1. our rules sheet
 for m in "${MODELS[@]}"; do
     stage "$m rules sheet (tuned)" "logs/bench/$m-rules.txt" python evaluate_open.py --model "$m" --tuned --prompts eval/constraints.jsonl --report "logs/bench/$m-rules.md" \
@@ -42,38 +45,45 @@ for m in "${MODELS[@]}"; do
     stage "$m rules sheet (plain base)" "logs/bench/$m-rules-base.txt" python evaluate_open.py --model "$m" --prompts eval/constraints.jsonl --report "logs/bench/$m-rules-base.md" \
         && ping "$m rules (plain base): $(tail -n 1 logs/bench/$m-rules-base.md)"
 done
+fi
 
+if want 2; then
 # 2. public benchmarks, quick
 for m in "${MODELS[@]}"; do
     stage "$m core benchmarks (200 questions each)" "logs/bench/$m-core.txt" python bench_open.py --model "$m" --suite core --limit 200 --out logs/bench \
         && ping "$m core (task: tuned / base): $(grep -E '^\| (arc|wino|mmlu|gsm|truth)' logs/bench/$m/report.md | awk -F'|' '{gsub(/ /,"",$2); gsub(/ /,"",$4); gsub(/ /,"",$5); printf "%s %s/%s; ", $2, $5, $4}')"
 done
+fi
 
+if want 3; then
 # 3. code benchmarks (they run model-written code: this machine only)
 for m in "${MODELS[@]}"; do
     stage "$m code benchmarks (50 questions each)" "logs/bench/$m-code.txt" python bench_open.py --model "$m" --suite code --allow-code --limit 50 --out logs/bench/code \
         && ping "$m code (task: tuned / base): $(grep -E '^\| (humaneval|mbpp)' logs/bench/code/$m/report.md | awk -F'|' '{gsub(/ /,"",$2); gsub(/ /,"",$4); gsub(/ /,"",$5); printf "%s %s/%s; ", $2, $5, $4}')"
 done
+fi
 
+if want 4; then
 # 4. VryxCode exercise test
 LLAMA=/workspace/llama.cpp
+LPORT=8099          # not 8080: on Vast that port is already used by the machine's own services (llama-server could not bind it)
 MODELDIR=/workspace/models
 mkdir -p "$MODELDIR"
 serve_and_run() {   # serve_and_run GGUF -- bench_exercises args...
     local gguf="$1"; shift
-    "$LLAMA/build/bin/llama-server" -m "$gguf" -c 16384 -ngl 99 --port 8080 > logs/bench/llama-server.txt 2>&1 &
+    "$LLAMA/build/bin/llama-server" -m "$gguf" -c 16384 -ngl 99 --port $LPORT > logs/bench/llama-server.txt 2>&1 &
     local pid=$!
-    for i in $(seq 1 120); do curl -s localhost:8080/health | grep -q ok && break; sleep 5; done
-    python bench_exercises.py "$@" --limit 10 --llama http://127.0.0.1:8080
+    for i in $(seq 1 120); do curl -s localhost:$LPORT/health | grep -q ok && break; sleep 5; done
+    python bench_exercises.py "$@" --limit 10 --llama http://127.0.0.1:$LPORT
     local rc=$?
     kill $pid 2>/dev/null; wait $pid 2>/dev/null
     return $rc
 }
 serve_and_run_collect() {
-    "$LLAMA/build/bin/llama-server" -m "$1" -c 16384 -ngl 99 --port 8080 > logs/bench/llama-server.txt 2>&1 &
+    "$LLAMA/build/bin/llama-server" -m "$1" -c 16384 -ngl 99 --port $LPORT > logs/bench/llama-server.txt 2>&1 &
     local pid=$!
-    for i in $(seq 1 120); do curl -s localhost:8080/health | grep -q ok && break; sleep 5; done
-    python collect_runs.py --coder qwen2.5-coder-14b --exercises "$EX" --limit 20 --synthetic 40 --llama http://127.0.0.1:8080 --out logs/bench/agent_runs.jsonl
+    for i in $(seq 1 120); do curl -s localhost:$LPORT/health | grep -q ok && break; sleep 5; done
+    python collect_runs.py --coder qwen2.5-coder-14b --exercises "$EX" --limit 20 --synthetic 40 --llama http://127.0.0.1:$LPORT --out logs/bench/agent_runs.jsonl
     local rc=$?
     kill $pid 2>/dev/null; wait $pid 2>/dev/null
     return $rc
@@ -104,4 +114,6 @@ if [ -x "$LLAMA/build/bin/llama-server" ] && [ -d "$EX" ]; then
 else
     ping "bench_all: skipped the exercise test (llama.cpp did not build, or the exercises are missing: see logs/bench/llama-build.txt)"
 fi
+fi
+
 ping "bench_all: all done. Results are in logs/bench/. Press Stop (not Destroy) on the Vast instance."
