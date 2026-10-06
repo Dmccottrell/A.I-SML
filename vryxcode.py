@@ -116,6 +116,9 @@ def preview(name, args):
         return f"write {args.get('path')} ({len(text.splitlines())} lines)\n{shown}"
     if name == "edit_file":
         return f"edit {args.get('path')}\n  - {str(args.get('old', ''))[:300]}\n  + {str(args.get('new', ''))[:300]}"
+    if name == "github":
+        return {"pull": "github pull: fetch new work from the linked GitHub repository (fast-forward only)",
+                "push": "github push: send this project's current branch to the linked GitHub repository"}.get(str(args.get("action")), f"github {args.get('action')}")
     return f"{name} {json.dumps(args)[:300]}"
 
 
@@ -138,12 +141,21 @@ def make_ask(auto_yes=False, input_fn=input, out=print):
     return ask
 
 
-def run_task(task, generate, workspace, ask, max_turns=12, context_tokens=None, extra_programs=(), out=print):
-    """Run one task. Returns harness.run_agent's result (finished, summary, turns, messages)."""
+GITHUB_TOOL_NOTE = (" github(action) with action status, pull or push works with the GitHub repository this project is linked to: commit with git first; "
+                    "the user is asked before anything is pulled or pushed.")
+
+
+def run_task(task, generate, workspace, ask, max_turns=12, context_tokens=None, extra_programs=(), out=print, tools=None, git_identity=None):
+    """Run one task. Returns harness.run_agent's result (finished, summary, turns, messages).
+    `tools` is {name: function(**args) -> text} of extra tools (the GitHub tool, run by the server, never by the sandbox)."""
     programs = set(harness.ALLOWED_PROGRAMS) | set(extra_programs)
     rules = {"write_file": "ask", "edit_file": "ask", "run": "ask"}
-    with harness.Sandbox(workspace=workspace, allowed_programs=programs) as sandbox:
-        result = harness.run_agent(task, generate, sandbox, max_turns=max_turns, system=SYSTEM, ask=ask, context_tokens=context_tokens,
+    kw = {"git_identity": git_identity} if git_identity else {}
+    with harness.Sandbox(workspace=workspace, allowed_programs=programs, **kw) as sandbox:
+        for name, fn in (tools or {}).items():
+            sandbox.register_tool(name, fn)
+        system = SYSTEM + (GITHUB_TOOL_NOTE if "github" in (tools or {}) else "")
+        result = harness.run_agent(task, generate, sandbox, max_turns=max_turns, system=system, ask=ask, context_tokens=context_tokens,
                                    permissions=harness.Permissions(rules=rules, ask=ask))
     out(("Done: " if result["finished"] else "Stopped without finishing: ") + (result["summary"] or f"{result['turns']} steps used") )
     return result

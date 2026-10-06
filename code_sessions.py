@@ -78,8 +78,8 @@ class Meter:
 class Session:
     """One task being worked on. `events` only ever grows; the page asks for the ones after the last it saw."""
 
-    def __init__(self, sid, user, project, task, model_id, workspace, auto_edits=False, meter=None):
-        self.meter = meter
+    def __init__(self, sid, user, project, task, model_id, workspace, auto_edits=False, meter=None, tools=None, identity=None):
+        self.meter, self.tools, self.identity = meter, tools, identity
         self.id, self.user, self.project, self.task, self.model_id, self.workspace = sid, user, project, task, model_id, workspace
         self.auto_edits = auto_edits
         self.events, self.state = [], "starting"       # starting | working | asking | done | stopped | failed
@@ -117,7 +117,9 @@ class Session:
             return True
         if self.auto_edits and name in ("write_file", "edit_file", "run"):
             return True
-        if name in getattr(self, "_always", set()):
+        if name == "github" and str(args.get("action", "status")) == "status":
+            return True                                  # only looking at the link
+        if name in getattr(self, "_always", set()) and name != "github":       # pulling and pushing always ask, every time
             return True
         qid = len(self.events)
         with self.cv:
@@ -131,7 +133,7 @@ class Session:
             if not self.stop.is_set():
                 self.state = "working"
         allow, always = answer
-        if always:
+        if always and name != "github":
             self._always = getattr(self, "_always", set()) | {name}
         self.emit("answer", id=qid, allow=allow)
         return allow
@@ -170,7 +172,7 @@ class Session:
         self.emit("start", task=self.task, model=self.model_id, project=self.project)
         try:
             result = vryxcode.run_task(self.task, self.wrap(generate), self.workspace, self.ask, max_turns, context_tokens, extra_programs,
-                                       out=lambda *_: None)
+                                       out=lambda *_: None, tools=self.tools, git_identity=self.identity)
             self.emit("end", finished=result["finished"], summary=clip(result["summary"]), turns=result["turns"])
             self.state = "done" if result["finished"] else "stopped"
         except U.LimitError as e:
@@ -347,7 +349,7 @@ class CodeManager:
         s = self.sessions.get(self.by_user.get(user))
         return s if s and s.state in ("starting", "working", "asking") else None
 
-    def start(self, user, project, task, model_id, generate, auto_edits=False, context_tokens=None, meter=None, outside=False):
+    def start(self, user, project, task, model_id, generate, auto_edits=False, context_tokens=None, meter=None, outside=False, tools=None, identity=None):
         task = str(task or "").strip()
         if not task:
             raise CodeError("Describe what to build or fix.")
@@ -365,7 +367,7 @@ class CodeManager:
             workspace = self.project_path(user, project)
             os.makedirs(workspace, exist_ok=True)
             self._n += 1
-            s = Session(f"s{self._n}-{int(time.time())}", user, project, task, model_id, workspace, auto_edits, meter)
+            s = Session(f"s{self._n}-{int(time.time())}", user, project, task, model_id, workspace, auto_edits, meter, tools, identity)
             self.sessions[s.id], self.by_user[user] = s, s.id
         threading.Thread(target=s.run, args=(generate, self.max_turns, context_tokens), daemon=True).start()
         return s, note

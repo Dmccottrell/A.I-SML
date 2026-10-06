@@ -9,8 +9,8 @@ class Catalog(unittest.TestCase):
     def test_list_is_valid(self):
         self.assertEqual(C.check(), [])
 
-    def test_nothing_is_connectable_yet(self):
-        self.assertTrue(all(a["status"] == "soon" for a in C.APPS))
+    def test_only_github_is_connectable_so_far(self):
+        self.assertEqual({a["id"] for a in C.APPS if a["status"] == "available"}, {"github"})      # GitHub is the first real one
 
     def test_every_app_that_changes_things_asks_first(self):
         for a in C.APPS:
@@ -30,9 +30,11 @@ class Server(Base):
         self.assertEqual({a["id"] for a in j["apps"]}, {a["id"] for a in C.APPS})
         self.assertTrue(j["rules"])
 
-    def test_connecting_says_coming_soon(self):
-        s, j = self.sam.call("POST", "/api/apps/github/connect", {})
+    def test_connecting_the_others_says_coming_soon(self):
+        s, j = self.sam.call("POST", "/api/apps/gmail/connect", {})
         self.assertEqual((s, j["code"]), (501, "coming_soon"))
+        s, j = self.sam.call("POST", "/api/apps/github/connect", {})          # GitHub is real: an empty token is a plain error
+        self.assertEqual((s, j["code"]), (400, "github"))
         self.assertEqual(self.sam.call("POST", "/api/apps/nothing/connect", {})[0], 404)
 
     def test_needs_a_key(self):
