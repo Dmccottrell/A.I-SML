@@ -746,6 +746,8 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 return self._file("sw.js", "text/javascript")
             if path == "/icon.svg":
                 return self._file("icon.svg", "image/svg+xml")
+            if path in ("/icon-192.png", "/icon-512.png", "/icon-maskable-512.png", "/apple-touch-icon.png"):
+                return self._file(path[1:], "image/png")
             if not path.startswith("/api/"):
                 return self._send(404, {"code": "not_found", "message": "Not found."})
             who = self._who()
