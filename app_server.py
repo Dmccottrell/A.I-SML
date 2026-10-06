@@ -48,6 +48,7 @@ import urllib.request
 import app_engine as E
 import auth
 import chat
+import data_tools
 import code_sandbox
 import chat_polish
 import code_sessions
@@ -76,7 +77,7 @@ OUTSIDE_NOTE = ("{label} is an outside coding model ({licence}), not an Emvryx m
 SECURITY_DEFAULTS = {"session_days": 90, "pair_minutes": 15, "login_fail_limit": 8, "login_fail_window": 600, "email_start_limit": 5,
                      "email_start_window": 600, "open_signups": False, "trusted_proxies": ["127.0.0.1", "::1"], "audit_notify": True,
                      "allow_key_links": False, "allowed_origins": [], "code_unsandboxed_for_others": False,
-                     "require_encryption": False, "github_client_id": "",
+                     "require_encryption": False, "github_client_id": "", "contact_email": "", "operator_name": "",
                      **code_sandbox.QUOTA_DEFAULTS}
 MAX_UPLOAD = 30_000_000                                # a project upload (base64): see code_sessions.MAX_IMPORT_BYTES
 MAX_TEXT = 20_000
@@ -1020,7 +1021,17 @@ class Handler(http.server.BaseHTTPRequestHandler):
             nonce = secrets.token_urlsafe(16)
             data = data.replace(b"<script>", b'<script nonce="' + nonce.encode() + b'">')
             return self._send(200, data, ctype, csp=self.PAGE_CSP.format(nonce=nonce))
-        self._send(200, data, ctype, csp="default-src 'none'; img-src 'self' data:; style-src 'unsafe-inline'; frame-ancestors 'none'; base-uri 'none'" if name.endswith(".svg") else None)
+        csp = None
+        if name in ("privacy.html", "terms.html"):               # the owner's name and contact go in where the page says {{operator}} and {{contact}}
+            import html as _html
+            contact = str(self.state.security.get("contact_email") or "")
+            operator = str(self.state.security.get("operator_name") or "")
+            data = (data.replace(b"{{contact}}", (f'<a href="mailto:{_html.escape(contact, quote=True)}">{_html.escape(contact)}</a>' if contact
+                                                 else "the person who gave you access").encode())
+                        .replace(b"{{operator}}", (_html.escape(operator) if operator else "the person who runs this server").encode()))
+        if name.endswith(".svg") or name in ("privacy.html", "terms.html"):
+            csp = "default-src 'none'; img-src 'self' data:; style-src 'unsafe-inline'; frame-ancestors 'none'; base-uri 'none'"
+        self._send(200, data, ctype, csp=csp)
 
     # ---- routes
     def do_GET(self):
@@ -1055,6 +1066,8 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 return self._send(410, "This pairing link was already used or has expired. Ask for a new one.\n", "text/plain; charset=utf-8")
             if path == "/api/auth-options":
                 return self._send(200, {"email": bool(self.state.mailer), "signups": bool(self.state.mailer and self.state.security["open_signups"])})
+            if path in ("/privacy", "/terms"):
+                return self._file(path[1:] + ".html", "text/html; charset=utf-8")
             if path == "/manifest.webmanifest":
                 return self._file("manifest.webmanifest", "application/manifest+json")
             if path == "/sw.js":
@@ -1084,6 +1097,10 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 return self._send(200, {"notes": self.state.saved_for(who["user"]).list(self.state.clock())})
             if path.startswith("/api/code"):
                 return self.api_code_get(who, path, qs)
+            if path == "/api/export":
+                data = data_tools.export_zip(self.state, who["user"])
+                self.state.auth.event("data_export", who["user"], self._ip(), "")
+                return self._send(200, data, "application/zip", {"Content-Disposition": f'attachment; filename="emvryx-{who["user"]}-data.zip"'})
             if path == "/api/sessions":
                 return self._send(200, {"sessions": [dict(x, current=(x["id"] == who.get("session"))) for x in self.state.auth.sessions_for(who["user"])]})
             if path == "/api/admin/audit" and who["owner"]:
@@ -1124,6 +1141,15 @@ class Handler(http.server.BaseHTTPRequestHandler):
             who = self._who()
             if not who:
                 return
+            if path == "/api/delete-account":
+                if str(body.get("confirm", "")) != who["user"]:
+                    return self._send(400, {"code": "confirm", "message": "Type your name to confirm.", "action": "Nothing was deleted."})
+                try:
+                    data_tools.delete_account(self.state, who["user"])
+                except ValueError as e:
+                    return self._send(400, {"code": "bad_request", "message": str(e)})
+                self._expire_cookie("emvryx_session")
+                return self._send(200, {"ok": True})
             if path == "/api/logout":
                 if who.get("session"):
                     self.state.auth.revoke(who["session"], who["user"])
@@ -1432,7 +1458,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
         model = pool.get(model_id) or default
         snap = st.usage_snapshot(who, model, effort)
         win = st.window_for(who, model)
-        return {"user": who["user"], "owner": who["owner"], "plan": who["tier"], "demo": st.demo,
+        return {"user": who["user"], "owner": who["owner"], "plan": who["tier"], "demo": st.demo, "contact": st.security.get("contact_email") or None,
                 "models": cat, "model": model["id"], "efforts": [
                     {"id": "auto", "name": "Auto", "use": "Picks for you",
                      "blurb": "Decides how long to think from your message: quick for simple questions, deeper for hard ones."},

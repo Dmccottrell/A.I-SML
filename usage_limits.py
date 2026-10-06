@@ -101,6 +101,12 @@ class UsageStore:
                         (user, tier, tz_minutes, 1 if owner else 0, json.dumps(overrides or {})))
         self.db.commit()
 
+    def delete_user(self, user):
+        """Everything stored about one person (their plan row, usage rows, tank and holds)."""
+        for table in ("users", "usage", "tank", "holds"):
+            self.db.execute(f"DELETE FROM {table} WHERE user = ?", (user,))
+        self.db.commit()
+
     def get_user(self, user):
         r = self.db.execute("SELECT tier, tz_minutes, owner, overrides FROM users WHERE user = ?", (user,)).fetchone()
         if not r:
