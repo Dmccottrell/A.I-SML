@@ -11,7 +11,8 @@ WHY THIS FILE EXISTS
     have not chosen to share.
 
 Usage:  python identity_lessons.py --name "Flare 2.5" --lessons data/v3/chat.jsonl --out data/v3/identity_patch.jsonl
-        (makes a small patch set: the corrected identity lessons mixed with ordinary ones, for finetune_open.py --patch)
+        (makes a small patch set: the corrected identity lessons mixed with ordinary ones, for finetune_open.py --patch.
+         The chats are short, so a pass is only a few steps: --patch runs 3 passes with a small step by default and warns if it is under 20 steps)
 """
 import argparse
 import json

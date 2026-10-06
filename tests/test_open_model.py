@@ -419,3 +419,35 @@ class EvaluateOpen(unittest.TestCase):
         for r in rows:
             self.assertTrue({"category", "prompt"} <= set(r))
             self.assertFalse(any("scratch" in w and "no" not in w for w in r.get("expect", [])))
+
+
+class PatchDefaults(unittest.TestCase):
+    def test_patch_mode_trains_for_several_passes_with_small_steps(self):
+        try:
+            import peft  # noqa: F401
+            import torch  # noqa: F401
+        except ImportError:
+            self.skipTest("peft not installed")
+        import contextlib
+        import io
+        import finetune_open
+        d = tempfile.mkdtemp()
+        base = tiny_base(d)
+        data = os.path.join(d, "chat.jsonl")
+        with open(data, "w", encoding="utf-8") as f:
+            for _ in range(40):
+                f.write(json.dumps({"messages": [{"role": "user", "content": "hello how are you"},
+                                                 {"role": "assistant", "content": "the capital of illinois is springfield"}]}) + "\n")
+        out = os.path.join(d, "out")
+        common = ["--model", base, "--data", data, "--out", out, "--batch_tokens", "128", "--rank", "4", "--max_len", "64", "--keep_old_identity"]
+        with contextlib.redirect_stdout(io.StringIO()):
+            finetune_open.main(common + ["--max_steps", "1"])
+        buf = io.StringIO()
+        with contextlib.redirect_stdout(buf):
+            finetune_open.main(common + ["--patch", "--pilot"])
+        text = buf.getvalue()
+        self.assertIn("(2 micro-batches each)", text)           # the patch default is a small step
+        buf = io.StringIO()
+        with contextlib.redirect_stdout(buf):
+            finetune_open.main(common + ["--patch", "--max_steps", "2"])
+        self.assertIn("patch run", buf.getvalue())

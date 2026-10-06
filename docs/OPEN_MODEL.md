@@ -193,6 +193,6 @@ The v3 lessons say the model "was trained from scratch on a home computer". That
 - `finetune_open.py` now **drops those lessons and adds 1,000 corrected identity chats by default** (`--keep_old_identity` turns it off, only right for from-scratch models). Equinox 2 and later get it automatically.
 - **Flare 2.5's first run (started before this fix) learned the old answers.** `chain_open.sh` fixes it with a short extra pass:
   `python identity_lessons.py --name "Flare 2.5" --lessons data/v3/chat.jsonl --out data/v3/identity_patch.jsonl`, then
-  `python finetune_open.py --model flare-2.5 --patch --data data/v3/identity_patch.jsonl` (about 50 steps; continues the saved adapter at a lower learning rate, mixed with ordinary lessons so it does not forget).
+  `python finetune_open.py --model flare-2.5 --patch --data data/v3/identity_patch.jsonl` (continues the saved adapter, mixed with ordinary lessons so it does not forget). **The first attempt (Oct 2026) did almost nothing**: the patch chats are so short that one pass was only a few steps at a low learning rate, and the identity sheet still scored 8/16 with the old answers. `--patch` now defaults to 3 passes, a small step (`--grad_accum 2`) and a learning rate of 1e-4, and warns when it would run fewer than 20 steps..
 - Check the result with `python evaluate_open.py --model flare-2.5 --tuned` (identity sheet, `eval/identity_open.jsonl`); other sheets work too (`--prompts eval/constraints.jsonl`).
 See [IDENTITY.md](IDENTITY.md) for the voice and the ways to make it ours.

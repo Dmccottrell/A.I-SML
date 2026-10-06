@@ -145,9 +145,9 @@ def main(argv=None):
     p.add_argument("--export", default=None, help="default: export/open/<model name>/my-ai")
     p.add_argument("--max_len", type=int, default=4096, help="longest training conversation, in tokens")
     p.add_argument("--batch_tokens", type=int, default=None, help="padded tokens per micro-batch (default: the preset's, else 8192)")
-    p.add_argument("--grad_accum", type=int, default=None, help="micro-batches per step (default: the preset's, else 8)")
-    p.add_argument("--epochs", type=float, default=1.0)
-    p.add_argument("--lr", type=float, default=None, help="default 2e-4 (5e-5 with --patch)")
+    p.add_argument("--grad_accum", type=int, default=None, help="micro-batches per step (default: the preset's, else 8; 2 with --patch)")
+    p.add_argument("--epochs", type=float, default=None, help="default 1 (3 with --patch: the patch chats are short, one pass is only a few steps)")
+    p.add_argument("--lr", type=float, default=None, help="default 2e-4 (1e-4 with --patch)")
     p.add_argument("--patch", action="store_true",
                    help="a short extra run that continues from the saved adapter (new optimizer, step count restarts): for fixing a finished run, "
                         "e.g. with identity_lessons.py's patch file. Do it last: a later plain resume would start from its step count")
@@ -168,9 +168,10 @@ def main(argv=None):
     if preset:
         a.model = cfg["hf"] if not os.path.isdir(a.model) else a.model
     a.batch_tokens = a.batch_tokens or cfg.get("batch_tokens", 8192)
-    a.grad_accum = a.grad_accum or cfg.get("grad_accum", 8)
+    a.grad_accum = a.grad_accum or (2 if a.patch else cfg.get("grad_accum", 8))
+    a.epochs = a.epochs if a.epochs is not None else (3.0 if a.patch else 1.0)
     a.rank = a.rank or cfg.get("rank", 64)
-    a.lr = a.lr or (5e-5 if a.patch else 2e-4)
+    a.lr = a.lr or (1e-4 if a.patch else 2e-4)
     a.warmup = a.warmup or (5 if a.patch else 30)
     a.quant4 = a.quant4 or cfg.get("quant4", False)
     name = preset or short_name(a.model)
@@ -215,6 +216,8 @@ def main(argv=None):
         total = 3
     print(f"{len(examples):,} conversations, {len(batches):,} micro-batches, {total:,} optimizer steps "
           f"({a.grad_accum} micro-batches each), device {device}")
+    if a.patch and total < 20:
+        print(f"WARNING: a patch of only {total} steps will barely change the model: raise --epochs or lower --grad_accum / --batch_tokens")
 
     dtype = torch.bfloat16 if device == "cuda" else torch.float32
     if a.quant4:
