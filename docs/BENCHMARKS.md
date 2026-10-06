@@ -56,7 +56,18 @@ These test an agent that works in a real repository or terminal, which is what V
 **Honest expectations (not measured):** the published scores for these come from large agents. Models of 4B to 14B usually resolve far fewer issues, so treat any number as a trend to track, not a target. Standard Vast instances are containers and often cannot run Docker (from memory): check before planning to run SWE-bench there; a machine that supports Docker, or a VM-type instance, may be needed.
 **Order I'd do them in:** (1) the `core` suite, (2) `code` suite, (3) `bench_exercises.py`, (4) `vryx_swe.py` on SWE-bench Lite with scoring on a Docker machine, (5) LiveCodeBench and Terminal-Bench, (6) Verified and Pro. Before any of them: connect VryxCode to a real trained model and try a few tasks by hand.
 
-## 4. Cautions
+## 4. Long-context test: `bench_long.py`
+
+Before spending anything on long-text training, measure what the models already do. The test hides one made-up sentence ("The secret code for project X is NNNNN.") inside a long made-up document, at the start, middle and end, and asks for the code. It prints a table by length and depth.
+
+Start the model with the window you want to test, using the settings from `open_models.llama_args`. Qwen3 models are native to 32K; 64K and 128K use YaRN, for example:
+
+    llama-server -m equinox-2.gguf -c 65536 --rope-scaling yarn --rope-scale 2 --yarn-orig-ctx 32768 --port 8090
+    python bench_long.py --llama http://127.0.0.1:8090 --label equinox-2 --lengths 8192,16384,32768,65536
+
+Results go to `logs/long/<label>.md` and `.json`. Weak at 32K means a short long-text fine-tune is worth it; strong means just raise the setting. Flare 2.5 stays at 8K by choice. The test is free to run on the PC (a few minutes per length).
+
+## 5. Cautions
 - Don't compare our numbers with a published table unless the tool, prompts, few-shot count and chat template match.
 - Some test sets leak into training data: a big jump on one benchmark with no gain elsewhere is suspect.
 - One run is a sample. Use `--limit` for speed, then the full set for any number you will quote.
