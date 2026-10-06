@@ -83,7 +83,8 @@ DEMO = [
 def check_model(model_id):
     """(ok, message). Only models flagged "vryxcode" in models.json may run it."""
     here = os.path.dirname(os.path.abspath(__file__))
-    models = json.load(open(os.path.join(here, "models.json"), encoding="utf-8"))["models"]
+    with open(os.path.join(here, "models.json"), encoding="utf-8") as f:
+        models = json.load(f)["models"]
     by_id = {m["id"]: m for m in models}
     ok_ids = [m["id"] for m in models if m.get("vryxcode")]
     names = ", ".join(f"{by_id[i]['name']} {by_id[i]['version']:g}" for i in ok_ids)

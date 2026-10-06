@@ -48,6 +48,8 @@ import urllib.request
 import app_engine as E
 import chat
 import chat_polish
+import code_sessions
+import vryxcode
 import connected_apps
 import lookup_auto
 import saved_notes
@@ -223,6 +225,8 @@ class AppState:
         self.stores, self.stops, self.settings = {}, {}, {}
         self.lock = threading.Lock()
         self.users = self._load_users()
+        self.code = code_sessions.CodeManager(data_dir)       # VryxCode sessions (projects live under <data>/code/)
+        self.code_generate = None                              # tests: code_generate(model) -> generate(messages)
 
     # ---- people and keys
     def _users_path(self):
@@ -381,6 +385,26 @@ class AppState:
                 c["older"] = True
                 other.append(c)
         return {"cards": cards, "other": other}
+
+    def code_models(self, who):
+        """The models VryxCode can use for this person: flagged "vryxcode", and ready to run here."""
+        cat = self.catalog(who)
+        return [{"id": m["id"], "name": m["name"], "version": m["version"], "state": m["state"], "badge": m["badge"],
+                 "note": vryxcode.ELIGIBLE_NOTE.get(m["id"], "")}
+                for m in cat["cards"] + cat["other"] if m.get("vryxcode")]
+
+    def code_backend(self, model):
+        """generate(messages) for a coding session on this model (the llama-server that runs it)."""
+        if self.code_generate:
+            return self.code_generate(model)
+        ctx = min(int(model.get("context_tested") or 8192), 32768)
+        if self.runner:
+            url = self.runner.ensure(model["id"], ctx)
+        elif self.llama_url:
+            url = self.llama_url
+        else:
+            raise code_sessions.CodeError("No model is attached to this server.", "Start it with --gguf or --llama (see docs/VRYXCODE.md).")
+        return vryxcode.LlamaChat(url)
 
     def pick_model(self, who, model_id):
         cat = self.catalog(who)
@@ -676,6 +700,8 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 return self._send(200, connected_apps.catalog())
             if path == "/api/saved-notes":
                 return self._send(200, {"notes": self.state.saved_for(who["user"]).list(self.state.clock())})
+            if path.startswith("/api/code"):
+                return self.api_code_get(who, path, qs)
             if path == "/api/admin/users" and who["owner"]:
                 return self._send(200, {"users": [{"user": u["user"], "tier": self.state.usage.get_user(u["user"])["tier"]}
                                                   for u in self.state.users.values()], "paused": bool(self.state.cfg.get("paused"))})
@@ -710,6 +736,8 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 if ev:
                     ev.set()
                 return self._send(200, {"ok": True})
+            if path.startswith("/api/code/"):
+                return self.api_code_post(who, path, body)
             if path == "/api/settings":
                 return self._send(200, self.state.put_settings(who["user"], body))
             m = re.fullmatch(r"/api/apps/([a-z]+)/connect", path)
@@ -762,6 +790,71 @@ class Handler(http.server.BaseHTTPRequestHandler):
             return self._send(404, {"code": "not_found", "message": "Not found."})
         self.state.store(who["user"]).delete_chat(int(m.group(1)))
         self._send(200, {"ok": True})
+
+    # ---- VryxCode
+    def _code_error(self, e):
+        self._send(400, {"code": "code_error", "message": e.message, "action": e.action})
+
+    def api_code_get(self, who, path, qs):
+        st, user = self.state, who["user"]
+        arg = lambda k: (qs.get(k) or [""])[0]
+        try:
+            if path == "/api/code":
+                run = st.code.running(user)
+                return self._send(200, {"models": st.code_models(who), "projects": st.code.projects(user),
+                                        "running": run.id if run else None, "project": run.project if run else None})
+            if path == "/api/code/files":
+                return self._send(200, {"files": st.code.files(user, arg("project"))})
+            if path == "/api/code/file":
+                return self._send(200, st.code.read(user, arg("project"), arg("path")))
+            m = re.fullmatch(r"/api/code/sessions/([\w-]+)", path)
+            if m:
+                s = st.code.get(user, m.group(1))
+                events, state, pending = s.since(max(0, int(arg("after") or 0)))
+                return self._send(200, {"events": events, "state": state, "pending": pending, "task": s.task, "project": s.project, "model": s.model_id})
+            return self._send(404, {"code": "not_found", "message": "Not found."})
+        except code_sessions.CodeError as e:
+            self._code_error(e)
+
+    def api_code_post(self, who, path, body):
+        st, user = self.state, who["user"]
+        try:
+            if path == "/api/code/start":
+                try:
+                    model = st.pick_model(who, str(body.get("model", "")))
+                except KeyError:
+                    raise code_sessions.CodeError("Pick a model for VryxCode.")
+                if not model.get("vryxcode"):
+                    raise code_sessions.CodeError(vryxcode.check_model(model["id"])[1])
+                if model["state"] != "ready":
+                    raise code_sessions.CodeError(f"{model['name']} {model['version']:g} isn't ready: {model['badge']}.")
+                project = st.code.check_name(body.get("project"))
+                box = {}
+
+                def generate(messages, model=model):          # the model loads on the first step, in the session's thread (it can take a minute)
+                    if "fn" not in box:
+                        try:
+                            box["fn"] = st.code_backend(model)
+                        except AppError as e:
+                            raise code_sessions.CodeError(e.message, e.action)
+                    return box["fn"](messages)
+                s, note = st.code.start(user, project, body.get("task"), model["id"], generate, bool(body.get("auto_edits")),
+                                        int(model.get("context_tested") or 8192))
+                return self._send(200, {"id": s.id, "note": note})
+            m = re.fullmatch(r"/api/code/sessions/([\w-]+)/answer", path)
+            if m:
+                ok = st.code.get(user, m.group(1)).respond(int(body.get("id", -1)), body.get("allow"), body.get("always"))
+                return self._send(200, {"ok": ok})
+            m = re.fullmatch(r"/api/code/sessions/([\w-]+)/stop", path)
+            if m:
+                st.code.get(user, m.group(1)).request_stop()
+                return self._send(200, {"ok": True})
+            if path == "/api/code/projects/delete":
+                st.code.delete_project(user, body.get("project"))
+                return self._send(200, {"ok": True})
+            return self._send(404, {"code": "not_found", "message": "Not found."})
+        except code_sessions.CodeError as e:
+            self._code_error(e)
 
     # ---- the API
     def api_state(self, who, qs):

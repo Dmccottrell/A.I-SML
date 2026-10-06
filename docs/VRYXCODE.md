@@ -39,6 +39,17 @@ python vryxcode.py --demo                         # a scripted run, no model nee
 - It refuses Ember 2, Flare 2 and Flare 2.5, and tells Equinox 2 users to keep tasks small.
 - Qwen's own tool-call format (`<tool_call>`) and our `<|tool_call|>` format both work, and `<think>` blocks are dropped.
 
+## In the chat app: the Code screen
+
+The app has a dedicated **VryxCode** entry in the left menu (like Claude Code or Codex next to their chat). It opens a full screen: a feed of what the model does (each step, each result), a file list with a viewer, a project picker, a model picker and a task box.
+
+- **Projects** are folders on the server, `<data>/code/<person>/<project>/`. Each person only reaches their own; names are letters, digits, dashes and underscores. The model is confined to the project by the same sandbox as the terminal tool.
+- **Models:** only the ones flagged `"vryxcode"` (Equinox 2 and above) that are ready on this server. Equinox shows its "small tasks" note.
+- **Permissions:** edits and runs show a card with *Allow*, *Always allow this* and *No*; running the unit tests never asks. "Auto-approve edits" skips the questions for the session. **Stop** ends the run at the next step.
+- One session per person at a time. The page polls `/api/code/sessions/<id>?after=N`; closing the page does not stop a run, and reopening the screen reattaches to it.
+- Server side: `code_sessions.py` (engine thread, events, questions) and the `/api/code/...` routes in `app_server.py`. Tests: `tests/test_code_sessions.py`.
+- Not built yet: counting VryxCode against plan limits, downloading a project as a zip, importing an existing folder, and the `<think>` stripping the chat page still lacks for Qwen3 models (VryxCode itself strips them).
+
 ## Using an outside coding model (for the best local coding today)
 `--coder LABEL` runs VryxCode on any coding model you start in llama-server, such as Qwen2.5-Coder-14B-Instruct or Qwen3.5-9B (both fit a 12 GB card at 4 bits; check the licence on each model's page). It skips the Emvryx model gate and labels the run as an outside model, so its scores are never mistaken for an Emvryx result. `bench_exercises.py` and `vryx_swe.py` take the same flag, so the candidates can be compared on the same exercises.
 ```
