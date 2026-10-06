@@ -108,40 +108,42 @@ svg .core { fill: var(--core); stroke: var(--sun); stroke-width: 3; transition: 
 /* VryxCode screen */
 .code { position: fixed; inset: 0; z-index: 30; background: var(--bg); display: flex; flex-direction: column; }
 .code[hidden] { display: none; }
-.code .bar2 { height: 60px; flex-shrink: 0; display: flex; align-items: center; gap: 8px; padding: 0 12px; border-bottom: 1px solid var(--line); }
-.code .bar2 .title { font: 600 18px 'Sora', sans-serif; flex: 1; white-space: nowrap; }
-.code .bar2 .title small { font: 400 13px 'Inter', sans-serif; color: var(--muted); margin-left: 8px; }
-.code .cols { flex: 1; min-height: 0; display: flex; }
-.code .feedcol { flex: 1; min-width: 0; display: flex; flex-direction: column; }
-.code .feed { flex: 1; overflow-y: auto; padding: 18px 16px; display: flex; flex-direction: column; gap: 12px; }
-.code .filecol { width: 340px; flex-shrink: 0; border-left: 1px solid var(--line); display: flex; flex-direction: column; min-height: 0; }
-.code .filecol h3 { margin: 0; padding: 12px 14px 6px; font-size: 13px; color: var(--muted); letter-spacing: .06em; }
-.code .flist { max-height: 34%; overflow-y: auto; padding: 0 8px 8px; }
-.code .flist button { display: block; width: 100%; text-align: left; background: transparent; border: 0; border-radius: 8px; padding: 6px 8px; font: 13px ui-monospace, Menlo, Consolas, monospace; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.code .flist button:hover, .code .flist button.on { background: var(--surface2); }
+.code .top2 { height: 60px; flex-shrink: 0; display: flex; align-items: center; gap: 4px; padding: 0 8px 0 4px; }
+.code .top2 .title { font: 600 18px 'Sora', sans-serif; flex: 1; white-space: nowrap; padding-left: 4px; }
+.code .top2 .chip { max-width: 40vw; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.code .main2 { flex: 1; min-height: 0; display: flex; position: relative; }
+.code .col { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.code .feed { flex: 1; overflow-y: auto; padding: 8px 16px 12px; }
+.code .feedin { max-width: 760px; margin: 0 auto; min-height: 100%; display: flex; flex-direction: column; justify-content: flex-end; gap: 10px; }
 .code pre { margin: 0; white-space: pre-wrap; word-break: break-word; font: 13px/1.5 ui-monospace, Menlo, Consolas, monospace; }
-.code .viewer { flex: 1; overflow: auto; padding: 8px 14px 14px; border-top: 1px solid var(--line); }
-.code .ev { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 10px 14px; display: flex; flex-direction: column; gap: 6px; }
-.code .ev .k { font-size: 12px; font-weight: 600; letter-spacing: .06em; color: var(--accenttext); }
-.code .ev.task { align-self: flex-end; max-width: 85%; background: var(--surface2); }
-.code .ev.res pre { color: var(--muted); max-height: 220px; overflow: auto; }
-.code .ev.ask { border-color: var(--accent); }
-.code .ev.fin { border-color: var(--accent); }
-.code .ev.bad { border-color: var(--danger); } .code .ev.bad .k { color: var(--danger); }
-.code .row { display: flex; gap: 8px; flex-wrap: wrap; }
-.code .cbox { border-top: 1px solid var(--line); padding: 10px 12px calc(10px + env(safe-area-inset-bottom)); display: flex; flex-direction: column; gap: 8px; }
-.code .cbox textarea { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; color: var(--text); padding: 12px; font: inherit; min-height: 48px; max-height: 160px; resize: none; width: 100%; }
-.code select, .code .cbox input[type=text] { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; color: var(--text); padding: 0 12px; min-height: 40px; font: inherit; max-width: 100%; }
-.code .hint { color: var(--muted); font-size: 13px; }
-.code .empty { margin: auto; max-width: 440px; text-align: center; color: var(--muted); display: flex; flex-direction: column; gap: 10px; }
-.code .empty b { color: var(--text); font: 600 22px 'Sora', sans-serif; }
-@media (max-width: 900px) {
-  .code .cols { flex-direction: column; }
-  .code .feedcol { min-height: 0; flex: 1 1 0; }
-  .code .filecol { width: auto; border-left: 0; border-top: 1px solid var(--line); height: 30%; flex: 0 0 30%; }
-  .code .flist { max-height: 70px; }
-  .code .cbox textarea { min-height: 40px; }
-}
+.code .you { align-self: flex-end; max-width: 85%; background: var(--surface2); border-radius: 18px 18px 4px 18px; padding: 10px 14px; }
+.code details.step { border-radius: 12px; }
+.code details.step summary { list-style: none; cursor: pointer; display: flex; align-items: center; gap: 10px; padding: 8px 10px; border-radius: 12px; color: var(--muted); font-size: 15px; min-height: 40px; }
+.code details.step summary::-webkit-details-marker { display: none; }
+.code details.step summary:hover { background: var(--surface); }
+.code details.step .dot { width: 8px; height: 8px; border-radius: 999px; background: var(--muted); flex-shrink: 0; }
+.code details.step.ok .dot { background: var(--accent); } .code details.step.no .dot { background: var(--danger); }
+.code details.step .what { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text); }
+.code details.step .more { padding: 4px 10px 10px 28px; display: flex; flex-direction: column; gap: 8px; }
+.code details.step .more pre { color: var(--muted); max-height: 240px; overflow: auto; }
+.code .ask, .code .fin, .code .bad { background: var(--surface); border: 1px solid var(--line); border-radius: 18px; padding: 14px 16px; display: flex; flex-direction: column; gap: 10px; }
+.code .ask { border-color: var(--accent); } .code .bad { border-color: var(--danger); }
+.code .ask b, .code .fin b { font-weight: 600; } .code .bad b { color: var(--danger); }
+.code .row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+.code .small { min-height: 40px; padding: 0 16px; border-radius: 12px; font-weight: 600; }
+.code .empty { margin: auto 0; display: flex; flex-direction: column; gap: 14px; align-items: flex-start; padding-bottom: 8vh; }
+.code .empty h1 { margin: 0; font: 600 30px 'Sora', sans-serif; letter-spacing: -0.02em; }
+.code .empty p { margin: 0; color: var(--muted); max-width: 460px; }
+.code .tip { color: var(--muted); font-size: 13px; text-align: center; padding: 6px 0 0; }
+.code .menu { bottom: auto; top: 100%; left: auto; right: 0; margin: 6px 0 0; width: min(320px, 92vw); z-index: 5; }
+.code .drawer { position: absolute; top: 0; right: 0; bottom: 0; width: 360px; max-width: 100%; background: var(--surface); border-left: 1px solid var(--line); display: flex; flex-direction: column; z-index: 4; box-shadow: -12px 0 32px rgba(0,0,0,.25); }
+.code .drawer[hidden] { display: none; }
+.code .drawer .dh { display: flex; align-items: center; justify-content: space-between; padding: 6px 6px 6px 16px; font-weight: 600; }
+.code .flist { max-height: 38%; overflow-y: auto; padding: 0 8px 8px; }
+.code .flist button { display: block; width: 100%; text-align: left; background: transparent; border: 0; border-radius: 8px; padding: 8px; font: 13px ui-monospace, Menlo, Consolas, monospace; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-height: 36px; }
+.code .flist button:hover, .code .flist button.on { background: var(--surface2); }
+.code .viewer { flex: 1; overflow: auto; padding: 10px 14px 14px; border-top: 1px solid var(--line); }
+@media (max-width: 900px) { .code .drawer { width: 100%; box-shadow: none; } }
 /* dialogs */
 .modal { position: fixed; inset: 0; background: rgba(0,0,0,.6); display: grid; place-items: center; z-index: 50; padding: 16px; }
 .dialog { background: var(--surface); border: 1px solid var(--line); border-radius: 22px; padding: 22px; width: min(520px, 100%); max-height: 90dvh; overflow-y: auto; display: flex; flex-direction: column; gap: 14px; }
@@ -222,30 +224,38 @@ svg .core { fill: var(--core); stroke: var(--sun); stroke-width: 3; transition: 
 </div>
 
 <div class="code" id="code" hidden>
-  <div class="bar2">
+  <div class="top2">
     <button class="icon" id="codeBack" aria-label="Back to chats"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M15 5l-7 7 7 7" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
-    <span class="title">VryxCode<small id="codeSub"></small></span>
+    <span class="title">VryxCode</span>
+    <div style="position:relative"><button class="chip" id="codeProj" aria-haspopup="true"></button><div class="menu" id="codeProjMenu" hidden></div></div>
+    <button class="chip" id="codeFilesBtn">Files</button>
   </div>
-  <div class="cols">
-    <div class="feedcol">
-      <div class="feed" id="codeFeed" aria-live="polite"></div>
-      <div class="cbox">
-        <div class="row">
-          <label class="sr" for="codeProject">Project</label><select id="codeProject" aria-label="Project"></select>
-          <label class="sr" for="codeModel">Model</label><select id="codeModel" aria-label="Model"></select>
-          <label class="hint" style="display:flex;align-items:center;gap:6px"><input type="checkbox" id="codeAuto"> Auto-approve edits</label>
+  <div class="main2">
+    <div class="col">
+      <div class="feed" id="codeFeed" aria-live="polite"><div class="feedin" id="codeIn"></div></div>
+      <div class="composer">
+        <div class="box">
+          <div class="menu" id="codeModelMenu" hidden style="top:auto;bottom:100%;left:0;right:auto;margin:0 0 10px"></div>
+          <div class="card">
+            <label class="sr" for="codeTask">Task</label>
+            <textarea id="codeTask" rows="2" maxlength="8000" placeholder="What should VryxCode build or fix?"></textarea>
+            <div class="tools">
+              <div class="left"><button class="pill" id="codeModelBtn" aria-haspopup="true" aria-label="Choose model"></button><button class="pill plain" id="codeAuto" aria-pressed="false">Auto-approve: off</button></div>
+              <button class="send" id="codeGo" aria-label="Run">&uarr;</button>
+              <button class="send stop" id="codeStop" aria-label="Stop" hidden>&#9632;</button>
+            </div>
+          </div>
+          <div class="tip" id="codeUsage"></div>
         </div>
-        <div class="hint" id="codeUsage"></div>
-        <div class="hint" id="codeNote"></div>
-        <label class="sr" for="codeTask">Task</label>
-        <textarea id="codeTask" rows="2" maxlength="8000" placeholder="What should VryxCode build or fix? One clear task."></textarea>
-        <div class="row"><button class="btn" id="codeGo">Run</button><button class="btn ghost" id="codeStop" hidden>Stop</button>
-          <button class="btn ghost" id="codeZip">Download zip</button><button class="btn ghost" id="codeImport">Import...</button>
-          <input type="file" id="codeZipIn" accept=".zip,application/zip" hidden><input type="file" id="codeDirIn" webkitdirectory multiple hidden></div>
       </div>
     </div>
-    <div class="filecol"><h3>FILES</h3><div class="flist" id="codeFiles"></div><div class="viewer"><pre id="codeView">Pick a file to read it.</pre></div></div>
+    <div class="drawer" id="codeDrawer" hidden>
+      <div class="dh"><span id="codeDrawerTitle">Files</span><button class="icon" id="codeDrawerX" aria-label="Close files"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg></button></div>
+      <div class="flist" id="codeFiles"></div>
+      <div class="viewer"><pre id="codeView">Pick a file to read it.</pre></div>
+    </div>
   </div>
+  <input type="file" id="codeZipIn" accept=".zip,application/zip" hidden><input type="file" id="codeDirIn" webkitdirectory multiple hidden>
 </div>
 
 <div class="modal" id="login" hidden>
@@ -666,104 +676,147 @@ function regenMenu(btn) {
 }
 
 // ---------------------------------------------------------------- VryxCode
-const C = {info: null, sid: null, seen: 0, timer: null, project: null, file: null};
+const C = {info: null, sid: null, seen: 0, timer: null, project: null, file: null, model: null, auto: false, last: null, files: []};
 const cOn = () => !$('code').hidden;
+const cModel = () => (C.info ? C.info.models.find((m) => m.id === C.model) : null);
 async function openCode() {
   $('code').hidden = false; document.body.classList.remove('menu-open');
   const r = await api('/api/code'); C.info = await r.json(); showUsage(C.info.usage);
-  const ms = C.info.models, usable = ms.filter((m) => m.state === 'ready');
-  $('codeModel').replaceChildren(...ms.map((m) => el('option', {value: m.id, disabled: m.state !== 'ready'}, (m.label || (m.name + ' ' + m.version)) + (m.state === 'ready' ? '' : ' (' + m.badge + ')'))));
-  const pick = usable.find((m) => m.id === S.model) || usable[0]; if (pick) $('codeModel').value = pick.id;
-  fillProjects(C.project || (C.info.projects[0] || 'my-project'));
-  noteForModel(); $('codeSub').textContent = 'Equinox 2 and above, or an outside coding model';
-  if (C.info.running && C.info.running !== C.sid) { C.sid = C.info.running; C.seen = 0; $('codeFeed').replaceChildren(); fillProjects(C.info.project); }
-  if (!C.sid) emptyFeed();
+  const usable = C.info.models.filter((m) => m.state === 'ready');
+  if (!cModel() || cModel().state !== 'ready') C.model = (usable.find((m) => m.id === S.model) || usable[0] || C.info.models[0] || {}).id;
+  C.project = C.project || C.info.running && C.info.project || C.info.projects[0] || 'my-project';
+  if (C.info.running && C.info.running !== C.sid) { C.sid = C.info.running; C.seen = 0; C.last = null; $('codeIn').replaceChildren(); C.project = C.info.project; }
+  renderCodeBar(); if (!C.sid) emptyFeed();
   refreshFiles(); if (C.sid) poll();
 }
-function fillProjects(cur) {
-  const names = Array.from(new Set(C.info.projects.concat([cur]))).filter(Boolean);
-  $('codeProject').replaceChildren(...names.map((n) => el('option', {value: n}, n)), el('option', {value: '__new'}, '+ New project...'));
-  $('codeProject').value = cur; C.project = cur;
+function renderCodeBar() {
+  $('codeProj').textContent = C.project + ' ▾';
+  const m = cModel();
+  $('codeModelBtn').replaceChildren(m ? (m.outside ? m.name + ' · outside' : m.label) : 'No model', el('span', {style: 'color:var(--muted)'}, '▾'));
+  $('codeAuto').textContent = 'Auto-approve: ' + (C.auto ? 'on' : 'off'); $('codeAuto').setAttribute('aria-pressed', C.auto);
+  $('codeFilesBtn').textContent = 'Files' + (C.files.length ? ' (' + C.files.length + ')' : '');
 }
 function emptyFeed() {
-  $('codeFeed').replaceChildren(el('div', {class: 'empty'}, el('b', {}, 'VryxCode'),
-    el('div', {}, 'Describe a coding task. A model works in its own project folder on this server: it reads files, edits them, runs the tests and tries again. It asks before it changes anything.'),
-    el('div', {}, 'It is a small model: good for a function, a bug fix, a test or a few files. Not big rewrites.')));
+  const tip = (t) => el('button', {class: 'chip', onclick: () => { $('codeTask').value = t; $('codeTask').focus(); }}, t);
+  $('codeIn').replaceChildren(el('div', {class: 'empty'}, el('h1', {}, 'What should we build?'),
+    el('p', {}, 'Describe one task. VryxCode works in its own project folder: it reads, edits, runs the tests and tries again, and asks before it changes anything.'),
+    el('div', {class: 'row'}, tip('Write a function with a unit test'), tip('Fix the failing test in this project'), tip('Explain what this project does'))));
 }
-function noteForModel() {
-  const m = C.info.models.find((x) => x.id === $('codeModel').value);
-  $('codeNote').textContent = m ? (m.note || '') : 'No coding model is ready on this server.';
-}
-$('codeModel').onchange = noteForModel;
-$('codeProject').onchange = () => {
-  if ($('codeProject').value === '__new') {
-    const n = (prompt('Project name (letters, numbers, dashes):') || '').trim();
-    if (!/^[A-Za-z0-9_-]{1,40}$/.test(n)) { fillProjects(C.project); return; }
-    fillProjects(n);
-  } else C.project = $('codeProject').value;
-  C.file = null; $('codeView').textContent = 'Pick a file to read it.'; refreshFiles();
+function closeCodeMenus() { $('codeProjMenu').hidden = true; $('codeModelMenu').hidden = true; }
+$('codeProj').onclick = (e) => {
+  e.stopPropagation(); const m = $('codeProjMenu'); if (!m.hidden) { m.hidden = true; return; } closeCodeMenus();
+  const item = (label, fn, cls) => el('button', {class: 'opt' + (cls ? ' ' + cls : ''), onclick: () => { closeCodeMenus(); fn(); }}, el('span', {class: 'grow'}, label));
+  const names = Array.from(new Set(C.info.projects.concat([C.project])));
+  m.replaceChildren(el('div', {class: 'head'}, 'PROJECT'), ...names.map((n) => item(n, () => { C.project = n; C.file = null; renderCodeBar(); refreshFiles(); }, n === C.project ? 'sel' : '')),
+    item('+ New project', newProject), el('div', {class: 'head'}, 'THIS PROJECT'),
+    item('Download as zip', () => { window.location = '/api/code/zip?project=' + encodeURIComponent(C.project); }), item('Import a zip or folder...', openImport),
+    item('Delete project', deleteProject));
+  m.hidden = false;
 };
-$('codeBack').onclick = () => { $('code').hidden = true; clearTimeout(C.timer); };
+function newProject() {
+  const n = (prompt('Project name (letters, numbers, dashes):') || '').trim();
+  if (!/^[A-Za-z0-9_-]{1,40}$/.test(n)) return; C.project = n; C.file = null; renderCodeBar(); refreshFiles();
+}
+async function deleteProject() {
+  if (!confirm('Delete the project "' + C.project + '" and all its files? This cannot be undone.')) return;
+  const r = await post('/api/code/projects/delete', {project: C.project}); const j = await r.json();
+  if (!r.ok) { note('bad', 'COULD NOT DELETE', j.message + ' ' + (j.action || '')); return; }
+  C.info.projects = C.info.projects.filter((p) => p !== C.project); C.project = C.info.projects[0] || 'my-project'; renderCodeBar(); refreshFiles();
+}
+$('codeModelBtn').onclick = (e) => {
+  e.stopPropagation(); const m = $('codeModelMenu'); if (!m.hidden) { m.hidden = true; return; } closeCodeMenus();
+  m.replaceChildren(el('div', {class: 'head'}, 'WHICH MODEL SHOULD CODE?'), ...C.info.models.map((x) => el('button', {class: 'opt' + (x.id === C.model ? ' sel' : ''), disabled: x.state !== 'ready',
+    onclick: () => { C.model = x.id; closeCodeMenus(); renderCodeBar(); }}, el('span', {class: 'grow'}, el('b', {}, x.label), el('small', {}, x.state === 'ready' ? (x.note || 'Ready') : x.badge)))));
+  m.hidden = false;
+};
+document.addEventListener('click', (e) => { if (cOn() && !e.target.closest('.menu')) closeCodeMenus(); });
+$('codeAuto').onclick = () => { C.auto = !C.auto; renderCodeBar(); };
+$('codeBack').onclick = () => { $('code').hidden = true; clearTimeout(C.timer); closeCodeMenus(); };
+function showDrawer(on) { $('codeDrawer').hidden = !on; }
+$('codeFilesBtn').onclick = () => showDrawer($('codeDrawer').hidden);
+$('codeDrawerX').onclick = () => showDrawer(false);
 async function refreshFiles() {
   if (!C.project) return;
-  const r = await api('/api/code/files?project=' + encodeURIComponent(C.project)); const j = await r.json();
-  $('codeFiles').replaceChildren(...(j.files.length ? j.files.map((f) => el('button', {class: f === C.file ? 'on' : '', onclick: () => viewFile(f)}, f)) : [el('div', {class: 'hint', style: 'padding:4px 8px'}, 'No files yet.')]));
+  const r = await api('/api/code/files?project=' + encodeURIComponent(C.project)); const j = await r.json(); C.files = j.files; renderCodeBar();
+  $('codeFiles').replaceChildren(...(j.files.length ? j.files.map((f) => el('button', {class: f === C.file ? 'on' : '', onclick: () => viewFile(f)}, f)) : [el('div', {style: 'color:var(--muted);padding:6px 8px;font-size:14px'}, 'No files yet.')]));
 }
 async function viewFile(f) {
   C.file = f; const r = await api('/api/code/file?project=' + encodeURIComponent(C.project) + '&path=' + encodeURIComponent(f)); const j = await r.json();
   $('codeView').textContent = r.ok ? j.text + (j.truncated ? '\n... (shortened)' : '') : j.message; refreshFiles();
 }
+function showUsage(u) {
+  if (!u) return;
+  $('codeUsage').textContent = u.exempt ? 'Owner: no limits' : u.plan[0].toUpperCase() + u.plan.slice(1) + ' · ' + u.tank_pct + '% left · about ' + fmt(u.steps_left) + ' coding steps';
+}
+function note(cls, k, text) { $('codeIn').append(el('div', {class: cls}, el('b', {}, k), el('div', {}, text))); scrollCode(); }
+function scrollCode() { const f = $('codeFeed'); f.scrollTop = f.scrollHeight; }
+function headline(preview, tool) {
+  const first = String(preview || '').split('\n')[0];
+  const m = /^write (\S+)/.exec(first) || null;
+  if (m) return 'Wrote ' + m[1];
+  const e = /^edit (\S+)/.exec(first); if (e) return 'Edited ' + e[1];
+  const r = /^run (.*)$/.exec(first); if (r) { try { return 'Ran ' + (JSON.parse(r[1]).command || r[1]); } catch (x) { return first; } }
+  const rd = /^read_file (.*)$/.exec(first); if (rd) { try { return 'Read ' + (JSON.parse(rd[1]).path || rd[1]); } catch (x) { return first; } }
+  return first.length > 90 ? first.slice(0, 90) + '...' : first || tool;
+}
 function cEvent(e) {
-  const feed = $('codeFeed'), mk = (cls, k, ...kids) => el('div', {class: 'ev ' + cls}, el('div', {class: 'k'}, k), ...kids);
-  if (e.kind === 'start') { feed.replaceChildren(el('div', {class: 'ev task'}, el('div', {}, e.task))); return; }
-  if (e.kind === 'step') return feed.append(mk('', e.tool ? e.tool.toUpperCase().replace('_', ' ') : 'MODEL', el('pre', {}, e.preview)));
-  if (e.kind === 'result') return feed.append(mk('res', 'RESULT', el('pre', {}, e.text)));
-  if (e.kind === 'answer') { const q = document.getElementById('ask' + e.id); if (q) q.replaceWith(mk('', e.allow ? 'ALLOWED' : 'NOT ALLOWED')); return; }
-  if (e.kind === 'ask') {
-    const node = mk('ask', 'ALLOW THIS?', el('pre', {}, e.preview)); node.id = 'ask' + e.id;
-    const reply = (allow, always) => post('/api/code/sessions/' + C.sid + '/answer', {id: e.id, allow, always}).then(() => poll());
-    node.append(el('div', {class: 'row'}, el('button', {class: 'btn', onclick: () => reply(true, false)}, 'Allow'), el('button', {class: 'btn ghost', onclick: () => reply(true, true)}, 'Always allow this'), el('button', {class: 'btn danger', onclick: () => reply(false, false)}, 'No')));
-    return feed.append(node);
+  const feed = $('codeIn');
+  if (e.kind === 'start') { feed.replaceChildren(el('div', {class: 'you'}, e.task)); C.last = null; return; }
+  if (e.kind === 'step') {
+    if (e.tool === 'finish') { C.last = null; return; }
+    const node = el('details', {class: 'step'}, el('summary', {}, el('span', {class: 'dot'}), el('span', {class: 'what'}, headline(e.preview, e.tool))),
+      el('div', {class: 'more'}, el('pre', {}, e.preview)));
+    feed.append(node); C.last = node; return;
   }
-  if (e.kind === 'end') feed.append(mk(e.error || e.limited ? 'bad' : e.finished ? 'fin' : '', e.error ? 'COULD NOT FINISH' : e.limited ? 'USAGE RAN OUT' : e.finished ? 'DONE' : 'STOPPED', el('div', {}, e.summary || (e.turns + ' steps used'))));
+  if (e.kind === 'result') {
+    if (C.last) {
+      const bad = /^error|exit code [1-9]|Traceback|FAILED/m.test(e.text);
+      C.last.classList.add(bad ? 'no' : 'ok'); C.last.querySelector('.more').append(el('pre', {}, e.text)); C.last = null;
+    }
+    return;
+  }
+  if (e.kind === 'answer') { const q = document.getElementById('ask' + e.id); if (q) q.remove(); return; }
+  if (e.kind === 'ask') {
+    const reply = (allow, always) => post('/api/code/sessions/' + C.sid + '/answer', {id: e.id, allow, always}).then(() => poll());
+    const node = el('div', {class: 'ask', id: 'ask' + e.id}, el('b', {}, 'Allow this?'), el('pre', {}, e.preview),
+      el('div', {class: 'row'}, el('button', {class: 'btn small', onclick: () => reply(true, false)}, 'Allow'), el('button', {class: 'chip', onclick: () => reply(true, true)}, 'Always allow this'), el('button', {class: 'chip', onclick: () => reply(false, false)}, 'No')));
+    feed.append(node); return;
+  }
+  if (e.kind === 'end') feed.append(el('div', {class: e.error || e.limited ? 'bad' : 'fin'}, el('b', {}, e.error ? 'Could not finish' : e.limited ? 'Usage ran out' : e.finished ? 'Done' : 'Stopped'),
+    el('div', {}, e.summary || (e.turns + ' steps used'))));
 }
 async function poll() {
   clearTimeout(C.timer); if (!C.sid || !cOn()) return;
   const r = await api('/api/code/sessions/' + C.sid + '?after=' + C.seen);
   if (!r.ok) { C.sid = null; return; }
-  const j = await r.json(), feed = $('codeFeed'), atEnd = feed.scrollTop + feed.clientHeight > feed.scrollHeight - 80;
+  const j = await r.json(), feed = $('codeFeed'), atEnd = feed.scrollTop + feed.clientHeight > feed.scrollHeight - 120;
   for (const e of j.events) cEvent(e); C.seen += j.events.length;
   if (j.events.some((e) => e.kind === 'result' || e.kind === 'end')) refreshFiles();
-  if (j.events.length && atEnd) feed.scrollTop = feed.scrollHeight;
-  showUsage(j.usage, j.used, j.steps);
+  if (j.events.length && atEnd) scrollCode();
+  showUsage(j.usage);
   const live = ['starting', 'working', 'asking'].includes(j.state);
   $('codeGo').hidden = live; $('codeStop').hidden = !live;
   if (live) C.timer = setTimeout(poll, j.state === 'asking' ? 1500 : 700);
 }
 $('codeGo').onclick = async () => {
-  const task = $('codeTask').value.trim(); if (!task) return;
-  const r = await post('/api/code/start', {project: C.project, task, model: $('codeModel').value, auto_edits: $('codeAuto').checked}); const j = await r.json();
-  if (!r.ok) { $('codeFeed').append(el('div', {class: 'ev bad'}, el('div', {class: 'k'}, 'NOT STARTED'), el('div', {}, j.message + ' ' + (j.action || '')))); return; }
-  C.sid = j.id; C.seen = 0; $('codeTask').value = ''; $('codeFeed').replaceChildren(); poll();
+  const task = $('codeTask').value.trim(); if (!task || !C.model) return;
+  const r = await post('/api/code/start', {project: C.project, task, model: C.model, auto_edits: C.auto}); const j = await r.json();
+  if (!r.ok) { note('bad', 'Could not start', j.message + ' ' + (j.action || '')); return; }
+  C.sid = j.id; C.seen = 0; $('codeTask').value = ''; $('codeIn').replaceChildren(); poll();
 };
-
-function showUsage(u, used, steps) {
-  if (!u) return;
-  $('codeUsage').textContent = u.exempt ? 'Owner: no limits.' : (u.plan[0].toUpperCase() + u.plan.slice(1) + ' plan · ' + u.status + ' · tank ' + u.tank_pct + '% · week ' + u.week_pct + '% left · about ' + fmt(u.steps_left) + ' coding steps left')
-    + (steps ? ' · this run: ' + steps + ' steps, ' + fmt(used) + ' tokens' : '') + '. Coding steps count like chat messages.';
-}
+$('codeStop').onclick = () => { if (C.sid) post('/api/code/sessions/' + C.sid + '/stop').then(() => poll()); };
+$('codeTask').addEventListener('keydown', (e) => { if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); $('codeGo').click(); } });
 const b64 = (buf) => { let s = '', a = new Uint8Array(buf); for (let i = 0; i < a.length; i += 0x8000) s += String.fromCharCode.apply(null, a.subarray(i, i + 0x8000)); return btoa(s); };
 async function sendImport(body) {
   const r = await post('/api/code/import', Object.assign({project: C.project}, body)); const j = await r.json();
-  $('codeFeed').append(el('div', {class: 'ev ' + (r.ok ? '' : 'bad')}, el('div', {class: 'k'}, r.ok ? 'IMPORTED' : 'NOT IMPORTED'), el('div', {}, r.ok ? j.imported + ' files added to ' + C.project + '.' : j.message + ' ' + (j.action || ''))));
+  note(r.ok ? 'fin' : 'bad', r.ok ? 'Imported' : 'Not imported', r.ok ? j.imported + ' files added to ' + C.project + '.' : j.message + ' ' + (j.action || ''));
   refreshFiles();
 }
-$('codeZip').onclick = () => { window.location = '/api/code/zip?project=' + encodeURIComponent(C.project); };
-$('codeImport').onclick = () => {
+function openImport() {
   const m = dialog([el('h2', {}, 'Import into ' + C.project), el('div', {style: 'color:var(--muted)'}, 'Add an existing project: a zip file, or a whole folder (up to 1,000 files and 20 MB; .git and node_modules are skipped). Files with the same name are replaced.'),
     el('button', {class: 'btn', onclick: () => { m.remove(); $('codeZipIn').click(); }}, 'Choose a zip file'),
     el('button', {class: 'btn ghost', onclick: () => { m.remove(); $('codeDirIn').click(); }}, 'Choose a folder')], 'Cancel');
-};
+}
 $('codeZipIn').onchange = async (e) => { const f = e.target.files[0]; e.target.value = ''; if (f) await sendImport({zip_b64: b64(await f.arrayBuffer())}); };
 $('codeDirIn').onchange = async (e) => {
   const list = Array.from(e.target.files).filter((f) => !/(^|\/)(\.git|node_modules|__pycache__)\//.test(f.webkitRelativePath)); e.target.value = '';
@@ -771,8 +824,6 @@ $('codeDirIn').onchange = async (e) => {
   const files = []; for (const f of list) { const p = f.webkitRelativePath.split('/').slice(1).join('/'); if (p) files.push({path: p, b64: b64(await f.arrayBuffer())}); }
   await sendImport({files});
 };
-$('codeStop').onclick = () => { if (C.sid) post('/api/code/sessions/' + C.sid + '/stop').then(() => poll()); };
-$('codeTask').addEventListener('keydown', (e) => { if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); $('codeGo').click(); } });
 
 // ---------------------------------------------------------------- login
 function showLogin() { S.state = null; applyTheme(); $('login').hidden = false; $('app').hidden = true; $('loginBrand').replaceChildren(logo(32, false, 'brand'), 'Emvryx'); }
