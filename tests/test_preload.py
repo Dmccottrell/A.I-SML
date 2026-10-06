@@ -116,3 +116,27 @@ class ModelOnlyTests(unittest.TestCase):
         self.assertEqual(notes, [])
         self.assertFalse(info["asked"])
         self.assertIn("none", lookup_auto.MODES)
+
+
+class SecondTryOrderTests(unittest.TestCase):
+    WIKI = [{"title": "Gordon Ramsey (actor)", "text": "an American actor and singer"}] * 3
+    WEB = [{"title": "Gordon Ramsay - bbc.com", "text": "a British chef", "url": "https://bbc.com/x"}] * 3
+
+    class Wiki:
+        def __init__(self, notes):
+            self.notes = notes
+
+        def search(self, q, k):
+            return self.notes[:k]
+
+    def test_a_second_try_reads_the_web_first_and_keeps_a_wikipedia_slot(self):
+        import lookup_auto
+        notes, info = lookup_auto.gather("who is gordon ramsey?", self.Wiki(self.WIKI), lambda q, k: self.WEB[:k], "auto", max_notes=3,
+                                         force_web=True, force_notes=True)
+        self.assertEqual(notes[0]["title"], "Gordon Ramsay - bbc.com")
+        self.assertEqual([n["title"] for n in notes].count("Gordon Ramsey (actor)"), 1)
+
+    def test_the_normal_order_is_unchanged(self):
+        import lookup_auto
+        notes, info = lookup_auto.gather("who is gordon ramsey?", self.Wiki(self.WIKI), lambda q, k: self.WEB[:k], "always", max_notes=3)
+        self.assertEqual(notes[0]["title"], "Gordon Ramsey (actor)")
