@@ -54,6 +54,28 @@ The app has a dedicated **VryxCode** entry in the left menu (like Claude Code or
 - **Download zip** gives the whole project (without `.git`, caches, `node_modules`). **Import...** takes a zip or a whole folder (up to 1,000 files, 20 MB, 2 MB each; paths that leave the project are refused and nothing is imported; `.git` and `node_modules` are skipped; same-named files are replaced). Not while a session is running.
 - **`<think>` text:** the chat now hides Qwen3's reasoning block as it streams (`app_engine.strip_think`), so it is neither shown nor saved; VryxCode strips it as before. Reasoning tokens are generated, but only the real counts from the server are charged.
 
+## The coding engine choice in the app (outside coder)
+
+The Code screen's model picker lists the Emvryx models that can code (Equinox 2 and above) **and** the outside coding model **Qwen2.5-Coder-14B**, always labelled "(outside model)" with a note that it is not an Emvryx model and does not carry Emvryx's lessons. It scored 8 / 9 of 10 exercises (first try / after a retry), against 4 / 5 for Equinox 2 and 5 / 5 for Solstice 2, so it is the best coding engine available today.
+
+- It is listed in `models.json` under `coders` (its own entry, not a chat model: it never appears in the chat picker).
+- It counts against usage like Solstice (`plan_like`), and is in a plan only if Solstice is. The owner is unlimited.
+- On a 12 GB GPU the Q4 file (about 9 GB) fits with a short window (8,192 tokens, `context_tested`), so VryxCode compacts old steps sooner.
+- Put the file where the app finds it, or name it yourself: `hf download Qwen/Qwen2.5-Coder-14B-Instruct-GGUF --include "*q4_k_m*" --local-dir export/open/coders`, then start the app with `--gguf qwen2.5-coder-14b=<path to the .gguf>` (for a file split in parts, the first one, `...-00001-of-0000N.gguf`) and `--llama-args "-ngl 99"`.
+
+**Plan (option C):** use the outside coder now; then collect more successful runs (the first 44 are backed up in the Hugging Face repo under `bench-logs-2026-10-06`) and train Solstice and Equinox on them, so an Emvryx model can drive VryxCode as well. That training is not started and needs approval and budget.
+
+## The coding engine choice in the app (outside coder)
+
+The Code screen's model picker lists the Emvryx models that can code (Equinox 2 and above) **and** the outside coding model **Qwen2.5-Coder-14B**, always labelled "(outside model)" with a note that it is not an Emvryx model and does not carry Emvryx's lessons. It scored 8 / 9 of 10 exercises (first try / after a retry), against 4 / 5 for Equinox 2 and 5 / 5 for Solstice 2, so it is the best coding engine available today.
+
+- It is listed in `models.json` under `coders` (its own entry, not a chat model: it never appears in the chat picker).
+- It counts against usage like Solstice (`plan_like`) and is in a plan only if Solstice is. The owner is unlimited.
+- On a 12 GB GPU the Q4 file (about 9 GB) fits with a short window (8,192 tokens, `context_tested`), so VryxCode compacts old steps sooner.
+- To use it: `hf download Qwen/Qwen2.5-Coder-14B-Instruct-GGUF --include "*q4_k_m*" --local-dir export/open/coders`, then start the app with `--gguf qwen2.5-coder-14b=<path to the .gguf>` (for a file split in parts, the first one, `...-00001-of-0000N.gguf`) and `--llama-args "-ngl 99"`.
+
+**Plan (option C):** use the outside coder now; then collect more successful runs (the first 44 are backed up in the Hugging Face repo under `bench-logs-2026-10-06`) and train Solstice and Equinox on them, so an Emvryx model can drive VryxCode too. That training is not started and needs approval and budget.
+
 ## Using an outside coding model (for the best local coding today)
 `--coder LABEL` runs VryxCode on any coding model you start in llama-server, such as Qwen2.5-Coder-14B-Instruct or Qwen3.5-9B (both fit a 12 GB card at 4 bits; check the licence on each model's page). It skips the Emvryx model gate and labels the run as an outside model, so its scores are never mistaken for an Emvryx result. `bench_exercises.py` and `vryx_swe.py` take the same flag, so the candidates can be compared on the same exercises.
 ```

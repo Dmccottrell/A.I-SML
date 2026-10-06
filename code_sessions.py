@@ -347,15 +347,18 @@ class CodeManager:
         s = self.sessions.get(self.by_user.get(user))
         return s if s and s.state in ("starting", "working", "asking") else None
 
-    def start(self, user, project, task, model_id, generate, auto_edits=False, context_tokens=None, meter=None):
+    def start(self, user, project, task, model_id, generate, auto_edits=False, context_tokens=None, meter=None, outside=False):
         task = str(task or "").strip()
         if not task:
             raise CodeError("Describe what to build or fix.")
         if len(task) > 8000:
             raise CodeError("That task is too long.", "Keep it under 8,000 characters.")
-        ok, note = vryxcode.check_model(model_id)
-        if not ok:
-            raise CodeError(note)
+        if outside:                                    # an outside coding model: labelled as such, never presented as an Emvryx result
+            note = "An outside coding model, not an Emvryx model."
+        else:
+            ok, note = vryxcode.check_model(model_id)
+            if not ok:
+                raise CodeError(note)
         with self.lock:
             if self.running(user):
                 raise CodeError("You already have a session running.", "Stop it or wait for it to finish.")

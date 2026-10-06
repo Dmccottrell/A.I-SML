@@ -206,6 +206,41 @@ class MoreTests(Base):
         self.assertEqual(self.owner.call("POST", "/api/code/import", {"project": "copy", "zip_b64": "!!"})[0], 400)
 
 
+class OutsideCoder(Base):
+    def setUp(self):
+        super().setUp()
+        self.state.code_generate = lambda model: vryxcode.ScriptedChat(list(vryxcode.DEMO))
+
+    def test_listed_as_an_outside_model_with_its_own_label(self):
+        models = {m["id"]: m for m in self.owner.call("GET", "/api/code")[1]["models"]}
+        c = models["qwen2.5-coder-14b"]
+        self.assertTrue(c["outside"])
+        self.assertIn("outside model", c["label"])
+        self.assertIn("not an Emvryx model", c["note"])
+        self.assertFalse(models["solstice-2"]["outside"])
+
+    def test_runs_and_is_counted_like_solstice(self):
+        st, j = self.owner.call("POST", "/api/admin/users", {"user": "lee", "tier": "pro"})
+        lee = Client(self.port, j["key"])
+        before = self.state.limiter.snapshot("lee", "solstice", "balanced", self.state.clock())["week"]["used"]
+        r = lee.call("POST", "/api/code/start", {"project": "demo", "task": "x", "model": "qwen2.5-coder-14b", "auto_edits": True})
+        self.assertEqual(r[0], 200, r)
+        wait_for(lambda: lee.call("GET", f"/api/code/sessions/{r[1]['id']}")[1]["state"] == "done")
+        after = self.state.limiter.snapshot("lee", "solstice", "balanced", self.state.clock())["week"]["used"]
+        self.assertGreater(after, before)
+        self.assertIn("slug.py", lee.call("GET", "/api/code/files?project=demo")[1]["files"])
+
+    def test_not_in_a_plan_without_solstice(self):
+        st, j = self.owner.call("POST", "/api/admin/users", {"user": "kid", "tier": "free"})
+        kid = Client(self.port, j["key"])
+        c = {m["id"]: m for m in kid.call("GET", "/api/code")[1]["models"]}["qwen2.5-coder-14b"]
+        self.assertEqual(c["state"], "locked")
+        self.assertEqual(kid.call("POST", "/api/code/start", {"project": "p", "task": "x", "model": "qwen2.5-coder-14b"})[0], 400)
+
+    def test_small_emvryx_models_still_refused(self):
+        self.assertEqual(self.owner.call("POST", "/api/code/start", {"project": "p", "task": "x", "model": "flare-2.5"})[0], 400)
+
+
 class ThinkFilter(unittest.TestCase):
     def test_hides_reasoning_even_when_tags_are_split(self):
         import app_engine
