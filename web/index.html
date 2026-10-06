@@ -105,6 +105,43 @@ svg .core { fill: var(--core); stroke: var(--sun); stroke-width: 3; transition: 
 .bar > div { height: 100%; border-radius: 999px; background: var(--accent); transition: width .3s linear; }
 .usage.low .bar > div { background: var(--danger); } .usage.low button { color: var(--danger); }
 .pop { position: absolute; right: 8px; top: -8px; font-size: 13px; font-weight: 600; color: var(--accenttext); animation: floatup 1.3s ease-out both; pointer-events: none; }
+/* VryxCode screen */
+.code { position: fixed; inset: 0; z-index: 30; background: var(--bg); display: flex; flex-direction: column; }
+.code[hidden] { display: none; }
+.code .bar2 { height: 60px; flex-shrink: 0; display: flex; align-items: center; gap: 8px; padding: 0 12px; border-bottom: 1px solid var(--line); }
+.code .bar2 .title { font: 600 18px 'Sora', sans-serif; flex: 1; white-space: nowrap; }
+.code .bar2 .title small { font: 400 13px 'Inter', sans-serif; color: var(--muted); margin-left: 8px; }
+.code .cols { flex: 1; min-height: 0; display: flex; }
+.code .feedcol { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.code .feed { flex: 1; overflow-y: auto; padding: 18px 16px; display: flex; flex-direction: column; gap: 12px; }
+.code .filecol { width: 340px; flex-shrink: 0; border-left: 1px solid var(--line); display: flex; flex-direction: column; min-height: 0; }
+.code .filecol h3 { margin: 0; padding: 12px 14px 6px; font-size: 13px; color: var(--muted); letter-spacing: .06em; }
+.code .flist { max-height: 34%; overflow-y: auto; padding: 0 8px 8px; }
+.code .flist button { display: block; width: 100%; text-align: left; background: transparent; border: 0; border-radius: 8px; padding: 6px 8px; font: 13px ui-monospace, Menlo, Consolas, monospace; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.code .flist button:hover, .code .flist button.on { background: var(--surface2); }
+.code pre { margin: 0; white-space: pre-wrap; word-break: break-word; font: 13px/1.5 ui-monospace, Menlo, Consolas, monospace; }
+.code .viewer { flex: 1; overflow: auto; padding: 8px 14px 14px; border-top: 1px solid var(--line); }
+.code .ev { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 10px 14px; display: flex; flex-direction: column; gap: 6px; }
+.code .ev .k { font-size: 12px; font-weight: 600; letter-spacing: .06em; color: var(--accenttext); }
+.code .ev.task { align-self: flex-end; max-width: 85%; background: var(--surface2); }
+.code .ev.res pre { color: var(--muted); max-height: 220px; overflow: auto; }
+.code .ev.ask { border-color: var(--accent); }
+.code .ev.fin { border-color: var(--accent); }
+.code .ev.bad { border-color: var(--danger); } .code .ev.bad .k { color: var(--danger); }
+.code .row { display: flex; gap: 8px; flex-wrap: wrap; }
+.code .cbox { border-top: 1px solid var(--line); padding: 10px 12px calc(10px + env(safe-area-inset-bottom)); display: flex; flex-direction: column; gap: 8px; }
+.code .cbox textarea { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; color: var(--text); padding: 12px; font: inherit; min-height: 48px; max-height: 160px; resize: none; width: 100%; }
+.code select, .code .cbox input[type=text] { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; color: var(--text); padding: 0 12px; min-height: 40px; font: inherit; max-width: 100%; }
+.code .hint { color: var(--muted); font-size: 13px; }
+.code .empty { margin: auto; max-width: 440px; text-align: center; color: var(--muted); display: flex; flex-direction: column; gap: 10px; }
+.code .empty b { color: var(--text); font: 600 22px 'Sora', sans-serif; }
+@media (max-width: 900px) {
+  .code .cols { flex-direction: column; }
+  .code .feedcol { min-height: 0; flex: 1 1 0; }
+  .code .filecol { width: auto; border-left: 0; border-top: 1px solid var(--line); height: 30%; flex: 0 0 30%; }
+  .code .flist { max-height: 70px; }
+  .code .cbox textarea { min-height: 40px; }
+}
 /* dialogs */
 .modal { position: fixed; inset: 0; background: rgba(0,0,0,.6); display: grid; place-items: center; z-index: 50; padding: 16px; }
 .dialog { background: var(--surface); border: 1px solid var(--line); border-radius: 22px; padding: 22px; width: min(520px, 100%); max-height: 90dvh; overflow-y: auto; display: flex; flex-direction: column; gap: 14px; }
@@ -182,6 +219,30 @@ svg .core { fill: var(--core); stroke: var(--sun); stroke-width: 3; transition: 
       </div>
     </div>
   </main>
+</div>
+
+<div class="code" id="code" hidden>
+  <div class="bar2">
+    <button class="icon" id="codeBack" aria-label="Back to chats"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M15 5l-7 7 7 7" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+    <span class="title">VryxCode<small id="codeSub"></small></span>
+  </div>
+  <div class="cols">
+    <div class="feedcol">
+      <div class="feed" id="codeFeed" aria-live="polite"></div>
+      <div class="cbox">
+        <div class="row">
+          <label class="sr" for="codeProject">Project</label><select id="codeProject" aria-label="Project"></select>
+          <label class="sr" for="codeModel">Model</label><select id="codeModel" aria-label="Model"></select>
+          <label class="hint" style="display:flex;align-items:center;gap:6px"><input type="checkbox" id="codeAuto"> Auto-approve edits</label>
+        </div>
+        <div class="hint" id="codeNote"></div>
+        <label class="sr" for="codeTask">Task</label>
+        <textarea id="codeTask" rows="2" maxlength="8000" placeholder="What should VryxCode build or fix? One clear task."></textarea>
+        <div class="row"><button class="btn" id="codeGo">Run</button><button class="btn ghost" id="codeStop" hidden>Stop</button></div>
+      </div>
+    </div>
+    <div class="filecol"><h3>FILES</h3><div class="flist" id="codeFiles"></div><div class="viewer"><pre id="codeView">Pick a file to read it.</pre></div></div>
+  </div>
 </div>
 
 <div class="modal" id="login" hidden>
@@ -305,7 +366,7 @@ function renderChats() {
 function renderLinks() {
   const mk = (name, note, fn) => el('button', {class: 'link', disabled: fn ? false : true, onclick: () => { document.body.classList.remove('menu-open'); fn && fn(); }}, el('span', {}, name), el('small', {}, note));
   const l = $('links'); l.replaceChildren(
-    mk('Private chat', 'Never saved', () => newChat(true)), mk('Usage', 'See what is left', openUsage),
+    mk('VryxCode', 'Coding assistant', openCode), mk('Private chat', 'Never saved', () => newChat(true)), mk('Usage', 'See what is left', openUsage),
     mk('Connected apps', 'Coming soon', openApps), mk('Memory', 'Coming soon'), mk('Skills', 'Coming soon'), mk('Documents', 'Coming soon'),
     mk('Settings', '', openSettings));
 }
@@ -600,6 +661,89 @@ function regenMenu(btn) {
       el('span', {class: 'grow'}, el('b', {}, o.label), el('small', {}, o.blurb)))));
   wrap.append(m); scrollDown(true);
 }
+
+// ---------------------------------------------------------------- VryxCode
+const C = {info: null, sid: null, seen: 0, timer: null, project: null, file: null};
+const cOn = () => !$('code').hidden;
+async function openCode() {
+  $('code').hidden = false; document.body.classList.remove('menu-open');
+  const r = await api('/api/code'); C.info = await r.json();
+  const ms = C.info.models, usable = ms.filter((m) => m.state === 'ready');
+  $('codeModel').replaceChildren(...ms.map((m) => el('option', {value: m.id, disabled: m.state !== 'ready'}, m.name + ' ' + m.version + (m.state === 'ready' ? '' : ' (' + m.badge + ')'))));
+  const pick = usable.find((m) => m.id === S.model) || usable[0]; if (pick) $('codeModel').value = pick.id;
+  fillProjects(C.project || (C.info.projects[0] || 'my-project'));
+  noteForModel(); $('codeSub').textContent = 'Equinox 2 and above';
+  if (C.info.running && C.info.running !== C.sid) { C.sid = C.info.running; C.seen = 0; $('codeFeed').replaceChildren(); fillProjects(C.info.project); }
+  if (!C.sid) emptyFeed();
+  refreshFiles(); if (C.sid) poll();
+}
+function fillProjects(cur) {
+  const names = Array.from(new Set(C.info.projects.concat([cur]))).filter(Boolean);
+  $('codeProject').replaceChildren(...names.map((n) => el('option', {value: n}, n)), el('option', {value: '__new'}, '+ New project...'));
+  $('codeProject').value = cur; C.project = cur;
+}
+function emptyFeed() {
+  $('codeFeed').replaceChildren(el('div', {class: 'empty'}, el('b', {}, 'VryxCode'),
+    el('div', {}, 'Describe a coding task. A model works in its own project folder on this server: it reads files, edits them, runs the tests and tries again. It asks before it changes anything.'),
+    el('div', {}, 'It is a small model: good for a function, a bug fix, a test or a few files. Not big rewrites.')));
+}
+function noteForModel() {
+  const m = C.info.models.find((x) => x.id === $('codeModel').value);
+  $('codeNote').textContent = m ? (m.note || '') : 'No coding model is ready on this server.';
+}
+$('codeModel').onchange = noteForModel;
+$('codeProject').onchange = () => {
+  if ($('codeProject').value === '__new') {
+    const n = (prompt('Project name (letters, numbers, dashes):') || '').trim();
+    if (!/^[A-Za-z0-9_-]{1,40}$/.test(n)) { fillProjects(C.project); return; }
+    fillProjects(n);
+  } else C.project = $('codeProject').value;
+  C.file = null; $('codeView').textContent = 'Pick a file to read it.'; refreshFiles();
+};
+$('codeBack').onclick = () => { $('code').hidden = true; clearTimeout(C.timer); };
+async function refreshFiles() {
+  if (!C.project) return;
+  const r = await api('/api/code/files?project=' + encodeURIComponent(C.project)); const j = await r.json();
+  $('codeFiles').replaceChildren(...(j.files.length ? j.files.map((f) => el('button', {class: f === C.file ? 'on' : '', onclick: () => viewFile(f)}, f)) : [el('div', {class: 'hint', style: 'padding:4px 8px'}, 'No files yet.')]));
+}
+async function viewFile(f) {
+  C.file = f; const r = await api('/api/code/file?project=' + encodeURIComponent(C.project) + '&path=' + encodeURIComponent(f)); const j = await r.json();
+  $('codeView').textContent = r.ok ? j.text + (j.truncated ? '\n... (shortened)' : '') : j.message; refreshFiles();
+}
+function cEvent(e) {
+  const feed = $('codeFeed'), mk = (cls, k, ...kids) => el('div', {class: 'ev ' + cls}, el('div', {class: 'k'}, k), ...kids);
+  if (e.kind === 'start') { feed.replaceChildren(el('div', {class: 'ev task'}, el('div', {}, e.task))); return; }
+  if (e.kind === 'step') return feed.append(mk('', e.tool ? e.tool.toUpperCase().replace('_', ' ') : 'MODEL', el('pre', {}, e.preview)));
+  if (e.kind === 'result') return feed.append(mk('res', 'RESULT', el('pre', {}, e.text)));
+  if (e.kind === 'answer') { const q = document.getElementById('ask' + e.id); if (q) q.replaceWith(mk('', e.allow ? 'ALLOWED' : 'NOT ALLOWED')); return; }
+  if (e.kind === 'ask') {
+    const node = mk('ask', 'ALLOW THIS?', el('pre', {}, e.preview)); node.id = 'ask' + e.id;
+    const reply = (allow, always) => post('/api/code/sessions/' + C.sid + '/answer', {id: e.id, allow, always}).then(() => poll());
+    node.append(el('div', {class: 'row'}, el('button', {class: 'btn', onclick: () => reply(true, false)}, 'Allow'), el('button', {class: 'btn ghost', onclick: () => reply(true, true)}, 'Always allow this'), el('button', {class: 'btn danger', onclick: () => reply(false, false)}, 'No')));
+    return feed.append(node);
+  }
+  if (e.kind === 'end') feed.append(mk(e.error ? 'bad' : e.finished ? 'fin' : '', e.error ? 'COULD NOT FINISH' : e.finished ? 'DONE' : 'STOPPED', el('div', {}, e.summary || (e.turns + ' steps used'))));
+}
+async function poll() {
+  clearTimeout(C.timer); if (!C.sid || !cOn()) return;
+  const r = await api('/api/code/sessions/' + C.sid + '?after=' + C.seen);
+  if (!r.ok) { C.sid = null; return; }
+  const j = await r.json(), feed = $('codeFeed'), atEnd = feed.scrollTop + feed.clientHeight > feed.scrollHeight - 80;
+  for (const e of j.events) cEvent(e); C.seen += j.events.length;
+  if (j.events.some((e) => e.kind === 'result' || e.kind === 'end')) refreshFiles();
+  if (j.events.length && atEnd) feed.scrollTop = feed.scrollHeight;
+  const live = ['starting', 'working', 'asking'].includes(j.state);
+  $('codeGo').hidden = live; $('codeStop').hidden = !live;
+  if (live) C.timer = setTimeout(poll, j.state === 'asking' ? 1500 : 700);
+}
+$('codeGo').onclick = async () => {
+  const task = $('codeTask').value.trim(); if (!task) return;
+  const r = await post('/api/code/start', {project: C.project, task, model: $('codeModel').value, auto_edits: $('codeAuto').checked}); const j = await r.json();
+  if (!r.ok) { $('codeFeed').append(el('div', {class: 'ev bad'}, el('div', {class: 'k'}, 'NOT STARTED'), el('div', {}, j.message + ' ' + (j.action || '')))); return; }
+  C.sid = j.id; C.seen = 0; $('codeTask').value = ''; $('codeFeed').replaceChildren(); poll();
+};
+$('codeStop').onclick = () => { if (C.sid) post('/api/code/sessions/' + C.sid + '/stop').then(() => poll()); };
+$('codeTask').addEventListener('keydown', (e) => { if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); $('codeGo').click(); } });
 
 // ---------------------------------------------------------------- login
 function showLogin() { S.state = null; applyTheme(); $('login').hidden = false; $('app').hidden = true; $('loginBrand').replaceChildren(logo(32, false, 'brand'), 'Emvryx'); }
