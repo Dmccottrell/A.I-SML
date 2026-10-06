@@ -203,7 +203,7 @@ class LegacyRunFolder(unittest.TestCase):
         os.chdir(d)
         seen = {}
         real = finetune_open.merge_and_export
-        finetune_open.merge_and_export = lambda base, adapter, export, torch: seen.update(adapter=adapter, export=export) or export
+        finetune_open.merge_and_export = lambda base, adapter, export, torch, spread=False: seen.update(adapter=adapter, export=export) or export
         try:
             os.makedirs(os.path.join("checkpoints", "dev", "open", "qwen2.5-1.5b-instruct", "adapter"))
             self.assertEqual(finetune_open.main(["--merge"]), 0)

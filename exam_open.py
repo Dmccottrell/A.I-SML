@@ -85,11 +85,27 @@ def find_adapter(name, model_arg):
     return next((c for c in candidates if os.path.isdir(c)), None)
 
 
-def load_base(model_id, device):
+QUANT4 = False          # set by load_base(quant4=True): a 4-bit model cannot be moved with .to(device)
+
+
+def to_device(model, device):
+    return model if QUANT4 else model.to(device)
+
+
+def load_base(model_id, device, quant4=False):
+    """The plain model. quant4=True loads it in 4 bits (the 14B model is about 30 GB in bf16, more than a 32 GB card can score with):
+    the same way it was trained (QLoRA), so base and tuned are still compared like for like."""
+    global QUANT4
     from transformers import AutoModelForCausalLM, AutoTokenizer
     dtype = torch.bfloat16 if device == "cuda" else torch.float32
     tok = AutoTokenizer.from_pretrained(model_id)
-    model = AutoModelForCausalLM.from_pretrained(model_id, dtype=dtype).to(device)
+    QUANT4 = bool(quant4 and device == "cuda")
+    if QUANT4:
+        from transformers import BitsAndBytesConfig
+        bnb = BitsAndBytesConfig(load_in_4bit=True, bnb_4bit_quant_type="nf4", bnb_4bit_compute_dtype=torch.bfloat16)
+        model = AutoModelForCausalLM.from_pretrained(model_id, dtype=dtype, quantization_config=bnb, device_map={"": 0})
+    else:
+        model = AutoModelForCausalLM.from_pretrained(model_id, dtype=dtype).to(device)
     return model, tok
 
 
@@ -114,7 +130,7 @@ def main(argv=None):
     print(f"HellaSwag: {len(examples):,} questions, model {model_id}, device {device}")
     results = []
 
-    model, tok = load_base(model_id, device)
+    model, tok = load_base(model_id, device, cfg.get("quant4", False))
     pad_id = tok.pad_token_id if tok.pad_token_id is not None else (tok.eos_token_id or 0)
     adapter = a.adapter or (find_adapter(name, model_id) if a.compare else None)
     if a.compare and not adapter:
@@ -126,7 +142,7 @@ def main(argv=None):
         results.append(("base", acc))
     if adapter:
         from peft import PeftModel
-        model = PeftModel.from_pretrained(model, adapter).to(device)
+        model = to_device(PeftModel.from_pretrained(model, adapter), device)
         acc = hellaswag_accuracy(model, tok, examples, device, a.max_len, pad_id, progress=500)
         print(f"base + our adapter: {acc * 100:.1f}%  (adapter: {adapter})")
         results.append(("tuned", acc))

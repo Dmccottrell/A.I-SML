@@ -67,7 +67,7 @@ def main(argv=None):
     a = p.parse_args(argv)
 
     import open_models
-    from exam_open import find_adapter, load_base
+    from exam_open import find_adapter, load_base, to_device
     preset, cfg = open_models.resolve(a.model)
     model_id = cfg["hf"] if preset and not os.path.isdir(a.model) else a.model
     name = preset or os.path.basename(model_id.rstrip("/\\")).lower()
@@ -75,13 +75,13 @@ def main(argv=None):
     with open(a.prompts, encoding="utf-8") as f:
         tests = [json.loads(line) for line in f if line.strip()]
 
-    model, hf_tok = load_base(model_id, device)
+    model, hf_tok = load_base(model_id, device, cfg.get("quant4", False))
     adapter = a.adapter or (find_adapter(name, model_id) if a.tuned else None)
     if a.tuned and not adapter:
         sys.exit("--tuned needs our adapter: pass --adapter <folder> or train first")
     if adapter:
         from peft import PeftModel
-        model = PeftModel.from_pretrained(model, adapter).to(device)
+        model = to_device(PeftModel.from_pretrained(model, adapter), device)
     model.eval()
     tok = OpenTokenizer(hf_tok.backend_tokenizer)
 
