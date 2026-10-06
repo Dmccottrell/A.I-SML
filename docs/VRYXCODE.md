@@ -76,6 +76,23 @@ The Code screen's model picker lists the Emvryx models that can code (Equinox 2 
 
 **Plan (option C):** use the outside coder now; then collect more successful runs (the first 44 are backed up in the Hugging Face repo under `bench-logs-2026-10-06`) and train Solstice and Equinox on them, so an Emvryx model can drive VryxCode too. That training is not started and needs approval and budget.
 
+## GitHub: create repositories, pull and push (a connected app)
+
+GitHub is the first real **connected app** (Menu > Connected apps > GitHub). Connect it once with a token you make on GitHub, and VryxCode can, per project (project menu > GitHub...):
+
+- **create a new repository** for the project (private by default) and link the project to it, **link** the project to a repository you already have, or **clone** one into an empty project;
+- **pull** (fast-forward only: it never rewrites your work) and **push** (never forced; pushing to `main` or `master` needs an extra yes).
+
+The model can do it too: when GitHub is connected and the project is linked, it gets a `github` tool with `status`, `pull` and `push`, after committing with its own `git` tool (which can now also make branches with `switch -c`). Every pull and push shows the usual **Allow / No** card, and "Always allow" and "Auto-approve edits" never cover it: it asks every time. Creating and linking repositories is a button only, never the model.
+
+How it is kept safe (`github_link.py`):
+- The token lives only on the server, in a private file (mode 600) per person. It is never sent to the page, never in a command line, a log, an event or a model prompt, and it is scrubbed from any git output we show. **Disconnect deletes it at once**; a short activity log (connected, created, pulled, pushed) stays on the Connected apps screen.
+- Git is only ever pointed at `https://github.com/<owner>/<repo>.git`, checked from the project's own remote setting before every pull or push, and the token is attached to github.com requests only (git's per-URL header from the environment). The model's file tools cannot edit the `.git` folder (where that setting lives); the model's `git` tool has no `remote`, `config`, `push` or `-c` before the subcommand.
+- Use the narrowest token: a fine-grained token limited to the repositories you choose, with Contents read and write, is enough to pull and push. Creating repositories needs a classic token with the `repo` scope (GitHub's rule).
+- A project with a running coding session can't be changed by the GitHub buttons until you stop it.
+- Honest limit: the command sandbox is not a wall against a deliberately hostile program (see the sandbox notes in `harness.py`); these checks protect against a small model's mistakes and a tampered remote setting, not a determined attacker with a shell.
+- Not built: opening pull requests and reading issues (a later step), and sign-in with GitHub's OAuth instead of a pasted token.
+
 ## Using an outside coding model (for the best local coding today)
 `--coder LABEL` runs VryxCode on any coding model you start in llama-server, such as Qwen2.5-Coder-14B-Instruct or Qwen3.5-9B (both fit a 12 GB card at 4 bits; check the licence on each model's page). It skips the Emvryx model gate and labels the run as an outside model, so its scores are never mistaken for an Emvryx result. `bench_exercises.py` and `vryx_swe.py` take the same flag, so the candidates can be compared on the same exercises.
 ```

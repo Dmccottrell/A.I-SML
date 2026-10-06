@@ -49,8 +49,10 @@ import app_engine as E
 import chat
 import chat_polish
 import code_sessions
+import harness
 import vryxcode
 import connected_apps
+import github_link
 import lookup_auto
 import saved_notes
 import context_window as CW
@@ -229,6 +231,9 @@ class AppState:
         self.lock = threading.Lock()
         self.users = self._load_users()
         self.code = code_sessions.CodeManager(data_dir)       # VryxCode sessions (projects live under <data>/code/)
+        self.github = github_link.Store(data_dir)               # connected GitHub accounts (token files, mode 600)
+        self.github_http = None                                 # tests: http(method, url, headers, body) -> (status, json)
+        self.github_local = False                               # tests only: allow a local folder as the remote
         self.code_generate = None                              # tests: code_generate(model) -> generate(messages)
 
     # ---- people and keys
@@ -414,6 +419,41 @@ class AppState:
         if self.code_generate or self.llama_url or (self.runner and self.runner.available(c["id"])):
             return "ready", "Ready"
         return "missing", "Not on this computer" if (self.runner and self.runner.bin) else "llama-server not found"
+
+    # ---- GitHub (a connected app)
+    def github_api(self, user):
+        d = self.github.get(user)
+        if not d.get("token"):
+            raise github_link.GitHubError("GitHub isn't connected.", "Open Menu > Connected apps > GitHub and connect it.")
+        return github_link.Api(d["token"], self.github_http)
+
+    def git_for(self, user, project):
+        d = self.github.get(user)
+        workspace = self.code.project_path(user, project)
+        identity = None
+        if d.get("login"):
+            identity = (d["login"], f"{d.get('id', 0)}+{d['login']}@users.noreply.github.com")
+        return github_link.Git(workspace, d.get("token"), self.github_local, identity)
+
+    def github_tool(self, user, project):
+        """The `github` tool the model may call (status, pull, push). It runs here on the server with the person's token; the model never sees it."""
+        def github(action="status"):
+            g = self.git_for(user, project)
+            try:
+                if action == "status":
+                    return json.dumps(g.status())
+                if action == "pull":
+                    out = g.pull()
+                    self.github.log(user, f"pulled {project}")
+                    return out
+                if action == "push":
+                    out = g.push(allow_protected=False)
+                    self.github.log(user, f"pushed {project}")
+                    return out
+            except github_link.GitHubError as e:
+                raise harness.ToolError(e.message + (" " + e.action if e.action else ""))
+            raise harness.ToolError("action must be status, pull or push")
+        return github
 
     def code_backend(self, model):
         """generate(messages) for a coding session on this model (the llama-server that runs it)."""
@@ -719,7 +759,9 @@ class Handler(http.server.BaseHTTPRequestHandler):
             if path == "/api/settings":
                 return self._send(200, self.state.get_settings(who["user"]))
             if path == "/api/apps":
-                return self._send(200, connected_apps.catalog())
+                cat = connected_apps.catalog()
+                cat["connections"] = {"github": self.state.github.public(who["user"])}
+                return self._send(200, cat)
             if path == "/api/saved-notes":
                 return self._send(200, {"notes": self.state.saved_for(who["user"]).list(self.state.clock())})
             if path.startswith("/api/code"):
@@ -762,6 +804,19 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 return self.api_code_post(who, path, body)
             if path == "/api/settings":
                 return self._send(200, self.state.put_settings(who["user"], body))
+            if path == "/api/apps/github/connect":
+                try:
+                    token = github_link.validate_token(body.get("token"))
+                    login, uid = github_link.Api(token, self.state.github_http).me()
+                except github_link.GitHubError as e:
+                    return self._send(400, {"code": "github", "message": e.message, "action": e.action})
+                self.state.github.connect(who["user"], token, login, uid)
+                self.state.github.log(who["user"], f"connected as {login}")
+                return self._send(200, self.state.github.public(who["user"]))
+            if path == "/api/apps/github/disconnect":
+                self.state.github.disconnect(who["user"])
+                self.state.github.log(who["user"], "disconnected (token deleted)")
+                return self._send(200, self.state.github.public(who["user"]))
             m = re.fullmatch(r"/api/apps/([a-z]+)/connect", path)
             if m:
                 try:
@@ -826,6 +881,43 @@ class Handler(http.server.BaseHTTPRequestHandler):
         return {"status": snap["status"], "exempt": snap["exempt"], "tank_pct": round(snap["tank"]["pct"]), "week_pct": round(snap["week"]["pct_left"]),
                 "steps_left": snap["can_send"], "plan": snap["plan"]}
 
+    def api_code_git(self, who, body):
+        """create_repo | link | clone | pull | push for a project, always started by the person (a button), never silently."""
+        st, user = self.state, who["user"]
+        project = st.code.check_name(body.get("project"))
+        action = str(body.get("action", ""))
+        if action not in ("create_repo", "link", "clone", "pull", "push"):
+            raise code_sessions.CodeError("Choose create_repo, link, clone, pull or push.")
+        if st.code.running(user):
+            raise code_sessions.CodeError("A coding session is running.", "Stop it first, then use GitHub.")
+        try:
+            api = st.github_api(user)
+            os.makedirs(st.code.project_path(user, project), exist_ok=True)
+            g = st.git_for(user, project)
+            if action == "create_repo":
+                owner, repo = api.create_repo(str(body.get("name") or project), bool(body.get("private", True)), str(body.get("description", "")))
+                g.init_and_link(owner, repo)
+                st.github.log(user, f"created {owner}/{repo} for {project}")
+                return {"ok": True, "message": f"Created {owner}/{repo} and linked this project to it."}
+            if action in ("link", "clone"):
+                owner, repo = github_link.parse_repo(body.get("repo"))
+                if action == "link":
+                    g.init_and_link(owner, repo)
+                    st.github.log(user, f"linked {project} to {owner}/{repo}")
+                    return {"ok": True, "message": f"Linked this project to {owner}/{repo}."}
+                g.clone(owner, repo)
+                st.github.log(user, f"cloned {owner}/{repo} into {project}")
+                return {"ok": True, "message": f"Cloned {owner}/{repo} into this project."}
+            if action == "pull":
+                out = g.pull()
+                st.github.log(user, f"pulled {project}")
+                return {"ok": True, "message": out}
+            out = g.push(allow_protected=bool(body.get("confirm_protected")))
+            st.github.log(user, f"pushed {project}")
+            return {"ok": True, "message": out}
+        except github_link.GitHubError as e:
+            raise code_sessions.CodeError(e.message, e.action)
+
     def api_code_get(self, who, path, qs):
         st, user = self.state, who["user"]
         arg = lambda k: (qs.get(k) or [""])[0]
@@ -834,6 +926,14 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 run = st.code.running(user)
                 return self._send(200, {"usage": self._code_usage(who, None), "models": st.code_models(who), "projects": st.code.projects(user),
                                         "running": run.id if run else None, "project": run.project if run else None})
+            if path == "/api/code/git":
+                project = st.code.check_name(arg("project"))
+                g = st.git_for(user, project)
+                try:
+                    status = g.status()
+                except github_link.GitHubError as e:
+                    status = {"repo": True, "linked": False, "problem": e.message}
+                return self._send(200, {"connected": st.github.connected(user), "login": st.github.get(user).get("login"), **status})
             if path == "/api/code/zip":
                 project = st.code.check_name(arg("project"))
                 return self._send(200, st.code.export_zip(user, project), "application/zip",
@@ -890,8 +990,18 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 if not snap["exempt"] and snap["can_send"] < 1:
                     raise code_sessions.CodeError("Your usage has run out for now.", "Coding steps are counted like chat messages. Wait for the tank to refill or the week to reset.")
                 meter = code_sessions.Meter(st.limiter, user, model["limiter_key"], st.clock)
+                tools, identity = None, None
+                if st.github.connected(user):
+                    g = st.git_for(user, project)
+                    identity = g.identity
+                    try:
+                        linked = g.is_repo() and bool(g.remote())
+                    except github_link.GitHubError:
+                        linked = False
+                    if linked:
+                        tools = {"github": st.github_tool(user, project)}
                 s, note = st.code.start(user, project, body.get("task"), model["id"], generate, bool(body.get("auto_edits")),
-                                        int(model.get("context_tested") or 8192), meter, outside=bool(model.get("outside")))
+                                        int(model.get("context_tested") or 8192), meter, outside=bool(model.get("outside")), tools=tools, identity=identity)
                 return self._send(200, {"id": s.id, "note": note})
             m = re.fullmatch(r"/api/code/sessions/([\w-]+)/answer", path)
             if m:
@@ -901,6 +1011,8 @@ class Handler(http.server.BaseHTTPRequestHandler):
             if m:
                 st.code.get(user, m.group(1)).request_stop()
                 return self._send(200, {"ok": True})
+            if path == "/api/code/git":
+                return self._send(200, self.api_code_git(who, body))
             if path == "/api/code/import":
                 project = st.code.check_name(body.get("project"))
                 return self._send(200, {"imported": st.code.import_b64(user, project, body), "project": project})

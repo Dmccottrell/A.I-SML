@@ -65,11 +65,12 @@ ALLOWED_PROGRAMS = {"python", "python3", "pytest", "ls", "cat", "head", "tail", 
                     "echo", "pwd", "sort", "uniq", "diff"}
 
 
-# git: only these subcommands, and never flags that point outside the workspace or run other programs
+# git: only these subcommands, and never flags that point outside the workspace or run other programs.
+# (git's own -c / -C options only work BEFORE the subcommand, which is refused above; after it, -c is a subcommand flag such as `switch -c NAME`.)
 GIT_SUBCOMMANDS = {"status", "diff", "log", "show", "init", "add", "commit", "branch", "switch", "checkout",
                    "restore", "stash", "worktree"}
 GIT_READ_ONLY = {"status", "diff", "log", "show", "init"}
-GIT_BLOCKED_FLAGS = ("-C", "-c", "--git-dir", "--work-tree", "--exec-path", "--upload-pack", "--receive-pack",
+GIT_BLOCKED_FLAGS = ("--git-dir", "--work-tree", "--exec-path", "--upload-pack", "--receive-pack",
                      "--namespace", "--super-prefix", "--config-env", "--output", "--ext-diff", "--textconv")
 PROJECT_FILES = ("EMVRYX.md", "AGENTS.md")
 HOOKS_FILE = os.path.join(".emvryx", "hooks.json")
@@ -117,7 +118,8 @@ class Sandbox:
     """One workspace folder plus the tools that work inside it."""
 
     def __init__(self, workspace=None, command_timeout=20, output_limit=1500, max_read_lines=80,
-                 command_prefix=None, allowed_programs=ALLOWED_PROGRAMS):
+                 command_prefix=None, allowed_programs=ALLOWED_PROGRAMS, git_identity=("Emvryx agent", "agent@localhost")):
+        self.git_identity = tuple(git_identity)
         self.own_dir = workspace is None
         self.root = os.path.realpath(workspace or tempfile.mkdtemp(prefix="agent_"))
         os.makedirs(self.root, exist_ok=True)
@@ -173,8 +175,14 @@ class Sandbox:
         more = f"\n[showing lines {start}-{end} of {len(lines)}]" if end < len(lines) or start > 1 else ""
         return cut(out, self.output_limit * 2) + more
 
+    def _not_git_folder(self, full):
+        """The .git folder holds the project's git settings (including where it pushes): only git itself may change it."""
+        if ".git" in self.rel(full).split("/"):
+            raise ToolError("the .git folder is managed by git: use the git tool instead of editing it")
+
     def write_file(self, path, content):
         full = self.path(path)
+        self._not_git_folder(full)
         if os.path.isdir(full):
             raise ToolError(f"{path!r} is a folder")
         os.makedirs(os.path.dirname(full), exist_ok=True)
@@ -184,6 +192,7 @@ class Sandbox:
 
     def edit_file(self, path, old, new):
         full = self.path(path)
+        self._not_git_folder(full)
         if not os.path.isfile(full):
             raise ToolError(f"{path!r} is not a file")
         with open(full, encoding="utf-8") as f:
@@ -256,8 +265,8 @@ class Sandbox:
     def _git(self, argv):
         env = {"GIT_CONFIG_GLOBAL": os.devnull, "GIT_CONFIG_SYSTEM": os.devnull, "GIT_CONFIG_NOSYSTEM": "1",
                "GIT_TERMINAL_PROMPT": "0", "GIT_EDITOR": "true", "GIT_PAGER": "cat", "HOME": self.root,
-               "GIT_AUTHOR_NAME": "Emvryx agent", "GIT_AUTHOR_EMAIL": "agent@localhost",
-               "GIT_COMMITTER_NAME": "Emvryx agent", "GIT_COMMITTER_EMAIL": "agent@localhost"}
+               "GIT_AUTHOR_NAME": self.git_identity[0], "GIT_AUTHOR_EMAIL": self.git_identity[1],
+               "GIT_COMMITTER_NAME": self.git_identity[0], "GIT_COMMITTER_EMAIL": self.git_identity[1]}
         return self._exec(["git", "-c", f"core.hooksPath={os.devnull}", "-c", "init.defaultBranch=main"] + argv, env)
 
     def _worktree(self, args):

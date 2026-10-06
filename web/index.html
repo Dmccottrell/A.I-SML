@@ -527,17 +527,87 @@ function dialog(children, closeText, extra) {
 
 // ---------------------------------------------------------------- connected apps
 async function openApps() {
-  const r = await api('/api/apps'); const c = await r.json();
-  const kids = [el('h2', {}, 'Connected apps'), el('div', {style: 'color:var(--muted)'}, 'Let Emvryx work with the apps you use. Nothing is connected yet: these are planned.')];
+  const r = await api('/api/apps'); const c = await r.json(); const conn = c.connections || {};
+  const kids = [el('h2', {}, 'Connected apps'), el('div', {style: 'color:var(--muted)'}, 'Let Emvryx work with the apps you use. GitHub is available now; the rest are planned.')];
   for (const cat of c.categories) {
     const list = c.apps.filter((a) => a.category === cat); if (!list.length) continue;
     kids.push(el('div', {class: 'label', style: 'padding:6px 0 0'}, cat.toUpperCase()));
-    for (const a of list) kids.push(el('div', {class: 'opt', style: 'cursor:default;opacity:.9'},
-      el('span', {class: 'grow'}, el('b', {}, a.name), el('small', {}, a.does), el('small', {style: 'font-size:13px'}, 'Permission: ' + a.permission)),
-      el('small', {style: 'text-align:right'}, 'Coming soon')));
+    for (const a of list) {
+      const on = conn[a.id] && conn[a.id].connected;
+      const right = a.status === 'available'
+        ? el('button', {class: 'chip', onclick: () => { document.querySelectorAll('.modal').forEach((m) => m.remove()); openGithubConnect(); }}, on ? 'Manage' : 'Connect')
+        : el('small', {style: 'text-align:right'}, 'Coming soon');
+      kids.push(el('div', {class: 'opt', style: 'cursor:default;opacity:.95'},
+        el('span', {class: 'grow'}, el('b', {}, a.name + (on ? '  ·  connected as @' + conn[a.id].login : '')), el('small', {}, a.does), el('small', {style: 'font-size:13px'}, 'Permission: ' + a.permission)), right));
+    }
   }
-  kids.push(el('b', {}, 'How connections will work'), ...c.rules.map((t) => el('div', {style: 'color:var(--muted);font-size:14px'}, '\u2022 ' + t)));
+  kids.push(el('b', {}, 'How connections work'), ...c.rules.map((t) => el('div', {style: 'color:var(--muted);font-size:14px'}, '• ' + t)));
   dialog(kids, 'Close');
+}
+
+// GitHub: connect with a token you make and can delete any time
+async function openGithubConnect(after) {
+  const r = await api('/api/apps'); const g = (await r.json()).connections.github;
+  const kids = [el('h2', {}, 'GitHub')];
+  const out = el('div', {style: 'color:var(--muted);font-size:14px;word-break:break-word'});
+  const close = () => document.querySelectorAll('.modal').forEach((m) => m.remove());
+  if (g.connected) {
+    kids.push(el('div', {}, 'Connected as ', el('b', {}, '@' + g.login), '. VryxCode can create repositories for your projects and pull and push. Pulling, pushing and creating always ask you first, and the model never sees your token.'));
+    kids.push(el('b', {}, 'Recent activity'));
+    kids.push(...(g.log.length ? g.log.map((l) => el('div', {style: 'color:var(--muted);font-size:14px'}, new Date(l.at * 1000).toLocaleString([], {month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit'}) + '  ' + l.what)) : [el('div', {style: 'color:var(--muted);font-size:14px'}, 'Nothing yet.')]));
+    kids.push(el('button', {class: 'btn danger', onclick: async () => { if (!confirm('Disconnect GitHub? The saved token is deleted now.')) return; await post('/api/apps/github/disconnect'); close(); if (after) after(); }}, 'Disconnect and delete the token'));
+  } else {
+    const tok = el('input', {type: 'password', placeholder: 'Paste your GitHub token', autocomplete: 'off', 'aria-label': 'GitHub token'});
+    kids.push(el('div', {style: 'color:var(--muted)'}, 'Make a token on GitHub (Settings > Developer settings > Personal access tokens) and paste it here. Give it the least it needs: a fine-grained token limited to the repositories you choose, with Contents read and write, is enough to pull and push. Creating new repositories needs a classic token with the repo permission (GitHub’s rule).'),
+      el('div', {style: 'color:var(--muted);font-size:14px'}, 'The token is kept on this server in a private file, never shown again, never given to the model, and deleted the moment you disconnect.'),
+      tok, out, el('button', {class: 'btn', onclick: async () => {
+        const rr = await post('/api/apps/github/connect', {token: tok.value}); const j = await rr.json();
+        if (!rr.ok) { out.style.color = 'var(--danger)'; out.textContent = j.message + ' ' + (j.action || ''); return; }
+        close(); if (after) after(); else openGithubConnect();
+      }}, 'Connect'));
+  }
+  dialog(kids, 'Close');
+}
+
+// GitHub for one VryxCode project: create / link / clone, pull, push
+async function openProjectGithub() {
+  const r = await api('/api/code/git?project=' + encodeURIComponent(C.project)); const g = await r.json();
+  const close = () => document.querySelectorAll('.modal').forEach((m) => m.remove());
+  const kids = [el('h2', {}, 'GitHub · ' + C.project)];
+  const out = el('div', {style: 'color:var(--muted);font-size:14px;word-break:break-word;white-space:pre-wrap'});
+  const act = async (body, then) => {
+    out.style.color = 'var(--muted)'; out.textContent = 'Working...';
+    const rr = await post('/api/code/git', Object.assign({project: C.project}, body)); const j = await rr.json();
+    if (!rr.ok) { out.style.color = 'var(--danger)'; out.textContent = j.message + ' ' + (j.action || ''); return; }
+    out.textContent = j.message; refreshFiles(); if (then) then();
+  };
+  if (!g.connected) {
+    kids.push(el('div', {style: 'color:var(--muted)'}, 'Connect your GitHub account first. Then VryxCode can create a repository for this project and pull and push.'),
+      el('button', {class: 'btn', onclick: () => { close(); openGithubConnect(() => openProjectGithub()); }}, 'Connect GitHub'));
+  } else if (!g.linked) {
+    const name = el('input', {type: 'text', value: C.project, 'aria-label': 'New repository name'}), priv = el('input', {type: 'checkbox', checked: 'checked'});
+    const repo = el('input', {type: 'text', placeholder: 'owner/name', 'aria-label': 'Existing repository'});
+    kids.push(el('div', {style: 'color:var(--muted)'}, 'Connected as @' + g.login + '. This project is not linked to a repository yet.'),
+      el('b', {}, 'Create a new repository'), name, el('label', {style: 'display:flex;gap:8px;align-items:center;color:var(--muted)'}, priv, 'Private'),
+      el('button', {class: 'btn', onclick: () => { if (confirm('Create the repository "' + name.value + '" on your GitHub account?')) act({action: 'create_repo', name: name.value, private: priv.checked}, () => { close(); openProjectGithub(); }); }}, 'Create and link'),
+      el('b', {}, 'Or use one you already have'), repo,
+      el('div', {class: 'row', style: 'display:flex;gap:8px;flex-wrap:wrap'},
+        el('button', {class: 'btn ghost', onclick: () => act({action: 'link', repo: repo.value}, () => { close(); openProjectGithub(); })}, 'Link this project to it'),
+        el('button', {class: 'btn ghost', onclick: () => { if (confirm('Copy that repository into this project? (The project must be empty.)')) act({action: 'clone', repo: repo.value}, () => { close(); openProjectGithub(); }); }}, 'Clone it into this project')));
+  } else {
+    const prot = ['main', 'master'].includes(g.branch);
+    kids.push(el('div', {}, 'Linked to ', el('b', {}, g.owner + '/' + g.name), '. Branch ', el('b', {}, g.branch || '(none)'), '.'),
+      el('div', {style: 'color:var(--muted);font-size:14px'}, (g.ahead ? g.ahead + ' commit' + (g.ahead > 1 ? 's' : '') + ' not pushed yet. ' : 'Nothing waiting to push. ') + (g.changed_files ? g.changed_files + ' changed file' + (g.changed_files > 1 ? 's' : '') + ' not committed yet (VryxCode commits when you ask it to).' : '')),
+      el('div', {style: 'display:flex;gap:8px;flex-wrap:wrap'},
+        el('button', {class: 'btn ghost', onclick: () => { if (confirm('Fetch new work from ' + g.owner + '/' + g.name + ' into this project? (Fast-forward only: it never rewrites your work.)')) act({action: 'pull'}, () => { close(); openProjectGithub(); }); }}, 'Pull'),
+        el('button', {class: 'btn', onclick: () => {
+          if (!confirm('Send the branch "' + g.branch + '" to ' + g.owner + '/' + g.name + ' on GitHub?')) return;
+          let sure = false; if (prot) { sure = confirm('"' + g.branch + '" is the main branch. Push straight to it?'); if (!sure) return; }
+          act({action: 'push', confirm_protected: sure}, () => { close(); openProjectGithub(); });
+        }}, 'Push')),
+      el('button', {class: 'chip', onclick: () => { close(); openGithubConnect(); }}, 'Manage the GitHub connection'));
+  }
+  kids.push(out); dialog(kids, 'Close');
 }
 
 // ---------------------------------------------------------------- saved notes
@@ -709,7 +779,7 @@ $('codeProj').onclick = (e) => {
   const names = Array.from(new Set(C.info.projects.concat([C.project])));
   m.replaceChildren(el('div', {class: 'head'}, 'PROJECT'), ...names.map((n) => item(n, () => { C.project = n; C.file = null; renderCodeBar(); refreshFiles(); }, n === C.project ? 'sel' : '')),
     item('+ New project', newProject), el('div', {class: 'head'}, 'THIS PROJECT'),
-    item('Download as zip', () => { window.location = '/api/code/zip?project=' + encodeURIComponent(C.project); }), item('Import a zip or folder...', openImport),
+    item('GitHub...', openProjectGithub), item('Download as zip', () => { window.location = '/api/code/zip?project=' + encodeURIComponent(C.project); }), item('Import a zip or folder...', openImport),
     item('Delete project', deleteProject));
   m.hidden = false;
 };

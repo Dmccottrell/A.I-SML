@@ -377,8 +377,10 @@ beta list", and "memory finds an earlier chat by meaning, not only by words".
 - **Connected apps** (`connected_apps.py`, `tests/test_connected_apps.py`): Menu > Connected apps lists the apps planned (Google Calendar, Gmail,
   Google Drive, Notion, Slack, GitHub, Vercel, Supabase) with what each would do and the permission it needs, and the rules (off until
   connected with your own sign-in; read-only first; Confirm for anything that changes something; only what is asked for is seen;
-  disconnect deletes access; on-device models never share). Nothing is connectable yet (`POST /api/apps/<id>/connect` answers
-  "coming soon"); real connections need sign-in with each service, which comes with accounts (see `docs/DEPLOY.md`).
+  disconnect deletes access; on-device models never share). **GitHub is the first one that is connectable** (`github_link.py`,
+  `POST /api/apps/github/connect` with a pasted token, `/disconnect` deletes it; `GET /api/apps` also returns the person's `connections`
+  with a short activity log, never the token); it powers create / link / clone / pull / push for VryxCode projects (see `docs/VRYXCODE.md`).
+  The others still answer "coming soon" until real sign-in with each service exists (see `docs/DEPLOY.md`).
 - **The website** (`build_site.py` -> `site/`): the five website designs as plain static pages with a dark/light switch, ready for
   Vercel (`docs/DEPLOY.md`). Rename note: the app was called Yuvra until Oct 2026; it is now **Emvryx** with an E-and-ring mark;
   the app moves an old `.yuvra` data folder to `.emvryx` by itself on start.

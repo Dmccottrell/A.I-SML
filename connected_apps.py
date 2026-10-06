@@ -4,7 +4,8 @@ Emvryx can use them for them (read their calendar, find a file, look at an issue
 
 WHAT THIS FILE DOES
     Lists the apps the app plans to connect, what each one lets Emvryx do, what permission it needs, and the rules every
-    connection follows. Nothing is connected yet: every app is "soon", and asking to connect one gives a plain "coming soon".
+    connection follows. GitHub is the first one that is "available" (github_link.py, connected with a token the person pastes);
+    the others are "soon", and asking to connect one gives a plain "coming soon".
     The screen (Menu > Connected apps) and the server (`GET /api/apps`) read this list, so adding an app is adding an entry.
 
     The rules (shown on the screen):
@@ -34,9 +35,9 @@ APPS = [
     {"id": "slack", "name": "Slack", "category": "Work", "status": "soon",
      "does": "Catch you up on channels you pick. Posting always needs your confirmation.",
      "permission": "Read chosen channels; post with confirmation"},
-    {"id": "github", "name": "GitHub", "category": "Builders", "status": "soon",
-     "does": "Read repositories, issues and pull requests, and suggest changes. Merging or pushing needs your confirmation.",
-     "permission": "Read repositories; changes with confirmation"},
+    {"id": "github", "name": "GitHub", "category": "Builders", "status": "available", "connect": "token",
+     "does": "Lets VryxCode create a repository for a project, link a project to one, and pull and push, the way a coding tool with GitHub connected does. Pulling, pushing and creating always need your confirmation.",
+     "permission": "Your repositories (a token you choose and can delete any time); never sends without your confirmation"},
     {"id": "vercel", "name": "Vercel", "category": "Builders", "status": "soon",
      "does": "Show the state of your deployments and logs. Deploying needs your confirmation.",
      "permission": "Read deployments; deploy with confirmation"},
