@@ -92,7 +92,7 @@
       ]
     },
     {
-      "id": "flare-2.5",
+      "id": "flare-2.5", "lookup": "when_needed",
       "name": "Flare",
       "version": 2.5,
       "generation": 2,
@@ -138,7 +138,7 @@
       ]
     },
     {
-      "id": "equinox-2",
+      "id": "equinox-2", "lookup": "when_needed",
       "name": "Equinox",
       "version": 2,
       "generation": 2,
@@ -186,7 +186,7 @@
       "vryxcode": true
     },
     {
-      "id": "solstice-2",
+      "id": "solstice-2", "lookup": "when_needed",
       "name": "Solstice",
       "version": 2,
       "generation": 2,
@@ -234,7 +234,7 @@
       "vryxcode": true
     },
     {
-      "id": "apogee-2",
+      "id": "apogee-2", "lookup": "when_needed",
       "name": "Apogee",
       "version": 2,
       "generation": 2,

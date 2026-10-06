@@ -850,7 +850,7 @@ def start_turn(state, who, chat_id, text, model_id, effort, regenerate=False, re
                 web_mode = state.get_settings(who["user"])["web_search"]
                 notes, found = lookup_auto.gather(text, state.wiki, state.web_fn, web_mode, private=chat_id < 0,
                                                   max_notes=5 if window >= 6000 else 3,
-                                                  saved=state.saved_for(who["user"]), now=state.clock())
+                                                  saved=state.saved_for(who["user"]), now=state.clock(), policy=model.get("lookup", "always"))
                 if found["asked"]:
                     q.put(("notes", {k: v for k, v in found.items() if k != "used"}))
             t_load = time.monotonic()
@@ -864,13 +864,18 @@ def start_turn(state, who, chat_id, text, model_id, effort, regenerate=False, re
             r = E.run_turn(tok, store, chat_id, backend, counted_model, window, max_new, user_text=text, stop=stop, notes=notes or None,
                            limiter=state.limiter, user=who["user"], effort=effort, clock=state.clock, pacer=pacer,
                            style_hint=regen_modes.get(mode)["hint"] if regenerate else "")
-            if found and found["asked"] and not regenerate and not found["web_tried"] and state.web_fn is not None and \
-                    state.get_settings(who["user"])["web_search"] not in ("off", "none") and chat_id >= 0 and lookup_auto.gave_up(r["text"]):
-                # The model said it doesn't know and the web hasn't been tried: search it and answer again (the second chance)
-                notes2, found2 = lookup_auto.gather(text, state.wiki, state.web_fn, "always", private=False,
+            web_mode_now = state.get_settings(who["user"])["web_search"]
+            knowledge_first = (model.get("lookup") == "when_needed" and found is not None and not found["asked"] and bool(text) and not regenerate
+                               and web_mode_now != "none" and lookup_auto.wants_lookup(text))
+            old_way = (found and found["asked"] and not regenerate and not found["web_tried"] and state.web_fn is not None and
+                       web_mode_now not in ("off", "none") and chat_id >= 0)
+            if (old_way or knowledge_first) and lookup_auto.gave_up(r["text"]):
+                # The model said it doesn't know. Old way: the web has not been tried, so search it. Knowledge-first models (Qwen) had no notes yet:
+                # look it up now. Then answer again (the second chance).
+                notes2, found2 = lookup_auto.gather(text, state.wiki, state.web_fn, "always" if old_way else web_mode_now, private=(chat_id < 0 and knowledge_first),
                                                     max_notes=5 if window >= 6000 else 3, saved=state.saved_for(who["user"]),
-                                                    now=state.clock(), force_web=True)
-                if found2["web"]:
+                                                    now=state.clock(), force_web=True, force_notes=True)
+                if found2["web"] or (knowledge_first and (found2["wiki"] or found2["saved"])):
                     q.put(("notes", {k: v for k, v in found2.items() if k != "used"} | {"retry": True}))
                     msgs = [m for m in store.messages(chat_id) if m["status"] != "compacted"]
                     if msgs and msgs[-1]["role"] == "assistant":

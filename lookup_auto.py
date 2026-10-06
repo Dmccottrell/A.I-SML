@@ -72,10 +72,14 @@ def notes_weak(notes, question):
     return best < 0.5
 
 
-def gather(question, wiki=None, web=None, mode="auto", private=False, max_notes=3, saved=None, now=0.0, force_web=False):
+def gather(question, wiki=None, web=None, mode="auto", private=False, max_notes=3, saved=None, now=0.0, force_web=False,
+           policy="always", force_notes=False):
     """(notes, info). `wiki` has .search(question, k); `web(question, k)` returns [{"title", "text", "url"}]. Both optional.
     `saved` (saved_notes.SavedNotes) holds notes the person approved before: they are searched first, offline.
-    `force_web` searches the web even if the rules wouldn't (the second try after the model said it doesn't know)."""
+    `force_web` searches the web even if the rules wouldn't (the second try after the model said it doesn't know).
+    `policy` "always" (small models: look up every factual question) or "when_needed" (strong models such as the Qwen ones know most famous
+    things and a wrong passage misleads them: Wikipedia and the web are used only for recent things, or when `force_notes` is set because the
+    model said it was not sure; notes the person approved are always used)."""
     info = {"asked": False, "saved": 0, "wiki": 0, "web": 0, "web_tried": False, "sources": []}
     mode = mode if mode in MODES else "auto"
     if not wants_lookup(question):
@@ -84,19 +88,23 @@ def gather(question, wiki=None, web=None, mode="auto", private=False, max_notes=
         return [], info
     info["asked"] = True
     recent = time_sensitive(question)
+    lazy = policy == "when_needed" and not (recent or force_notes)
     wiki_notes, web_notes, saved_notes = [], [], []
     if saved is not None and not private:
         try:
             saved_notes = saved.search(question, max_notes, now)
         except Exception as e:
             print(f"(saved notes failed: {e})")
-    if wiki is not None:
+    if lazy and not saved_notes:                                # the model answers from its own knowledge first
+        info["asked"] = False
+        return [], info
+    if wiki is not None and not lazy:
         try:
             wiki_notes = [{"title": n["title"], "text": n["text"], "kind": "wikipedia", "url": None}
                           for n in wiki.search(question, max_notes)]
         except Exception as e:                                  # a missing or damaged index must not stop the chat
             print(f"(Wikipedia lookup failed: {e})")
-    use_web = web is not None and not private and mode != "off" and (
+    use_web = web is not None and not private and mode != "off" and not lazy and (
         mode == "always" or force_web or recent or notes_weak(saved_notes + wiki_notes, question))
     if use_web:
         info["web_tried"] = True
