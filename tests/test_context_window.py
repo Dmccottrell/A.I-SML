@@ -11,6 +11,8 @@ LIM = U.load_limits()
 
 def model(mid="flare-2.5", **kw):
     m = dict(next(x for x in MANIFEST["models"] if x["id"] == mid))
+    if mid in ("flare-2.5", "solstice-2"):      # fixed numbers so these tests do not move when a real model is re-measured
+        m.update(context_tested=2048, weights_mb=700, kv_kb_per_token=24, size_mb=700)
     m.update(kw)
     return m
 

@@ -139,7 +139,7 @@ class State(Base):
         names = [m["name"] for m in j["models"]["cards"]]
         self.assertEqual(names, ["Ember", "Flare", "Equinox", "Solstice", "Apogee"])
         self.assertEqual(j["models"]["cards"][0]["state"], "ready")
-        self.assertEqual([m["id"] for m in j["models"]["other"]], [])      # Ember 2 is its own name, so it is a card
+        self.assertEqual([m["id"] for m in j["models"]["other"]], ["flare-2"])      # Flare 2.5 is the Flare card; Flare 2 (v3) moves to "Other models"
         self.assertEqual([e["id"] for e in j["efforts"]], ["auto", "quick", "balanced", "deep"])
         self.assertEqual(j["pause_by_effort"], {"quick": 0.5, "balanced": 1.2, "deep": 2.4})
         self.assertGreater(len(j["thinking_words"]), 5)
@@ -163,7 +163,7 @@ class State(Base):
 
     def test_window_comes_from_the_device_check(self):
         j = self.sam.call("GET", "/api/state")[1]
-        self.assertEqual(j["window"]["window"], 2048)               # nothing has passed the long-context ladder yet
+        self.assertEqual(j["window"]["window"], 8192)               # the selected model (Flare 2.5) is set to 8,192 until its 32K is tested
         self.assertIn("limited by", j["window"]["reason"])
 
     def test_settings_roundtrip(self):
