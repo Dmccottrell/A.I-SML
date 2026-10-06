@@ -114,8 +114,26 @@ def demo_tokenizer():
     return tok
 
 
+def _windows_memory():
+    """(total GB, free GB) of this Windows computer's memory, or None when this is not Windows (or it cannot be read)."""
+    try:
+        import ctypes
+
+        class Status(ctypes.Structure):
+            _fields_ = [("length", ctypes.c_ulong), ("load", ctypes.c_ulong), ("total", ctypes.c_ulonglong), ("avail", ctypes.c_ulonglong),
+                        ("page_total", ctypes.c_ulonglong), ("page_avail", ctypes.c_ulonglong), ("virt_total", ctypes.c_ulonglong),
+                        ("virt_avail", ctypes.c_ulonglong), ("ext", ctypes.c_ulonglong)]
+        st = Status()
+        st.length = ctypes.sizeof(Status)
+        if not ctypes.windll.kernel32.GlobalMemoryStatusEx(ctypes.byref(st)):
+            return None
+        return st.total / 1024 ** 3, st.avail / 1024 ** 3
+    except (AttributeError, OSError, ImportError):
+        return None
+
+
 def free_memory_gb(fallback=8.0):
-    """Memory that is free right now (Linux: MemAvailable). Elsewhere: the fallback."""
+    """Memory that is free right now (Linux: MemAvailable; Windows: the system call). Elsewhere: the fallback."""
     try:
         with open("/proc/meminfo") as f:
             for line in f:
@@ -123,7 +141,8 @@ def free_memory_gb(fallback=8.0):
                     return int(line.split()[1]) / 1024 / 1024
     except OSError:
         pass
-    return fallback
+    win = _windows_memory()
+    return win[1] if win else fallback
 
 
 def total_memory_gb(fallback=8.0):
@@ -134,7 +153,8 @@ def total_memory_gb(fallback=8.0):
                     return int(line.split()[1]) / 1024 / 1024
     except OSError:
         pass
-    return fallback
+    win = _windows_memory()                      # without this a Windows PC was always "8 GB", so Solstice showed "Needs 10 GB of memory"
+    return win[0] if win else fallback
 
 
 # ------------------------------------------------------------------ running a GGUF model (llama.cpp's llama-server)
