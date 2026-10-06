@@ -235,10 +235,13 @@ svg .core { fill: var(--core); stroke: var(--sun); stroke-width: 3; transition: 
           <label class="sr" for="codeModel">Model</label><select id="codeModel" aria-label="Model"></select>
           <label class="hint" style="display:flex;align-items:center;gap:6px"><input type="checkbox" id="codeAuto"> Auto-approve edits</label>
         </div>
+        <div class="hint" id="codeUsage"></div>
         <div class="hint" id="codeNote"></div>
         <label class="sr" for="codeTask">Task</label>
         <textarea id="codeTask" rows="2" maxlength="8000" placeholder="What should VryxCode build or fix? One clear task."></textarea>
-        <div class="row"><button class="btn" id="codeGo">Run</button><button class="btn ghost" id="codeStop" hidden>Stop</button></div>
+        <div class="row"><button class="btn" id="codeGo">Run</button><button class="btn ghost" id="codeStop" hidden>Stop</button>
+          <button class="btn ghost" id="codeZip">Download zip</button><button class="btn ghost" id="codeImport">Import...</button>
+          <input type="file" id="codeZipIn" accept=".zip,application/zip" hidden><input type="file" id="codeDirIn" webkitdirectory multiple hidden></div>
       </div>
     </div>
     <div class="filecol"><h3>FILES</h3><div class="flist" id="codeFiles"></div><div class="viewer"><pre id="codeView">Pick a file to read it.</pre></div></div>
@@ -667,7 +670,7 @@ const C = {info: null, sid: null, seen: 0, timer: null, project: null, file: nul
 const cOn = () => !$('code').hidden;
 async function openCode() {
   $('code').hidden = false; document.body.classList.remove('menu-open');
-  const r = await api('/api/code'); C.info = await r.json();
+  const r = await api('/api/code'); C.info = await r.json(); showUsage(C.info.usage);
   const ms = C.info.models, usable = ms.filter((m) => m.state === 'ready');
   $('codeModel').replaceChildren(...ms.map((m) => el('option', {value: m.id, disabled: m.state !== 'ready'}, m.name + ' ' + m.version + (m.state === 'ready' ? '' : ' (' + m.badge + ')'))));
   const pick = usable.find((m) => m.id === S.model) || usable[0]; if (pick) $('codeModel').value = pick.id;
@@ -722,7 +725,7 @@ function cEvent(e) {
     node.append(el('div', {class: 'row'}, el('button', {class: 'btn', onclick: () => reply(true, false)}, 'Allow'), el('button', {class: 'btn ghost', onclick: () => reply(true, true)}, 'Always allow this'), el('button', {class: 'btn danger', onclick: () => reply(false, false)}, 'No')));
     return feed.append(node);
   }
-  if (e.kind === 'end') feed.append(mk(e.error ? 'bad' : e.finished ? 'fin' : '', e.error ? 'COULD NOT FINISH' : e.finished ? 'DONE' : 'STOPPED', el('div', {}, e.summary || (e.turns + ' steps used'))));
+  if (e.kind === 'end') feed.append(mk(e.error || e.limited ? 'bad' : e.finished ? 'fin' : '', e.error ? 'COULD NOT FINISH' : e.limited ? 'USAGE RAN OUT' : e.finished ? 'DONE' : 'STOPPED', el('div', {}, e.summary || (e.turns + ' steps used'))));
 }
 async function poll() {
   clearTimeout(C.timer); if (!C.sid || !cOn()) return;
@@ -732,6 +735,7 @@ async function poll() {
   for (const e of j.events) cEvent(e); C.seen += j.events.length;
   if (j.events.some((e) => e.kind === 'result' || e.kind === 'end')) refreshFiles();
   if (j.events.length && atEnd) feed.scrollTop = feed.scrollHeight;
+  showUsage(j.usage, j.used, j.steps);
   const live = ['starting', 'working', 'asking'].includes(j.state);
   $('codeGo').hidden = live; $('codeStop').hidden = !live;
   if (live) C.timer = setTimeout(poll, j.state === 'asking' ? 1500 : 700);
@@ -741,6 +745,31 @@ $('codeGo').onclick = async () => {
   const r = await post('/api/code/start', {project: C.project, task, model: $('codeModel').value, auto_edits: $('codeAuto').checked}); const j = await r.json();
   if (!r.ok) { $('codeFeed').append(el('div', {class: 'ev bad'}, el('div', {class: 'k'}, 'NOT STARTED'), el('div', {}, j.message + ' ' + (j.action || '')))); return; }
   C.sid = j.id; C.seen = 0; $('codeTask').value = ''; $('codeFeed').replaceChildren(); poll();
+};
+
+function showUsage(u, used, steps) {
+  if (!u) return;
+  $('codeUsage').textContent = u.exempt ? 'Owner: no limits.' : (u.plan[0].toUpperCase() + u.plan.slice(1) + ' plan · ' + u.status + ' · tank ' + u.tank_pct + '% · week ' + u.week_pct + '% left · about ' + fmt(u.steps_left) + ' coding steps left')
+    + (steps ? ' · this run: ' + steps + ' steps, ' + fmt(used) + ' tokens' : '') + '. Coding steps count like chat messages.';
+}
+const b64 = (buf) => { let s = '', a = new Uint8Array(buf); for (let i = 0; i < a.length; i += 0x8000) s += String.fromCharCode.apply(null, a.subarray(i, i + 0x8000)); return btoa(s); };
+async function sendImport(body) {
+  const r = await post('/api/code/import', Object.assign({project: C.project}, body)); const j = await r.json();
+  $('codeFeed').append(el('div', {class: 'ev ' + (r.ok ? '' : 'bad')}, el('div', {class: 'k'}, r.ok ? 'IMPORTED' : 'NOT IMPORTED'), el('div', {}, r.ok ? j.imported + ' files added to ' + C.project + '.' : j.message + ' ' + (j.action || ''))));
+  refreshFiles();
+}
+$('codeZip').onclick = () => { window.location = '/api/code/zip?project=' + encodeURIComponent(C.project); };
+$('codeImport').onclick = () => {
+  const m = dialog([el('h2', {}, 'Import into ' + C.project), el('div', {style: 'color:var(--muted)'}, 'Add an existing project: a zip file, or a whole folder (up to 1,000 files and 20 MB; .git and node_modules are skipped). Files with the same name are replaced.'),
+    el('button', {class: 'btn', onclick: () => { m.remove(); $('codeZipIn').click(); }}, 'Choose a zip file'),
+    el('button', {class: 'btn ghost', onclick: () => { m.remove(); $('codeDirIn').click(); }}, 'Choose a folder')], 'Cancel');
+};
+$('codeZipIn').onchange = async (e) => { const f = e.target.files[0]; e.target.value = ''; if (f) await sendImport({zip_b64: b64(await f.arrayBuffer())}); };
+$('codeDirIn').onchange = async (e) => {
+  const list = Array.from(e.target.files).filter((f) => !/(^|\/)(\.git|node_modules|__pycache__)\//.test(f.webkitRelativePath)); e.target.value = '';
+  if (!list.length) return;
+  const files = []; for (const f of list) { const p = f.webkitRelativePath.split('/').slice(1).join('/'); if (p) files.push({path: p, b64: b64(await f.arrayBuffer())}); }
+  await sendImport({files});
 };
 $('codeStop').onclick = () => { if (C.sid) post('/api/code/sessions/' + C.sid + '/stop').then(() => poll()); };
 $('codeTask').addEventListener('keydown', (e) => { if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); $('codeGo').click(); } });

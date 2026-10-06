@@ -43,6 +43,7 @@ class LlamaChat:
 
     def __init__(self, url="http://127.0.0.1:8080", temperature=0.2, max_tokens=1024, timeout=600):
         self.url, self.temperature, self.max_tokens, self.timeout = url.rstrip("/"), temperature, max_tokens, timeout
+        self.usage = None                                  # {"fresh_in", "cached_in", "out"} of the last call (the app counts it)
 
     def __call__(self, messages):
         body = json.dumps({"model": "local", "messages": messages, "temperature": self.temperature, "max_tokens": self.max_tokens,
@@ -53,6 +54,10 @@ class LlamaChat:
                 data = json.load(r)
         except OSError as e:
             raise SystemExit(f"can't reach the model at {self.url} ({e}). Start llama-server first (see the top of vryxcode.py).")
+        u, cached = data.get("usage") or {}, int((data.get("timings") or {}).get("cache_n") or 0)
+        if "prompt_tokens" in u:
+            prompt = int(u["prompt_tokens"])
+            self.usage = {"fresh_in": max(0, prompt - cached), "cached_in": min(cached, prompt), "out": int(u.get("completion_tokens", 0))}
         return THINK.sub("", data["choices"][0]["message"]["content"]).strip()
 
 

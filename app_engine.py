@@ -81,6 +81,41 @@ def cut_bleed(text):
     return (text, False) if cut < 0 else (text[:cut], True)
 
 
+def strip_think(pieces, open_tag="<think>", close_tag="</think>"):
+    """Drop a model's hidden reasoning (Qwen3 writes <think>...</think> before its answer) from a stream of text pieces, even when a
+    tag is split across pieces. Text after the closing tag has its leading blank space removed. An unfinished block is dropped."""
+    buf, inside, started = "", False, False
+    for piece in pieces:
+        buf += piece
+        while True:
+            if inside:
+                i = buf.find(close_tag)
+                if i < 0:
+                    buf = buf[-(len(close_tag) - 1):]                  # keep only a possible start of the closing tag
+                    break
+                buf, inside, started = buf[i + len(close_tag):].lstrip(), False, False
+                if not buf:
+                    break
+                continue
+            i = buf.find(open_tag)
+            if i >= 0:
+                if buf[:i]:
+                    yield buf[:i]
+                buf, inside = buf[i + len(open_tag):], True
+                continue
+            keep = 0                                                   # hold back a possible start of "<think>"
+            for n in range(min(len(open_tag) - 1, len(buf)), 0, -1):
+                if open_tag.startswith(buf[-n:]):
+                    keep = n
+                    break
+            out, buf = buf[:len(buf) - keep], buf[len(buf) - keep:]
+            if out:
+                yield out
+            break
+    if buf and not inside:
+        yield buf
+
+
 class Guard:
     """Wrap a stream of text pieces. Stops it at the length cap, when it loops, when the model starts writing the other
     side of the chat ("bleed"), or when `stop` is set (the Stop button). `reason` is then "length", "loop", "bleed" or
@@ -271,7 +306,7 @@ def run_turn(tok, store, chat_id, backend, model, window, max_new, user_text=Non
                 store.remove_message(chat_id, user_row)
             raise
     row = store.add(chat_id, "assistant", "", model["id"], "partial")
-    stream = backend.stream(ids, max_new)
+    stream = strip_think(backend.stream(ids, max_new))
     guard = Guard(pacer(stream) if pacer else stream, stop=stop)
     count = 0
     try:
