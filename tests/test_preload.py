@@ -140,3 +140,27 @@ class SecondTryOrderTests(unittest.TestCase):
         import lookup_auto
         notes, info = lookup_auto.gather("who is gordon ramsey?", self.Wiki(self.WIKI), lambda q, k: self.WEB[:k], "always", max_notes=3)
         self.assertEqual(notes[0]["title"], "Gordon Ramsey (actor)")
+
+
+class NoToolCallTests(unittest.TestCase):
+    def test_stops_early_when_the_model_only_chats(self):
+        import harness
+        calls = []
+
+        def talk(messages):
+            calls.append(1)
+            return "I can review your code. Please share the code you'd like me to review."
+        with harness.Sandbox(workspace=tempfile.mkdtemp()) as box:
+            r = harness.run_agent("review my code", talk, box, max_turns=12)
+        self.assertFalse(r["finished"])
+        self.assertEqual(len(calls), harness.NO_CALL_LIMIT)
+        self.assertEqual(r["stopped"], "no_tool")
+        self.assertIn("Please share the code", r["summary"])
+
+    def test_a_tool_call_in_between_resets_the_count(self):
+        import harness
+        replies = iter(["hello", "hello", '<|tool_call|>{"name": "list_files", "args": {"path": "."}}<|end_tool_call|>', "hello", "hello",
+                        '<|tool_call|>{"name": "finish", "args": {"summary": "done"}}<|end_tool_call|>'])
+        with harness.Sandbox(workspace=tempfile.mkdtemp()) as box:
+            r = harness.run_agent("x", lambda m: next(replies), box, max_turns=12)
+        self.assertTrue(r["finished"])

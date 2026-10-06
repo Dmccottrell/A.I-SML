@@ -483,6 +483,9 @@ def compact(messages, keep=4):
     return system + [head] + tail, middle
 
 
+NO_CALL_LIMIT = 3          # stop after this many replies in a row without a tool call, instead of using every step on the same answer
+
+
 def run_agent(task, generate, sandbox, max_turns=8, system=None, project=True, hooks=None, permissions=None,
               ask=None, context_tokens=None):
     """Let a model work on `task`. `generate(messages)` returns the model's next reply as text.
@@ -501,6 +504,7 @@ def run_agent(task, generate, sandbox, max_turns=8, system=None, project=True, h
     first = (f"Project notes:\n{notes}\n\nTask: {task}" if notes else task)
     messages = ([{"role": "system", "content": system}] if system else []) + [{"role": "user", "content": first}]
     episodes = []
+    no_call = 0                                       # replies in a row with no tool call at all (the model is chatting, not working)
     for turn in range(1, max_turns + 1):
         if context_tokens and estimate_tokens(messages) > context_tokens * 0.7:
             messages, dropped = compact(messages)
@@ -528,6 +532,14 @@ def run_agent(task, generate, sandbox, max_turns=8, system=None, project=True, h
                     result += "\n" + "\n".join(problems)
         except ToolError as e:
             result, done = f"error: {e}", False
+            no_call = no_call + 1 if str(e).startswith("no tool call found") else 0
+            if no_call >= NO_CALL_LIMIT:
+                said = " ".join(reply.split())[:300]
+                return {"finished": False, "turns": turn, "messages": messages, "episodes": episodes, "stopped": "no_tool",
+                        "summary": f'The model kept answering in words instead of using its tools, so nothing was done. It said: "{said}" '
+                                   "Try a specific task (for example: create hello.py that prints a greeting, with a test), or pick Solstice or the Qwen coder."}
+        else:
+            no_call = 0
         if done:
             return {"finished": True, "summary": result, "turns": turn, "messages": messages, "episodes": episodes}
         messages.append({"role": "user", "content": format_result(result)})
