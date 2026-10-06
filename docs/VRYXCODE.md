@@ -52,5 +52,8 @@ python vryxcode.py --demo                         # a scripted run, no model nee
 - A permission model: what it may read, write and run without asking, shown in the terminal.
 - Practice data for the open base (tasks run in the sandbox by a stronger open model; no ChatGPT, Claude or Gemini output).
 
+## Benchmarks
+The agentic coding benchmarks (SWE-bench Verified, Lite and Pro, Terminal-Bench, the Aider benchmark, LiveCodeBench) and what each needs are in [BENCHMARKS.md](BENCHMARKS.md). The plan: prove VryxCode on a real model first, add a patch mode, then start with the Aider benchmark and SWE-bench Lite.
+
 ## Name
 VryxCode follows the family (Emvryx, Ember, Flare...). **A first quick check (Oct 2026, a Google AI answer, so only a rough sign):** it said "VryxCode" was not registered or pending at the USPTO. That is encouraging but is not a clearance search: before a public launch, search the USPTO trademark database yourself (or ask a trademark attorney) for similar names in software, check for confusingly similar existing brands, and check domains and app-store names, like the other names.
