@@ -672,10 +672,10 @@ async function openCode() {
   $('code').hidden = false; document.body.classList.remove('menu-open');
   const r = await api('/api/code'); C.info = await r.json(); showUsage(C.info.usage);
   const ms = C.info.models, usable = ms.filter((m) => m.state === 'ready');
-  $('codeModel').replaceChildren(...ms.map((m) => el('option', {value: m.id, disabled: m.state !== 'ready'}, m.name + ' ' + m.version + (m.state === 'ready' ? '' : ' (' + m.badge + ')'))));
+  $('codeModel').replaceChildren(...ms.map((m) => el('option', {value: m.id, disabled: m.state !== 'ready'}, (m.label || (m.name + ' ' + m.version)) + (m.state === 'ready' ? '' : ' (' + m.badge + ')'))));
   const pick = usable.find((m) => m.id === S.model) || usable[0]; if (pick) $('codeModel').value = pick.id;
   fillProjects(C.project || (C.info.projects[0] || 'my-project'));
-  noteForModel(); $('codeSub').textContent = 'Equinox 2 and above';
+  noteForModel(); $('codeSub').textContent = 'Equinox 2 and above, or an outside coding model';
   if (C.info.running && C.info.running !== C.sid) { C.sid = C.info.running; C.seen = 0; $('codeFeed').replaceChildren(); fillProjects(C.info.project); }
   if (!C.sid) emptyFeed();
   refreshFiles(); if (C.sid) poll();

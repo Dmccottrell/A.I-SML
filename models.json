@@ -282,5 +282,21 @@
       "vryxcode": true
     }
   ],
-  "keep_latest_per_name": 2
+  "keep_latest_per_name": 2,
+  "coders": [
+    {
+      "id": "qwen2.5-coder-14b",
+      "label": "Qwen2.5-Coder-14B",
+      "outside": true,
+      "licence": "Apache 2.0",
+      "hf": "Qwen/Qwen2.5-Coder-14B-Instruct-GGUF",
+      "file": "qwen2.5-coder-14b-instruct-q4_k_m.gguf",
+      "min_ram_gb": 12,
+      "context_tested": 8192,
+      "plan_like": "solstice",
+      "local_gguf": [
+        "export/open/coders/qwen2.5-coder-14b-instruct-q4_k_m.gguf"
+      ]
+    }
+  ]
 }

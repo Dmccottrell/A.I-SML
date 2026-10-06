@@ -65,6 +65,8 @@ from open_tokenizer import OpenTokenizer
 HERE = os.path.dirname(os.path.abspath(__file__))
 WEB = os.path.join(HERE, "web")
 MAX_BODY = 1_000_000
+OUTSIDE_NOTE = ("{label} is an outside coding model ({licence}), not an Emvryx model: it is strong at code but does not carry Emvryx's lessons. "
+                "Anything it writes is its work, and it is counted like Solstice.")
 MAX_UPLOAD = 30_000_000                                # a project upload (base64): see code_sessions.MAX_IMPORT_BYTES
 MAX_TEXT = 20_000
 EFFORTS = {"quick": 160, "balanced": 320, "deep": 700}          # most words a reply may have, per effort level
@@ -190,7 +192,7 @@ def find_llama_server():
 def discover_ggufs(manifest, root=HERE):
     """{model id: path} for every model whose .gguf already sits where the export scripts put it (see `local_gguf`)."""
     found = {}
-    for m in manifest["models"]:
+    for m in list(manifest["models"]) + list(manifest.get("coders", [])):      # the models, and the outside coding models VryxCode can use
         for rel in m.get("local_gguf", []):
             path = rel if os.path.isabs(rel) else os.path.join(root, rel)
             if os.path.exists(path):
@@ -390,9 +392,28 @@ class AppState:
     def code_models(self, who):
         """The models VryxCode can use for this person: flagged "vryxcode", and ready to run here."""
         cat = self.catalog(who)
-        return [{"id": m["id"], "name": m["name"], "version": m["version"], "state": m["state"], "badge": m["badge"],
-                 "note": vryxcode.ELIGIBLE_NOTE.get(m["id"], "")}
-                for m in cat["cards"] + cat["other"] if m.get("vryxcode")]
+        out = [{"id": m["id"], "name": m["name"], "version": m["version"], "state": m["state"], "badge": m["badge"],
+                "label": f"{m['name']} {m['version']:g}", "outside": False, "note": vryxcode.ELIGIBLE_NOTE.get(m["id"], "")}
+               for m in cat["cards"] + cat["other"] if m.get("vryxcode")]
+        for c in self.manifest.get("coders", []):
+            state, badge = self._coder_state(c, who)
+            out.append({"id": c["id"], "name": c["label"], "version": "", "state": state, "badge": badge, "label": c["label"] + " (outside model)",
+                        "outside": True, "note": OUTSIDE_NOTE.format(label=c["label"], licence=c.get("licence", "open"))})
+        return out
+
+    def coder(self, coder_id):
+        return next((c for c in self.manifest.get("coders", []) if c["id"] == coder_id), None)
+
+    def _coder_state(self, c, who):
+        """ready | locked | too_big | missing for an outside coding model (same plan rule as the Emvryx model it costs like)."""
+        plan = self.cfg["tiers"][who["tier"]]["models"]
+        if not who["owner"] and plan != "all" and c.get("plan_like", "solstice") not in plan:
+            return "locked", "Not in your plan"
+        if self.ram_gb < c.get("min_ram_gb", 0):
+            return "too_big", f"Needs {c['min_ram_gb']} GB of memory"
+        if self.code_generate or self.llama_url or (self.runner and self.runner.available(c["id"])):
+            return "ready", "Ready"
+        return "missing", "Not on this computer" if (self.runner and self.runner.bin) else "llama-server not found"
 
     def code_backend(self, model):
         """generate(messages) for a coding session on this model (the llama-server that runs it)."""
@@ -799,7 +820,8 @@ class Handler(http.server.BaseHTTPRequestHandler):
     def _code_usage(self, who, model_id):
         """The same numbers as the chat's usage line, in 'coding steps' (one step = one model call at Balanced)."""
         st = self.state
-        name = next((m["name"] for m in st.manifest["models"] if m["id"] == model_id), "Equinox").lower()
+        coder = st.coder(model_id)
+        name = coder.get("plan_like", "solstice") if coder else next((m["name"] for m in st.manifest["models"] if m["id"] == model_id), "Equinox").lower()
         snap = st.limiter.snapshot(who["user"], name, "balanced", st.clock())
         return {"status": snap["status"], "exempt": snap["exempt"], "tank_pct": round(snap["tank"]["pct"]), "week_pct": round(snap["week"]["pct_left"]),
                 "steps_left": snap["can_send"], "plan": snap["plan"]}
@@ -835,14 +857,23 @@ class Handler(http.server.BaseHTTPRequestHandler):
         st, user = self.state, who["user"]
         try:
             if path == "/api/code/start":
-                try:
-                    model = st.pick_model(who, str(body.get("model", "")))
-                except KeyError:
-                    raise code_sessions.CodeError("Pick a model for VryxCode.")
-                if not model.get("vryxcode"):
-                    raise code_sessions.CodeError(vryxcode.check_model(model["id"])[1])
-                if model["state"] != "ready":
-                    raise code_sessions.CodeError(f"{model['name']} {model['version']:g} isn't ready: {model['badge']}.")
+                coder = st.coder(str(body.get("model", "")))
+                if coder:                                            # an outside coding model: labelled as such, costs like its plan_like model
+                    cstate, cbadge = st._coder_state(coder, who)
+                    if cstate != "ready":
+                        raise code_sessions.CodeError(f"{coder['label']} isn't ready: {cbadge}.")
+                    model = {"id": coder["id"], "name": coder["label"], "version": 0, "context_tested": coder.get("context_tested", 8192),
+                             "limiter_key": coder.get("plan_like", "solstice"), "outside": True}
+                else:
+                    try:
+                        model = st.pick_model(who, str(body.get("model", "")))
+                    except KeyError:
+                        raise code_sessions.CodeError("Pick a model for VryxCode.")
+                    if not model.get("vryxcode"):
+                        raise code_sessions.CodeError(vryxcode.check_model(model["id"])[1])
+                    if model["state"] != "ready":
+                        raise code_sessions.CodeError(f"{model['name']} {model['version']:g} isn't ready: {model['badge']}.")
+                    model["limiter_key"] = model["name"].lower()
                 project = st.code.check_name(body.get("project"))
                 box = {}
 
@@ -855,12 +886,12 @@ class Handler(http.server.BaseHTTPRequestHandler):
                     reply = box["fn"](messages)
                     generate.usage = getattr(box["fn"], "usage", None)      # the real counts, for the usage meter
                     return reply
-                snap = st.limiter.snapshot(user, model["name"].lower(), "balanced", st.clock())
+                snap = st.limiter.snapshot(user, model["limiter_key"], "balanced", st.clock())
                 if not snap["exempt"] and snap["can_send"] < 1:
                     raise code_sessions.CodeError("Your usage has run out for now.", "Coding steps are counted like chat messages. Wait for the tank to refill or the week to reset.")
-                meter = code_sessions.Meter(st.limiter, user, model["name"].lower(), st.clock)
+                meter = code_sessions.Meter(st.limiter, user, model["limiter_key"], st.clock)
                 s, note = st.code.start(user, project, body.get("task"), model["id"], generate, bool(body.get("auto_edits")),
-                                        int(model.get("context_tested") or 8192), meter)
+                                        int(model.get("context_tested") or 8192), meter, outside=bool(model.get("outside")))
                 return self._send(200, {"id": s.id, "note": note})
             m = re.fullmatch(r"/api/code/sessions/([\w-]+)/answer", path)
             if m:
@@ -1044,7 +1075,7 @@ def main():
     files = discover_ggufs(manifest)
     for item in args.gguf:
         mid, _, path = item.partition("=")
-        if not path or not any(m["id"] == mid for m in manifest["models"]):
+        if not path or not any(m["id"] == mid for m in list(manifest["models"]) + list(manifest.get("coders", []))):
             sys.exit(f"--gguf wants ID=PATH with an id from models.json (got {item!r}).")
         files[mid] = path
     runner = None
