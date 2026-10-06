@@ -405,3 +405,7 @@ replaces the first answer and says it searched. A thumbs up ("Right") under an a
 SQLite file per person: `saved-<name>.db`); the next similar question reads them first, offline, and the line above the answer says
 "Read 1 saved note". Recent things (news, scores, prices) are kept for a day, stable facts for 180 days. Settings has a Saved notes list with
 Delete and Delete all; "Delete all my chats" also clears them. Private chats never save or read saved notes. The model's weights never change.
+
+### Replacing a key (`--rotate-key`)
+`python app_server.py --rotate-key owner` (or a name you added with `--add-user`) gives that person a new key and prints the new link; the old key stops working as soon as the app is restarted. Chats and usage stay.
+Do this whenever a key has been seen where it should not be (a screenshot, a message), especially before sharing a public link such as `chat.emvryx.app`.

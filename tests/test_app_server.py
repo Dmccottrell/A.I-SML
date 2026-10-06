@@ -426,3 +426,29 @@ class DemoMode(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class RotateKeys(unittest.TestCase):
+    def test_a_new_key_replaces_the_old_one_and_survives_a_restart(self):
+        import tempfile
+        d = tempfile.mkdtemp()
+        st = A.AppState(d, ram_gb=8, pace=False)
+        phone = st.add_user("darry-phone", "mega")
+        old_owner = st.owner_key()
+        new_phone = st.rotate_key("darry-phone")
+        self.assertNotEqual(new_phone, phone)
+        self.assertIsNone(st.who(phone))                               # the old key stops working at once
+        self.assertEqual(st.who(new_phone)["user"], "darry-phone")
+        new_owner = st.rotate_key("owner")
+        self.assertNotEqual(new_owner, old_owner)
+        self.assertIsNone(st.who(old_owner))
+        self.assertTrue(st.who(new_owner)["owner"])
+        again = A.AppState(d, ram_gb=8, pace=False)                     # saved: still the new keys after a restart
+        self.assertEqual(again.owner_key(), new_owner)
+        self.assertEqual(again.who(new_phone)["user"], "darry-phone")
+        self.assertIsNone(again.who(phone))
+
+    def test_an_unknown_name_is_an_error(self):
+        st = A.AppState(None, ram_gb=8, pace=False)
+        with self.assertRaises(ValueError):
+            st.rotate_key("nobody")
