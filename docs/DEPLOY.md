@@ -64,6 +64,12 @@ computer; the tunnel gives it a public link.
 3. That address changes each time you restart it (fine for testing). A fixed address needs a (free) Cloudflare account and a domain.
 4. Never post keys publicly. The PC must be on while they chat. Don't run it while a GPU training run needs the machine.
 
+**A fixed address, `chat.emvryx.app` (set up Oct 2026).** A named Cloudflare tunnel (`emvryx-chat`, installed on the PC as the `cloudflared` Windows service) sends `chat.emvryx.app` to the chat app on this PC; the website's buttons point at it.
+- In Cloudflare (Zero Trust, Networks, Tunnels, `emvryx-chat`, Published application routes): subdomain `chat`, domain `emvryx.app`, type **HTTP**, URL **`127.0.0.1:PORT`** (the port the app runs on). Use `127.0.0.1`, not `localhost`: on Windows `localhost` can resolve to the newer address type while the app listens on the older one, and the tunnel then shows **502 Bad gateway**.
+- Check the app answers on this PC (`curl.exe -s -o NUL -w "%{http_code}" http://127.0.0.1:PORT/` prints 200), and `Get-Service cloudflared` says Running.
+- Only one copy of the app may run per port: on Windows an old copy can keep answering (a picker that shows old models means an old copy; use a new `--port`).
+- Give people their own key (`python app_server.py --add-user NAME mega`), never the owner key, and replace any key that has been seen (`--rotate-key NAME`, then restart the app). The PC must be on, awake and running the app. Cloudflare Access (a login before the page loads) is a free extra layer worth adding.
+
 **Later, a rented server** (when the PC being on stops being OK): a small cloud server (a few dollars a month) runs
 `app_server.py` plus `llama-server` for small models (Ember, Flare); bigger models (Equinox and up) need a GPU server, which is the
 main cost. The website's "Open Emvryx" button then points at that address.
