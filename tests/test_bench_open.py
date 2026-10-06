@@ -9,10 +9,13 @@ import bench_open as B
 
 class Suites(unittest.TestCase):
     def test_every_requested_benchmark_is_covered_with_the_harness_names(self):
-        wanted = {"arc_challenge", "winogrande", "mmlu", "gsm8k_cot", "humaneval", "truthfulqa_mc2",
+        wanted = {"arc_challenge", "winogrande", "mmlu", "gsm8k_cot", "humaneval_instruct", "truthfulqa_mc2",
                   "mmlu_pro", "leaderboard_gpqa_diamond", "ifeval", "leaderboard_math_hard", "leaderboard_musr", "leaderboard_bbh", "mbpp"}
         self.assertEqual(wanted, set(B.TASKS))
         self.assertEqual(set(sum(B.SUITES.values(), [])), set(B.TASKS))
+
+    def test_plain_humaneval_means_the_chat_version(self):
+        self.assertEqual(B.resolve_tasks("humaneval"), ["humaneval_instruct"])
 
     def test_resolve(self):
         self.assertEqual(B.resolve_tasks("core"), B.SUITES["core"])
@@ -41,8 +44,8 @@ class Commands(unittest.TestCase):
 
     def test_code_tasks_need_an_explicit_yes(self):
         with self.assertRaises(ValueError):
-            B.build_commands("m", ["humaneval"])
-        chat, env, argv = B.build_commands("m", ["humaneval", "mbpp"], allow_code=True)[0]
+            B.build_commands("m", ["humaneval_instruct"])
+        chat, env, argv = B.build_commands("m", ["humaneval_instruct", "mbpp"], allow_code=True)[0]
         self.assertEqual(env["HF_ALLOW_CODE_EVAL"], "1")
         self.assertIn("--confirm_run_unsafe_code", argv)
 
