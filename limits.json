@@ -28,7 +28,8 @@
         "everyday": 8192,
         "long": 8192
       },
-      "priority": 0
+      "priority": 0,
+      "vryxcode": false
     },
     "pro": {
       "tank": 200000,
@@ -39,7 +40,8 @@
         "everyday": 8192,
         "long": 32768
       },
-      "priority": 0
+      "priority": 0,
+      "vryxcode": true
     },
     "mega": {
       "tank": 800000,
@@ -50,7 +52,8 @@
         "everyday": 8192,
         "long": 65536
       },
-      "priority": 1
+      "priority": 1,
+      "vryxcode": true
     }
   }
 }

@@ -145,12 +145,14 @@ GITHUB_TOOL_NOTE = (" github(action) with action status, pull or push works with
                     "the user is asked before anything is pulled or pushed.")
 
 
-def run_task(task, generate, workspace, ask, max_turns=12, context_tokens=None, extra_programs=(), out=print, tools=None, git_identity=None):
+def run_task(task, generate, workspace, ask, max_turns=12, context_tokens=None, extra_programs=(), out=print, tools=None, git_identity=None, command_prefix=None, container=False):
     """Run one task. Returns harness.run_agent's result (finished, summary, turns, messages).
     `tools` is {name: function(**args) -> text} of extra tools (the GitHub tool, run by the server, never by the sandbox)."""
     programs = set(harness.ALLOWED_PROGRAMS) | set(extra_programs)
     rules = {"write_file": "ask", "edit_file": "ask", "run": "ask"}
     kw = {"git_identity": git_identity} if git_identity else {}
+    if command_prefix:
+        kw.update(command_prefix=command_prefix, container=container)
     with harness.Sandbox(workspace=workspace, allowed_programs=programs, **kw) as sandbox:
         for name, fn in (tools or {}).items():
             sandbox.register_tool(name, fn)

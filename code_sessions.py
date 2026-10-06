@@ -20,6 +20,7 @@ import threading
 import time
 import zipfile
 
+import code_sandbox
 import harness
 import usage_limits as U
 import vryxcode
@@ -40,6 +41,14 @@ class CodeError(Exception):
 
 class Stopped(Exception):
     pass
+
+
+class QuotaStop(Exception):
+    """A coding session ran past one of the person's limits (time, or the project got too big)."""
+
+    def __init__(self, message):
+        super().__init__(message)
+        self.message = message
 
 
 def clip(text, limit=MAX_EVENT_TEXT):
@@ -78,8 +87,10 @@ class Meter:
 class Session:
     """One task being worked on. `events` only ever grows; the page asks for the ones after the last it saw."""
 
-    def __init__(self, sid, user, project, task, model_id, workspace, auto_edits=False, meter=None, tools=None, identity=None):
+    def __init__(self, sid, user, project, task, model_id, workspace, auto_edits=False, meter=None, tools=None, identity=None, prefix=None, quotas=None, base=None):
         self.meter, self.tools, self.identity = meter, tools, identity
+        self.prefix, self.quotas, self.base = prefix, quotas, base         # the container prefix (or None), the quota checker and the person's projects folder
+        self.deadline = quotas.session_deadline() if quotas else None
         self.id, self.user, self.project, self.task, self.model_id, self.workspace = sid, user, project, task, model_id, workspace
         self.auto_edits = auto_edits
         self.events, self.state = [], "starting"       # starting | working | asking | done | stopped | failed
@@ -138,6 +149,15 @@ class Session:
         self.emit("answer", id=qid, allow=allow)
         return allow
 
+    def check_limits(self):
+        if self.deadline and time.time() > self.deadline:
+            raise QuotaStop(f"This session ran for the longest time allowed ({self.quotas.q['code_session_minutes']} minutes).")
+        if self.quotas and self.base:
+            try:
+                self.quotas.room(self.base, self.workspace)
+            except code_sandbox.QuotaError as e:
+                raise QuotaStop(e.message + " " + e.action)
+
     def wrap(self, generate):
         """The model call, with every step reported to the page and a check for Stop."""
         seen = {"n": 0}
@@ -147,6 +167,7 @@ class Session:
                 raise Stopped()
             if seen["n"] and messages and messages[-1]["role"] == "user":
                 self.emit("result", text=clip(RESULT_TAGS.sub("", messages[-1]["content"]).strip()))
+                self.check_limits()                                          # a step may have grown the project: check before going on
             seen["n"] += 1
             res = self.meter.reserve(messages) if self.meter else None       # raises U.LimitError when the plan has run out
             try:
@@ -172,12 +193,16 @@ class Session:
         self.emit("start", task=self.task, model=self.model_id, project=self.project)
         try:
             result = vryxcode.run_task(self.task, self.wrap(generate), self.workspace, self.ask, max_turns, context_tokens, extra_programs,
-                                       out=lambda *_: None, tools=self.tools, git_identity=self.identity)
+                                       out=lambda *_: None, tools=self.tools, git_identity=self.identity,
+                                       command_prefix=self.prefix, container=bool(self.prefix))
             self.emit("end", finished=result["finished"], summary=clip(result["summary"]), turns=result["turns"])
             self.state = "done" if result["finished"] else "stopped"
         except U.LimitError as e:
             when = f" Try again in about {max(1, int((e.retry_after or 0) // 60))} minutes." if e.retry_after else ""
             self.emit("end", finished=False, summary=f"Your usage ran out: {e.message}{when} Your files so far are kept.", turns=0, limited=True)
+            self.state = "limited"
+        except QuotaStop as e:
+            self.emit("end", finished=False, summary="Stopped: " + e.message + " Your files so far are kept.", turns=0, limited=True)
             self.state = "limited"
         except Stopped:
             self.emit("end", finished=False, summary="Stopped.", turns=0)
@@ -191,8 +216,11 @@ class Session:
 class CodeManager:
     """All projects and sessions on this server."""
 
-    def __init__(self, root, max_turns=12):
+    def __init__(self, root, max_turns=12, quotas=None):
         self.root, self.max_turns = root, max_turns          # root=None keeps projects in a temporary folder (tests)
+        self.quotas = quotas or code_sandbox.Quotas()
+        self.sandbox = {"mode": "none"}                      # set from the command line: {"mode": "docker", "image", "runtime", "cpus", "memory", "pids"}
+        self._avail = (0, None)
         self.sessions, self.by_user = {}, {}
         self.lock = threading.Lock()
         self._tmp = None
@@ -301,6 +329,10 @@ class CodeManager:
             if not full.startswith(root + os.sep):
                 raise CodeError("That upload has a path that leaves the project.", "Nothing was imported.")
         os.makedirs(root, exist_ok=True)
+        try:
+            self.quotas.room(self.base(user), root, extra_bytes=total, extra_files=len(clean))
+        except code_sandbox.QuotaError as e:
+            raise CodeError(e.message, e.action)
         for rel, data in clean:
             full = os.path.join(root, rel)
             os.makedirs(os.path.dirname(full), exist_ok=True)
@@ -349,6 +381,22 @@ class CodeManager:
         s = self.sessions.get(self.by_user.get(user))
         return s if s and s.state in ("starting", "working", "asking") else None
 
+    def sandbox_ready(self):
+        """(ok, message). In container mode Docker must answer (checked at most every 30 s); there is no quiet fallback to the host."""
+        if self.sandbox.get("mode") != "docker":
+            return True, "folder sandbox only"
+        now = time.time()
+        if now - self._avail[0] > 30 or self._avail[1] is None:
+            self._avail = (now, code_sandbox.available(self.sandbox.get("image", code_sandbox.DEFAULT_IMAGE)))
+        return self._avail[1]
+
+    def prefix_for(self, workspace):
+        if self.sandbox.get("mode") != "docker":
+            return None
+        sb = self.sandbox
+        return code_sandbox.docker_prefix(sb.get("image", code_sandbox.DEFAULT_IMAGE), workspace, cpus=sb.get("cpus", "1"), memory=sb.get("memory", "768m"),
+                                          pids=sb.get("pids", 128), runtime=sb.get("runtime"))
+
     def start(self, user, project, task, model_id, generate, auto_edits=False, context_tokens=None, meter=None, outside=False, tools=None, identity=None):
         task = str(task or "").strip()
         if not task:
@@ -364,10 +412,20 @@ class CodeManager:
         with self.lock:
             if self.running(user):
                 raise CodeError("You already have a session running.", "Stop it or wait for it to finish.")
+            ok, why = self.sandbox_ready()
+            if not ok:
+                raise CodeError("The code sandbox isn't available, so nothing was run. " + why, "The owner needs to start Docker or build the sandbox image.")
             workspace = self.project_path(user, project)
-            os.makedirs(workspace, exist_ok=True)
+            try:
+                self.quotas.new_project(self.base(user), project)
+                os.makedirs(workspace, exist_ok=True)
+                self.quotas.room(self.base(user), workspace)
+                self.quotas.start_session(user)
+            except code_sandbox.QuotaError as e:
+                raise CodeError(e.message, e.action)
             self._n += 1
-            s = Session(f"s{self._n}-{int(time.time())}", user, project, task, model_id, workspace, auto_edits, meter, tools, identity)
+            s = Session(f"s{self._n}-{int(time.time())}", user, project, task, model_id, workspace, auto_edits, meter, tools, identity,
+                        prefix=self.prefix_for(workspace), quotas=self.quotas, base=self.base(user))
             self.sessions[s.id], self.by_user[user] = s, s.id
         threading.Thread(target=s.run, args=(generate, self.max_turns, context_tokens), daemon=True).start()
         return s, note
