@@ -36,6 +36,11 @@ BRANCH_RE = re.compile(r"[A-Za-z0-9._/-]{1,100}")
 URL_RE = re.compile(r"https://github\.com/([A-Za-z0-9](?:[A-Za-z0-9-]{0,38}))/([A-Za-z0-9._-]{1,100}?)(?:\.git)?")
 TOKEN_RE = re.compile(r"[A-Za-z0-9_]{20,255}")
 PROTECTED = {"main", "master"}
+# The only git settings a project's own .git/config may hold when the SERVER runs git on it. Anything else (filters, fsmonitor, proxies, url
+# rewrites, includes, aliases, credential helpers, ssh commands...) can make git run a program or send things somewhere else: refused.
+SAFE_CONFIG = re.compile(r"(core\.(repositoryformatversion|filemode|bare|logallrefupdates|ignorecase|precomposeunicode|symlinks)"
+                         r"|remote\.origin\.(url|fetch)|branch\.[^.\s]+\.(remote|merge)|user\.(name|email)|init\.defaultbranch"
+                         r"|extensions\.(objectformat|worktreeconfig|noop))")
 GIT_TIMEOUT = 180
 MAX_OUTPUT = 4000
 
@@ -181,6 +186,7 @@ class Git:
     def __init__(self, workspace, token=None, allow_local=False, identity=None):
         self.ws, self.token, self.allow_local = workspace, token, allow_local
         self.identity = identity or ("Emvryx", "emvryx@localhost")
+        self._checked = False
 
     def _env(self, home):
         env = {"PATH": os.environ.get("PATH", ""), "HOME": home, "GIT_CONFIG_GLOBAL": os.devnull, "GIT_CONFIG_SYSTEM": os.devnull,
@@ -200,7 +206,24 @@ class Git:
             text = text.replace(self.token, "***").replace(basic, "***")
         return text
 
+    def check_config(self):
+        """Refuse to run git on a project whose own settings could run a program or redirect the token (a model or a container may have written
+        them). Only the plain settings in SAFE_CONFIG are allowed."""
+        if not self.is_repo():
+            return
+        out = self._raw(["config", "--local", "--list", "--name-only"])
+        bad = sorted({k for k in out.splitlines() if k.strip() and not SAFE_CONFIG.fullmatch(k.strip().lower())})
+        if bad:
+            raise GitHubError("This project's git settings were changed in a way that is not allowed (" + ", ".join(bad[:4]) + "), so nothing was run.",
+                              "Delete the .git folder's config changes, or make a fresh project and copy your files into it.")
+
     def run(self, args, cwd=None, check=True, timeout=GIT_TIMEOUT):
+        if not self._checked and args and args[0] != "config" and cwd in (None, self.ws):
+            self._checked = True
+            self.check_config()
+        return self._raw(args, cwd, check, timeout)
+
+    def _raw(self, args, cwd=None, check=True, timeout=GIT_TIMEOUT):
         safe = ["git", "-c", "core.hooksPath=" + os.devnull, "-c", "core.fsmonitor=false", "-c", "credential.helper=",
                 "-c", "protocol.allow=never", "-c", "protocol.https.allow=always", "-c", "init.defaultBranch=main"]
         if self.allow_local:

@@ -48,6 +48,7 @@ import urllib.request
 import app_engine as E
 import auth
 import chat
+import code_sandbox
 import chat_polish
 import code_sessions
 import harness
@@ -73,7 +74,8 @@ OUTSIDE_NOTE = ("{label} is an outside coding model ({licence}), not an Emvryx m
                 "Anything it writes is its work, and it is counted like Solstice.")
 SECURITY_DEFAULTS = {"session_days": 90, "pair_minutes": 15, "login_fail_limit": 8, "login_fail_window": 600, "email_start_limit": 5,
                      "email_start_window": 600, "open_signups": False, "trusted_proxies": ["127.0.0.1", "::1"], "audit_notify": True,
-                     "allow_key_links": False, "allowed_origins": []}
+                     "allow_key_links": False, "allowed_origins": [], "code_unsandboxed_for_others": False,
+                     **code_sandbox.QUOTA_DEFAULTS}
 MAX_UPLOAD = 30_000_000                                # a project upload (base64): see code_sessions.MAX_IMPORT_BYTES
 MAX_TEXT = 20_000
 EFFORTS = {"quick": 160, "balanced": 320, "deep": 700}          # most words a reply may have, per effort level
@@ -241,7 +243,7 @@ class AppState:
         self._fresh = {}                                       # key hash -> the key, ONLY for keys made in this run (so they can be shown once)
         self._users_mtime = 0
         self.users = self._load_users()
-        self.code = code_sessions.CodeManager(data_dir)       # VryxCode sessions (projects live under <data>/code/)
+        self.code = code_sessions.CodeManager(data_dir, quotas=code_sandbox.Quotas(self.security))       # VryxCode sessions (projects live under <data>/code/)
         self.github = github_link.Store(data_dir)               # connected GitHub accounts (token files, mode 600)
         self.github_http = None                                 # tests: http(method, url, headers, body) -> (status, json)
         self.github_local = False                               # tests only: allow a local folder as the remote
@@ -598,6 +600,17 @@ class AppState:
                 raise harness.ToolError(e.message + (" " + e.action if e.action else ""))
             raise harness.ToolError("action must be status, pull or push")
         return github
+
+    def code_allowed(self, who):
+        """(ok, why not). The owner always may. Others need VryxCode in their plan, and a container sandbox (or the owner explicitly accepting
+        the folder sandbox for them): a person must never get to run programs on the host with only the folder sandbox between us."""
+        if who["owner"]:
+            return True, ""
+        if not self.cfg["tiers"][who["tier"]].get("vryxcode", False):
+            return False, "VryxCode isn't included in your plan."
+        if self.code.sandbox.get("mode") != "docker" and not self.security["code_unsandboxed_for_others"]:
+            return False, "VryxCode is only open to the owner until the container sandbox is turned on."
+        return True, ""
 
     def code_backend(self, model):
         """generate(messages) for a coding session on this model (the llama-server that runs it)."""
@@ -1256,7 +1269,9 @@ class Handler(http.server.BaseHTTPRequestHandler):
         try:
             if path == "/api/code":
                 run = st.code.running(user)
-                return self._send(200, {"usage": self._code_usage(who, None), "models": st.code_models(who), "projects": st.code.projects(user),
+                allowed, why = st.code_allowed(who)
+                return self._send(200, {"allowed": allowed, "why_not": why, "sandbox": st.code.sandbox.get("mode", "none"),
+                                        "usage": self._code_usage(who, None), "models": st.code_models(who), "projects": st.code.projects(user),
                                         "running": run.id if run else None, "project": run.project if run else None})
             if path == "/api/code/git":
                 project = st.code.check_name(arg("project"))
@@ -1289,6 +1304,9 @@ class Handler(http.server.BaseHTTPRequestHandler):
         st, user = self.state, who["user"]
         try:
             if path == "/api/code/start":
+                allowed, why = st.code_allowed(who)
+                if not allowed:
+                    raise code_sessions.CodeError(why, "Ask the owner about VryxCode access.")
                 coder = st.coder(str(body.get("model", "")))
                 if coder:                                            # an outside coding model: labelled as such, costs like its plan_like model
                     cstate, cbadge = st._coder_state(coder, who)
@@ -1576,6 +1594,11 @@ def main():
                     help="the Wikipedia index (wiki_index.py) the chat looks things up in; skipped if the file isn't there")
     ap.add_argument("--no-web", action="store_true", help="never search the web (people's own Settings choice then has no effect)")
     ap.add_argument("--timings", action="store_true", help="print how long each reply took (loading, first word, total)")
+    ap.add_argument("--code-sandbox", choices=("none", "docker"), default="none", help="run VryxCode's commands in a throwaway Docker container (see docker/code-sandbox)")
+    ap.add_argument("--code-image", default=code_sandbox.DEFAULT_IMAGE)
+    ap.add_argument("--code-runtime", default=None, help="a stronger container runtime such as runsc (gVisor), if installed")
+    ap.add_argument("--code-cpus", default="1")
+    ap.add_argument("--code-memory", default="768m")
     ap.add_argument("--pair", metavar="NAME", default=None, help="print a one-time link (valid 15 minutes) that signs NAME in on one device, then exit")
     ap.add_argument("--rotate-key", metavar="NAME", help="give someone a new key (owner, or a name from --add-user); the old key stops working. Restart the app afterwards")
     ap.add_argument("--add-user", nargs=2, metavar=("NAME", "PLAN"), help="add a tester (free, pro or mega) and print their key")
@@ -1598,6 +1621,7 @@ def main():
         runner = ModelRunner(args.llama_bin or find_llama_server(), files, extra_args=args.llama_args.split())
     state = AppState(args.data, args.llama, args.llama_key, tok, manifest=manifest, ram_gb=args.ram, runner=runner)
     state.verbose = args.timings
+    state.code.sandbox = {"mode": args.code_sandbox, "image": args.code_image, "runtime": args.code_runtime, "cpus": args.code_cpus, "memory": args.code_memory}
     base = f"http://localhost:{args.port}"
     if args.rotate_key:
         try:
@@ -1643,6 +1667,11 @@ def main():
         print("Emvryx is running. Models on this computer: " + (", ".join(sorted(files)) or "none") + (" (via --llama)" if args.llama else ""))
         if runner and not runner.bin:
             print("llama-server was not found. Install llama.cpp and pass --llama-bin <path to llama-server.exe>.")
+    if args.code_sandbox == "docker":
+        ok, why = code_sandbox.available(args.code_image)
+        print(("VryxCode runs in Docker containers (no network, hard limits)." if ok else f"VryxCode sandbox NOT ready, so VryxCode will refuse to run: {why}"))
+    else:
+        print("VryxCode runs with the folder sandbox only: it is open to the owner only. For other people use --code-sandbox docker (docs/SECURITY.md).")
     fresh = state.owner_key()
     if fresh:                                            # the first run: the owner's key exists only now
         print(f"Your owner key (shown once, it is not stored): {fresh}")

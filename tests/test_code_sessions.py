@@ -22,9 +22,18 @@ def wait_for(fn, seconds=15):
     raise AssertionError("timed out")
 
 
+def open_to_everyone(state):
+    """For the tests of coding itself: everyone's plan includes VryxCode and the owner accepts the folder sandbox for them
+    (the gating has its own tests in test_code_sandbox.py)."""
+    state.security["code_unsandboxed_for_others"] = True
+    for tier in state.cfg["tiers"].values():
+        tier["vryxcode"] = True
+
+
 class CodeTests(Base):
     def setUp(self):
         super().setUp()
+        open_to_everyone(self.state)
         self.state.code_generate = lambda model: vryxcode.ScriptedChat(list(vryxcode.DEMO))
 
     def poll(self, c, sid, after=0):
@@ -138,6 +147,7 @@ class CodeTests(Base):
 class MoreTests(Base):
     def setUp(self):
         super().setUp()
+        open_to_everyone(self.state)
         self.state.code_generate = lambda model: vryxcode.ScriptedChat(list(vryxcode.DEMO))
 
     def finish_run(self, c):
@@ -207,6 +217,7 @@ class MoreTests(Base):
 class OutsideCoder(Base):
     def setUp(self):
         super().setUp()
+        open_to_everyone(self.state)
         self.state.code_generate = lambda model: vryxcode.ScriptedChat(list(vryxcode.DEMO))
 
     def test_listed_as_an_outside_model_with_its_own_label(self):

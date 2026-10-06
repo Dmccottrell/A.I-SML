@@ -118,8 +118,9 @@ class Sandbox:
     """One workspace folder plus the tools that work inside it."""
 
     def __init__(self, workspace=None, command_timeout=20, output_limit=1500, max_read_lines=80,
-                 command_prefix=None, allowed_programs=ALLOWED_PROGRAMS, git_identity=("Emvryx agent", "agent@localhost")):
+                 command_prefix=None, allowed_programs=ALLOWED_PROGRAMS, git_identity=("Emvryx agent", "agent@localhost"), container=False):
         self.git_identity = tuple(git_identity)
+        self.container = bool(container)         # True when command_prefix is a `docker run ...` (code_sandbox.docker_prefix): commands run inside it
         self.own_dir = workspace is None
         self.root = os.path.realpath(workspace or tempfile.mkdtemp(prefix="agent_"))
         os.makedirs(self.root, exist_ok=True)
@@ -214,9 +215,17 @@ class Sandbox:
         if os.name == "nt":
             env["SYSTEMROOT"] = os.environ.get("SYSTEMROOT", "")
         env.update(extra_env or {})
-        kwargs = {"preexec_fn": _limits} if sys.platform.startswith("linux") else {}
+        kwargs = {"preexec_fn": _limits} if sys.platform.startswith("linux") and not self.container else {}
+        if self.container and wrap:
+            # the container is a separate world: environment variables must be passed in with -e (before the image name, the last word of the prefix)
+            inside = dict(extra_env or {})
+            if "HOME" in inside:
+                inside["HOME"] = "/tmp"
+            command = self.prefix[:-1] + [x for k, v in inside.items() for x in ("-e", f"{k}={v}")] + [self.prefix[-1]] + argv
+        else:
+            command = (self.prefix if wrap else []) + argv
         try:
-            r = subprocess.run((self.prefix if wrap else []) + argv, cwd=self.root, env=env, capture_output=True,
+            r = subprocess.run(command, cwd=self.root, env=env, capture_output=True,
                                text=True, encoding="utf-8", errors="replace", timeout=self.command_timeout,
                                stdin=subprocess.DEVNULL, **kwargs)
         except subprocess.TimeoutExpired:
@@ -236,8 +245,8 @@ class Sandbox:
         program = os.path.basename(argv[0])
         if program not in self.allowed:
             raise ToolError(f"{program!r} is not allowed. Allowed: {', '.join(sorted(self.allowed))}")
-        if program in ("python", "python3"):
-            argv[0] = sys.executable                     # the same Python we are running
+        if program in ("python", "python3") and not self.container:
+            argv[0] = sys.executable                     # the same Python we are running (inside a container, the image's own python is used)
         return self._exec(argv)
 
     # ---------------------------------------------------------------- git (a safe subset)

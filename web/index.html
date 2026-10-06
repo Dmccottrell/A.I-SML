@@ -797,6 +797,8 @@ function renderCodeBar() {
   $('codeFilesBtn').textContent = 'Files' + (C.files.length ? ' (' + C.files.length + ')' : '');
 }
 function emptyFeed() {
+  if (C.info && C.info.allowed === false) { $('codeIn').replaceChildren(el('div', {class: 'empty'}, el('h1', {}, 'VryxCode is not open to you yet'), el('p', {}, C.info.why_not || 'Ask the owner for access.'))); $('codeGo').disabled = true; return; }
+  $('codeGo').disabled = false;
   const tip = (t) => el('button', {class: 'chip', onclick: () => { $('codeTask').value = t; $('codeTask').focus(); }}, t);
   $('codeIn').replaceChildren(el('div', {class: 'empty'}, el('h1', {}, 'What should we build?'),
     el('p', {}, 'Describe one task. VryxCode works in its own project folder: it reads, edits, runs the tests and tries again, and asks before it changes anything.'),
