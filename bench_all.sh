@@ -35,7 +35,7 @@ while pgrep -f "chain_open.sh" > /dev/null || pgrep -f "finetune_open.py" > /dev
 START=$(date +%s)
 pip install -q lm_eval peft datasets > /dev/null 2>&1
 
-MODELS=(flare-2.5 equinox-2 solstice-2)
+MODELS=(${BENCH_MODELS:-flare-2.5 equinox-2 solstice-2})      # BENCH_MODELS="apogee-2" bash bench_all.sh: only those models
 
 if want 1; then
 # 1. our rules sheet
@@ -107,7 +107,7 @@ if [ -x "$LLAMA/build/bin/llama-server" ] && [ -d "$EX" ]; then
         stage "collecting successful runs from Qwen2.5-Coder-14B" logs/bench/collect.txt serve_and_run_collect "$CODER" \
             && ping "collected runs: $(wc -l < logs/bench/agent_runs.jsonl) saved in logs/bench/agent_runs.jsonl"
     fi
-    for m in solstice-2 equinox-2; do
+    for m in ${EX_MODELS:-solstice-2 equinox-2}; do      # EX_MODELS="apogee-2 solstice-2" to choose which of ours get the exercise test
         stage "converting $m to a GGUF" "logs/bench/$m-convert.txt" python "$LLAMA/convert_hf_to_gguf.py" "export/open/$m/my-ai" --outfile "$MODELDIR/$m-q8.gguf" --outtype q8_0 \
             && stage "exercises: $m" "logs/bench/$m-exercises.txt" serve_and_run "$MODELDIR/$m-q8.gguf" --model "$m" --exercises "$EX" --out "logs/bench/$m-exercises.json" \
             && ping "$m exercises: $(summary logs/bench/$m-exercises.json)"
