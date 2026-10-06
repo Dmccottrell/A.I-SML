@@ -70,6 +70,14 @@ computer; the tunnel gives it a public link.
 - Only one copy of the app may run per port: on Windows an old copy can keep answering (a picker that shows old models means an old copy; use a new `--port`).
 - Give people their own key (`python app_server.py --add-user NAME mega`), never the owner key, and replace any key that has been seen (`--rotate-key NAME`, then restart the app). The PC must be on, awake and running the app. Cloudflare Access (a login before the page loads) is a free extra layer worth adding.
 
+**Start by itself at boot (Windows).** The tunnel is already a Windows service. To make the app start on its own too, restart if it stops, and keep the PC awake while plugged in, run this once in PowerShell **as Administrator** (use your own paths; the `-Llama` one should be the llama-server with GPU support):
+```powershell
+cd C:\Users\Darry\Projects\a.i-sml
+powershell -ExecutionPolicy Bypass -File windows\install_autostart.ps1 -Llama "C:\path\to\llama-server.exe"
+Start-ScheduledTask -TaskName "Emvryx App"
+```
+It writes `.emvryx\start_emvryx.cmd` (log: `.emvryx\server.log`), registers the task "Emvryx App", turns off sleep/hibernate on mains power and sets the tunnel service to start and restart automatically. Undo with `-Remove`. Limits: the app starts when you **sign in**, so after a restart the PC waits at the sign-in screen (turning on automatic sign-in fixes that but lets anyone who restarts the PC use it: only do it if the PC is somewhere safe and use BitLocker/a screen lock). Stop the old copy before starting a new one (one app per port). Not tested on a real Windows PC yet: if a step fails, send me the message.
+
 **Later, a rented server** (when the PC being on stops being OK): a small cloud server (a few dollars a month) runs
 `app_server.py` plus `llama-server` for small models (Ember, Flare); bigger models (Equinox and up) need a GPU server, which is the
 main cost. The website's "Open Emvryx" button then points at that address.
