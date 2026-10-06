@@ -33,8 +33,14 @@ Names differ from the common ones in a few places (`openai_humaneval` is `humane
 Rough cost (an estimate, not measured): `--limit 200` on a 1.5B model takes minutes; the full core suite on a 1.5B to 8B model is probably under an hour each on the 5090, the hard suite longer. Each costs a few cents to a few dollars at about $0.51 an hour.
 What to expect: a small fine-tune should leave these scores about where the base is (Flare 2.5 on HellaSwag: +1.6). GPQA, MATH level 5 and MuSR will be low for 1.5B to 14B models; that is normal, so look at the **difference** between base and tuned.
 
-## 3. Agentic coding benchmarks (not built; plan)
-These test an agent that works in a real repository or terminal, which is what VryxCode is for ([VRYXCODE.md](VRYXCODE.md)). None can run until VryxCode has been proven on a real model, and most need Docker.
+## 3. Agentic coding benchmarks
+These test an agent that works in a real repository or terminal, which is what VryxCode is for ([VRYXCODE.md](VRYXCODE.md)). Two tools exist; **neither has run with a real model yet** (only with scripted stand-ins), and most of the real benchmarks need Docker.
+
+**Built (Oct 2026), no Docker needed**
+- **`bench_exercises.py`: an Aider-style exercise benchmark.** For each Exercism Python exercise, VryxCode edits the solution file; we run the tests; if they fail it gets the failing output and tries once more. Reports pass on the first try, pass after the second try, and how many attempts changed nothing (a sign the model could not use the tools). Get the exercises with `git clone https://github.com/exercism/python`, then `python bench_exercises.py --exercises python/exercises/practice --model solstice-2 --limit 20`. It is **not** the official Aider benchmark (that asks for diff-format edits and runs in Docker), so compare only our own runs with each other.
+- **`vryx_swe.py`: SWE-bench-style predictions.** For each issue it copies the repository at the right commit, lets VryxCode edit it (never seeing the hidden tests), and saves the change as a patch in the SWE-bench predictions format. The official SWE-bench checker, on a machine with Docker, then scores it. Limit: our sandbox runs only Python and a short list of programs with no network, and a project's dependencies are usually missing, so the agent often cannot run the project's tests and edits from reading the code: treat the score as a floor.
+
+**Still not built** (they need Docker or their own harness): the official SWE-bench scoring, Terminal-Bench, the official Aider harness, LiveCodeBench.
 
 | Benchmark | What it is | Resolved by | What it needs |
 |---|---|---|---|
@@ -46,7 +52,7 @@ These test an agent that works in a real repository or terminal, which is what V
 | **LiveCodeBench** | fresh competitive-programming problems with test execution | pass@1 | its own harness (not in lm-evaluation-harness) and a place to run code safely |
 
 **Honest expectations (not measured):** the published scores for these come from large agents. Models of 4B to 14B usually resolve far fewer issues, so treat any number as a trend to track, not a target. Standard Vast instances are containers and often cannot run Docker (from memory): check before planning to run SWE-bench there; a machine that supports Docker, or a VM-type instance, may be needed.
-**Order I'd do them in:** (1) the `core` suite, (2) `code` suite, (3) the Aider benchmark, (4) LiveCodeBench, (5) SWE-bench Lite and Terminal-Bench, (6) Verified and Pro. Before 3 to 6: give VryxCode a patch mode and run it against a few scripted tasks first.
+**Order I'd do them in:** (1) the `core` suite, (2) `code` suite, (3) `bench_exercises.py`, (4) `vryx_swe.py` on SWE-bench Lite with scoring on a Docker machine, (5) LiveCodeBench and Terminal-Bench, (6) Verified and Pro. Before any of them: connect VryxCode to a real trained model and try a few tasks by hand.
 
 ## 4. Cautions
 - Don't compare our numbers with a published table unless the tool, prompts, few-shot count and chat template match.
