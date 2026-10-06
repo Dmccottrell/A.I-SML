@@ -18,6 +18,7 @@ WHAT THIS FILE DOES
 
     All failures are AppError subclasses (app_errors.py): a plain message plus one next step.
 """
+import re
 import json
 import sqlite3
 import threading
@@ -113,6 +114,29 @@ def strip_think(pieces, open_tag="<think>", close_tag="</think>"):
                 yield out
             break
     if buf and not inside:
+        yield buf
+
+
+SOURCE_TAG = re.compile(r"\s*\(source:[^)]*\)", re.I)
+SOURCE_START = re.compile(r"\s*(?:\((?:s(?:o(?:u(?:r(?:c(?:e(?::[^)]*)?)?)?)?)?)?)?)?$", re.I)     # blanks and a possible start of the tag, at the end
+
+
+def strip_source(pieces):
+    """Drop a "(Source: ...)" tag from a stream of text pieces. A model trained on lookup notes writes one after its answer; the app shows
+    where an answer came from separately, so the tag is only clutter. It works when the tag is split across pieces; the blank before it goes too."""
+    buf, removed = "", False
+    for piece in pieces:
+        buf += piece
+        buf, n = SOURCE_TAG.subn("", buf)
+        removed = removed or n > 0
+        cut = SOURCE_START.search(buf).start()                  # trailing blanks and a half-written tag wait for the next piece
+        if cut > 0:
+            yield buf[:cut]
+        buf = buf[cut:]
+    i = buf.lower().find("(source:")
+    if i >= 0:                                                  # the reply ended inside a tag
+        buf, removed = buf[:i].rstrip(), True
+    if buf.strip() or not removed:
         yield buf
 
 
@@ -306,7 +330,7 @@ def run_turn(tok, store, chat_id, backend, model, window, max_new, user_text=Non
                 store.remove_message(chat_id, user_row)
             raise
     row = store.add(chat_id, "assistant", "", model["id"], "partial")
-    stream = strip_think(backend.stream(ids, max_new))
+    stream = strip_source(strip_think(backend.stream(ids, max_new)))
     guard = Guard(pacer(stream) if pacer else stream, stop=stop)
     count = 0
     try:

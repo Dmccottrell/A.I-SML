@@ -1,0 +1,67 @@
+"""--preload: the app loads a model when it starts so the first message does not wait."""
+import os
+import tempfile
+import unittest
+
+import app_server as A
+
+
+class FakeRunner:
+    def __init__(self, ok=True, have=True):
+        self.calls, self.ok, self.have, self.bin = [], ok, have, "llama-server"
+
+    def available(self, model_id):
+        return self.have
+
+    def ensure(self, model_id, ctx):
+        self.calls.append((model_id, ctx))
+        if not self.ok:
+            raise A.AppError("The model stopped while loading.", "x")
+        return "http://127.0.0.1:1"
+
+
+def state(runner):
+    return A.AppState(tempfile.mkdtemp(), None, None, None, runner=runner)
+
+
+class PreloadTests(unittest.TestCase):
+    def test_loads_the_model_with_a_window(self):
+        r = FakeRunner()
+        msg = state(r).preload("flare-2.5")
+        self.assertIn("ready", msg)
+        self.assertEqual(r.calls[0][0], "flare-2.5")
+        self.assertGreater(r.calls[0][1], 0)
+
+    def test_failure_is_a_message_not_a_crash(self):
+        self.assertIn("could not be preloaded", state(FakeRunner(ok=False)).preload("flare-2.5"))
+
+    def test_missing_file_unknown_id_and_no_runner(self):
+        self.assertIn("not on this computer", state(FakeRunner(have=False)).preload("flare-2.5"))
+        self.assertIn("unknown model", state(FakeRunner()).preload("nope"))
+        self.assertIn("nothing to preload", state(None).preload("flare-2.5"))
+
+
+if __name__ == "__main__":
+    unittest.main()
+
+
+class StripSourceTests(unittest.TestCase):
+    def run_pieces(self, pieces):
+        import app_engine as E
+        return "".join(E.strip_source(iter(pieces)))
+
+    def test_removes_the_tag_at_the_end(self):
+        self.assertEqual(self.run_pieces(["You can perform this action. (Source: What Can You Do?)"]), "You can perform this action.")
+
+    def test_removes_it_when_split_across_pieces(self):
+        self.assertEqual(self.run_pieces(["Hello. ", "(Sou", "rce: A", " page)", ""]), "Hello.")
+        self.assertEqual(self.run_pieces(["Hi", " ", "(", "Source:", " x", ")", " Bye."]), "Hi Bye.")
+
+    def test_leaves_other_brackets_and_plain_text(self):
+        self.assertEqual(self.run_pieces(["Use f(x) and (so on) now ", "(see below)"]), "Use f(x) and (so on) now (see below)")
+        self.assertEqual(self.run_pieces(["A ", "(", "s"]), "A (s")
+        self.assertEqual(self.run_pieces(["It ends here. "]), "It ends here. ")
+
+    def test_case_and_unfinished_tag(self):
+        self.assertEqual(self.run_pieces(["Done. (source: wiki)"]), "Done.")
+        self.assertEqual(self.run_pieces(["Done. (Source: wi"]), "Done.")
