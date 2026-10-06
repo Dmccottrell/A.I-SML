@@ -96,3 +96,8 @@ never send an app's data anywhere. Real connections need sign-in with each servi
 - The site on Vercel (steps A1 to A6) needs nothing from me: it is clicks on vercel.com.
 - Running the app and adding testers (section B) needs nothing from me either.
 - Ask me for the things that need code: a domain hook-up, Supabase sign-in, real connected apps, a rented-server setup.
+
+
+## Install it on a phone (the app is a PWA)
+
+Open your `https://chat.emvryx.app` address in the phone's browser, then: **Android (Chrome):** menu (three dots) > *Install app* (or *Add to Home screen*). **iPhone (Safari):** Share > *Add to Home Screen*. It then opens full screen with the Emvryx icon, like an app. It needs https (the Cloudflare address has it); over plain `http://` on your home network the browser will only offer a shortcut, not an install. The page shell is cached so it opens instantly, but chatting needs the server (and your PC, if that is where the model runs) to be on: the API is never cached. If the icon does not update after a change, remove the app and add it again.
