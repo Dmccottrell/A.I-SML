@@ -11,6 +11,8 @@ Numbers marked "(memory)" are published figures I recalled, not ours. Nothing in
 | Equinox 2, Solstice 2, Apogee 2 | pending | pending | pending | pending | pending |
 Tools: `exam.py` / `exam_open.py` (HellaSwag), `evaluate.py` / `evaluate_open.py` (our sheets, `eval/*.jsonl`).
 
+**One script runs the quick versions of everything on the cloud machine: `bash bench_all.sh`** (rules sheets, quick core and code benchmarks for Flare 2.5, Equinox 2 and Solstice 2, then the VryxCode exercise test on Qwen2.5-Coder-14B, Solstice 2 and Equinox 2). Estimated 4 to 6 hours, about $2 to $3; `MAX_HOURS=4` sets a spending guard. It has not been run yet.
+
 ## 2. Public knowledge, reasoning and code benchmarks: `bench_open.py` (lm-evaluation-harness 0.4.13)
 `python bench_open.py --model flare-2.5 --suite core --limit 200` (a fast check), then without `--limit` for the real number. It runs the plain base and base + our adapter and prints the difference.
 
