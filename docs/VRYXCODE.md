@@ -3,6 +3,8 @@
 VryxCode is a separate part of Emvryx made for code: it reads a project, proposes changes, runs the tests and tries again, the way Claude Code does, but running on **your own models, on your own machine**.
 It is the coding helper from the roadmap ("Agentic coding") given its own name, its own screen and its own rules. The first version is built as a terminal tool (`vryxcode.py`); the app screen is not. It is tested with scripted and fake models only: **nobody has run it with a real Qwen model yet**, so its real quality is unknown until the first model is trained.
 
+> **First real-model results (Oct 6 2026):** on 10 practice exercises, first try / after a retry: Qwen2.5-Coder-14B (outside model) 8 / 9, Solstice 2 5 / 5, Equinox 2 4 / 5. The agent loop, tool format and permission flow all worked with real models. See [BENCHMARKS.md](BENCHMARKS.md).
+
 ## Which models can run it
 VryxCode is **only offered on the higher models**:
 
