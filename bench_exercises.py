@@ -132,8 +132,9 @@ def main(argv=None):
     p.add_argument("--max-turns", type=int, default=12)
     p.add_argument("--context", type=int, default=32768)
     p.add_argument("--out", default="logs/exercises.json")
+    p.add_argument("--coder", default=None, metavar="LABEL", help="score an outside coding model that llama-server is running, under this label")
     a = p.parse_args(argv)
-    ok, note = V.check_model(a.model)
+    ok, note = V.gate(a.model, a.coder)
     if not ok:
         raise SystemExit(note)
     items = find_exercises(a.exercises)
@@ -151,7 +152,7 @@ def main(argv=None):
     print(json.dumps(s, indent=2))
     os.makedirs(os.path.dirname(a.out) or ".", exist_ok=True)
     with open(a.out, "w", encoding="utf-8") as f:
-        json.dump({"model": a.model, "summary": s, "results": results}, f, indent=2)
+        json.dump({"model": a.coder or a.model, "outside_model": bool(a.coder), "summary": s, "results": results}, f, indent=2)
     return 0
 
 

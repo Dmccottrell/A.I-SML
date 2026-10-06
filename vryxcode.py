@@ -15,6 +15,7 @@ WHAT THIS FILE DOES
 
 Usage:  1. start a model (see open_models.llama_args):  llama-server -m export/open/solstice-2/my-ai-q4_k_m.gguf -c 32768 --port 8080
         2. cd into your project and run:                python vryxcode.py --model solstice-2 "add a function to utils.py that slugifies a title, with tests"
+        a coding model from outside Emvryx:             python vryxcode.py --coder qwen2.5-coder-14b "task"
         no task = interactive:                          python vryxcode.py --model solstice-2
         try it without any model:                       python vryxcode.py --demo
 """
@@ -94,6 +95,14 @@ def check_model(model_id):
     return True, ELIGIBLE_NOTE.get(model_id, "")
 
 
+def gate(model_id, coder=None):
+    """(ok, message). With `coder` (a label for an outside coding model you started in llama-server, e.g. qwen2.5-coder-14b) the Emvryx model gate is skipped:
+    the run is labelled as an outside model, not an Emvryx one. Without it, only Equinox 2 and above may run VryxCode."""
+    if coder:
+        return True, f"Using the coding model '{coder}' (an outside model, not an Emvryx model). Whatever it scores is its score, not an Emvryx result."
+    return check_model(model_id)
+
+
 def preview(name, args):
     if name == "write_file":
         text = str(args.get("content", ""))
@@ -145,9 +154,10 @@ def main(argv=None, input_fn=input):
     p.add_argument("--context", type=int, default=32768, help="the context the server was started with (old steps are summarised near it)")
     p.add_argument("--allow", default="", help="more programs the model may run, comma separated (e.g. node,npm)")
     p.add_argument("--demo", action="store_true", help="a scripted run in a temporary folder: no model, shows the loop")
+    p.add_argument("--coder", default=None, metavar="LABEL", help="use an outside coding model that llama-server is running (e.g. qwen2.5-coder-14b), instead of an Emvryx model")
     a = p.parse_args(argv)
 
-    ok, note = check_model(a.model)
+    ok, note = gate(a.model, a.coder)
     if not ok:
         raise SystemExit(note)
     if note:
