@@ -144,3 +144,57 @@ class Server(Base):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class KnowledgeFirst(Base):
+    """Models flagged "lookup": "when_needed" (the Qwen ones) answer from what they know and look things up only when it is recent or they are unsure."""
+    backend = None
+    script = "Springfield is the capital."
+    factory = staticmethod(Server.factory)
+
+    def setUp(self):
+        super().setUp()
+        Server.script = "Springfield is the capital."
+        self.web = FakeWeb([NEWS])
+        self.state.wiki = FakeWiki([SPRINGFIELD])
+        self.state.web_fn = self.web
+        for m in self.state.manifest["models"]:
+            m["lookup"] = "when_needed"
+
+    def events(self, body):
+        return [(n, d) for n, d in body]
+
+    def test_a_plain_fact_question_is_answered_without_any_lookup(self):
+        ev = self.events(self.ask(self.sam, self.new_chat(self.sam), "Who is Gordon Ramsay?")[2])
+        self.assertEqual([n for n, d in ev if n == "notes"], [])
+        self.assertEqual(self.state.wiki.calls, [])
+        self.assertEqual(self.web.calls, [])
+        self.assertEqual(len(Server.backend.prompts), 1)
+
+    def test_a_recent_question_still_looks_things_up_first(self):
+        ev = self.events(self.ask(self.sam, self.new_chat(self.sam), "Who won the Tigers game today?")[2])
+        self.assertEqual(len([n for n, d in ev if n == "notes"]), 1)
+        self.assertTrue(self.web.calls)
+
+    def test_when_the_model_is_not_sure_it_looks_it_up_and_answers_again(self):
+        Server.script = "I'm not sure."
+        ev = self.events(self.ask(self.sam, self.new_chat(self.sam), "What is the capital of Illinois?")[2])
+        notes = [d for n, d in ev if n == "notes"]
+        self.assertEqual(len(notes), 1)
+        self.assertTrue(notes[0].get("retry"))
+        self.assertEqual(len(Server.backend.prompts), 2)
+        self.assertTrue(self.state.wiki.calls)
+
+    def test_model_only_setting_never_looks_anything_up(self):
+        Server.script = "I'm not sure."
+        self.sam.call("POST", "/api/settings", {"web_search": "none"})
+        ev = self.events(self.ask(self.sam, self.new_chat(self.sam), "What is the capital of Illinois?")[2])
+        self.assertEqual([n for n, d in ev if n == "notes"], [])
+        self.assertEqual(self.state.wiki.calls, [])
+        self.assertEqual(len(Server.backend.prompts), 1)
+
+    def test_default_models_keep_looking_up_every_fact_question(self):
+        for m in self.state.manifest["models"]:
+            m.pop("lookup", None)
+        ev = self.events(self.ask(self.sam, self.new_chat(self.sam), "What is the capital of Illinois?")[2])
+        self.assertEqual(len([n for n, d in ev if n == "notes"]), 1)

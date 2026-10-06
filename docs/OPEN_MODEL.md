@@ -36,6 +36,13 @@ python ..\llama.cpp\convert_hf_to_gguf.py export\open\flare-2\my-ai --outfile ex
 A run started before the presets existed saved to `checkpoints/dev/open/qwen2.5-1.5b-instruct`; the code still finds it (resume and `--merge` work), and new runs use `checkpoints/dev/open/flare-2`.
 The lessons file is `data\v3\chat.jsonl` (`python make_chat_data_v3.py`), the same lessons v3 learned, now on a stronger base.
 
+## How the app looks things up for these models (knowledge first)
+Flare 2 and Ember are small and know little, so the app looks up every factual question for them and they answer from the notes. The Qwen-based models
+(Flare 2.5, Equinox 2, Solstice 2, Apogee 2) know far more, and a wrong passage misleads them (a misspelt name once pulled in the wrong person's article and
+every model repeated it). So `models.json` marks them `"lookup": "when_needed"`: they answer from what they know; Wikipedia and the web are used only for recent things
+(news, scores, weather) or **when the model says it is not sure**, in which case the app looks it up and lets it answer again. Notes you approved with a thumbs up are always used.
+Settings > Looking things up > "Model only" turns lookups off completely.
+
 ## Adding it to the app
 `models.json` already has the entries (status `planned`, generation 2). When a model's GGUF exists, set its status to `beta`; each entry has `"open": true`, `"tokenizer": "checkpoints/dev/open/flare-2/tokenizer/tokenizer.json"`,
 `"context": 32768`, `"local_gguf": ["export/open/flare-2/my-ai-q4_k_m.gguf"]`, `"kv_kb_per_token": 28`, and `"base": "Qwen2.5-1.5B-Instruct"` (provenance for the docs; the model's name in the app is just Emvryx + its name and number).
