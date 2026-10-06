@@ -926,7 +926,7 @@ $('codeDirIn').onchange = async (e) => {
 };
 
 // ---------------------------------------------------------------- login
-function showLogin() { offerEmailSignIn(); S.state = null; applyTheme(); $('login').hidden = false; $('app').hidden = true; $('loginBrand').replaceChildren(logo(32, false, 'brand'), 'Emvryx'); }
+function showLogin() { if (location.search.includes('notice=keylink')) { $('loginErr').textContent = 'Key links are turned off (a key in an address is easy to leak). Paste your key below, or ask the owner for a one-time sign-in link.'; history.replaceState(null, '', '/'); } offerEmailSignIn(); S.state = null; applyTheme(); $('login').hidden = false; $('app').hidden = true; $('loginBrand').replaceChildren(logo(32, false, 'brand'), 'Emvryx'); }
 async function offerEmailSignIn() {
   document.querySelectorAll('#emailOpt').forEach((n) => n.remove());
   try { const o = await (await fetch('/api/auth-options')).json(); if (!o.email) return; } catch (e) { return; }

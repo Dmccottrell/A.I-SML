@@ -17,10 +17,18 @@ This file is the single place for how Emvryx keeps people and their data safe. I
 - **Bans:** the owner can turn a person off (Settings > Owner > People): their devices are signed out at once and key, link and code sign-in are refused. The owner cannot be turned off.
 - **Audit log:** the last 5,000 security events (sign-ins, failures, pairing, sign-outs, bans, key rotations, email codes) with the person, a coarse address and a short note, never a key, code or token. Owner only: Settings > People and the security log, or `GET /api/admin/audit`.
 
+## 3. Browser protections (built)
+
+- **Content security policy:** the page may run only its own script, identified by a fresh one-time nonce on every load (no `unsafe-eval`, no inline handlers, no other sites' scripts), and may load only its own files plus Google's font files; it cannot be framed (`frame-ancestors 'none'`, `X-Frame-Options: DENY`), cannot be made to submit forms elsewhere, and allows no plug-ins. Every JSON answer carries a policy that allows nothing. The page builds everything from text (no `innerHTML` with model or user text), so a model's reply cannot inject script.
+- **HTTPS:** `Strict-Transport-Security` (one year) is sent whenever the proxy says the request was https (Cloudflare does), and the session cookie gets `Secure` then. A caller that is not the proxy cannot claim https.
+- **Cross-site requests (CSRF):** every POST and DELETE is checked. A request a browser says came from another website (`Sec-Fetch-Site: cross-site`, a foreign `Origin`, or `Origin: null`) is refused with 403 and logged. The page's own requests and programs like curl (which are not browsers) pass. If the Cloudflare tunnel rewrote the Host header, `Sec-Fetch-Site` still identifies the page's own requests; to also accept an address by name, add it to `allowed_origins`. Cookies are also SameSite=Strict.
+- **No keys in addresses:** `/?key=...` links are **off by default** (`allow_key_links`: set `true` in `.emvryx/security.json` to bring them back): the address is dropped at once with a note on the sign-in screen, because a key in a link ends up in history, logs and chat. Use a one-time pairing link, or paste the key in the sign-in box.
+- Also: `Referrer-Policy: no-referrer`, `Cross-Origin-Opener-Policy: same-origin`, `Cross-Origin-Resource-Policy: same-origin`, `X-Content-Type-Options: nosniff`, a `Permissions-Policy` that turns off camera, microphone, location and payment, and `X-Robots-Tag: noindex` so search engines do not list a private app.
+
 ## Settings you can change (`.emvryx/security.json`, all optional)
 
-`session_days` (90), `pair_minutes` (15), `login_fail_limit` (8), `login_fail_window` (600 seconds), `email_start_limit` (5), `email_start_window` (600), `open_signups` (false), `trusted_proxies` (`["127.0.0.1", "::1"]`; set `[]` if the app is reached directly and not through a proxy).
+`session_days` (90), `pair_minutes` (15), `login_fail_limit` (8), `login_fail_window` (600 seconds), `email_start_limit` (5), `email_start_window` (600), `open_signups` (false), `allow_key_links` (false), `allowed_origins` (`[]`), `trusted_proxies` (`["127.0.0.1", "::1"]`; set `[]` if the app is reached directly and not through a proxy).
 
 ## Still to build (in order)
 
-Browser protections (3), VryxCode in containers (4), encrypted connected-account tokens and GitHub sign-in (5), policies and data tools (7), a security review, dependency audit and monitoring (8). Capacity and cost (6) is on hold by decision.
+VryxCode in containers (4), encrypted connected-account tokens and GitHub sign-in (5), policies and data tools (7), a security review, dependency audit and monitoring (8). Capacity and cost (6) is on hold by decision.
