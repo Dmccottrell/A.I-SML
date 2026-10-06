@@ -36,9 +36,9 @@ Tools: `exam.py` / `exam_open.py` (HellaSwag), `evaluate.py` / `evaluate_open.py
 | hard | `leaderboard_math_hard` | competition maths, exact match | Level 5 maths, final boxed answer | small models score very low: expected |
 | hard | `leaderboard_musr` | accuracy | Multi-step reasoning in long stories | |
 | hard | `leaderboard_bbh` | 3-shot, exact match / acc_norm | BIG-Bench Hard logic and algorithms | |
-| code | `humaneval` | Python generation, pass@1 | Writing functions that pass unit tests | **runs the model's code** |
+| code | `humaneval_instruct` | Python generation, pass@1 | Writing functions that pass unit tests | **runs the model's code** |
 | code | `mbpp` | Python generation, pass@1 | Writing Python from a description | **runs the model's code** |
-Names differ from the common ones in a few places (`openai_humaneval` is `humaneval`; MATH, MuSR, BBH and GPQA are the `leaderboard_*` versions): they were checked against the installed tool, not from memory. Run the code suite only with `--allow-code` and only on the cloud machine, never on your PC.
+Names differ from the common ones in a few places (`openai_humaneval` is `humaneval_instruct` here: the plain `humaneval` task scored 0.0% on both Flare 2.5 and its base probably because chat models answer in a chat format that task cannot read (not confirmed); MATH, MuSR, BBH and GPQA are the `leaderboard_*` versions): they were checked against the installed tool, not from memory. Run the code suite only with `--allow-code` and only on the cloud machine, never on your PC.
 Rough cost (an estimate, not measured): `--limit 200` on a 1.5B model takes minutes; the full core suite on a 1.5B to 8B model is probably under an hour each on the 5090, the hard suite longer. Each costs a few cents to a few dollars at about $0.51 an hour.
 What to expect: a small fine-tune should leave these scores about where the base is (Flare 2.5 on HellaSwag: +1.6). GPQA, MATH level 5 and MuSR will be low for 1.5B to 14B models; that is normal, so look at the **difference** between base and tuned.
 

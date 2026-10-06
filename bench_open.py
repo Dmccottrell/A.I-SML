@@ -35,22 +35,23 @@ TASKS = {
     "leaderboard_math_hard": ("Competition maths, level 5, final boxed answer", ["exact_match,none"], True, "small models score very low: expected"),
     "leaderboard_musr": ("Multi-step reasoning inside long narratives", ["acc_norm,none", "acc,none"], False, ""),
     "leaderboard_bbh": ("BIG-Bench Hard: algorithmic and logic tasks (3-shot)", ["acc_norm,none", "acc,none"], False, ""),
-    "humaneval": ("Writing Python functions, checked by unit tests (pass@1)", ["pass@1,create_test", "pass@1,none"], True, "RUNS model-written code"),
+    "humaneval_instruct": ("Writing Python functions, checked by unit tests (pass@1; the chat-model version of HumanEval)", ["pass@1,create_test", "pass@1,none"], True, "RUNS model-written code"),
     "mbpp": ("Writing Python from a description, checked by tests (pass@1)", ["pass_at_1,none", "pass@1,none"], True, "RUNS model-written code"),
 }
 SUITES = {
     "core": ["arc_challenge", "winogrande", "mmlu", "gsm8k_cot", "truthfulqa_mc2"],
     "hard": ["mmlu_pro", "leaderboard_gpqa_diamond", "ifeval", "leaderboard_math_hard", "leaderboard_musr", "leaderboard_bbh"],
-    "code": ["humaneval", "mbpp"],
+    "code": ["humaneval_instruct", "mbpp"],
 }
-CODE_TASKS = {"humaneval", "mbpp"}
+CODE_TASKS = {"humaneval_instruct", "mbpp"}
+ALIASES = {"humaneval": "humaneval_instruct"}      # plain `humaneval` gives a chat model 0%: it expects a bare code completion, not a chat reply
 FEWSHOT = {"mmlu": 5}
 
 
 def resolve_tasks(suites):
     """Task names for a comma-separated list of suites and/or task names, in order, without repeats."""
     out = []
-    for item in [s.strip() for s in suites.split(",") if s.strip()]:
+    for item in [ALIASES.get(s.strip(), s.strip()) for s in suites.split(",") if s.strip()]:
         names = SUITES.get(item) or ([item] if item in TASKS else None)
         if names is None:
             raise ValueError(f"{item!r} is not a suite ({', '.join(SUITES)}) or a known task ({', '.join(TASKS)})")
