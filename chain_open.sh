@@ -6,12 +6,14 @@
 #   tmux new -s chain        (or use the one you have)
 #   bash chain_open.sh                     # Flare 2.5 wrap-up, then Equinox 2
 #   bash chain_open.sh equinox-2 solstice-2   # more models, one after the other (only start ones you have budget for)
+#   SKIP_FLARE=1 ATTACH=equinox-2 bash chain_open.sh   # a run is already going: wait for it, then merge, exam and back it up, and stop there (no next model)
 #   SKIP_FLARE=1 bash chain_open.sh           # skip the Flare 2.5 wrap-up (already done) and go straight to Equinox 2 (it resumes if it was stopped)
 #
 # It never presses Stop on the Vast instance: when it pings "all done", stop the instance yourself (Stop, not Destroy).
 NTFY="${NTFY_TOPIC:-v35-AI}"
 REPO="Dmccottrell/aisml-checkpoints"
 NEXT=("${@:-equinox-2}")
+if [ -n "${ATTACH:-}" ] && [ "$#" -eq 0 ]; then NEXT=(); fi          # ATTACH=equinox-2: only wrap up the run that is already going
 mkdir -p logs
 pip install -q datasets peft > /dev/null 2>&1      # the exam needs datasets; the adapters need peft (Apogee also needs: pip install bitsandbytes)
 ping() { echo "$(date +%H:%M) $1"; curl -s -d "$1" "ntfy.sh/$NTFY" > /dev/null || true; }
@@ -41,6 +43,7 @@ wrap_up() {   # merge, exam, back up one model: wrap_up <preset>
 }
 
 if [ "${SKIP_FLARE:-0}" != "1" ]; then wrap_up flare-2.5; fi      # SKIP_FLARE=1 bash chain_open.sh: only the next models
+if [ -n "${ATTACH:-}" ]; then wrap_up "$ATTACH"; fi         # a training run for this model is already going (the wait above covers it): merge, exam, back up
 for m in "${NEXT[@]}"; do
     ping "$m: pilot (3 steps, checks memory and speed)"
     python finetune_open.py --model "$m" --pilot > "logs/$m-pilot.txt" 2>&1 || fail "$m pilot failed, probably out of memory (logs/$m-pilot.txt). Lower --batch_tokens."
