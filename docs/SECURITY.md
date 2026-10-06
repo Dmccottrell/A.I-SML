@@ -41,10 +41,17 @@ This file is the single place for how Emvryx keeps people and their data safe. I
 - Connect, disconnect and sign-in starts are written to the audit log.
 - Not built: GitHub App installation tokens with per-repository permissions (the narrowest option); other services (the Connected apps list keeps them "coming soon").
 
+## 7. Your data rights, policies, backups and contact (built)
+
+- **Download my data / Delete my account** (Settings > Your data; `data_tools.py`): a zip of plain files with everything held about the person (profile, settings, saved chats, kept notes, devices, GitHub activity log, VryxCode projects; never a key or a token), and a real deletion that removes chats, notes, projects, the GitHub connection, devices and usage rows, signs every device out, and replaces their name in the security log with "(deleted)". The owner account cannot be deleted this way. Both are logged.
+- **Privacy and Terms pages** at `/privacy` and `/terms` (public; `web/privacy.html`, `web/terms.html`), linked from the sign-in screen and Settings. They describe what the code really does (what is kept and for how long, private chats never saved, no ads or trackers, hashed keys, encrypted tokens, the 5,000-event log, 90-day devices, 14 daily backups, web search only when it is on). Put your details in `.emvryx/security.json`: `"operator_name": "Your name or company"` and `"contact_email": "you@example.com"`; they fill the pages and add a "Report a problem" link in Settings. **Have a lawyer read both before you open to the public**: they are written in plain words but are not legal advice, and the age rule, governing law and liability wording depend on where you are. One statement needs your explicit yes: "chats are not used to train any model".
+- **Backups** (`backup_data.py`): `python backup_data.py --data .emvryx --out backups` makes a dated zip (SQLite files copied safely while the app runs; mode 600; `secret.key` left out unless `--with-key`; the 14 newest kept, `--keep N`), and `--restore ZIP --to EMPTYFOLDER` restores it (refusing a non-empty folder and unsafe paths). Run it daily from Task Scheduler or cron and store the zips away from the server. Deleted accounts leave the backups as they age out.
+- **Names:** an informal check is in [TRADEMARK.md](TRADEMARK.md): "Emvryx" looks distinctive, the five model names are common words already used around AI (always use them with the Emvryx stem), and a proper attorney-led search is still needed.
+
 ## Settings you can change (`.emvryx/security.json`, all optional)
 
-`session_days` (90), `pair_minutes` (15), `login_fail_limit` (8), `login_fail_window` (600 seconds), `email_start_limit` (5), `email_start_window` (600), `open_signups` (false), `allow_key_links` (false), `allowed_origins` (`[]`), `code_unsandboxed_for_others` (false), `require_encryption` (false), `github_client_id` and the quota names above, `trusted_proxies` (`["127.0.0.1", "::1"]`; set `[]` if the app is reached directly and not through a proxy).
+`session_days` (90), `pair_minutes` (15), `login_fail_limit` (8), `login_fail_window` (600 seconds), `email_start_limit` (5), `email_start_window` (600), `open_signups` (false), `allow_key_links` (false), `allowed_origins` (`[]`), `code_unsandboxed_for_others` (false), `require_encryption` (false), `github_client_id`, `contact_email`, `operator_name` and the quota names above, `trusted_proxies` (`["127.0.0.1", "::1"]`; set `[]` if the app is reached directly and not through a proxy).
 
 ## Still to build (in order)
 
-Policies and data tools (7), a security review, dependency audit and monitoring (8). Capacity and cost (6) is on hold by decision.
+A security review, dependency audit and monitoring (8). Capacity and cost (6) is on hold by decision.

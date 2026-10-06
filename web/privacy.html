@@ -1,0 +1,65 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex"><title>Privacy: Emvryx</title>
+<style>
+:root{--bg:#07080D;--text:#EEF0F6;--muted:#9AA3BC;--line:#232739;--accent:#F5A524;--surface:#0F1119}
+@media (prefers-color-scheme: light){:root{--bg:#F7F8FC;--text:#0D0F1A;--muted:#4A526B;--line:#D8DCEA;--accent:#8F5600;--surface:#fff}}
+*{box-sizing:border-box} body{margin:0;background:var(--bg);color:var(--text);font:17px/1.6 system-ui,-apple-system,Segoe UI,Roboto,sans-serif}
+main{max-width:760px;margin:0 auto;padding:32px 20px 80px} a{color:var(--accent)} h1{font-size:34px;line-height:1.15;margin:8px 0 4px;letter-spacing:-.02em}
+h2{font-size:21px;margin:34px 0 6px} p,li{color:var(--text)} .muted{color:var(--muted);font-size:15px} ul{padding-left:22px} li{margin:5px 0}
+.top{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap} .box{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:14px 18px;margin:18px 0}
+</style>
+</head><body><main>
+<div class="top"><a href="/">&larr; Back to Emvryx</a><span class="muted">Privacy &middot; Terms: <a href="/privacy">Privacy</a> &middot; <a href="/terms">Terms</a></span></div>
+<h1>Privacy</h1>
+<p class="muted">Last updated: October 2026. Plain words, no tricks. If something here is not true of the app you are using, tell us: {{contact}}.</p>
+<div class="box"><b>The short version.</b> Emvryx saves your chats (except Private chats) on the server it runs on, uses them only to show them back to you, never sells or shares them, shows no ads and has no trackers. You can download everything or delete your account yourself, any time, in Settings.</div>
+
+<h2>Who runs this</h2>
+<p>{{operator}} runs this copy of Emvryx. They decide where it runs (their own computer or a rented server) and are the one who can reach the files on it. That is the honest limit of "private": the server's owner could read what is stored there, so do not put anything in Emvryx that you would not trust that person with. Chats are not end-to-end encrypted.</p>
+
+<h2>What we keep, and why</h2>
+<ul>
+<li><b>Your account:</b> your name, your plan, and (if you use email sign-in) your email address. Your sign-in key is never stored: only a one-way fingerprint of it, so even the owner cannot read it back.</li>
+<li><b>Your chats:</b> the messages and the model's answers, so you can come back to them. <b>Private chats are never saved</b>: they exist only in memory while the server runs.</li>
+<li><b>Notes you keep:</b> when you tap thumbs-up on an answer, the source notes it used are saved so the same question works offline (you can delete them).</li>
+<li><b>Usage:</b> how many tokens you used, to apply your plan's limits.</li>
+<li><b>Devices:</b> each signed-in device gets a random session. We keep only a fingerprint of it, a label like "Chrome on Android", the last time it was used and the first two parts of its internet address (for example 203.0.x.x), so you can see and sign out your devices.</li>
+<li><b>Security log:</b> the latest 5,000 sign-ins, failed tries, pairing links, bans and similar events, each with a name, a time and the same shortened address. It is for spotting abuse and is visible only to the owner.</li>
+<li><b>VryxCode projects:</b> the files in your coding projects and their GitHub link, stored on the server. If you connect GitHub, the access token is stored encrypted and is never shown to the model. Commands VryxCode runs happen on the server (inside a locked-down container when it is turned on).</li>
+</ul>
+
+<h2>Who else sees it</h2>
+<ul>
+<li><b>The AI models</b> run on the server. Your messages are given to the model to answer you; they are not sent to another company's AI service.</li>
+<li><b>Looking things up:</b> questions are first looked up in a local copy of Wikipedia. If web search is on (Settings), a question may be sent to a search service to find fresh information; the answer says when it did. Private chats never search the web.</li>
+<li><b>GitHub:</b> only if you connect it, and only when you pull, push or create a repository. We send GitHub what git needs for that action and nothing else.</li>
+<li><b>Email:</b> if email sign-in is on, the email provider the owner chose delivers your sign-in code.</li>
+<li>We do not sell your data, share it for advertising, or use analytics or tracking scripts. The page loads only its own files and a font from Google Fonts.</li>
+<li><b>Training:</b> your chats are not used to train or improve any model. If that ever changes it will be opt-in and announced here first.</li>
+</ul>
+
+<h2>Your choices</h2>
+<ul>
+<li><b>Download your data:</b> Settings &rarr; Download my data (a zip of plain files).</li>
+<li><b>Delete chats:</b> delete one chat, or all of them, in the chat list and Settings.</li>
+<li><b>Delete your account:</b> Settings &rarr; Delete my account removes your chats, notes, projects, GitHub connection, devices and usage for good. It cannot be undone. Backups the owner keeps are removed on their normal schedule (see below).</li>
+<li><b>Sign out a device</b> any time from Settings.</li>
+</ul>
+
+<h2>How long we keep things</h2>
+<ul>
+<li>Chats, notes and projects: until you delete them or your account.</li>
+<li>A signed-in device: 90 days after you last used it, or until you sign it out.</li>
+<li>The security log: the latest 5,000 events.</li>
+<li>Backups: the owner may keep backups of the server's data for a limited time (14 daily copies by default). Deleted data leaves them when they age out.</li>
+</ul>
+
+<h2>Keeping it safe</h2>
+<p>Keys are stored as fingerprints, tokens are encrypted, the connection is encrypted (https), and the app has protections against attacks from other websites, guessing and abuse. No system is perfectly safe. If we find out your data was exposed, we will tell the people affected. You can read the technical details in the project's security notes.</p>
+
+<h2>Children</h2>
+<p>Emvryx is not made for children under 13 to sign up on their own. A parent or guardian should set up access for a younger person and look after the key or sign-in.</p>
+
+<h2>Changes and questions</h2>
+<p>If this page changes in a way that matters, the date at the top changes and the owner will say so in the app. Questions, requests to see or remove data, or reports of abuse: {{contact}}.</p>
+</main></body></html>

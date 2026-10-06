@@ -124,3 +124,8 @@ Today Emvryx is for you and the people you give a key to. Opening it to anyone i
 **8. Before the doors open.** A security review of the code (`/security-review`), a dependency audit, a test with a few outside testers on the free tier first, and monitoring of errors and unusual usage.
 
 Start with 1, 2 and 3: they are small. 4 and 6 are the big ones and decide when it is safe to go public.
+
+
+## Backups on a schedule
+
+Windows (Task Scheduler, daily at 3 AM): Action "Start a program": `python` with arguments `backup_data.py --data .emvryx --out D:\emvryx-backups --keep 14`, start in the project folder. Linux: `0 3 * * * cd /path/to/A.I-SML && python backup_data.py --data .emvryx --out /backups/emvryx --keep 14`. Keep `secret.key` somewhere else (it is not in the zip): without it a restore asks people to connect GitHub again, which is fine. Test a restore once: `python backup_data.py --restore <zip> --to <empty folder>`. See [SECURITY.md](SECURITY.md).

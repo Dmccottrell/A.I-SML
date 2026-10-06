@@ -271,6 +271,7 @@ svg .core { fill: var(--core); stroke: var(--sun); stroke-width: 3; transition: 
     <label class="sr" for="keyInput">Key</label>
     <input type="password" id="keyInput" autocomplete="off" placeholder="Your key">
     <div id="loginErr" style="color:var(--danger)"></div>
+    <div style="color:var(--muted);font-size:13px">By signing in you agree to the <a href="/terms" target="_blank" rel="noopener" style="color:var(--accenttext)">Terms</a>; see how your data is handled in the <a href="/privacy" target="_blank" rel="noopener" style="color:var(--accenttext)">Privacy</a> page.</div>
     <button class="btn" type="submit">Continue</button>
   </form>
 </div>
@@ -665,6 +666,15 @@ async function openSettings() {
     el('b', {}, 'Your data'),
     el('div', {style: 'color:var(--muted);font-size:14px'}, 'Chats are saved on the server you opened this page from. Private chats are never saved. Nothing leaves it unless you attach an online model.'),
     el('button', {class: 'btn danger', onclick: async () => { if (confirm('Delete every chat? This cannot be undone.')) { await post('/api/delete-everything'); S.chatId = null; S.messages = []; await load(); } }}, 'Delete all my chats'),
+    el('b', {}, 'Your data'),
+    el('div', {style: 'display:flex;gap:8px;flex-wrap:wrap'}, el('a', {class: 'btn ghost', href: '/api/export', style: 'display:inline-flex;align-items:center;text-decoration:none', download: ''}, 'Download my data'),
+      ...(st.owner ? [] : [el('button', {class: 'btn danger', onclick: async () => {
+        const typed = prompt('Delete your account and everything in it (chats, notes, projects, GitHub link, devices)? This cannot be undone. Type your name (' + st.user + ') to confirm:');
+        if (typed === null) return; const r = await post('/api/delete-account', {confirm: typed.trim()}); const j = await r.json();
+        if (!r.ok) { alert(j.message + ' ' + (j.action || '')); return; } location.reload();
+      }}, 'Delete my account')])),
+    el('div', {style: 'color:var(--muted);font-size:14px'}, el('a', {href: '/privacy', target: '_blank', rel: 'noopener', style: 'color:var(--accenttext)'}, 'Privacy'), '  \u00b7  ', el('a', {href: '/terms', target: '_blank', rel: 'noopener', style: 'color:var(--accenttext)'}, 'Terms'),
+      ...(st.contact ? ['  \u00b7  ', el('a', {href: 'mailto:' + st.contact, style: 'color:var(--accenttext)'}, 'Report a problem')] : [])),
     el('b', {}, 'Where you are signed in'), el('div', {id: 'deviceList', style: 'display:flex;flex-direction:column;gap:8px'}, el('div', {style: 'color:var(--muted);font-size:14px'}, 'Loading...'))];
   if (st.owner) {
     const name = el('input', {type: 'text', placeholder: 'Name, e.g. sam', 'aria-label': 'Tester name'}), mail = el('input', {type: 'text', placeholder: 'Email (optional, for email sign-in)', 'aria-label': 'Tester email', inputmode: 'email'});

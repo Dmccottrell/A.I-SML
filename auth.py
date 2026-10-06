@@ -204,6 +204,14 @@ class AuthDB:
             self.db.execute("DELETE FROM events WHERE id <= (SELECT MAX(id) FROM events) - ?", (EVENTS_KEPT,))
             self.db.commit()
 
+    def scrub_user(self, user):
+        """After an account is deleted: their name leaves the security log (the events stay, as '(deleted)') and their sessions are removed."""
+        with self.lock:
+            self.db.execute("UPDATE events SET user = '(deleted)' WHERE user = ?", (user,))
+            self.db.execute("DELETE FROM sessions WHERE user = ?", (user,))
+            self.db.execute("DELETE FROM pairs WHERE user = ?", (user,))
+            self.db.commit()
+
     def events(self, limit=100, kind=None, user=None):
         q, args = "SELECT at, kind, user, ip, detail FROM events", []
         conds = []

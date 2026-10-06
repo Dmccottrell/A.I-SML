@@ -141,6 +141,17 @@ class Store:
         old = self.get(user)
         self.put(user, {"log": old.get("log", [])})
 
+    def forget(self, user):
+        """Remove the person's file altogether (account deletion): not even the activity log is kept."""
+        with self.lock:
+            if not self.dir:
+                self.mem.pop(user, None)
+                return
+            try:
+                os.remove(self._path(user))
+            except OSError:
+                pass
+
     def log(self, user, what):
         d = self.get(user)
         d["log"] = (d.get("log", []) + [{"at": int(time.time()), "what": what}])[-50:]
