@@ -377,9 +377,9 @@ class Git:
         if not remote:
             raise GitHubError("This project isn't linked to a GitHub repository yet.", "Create or link one first.")
         branch = self.branch()
-        if not branch or not BRANCH_RE.fullmatch(branch):
+        if not branch or not BRANCH_RE.fullmatch(branch) or ".." in branch or branch.startswith("-"):
             raise GitHubError("There is no branch checked out to pull into.")
-        out = self.run(["pull", "--ff-only", remote[2], branch])
+        out = self.run(["pull", "--ff-only", "--", remote[2], branch])
         return out or "Already up to date."
 
     def push(self, allow_protected=False):
@@ -393,7 +393,7 @@ class Git:
             raise GitHubError("There is nothing to push yet: no commits.", "Commit your work first.")
         if branch in PROTECTED and not allow_protected:
             raise GitHubError(f"Pushing straight to {branch} needs an extra confirmation.", "Make a branch (git switch -c my-change) or confirm it.")
-        out = self.run(["push", remote[2], f"refs/heads/{branch}:refs/heads/{branch}"])
+        out = self.run(["push", "--", remote[2], f"refs/heads/{branch}:refs/heads/{branch}"])
         self.run(["update-ref", f"refs/remotes/origin/{branch}", "HEAD"], check=False)
         return out or f"Pushed {branch} to {remote[0]}/{remote[1]}."
 

@@ -23,8 +23,8 @@ class SignIn(Base):
 
     def signed_in(self, name="sam"):
         c = Client(self.port)
-        st, h, _ = c.call("GET", "/pair/" + self.pair(name), raw=True)
-        self.assertEqual(st, 302)
+        st, h = c.use_pairing_link(self.pair(name))
+        self.assertEqual(st, 303)
         c.cookie = cookie_of(h)
         return c
 
@@ -45,13 +45,29 @@ class SignIn(Base):
     def test_a_pairing_link_signs_in_once(self):
         t = self.pair("sam")
         c = Client(self.port)
-        st, h, _ = c.call("GET", "/pair/" + t, raw=True)
-        self.assertEqual(st, 302)
+        st, h = c.use_pairing_link(t)
+        self.assertEqual(st, 303)
         self.assertIn("HttpOnly", h["Set-Cookie"])
         c.cookie = cookie_of(h)
         self.assertEqual(c.call("GET", "/api/state")[1]["user"], "sam")
         self.assertEqual(Client(self.port).call("GET", "/pair/" + t, raw=True)[0], 410)           # used up
         self.assertEqual(Client(self.port).call("GET", "/pair/nottherealtokenxxxx", raw=True)[0], 410)
+
+    def test_opening_a_link_does_not_use_it_up_so_a_chat_apps_preview_cannot_burn_it(self):
+        t = self.pair("sam")
+        for _ in range(3):                                                           # previews, scanners, the person looking twice
+            st, h, page = Client(self.port).call("GET", "/pair/" + t, raw=True)
+            self.assertEqual(st, 200)
+            self.assertNotIn("Set-Cookie", h)
+            self.assertIn(b'<form method="post" action="/pair/', page)
+            self.assertIn("form-action 'self'", h["Content-Security-Policy"])
+        self.assertEqual(Client(self.port).use_pairing_link(t)[0], 303)              # only the button signs in
+
+    def test_a_cross_site_page_cannot_press_the_button(self):
+        t = self.pair("sam")
+        st, _, _ = Client(self.port).call("POST", "/pair/" + t, raw=True, headers={"Sec-Fetch-Site": "cross-site", "Origin": "https://evil.example"})
+        self.assertEqual(st, 403)
+        self.assertEqual(Client(self.port).use_pairing_link(t)[0], 303)              # the link was not used up by the attempt
 
     def test_only_the_owner_makes_pairing_links(self):
         self.assertEqual(self.sam.call("POST", "/api/admin/pairing", {"user": "sam"})[0], 403)
@@ -90,10 +106,10 @@ class SignIn(Base):
 
     def test_cookie_is_secure_only_when_the_proxy_says_https(self):
         t1 = self.pair()
-        h1 = Client(self.port).call("GET", "/pair/" + t1, raw=True)[1]
+        h1 = Client(self.port).use_pairing_link(t1)[1]
         self.assertNotIn("Secure", h1["Set-Cookie"])
         t2 = self.pair()
-        h2 = Client(self.port).call("GET", "/pair/" + t2, raw=True, headers={"X-Forwarded-Proto": "https"})[1]
+        h2 = Client(self.port).use_pairing_link(t2, headers={"X-Forwarded-Proto": "https"})[1]
         self.assertIn("Secure", h2["Set-Cookie"])
 
     # ---- guessing and lockout
@@ -151,6 +167,7 @@ class EmailSignIn(Base):
         super().setUp()
         self.mail = mailer.FakeMailer()
         self.state.mailer = self.mail
+        self.state.mail_async = False                                     # deterministic in tests
         self.state.set_email("sam", "Sam@Example.com")
 
     def code(self):

@@ -11,4 +11,4 @@ transformers
 fpdf2
 python-docx
 # keeping saved tokens (GitHub) encrypted on disk (secret_box.py)
-cryptography
+cryptography>=42.0.4

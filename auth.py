@@ -161,6 +161,15 @@ class AuthDB:
             self.db.commit()
         return token
 
+    def peek_pair(self, token, now=None):
+        """The person a pairing link is for, WITHOUT using it up (so a chat app's link preview cannot burn it): None if it is unknown, used or late."""
+        if not token:
+            return None
+        now = time.time() if now is None else now
+        with self.lock:
+            row = self.db.execute("SELECT user, expires, used FROM pairs WHERE token_hash = ?", (digest(token),)).fetchone()
+        return row[0] if row and not row[2] and row[1] >= now else None
+
     def use_pair(self, token, now=None):
         """The person a pairing link is for, once. A second use, or a late one, gets None."""
         if not token:

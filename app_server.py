@@ -77,8 +77,14 @@ OUTSIDE_NOTE = ("{label} is an outside coding model ({licence}), not an Emvryx m
 SECURITY_DEFAULTS = {"session_days": 90, "pair_minutes": 15, "login_fail_limit": 8, "login_fail_window": 600, "email_start_limit": 5,
                      "email_start_window": 600, "open_signups": False, "trusted_proxies": ["127.0.0.1", "::1"], "audit_notify": True,
                      "allow_key_links": False, "allowed_origins": [], "code_unsandboxed_for_others": False,
-                     "require_encryption": False, "github_client_id": "", "contact_email": "", "operator_name": "",
+                     "require_encryption": False, "github_client_id": "", "contact_email": "", "operator_name": "", "alert_ntfy_topic": "",
                      **code_sandbox.QUOTA_DEFAULTS}
+PAIR_PAGE = ('<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">'
+             '<meta name="robots" content="noindex"><title>Sign in: Emvryx</title><style>body{margin:0;min-height:100vh;display:grid;place-items:center;'
+             'background:#07080D;color:#EEF0F6;font:17px/1.5 system-ui,sans-serif}main{max-width:380px;padding:24px}h1{font-size:26px;margin:0 0 8px}'
+             'p{color:#9AA3BC}button{width:100%;min-height:48px;border:0;border-radius:12px;background:#F5A524;color:#1A1204;font:600 17px system-ui;cursor:pointer}'
+             '</style></head><body><main><h1>Sign in to Emvryx</h1><p>This link signs in <b>one device</b>, once. Only continue if you asked for it.</p>'
+             '<form method="post" action="/pair/{{token}}"><button type="submit">Sign in on this device</button></form></main></body></html>')
 MAX_UPLOAD = 30_000_000                                # a project upload (base64): see code_sessions.MAX_IMPORT_BYTES
 MAX_TEXT = 20_000
 EFFORTS = {"quick": 160, "balanced": 320, "deep": 700}          # most words a reply may have, per effort level
@@ -242,6 +248,7 @@ class AppState:
         self.auth = auth.AuthDB(os.path.join(data_dir, "auth.db") if data_dir else ":memory:")
         self.rl = auth.RateLimiter()                           # per-address sliding windows (sign-in failures, email codes)
         self.security = self._load_security()
+        self.auth.prune()
         self.mailer = mailer.from_env()                        # None until EMVRYX_SMTP_* is set: email sign-in is then off
         self._fresh = {}                                       # key hash -> the key, ONLY for keys made in this run (so they can be shown once)
         self._users_mtime = 0
@@ -249,6 +256,9 @@ class AppState:
         self.code = code_sessions.CodeManager(data_dir, quotas=code_sandbox.Quotas(self.security))       # VryxCode sessions (projects live under <data>/code/)
         self.secrets = secret_box.SecretBox(data_dir, require=self.security["require_encryption"])
         self.github = github_link.Store(data_dir, self.secrets)  # connected GitHub accounts (tokens encrypted, files mode 600)
+        self.metrics = {"errors": 0, "started": time.time()}
+        self._alerted = {}
+        self.mail_async = True                                  # send the sign-in email in the background so the answer takes the same time for every address
         self.github_device = {}                                 # person -> the sign-in in progress (its device code never leaves the server)
         self.github_http = None                                 # tests: http(method, url, headers, body) -> (status, json)
         self.github_local = False                               # tests only: allow a local folder as the remote
@@ -571,6 +581,33 @@ class AppState:
             return "ready", "Ready"
         return "missing", "Not on this computer" if (self.runner and self.runner.bin) else "llama-server not found"
 
+    def alert(self, kind, text, per_hour=6):
+        """A short message to the owner's phone (ntfy) when something security-relevant happens. Off until "alert_ntfy_topic" is set in security.json.
+        At most `per_hour` of the same kind, so an attack cannot flood the phone. Never raises, never contains a key, code or token."""
+        topic = str(self.security.get("alert_ntfy_topic") or "")
+        if not topic:
+            return
+        now = time.time()
+        recent = [t for t in self._alerted.get(kind, []) if now - t < 3600]
+        if len(recent) >= per_hour:
+            return
+        self._alerted[kind] = recent + [now]
+        import notify
+        threading.Thread(target=notify.send, args=(topic, text, "Emvryx security"), daemon=True).start()
+
+    def health(self):
+        """Numbers for the owner: how it is doing and whether anything looks like an attack."""
+        hour = time.time() - 3600
+        ev = [e for e in self.auth.events(500) if e["at"] >= hour]
+        count = lambda k: sum(1 for e in ev if e["kind"] == k)
+        return {"uptime_minutes": int((time.time() - self.metrics["started"]) / 60), "server_errors": self.metrics["errors"],
+                "devices_signed_in": self.auth.db.execute("SELECT COUNT(*) FROM sessions WHERE revoked = 0 AND expires > ?", (time.time(),)).fetchone()[0],
+                "last_hour": {"sign_ins": count("login_ok"), "failed_tries": count("login_fail"), "lockouts": count("lockout"), "cross_site_refusals": count("bad_origin"),
+                              "key_links_refused": count("key_link_refused")},
+                "coding_running": sum(1 for x in self.code.sessions.values() if x.state in ("starting", "working", "asking")),
+                "encryption": self.secrets.available, "email_sign_in": bool(self.mailer), "code_sandbox": self.code.sandbox.get("mode", "none"),
+                "alerts_on": bool(self.security.get("alert_ntfy_topic"))}
+
     # ---- GitHub (a connected app)
     def github_client_id(self):
         return str(os.environ.get("EMVRYX_GITHUB_CLIENT_ID") or self.security.get("github_client_id") or "")
@@ -887,6 +924,9 @@ class Handler(http.server.BaseHTTPRequestHandler):
             body = json.dumps(body).encode()
         elif isinstance(body, str):
             body = body.encode()
+        if status >= 500:
+            self.state.metrics["errors"] += 1
+            self.state.alert("server_error", f"Emvryx: a server error ({status}) on {self.path.split('?')[0]}", per_hour=3)
         self.send_response(status)
         self.send_header("Content-Type", ctype)
         self.send_header("Content-Length", str(len(body)))
@@ -917,7 +957,9 @@ class Handler(http.server.BaseHTTPRequestHandler):
         """The caller's address. Behind the Cloudflare tunnel every request comes from this computer, so the real address is taken from the
         proxy's header, but only when the request really came from the proxy (a trusted address), never from an outside caller."""
         if self._peer_trusted():
-            ip = self.headers.get("CF-Connecting-IP") or (self.headers.get("X-Forwarded-For") or "").split(",")[0].strip()
+            # Cloudflare sets CF-Connecting-IP itself. A plain proxy APPENDS to X-Forwarded-For, so only the LAST entry (added by our own proxy)
+            # can be trusted: the first is whatever the caller wrote.
+            ip = self.headers.get("CF-Connecting-IP") or (self.headers.get("X-Forwarded-For") or "").split(",")[-1].strip()
             if ip:
                 return ip[:64]
         return self.client_address[0] if self.client_address else ""
@@ -946,6 +988,10 @@ class Handler(http.server.BaseHTTPRequestHandler):
         st = self.state
         sid, token = st.auth.new_session(user, self.headers.get("User-Agent", ""), self._ip(), st.security["session_days"])
         st.auth.event("login_ok", user, self._ip(), how)
+        if st.user_record(user) and st.user_record(user).get("owner"):
+            st.alert("owner_signin", f"Emvryx: the owner signed in ({auth.device_label(self.headers.get('User-Agent', ''))}, {how})", per_hour=6)
+        if secrets.randbelow(50) == 0:
+            st.auth.prune()
         self._set_session_cookie(token)
         return sid
 
@@ -954,6 +1000,11 @@ class Handler(http.server.BaseHTTPRequestHandler):
         st = self.state
         wait = st.rl.blocked("fail:" + self._ip(), st.security["login_fail_limit"], st.security["login_fail_window"])
         if wait:
+            key = "lock:" + self._ip()
+            if st.rl.blocked(key, 1, st.security["login_fail_window"]) == 0:           # the first refusal of this lockout: log it once and tell the owner
+                st.rl.hit(key)
+                st.auth.event("lockout", "", self._ip(), f"{st.security['login_fail_limit']} wrong tries")
+                st.alert("lockout", "Emvryx: an address was locked out after repeated wrong sign-in tries", per_hour=4)
             self._send(429, {"code": "too_many", "message": "Too many wrong tries from this address.", "action": f"Wait about {max(1, wait // 60)} minute(s) and try again.",
                              "retry_after": wait}, headers={"Retry-After": str(wait)})
         return bool(wait)
@@ -961,6 +1012,8 @@ class Handler(http.server.BaseHTTPRequestHandler):
     def _fail(self, what):
         st, ip = self.state, self._ip()
         st.rl.hit("fail:" + ip)
+        if len(st.rl.hits) > 5000:
+            st.rl.trim(3600)
         st.auth.event("login_fail", "", ip, what)
 
     def _credential_kind(self):
@@ -1053,15 +1106,14 @@ class Handler(http.server.BaseHTTPRequestHandler):
                     self._fail("bad key link")
                 return self._file("index.html", "text/html; charset=utf-8")
             m = re.fullmatch(r"/pair/([A-Za-z0-9_-]{16,80})", path)
-            if m:                                                # a one-time pairing link from the owner: becomes a session and is used up
+            if m:                                                # a pairing link: show a button; only the button (a POST) uses it up
                 if self._locked():
                     return
-                user = self.state.auth.use_pair(m.group(1))
+                user = self.state.auth.peek_pair(m.group(1))
                 who = self.state.who_name(user) if user else None
                 if who and not who["banned"]:
-                    self.state.auth.event("pair_used", user, self._ip(), "")
-                    self._start_session(user, "pairing link")
-                    return self._send(302, b"", "text/plain", {"Location": "/"})
+                    return self._send(200, PAIR_PAGE.replace("{{token}}", m.group(1)).encode(), "text/html; charset=utf-8",
+                                      csp="default-src 'none'; style-src 'unsafe-inline'; form-action 'self'; frame-ancestors 'none'; base-uri 'none'")
                 self._fail("bad pairing link")
                 return self._send(410, "This pairing link was already used or has expired. Ask for a new one.\n", "text/plain; charset=utf-8")
             if path == "/api/auth-options":
@@ -1103,6 +1155,8 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 return self._send(200, data, "application/zip", {"Content-Disposition": f'attachment; filename="emvryx-{who["user"]}-data.zip"'})
             if path == "/api/sessions":
                 return self._send(200, {"sessions": [dict(x, current=(x["id"] == who.get("session"))) for x in self.state.auth.sessions_for(who["user"])]})
+            if path == "/api/admin/health" and who["owner"]:
+                return self._send(200, self.state.health())
             if path == "/api/admin/audit" and who["owner"]:
                 return self._send(200, {"events": self.state.auth.events(int((qs.get("limit") or ["100"])[0]), (qs.get("kind") or [None])[0])})
             if path == "/api/admin/users" and who["owner"]:
@@ -1120,6 +1174,21 @@ class Handler(http.server.BaseHTTPRequestHandler):
         if not self._origin_ok():
             self.state.auth.event("bad_origin", "", self._ip(), f"POST {path}")
             return self._send(403, {"code": "bad_origin", "message": "That request came from another website, so it was refused.", "action": "Use Emvryx at its own address."})
+        m = re.fullmatch(r"/pair/([A-Za-z0-9_-]{16,80})", path)
+        if m:                                                    # the button on the pairing page: this is what uses the link up
+            try:
+                if self._locked():
+                    return
+                user = self.state.auth.use_pair(m.group(1))
+                who = self.state.who_name(user) if user else None
+                if who and not who["banned"]:
+                    self.state.auth.event("pair_used", user, self._ip(), "")
+                    self._start_session(user, "pairing link")
+                    return self._send(303, b"", "text/plain", {"Location": "/"})
+                self._fail("bad pairing link")
+                return self._send(410, "This pairing link was already used or has expired. Ask for a new one.\n", "text/plain; charset=utf-8")
+            except (BrokenPipeError, ConnectionResetError):
+                return
         try:
             body = self._json()
             if path == "/api/login":
@@ -1525,15 +1594,22 @@ class Handler(http.server.BaseHTTPRequestHandler):
         if not email or st.rl.blocked("email:" + email, 3, 600):
             return self._send(200, generic)
         st.rl.hit("email:" + email)
+        if len(st.rl.hits) > 5000:
+            st.rl.trim(3600)
         rec = st.user_by_email(email)
         if (rec and not rec.get("banned")) or (not rec and st.security["open_signups"]):
             code = auth.make_code()
             st.auth.put_code(email, code)
-            try:
-                st.mailer.send(email, *mailer.code_email(code))
-                st.auth.event("email_code", rec["user"] if rec else "", ip, "sent")
-            except Exception as e:                           # never tell the caller: it would show whether the address is known
-                st.auth.event("email_send_failed", "", ip, str(e)[:120])
+            def deliver():
+                try:
+                    st.mailer.send(email, *mailer.code_email(code))
+                    st.auth.event("email_code", rec["user"] if rec else "", ip, "sent")
+                except Exception as e:                       # never tell the caller: it would show whether the address is known
+                    st.auth.event("email_send_failed", "", ip, str(e)[:120])
+            if st.mail_async:                                # in the background: a known address must not take longer to answer than an unknown one
+                threading.Thread(target=deliver, daemon=True).start()
+            else:
+                deliver()
         return self._send(200, generic)
 
     def api_email_verify(self, body):
