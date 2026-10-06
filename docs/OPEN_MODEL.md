@@ -205,3 +205,8 @@ See [IDENTITY.md](IDENTITY.md) for the voice and the ways to make it ours.
 - **Caveat:** the identity questions are close to the lessons it was trained on, so 16/16 shows it learned them, not how it handles other wordings. Test rephrased questions next.
 - **Backed up:** `Dmccottrell/aisml-checkpoints` (private): `flare-2.5/my-ai` (the merged model) and `flare-2.5/adapter`.
 - **Not done yet:** the lookup sheet (41) and rules sheet (30) on Flare 2.5, the GGUF for the app, and the app entry (still `planned` in `models.json`).
+
+### Window settings in the app (Oct 2026)
+`models.json` now sets **context_tested = 32,768** for Flare 2.5, Equinox 2, Solstice 2 and Apogee 2 (Qwen reads 32K natively; none of them has been through our own long-input test yet, so treat it as the maker's figure).
+The app still picks the smallest of: that number, what fits in your free memory (Apogee 2 will come out far smaller on a 12 GB card), the plan, and the window mode: **"everyday" caps the window at 8,192 tokens; choose "long" in Settings to use more.**
+The 128K YaRN windows are not switched on in the app (they need extra llama-server options, `open_models.llama_args`, and about 18 GB of memory). Ember 2 (1,024) and Flare 2 (2,048) cannot be raised: their position range was trained that short, and stretching it needs the long-context ladder.
