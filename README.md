@@ -37,7 +37,7 @@ number: **Emvryx Ember** (small and quick), **Emvryx Flare** (fast and light), *
 | **1: trained from scratch here** (the original line) | Ember 2 (88M), Flare 2 (394M) | Our own tokenizer, transformer and training run |
 | **2: the 2.x series, built on open bases** | **Flare 2.5** (Qwen 2.5 1.5B), **Equinox 2** (about 4B), **Solstice 2** (about 8B), **Apogee 2** (about 14B) | Fine-tuned here on Emvryx's own lessons, with the base credited in `NOTICE` |
 
-A newer generation takes the main spot in the app's picker. Each name has
+Planned: a 3.x series on Qwen3.5 and a 4.x series on Qwen3.8 or the newest base (`docs/OPEN_MODEL.md`). A newer generation takes the main spot in the app's picker. Each name has
 its own number that goes up only when that model is updated ("+" refreshes take the next decimal: Flare 2.5 to Flare 2.6). The from-scratch v3.5 run was
 stopped (see `docs/V3_5.md`). They are placeholders: no trademark check has been done yet. See `docs/ROADMAP.md`, `docs/OPEN_MODEL.md` and `docs/APP.md`. A coding assistant, **VryxCode** (planned, only on Equinox 2 and above), is described in `docs/VRYXCODE.md`.
 

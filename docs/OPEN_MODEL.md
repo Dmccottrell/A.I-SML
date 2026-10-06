@@ -211,3 +211,22 @@ See [IDENTITY.md](IDENTITY.md) for the voice and the ways to make it ours.
 The app still picks the smallest of: that number, what fits in your free memory (Apogee 2 will come out far smaller on a 12 GB card), the plan, and the window mode: **"everyday" caps the window at 8,192 tokens; choose "long" in Settings to use more.**
 The 128K YaRN windows are not switched on in the app (they need extra llama-server options, `open_models.llama_args`, and about 18 GB of memory). Ember 2 (1,024) and Flare 2 (2,048) cannot be raised: their position range was trained that short, and stretching it needs the long-context ladder.
 **Flare 2.5 stays at 8,192** (the owner's choice) until a long-input test shows more is safe. **Training length is separate from the window:** the fine-tunes train on short chats (`--max_len 4096`, most lessons are well under 1,000 tokens), while the window is only a setting for chatting. The base Qwen model's 32K ability is not removed by the fine-tune; teaching the model to *use* long inputs well is a later "+" step with long-document lessons.
+
+## Later generations: 3.x on Qwen3.5, 4.x on Qwen3.8 or the newest (planned, Oct 2026)
+A web search on 2026-10-06 found newer open bases than the ones the 2.x series uses (check again before each build; releases move fast):
+- **Qwen3.5** (Feb to Mar 2026): small sizes **0.8B, 2B, 4B, 9B**; medium **27B, 35B-A3B, 122B-A10B, 397B-A17B** (A = how many parameters are active per word, a mixture of experts). Apache 2.0 like the Qwen3 family.
+- **Qwen3.8** (Aug 2026): built on the Qwen3.5 design; **27B** dense and a 2.4T-A95B mixture; 262,144-token context; Apache 2.0.
+
+| Generation | Flare | Equinox | Solstice | Apogee | Base family |
+|---|---|---|---|---|---|
+| **2.x** (now) | 2.5: Qwen2.5-1.5B | 2: Qwen3-4B | 2: Qwen3-8B | 2: Qwen3-14B | Qwen2.5 / Qwen3 |
+| **3.x** (planned) | 3: Qwen3.5-2B (or 0.8B) | 3: Qwen3.5-4B | 3: Qwen3.5-9B | 3: Qwen3.5-27B | Qwen3.5 |
+| **4.x** (planned) | newest small | newest 4B-class | newest 9B-class | Qwen3.8-27B or newer | Qwen3.8 or newer |
+"x.0 = the first build on a new base generation, x.5 = its improved release" still holds. Nothing here is decided: pick each base when its turn comes.
+
+**Before any 3.x build, run a short pilot on the 5090** (`python finetune_open.py --model Qwen/Qwen3.5-2B --pilot`, then the 4B) and check:
+1. The tools understand the new design: the trainer (transformers and peft), `open_tokenizer.py` (ChatML special tokens), and llama.cpp's converter for the GGUF. Newer designs sometimes need newer versions of all three. Not tested here: this sandbox cannot download them.
+2. Memory and speed (add a preset to `open_models.py` with the real layer counts and `llama_args`).
+3. The chat template: newer Qwen models can think by default, and our lessons have no thinking text.
+4. The exam (`exam_open.py --compare`) and the identity sheet, as for every model.
+Hardware: the 27B models do not fit a 12 GB card even in 4 bits (about 16 GB), so Apogee 3 needs a rented GPU or offloading to memory; the 35B-A3B mixture runs only 3B per word but still needs about 20 GB to hold the weights.

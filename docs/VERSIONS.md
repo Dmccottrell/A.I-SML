@@ -8,6 +8,7 @@ v3.5, v4, v5, v6 and v6.5 are planned: their numbers are estimates and will chan
 > **v1, v2 and v3 (Ember 2, Flare 2) stay from scratch**, and the from-scratch v3.5 run was **stopped** (step recorded in `docs/V3_5.md`). **Flare 2.5 is
 > Qwen 2.5 1.5B with a 32K context** ([OPEN_MODEL.md](OPEN_MODEL.md)). Later rungs (suggestions, not chosen): Equinox 2 about a 4B base,
 > Solstice 2 about an 8B base, Apogee 2 about a 14B base on rented GPUs; pick each base when its turn comes, because better open models will exist.
+> **Later:** a 3.x series on Qwen3.5 (2B, 4B, 9B, 27B) and a 4.x series on Qwen3.8 or newer are planned (see [OPEN_MODEL.md](OPEN_MODEL.md)).
 > **Order of work:** all the 2.0 builds first (Flare 2.5, Equinox 2, Solstice 2, Apogee 2), then the improved Equinox 2.5, Solstice 2.5 and Apogee 2.5 (see [OPEN_MODEL.md](OPEN_MODEL.md)).
 > The rest of this file was written for the from-scratch plan: where it says a version's brain is trained from scratch or grown from v3.5, read it with this update.
 

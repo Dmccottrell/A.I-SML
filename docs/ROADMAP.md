@@ -13,6 +13,8 @@ version's test-sheet results decide what the next one focuses on.
 > The version slots map as: v3 -> Flare 2 (from scratch), v3.5 -> Flare 2.5, v4 -> Equinox 2, v5 -> Solstice 2, v6 -> Apogee 2. Text below that uses the old names describes the from-scratch plan.
 > The rest of this file was written for the from-scratch plan: where it says a version's brain is trained from scratch or grown from v3.5, read it with this update.
 
+> **Later generations (planned):** 3.x on **Qwen3.5** (2B, 4B, 9B, 27B) and 4.x on **Qwen3.8** or the newest base; each needs a short pilot first. See [OPEN_MODEL.md](OPEN_MODEL.md#later-generations-3x-on-qwen35-4x-on-qwen38-or-the-newest-planned-oct-2026).
+>
 > **VryxCode** (a coding assistant, planned; only on Equinox 2, Solstice 2 and Apogee 2): [VRYXCODE.md](VRYXCODE.md).
 >
 > **Order of work (decided Oct 2026):** build all the 2.0 models first (Flare 2.5, Equinox 2, Solstice 2, Apogee 2), then the improved **Equinox 2.5, Solstice 2.5 and Apogee 2.5** releases (new lessons, DPO, skill packs, tools, thinking dial). Details: [OPEN_MODEL.md](OPEN_MODEL.md#order-of-work-all-the-20-builds-first-then-the-improved-25-releases-decided-oct-2026).
