@@ -342,6 +342,7 @@ async function api(path, opts) {
 const post = (path, body) => api(path, {method: 'POST', body: JSON.stringify(body || {})});
 
 // ---------------------------------------------------------------- theme
+function mname(m) { return m ? m.name + (m.version ? ' ' + m.version : '') : 'Emvryx'; }   // the name with its version: Flare 2.5
 function allModels() { return S.state ? S.state.models.cards.concat(S.state.models.other || []) : []; }
 function curModel() { return allModels().find((m) => m.id === S.model) || null; }
 function applyTheme() {
@@ -414,7 +415,7 @@ function bubble(m, last) {
   if (m.role === 'user' && m.content.startsWith(SUMMARY_MARK)) return el('div', {class: 'note'}, 'Earlier messages were summarized to save room');
   if (m.role === 'user') return el('div', {class: 'msg user'}, el('div', {class: 'bubble'}, m.content));
   const model = allModels().find((c) => c.id === m.model_id);
-  const meta = el('div', {class: 'meta'}, logo(14, false, model ? model.name : 'brand'), (model ? model.name + (model.older ? ' ' + model.version : '') : 'Emvryx') + (m.status === 'partial' ? ' · stopped' : ''));
+  const meta = el('div', {class: 'meta'}, logo(14, false, model ? model.name : 'brand'), mname(model) + (m.status === 'partial' ? ' · stopped' : ''));
   const acts = el('div', {class: 'acts'}, el('button', {class: 'chip', onclick: (e) => { navigator.clipboard && navigator.clipboard.writeText(m.content); e.target.textContent = 'Copied'; setTimeout(() => e.target.textContent = 'Copy', 1500); }}, 'Copy'));
   if (S.chatId != null && S.chatId >= 0 && m.status === 'done') acts.append(el('button', {class: 'chip', title: 'Right answer: keep the notes it used, so it can answer this again offline', onclick: async (e) => {
     const b = e.currentTarget; b.disabled = true; try { const r = await post('/api/chats/' + S.chatId + '/messages/' + m.id + '/like'); const j = await r.json(); b.textContent = j.saved ? 'Saved' : 'Thanks'; } catch (x) { b.disabled = false; } }}, '\ud83d\udc4d Right'));
@@ -437,8 +438,8 @@ $('down').onclick = () => { S.stick = true; scrollDown(true); };
 // ---------------------------------------------------------------- composer
 function renderComposer() {
   const m = curModel(); if (!m) return;
-  $('modelBtn').replaceChildren(logo(22), m.name, el('span', {style: 'color:var(--muted)'}, '▾'));
-  $('modelBtn').setAttribute('aria-label', 'Choose model: ' + m.name);
+  $('modelBtn').replaceChildren(logo(22), mname(m), el('span', {style: 'color:var(--muted)'}, '▾'));
+  $('modelBtn').setAttribute('aria-label', 'Choose model: ' + mname(m));
   const ef = S.state.efforts.find((e) => e.id === S.effort) || S.state.efforts.find((e) => e.id === 'balanced');
   const shown = S.effort === 'auto' && S.autoNote ? 'Auto \u00b7 ' + S.autoNote.effort[0].toUpperCase() + S.autoNote.effort.slice(1) : ef.name;
   $('effortBtn').replaceChildren(shown, el('span', {}, '▾'));
@@ -449,7 +450,7 @@ $('modelBtn').onclick = () => {
   const open = !$('modelMenu').hidden; closeMenus(); if (open) return;
   const m = $('modelMenu'); m.replaceChildren(el('div', {class: 'head'}, 'SELECT MODEL'));
   const row = (c) => el('button', {class: 'opt' + (c.id === S.model ? ' sel' : ''), disabled: c.state !== 'ready', onclick: () => chooseModel(c)},
-    logo(30, false, c.name), el('span', {class: 'grow'}, el('b', {}, c.name + (c.older ? ' ' + c.version : '')), el('small', {}, c.tagline || '')), el('small', {style: 'text-align:right'}, c.badge));
+    logo(30, false, c.name), el('span', {class: 'grow'}, el('b', {}, mname(c)), el('small', {}, c.tagline || '')), el('small', {style: 'text-align:right'}, c.badge));
   for (const c of S.state.models.cards) m.append(row(c));
   if ((S.state.models.other || []).length) { m.append(el('div', {class: 'head'}, 'OTHER MODELS')); for (const c of S.state.models.other) m.append(row(c)); }
   m.hidden = false;
@@ -751,7 +752,7 @@ async function send(regen, mode) {
         const w = think.querySelector('.word'); clearInterval(S.thinkTimer); S.thinkTimer = null; if (w) w.textContent = 'Loading ' + data.model + ' (first message only)';
       } else if (ev === 'piece') {
         if (!aiWrap) { think._stop(); think.remove(); const m = curModel(); aiBubble = el('div', {class: 'bubble'}); const note = S.autoNote ? el('span', {title: S.autoNote.reason}, ' \u00b7 Auto chose ' + S.autoNote.effort[0].toUpperCase() + S.autoNote.effort.slice(1)) : null;
-        aiWrap = el('div', {class: 'msg ai'}, el('div', {class: 'meta'}, logo(14, false, m ? m.name : 'brand'), m ? m.name : 'Emvryx', note), aiBubble); $('thread').append(aiWrap);
+        aiWrap = el('div', {class: 'msg ai'}, el('div', {class: 'meta'}, logo(14, false, m ? m.name : 'brand'), mname(m), note), aiBubble); $('thread').append(aiWrap);
           const line = lookupLine(looked); if (line) aiWrap.insertBefore(line, aiBubble); }
         got += data.t; aiBubble.replaceChildren(got, el('span', {class: 'cursor'}, '▍')); scrollDown();
       } else if (ev === 'done') {
