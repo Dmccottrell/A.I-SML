@@ -93,6 +93,7 @@ summary() { python -c "import json,sys; s=json.load(open(sys.argv[1]))['summary'
 if [ ! -x "$LLAMA/build/bin/llama-server" ]; then
     stage "building llama.cpp with CUDA" logs/bench/llama-build.txt bash -c "cd /workspace && (test -d llama.cpp || git clone https://github.com/ggml-org/llama.cpp) && cd llama.cpp && cmake -B build -DGGML_CUDA=ON && cmake --build build --config Release -j 16 --target llama-server"
 fi
+pip install -q sentencepiece gguf protobuf > /dev/null 2>&1       # llama.cpp's converter imports sentencepiece before it checks the tokenizer (a plain Qwen folder has none): without it the conversion fails
 [ -d /workspace/exercism-python ] || git clone -q https://github.com/exercism/python /workspace/exercism-python
 EX=/workspace/exercism-python/exercises/practice
 if [ -x "$LLAMA/build/bin/llama-server" ] && [ -d "$EX" ]; then
