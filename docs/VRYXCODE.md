@@ -47,6 +47,14 @@ python vryxcode.py --coder qwen2.5-coder-14b "add a function that slugifies a ti
 python bench_exercises.py --coder qwen2.5-coder-14b --exercises python\exercises\practice --limit 10
 ```
 
+## Collecting training runs (`collect_runs.py`)
+A coding agent is trained on its own checked successes. `collect_runs.py` runs a model through VryxCode on practice tasks (Exercism exercises with `--exercises`, and fresh made-up bug-fix tasks with `--synthetic N`) and keeps a run only if the tests pass when **we** run them, it did not edit the test files, it changed a file and ran the tests, and it did not fall into a spiral of tool errors; rejected runs are counted by reason and not saved. The output is chat examples (`logs/agent_runs.jsonl`) that `finetune_open.py` trains on, with the label of the model that wrote them (open models only). `--samples K` tries each task K times; `--format qwen` writes Qwen's own `<tool_call>` markers (then VryxCode's system prompt would need the same format).
+```
+python collect_runs.py --coder qwen2.5-coder-14b --exercises python/exercises/practice --limit 20 --synthetic 40 --out logs/agent_runs.jsonl
+python finetune_open.py --model solstice-2 --patch --data logs/agent_runs.jsonl      # a short extra pass on the saved adapter
+```
+Tested with scripted models only. Nothing has been trained on collected runs yet: first look at how many runs are accepted and read a few, and compare the exercise scores before and after.
+
 ## What already exists
 - `harness.py`: a sandbox that reads a file, edits a file, runs a command and runs tests, all inside a temporary copy.
 - `agent_tasks.py`, `agent_lessons.py`, `make_agent_data.py`: tiny practice projects and the lessons for tool use, project notes, asking first, "too big" and carrying on after old steps are folded away.
