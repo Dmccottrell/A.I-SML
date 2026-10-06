@@ -22,6 +22,7 @@ import base64
 import json
 import os
 import re
+import secret_box
 import subprocess
 import tempfile
 import threading
@@ -72,35 +73,61 @@ def parse_repo(text):
 
 # ------------------------------------------------------------------ the saved connection
 class Store:
-    """One private file per person: {"token", "login", "id"} plus a short log. data_dir None keeps it in memory (tests)."""
+    """One private file per person: {"token_enc", "login", "id"} plus a short log. The token is encrypted on disk (secret_box.py); `get` hands it
+    back decrypted as "token". data_dir None keeps everything in memory (tests)."""
 
-    def __init__(self, data_dir=None):
+    def __init__(self, data_dir=None, box=None):
         self.dir = os.path.join(data_dir, "github") if data_dir else None
+        self.box = box or secret_box.SecretBox(data_dir)
         self.mem, self.lock = {}, threading.Lock()          # the folder is made on the first save, so a server that never uses GitHub has none
 
     def _path(self, user):
         return os.path.join(self.dir, re.sub(r"[^A-Za-z0-9_-]", "_", user) + ".json")
 
+    def _read(self, user):
+        if not self.dir:
+            return dict(self.mem.get(user, {}))
+        try:
+            with open(self._path(user), encoding="utf-8") as f:
+                return json.load(f)
+        except (OSError, ValueError):
+            return {}
+
+    def _write(self, user, raw):
+        if not self.dir:
+            self.mem[user] = dict(raw)
+            return
+        os.makedirs(self.dir, mode=0o700, exist_ok=True)
+        tmp = self._path(user) + ".tmp"
+        fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+        with os.fdopen(fd, "w", encoding="utf-8") as f:
+            json.dump(raw, f)
+        os.replace(tmp, self._path(user))
+        os.chmod(self._path(user), 0o600)
+
     def get(self, user):
         with self.lock:
-            if not self.dir:
-                return dict(self.mem.get(user, {}))
-            try:
-                with open(self._path(user), encoding="utf-8") as f:
-                    return json.load(f)
-            except (OSError, ValueError):
-                return {}
+            raw = self._read(user)
+            data = {k: v for k, v in raw.items() if k not in ("token", "token_enc")}
+            if raw.get("token_enc"):
+                data["token"] = self.box.decrypt(raw["token_enc"])
+                if not data["token"]:
+                    data.pop("token")
+                    data["unreadable"] = True                # the key changed or the file is damaged: connect again
+            elif raw.get("token"):                           # an older file with the token in the clear: use it and re-save it encrypted
+                data["token"] = raw["token"]
+                self._write(user, self._pack(data))
+            return data
+
+    def _pack(self, data):
+        raw = {k: v for k, v in data.items() if k not in ("token", "unreadable")}
+        if data.get("token"):
+            raw["token_enc"] = self.box.encrypt(data["token"])
+        return raw
 
     def put(self, user, data):
         with self.lock:
-            if not self.dir:
-                self.mem[user] = dict(data)
-                return
-            os.makedirs(self.dir, mode=0o700, exist_ok=True)
-            fd = os.open(self._path(user), os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
-            with os.fdopen(fd, "w", encoding="utf-8") as f:
-                json.dump(data, f)
-            os.chmod(self._path(user), 0o600)
+            self._write(user, self._pack(data))
 
     def connected(self, user):
         return bool(self.get(user).get("token"))
@@ -177,6 +204,46 @@ def validate_token(token):
     if not TOKEN_RE.fullmatch(token):
         raise GitHubError("That doesn't look like a GitHub token.", "Paste the whole token, with no spaces. It starts with ghp_ or github_pat_.")
     return token
+
+
+# ------------------------------------------------------------------ "Sign in with GitHub" (device flow: no secret, no pasted token)
+DEVICE_CODE_URL = "https://github.com/login/device/code"
+DEVICE_TOKEN_URL = "https://github.com/login/oauth/access_token"
+CLIENT_ID_RE = re.compile(r"[A-Za-z0-9._-]{8,60}")
+
+
+class DeviceFlow:
+    """GitHub's device authorization flow. The server asks GitHub for a short code; the person types it at github.com/login/device and says yes;
+    the server then collects the access token. The person never handles a token, and our app needs only its public client id (made by creating a
+    GitHub OAuth App with "Enable Device Flow" ticked: see docs/SECURITY.md)."""
+
+    def __init__(self, client_id, http=None, scope="repo"):
+        if not CLIENT_ID_RE.fullmatch(client_id or ""):
+            raise GitHubError("GitHub sign-in isn't set up on this server.", "The owner needs a GitHub client id (docs/SECURITY.md).")
+        self.client_id, self.http, self.scope = client_id, http or _urllib_http, scope
+
+    def _post(self, url, body):
+        status, data = self.http("POST", url, {"Accept": "application/json", "Content-Type": "application/json", "User-Agent": "Emvryx"},
+                                 json.dumps(body).encode())
+        if status >= 400 and not data:
+            raise GitHubError(f"GitHub answered with an error ({status}).", "Try again in a minute.")
+        return data
+
+    def start(self):
+        d = self._post(DEVICE_CODE_URL, {"client_id": self.client_id, "scope": self.scope})
+        if "device_code" not in d:
+            raise GitHubError("GitHub did not start the sign-in: " + str(d.get("error_description") or d.get("error") or "unknown reason") + ".")
+        return {"device_code": d["device_code"], "user_code": d["user_code"], "verification_uri": d.get("verification_uri", "https://github.com/login/device"),
+                "expires_in": int(d.get("expires_in", 900)), "interval": int(d.get("interval", 5))}
+
+    def poll(self, device_code):
+        """('pending' | 'slow_down' | 'done' | 'expired' | 'denied', token or None)."""
+        d = self._post(DEVICE_TOKEN_URL, {"client_id": self.client_id, "device_code": device_code,
+                                          "grant_type": "urn:ietf:params:oauth:grant-type:device_code"})
+        if d.get("access_token"):
+            return "done", str(d["access_token"])
+        err = d.get("error", "")
+        return {"authorization_pending": "pending", "slow_down": "slow_down", "expired_token": "expired", "access_denied": "denied"}.get(err, "denied"), None
 
 
 # ------------------------------------------------------------------ git, run by the server
