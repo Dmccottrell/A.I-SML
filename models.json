@@ -102,11 +102,11 @@
       "tier": "Lite",
       "where": "device",
       "file": "flare-2.5.q4_k_m.gguf",
-      "size_mb": 1000,
+      "size_mb": 3100,
       "sha256": "",
       "min_ram_gb": 4,
       "context": 32768,
-      "status": "planned",
+      "status": "beta",
       "supports_effort": false,
       "skills": [
         "study",
@@ -114,9 +114,9 @@
       ],
       "pinned": false,
       "cost_weight": 1,
-      "context_tested": 2048,
+      "context_tested": 8192,
       "kv_kb_per_token": 28,
-      "weights_mb": 1000,
+      "weights_mb": 3100,
       "tokenizer": "checkpoints/dev/open/flare-2.5/tokenizer/tokenizer.json",
       "local_gguf": [
         "export/open/flare-2.5/my-ai-q4_k_m.gguf",
@@ -124,11 +124,11 @@
         "export/open/flare-2.5/my-ai-f16.gguf"
       ],
       "sampling": {
-        "temperature": 0.65,
-        "top_k": 40,
-        "top_p": 0.92,
+        "temperature": 0.7,
+        "top_k": 20,
+        "top_p": 0.8,
         "min_p": 0.05,
-        "repeat_penalty": 1.1,
+        "repeat_penalty": 1.05,
         "repeat_last_n": 64
       },
       "max_reply_tokens": 768,
