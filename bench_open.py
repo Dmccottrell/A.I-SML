@@ -19,6 +19,7 @@ import argparse
 import json
 import os
 import subprocess
+import tempfile
 import sys
 
 # task -> (what it tests, metrics to read in order of preference, run with the chat template?, note)
@@ -126,10 +127,33 @@ def table(tasks, base, tuned):
     return "\n".join(lines)
 
 
+def neutral(argv, base):
+    """The same command with paths made absolute, so it can run from another folder. lm_eval must NOT run from the project folder: `python -m`
+    puts the current folder first on the import path, and our evaluate.py / config.py then shadow the libraries of the same name (HumanEval and
+    MBPP load Hugging Face's `evaluate`, and failed with our argument parser's usage message)."""
+    out = list(argv)
+    for i, a in enumerate(out):
+        if a == "--output_path" and i + 1 < len(out):
+            out[i + 1] = os.path.abspath(os.path.join(base, out[i + 1]))
+        if a == "--model_args" and i + 1 < len(out):
+            parts = []
+            for kv in out[i + 1].split(","):
+                key, _, val = kv.partition("=")
+                if key == "peft" and val and os.path.exists(os.path.join(base, val)):
+                    kv = "peft=" + os.path.abspath(os.path.join(base, val))
+                parts.append(kv)
+            out[i + 1] = ",".join(parts)
+    return out
+
+
 def run(argv, env_extra):
     env = {**os.environ, **env_extra}
+    env.pop("PYTHONPATH", None)
+    here = os.getcwd()
+    argv = neutral(argv, here)
     print("+", " ".join(argv), flush=True)
-    return subprocess.run(argv, env=env).returncode
+    with tempfile.TemporaryDirectory(prefix="lm_eval_") as work:
+        return subprocess.run(argv, env=env, cwd=work).returncode
 
 
 def main(argv=None):

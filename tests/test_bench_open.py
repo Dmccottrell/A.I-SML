@@ -88,6 +88,28 @@ class Cli(unittest.TestCase):
         self.assertEqual(out.count("lm_eval"), 2)
         self.assertIn("peft=/some/adapter", out)
 
+    def test_lm_eval_runs_from_a_neutral_folder_so_our_files_cannot_shadow_its_libraries(self):
+        import os, tempfile
+        from unittest import mock
+        seen = {}
+
+        def fake(argv, env=None, cwd=None):
+            seen.update(argv=argv, cwd=cwd, env=env)
+            return mock.Mock(returncode=0)
+        with tempfile.TemporaryDirectory() as proj:
+            os.makedirs(os.path.join(proj, "adapter"))
+            old = os.getcwd()
+            os.chdir(proj)
+            try:
+                with mock.patch.dict(os.environ, {"PYTHONPATH": "/somewhere"}), mock.patch("subprocess.run", fake):
+                    B.run(["py", "-m", "lm_eval", "--model_args", "pretrained=x,peft=adapter", "--output_path", "logs/out"], {})
+            finally:
+                os.chdir(old)
+            self.assertNotEqual(os.path.realpath(seen["cwd"]), os.path.realpath(proj))
+            self.assertNotIn("PYTHONPATH", seen["env"])
+            self.assertTrue(os.path.isabs(seen["argv"][seen["argv"].index("--output_path") + 1]))
+            self.assertIn("peft=" + os.path.abspath(os.path.join(proj, "adapter")), seen["argv"][seen["argv"].index("--model_args") + 1])
+
     def test_tuned_without_an_adapter_is_an_error(self):
         with self.assertRaises(SystemExit):
             B.main(["--model", "equinox-2", "--adapter", "", "--suite", "arc_challenge", "--dry-run"])
