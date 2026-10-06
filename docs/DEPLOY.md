@@ -101,3 +101,26 @@ never send an app's data anywhere. Real connections need sign-in with each servi
 ## Install it on a phone (the app is a PWA)
 
 Open your `https://chat.emvryx.app` address in the phone's browser, then: **Android (Chrome):** menu (three dots) > *Install app* (or *Add to Home screen*). **iPhone (Safari):** Share > *Add to Home Screen*. It then opens full screen with the Emvryx icon, like an app. It needs https (the Cloudflare address has it); over plain `http://` on your home network the browser will only offer a shortcut, not an install. The page shell is cached so it opens instantly, but chatting needs the server (and your PC, if that is where the model runs) to be on: the API is never cached. If the icon does not update after a change, remove the app and add it again.
+
+
+## Going public later: the checklist (decided Oct 2026: stay on keys for now)
+
+Today Emvryx is for you and the people you give a key to. Opening it to anyone is a different job, because strangers can then use your computer's time, your money (cloud models) and, through VryxCode, run code and reach connected accounts. When we get there, in this order:
+
+**1. Sign-in that is not a pasted key.** Accounts with email or Google sign-in (or Cloudflare Access in front of the tunnel as a first step), a session that can be revoked, and "remember this device" that is not the key itself. Today a key is stored in plain text in `.emvryx/users.json` (file mode 600) and is its own login: fine for a few people, not for the public. Hash anything stored, add expiry.
+
+**2. Sign-in protections.** Rate-limit login attempts and sign-ups per address (the app has no per-address limit yet), lock out repeated failures, require a verified email, and add a way to ban an account. Use Cloudflare's rate-limiting and bot rules too.
+
+**3. Browser protections (not built).** `Secure` on the cookie (it has HttpOnly and SameSite=Strict already), a Content-Security-Policy and HSTS, an Origin check on every POST (CSRF), and no secrets in URLs (the `?key=` link would go).
+
+**4. VryxCode must not run on the shared machine for strangers.** The sandbox protects against a small model's mistakes, not a hostile user (see `harness.py`). For the public: run each coding session in a throwaway container (Docker with gVisor or a micro-VM) with no network, hard CPU, memory, disk and time limits, a per-person quota, and a separate machine from the models. Until then, keep VryxCode to people you trust (a tier that is off by default).
+
+**5. Connected accounts.** Replace the pasted GitHub token with GitHub's own sign-in (OAuth), encrypt tokens at rest with a server key, show a clear log, and keep pull and push confirmed every time.
+
+**6. Capacity and cost.** The PC cannot serve strangers: use a cloud GPU with the plan limits and the owner's pause switch (both already built), per-person daily caps, a spending alarm, and a queue so a busy moment degrades politely.
+
+**7. Data and rules.** A short privacy policy and terms (chats are saved on the server; private chats are never saved; delete-everything exists), backups, an abuse and takedown contact, a check of the Emvryx name for trademarks (not done), and the model licence credits in `NOTICE` (done) plus the "outside model" labels (done).
+
+**8. Before the doors open.** A security review of the code (`/security-review`), a dependency audit, a test with a few outside testers on the free tier first, and monitoring of errors and unusual usage.
+
+Start with 1, 2 and 3: they are small. 4 and 6 are the big ones and decide when it is safe to go public.
