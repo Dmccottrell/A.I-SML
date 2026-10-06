@@ -865,7 +865,7 @@ def start_turn(state, who, chat_id, text, model_id, effort, regenerate=False, re
                            limiter=state.limiter, user=who["user"], effort=effort, clock=state.clock, pacer=pacer,
                            style_hint=regen_modes.get(mode)["hint"] if regenerate else "")
             if found and found["asked"] and not regenerate and not found["web_tried"] and state.web_fn is not None and \
-                    state.get_settings(who["user"])["web_search"] != "off" and chat_id >= 0 and lookup_auto.gave_up(r["text"]):
+                    state.get_settings(who["user"])["web_search"] not in ("off", "none") and chat_id >= 0 and lookup_auto.gave_up(r["text"]):
                 # The model said it doesn't know and the web hasn't been tried: search it and answer again (the second chance)
                 notes2, found2 = lookup_auto.gather(text, state.wiki, state.web_fn, "always", private=False,
                                                     max_notes=5 if window >= 6000 else 3, saved=state.saved_for(who["user"]),

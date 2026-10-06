@@ -103,3 +103,16 @@ class MemoryTests(unittest.TestCase):
     def test_not_windows_gives_none(self):
         if os.name != "nt":
             self.assertIsNone(A._windows_memory())
+
+
+class ModelOnlyTests(unittest.TestCase):
+    def test_none_mode_does_no_lookup_at_all(self):
+        import lookup_auto
+
+        class Boom:
+            def search(self, *a, **k):
+                raise AssertionError("must not search")
+        notes, info = lookup_auto.gather("who is gordon ramsay?", Boom(), lambda q, k: (_ for _ in ()).throw(AssertionError("web")), mode="none")
+        self.assertEqual(notes, [])
+        self.assertFalse(info["asked"])
+        self.assertIn("none", lookup_auto.MODES)
