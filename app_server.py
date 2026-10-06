@@ -1768,6 +1768,8 @@ def main():
     ap.add_argument("--code-runtime", default=None, help="a stronger container runtime such as runsc (gVisor), if installed")
     ap.add_argument("--code-cpus", default="1")
     ap.add_argument("--code-memory", default="768m")
+    ap.add_argument("--weather-place", default=os.environ.get("EMVRYX_WEATHER_PLACE", ""), metavar="PLACE",
+                    help="the place weather questions use when they do not name one, for example \"Austin, Texas\"")
     ap.add_argument("--preload", metavar="MODEL_ID", default=None, help="load this model when the app starts, so the first message does not wait for it (for example flare-2.5)")
     ap.add_argument("--pair", metavar="NAME", default=None, help="print a one-time link (valid 15 minutes) that signs NAME in on one device, then exit")
     ap.add_argument("--rotate-key", metavar="NAME", help="give someone a new key (owner, or a name from --add-user); the old key stops working. Restart the app afterwards")
@@ -1827,8 +1829,8 @@ def main():
     else:
         print(f"No Wikipedia index at {args.wiki}: answers come from the model's memory (see wiki_index.py)")
     if not args.no_web:
-        from web_search import web_notes
-        state.web_fn = lambda question, k: web_notes(question, k)        # Auto: only when the person's setting and the question call for it
+        from web_search import web_answer
+        state.web_fn = lambda question, k: web_answer(question, k, place=args.weather_place)        # Auto: only when the person's setting and the question call for it
     srv = make_server(state, args.host, args.port)
     if args.preload:
         def _preload():

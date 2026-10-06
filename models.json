@@ -152,7 +152,7 @@
       "sha256": "",
       "min_ram_gb": 6,
       "context": 32768,
-      "status": "planned",
+      "status": "beta",
       "supports_effort": true,
       "skills": [
         "study",
@@ -200,7 +200,7 @@
       "sha256": "",
       "min_ram_gb": 10,
       "context": 32768,
-      "status": "planned",
+      "status": "beta",
       "supports_effort": true,
       "skills": [
         "study",
