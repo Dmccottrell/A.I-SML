@@ -8,6 +8,8 @@ Numbers marked "(memory)" are published figures I recalled, not ours. Nothing in
 | Ember 2 (v2) | 28.4% (full) | n/a | not run | not run | 18/20 |
 | Flare 2 (v3) | 36.2% pretrained, 34.8% after chat tuning (full) | n/a | 26-29 (with Wikipedia notes) | 10-11 | not run |
 | Flare 2.5 | 67.2% (2,000-question sample; plain Qwen 2.5 1.5B 65.6%) | 16/16 | not run | not run | not run |
+| Equinox 2 | 68.5% (2,000-question sample; plain Qwen3-4B 64.8%) | 16/16 | not run | not run | not run |
+| Solstice 2 | 73.6% (2,000-question sample; plain Qwen3-8B 71.9%) | 16/16 | not run | not run | not run |
 | Equinox 2, Solstice 2, Apogee 2 | pending | pending | pending | pending | pending |
 Tools: `exam.py` / `exam_open.py` (HellaSwag), `evaluate.py` / `evaluate_open.py` (our sheets, `eval/*.jsonl`).
 
