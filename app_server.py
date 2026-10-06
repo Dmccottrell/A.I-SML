@@ -46,6 +46,7 @@ import urllib.parse
 import urllib.request
 
 import app_engine as E
+import auth
 import chat
 import chat_polish
 import code_sessions
@@ -54,6 +55,7 @@ import vryxcode
 import connected_apps
 import github_link
 import lookup_auto
+import mailer
 import saved_notes
 import context_window as CW
 import effort_router
@@ -69,6 +71,8 @@ WEB = os.path.join(HERE, "web")
 MAX_BODY = 1_000_000
 OUTSIDE_NOTE = ("{label} is an outside coding model ({licence}), not an Emvryx model: it is strong at code but does not carry Emvryx's lessons. "
                 "Anything it writes is its work, and it is counted like Solstice.")
+SECURITY_DEFAULTS = {"session_days": 90, "pair_minutes": 15, "login_fail_limit": 8, "login_fail_window": 600, "email_start_limit": 5,
+                     "email_start_window": 600, "open_signups": False, "trusted_proxies": ["127.0.0.1", "::1"], "audit_notify": True}
 MAX_UPLOAD = 30_000_000                                # a project upload (base64): see code_sessions.MAX_IMPORT_BYTES
 MAX_TEXT = 20_000
 EFFORTS = {"quick": 160, "balanced": 320, "deep": 700}          # most words a reply may have, per effort level
@@ -229,6 +233,12 @@ class AppState:
         self.limiter = U.Limiter(self.usage, self.cfg, self.manifest)
         self.stores, self.stops, self.settings = {}, {}, {}
         self.lock = threading.Lock()
+        self.auth = auth.AuthDB(os.path.join(data_dir, "auth.db") if data_dir else ":memory:")
+        self.rl = auth.RateLimiter()                           # per-address sliding windows (sign-in failures, email codes)
+        self.security = self._load_security()
+        self.mailer = mailer.from_env()                        # None until EMVRYX_SMTP_* is set: email sign-in is then off
+        self._fresh = {}                                       # key hash -> the key, ONLY for keys made in this run (so they can be shown once)
+        self._users_mtime = 0
         self.users = self._load_users()
         self.code = code_sessions.CodeManager(data_dir)       # VryxCode sessions (projects live under <data>/code/)
         self.github = github_link.Store(data_dir)               # connected GitHub accounts (token files, mode 600)
@@ -237,16 +247,35 @@ class AppState:
         self.code_generate = None                              # tests: code_generate(model) -> generate(messages)
 
     # ---- people and keys
+    # users.json maps a credential id to the person: "h:<sha256 of their key>" for a key, "e:<name>" for a person who signs in by email.
+    # The key itself is never stored: it is shown once, when it is made.
     def _users_path(self):
         return os.path.join(self.data_dir, "users.json") if self.data_dir else None
+
+    def _load_security(self):
+        sec = dict(SECURITY_DEFAULTS)
+        if self.data_dir:
+            try:
+                with open(os.path.join(self.data_dir, "security.json"), encoding="utf-8") as f:
+                    sec.update({k: v for k, v in json.load(f).items() if k in SECURITY_DEFAULTS})
+            except (OSError, ValueError):
+                pass
+        return sec
 
     def _load_users(self):
         path, users = self._users_path(), {}
         if path and os.path.exists(path):
             with open(path, encoding="utf-8") as f:
                 users = json.load(f)
+        migrated = False
+        for k in list(users):
+            if not (k.startswith("h:") or k.startswith("e:")):           # an older file that kept the keys themselves: keep them working, store only the hash
+                users["h:" + auth.digest(k)] = users.pop(k)
+                migrated = True
         if not any(u.get("owner") for u in users.values()):
-            users[secrets.token_urlsafe(24)] = {"user": "owner", "tier": "mega", "owner": True}
+            key = secrets.token_urlsafe(24)
+            users["h:" + auth.digest(key)] = {"user": "owner", "tier": "mega", "owner": True}
+            self._fresh["h:" + auth.digest(key)] = key
         self.users = users
         self._save_users()
         for u in users.values():
@@ -256,11 +285,32 @@ class AppState:
     def _save_users(self):
         path = self._users_path()
         if path:
-            with open(path, "w", encoding="utf-8") as f:
+            tmp = path + ".tmp"
+            fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+            with os.fdopen(fd, "w", encoding="utf-8") as f:
                 json.dump(self.users, f, indent=2)
+            os.replace(tmp, path)
             try:
                 os.chmod(path, 0o600)
+                self._users_mtime = os.stat(path).st_mtime
             except OSError:
+                pass
+
+    def _reload_users_if_changed(self):
+        """Another process (--rotate-key, --add-user) may have changed users.json while the server runs: read it again."""
+        path = self._users_path()
+        if not path:
+            return
+        try:
+            mtime = os.stat(path).st_mtime
+        except OSError:
+            return
+        if mtime != self._users_mtime:
+            try:
+                with open(path, encoding="utf-8") as f:
+                    self.users = json.load(f)
+                self._users_mtime = mtime
+            except (OSError, ValueError):
                 pass
 
     def _ensure_usage_user(self, u):
@@ -269,44 +319,137 @@ class AppState:
         except KeyError:
             self.usage.add_user(u["user"], u["tier"], u.get("tz_minutes", 0), owner=u.get("owner", False))
 
-    def add_user(self, name, tier, tz_minutes=0):
+    def _entries(self, name):
+        return [k for k, u in self.users.items() if u["user"] == name]
+
+    def user_record(self, name):
+        return next((u for u in self.users.values() if u["user"] == name), None)
+
+    def add_user(self, name, tier, tz_minutes=0, email=None):
+        """A new person: returns their key (shown once, never stored). For someone who already exists the plan is updated and None is returned:
+        make them a pairing link instead (or rotate their key)."""
         if tier not in self.cfg["tiers"]:
             raise ValueError(f"plan must be one of {', '.join(self.cfg['tiers'])}")
         if not re.fullmatch(r"[A-Za-z0-9_-]{1,32}", name):
             raise ValueError("a name is letters, numbers, - and _ (up to 32)")
-        for k, u in self.users.items():
-            if u["user"] == name:
-                return k
+        rec = self.user_record(name)
+        if rec is not None:
+            if email:
+                self.set_email(name, email)
+            return None
+        if email and not auth.clean_email(email):
+            raise ValueError("that does not look like an email address")
         key = secrets.token_urlsafe(24)
-        self.users[key] = {"user": name, "tier": tier, "owner": False, "tz_minutes": tz_minutes}
+        entry = {"user": name, "tier": tier, "owner": False, "tz_minutes": tz_minutes}
+        if email:
+            entry["email"] = auth.clean_email(email)
+        self.users["h:" + auth.digest(key)] = entry
+        self._fresh["h:" + auth.digest(key)] = key
         self._save_users()
-        self._ensure_usage_user(self.users[key])
+        self._ensure_usage_user(entry)
+        self.auth.event("user_added", name, "", f"plan {tier}")
         return key
 
+    def set_email(self, name, email):
+        email = auth.clean_email(email)
+        if not email:
+            raise ValueError("that does not look like an email address")
+        for u in self.users.values():
+            if u.get("email") == email and u["user"] != name:
+                raise ValueError("that email already belongs to someone else")
+        for k in self._entries(name):
+            self.users[k]["email"] = email
+            self.users[k].pop("email_verified", None)
+        self._save_users()
+
     def rotate_key(self, name):
-        """Replace a person's key with a new one (the old key stops working at once). Their chats and usage stay. Returns the new key."""
-        found = [k for k, u in self.users.items() if u["user"] == name]
+        """Replace a person's key with a new one (the old key stops working at once, and so do their signed-in devices). Returns the new key."""
+        found = self._entries(name)
         if not found:
             raise ValueError(f"no one is called {name!r} (use owner, or a name you added with --add-user)")
         key = secrets.token_urlsafe(24)
+        new = "h:" + auth.digest(key)
+        rec = dict(self.users[found[0]])
         for old in found:
-            self.users[key] = self.users.pop(old)
+            self.users.pop(old, None)
+            self._fresh.pop(old, None)
+        self.users[new] = rec
+        self._fresh[new] = key
         self._save_users()
+        self.auth.revoke_user(name)
+        self.auth.event("key_rotated", name, "", "all signed-in devices were signed out")
         return key
 
     def owner_key(self):
-        return next(k for k, u in self.users.items() if u.get("owner"))
+        """The owner's key, but only if it was made in this run (it is stored hashed: use a pairing link or --rotate-key owner otherwise)."""
+        return next((self._fresh[k] for k, u in self.users.items() if u.get("owner") and k in self._fresh), None)
+
+    def _who_of(self, entry):
+        row = self.usage.get_user(entry["user"])
+        return {"user": entry["user"], "owner": row["owner"], "tier": row["tier"], "banned": bool(entry.get("banned")),
+                "email": entry.get("email")}
 
     def who(self, key):
-        """The person a key belongs to, or None. Compares in constant time."""
-        found = None
-        for k, u in self.users.items():
-            if key and hmac.compare_digest(k.encode(), key.encode()):
-                found = u
-        if not found:
+        """The person a key belongs to, or None."""
+        if not key:
             return None
-        row = self.usage.get_user(found["user"])
-        return {"user": found["user"], "owner": row["owner"], "tier": row["tier"]}
+        self._reload_users_if_changed()
+        entry = self.users.get("h:" + auth.digest(key))
+        return self._who_of(entry) if entry else None
+
+    def who_session(self, token):
+        """The person a session cookie belongs to (the session is extended while it is used), or None."""
+        self._reload_users_if_changed()
+        sess = self.auth.session(token, self.security["session_days"])
+        if not sess:
+            return None
+        rec = self.user_record(sess["user"])
+        if not rec:
+            return None
+        who = self._who_of(rec)
+        who["session"] = sess["id"]
+        return who
+
+    def who_name(self, name):
+        rec = self.user_record(name)
+        return self._who_of(rec) if rec else None
+
+    def user_by_email(self, email):
+        email = auth.clean_email(email)
+        return next((u for u in self.users.values() if email and u.get("email") == email), None)
+
+    def set_ban(self, name, banned):
+        rec = self.user_record(name)
+        if not rec:
+            raise ValueError("no one is called that")
+        if rec.get("owner") and banned:
+            raise ValueError("the owner cannot be banned")
+        for k in self._entries(name):
+            self.users[k]["banned"] = bool(banned)
+        self._save_users()
+        if banned:
+            self.auth.revoke_user(name)
+        self.auth.event("ban" if banned else "unban", name, "", "")
+
+    def create_email_account(self, email):
+        """A free account for an address that proved it owns it (only when open signups are on)."""
+        email = auth.clean_email(email)
+        base = re.sub(r"[^A-Za-z0-9_-]", "", email.split("@")[0])[:24] or "user"
+        name, n = base, 1
+        while self.user_record(name):
+            n += 1
+            name = f"{base}{n}"
+        entry = {"user": name, "tier": "free", "owner": False, "tz_minutes": 0, "email": email, "email_verified": True}
+        self.users["e:" + name] = entry
+        self._save_users()
+        self._ensure_usage_user(entry)
+        self.auth.event("signup", name, "", "email")
+        return name
+
+    def mark_email_verified(self, name):
+        for k in self._entries(name):
+            self.users[k]["email_verified"] = True
+        self._save_users()
 
     def set_plan(self, name, tier):
         if tier not in self.cfg["tiers"]:
@@ -680,6 +823,10 @@ class Handler(http.server.BaseHTTPRequestHandler):
             return
         sys.stderr.write("%s %s\n" % (self.command, self.path.split("?")[0]))
 
+    def handle_one_request(self):
+        self._cookies = []
+        super().handle_one_request()
+
     # ---- helpers
     def _send(self, status, body=b"", ctype="application/json", headers=None):
         if isinstance(body, (dict, list)):
@@ -693,6 +840,9 @@ class Handler(http.server.BaseHTTPRequestHandler):
         self.send_header("X-Content-Type-Options", "nosniff")
         for k, v in (headers or {}).items():
             self.send_header(k, v)
+        for cookie in getattr(self, "_cookies", []):
+            self.send_header("Set-Cookie", cookie)
+        self._cookies = []
         self.end_headers()
         self.wfile.write(body)
 
@@ -703,25 +853,103 @@ class Handler(http.server.BaseHTTPRequestHandler):
         raw = self.rfile.read(n) if n else b""
         return json.loads(raw) if raw else {}
 
-    def _key(self):
-        auth = self.headers.get("Authorization", "")
-        if auth.startswith("Bearer "):
-            return auth[7:].strip()
+    # ---- who is asking
+    def _peer_trusted(self):
+        return bool(self.client_address) and self.client_address[0] in self.state.security["trusted_proxies"]
+
+    def _ip(self):
+        """The caller's address. Behind the Cloudflare tunnel every request comes from this computer, so the real address is taken from the
+        proxy's header, but only when the request really came from the proxy (a trusted address), never from an outside caller."""
+        if self._peer_trusted():
+            ip = self.headers.get("CF-Connecting-IP") or (self.headers.get("X-Forwarded-For") or "").split(",")[0].strip()
+            if ip:
+                return ip[:64]
+        return self.client_address[0] if self.client_address else ""
+
+    def _https(self):
+        if not self._peer_trusted():
+            return False
+        return (self.headers.get("X-Forwarded-Proto") or "").lower() == "https" or '"https"' in (self.headers.get("CF-Visitor") or "")
+
+    def _cookie_dict(self):
+        out = {}
         for part in (self.headers.get("Cookie") or "").split(";"):
             k, _, v = part.strip().partition("=")
-            if k == "emvryx_key":
-                return urllib.parse.unquote(v)
-        return None
+            if k:
+                out[k] = urllib.parse.unquote(v)
+        return out
+
+    def _set_session_cookie(self, token):
+        days = self.state.security["session_days"]
+        self._cookies.append(f"emvryx_session={token}; Path=/; HttpOnly; SameSite=Strict; Max-Age={days * 86400}" + ("; Secure" if self._https() else ""))
+
+    def _expire_cookie(self, name):
+        self._cookies.append(f"{name}=; Path=/; HttpOnly; SameSite=Strict; Max-Age=0" + ("; Secure" if self._https() else ""))
+
+    def _start_session(self, user, how):
+        st = self.state
+        sid, token = st.auth.new_session(user, self.headers.get("User-Agent", ""), self._ip(), st.security["session_days"])
+        st.auth.event("login_ok", user, self._ip(), how)
+        self._set_session_cookie(token)
+        return sid
+
+    def _locked(self):
+        """True (and a 429 is sent) when this address has had too many wrong tries lately."""
+        st = self.state
+        wait = st.rl.blocked("fail:" + self._ip(), st.security["login_fail_limit"], st.security["login_fail_window"])
+        if wait:
+            self._send(429, {"code": "too_many", "message": "Too many wrong tries from this address.", "action": f"Wait about {max(1, wait // 60)} minute(s) and try again.",
+                             "retry_after": wait}, headers={"Retry-After": str(wait)})
+        return bool(wait)
+
+    def _fail(self, what):
+        st, ip = self.state, self._ip()
+        st.rl.hit("fail:" + ip)
+        st.auth.event("login_fail", "", ip, what)
+
+    def _credential_kind(self):
+        if (self.headers.get("Authorization") or "").startswith("Bearer "):
+            return "key"
+        c = self._cookie_dict()
+        if c.get("emvryx_session"):
+            return "session"
+        return "key" if c.get("emvryx_key") else None
+
+    def _key(self):
+        """Kept for the few callers that only need to know whether a key was sent."""
+        auth_h = self.headers.get("Authorization", "")
+        return auth_h[7:].strip() if auth_h.startswith("Bearer ") else self._cookie_dict().get("emvryx_key")
 
     def _who(self):
-        who = self.state.who(self._key())
+        """The signed-in person, or None after sending the right error. A key (bearer header, or the old key cookie) is checked against the
+        rate limit first, then turned into a session; a session cookie is checked as is."""
+        st = self.state
+        kind = self._credential_kind()
+        who = None
+        if kind == "key":
+            if self._locked():
+                return None
+            auth_h = self.headers.get("Authorization", "")
+            if auth_h.startswith("Bearer "):
+                who = st.who(auth_h[7:].strip())
+            else:                                           # the old cookie that held the key itself: swap it for a session
+                who = st.who(self._cookie_dict().get("emvryx_key"))
+                self._expire_cookie("emvryx_key")
+                if who and not who["banned"]:
+                    who["session"] = self._start_session(who["user"], "old cookie upgraded")
+            if not who:
+                self._fail("bad key")
+        elif kind == "session":
+            who = st.who_session(self._cookie_dict().get("emvryx_session"))
+            if not who:
+                self._expire_cookie("emvryx_session")       # revoked or expired: clear it so the page shows the sign-in
+        if who and who["banned"]:
+            self._send(403, {"code": "banned", "message": "This account has been turned off.", "action": "Ask the owner if you think that is a mistake."})
+            return None
         if not who:
-            self._send(401, {"code": "bad_key", "message": "That key isn't right.",
-                             "action": "Open the link the server printed, or ask the owner for your key."})
+            self._send(401, {"code": "bad_key", "message": "You are not signed in." if kind != "key" else "That key isn't right.",
+                             "action": "Open the link the server printed, a pairing link from the owner, or sign in with an email code."})
         return who
-
-    def _cookie(self, key):
-        return {"Set-Cookie": f"emvryx_key={urllib.parse.quote(key)}; Path=/; HttpOnly; SameSite=Strict; Max-Age=31536000"}
 
     def _file(self, name, ctype):
         path = os.path.join(WEB, name)
@@ -737,9 +965,29 @@ class Handler(http.server.BaseHTTPRequestHandler):
         try:
             if path == "/":
                 key = (qs.get("key") or [None])[0]
-                if key and self.state.who(key):                 # the printed link: remember the key, then drop it from the URL
-                    return self._send(302, b"", "text/plain", {"Location": "/", **self._cookie(key)})
+                if key:                                          # an old-style key link: turn it into a session and drop the key from the address
+                    if self._locked():
+                        return
+                    who = self.state.who(key)
+                    if who and not who["banned"]:
+                        self._start_session(who["user"], "key link")
+                        return self._send(302, b"", "text/plain", {"Location": "/"})
+                    self._fail("bad key link")
                 return self._file("index.html", "text/html; charset=utf-8")
+            m = re.fullmatch(r"/pair/([A-Za-z0-9_-]{16,80})", path)
+            if m:                                                # a one-time pairing link from the owner: becomes a session and is used up
+                if self._locked():
+                    return
+                user = self.state.auth.use_pair(m.group(1))
+                who = self.state.who_name(user) if user else None
+                if who and not who["banned"]:
+                    self.state.auth.event("pair_used", user, self._ip(), "")
+                    self._start_session(user, "pairing link")
+                    return self._send(302, b"", "text/plain", {"Location": "/"})
+                self._fail("bad pairing link")
+                return self._send(410, "This pairing link was already used or has expired. Ask for a new one.\n", "text/plain; charset=utf-8")
+            if path == "/api/auth-options":
+                return self._send(200, {"email": bool(self.state.mailer), "signups": bool(self.state.mailer and self.state.security["open_signups"])})
             if path == "/manifest.webmanifest":
                 return self._file("manifest.webmanifest", "application/manifest+json")
             if path == "/sw.js":
@@ -768,8 +1016,13 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 return self._send(200, {"notes": self.state.saved_for(who["user"]).list(self.state.clock())})
             if path.startswith("/api/code"):
                 return self.api_code_get(who, path, qs)
+            if path == "/api/sessions":
+                return self._send(200, {"sessions": [dict(x, current=(x["id"] == who.get("session"))) for x in self.state.auth.sessions_for(who["user"])]})
+            if path == "/api/admin/audit" and who["owner"]:
+                return self._send(200, {"events": self.state.auth.events(int((qs.get("limit") or ["100"])[0]), (qs.get("kind") or [None])[0])})
             if path == "/api/admin/users" and who["owner"]:
-                return self._send(200, {"users": [{"user": u["user"], "tier": self.state.usage.get_user(u["user"])["tier"]}
+                return self._send(200, {"users": [{"user": u["user"], "tier": self.state.usage.get_user(u["user"])["tier"], "email": u.get("email"),
+                                                   "banned": bool(u.get("banned")), "owner": bool(u.get("owner"))}
                                                   for u in self.state.users.values()], "paused": bool(self.state.cfg.get("paused"))})
             return self._send(404, {"code": "not_found", "message": "Not found."})
         except (BrokenPipeError, ConnectionResetError):
@@ -782,14 +1035,38 @@ class Handler(http.server.BaseHTTPRequestHandler):
         try:
             body = self._json()
             if path == "/api/login":
+                if self._locked():
+                    return
                 key = str(body.get("key", "")).strip()
-                if not self.state.who(key):
-                    return self._send(401, {"code": "bad_key", "message": "That key isn't right.",
-                                            "action": "Check it and try again."})
-                return self._send(200, {"ok": True}, headers=self._cookie(key))
+                who = self.state.who(key)
+                if not who:
+                    self._fail("bad key")
+                    return self._send(401, {"code": "bad_key", "message": "That key isn't right.", "action": "Check it and try again."})
+                if who["banned"]:
+                    return self._send(403, {"code": "banned", "message": "This account has been turned off.", "action": "Ask the owner if you think that is a mistake."})
+                self._start_session(who["user"], "key")
+                return self._send(200, {"ok": True})
+            if path == "/api/login/email/start":
+                return self.api_email_start(body)
+            if path == "/api/login/email/verify":
+                return self.api_email_verify(body)
             who = self._who()
             if not who:
                 return
+            if path == "/api/logout":
+                if who.get("session"):
+                    self.state.auth.revoke(who["session"], who["user"])
+                    self.state.auth.event("logout", who["user"], self._ip(), "")
+                self._expire_cookie("emvryx_session")
+                return self._send(200, {"ok": True})
+            if path == "/api/sessions/revoke":
+                ok = self.state.auth.revoke(str(body.get("id", "")), who["user"])
+                self.state.auth.event("session_revoked", who["user"], self._ip(), "one device")
+                return self._send(200, {"ok": ok})
+            if path == "/api/sessions/revoke-others":
+                n = self.state.auth.revoke_user(who["user"], who.get("session"))
+                self.state.auth.event("session_revoked", who["user"], self._ip(), f"{n} other devices")
+                return self._send(200, {"revoked": n})
             if path == "/api/chats":
                 cid = self.state.store(who["user"]).new_chat(private=bool(body.get("private")))
                 return self._send(200, {"id": cid})
@@ -1063,13 +1340,80 @@ class Handler(http.server.BaseHTTPRequestHandler):
         st = self.state
         if path == "/api/admin/users":
             name, tier = str(body.get("user", "")), str(body.get("tier", "free"))
-            key = st.add_user(name, tier)
+            try:
+                key = st.add_user(name, tier, email=body.get("email") or None)
+            except ValueError as e:
+                return self._send(400, {"code": "bad_request", "message": str(e)})
             st.set_plan(name, tier)
-            return self._send(200, {"user": name, "tier": tier, "key": key})
+            pair = st.auth.new_pair(name, st.security["pair_minutes"], made_by="owner")
+            st.auth.event("pair_created", name, self._ip(), "by owner")
+            return self._send(200, {"user": name, "tier": tier, "key": key, "pair": pair, "pair_minutes": st.security["pair_minutes"]})
+        if path == "/api/admin/pairing":
+            name = str(body.get("user", ""))
+            if not st.user_record(name):
+                return self._send(404, {"code": "not_found", "message": "No one is called that."})
+            pair = st.auth.new_pair(name, st.security["pair_minutes"], made_by="owner")
+            st.auth.event("pair_created", name, self._ip(), "by owner")
+            return self._send(200, {"user": name, "pair": pair, "pair_minutes": st.security["pair_minutes"]})
+        if path == "/api/admin/ban":
+            try:
+                st.set_ban(str(body.get("user", "")), bool(body.get("banned", True)))
+            except ValueError as e:
+                return self._send(400, {"code": "bad_request", "message": str(e)})
+            return self._send(200, {"ok": True})
         if path == "/api/admin/pause":
             st.cfg["paused"] = bool(body.get("paused"))
             return self._send(200, {"paused": st.cfg["paused"]})
         self._send(404, {"code": "not_found", "message": "Not found."})
+
+    # ---- email sign-in
+    def api_email_start(self, body):
+        st = self.state
+        if not st.mailer:
+            return self._send(501, {"code": "email_off", "message": "Email sign-in isn't set up on this server.", "action": "Use your key or a pairing link."})
+        ip = self._ip()
+        wait = st.rl.blocked("email-ip:" + ip, st.security["email_start_limit"], st.security["email_start_window"])
+        if wait:
+            return self._send(429, {"code": "too_many", "message": "Too many codes asked for from this address.", "action": f"Wait about {max(1, wait // 60)} minute(s).",
+                                    "retry_after": wait}, headers={"Retry-After": str(wait)})
+        st.rl.hit("email-ip:" + ip)
+        email = auth.clean_email(body.get("email"))
+        generic = {"ok": True, "message": "If that address can sign in, a code is on its way."}      # the same answer whether or not it can: nobody can probe who has an account
+        if not email or st.rl.blocked("email:" + email, 3, 600):
+            return self._send(200, generic)
+        st.rl.hit("email:" + email)
+        rec = st.user_by_email(email)
+        if (rec and not rec.get("banned")) or (not rec and st.security["open_signups"]):
+            code = auth.make_code()
+            st.auth.put_code(email, code)
+            try:
+                st.mailer.send(email, *mailer.code_email(code))
+                st.auth.event("email_code", rec["user"] if rec else "", ip, "sent")
+            except Exception as e:                           # never tell the caller: it would show whether the address is known
+                st.auth.event("email_send_failed", "", ip, str(e)[:120])
+        return self._send(200, generic)
+
+    def api_email_verify(self, body):
+        st = self.state
+        if self._locked():
+            return
+        email = auth.clean_email(body.get("email"))
+        if not email or not st.auth.check_code(email, str(body.get("code", ""))):
+            self._fail("bad email code")
+            return self._send(401, {"code": "bad_code", "message": "That code isn't right, or it has run out.", "action": "Ask for a new one."})
+        rec = st.user_by_email(email)
+        if rec:
+            if rec.get("banned"):
+                return self._send(403, {"code": "banned", "message": "This account has been turned off.", "action": "Ask the owner if you think that is a mistake."})
+            user = rec["user"]
+            st.mark_email_verified(user)
+        elif st.security["open_signups"]:
+            user = st.create_email_account(email)
+        else:
+            self._fail("email code for unknown address")
+            return self._send(401, {"code": "bad_code", "message": "That code isn't right, or it has run out.", "action": "Ask for a new one."})
+        self._start_session(user, "email code")
+        return self._send(200, {"ok": True})
 
     def api_send(self, who, cid, body):
         st = self.state
@@ -1176,6 +1520,7 @@ def main():
                     help="the Wikipedia index (wiki_index.py) the chat looks things up in; skipped if the file isn't there")
     ap.add_argument("--no-web", action="store_true", help="never search the web (people's own Settings choice then has no effect)")
     ap.add_argument("--timings", action="store_true", help="print how long each reply took (loading, first word, total)")
+    ap.add_argument("--pair", metavar="NAME", default=None, help="print a one-time link (valid 15 minutes) that signs NAME in on one device, then exit")
     ap.add_argument("--rotate-key", metavar="NAME", help="give someone a new key (owner, or a name from --add-user); the old key stops working. Restart the app afterwards")
     ap.add_argument("--add-user", nargs=2, metavar=("NAME", "PLAN"), help="add a tester (free, pro or mega) and print their key")
     args = ap.parse_args()
@@ -1197,17 +1542,33 @@ def main():
         runner = ModelRunner(args.llama_bin or find_llama_server(), files, extra_args=args.llama_args.split())
     state = AppState(args.data, args.llama, args.llama_key, tok, manifest=manifest, ram_gb=args.ram, runner=runner)
     state.verbose = args.timings
+    base = f"http://localhost:{args.port}"
     if args.rotate_key:
         try:
             key = state.rotate_key(args.rotate_key)
         except ValueError as e:
             sys.exit(str(e))
-        print(f"{args.rotate_key}: http://localhost:{args.port}/?key={key}")
-        print("The old key no longer works. Restart the app so it reads the new key.")
+        pair = state.auth.new_pair(args.rotate_key, state.security["pair_minutes"], made_by="command line")
+        print(f"New key for {args.rotate_key} (shown once, it is not stored): {key}")
+        print(f"Or sign in on one device with this one-time link (valid {state.security['pair_minutes']} minutes): {base}/pair/{pair}")
+        print("The old key no longer works, and every device that was signed in as them has been signed out. Restart the app so it reads the change.")
+        return
+    if args.pair:
+        if not state.user_record(args.pair):
+            sys.exit(f"no one is called {args.pair!r}")
+        pair = state.auth.new_pair(args.pair, state.security["pair_minutes"], made_by="command line")
+        state.auth.event("pair_created", args.pair, "", "command line")
+        print(f"One-time sign-in link for {args.pair} (valid {state.security['pair_minutes']} minutes, works once): {base}/pair/{pair}")
+        print("Use your own address instead of localhost if you open it from another device (for example https://chat.emvryx.app/pair/...).")
         return
     if args.add_user:
         key = state.add_user(*args.add_user)
-        print(f"{args.add_user[0]} ({args.add_user[1]}): http://localhost:{args.port}/?key={key}")
+        if key is None:
+            print(f"{args.add_user[0]} already exists (their plan was kept). Use --pair or --rotate-key to give them a way in.")
+            return
+        pair = state.auth.new_pair(args.add_user[0], state.security["pair_minutes"], made_by="command line")
+        print(f"{args.add_user[0]} ({args.add_user[1]}). Key (shown once, not stored): {key}")
+        print(f"One-time sign-in link (valid {state.security['pair_minutes']} minutes): {base}/pair/{pair}")
         return
     if os.path.exists(args.wiki):
         from wiki_index import WikiIndex
@@ -1226,7 +1587,12 @@ def main():
         print("Emvryx is running. Models on this computer: " + (", ".join(sorted(files)) or "none") + (" (via --llama)" if args.llama else ""))
         if runner and not runner.bin:
             print("llama-server was not found. Install llama.cpp and pass --llama-bin <path to llama-server.exe>.")
-    print(f"Open: http://{shown}:{args.port}/?key={state.owner_key()}")
+    fresh = state.owner_key()
+    if fresh:                                            # the first run: the owner's key exists only now
+        print(f"Your owner key (shown once, it is not stored): {fresh}")
+    pair = state.auth.new_pair("owner", state.security["pair_minutes"], made_by="startup")
+    print(f"Open (one time, valid {state.security['pair_minutes']} minutes): http://{shown}:{args.port}/pair/{pair}")
+    print("Need another link later?  python app_server.py --pair owner")
     if args.host == "0.0.0.0":
         print("Reachable from your network. Anyone with a key can use it; keep keys private.")
     try:

@@ -644,17 +644,42 @@ async function openSettings() {
     el('div', {style: 'color:var(--muted);font-size:14px'}, 'Notes you gave a thumbs up are kept here so the same question works offline. You can delete any of them.'),
     el('b', {}, 'Your data'),
     el('div', {style: 'color:var(--muted);font-size:14px'}, 'Chats are saved on the server you opened this page from. Private chats are never saved. Nothing leaves it unless you attach an online model.'),
-    el('button', {class: 'btn danger', onclick: async () => { if (confirm('Delete every chat? This cannot be undone.')) { await post('/api/delete-everything'); S.chatId = null; S.messages = []; await load(); } }}, 'Delete all my chats')];
+    el('button', {class: 'btn danger', onclick: async () => { if (confirm('Delete every chat? This cannot be undone.')) { await post('/api/delete-everything'); S.chatId = null; S.messages = []; await load(); } }}, 'Delete all my chats'),
+    el('b', {}, 'Where you are signed in'), el('div', {id: 'deviceList', style: 'display:flex;flex-direction:column;gap:8px'}, el('div', {style: 'color:var(--muted);font-size:14px'}, 'Loading...'))];
   if (st.owner) {
-    const name = el('input', {type: 'text', placeholder: 'Name, e.g. sam', 'aria-label': 'Tester name'}), out = el('div', {style: 'word-break:break-all;color:var(--muted);font-size:14px'});
+    const name = el('input', {type: 'text', placeholder: 'Name, e.g. sam', 'aria-label': 'Tester name'}), mail = el('input', {type: 'text', placeholder: 'Email (optional, for email sign-in)', 'aria-label': 'Tester email', inputmode: 'email'});
+    const out = el('div', {style: 'word-break:break-all;color:var(--muted);font-size:14px'});
     let plan = 'free';
-    kids.push(el('b', {}, 'Owner: testers and plans'), name, seg([['free', 'Free'], ['pro', 'Pro'], ['mega', 'Mega']], 'free', (v) => { plan = v; }),
-      el('button', {class: 'btn', onclick: async () => { const r = await post('/api/admin/users', {user: name.value.trim(), tier: plan}); const j = await r.json();
-        out.textContent = r.ok ? 'Share this link privately: ' + location.origin + '/?key=' + j.key : j.message; }}, 'Add or change tester'), out,
+    const link = (j) => out.textContent = 'Send this link privately. It works once, on one device, for ' + j.pair_minutes + ' minutes: ' + location.origin + '/pair/' + j.pair + (j.key ? '\nTheir key (shown once, not stored): ' + j.key : '');
+    kids.push(el('b', {}, 'Owner: people and plans'), name, mail, seg([['free', 'Free'], ['pro', 'Pro'], ['mega', 'Mega']], 'free', (v) => { plan = v; }),
+      el('button', {class: 'btn', onclick: async () => { const r = await post('/api/admin/users', {user: name.value.trim(), tier: plan, email: mail.value.trim() || undefined}); const j = await r.json();
+        if (r.ok) link(j); else out.textContent = j.message; }}, 'Add or change person and make a sign-in link'), out,
+      el('button', {class: 'btn ghost', onclick: openPeople}, 'People, bans and the security log'),
       el('button', {class: 'btn ghost', onclick: async () => { const r = await post('/api/admin/pause', {paused: true}); out.textContent = 'Paused: everyone except the owner is stopped. Reload to resume after restarting the server.'; }}, 'Pause everyone'),
       el('button', {class: 'btn ghost', onclick: async () => { await post('/api/admin/pause', {paused: false}); out.textContent = 'Resumed.'; }}, 'Resume'));
   }
+  setTimeout(loadDevices, 0);
   dialog(kids, 'Done');
+}
+
+async function loadDevices() {
+  const box = document.getElementById('deviceList'); if (!box) return;
+  const j = await (await api('/api/sessions')).json(); const when = (t) => new Date(t * 1000).toLocaleString([], {month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit'});
+  box.replaceChildren(...j.sessions.map((d) => el('div', {class: 'opt', style: 'cursor:default'}, el('span', {class: 'grow'}, el('b', {}, d.device + (d.current ? '  ·  this device' : '')), el('small', {}, 'Last used ' + when(d.last_seen) + (d.where ? ' · ' + d.where : ''))),
+      d.current ? el('button', {class: 'chip', onclick: async () => { await post('/api/logout'); location.reload(); }}, 'Sign out')
+                : el('button', {class: 'chip', onclick: async () => { await post('/api/sessions/revoke', {id: d.id}); loadDevices(); }}, 'Sign out'))),
+    ...(j.sessions.length > 1 ? [el('button', {class: 'btn ghost', onclick: async () => { await post('/api/sessions/revoke-others'); loadDevices(); }}, 'Sign out every other device')] : []));
+}
+async function openPeople() {
+  const j = await (await api('/api/admin/users')).json(); const a = await (await api('/api/admin/audit?limit=40')).json();
+  const out = el('div', {style: 'word-break:break-all;color:var(--muted);font-size:14px'});
+  const when = (t) => new Date(t * 1000).toLocaleString([], {month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit'});
+  const kids = [el('h2', {}, 'People')];
+  for (const u of j.users) kids.push(el('div', {class: 'opt', style: 'cursor:default'}, el('span', {class: 'grow'}, el('b', {}, u.user + (u.owner ? ' (owner)' : '') + (u.banned ? '  ·  turned off' : '')), el('small', {}, u.tier + (u.email ? ' · ' + u.email : ''))),
+    el('button', {class: 'chip', onclick: async () => { const r = await post('/api/admin/pairing', {user: u.user}); const k = await r.json(); out.textContent = 'One-time link for ' + u.user + ' (' + k.pair_minutes + ' minutes): ' + location.origin + '/pair/' + k.pair; }}, 'Sign-in link'),
+    ...(u.owner ? [] : [el('button', {class: 'chip', onclick: async () => { await post('/api/admin/ban', {user: u.user, banned: !u.banned}); document.querySelectorAll('.modal').forEach((m) => m.remove()); openPeople(); }}, u.banned ? 'Turn on' : 'Turn off')])));
+  kids.push(out, el('b', {}, 'Security log (latest 40)'), ...a.events.map((e) => el('div', {style: 'color:var(--muted);font-size:13px'}, when(e.at) + '  ' + e.kind + (e.user ? ' · ' + e.user : '') + (e.ip ? ' · ' + e.ip : '') + (e.detail ? ' · ' + e.detail : ''))));
+  dialog(kids, 'Close');
 }
 
 // ---------------------------------------------------------------- sending
@@ -901,7 +926,25 @@ $('codeDirIn').onchange = async (e) => {
 };
 
 // ---------------------------------------------------------------- login
-function showLogin() { S.state = null; applyTheme(); $('login').hidden = false; $('app').hidden = true; $('loginBrand').replaceChildren(logo(32, false, 'brand'), 'Emvryx'); }
+function showLogin() { offerEmailSignIn(); S.state = null; applyTheme(); $('login').hidden = false; $('app').hidden = true; $('loginBrand').replaceChildren(logo(32, false, 'brand'), 'Emvryx'); }
+async function offerEmailSignIn() {
+  document.querySelectorAll('#emailOpt').forEach((n) => n.remove());
+  try { const o = await (await fetch('/api/auth-options')).json(); if (!o.email) return; } catch (e) { return; }
+  $('loginForm').append(el('button', {class: 'btn ghost', type: 'button', id: 'emailOpt', onclick: emailSignIn}, 'Sign in with an email code instead'));
+}
+function emailSignIn() {
+  const email = el('input', {type: 'text', placeholder: 'you@example.com', autocomplete: 'email', 'aria-label': 'Email address', inputmode: 'email'}), code = el('input', {type: 'text', placeholder: '6-digit code', inputmode: 'numeric', 'aria-label': 'Code', hidden: true, autocomplete: 'one-time-code'});
+  const out = el('div', {style: 'color:var(--muted);font-size:14px'}); let step = 1;
+  const go = el('button', {class: 'btn', onclick: async () => {
+    out.style.color = 'var(--muted)';
+    const r = await fetch(step === 1 ? '/api/login/email/start' : '/api/login/email/verify', {method: 'POST', headers: {'Content-Type': 'application/json'}, credentials: 'same-origin', body: JSON.stringify({email: email.value, code: code.value})});
+    const j = await r.json();
+    if (!r.ok) { out.style.color = 'var(--danger)'; out.textContent = j.message + ' ' + (j.action || ''); return; }
+    if (step === 1) { step = 2; code.hidden = false; code.focus(); out.textContent = j.message; go.textContent = 'Sign in'; }
+    else { document.querySelectorAll('.modal').forEach((m) => { if (m.id !== 'login') m.remove(); }); load(); }
+  }}, 'Send me a code');
+  dialog([el('h2', {}, 'Sign in with email'), el('div', {style: 'color:var(--muted)'}, 'We email a 6-digit code to the address you were invited with. It works once, for 10 minutes.'), email, code, out, go], 'Cancel');
+}
 $('loginForm').onsubmit = async (e) => {
   e.preventDefault(); const r = await fetch('/api/login', {method: 'POST', headers: {'Content-Type': 'application/json'}, credentials: 'same-origin', body: JSON.stringify({key: $('keyInput').value})});
   if (r.ok) { $('keyInput').value = ''; load(); } else { const j = await r.json(); $('loginErr').textContent = j.message + ' ' + (j.action || ''); }

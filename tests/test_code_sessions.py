@@ -106,8 +106,7 @@ class CodeTests(Base):
     def test_people_cannot_reach_each_others_sessions_or_files(self):
         sid = self.start(self.owner, auto_edits=True)[1]["id"]
         wait_for(lambda: self.poll(self.owner, sid)["state"] == "done")
-        st, j = self.owner.call("POST", "/api/admin/users", {"user": "sam", "tier": "pro"})
-        sam = Client(self.port, j["key"])
+        sam = self.sam                                                   # another person (the free plan)
         self.assertEqual(sam.call("GET", f"/api/code/sessions/{sid}")[0], 400)
         self.assertEqual(sam.call("GET", "/api/code/files?project=demo")[1]["files"], [])
         self.assertEqual(sam.call("GET", "/api/code/file?project=demo&path=slug.py")[0], 400)
@@ -147,8 +146,7 @@ class MoreTests(Base):
         return c.call("GET", f"/api/code/sessions/{sid}")[1]
 
     def test_session_is_counted_against_usage(self):
-        st, j = self.owner.call("POST", "/api/admin/users", {"user": "sam", "tier": "free"})
-        sam = Client(self.port, j["key"])
+        sam = self.sam
         st, info = sam.call("GET", "/api/code")
         self.assertFalse(info["usage"]["exempt"])
         before = self.state.limiter.snapshot("sam", "flare", "balanced", self.state.clock())["week"]["used"]

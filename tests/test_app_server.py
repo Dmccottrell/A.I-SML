@@ -23,9 +23,9 @@ class Client:
     def __init__(self, port, key=None):
         self.port, self.key, self.cookie = port, key, None
 
-    def call(self, method, path, body=None, raw=False, bearer=True):
+    def call(self, method, path, body=None, raw=False, bearer=True, headers=None):
         c = http.client.HTTPConnection("127.0.0.1", self.port, timeout=20)
-        h = {"Content-Type": "application/json"}
+        h = {"Content-Type": "application/json", **(headers or {})}
         if self.key and bearer:
             h["Authorization"] = "Bearer " + self.key
         if self.cookie:
@@ -103,10 +103,11 @@ class Access(Base):
         self.assertEqual(Client(self.port).call("GET", "/api/state")[0], 401)
         self.assertEqual(Client(self.port, "wrong").call("GET", "/api/state")[0], 401)
 
-    def test_link_with_key_sets_a_cookie(self):
+    def test_link_with_key_sets_a_session_cookie_not_the_key(self):
         s, h, _ = Client(self.port).call("GET", "/?key=" + self.sam_key, raw=True)
         self.assertEqual(s, 302)
-        self.assertIn("emvryx_key=", h["Set-Cookie"])
+        self.assertIn("emvryx_session=", h["Set-Cookie"])
+        self.assertNotIn(self.sam_key, h["Set-Cookie"])                 # the cookie is a revocable session, never the key itself
         self.assertIn("HttpOnly", h["Set-Cookie"])
         c = Client(self.port)
         c.cookie = h["Set-Cookie"].split(";")[0]
@@ -117,7 +118,7 @@ class Access(Base):
         self.assertEqual(c.call("POST", "/api/login", {"key": "nope"})[0], 401)
         s, h, _ = c.call("POST", "/api/login", {"key": self.sam_key}, raw=True)
         self.assertEqual(s, 200)
-        self.assertIn("emvryx_key=", h["Set-Cookie"])
+        self.assertIn("emvryx_session=", h["Set-Cookie"])
 
     def test_people_cannot_see_each_others_chats(self):
         cid = self.new_chat(self.sam)
@@ -360,11 +361,15 @@ class Privacy(Base):
         self.ask(self.sam, cid, "remember this chat")
         again = A.AppState(self.tmp.name, manifest=self.manifest, ram_gb=16, backend_factory=fake_factory(), pace=False)
         self.assertEqual(again.store("sam").list_chats()[0]["title"], "remember this chat")
-        self.assertEqual(again.owner_key(), self.state.owner_key())
+        self.assertTrue(again.who(self.state.owner_key())["owner"])         # the same key still works, though only its hash is stored
+        self.assertIsNone(again.owner_key())                                # ... and it can no longer be shown
 
-    def test_keys_file_is_private(self):
-        mode = os.stat(os.path.join(self.tmp.name, "users.json")).st_mode & 0o777
-        self.assertEqual(mode & 0o077, 0)
+    def test_keys_file_is_private_and_holds_no_key(self):
+        path = os.path.join(self.tmp.name, "users.json")
+        self.assertEqual(os.stat(path).st_mode & 0o077, 0)
+        text = open(path).read()
+        for key in (self.sam_key, self.state.owner_key()):
+            self.assertNotIn(key, text)                                    # only the hash of a key is stored
 
     def test_the_log_never_holds_message_text(self):
         self.srv.quiet = False
@@ -444,7 +449,7 @@ class RotateKeys(unittest.TestCase):
         self.assertIsNone(st.who(old_owner))
         self.assertTrue(st.who(new_owner)["owner"])
         again = A.AppState(d, ram_gb=8, pace=False)                     # saved: still the new keys after a restart
-        self.assertEqual(again.owner_key(), new_owner)
+        self.assertTrue(again.who(new_owner)["owner"])
         self.assertEqual(again.who(new_phone)["user"], "darry-phone")
         self.assertIsNone(again.who(phone))
 
