@@ -196,3 +196,12 @@ The v3 lessons say the model "was trained from scratch on a home computer". That
   `python finetune_open.py --model flare-2.5 --patch --data data/v3/identity_patch.jsonl` (continues the saved adapter, mixed with ordinary lessons so it does not forget). **The first attempt (Oct 2026) did almost nothing**: the patch chats are so short that one pass was only a few steps at a low learning rate, and the identity sheet still scored 8/16 with the old answers. `--patch` now defaults to 3 passes, a small step (`--grad_accum 2`) and a learning rate of 1e-4, and warns when it would run fewer than 20 steps..
 - Check the result with `python evaluate_open.py --model flare-2.5 --tuned` (identity sheet, `eval/identity_open.jsonl`); other sheets work too (`--prompts eval/constraints.jsonl`).
 See [IDENTITY.md](IDENTITY.md) for the voice and the ways to make it ours.
+
+## Results: Flare 2.5 (Qwen 2.5 1.5B, trained Oct 5-6 2026)
+- **Training:** 988 steps over 109,917 chats on one RTX 5090 (7.2 s/step, about 2 hours, final loss about 0.75). The first run learned the old "trained from scratch" identity answers (identity sheet 8/16), so it got an identity fix.
+  The first fix did almost nothing (a few steps); the second (`--patch`, 189 steps, about 6 minutes) gave **identity 16/16** (`eval/identity_open.jsonl`).
+- **HellaSwag (2,000 questions spread over the test, `exam_open.py --compare`):** plain Qwen 2.5 1.5B **65.6%**, Flare 2.5 **67.2%** (+1.6 points, so the lessons did not make it forget anything). Our own models: Ember 2 28.4%, Flare 2 (v3) 36.2%.
+  A 2,000-question sample, not the full 10,042.
+- **Caveat:** the identity questions are close to the lessons it was trained on, so 16/16 shows it learned them, not how it handles other wordings. Test rephrased questions next.
+- **Backed up:** `Dmccottrell/aisml-checkpoints` (private): `flare-2.5/my-ai` (the merged model) and `flare-2.5/adapter`.
+- **Not done yet:** the lookup sheet (41) and rules sheet (30) on Flare 2.5, the GGUF for the app, and the app entry (still `planned` in `models.json`).

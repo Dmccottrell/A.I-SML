@@ -46,7 +46,7 @@ The tables below show this version in the Flare 2.5 column (the old v3.5 slot). 
 | Steps | **988** (one pass), 8 micro-batches of up to 8,192 tokens each, saved every 100 |
 | Where / how long / cost | One RTX 5090, **7.1 s/step, 18.6 GB**, about 2 hours, about **$1** (the pilot; the full run is in progress) |
 | Not carried over | Saving things to memory with tool calls (no tool tokens in the open format) |
-| Quality | Not measured yet. Roughly 65% on HellaSwag is the published figure for the base model (from memory); the real number comes from `benchmarks.py` after training |
+| Quality | **HellaSwag 67.2%** (2,000-question sample; plain Qwen 2.5 1.5B 65.6%); identity test 16/16; the lookup and rules sheets are still to run |
 | Phone file | about 1 GB at Q4 (an estimate; the real size comes after conversion) |
 | Details | [OPEN_MODEL.md](OPEN_MODEL.md) |
 
@@ -140,12 +140,12 @@ real GSM8K questions (a well-known math test) are kept for testing only, never f
 
 |  | **v1** | **v2** | **v3** | **Flare 2.5** (was v3.5, Qwen base) | **Equinox 2** (was v4, Qwen3-4B) | **Solstice 2** (was v5, Qwen3-8B) | **Apogee 2** (was v6, Qwen3-14B) | **v6.5** (TBD base) |
 |---|---|---|---|---|---|---|---|---|
-| Final val loss | **1.279** | **2.929** (best), 2.984 at the last step | **≈2.68** (step 45,000) | Training loss ~0.9 at the start; the final value is measured when done | Measured when trained | Measured when trained | Measured when trained | TBD |
+| Final val loss | **1.279** | **2.929** (best), 2.984 at the last step | **≈2.68** (step 45,000) | Training loss 0.95 at the start, about 0.75 at the end (988 steps) | Measured when trained | Measured when trained | Measured when trained | TBD |
 | Phone file | 32 MB | **89 MB** | ~420 MB (Q8) or **~240 MB (Q4)** | **~1 GB (Q4)** (estimate) | ~2.5 GB (Q4) | ~5 GB (Q4) | ~9 GB (Q4) | TBD |
 | Test sheet (`evaluate.py`, /20) | Only identity and story questions | **18/20** (baseline) | Goal: clearly beat v2 | Measured after training | Goal: beat Flare 2.5 | Goal: beat Flare 2.5 | Goal: beat Flare 2.5 | TBD |
 | v3 test sheet (`prompts_v3.jsonl`, /41) | — | Run to set the baseline* | Goal: clearly beat v2, most of all on facts_hard, instructions, topic_switch, honesty, correction | Goal: beat v3 | Goal: beat Flare 2.5 | Goal: beat Flare 2.5 | Goal: beat Flare 2.5 | TBD |
 | Phone speed (PocketPal, Q8_0) | — | **~210–245 tokens/s**, first word in <0.1 s | Slower (4.5× bigger); measured when done | Slower than v3 (~4× bigger); measured when done | Slower than Flare 2.5 (~2.6× bigger); measured when done | ~5× bigger; measured when done | ~10× bigger; PC or server | TBD |
-| HellaSwag (`exam.py`, full test, random = 25%) | — | **28.4%** (baseline) | **31.7% at step 15,000** (full test; the 500-question mini-exam reads ~5 points high); forecast **~34–38%** | Base model ~65% (published, from memory); ours measured after training | Not measured. Run `exam.py` after training | Not measured. Run `exam.py` after training | Not measured. Run `exam.py` after training | TBD |
+| HellaSwag (`exam.py`, full test, random = 25%) | — | **28.4%** (baseline) | **31.7% at step 15,000** (full test; the 500-question mini-exam reads ~5 points high); forecast **~34–38%** | **67.2%** (2,000-question sample; plain Qwen 2.5 1.5B 65.6%) | Not measured. Run `exam.py` after training | Not measured. Run `exam.py` after training | Not measured. Run `exam.py` after training | TBD |
 | Public yardsticks (`lm-evaluation-harness`: ARC, MMLU; small GSM8K-style math) | — | Run to set the baseline | Goal: beat v2 | Goal: beat v3 | Base model, published and from memory: MMLU about 73% (ours measured after training) | Base model MMLU about 77% (from memory) | Base model MMLU about 81% (from memory) | TBD |
 | Tool, thinking and coding tests (v4+) | — | — | — | — | Goal: tools and thinking from v4 on (see the roadmap) | Goal: tools and thinking from v4 on (see the roadmap) | Goal: tools and thinking from v4 on (see the roadmap) | TBD |
 
