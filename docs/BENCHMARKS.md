@@ -20,6 +20,8 @@ Tools: `exam.py` / `exam_open.py` (HellaSwag), `evaluate.py` / `evaluate_open.py
 
 **Equinox 2 core (same setup, tuned / plain Qwen3-4B base):** ARC-Challenge 54.0 / 54.5, WinoGrande **74.0 / 66.5**, MMLU 72.4 / 71.4, GSM8K (chain of thought) **76.5 / 0.5**, TruthfulQA mc2 51.7 / 53.0. WinoGrande is +7.5, about twice the wobble, so probably real. The base's 0.5% on GSM8K is almost certainly a measurement problem, not real ability: plain Qwen3 starts with a long `<think>` block and likely runs out of answer room or fails the answer-format check, so do not quote "76.5 vs 0.5" as a gain; quote 76.5% for Equinox 2 and say the base was not fairly measured (re-run the base with thinking off, or a larger token limit, to compare).
 
+**Code benchmarks (50 questions each, so about 5 to 7 points of wobble), Oct 6 2026, tuned / plain base:** MBPP: Flare 2.5 **38.0 / 40.0**, Equinox 2 **62.0 / 0.0**, Solstice 2 **66.0 / 0.0**. HumanEval (the chat version, `humaneval_instruct`): Solstice 2 **92.0 / 96.0**; Flare 2.5 and Equinox 2 read 0.0 / 0.0 only because they ran with the old plain `humaneval` task (invalid, see below), so they are to be re-run. The Qwen3 bases' 0.0% on MBPP is very likely the same measuring problem as their 0.5% on GSM8K (long hidden reasoning, failed answer format), so do not quote it as a gain. Solstice's HumanEval is 4 points under its base, which is 2 questions out of 50: inside the wobble, but worth re-checking at full size.
+
 ## 2. Public knowledge, reasoning and code benchmarks: `bench_open.py` (lm-evaluation-harness 0.4.13)
 `python bench_open.py --model flare-2.5 --suite core --limit 200` (a fast check), then without `--limit` for the real number. It runs the plain base and base + our adapter and prints the difference.
 
