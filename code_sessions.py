@@ -12,18 +12,23 @@ WHAT THIS FILE DOES
     * A person has one running session at a time. "Stop" ends it at the next step.
     * Nothing here sends code anywhere: the model is the llama-server on the same computer.
 """
+import base64
+import io
 import os
 import re
 import threading
 import time
+import zipfile
 
 import harness
+import usage_limits as U
 import vryxcode
 
 NAME_OK = re.compile(r"[A-Za-z0-9_-]{1,40}")
 MAX_FILE_BYTES = 200_000
 MAX_EVENT_TEXT = 6000
 RESULT_TAGS = re.compile(r"<\|/?(?:end_)?tool_result\|>|<\|end_tool_result\|>")
+MAX_IMPORT_FILES, MAX_IMPORT_BYTES, MAX_ONE_FILE = 1000, 20_000_000, 2_000_000
 SKIP_DIRS = {".git", "__pycache__", "node_modules", ".emvryx"}
 
 
@@ -42,10 +47,39 @@ def clip(text, limit=MAX_EVENT_TEXT):
     return text if len(text) <= limit else text[:limit] + f"\n... ({len(text) - limit} more characters)"
 
 
+class Meter:
+    """Counts a coding session against the person's plan, step by step, exactly like chat messages (same tank, same week, same model weight).
+    Before each model call the likely cost is held; afterwards the real counts (from llama-server when it reports them) replace the hold."""
+
+    def __init__(self, limiter, user, model_key, clock=time.time, max_new=1024, effort="balanced"):
+        self.limiter, self.user, self.key, self.clock, self.max_new, self.effort = limiter, user, model_key, clock, max_new, effort
+        self.counted = 0.0
+        self.steps = 0
+
+    @staticmethod
+    def tokens(messages):
+        return sum(len(str(m.get("content", ""))) for m in messages) // 4 + 4 * len(messages)
+
+    def reserve(self, messages):
+        est = (self.tokens(messages) + self.max_new) * self.limiter.weight(self.key) * self.limiter.cfg["effort"][self.effort]
+        return self.limiter.reserve(self.user, self.key, self.effort, est, self.clock())
+
+    def cancel(self, res):
+        self.limiter.cancel(res, self.clock())
+
+    def settle(self, res, generate, messages, reply):
+        u = getattr(generate, "usage", None) or {}
+        fresh = u.get("fresh_in", self.tokens(messages))
+        out = u.get("out", len(reply) // 4)
+        self.counted += self.limiter.settle(res, fresh, u.get("cached_in", 0), out, self.effort, self.clock())
+        self.steps += 1
+
+
 class Session:
     """One task being worked on. `events` only ever grows; the page asks for the ones after the last it saw."""
 
-    def __init__(self, sid, user, project, task, model_id, workspace, auto_edits=False):
+    def __init__(self, sid, user, project, task, model_id, workspace, auto_edits=False, meter=None):
+        self.meter = meter
         self.id, self.user, self.project, self.task, self.model_id, self.workspace = sid, user, project, task, model_id, workspace
         self.auto_edits = auto_edits
         self.events, self.state = [], "starting"       # starting | working | asking | done | stopped | failed
@@ -112,7 +146,15 @@ class Session:
             if seen["n"] and messages and messages[-1]["role"] == "user":
                 self.emit("result", text=clip(RESULT_TAGS.sub("", messages[-1]["content"]).strip()))
             seen["n"] += 1
-            reply = generate(messages)
+            res = self.meter.reserve(messages) if self.meter else None       # raises U.LimitError when the plan has run out
+            try:
+                reply = generate(messages)
+            except BaseException:
+                if self.meter:
+                    self.meter.cancel(res)
+                raise
+            if self.meter:
+                self.meter.settle(res, generate, messages, reply)
             if self.stop.is_set():
                 raise Stopped()
             try:
@@ -131,6 +173,10 @@ class Session:
                                        out=lambda *_: None)
             self.emit("end", finished=result["finished"], summary=clip(result["summary"]), turns=result["turns"])
             self.state = "done" if result["finished"] else "stopped"
+        except U.LimitError as e:
+            when = f" Try again in about {max(1, int((e.retry_after or 0) // 60))} minutes." if e.retry_after else ""
+            self.emit("end", finished=False, summary=f"Your usage ran out: {e.message}{when} Your files so far are kept.", turns=0, limited=True)
+            self.state = "limited"
         except Stopped:
             self.emit("end", finished=False, summary="Stopped.", turns=0)
             self.state = "stopped"
@@ -198,6 +244,96 @@ class CodeManager:
             return {"path": rel, "text": "(a binary file)", "truncated": False}
         return {"path": rel, "text": data[:MAX_FILE_BYTES].decode("utf-8", "replace"), "truncated": len(data) > MAX_FILE_BYTES}
 
+    def export_zip(self, user, project):
+        """The whole project as zip bytes (without .git, caches and node_modules)."""
+        path = self.project_path(user, project)
+        if not os.path.isdir(path):
+            raise CodeError("That project isn't here.")
+        buf, total = io.BytesIO(), 0
+        with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as z:
+            for dirpath, dirs, names in os.walk(path):
+                dirs[:] = sorted(d for d in dirs if d not in SKIP_DIRS and not os.path.islink(os.path.join(dirpath, d)))
+                for n in sorted(names):
+                    full = os.path.join(dirpath, n)
+                    if os.path.islink(full):
+                        continue
+                    total += os.path.getsize(full)
+                    if total > 50_000_000:
+                        raise CodeError("That project is too big to download as one zip.")
+                    z.write(full, os.path.relpath(full, path))
+        return buf.getvalue()
+
+    @staticmethod
+    def _safe_rel(name):
+        """A path from an upload, made safe: None to skip it, CodeError if it tries to escape."""
+        name = str(name).replace("\\", "/").lstrip("/")
+        parts = [p for p in name.split("/") if p not in ("", ".")]
+        if not parts:
+            return None
+        if ".." in parts or re.match(r"^[A-Za-z]:", parts[0]):
+            raise CodeError("That upload has a path that leaves the project.", "Nothing was imported.")
+        if any(p in SKIP_DIRS for p in parts[:-1]):
+            return None
+        return "/".join(parts)
+
+    def import_files(self, user, project, entries):
+        """entries: [(path, bytes)]. Writes them into the project (overwriting). Returns how many were written."""
+        if self.running(user):
+            raise CodeError("A session is running.", "Stop it first.")
+        root = os.path.realpath(self.project_path(user, project))
+        clean, total = [], 0
+        for name, data in entries:
+            rel = self._safe_rel(name)
+            if rel is None:
+                continue
+            if len(data) > MAX_ONE_FILE:
+                raise CodeError(f"{rel} is too big to import (over 2 MB).", "Nothing was imported.")
+            total += len(data)
+            clean.append((rel, data))
+            if len(clean) > MAX_IMPORT_FILES or total > MAX_IMPORT_BYTES:
+                raise CodeError("That is too much to import (up to 1,000 files and 20 MB).", "Nothing was imported.")
+        if not clean:
+            raise CodeError("No files to import.")
+        for rel, data in clean:
+            full = os.path.realpath(os.path.join(root, rel))
+            if not full.startswith(root + os.sep):
+                raise CodeError("That upload has a path that leaves the project.", "Nothing was imported.")
+        os.makedirs(root, exist_ok=True)
+        for rel, data in clean:
+            full = os.path.join(root, rel)
+            os.makedirs(os.path.dirname(full), exist_ok=True)
+            with open(full, "wb") as f:
+                f.write(data)
+        return len(clean)
+
+    def import_zip(self, user, project, data):
+        try:
+            z = zipfile.ZipFile(io.BytesIO(data))
+        except zipfile.BadZipFile:
+            raise CodeError("That isn't a zip file.")
+        entries, total = [], 0
+        with z:
+            for info in z.infolist():
+                if info.is_dir() or (info.external_attr >> 16) & 0o170000 == 0o120000:     # folders and symlinks are skipped
+                    continue
+                total += info.file_size
+                if info.file_size > MAX_ONE_FILE or total > MAX_IMPORT_BYTES or len(entries) >= MAX_IMPORT_FILES:
+                    raise CodeError("That zip is too big to import (up to 1,000 files, 20 MB, 2 MB each).", "Nothing was imported.")
+                entries.append((info.filename, z.read(info)))
+        return self.import_files(user, project, entries)
+
+    def import_b64(self, user, project, body):
+        """Either {"zip_b64": ...} or {"files": [{"path", "b64"}]}."""
+        try:
+            if body.get("zip_b64"):
+                return self.import_zip(user, project, base64.b64decode(body["zip_b64"], validate=True))
+            files = body.get("files")
+            if not isinstance(files, list):
+                raise CodeError("Choose a zip file or a folder.")
+            return self.import_files(user, project, [(f["path"], base64.b64decode(f["b64"], validate=True)) for f in files])
+        except (ValueError, KeyError, TypeError):
+            raise CodeError("That upload could not be read.")
+
     def delete_project(self, user, project):
         import shutil
         if self.running(user):
@@ -211,7 +347,7 @@ class CodeManager:
         s = self.sessions.get(self.by_user.get(user))
         return s if s and s.state in ("starting", "working", "asking") else None
 
-    def start(self, user, project, task, model_id, generate, auto_edits=False, context_tokens=None):
+    def start(self, user, project, task, model_id, generate, auto_edits=False, context_tokens=None, meter=None):
         task = str(task or "").strip()
         if not task:
             raise CodeError("Describe what to build or fix.")
@@ -226,7 +362,7 @@ class CodeManager:
             workspace = self.project_path(user, project)
             os.makedirs(workspace, exist_ok=True)
             self._n += 1
-            s = Session(f"s{self._n}-{int(time.time())}", user, project, task, model_id, workspace, auto_edits)
+            s = Session(f"s{self._n}-{int(time.time())}", user, project, task, model_id, workspace, auto_edits, meter)
             self.sessions[s.id], self.by_user[user] = s, s.id
         threading.Thread(target=s.run, args=(generate, self.max_turns, context_tokens), daemon=True).start()
         return s, note

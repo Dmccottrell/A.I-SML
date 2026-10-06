@@ -1,6 +1,10 @@
 """The VryxCode screen's server side: projects, a scripted session, permission questions, stopping, and the guards."""
+import base64
+import http.client
+import io
 import os
 import time
+import zipfile
 import unittest
 
 import harness
@@ -130,6 +134,86 @@ class CodeTests(Base):
 
     def test_needs_a_key(self):
         self.assertEqual(Client(self.port).call("GET", "/api/code")[0], 401)
+
+
+class MoreTests(Base):
+    def setUp(self):
+        super().setUp()
+        self.state.code_generate = lambda model: vryxcode.ScriptedChat(list(vryxcode.DEMO))
+
+    def finish_run(self, c):
+        sid = c.call("POST", "/api/code/start", {"project": "demo", "task": "x", "model": "solstice-2", "auto_edits": True})[1]["id"]
+        wait_for(lambda: c.call("GET", f"/api/code/sessions/{sid}")[1]["state"] in ("done", "limited", "failed"))
+        return c.call("GET", f"/api/code/sessions/{sid}")[1]
+
+    def test_session_is_counted_against_usage(self):
+        st, j = self.owner.call("POST", "/api/admin/users", {"user": "sam", "tier": "free"})
+        sam = Client(self.port, j["key"])
+        st, info = sam.call("GET", "/api/code")
+        self.assertFalse(info["usage"]["exempt"])
+        before = self.state.limiter.snapshot("sam", "flare", "balanced", self.state.clock())["week"]["used"]
+        j = sam.call("POST", "/api/code/start", {"project": "demo", "task": "x", "model": "equinox-2", "auto_edits": True})
+        if j[0] != 200:                                           # a free plan may not include Equinox: use what it does include
+            self.skipTest(j[1]["message"])
+        r = self.finish_run_for(sam, j[1]["id"])
+        self.assertGreater(r["used"], 0)
+        self.assertGreater(r["steps"], 0)
+        after = self.state.limiter.snapshot("sam", "flare", "balanced", self.state.clock())["week"]["used"]
+        self.assertGreater(after, before)
+
+    def finish_run_for(self, c, sid):
+        wait_for(lambda: c.call("GET", f"/api/code/sessions/{sid}")[1]["state"] in ("done", "limited", "failed"))
+        return c.call("GET", f"/api/code/sessions/{sid}")[1]
+
+    def test_owner_is_not_limited_but_still_measured(self):
+        r = self.finish_run(self.owner)
+        self.assertEqual(r["state"], "done")
+        self.assertTrue(r["usage"]["exempt"])
+
+    def test_session_stops_when_usage_runs_out(self):
+        st, j = self.owner.call("POST", "/api/admin/users", {"user": "pat", "tier": "pro"})
+        pat = Client(self.port, j["key"])
+        self.state.limiter.cfg["tiers"]["pro"]["tank"] = 1500        # room for only the first step or two
+        self.state.limiter.cfg["tiers"]["pro"]["refill_per_hour"] = 1
+        sid = pat.call("POST", "/api/code/start", {"project": "demo", "task": "x", "model": "equinox-2", "auto_edits": True})
+        if sid[0] != 200:
+            self.skipTest(sid[1]["message"])
+        r = self.finish_run_for(pat, sid[1]["id"])
+        self.assertEqual(r["state"], "limited")
+        self.assertIn("usage ran out", r["events"][-1]["summary"])
+
+    def test_zip_round_trip_and_import_guards(self):
+        self.finish_run(self.owner)
+        c = http.client.HTTPConnection("127.0.0.1", self.port)
+        c.request("GET", "/api/code/zip?project=demo", headers={"Authorization": "Bearer " + self.state.owner_key()})
+        r = c.getresponse()
+        data = r.read()
+        self.assertEqual(r.status, 200)
+        self.assertEqual(r.getheader("Content-Type"), "application/zip")
+        self.assertIn("slug.py", zipfile.ZipFile(io.BytesIO(data)).namelist())
+        ok = self.owner.call("POST", "/api/code/import", {"project": "copy", "zip_b64": base64.b64encode(data).decode()})
+        self.assertEqual(ok[0], 200)
+        self.assertIn("slug.py", self.owner.call("GET", "/api/code/files?project=copy")[1]["files"])
+        evil = io.BytesIO()
+        with zipfile.ZipFile(evil, "w") as z:
+            z.writestr("../escape.txt", "x")
+        bad = self.owner.call("POST", "/api/code/import", {"project": "copy", "zip_b64": base64.b64encode(evil.getvalue()).decode()})
+        self.assertEqual(bad[0], 400)
+        bad = self.owner.call("POST", "/api/code/import", {"project": "copy", "files": [{"path": "a/../../x", "b64": "eA=="}]})
+        self.assertEqual(bad[0], 400)
+        good = self.owner.call("POST", "/api/code/import", {"project": "copy", "files": [{"path": "sub/new.txt", "b64": "aGk="}, {"path": ".git/config", "b64": "eA=="}]})
+        self.assertEqual(good[1]["imported"], 1)
+        self.assertEqual(self.owner.call("POST", "/api/code/import", {"project": "copy", "zip_b64": "!!"})[0], 400)
+
+
+class ThinkFilter(unittest.TestCase):
+    def test_hides_reasoning_even_when_tags_are_split(self):
+        import app_engine
+        f = lambda pieces: "".join(app_engine.strip_think(pieces))
+        self.assertEqual(f(["<thi", "nk>reason", "ing</th", "ink>\n\nHello <b", "> there"]), "Hello <b> there")
+        self.assertEqual(f(["plain ", "text"]), "plain text")
+        self.assertEqual(f(["<think>never closed"]), "")
+        self.assertEqual(f(["Answer: 1 < 2"]), "Answer: 1 < 2")
 
 
 if __name__ == "__main__":

@@ -65,6 +65,7 @@ from open_tokenizer import OpenTokenizer
 HERE = os.path.dirname(os.path.abspath(__file__))
 WEB = os.path.join(HERE, "web")
 MAX_BODY = 1_000_000
+MAX_UPLOAD = 30_000_000                                # a project upload (base64): see code_sessions.MAX_IMPORT_BYTES
 MAX_TEXT = 20_000
 EFFORTS = {"quick": 160, "balanced": 320, "deep": 700}          # most words a reply may have, per effort level
 TEMPERATURE = {"quick": 0.7, "balanced": 0.8, "deep": 0.8}
@@ -636,7 +637,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
 
     def _json(self):
         n = int(self.headers.get("Content-Length") or 0)
-        if n > MAX_BODY:
+        if n > (MAX_UPLOAD if self.path.split("?")[0] == "/api/code/import" else MAX_BODY):
             raise ValueError("too big")
         raw = self.rfile.read(n) if n else b""
         return json.loads(raw) if raw else {}
@@ -795,14 +796,26 @@ class Handler(http.server.BaseHTTPRequestHandler):
     def _code_error(self, e):
         self._send(400, {"code": "code_error", "message": e.message, "action": e.action})
 
+    def _code_usage(self, who, model_id):
+        """The same numbers as the chat's usage line, in 'coding steps' (one step = one model call at Balanced)."""
+        st = self.state
+        name = next((m["name"] for m in st.manifest["models"] if m["id"] == model_id), "Equinox").lower()
+        snap = st.limiter.snapshot(who["user"], name, "balanced", st.clock())
+        return {"status": snap["status"], "exempt": snap["exempt"], "tank_pct": round(snap["tank"]["pct"]), "week_pct": round(snap["week"]["pct_left"]),
+                "steps_left": snap["can_send"], "plan": snap["plan"]}
+
     def api_code_get(self, who, path, qs):
         st, user = self.state, who["user"]
         arg = lambda k: (qs.get(k) or [""])[0]
         try:
             if path == "/api/code":
                 run = st.code.running(user)
-                return self._send(200, {"models": st.code_models(who), "projects": st.code.projects(user),
+                return self._send(200, {"usage": self._code_usage(who, None), "models": st.code_models(who), "projects": st.code.projects(user),
                                         "running": run.id if run else None, "project": run.project if run else None})
+            if path == "/api/code/zip":
+                project = st.code.check_name(arg("project"))
+                return self._send(200, st.code.export_zip(user, project), "application/zip",
+                                  {"Content-Disposition": f'attachment; filename="{project}.zip"'})
             if path == "/api/code/files":
                 return self._send(200, {"files": st.code.files(user, arg("project"))})
             if path == "/api/code/file":
@@ -811,7 +824,9 @@ class Handler(http.server.BaseHTTPRequestHandler):
             if m:
                 s = st.code.get(user, m.group(1))
                 events, state, pending = s.since(max(0, int(arg("after") or 0)))
-                return self._send(200, {"events": events, "state": state, "pending": pending, "task": s.task, "project": s.project, "model": s.model_id})
+                return self._send(200, {"events": events, "state": state, "pending": pending, "task": s.task, "project": s.project, "model": s.model_id,
+                                        "used": round(s.meter.counted) if s.meter else 0, "steps": s.meter.steps if s.meter else 0,
+                                        "usage": self._code_usage(who, s.model_id)})
             return self._send(404, {"code": "not_found", "message": "Not found."})
         except code_sessions.CodeError as e:
             self._code_error(e)
@@ -837,9 +852,15 @@ class Handler(http.server.BaseHTTPRequestHandler):
                             box["fn"] = st.code_backend(model)
                         except AppError as e:
                             raise code_sessions.CodeError(e.message, e.action)
-                    return box["fn"](messages)
+                    reply = box["fn"](messages)
+                    generate.usage = getattr(box["fn"], "usage", None)      # the real counts, for the usage meter
+                    return reply
+                snap = st.limiter.snapshot(user, model["name"].lower(), "balanced", st.clock())
+                if not snap["exempt"] and snap["can_send"] < 1:
+                    raise code_sessions.CodeError("Your usage has run out for now.", "Coding steps are counted like chat messages. Wait for the tank to refill or the week to reset.")
+                meter = code_sessions.Meter(st.limiter, user, model["name"].lower(), st.clock)
                 s, note = st.code.start(user, project, body.get("task"), model["id"], generate, bool(body.get("auto_edits")),
-                                        int(model.get("context_tested") or 8192))
+                                        int(model.get("context_tested") or 8192), meter)
                 return self._send(200, {"id": s.id, "note": note})
             m = re.fullmatch(r"/api/code/sessions/([\w-]+)/answer", path)
             if m:
@@ -849,6 +870,9 @@ class Handler(http.server.BaseHTTPRequestHandler):
             if m:
                 st.code.get(user, m.group(1)).request_stop()
                 return self._send(200, {"ok": True})
+            if path == "/api/code/import":
+                project = st.code.check_name(body.get("project"))
+                return self._send(200, {"imported": st.code.import_b64(user, project, body), "project": project})
             if path == "/api/code/projects/delete":
                 st.code.delete_project(user, body.get("project"))
                 return self._send(200, {"ok": True})
