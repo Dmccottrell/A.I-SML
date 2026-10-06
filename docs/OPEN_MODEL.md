@@ -197,6 +197,8 @@ The v3 lessons say the model "was trained from scratch on a home computer". That
 - Check the result with `python evaluate_open.py --model flare-2.5 --tuned` (identity sheet, `eval/identity_open.jsonl`); other sheets work too (`--prompts eval/constraints.jsonl`).
 See [IDENTITY.md](IDENTITY.md) for the voice and the ways to make it ours.
 
+See [BENCHMARKS.md](BENCHMARKS.md) for every benchmark we measure or plan (public suites via `bench_open.py`, agentic ones, what each needs).
+
 ## Results: Flare 2.5 (Qwen 2.5 1.5B, trained Oct 5-6 2026)
 - **Training:** 988 steps over 109,917 chats on one RTX 5090 (7.2 s/step, about 2 hours, final loss about 0.75). The first run learned the old "trained from scratch" identity answers (identity sheet 8/16), so it got an identity fix.
   The first fix did almost nothing (a few steps); the second (`--patch`, 189 steps, about 6 minutes) gave **identity 16/16** (`eval/identity_open.jsonl`).
