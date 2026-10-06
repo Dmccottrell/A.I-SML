@@ -39,6 +39,14 @@ python vryxcode.py --demo                         # a scripted run, no model nee
 - It refuses Ember 2, Flare 2 and Flare 2.5, and tells Equinox 2 users to keep tasks small.
 - Qwen's own tool-call format (`<tool_call>`) and our `<|tool_call|>` format both work, and `<think>` blocks are dropped.
 
+## Using an outside coding model (for the best local coding today)
+`--coder LABEL` runs VryxCode on any coding model you start in llama-server, such as Qwen2.5-Coder-14B-Instruct or Qwen3.5-9B (both fit a 12 GB card at 4 bits; check the licence on each model's page). It skips the Emvryx model gate and labels the run as an outside model, so its scores are never mistaken for an Emvryx result. `bench_exercises.py` and `vryx_swe.py` take the same flag, so the candidates can be compared on the same exercises.
+```
+llama-server -m models\coder\qwen2.5-coder-14b-instruct-q4_k_m.gguf -c 12288 -ngl 99 -fa on -ctk q8_0 -ctv q8_0 --port 8080
+python vryxcode.py --coder qwen2.5-coder-14b "add a function that slugifies a title, with tests"
+python bench_exercises.py --coder qwen2.5-coder-14b --exercises python\exercises\practice --limit 10
+```
+
 ## What already exists
 - `harness.py`: a sandbox that reads a file, edits a file, runs a command and runs tests, all inside a temporary copy.
 - `agent_tasks.py`, `agent_lessons.py`, `make_agent_data.py`: tiny practice projects and the lessons for tool use, project notes, asking first, "too big" and carrying on after old steps are folded away.

@@ -94,9 +94,10 @@ def main(argv=None):
     p.add_argument("--max-turns", type=int, default=20)
     p.add_argument("--context", type=int, default=32768)
     p.add_argument("--resume", action="store_true", help="skip instances already in --out")
+    p.add_argument("--coder", default=None, metavar="LABEL", help="use an outside coding model that llama-server is running, under this label")
     a = p.parse_args(argv)
 
-    ok, note = V.check_model(a.model)
+    ok, note = V.gate(a.model, a.coder)
     if not ok:
         raise SystemExit(note)
     with open(a.instances, encoding="utf-8") as f:
@@ -117,7 +118,7 @@ def main(argv=None):
             except (FileNotFoundError, RuntimeError) as e:
                 print(f"{inst['instance_id']}: skipped ({e})")
                 continue
-            out_f.write(json.dumps(predictions_row(solved, a.model), ensure_ascii=False) + "\n")
+            out_f.write(json.dumps(predictions_row(solved, a.coder or a.model), ensure_ascii=False) + "\n")
             out_f.flush()
     print(f"predictions in {a.out}. Score them with the official SWE-bench harness on a machine with Docker.")
     return 0

@@ -120,3 +120,18 @@ class Backend(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class OutsideCoder(unittest.TestCase):
+    def test_the_gate_lets_an_outside_coding_model_through_but_labels_it(self):
+        ok, msg = V.gate("flare-2.5", "qwen2.5-coder-14b")
+        self.assertTrue(ok)
+        self.assertIn("not an Emvryx model", msg)
+        self.assertFalse(V.gate("flare-2.5")[0])                     # without --coder the small models are still refused
+        self.assertTrue(V.gate("solstice-2")[0])
+
+    def test_the_command_runs_with_a_coder_label(self):
+        # an unreachable server proves the gate was passed (the error is about the server, not the model)
+        with self.assertRaises(SystemExit) as c:
+            V.main(["--coder", "qwen2.5-coder-14b", "--llama", "http://127.0.0.1:9", "--workspace", tempfile.mkdtemp(), "do it"])
+        self.assertIn("llama-server", str(c.exception))
