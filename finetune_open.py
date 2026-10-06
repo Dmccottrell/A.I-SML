@@ -123,11 +123,21 @@ def lr_at(step, total, base, warmup):
     return base * (0.1 + 0.9 * 0.5 * (1 + math.cos(math.pi * min(1.0, t))))
 
 
-def merge_and_export(base_model, adapter_dir, export_dir, torch):
+def merge_and_export(base_model, adapter_dir, export_dir, torch, spread=False):
     """Merge the LoRA adapter into the base weights and write a plain Hugging Face folder."""
     from peft import PeftModel
     from transformers import AutoModelForCausalLM, AutoTokenizer
-    model = AutoModelForCausalLM.from_pretrained(base_model, dtype=torch.bfloat16)
+    model = None
+    if spread and torch.cuda.is_available():       # a 14B model is about 30 GB in bf16: more than a 30 GB machine's RAM, so fill the GPU first and spill the rest to RAM
+        gpu_gb = torch.cuda.get_device_properties(0).total_memory / 2**30
+        try:
+            model = AutoModelForCausalLM.from_pretrained(base_model, dtype=torch.bfloat16, device_map="auto",
+                                                         max_memory={0: f"{int(gpu_gb * 0.9)}GiB", "cpu": "22GiB"})
+        except Exception as e:                      # fall back to the plain load below
+            print(f"merge: spreading over GPU and RAM failed ({e}); loading on the CPU instead", flush=True)
+            model = None
+    if model is None:
+        model = AutoModelForCausalLM.from_pretrained(base_model, dtype=torch.bfloat16)
     model = PeftModel.from_pretrained(model, adapter_dir).merge_and_unload()
     os.makedirs(export_dir, exist_ok=True)
     model.save_pretrained(export_dir, safe_serialization=True)
@@ -185,7 +195,7 @@ def main(argv=None):
     if a.merge:
         if not os.path.isdir(os.path.join(a.out, "adapter")):
             sys.exit(f"no adapter in {a.out}/adapter - train first (python finetune_open.py)")
-        print("merged ->", merge_and_export(a.model, os.path.join(a.out, "adapter"), a.export, torch))
+        print("merged ->", merge_and_export(a.model, os.path.join(a.out, "adapter"), a.export, torch, spread=a.quant4))
         return 0
 
     from peft import LoraConfig, PeftModel, get_peft_model
