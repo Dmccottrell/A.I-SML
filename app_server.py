@@ -271,6 +271,17 @@ class AppState:
         self._ensure_usage_user(self.users[key])
         return key
 
+    def rotate_key(self, name):
+        """Replace a person's key with a new one (the old key stops working at once). Their chats and usage stay. Returns the new key."""
+        found = [k for k, u in self.users.items() if u["user"] == name]
+        if not found:
+            raise ValueError(f"no one is called {name!r} (use owner, or a name you added with --add-user)")
+        key = secrets.token_urlsafe(24)
+        for old in found:
+            self.users[key] = self.users.pop(old)
+        self._save_users()
+        return key
+
     def owner_key(self):
         return next(k for k, u in self.users.items() if u.get("owner"))
 
@@ -903,6 +914,7 @@ def main():
                     help="the Wikipedia index (wiki_index.py) the chat looks things up in; skipped if the file isn't there")
     ap.add_argument("--no-web", action="store_true", help="never search the web (people's own Settings choice then has no effect)")
     ap.add_argument("--timings", action="store_true", help="print how long each reply took (loading, first word, total)")
+    ap.add_argument("--rotate-key", metavar="NAME", help="give someone a new key (owner, or a name from --add-user); the old key stops working. Restart the app afterwards")
     ap.add_argument("--add-user", nargs=2, metavar=("NAME", "PLAN"), help="add a tester (free, pro or mega) and print their key")
     args = ap.parse_args()
     if args.data == ".emvryx" and not os.path.exists(".emvryx") and os.path.isdir(".yuvra"):   # the app was called Yuvra before
@@ -923,6 +935,14 @@ def main():
         runner = ModelRunner(args.llama_bin or find_llama_server(), files, extra_args=args.llama_args.split())
     state = AppState(args.data, args.llama, args.llama_key, tok, manifest=manifest, ram_gb=args.ram, runner=runner)
     state.verbose = args.timings
+    if args.rotate_key:
+        try:
+            key = state.rotate_key(args.rotate_key)
+        except ValueError as e:
+            sys.exit(str(e))
+        print(f"{args.rotate_key}: http://localhost:{args.port}/?key={key}")
+        print("The old key no longer works. Restart the app so it reads the new key.")
+        return
     if args.add_user:
         key = state.add_user(*args.add_user)
         print(f"{args.add_user[0]} ({args.add_user[1]}): http://localhost:{args.port}/?key={key}")
