@@ -6,6 +6,7 @@
 #   tmux new -s chain        (or use the one you have)
 #   bash chain_open.sh                     # Flare 2.5 wrap-up, then Equinox 2
 #   bash chain_open.sh equinox-2 solstice-2   # more models, one after the other (only start ones you have budget for)
+#   SKIP_FLARE=1 bash chain_open.sh           # skip the Flare 2.5 wrap-up (already done) and go straight to Equinox 2 (it resumes if it was stopped)
 #
 # It never presses Stop on the Vast instance: when it pings "all done", stop the instance yourself (Stop, not Destroy).
 NTFY="${NTFY_TOPIC:-v35-AI}"
@@ -39,7 +40,7 @@ wrap_up() {   # merge, exam, back up one model: wrap_up <preset>
     hf upload "$REPO" "export/open/$m/my-ai" "$m/my-ai" > "logs/$m-upload.txt" 2>&1 || ping "$m: upload failed (logs/$m-upload.txt), the files are still on this machine"
 }
 
-wrap_up flare-2.5
+if [ "${SKIP_FLARE:-0}" != "1" ]; then wrap_up flare-2.5; fi      # SKIP_FLARE=1 bash chain_open.sh: only the next models
 for m in "${NEXT[@]}"; do
     ping "$m: pilot (3 steps, checks memory and speed)"
     python finetune_open.py --model "$m" --pilot > "logs/$m-pilot.txt" 2>&1 || fail "$m pilot failed, probably out of memory (logs/$m-pilot.txt). Lower --batch_tokens."
