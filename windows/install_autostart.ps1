@@ -6,6 +6,7 @@ Run it ONCE, in PowerShell opened as Administrator (right-click PowerShell, "Run
     cd C:\Users\Darry\Projects\a.i-sml
     powershell -ExecutionPolicy Bypass -File windows\install_autostart.ps1 -Llama "C:\Users\Darry\Downloads\llama-b11192-bin-win-cpu-x64\llama-server.exe"
 
+Add -Python "C:\path\to\python.exe" if the python you normally run the app with is not the first one on the PATH (find it with:  where.exe python  in a normal, non-admin window).
 Use the llama-server.exe that has CUDA (GPU) support if you have one, so the 4070 is used. Take it off with:  -Remove
 
 What it does:
@@ -19,6 +20,7 @@ It does NOT change your keys, and it does not open anything to the internet by i
 param(
     [string]$Repo = (Split-Path -Parent $PSScriptRoot),
     [string]$Llama = "",
+    [string]$Python = "",
     [int]$Port = 8000,
     [string]$LlamaArgs = "-ngl 99",
     [switch]$Remove
@@ -33,8 +35,10 @@ if ($Remove) {
 }
 
 if (-not (Test-Path (Join-Path $Repo "app_server.py"))) { throw "app_server.py not found in $Repo (use -Repo to say where the project is)." }
-$python = (Get-Command python -ErrorAction SilentlyContinue).Source
-if (-not $python) { throw "Python was not found on the PATH." }
+$python = if ($Python) { $Python } else { (Get-Command python -ErrorAction SilentlyContinue).Source }
+if (-not $python -or -not (Test-Path $python)) { throw "Python was not found. Use -Python with the full path of the python.exe you normally run the app with." }
+& $python -c "import tokenizers, numpy, regex" 2>$null
+if ($LASTEXITCODE -ne 0) { Write-Warning "This Python ($python) is missing packages the app needs. Use the python.exe you normally run the app with (-Python), or run: & `"$python`" -m pip install -r requirements.txt" }
 $data = Join-Path $Repo ".emvryx"
 New-Item -ItemType Directory -Force -Path $data | Out-Null
 
