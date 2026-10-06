@@ -207,6 +207,7 @@ See [IDENTITY.md](IDENTITY.md) for the voice and the ways to make it ours.
 - **Not done yet:** the lookup sheet (41) and rules sheet (30) on Flare 2.5, the GGUF for the app, and the app entry (still `planned` in `models.json`).
 
 ### Window settings in the app (Oct 2026)
-`models.json` now sets **context_tested = 32,768** for Flare 2.5, Equinox 2, Solstice 2 and Apogee 2 (Qwen reads 32K natively; none of them has been through our own long-input test yet, so treat it as the maker's figure).
+`models.json` sets **context_tested = 32,768** for Equinox 2, Solstice 2 and Apogee 2 (Qwen reads 32K natively; none of them has been through our own long-input test yet, so treat it as the maker's figure).
 The app still picks the smallest of: that number, what fits in your free memory (Apogee 2 will come out far smaller on a 12 GB card), the plan, and the window mode: **"everyday" caps the window at 8,192 tokens; choose "long" in Settings to use more.**
 The 128K YaRN windows are not switched on in the app (they need extra llama-server options, `open_models.llama_args`, and about 18 GB of memory). Ember 2 (1,024) and Flare 2 (2,048) cannot be raised: their position range was trained that short, and stretching it needs the long-context ladder.
+**Flare 2.5 stays at 8,192** (the owner's choice) until a long-input test shows more is safe. **Training length is separate from the window:** the fine-tunes train on short chats (`--max_len 4096`, most lessons are well under 1,000 tokens), while the window is only a setting for chatting. The base Qwen model's 32K ability is not removed by the fine-tune; teaching the model to *use* long inputs well is a later "+" step with long-document lessons.

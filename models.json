@@ -114,7 +114,7 @@
       ],
       "pinned": false,
       "cost_weight": 1,
-      "context_tested": 32768,
+      "context_tested": 8192,
       "kv_kb_per_token": 28,
       "weights_mb": 3100,
       "tokenizer": "checkpoints/dev/open/flare-2.5/tokenizer/tokenizer.json",
