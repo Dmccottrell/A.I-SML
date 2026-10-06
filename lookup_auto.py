@@ -8,13 +8,13 @@ answer from notes, name the source, and say "I don't know" when the notes don't 
     3. Search the web too when the setting allows it AND (the question is about something recent, OR the Wikipedia notes
        barely match the question). Never in a private chat, and a failed or offline search just means no web notes.
 
-The setting is per person: "auto" (the default), "off" (Wikipedia on this computer only) or "always" (web for every factual
-question). `gather` returns (notes, info); `info` is what the page shows ("Read 2 notes from Wikipedia and 1 from the web").
+The setting is per person: "auto" (the default), "off" (Wikipedia on this computer only), "always" (web for every factual
+question) or "none" (no lookup at all: the model answers from what it knows). `gather` returns (notes, info); `info` is what the page shows ("Read 2 notes from Wikipedia and 1 from the web").
 """
 import re
 import threading
 
-MODES = ("auto", "off", "always")
+MODES = ("auto", "off", "always", "none")     # "none": no lookup at all, the model answers from what it knows
 
 # a message that starts with one of these is a job, not a question: no lookup
 TASK_START = re.compile(r"^(write|draft|compose|translate|rewrite|rephrase|summari[sz]e|proofread|edit|fix|make|create|generate|"
@@ -79,6 +79,8 @@ def gather(question, wiki=None, web=None, mode="auto", private=False, max_notes=
     info = {"asked": False, "saved": 0, "wiki": 0, "web": 0, "web_tried": False, "sources": []}
     mode = mode if mode in MODES else "auto"
     if not wants_lookup(question):
+        return [], info
+    if mode == "none":
         return [], info
     info["asked"] = True
     recent = time_sensitive(question)
