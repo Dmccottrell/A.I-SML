@@ -11,6 +11,7 @@
 #   3  code benchmarks (HumanEval, MBPP, 50 questions each), base vs tuned, 3 models                   (about 1 h)
 #   4  VryxCode exercise test: Qwen2.5-Coder-14B (outside model), Solstice 2 and Equinox 2, 10 exercises each (about 1.5 to 2 h,
 #      including building llama.cpp, downloading the coder model and converting our models)
+#   5  (only with COLLECT=1) keep the coder's successful practice runs as training data: about 1 more hour
 # A failed step is reported and skipped; the next one still runs. It never stops the Vast instance: when it pings "all done", press Stop (not Destroy).
 # Not included: the hard suite (MMLU-Pro, GPQA, MATH, MuSR, BBH: long, and GPQA needs a Hugging Face login) and full-size runs: do those later if you want them.
 NTFY="${NTFY_TOPIC:-v35-AI}"
@@ -68,6 +69,15 @@ serve_and_run() {   # serve_and_run GGUF -- bench_exercises args...
     kill $pid 2>/dev/null; wait $pid 2>/dev/null
     return $rc
 }
+serve_and_run_collect() {
+    "$LLAMA/build/bin/llama-server" -m "$1" -c 16384 -ngl 99 --port 8080 > logs/bench/llama-server.txt 2>&1 &
+    local pid=$!
+    for i in $(seq 1 120); do curl -s localhost:8080/health | grep -q ok && break; sleep 5; done
+    python collect_runs.py --coder qwen2.5-coder-14b --exercises "$EX" --limit 20 --synthetic 40 --llama http://127.0.0.1:8080 --out logs/bench/agent_runs.jsonl
+    local rc=$?
+    kill $pid 2>/dev/null; wait $pid 2>/dev/null
+    return $rc
+}
 summary() { python -c "import json,sys; s=json.load(open(sys.argv[1]))['summary']; print(s.get('passed_first_try'), 'first try,', s.get('passed_after_second_try'), 'after second, of', s.get('exercises'))" "$1"; }
 
 if [ ! -x "$LLAMA/build/bin/llama-server" ]; then
@@ -81,6 +91,10 @@ if [ -x "$LLAMA/build/bin/llama-server" ] && [ -d "$EX" ]; then
     if [ -n "$CODER" ]; then
         stage "exercises: Qwen2.5-Coder-14B (outside model)" logs/bench/coder14b-exercises.txt serve_and_run "$CODER" --coder qwen2.5-coder-14b --exercises "$EX" --out logs/bench/coder14b-exercises.json \
             && ping "Qwen2.5-Coder-14B exercises: $(summary logs/bench/coder14b-exercises.json)"
+    fi
+    if [ "${COLLECT:-0}" = "1" ] && [ -n "$CODER" ]; then      # COLLECT=1 bash bench_all.sh: also keep the coder's successful runs as training data (about 1 hour more)
+        stage "collecting successful runs from Qwen2.5-Coder-14B" logs/bench/collect.txt serve_and_run_collect "$CODER" \
+            && ping "collected runs: $(wc -l < logs/bench/agent_runs.jsonl) saved in logs/bench/agent_runs.jsonl"
     fi
     for m in solstice-2 equinox-2; do
         stage "converting $m to a GGUF" "logs/bench/$m-convert.txt" python "$LLAMA/convert_hf_to_gguf.py" "export/open/$m/my-ai" --outfile "$MODELDIR/$m-q8.gguf" --outtype q8_0 \
