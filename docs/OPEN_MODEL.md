@@ -232,3 +232,7 @@ A web search on 2026-10-06 found newer open bases than the ones the 2.x series u
 3. The chat template: newer Qwen models can think by default, and our lessons have no thinking text.
 4. The exam (`exam_open.py --compare`) and the identity sheet, as for every model.
 Hardware: the 27B models do not fit a 12 GB card even in 4 bits (about 16 GB), so Apogee 3 needs a rented GPU or offloading to memory; the 35B-A3B mixture runs only 3B per word but still needs about 20 GB to hold the weights.
+
+### Decision point before Solstice 2 (Oct 6 2026)
+The 2.x builds use Qwen2.5 / Qwen3 because that is what was known when they were planned; Qwen3.5 (and Qwen3.8) turned out to exist. Costs are small ($1 to $5 per build), so a base swap is cheap, but the newer bases are untried here. To try Qwen3.5 without risk: let Equinox 2 finish (`SKIP_FLARE=1 ATTACH=equinox-2 bash chain_open.sh` waits, merges, tests and backs it up, then stops), then pilot the new base for a few cents:
+`python finetune_open.py --model Qwen/Qwen3.5-9B --pilot --batch_tokens 2048 --grad_accum 32 --rank 32` (and `Qwen/Qwen3.5-4B`, `Qwen/Qwen3.5-2B`). If a pilot works (it loads, trains, and `open_tokenizer.py` accepts the tokenizer), train it and check it like the others (`exam_open.py`, `evaluate_open.py`, `bench_open.py`); if it fails, the pilot says why, and Solstice 2 on Qwen3-8B (`--model solstice-2`) is still the fallback.
