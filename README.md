@@ -39,7 +39,7 @@ number: **Emvryx Ember** (small and quick), **Emvryx Flare** (fast and light), *
 
 Planned: a 3.x series on Qwen3.5 and a 4.x series on Qwen3.8 or the newest base (`docs/OPEN_MODEL.md`). A newer generation takes the main spot in the app's picker. Each name has
 its own number that goes up only when that model is updated ("+" refreshes take the next decimal: Flare 2.5 to Flare 2.6). The from-scratch v3.5 run was
-stopped (see `docs/V3_5.md`). They are placeholders: no trademark check has been done yet. See `docs/ROADMAP.md`, `docs/OPEN_MODEL.md` and `docs/APP.md`. Measured so far (HellaSwag, tuned vs plain base): Flare 2.5 67.2% vs 65.6%, Equinox 2 68.5% vs 64.8%, Solstice 2 73.6% vs 71.9%; identity 16/16 on all three. A coding assistant, **VryxCode** (built: terminal tool and a Code screen in the chat app, usage-metered; only on Equinox 2 and above), is described in `docs/VRYXCODE.md`.
+stopped (see `docs/V3_5.md`). They are placeholders: no trademark check has been done yet. See `docs/ROADMAP.md`, `docs/OPEN_MODEL.md` and `docs/APP.md`. For non-technical readers, see the plain-language **[Family guide](docs/FAMILY_GUIDE.md)**. Measured so far (HellaSwag, tuned vs plain base): Flare 2.5 67.2% vs 65.6%, Equinox 2 68.5% vs 64.8%, Solstice 2 73.6% vs 71.9%; identity 16/16 on all three. A coding assistant, **VryxCode** (built: terminal tool and a Code screen in the chat app, usage-metered; only on Equinox 2 and above), is described in `docs/VRYXCODE.md`.
 
 ## Pretrained weights policy (updated Oct 2026)
 
