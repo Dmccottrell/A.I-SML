@@ -38,6 +38,14 @@ class Client:
             return r.status, dict(r.getheaders()), data
         return r.status, (json.loads(data) if data else {})
 
+    def use_pairing_link(self, token, headers=None):
+        """What a browser does: open the link (a page with a button; nothing is used up yet), then press the button. Returns (status, headers)."""
+        st, h, _ = self.call("GET", "/pair/" + token, raw=True, headers=headers)
+        if st != 200:
+            return st, h
+        st, h, _ = self.call("POST", "/pair/" + token, raw=True, headers=headers)
+        return st, h
+
     def stream(self, chat_id, body):
         """POST a message; returns (status, headers, [(event, data)]) - or (status, headers, json) for plain errors."""
         c = http.client.HTTPConnection("127.0.0.1", self.port, timeout=30)

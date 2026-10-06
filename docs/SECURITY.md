@@ -48,10 +48,37 @@ This file is the single place for how Emvryx keeps people and their data safe. I
 - **Backups** (`backup_data.py`): `python backup_data.py --data .emvryx --out backups` makes a dated zip (SQLite files copied safely while the app runs; mode 600; `secret.key` left out unless `--with-key`; the 14 newest kept, `--keep N`), and `--restore ZIP --to EMPTYFOLDER` restores it (refusing a non-empty folder and unsafe paths). Run it daily from Task Scheduler or cron and store the zips away from the server. Deleted accounts leave the backups as they age out.
 - **Names:** an informal check is in [TRADEMARK.md](TRADEMARK.md): "Emvryx" looks distinctive, the five model names are common words already used around AI (always use them with the Emvryx stem), and a proper attorney-led search is still needed.
 
+## 8. Review, dependency audit, monitoring and the threat model (done Oct 6 2026)
+
+**Threat model in one table** (who could do what, and what stops them):
+
+| Threat | What stops it |
+|---|---|
+| A stranger guesses a key, pairing link or email code | 192-bit keys; 8 wrong tries per address per 10 minutes locks the address out; codes 6 digits, 5 tries, 3 codes per address per 10 minutes; one-time 15-minute pairing links |
+| A stolen data folder or backup | keys stored only as hashes; sessions only as hashes; saved tokens encrypted with a key that is not in the folder or the backup |
+| A stolen cookie or lost phone | the cookie is a session (not the key): sign that device out from another, or rotate the key (signs everyone out); sessions expire after 90 idle days; Secure + HttpOnly + SameSite=Strict |
+| Another website making your browser act (CSRF, clickjacking, script injection) | cross-site request check on every POST/DELETE; SameSite=Strict; frame-ancestors none; CSP with a one-time nonce and no inline handlers; the page builds everything from text |
+| A link preview burning a sign-in link | opening a pairing link only shows a button; the button (a POST) uses it |
+| Someone lying about their address to dodge a lockout | the real address is read only from the trusted proxy's headers, and from X-Forwarded-For only the entry the proxy added |
+| Working out who has an account (enumeration, timing) | the same answer and the same time for any address (the email is sent in the background) |
+| A coding model or user running harmful code | folder sandbox always; for other people also a container with no network and hard limits (fails closed); only the owner otherwise; quotas |
+| A container planting git settings to run code on the server or steal the token | the server only runs git on projects whose `.git/config` holds plain settings; the remote must be github.com; branch names are checked; `--` before the refspec |
+| The model reading or leaking a token | tokens are used only by server code, never in a prompt, event, log or command line; output is scrubbed |
+| An abusive or banned person | owner can turn them off (devices signed out at once); per-plan limits; audit log |
+| Losing everything | `backup_data.py` daily zips with retention and a tested restore |
+
+**What the review found and fixed** (all in this build, each with a test in `tests/test_review_fixes.py`): (1) the address behind a proxy was taken from the first X-Forwarded-For entry, which a caller writes, so a lockout could be dodged; now only the proxy's own entry is used. (2) A pairing link was used up by the first request to it, so a chat app's link preview could burn it; now a button does it. (3) A known email answered more slowly than an unknown one (the mail was sent before answering), which leaks who has an account; now it is sent in the background. (4) A branch name that looks like an option, written into `.git/HEAD` by a container, could have been passed to `git pull` as an option; names are checked and `--` is used. (5) The data export read whole files into memory as text (which also corrupted binary files); now raw bytes, per-file and total caps, links skipped, with a note listing what was left out. (6) Rate-limit memory and old sessions were never cleaned up; now trimmed and pruned. Reviewed and found sound: SQL (all queries are parameterised), static file serving (fixed names only), the data deletion (no path comes from the caller), zip restore (path-escape refused), the GitHub calls (fixed hosts only).
+
+**Dependency audit** (pip-audit 2.10.1 against this environment, Oct 6 2026): no known vulnerabilities in the packages the app runs on. Two were reported in `nltk` and `sqlitedict`, which come in with the benchmark tool on the cloud machine and are not used by the app. `requirements.txt` now asks for `cryptography>=42.0.4` (earlier releases have known fixes). Re-run `pip-audit -r requirements.txt` before each public release and monthly.
+
+**Monitoring:** `GET /api/admin/health` (owner only; also useful for a status check) gives uptime, server errors, signed-in devices and, for the last hour, sign-ins, failed tries, lockouts, cross-site refusals and refused key links, plus whether encryption, email sign-in, the code sandbox and alerts are on. Set `"alert_ntfy_topic": "your-secret-topic"` in `.emvryx/security.json` to get a phone message (through ntfy, the same as training) when an address is locked out, when the owner signs in, and on a server error; each kind is capped per hour so an attack cannot flood your phone. The security log (Settings > People) is the detail behind it.
+
+**Not done, and why:** (a) a real Docker run, a real mail server, a real Google or GitHub sign-in and a real GitHub push have not been tried (none were available here; the code is tested with stand-ins and the setup steps are above), (b) an outside tester round on the free tier needs people, (c) a lawyer's read of Privacy and Terms, and a proper trademark search, (d) sign-in with Google, (e) capacity and cost (item 6) is on hold by decision. Do (a) and (b) before opening to the public; they are the difference between "tested" and "proven".
+
 ## Settings you can change (`.emvryx/security.json`, all optional)
 
-`session_days` (90), `pair_minutes` (15), `login_fail_limit` (8), `login_fail_window` (600 seconds), `email_start_limit` (5), `email_start_window` (600), `open_signups` (false), `allow_key_links` (false), `allowed_origins` (`[]`), `code_unsandboxed_for_others` (false), `require_encryption` (false), `github_client_id`, `contact_email`, `operator_name` and the quota names above, `trusted_proxies` (`["127.0.0.1", "::1"]`; set `[]` if the app is reached directly and not through a proxy).
+`session_days` (90), `pair_minutes` (15), `login_fail_limit` (8), `login_fail_window` (600 seconds), `email_start_limit` (5), `email_start_window` (600), `open_signups` (false), `allow_key_links` (false), `allowed_origins` (`[]`), `code_unsandboxed_for_others` (false), `require_encryption` (false), `github_client_id`, `contact_email`, `operator_name`, `alert_ntfy_topic` and the quota names above, `trusted_proxies` (`["127.0.0.1", "::1"]`; set `[]` if the app is reached directly and not through a proxy).
 
-## Still to build (in order)
+## Still to do
 
-A security review, dependency audit and monitoring (8). Capacity and cost (6) is on hold by decision.
+Try it for real (Docker, mail, GitHub), run an outside tester round, get the policies and names checked, then decide on item 6 (capacity and cost, on hold) and Google sign-in.

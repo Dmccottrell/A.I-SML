@@ -17,6 +17,8 @@ import shutil
 import time
 import zipfile
 
+EXPORT_FILE_LIMIT, EXPORT_TOTAL_LIMIT = 20_000_000, 150_000_000
+
 README = """This is everything Emvryx holds about you, as of {when}.
 
 profile.json        your name, plan and email (never your key: it is stored only as a hash, so we cannot show it)
@@ -57,14 +59,17 @@ def export_zip(state, user):
         z.writestr("saved_notes.json", json.dumps(state.saved_for(user).list(now), indent=2))
         z.writestr("devices.json", json.dumps(state.auth.sessions_for(user), indent=2))
         z.writestr("github.json", json.dumps(state.github.public(user), indent=2))
-        base = state.code.base(user)
+        total, skipped = 0, []
         for project in state.code.projects(user):
             for rel in state.code.files(user, project):
-                try:
-                    data = state.code.read(user, project, rel)["text"]
-                except Exception:
+                data = state.code.read_bytes(user, project, rel, limit=EXPORT_FILE_LIMIT)
+                if data is None or total + len(data) > EXPORT_TOTAL_LIMIT:
+                    skipped.append(f"{project}/{rel}")
                     continue
+                total += len(data)
                 z.writestr(f"projects/{_safe(project)}/{rel}", data)
+        if skipped:
+            z.writestr("projects/_NOT_INCLUDED.txt", "These files were left out (too big for the download, or not ordinary files):\n" + "\n".join(skipped[:500]) + "\n")
     return buf.getvalue()
 
 

@@ -368,6 +368,17 @@ class CodeManager:
         except (ValueError, KeyError, TypeError):
             raise CodeError("That upload could not be read.")
 
+    def read_bytes(self, user, project, rel, limit=None):
+        """A project file's raw bytes (for the data export), only from inside the project; None if it is missing, a link or over `limit`."""
+        root = os.path.realpath(self.project_path(user, project))
+        full = os.path.realpath(os.path.join(root, rel))
+        if not full.startswith(root + os.sep) or not os.path.isfile(full) or os.path.islink(os.path.join(root, rel)):
+            return None
+        if limit is not None and os.path.getsize(full) > limit:
+            return None
+        with open(full, "rb") as f:
+            return f.read()
+
     def delete_project(self, user, project):
         import shutil
         if self.running(user):

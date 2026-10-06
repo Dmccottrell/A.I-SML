@@ -66,7 +66,7 @@ class Rights(Base):
     def test_deleting_an_account_removes_everything(self):
         self.sam_data()
         phone = Client(self.port)
-        st, h, _ = phone.call("GET", "/pair/" + self.owner.call("POST", "/api/admin/pairing", {"user": "sam"})[1]["pair"], raw=True)
+        st, h = phone.use_pairing_link(self.owner.call("POST", "/api/admin/pairing", {"user": "sam"})[1]["pair"])
         phone.cookie = h["Set-Cookie"].split(";")[0]
         self.assertEqual(self.sam.call("POST", "/api/delete-account", {"confirm": "wrong"})[0], 400)
         self.assertEqual(self.sam.call("GET", "/api/state")[0], 200)               # nothing happened
