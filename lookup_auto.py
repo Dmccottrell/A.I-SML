@@ -113,9 +113,13 @@ def gather(question, wiki=None, web=None, mode="auto", private=False, max_notes=
                          for n in (web(question, max_notes) or [])]
         except Exception as e:                                  # offline, a timeout, a bad key...
             print(f"(web search failed: {e})")
-    first, second = (web_notes, wiki_notes) if recent else (wiki_notes, web_notes)
+    # Which group is read first. Recent things: the web. A second try (the model was not sure): also the web, because a search engine fixes a misspelt
+    # name and ranks the famous page first, where the local Wikipedia index matches the letters exactly (and may find a different person).
+    first, second = (web_notes, wiki_notes) if (recent or force_notes) else (wiki_notes, web_notes)
+    if (recent or force_notes) and second and len(first) >= max_notes > 1:
+        first = first[:max_notes - 1]                            # keep a slot for the other source
     merged = []
-    for group in ((saved_notes, first, second) if not recent else (first, saved_notes, second)):                               # the notes the model reads: at most max_notes, best group first
+    for group in ((saved_notes, first, second) if not (recent or force_notes) else (first, saved_notes, second)):                               # the notes the model reads: at most max_notes, best group first
         for n in group:
             if len(merged) < max_notes:
                 merged.append(n)
