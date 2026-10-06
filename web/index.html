@@ -562,9 +562,29 @@ async function openGithubConnect(after) {
     kids.push(...(g.log.length ? g.log.map((l) => el('div', {style: 'color:var(--muted);font-size:14px'}, new Date(l.at * 1000).toLocaleString([], {month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit'}) + '  ' + l.what)) : [el('div', {style: 'color:var(--muted);font-size:14px'}, 'Nothing yet.')]));
     kids.push(el('button', {class: 'btn danger', onclick: async () => { if (!confirm('Disconnect GitHub? The saved token is deleted now.')) return; await post('/api/apps/github/disconnect'); close(); if (after) after(); }}, 'Disconnect and delete the token'));
   } else {
+    if (g.device) {
+      const status = el('div', {style: 'color:var(--muted);font-size:14px'});
+      kids.push(el('div', {style: 'color:var(--muted)'}, 'The easy way: sign in with GitHub. You get a short code, type it on github.com, and say yes. You never handle a token.'),
+        el('button', {class: 'btn', onclick: async (e) => {
+          e.target.disabled = true; status.style.color = 'var(--muted)'; status.textContent = 'Starting...';
+          const r = await post('/api/apps/github/device/start'); const d = await r.json();
+          if (!r.ok) { e.target.disabled = false; status.style.color = 'var(--danger)'; status.textContent = d.message + ' ' + (d.action || ''); return; }
+          status.replaceChildren('Open ', el('a', {href: d.verification_uri, target: '_blank', rel: 'noopener', style: 'color:var(--accenttext)'}, d.verification_uri.replace('https://', '')), ' and enter ', el('b', {style: 'font-size:20px;letter-spacing:.1em;color:var(--text)'}, d.user_code), '. Waiting for you to say yes...');
+          const stop = Date.now() + d.expires_in * 1000;
+          const tick = async () => {
+            if (!document.body.contains(status)) return;
+            if (Date.now() > stop) { status.textContent = 'That code ran out. Try again.'; e.target.disabled = false; return; }
+            const pr = await post('/api/apps/github/device/poll'); const pj = await pr.json();
+            if (pj.status === 'done') { close(); if (after) after(); else openGithubConnect(); return; }
+            if (pj.status === 'denied' || pj.status === 'expired' || !pr.ok) { status.style.color = 'var(--danger)'; status.textContent = pj.status === 'denied' ? 'You said no on GitHub.' : (pj.message || 'That sign-in ended. Try again.'); e.target.disabled = false; return; }
+            setTimeout(tick, Math.max(2, pj.wait || d.interval) * 1000);
+          };
+          setTimeout(tick, d.interval * 1000);
+        }}, 'Sign in with GitHub'), status, el('div', {style: 'color:var(--muted);font-size:14px'}, 'Or paste a token instead:'));
+    }
     const tok = el('input', {type: 'password', placeholder: 'Paste your GitHub token', autocomplete: 'off', 'aria-label': 'GitHub token'});
     kids.push(el('div', {style: 'color:var(--muted)'}, 'Make a token on GitHub (Settings > Developer settings > Personal access tokens) and paste it here. Give it the least it needs: a fine-grained token limited to the repositories you choose, with Contents read and write, is enough to pull and push. Creating new repositories needs a classic token with the repo permission (GitHub’s rule).'),
-      el('div', {style: 'color:var(--muted);font-size:14px'}, 'The token is kept on this server in a private file, never shown again, never given to the model, and deleted the moment you disconnect.'),
+      el('div', {style: 'color:var(--muted);font-size:14px'}, 'The token is kept on this server encrypted' + (g.encrypted ? '' : ' (NOT encrypted: ask the owner to install the cryptography package)') + ', never shown again, never given to the model, and deleted the moment you disconnect.'),
       tok, out, el('button', {class: 'btn', onclick: async () => {
         const rr = await post('/api/apps/github/connect', {token: tok.value}); const j = await rr.json();
         if (!rr.ok) { out.style.color = 'var(--danger)'; out.textContent = j.message + ' ' + (j.action || ''); return; }

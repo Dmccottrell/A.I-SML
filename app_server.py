@@ -57,6 +57,7 @@ import connected_apps
 import github_link
 import lookup_auto
 import mailer
+import secret_box
 import saved_notes
 import context_window as CW
 import effort_router
@@ -75,6 +76,7 @@ OUTSIDE_NOTE = ("{label} is an outside coding model ({licence}), not an Emvryx m
 SECURITY_DEFAULTS = {"session_days": 90, "pair_minutes": 15, "login_fail_limit": 8, "login_fail_window": 600, "email_start_limit": 5,
                      "email_start_window": 600, "open_signups": False, "trusted_proxies": ["127.0.0.1", "::1"], "audit_notify": True,
                      "allow_key_links": False, "allowed_origins": [], "code_unsandboxed_for_others": False,
+                     "require_encryption": False, "github_client_id": "",
                      **code_sandbox.QUOTA_DEFAULTS}
 MAX_UPLOAD = 30_000_000                                # a project upload (base64): see code_sessions.MAX_IMPORT_BYTES
 MAX_TEXT = 20_000
@@ -244,7 +246,9 @@ class AppState:
         self._users_mtime = 0
         self.users = self._load_users()
         self.code = code_sessions.CodeManager(data_dir, quotas=code_sandbox.Quotas(self.security))       # VryxCode sessions (projects live under <data>/code/)
-        self.github = github_link.Store(data_dir)               # connected GitHub accounts (token files, mode 600)
+        self.secrets = secret_box.SecretBox(data_dir, require=self.security["require_encryption"])
+        self.github = github_link.Store(data_dir, self.secrets)  # connected GitHub accounts (tokens encrypted, files mode 600)
+        self.github_device = {}                                 # person -> the sign-in in progress (its device code never leaves the server)
         self.github_http = None                                 # tests: http(method, url, headers, body) -> (status, json)
         self.github_local = False                               # tests only: allow a local folder as the remote
         self.code_generate = None                              # tests: code_generate(model) -> generate(messages)
@@ -567,6 +571,9 @@ class AppState:
         return "missing", "Not on this computer" if (self.runner and self.runner.bin) else "llama-server not found"
 
     # ---- GitHub (a connected app)
+    def github_client_id(self):
+        return str(os.environ.get("EMVRYX_GITHUB_CLIENT_ID") or self.security.get("github_client_id") or "")
+
     def github_api(self, user):
         d = self.github.get(user)
         if not d.get("token"):
@@ -1070,7 +1077,8 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 return self._send(200, self.state.get_settings(who["user"]))
             if path == "/api/apps":
                 cat = connected_apps.catalog()
-                cat["connections"] = {"github": self.state.github.public(who["user"])}
+                cat["connections"] = {"github": dict(self.state.github.public(who["user"]), device=bool(self.state.github_client_id()),
+                                                     encrypted=self.state.secrets.available)}
                 return self._send(200, cat)
             if path == "/api/saved-notes":
                 return self._send(200, {"notes": self.state.saved_for(who["user"]).list(self.state.clock())})
@@ -1146,6 +1154,42 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 return self.api_code_post(who, path, body)
             if path == "/api/settings":
                 return self._send(200, self.state.put_settings(who["user"], body))
+            if path == "/api/apps/github/device/start":
+                try:
+                    flow = github_link.DeviceFlow(self.state.github_client_id(), self.state.github_http)
+                    d = flow.start()
+                except github_link.GitHubError as e:
+                    return self._send(400, {"code": "github", "message": e.message, "action": e.action})
+                self.state.github_device[who["user"]] = {"device_code": d["device_code"], "expires": time.time() + d["expires_in"], "interval": d["interval"], "last": 0}
+                self.state.auth.event("github_device_start", who["user"], self._ip(), "")
+                return self._send(200, {"user_code": d["user_code"], "verification_uri": d["verification_uri"], "interval": d["interval"], "expires_in": d["expires_in"]})
+            if path == "/api/apps/github/device/poll":
+                pend = self.state.github_device.get(who["user"])
+                if not pend or pend["expires"] < time.time():
+                    self.state.github_device.pop(who["user"], None)
+                    return self._send(400, {"code": "github", "message": "That sign-in has run out.", "action": "Start it again."})
+                wait = pend["last"] + pend["interval"] - time.time()
+                if wait > 0:                                       # never ask GitHub faster than it said
+                    return self._send(200, {"status": "pending", "wait": int(wait) + 1})
+                pend["last"] = time.time()
+                try:
+                    status, token = github_link.DeviceFlow(self.state.github_client_id(), self.state.github_http).poll(pend["device_code"])
+                    if status == "done":
+                        login, uid = github_link.Api(token, self.state.github_http).me()
+                except github_link.GitHubError as e:
+                    return self._send(400, {"code": "github", "message": e.message, "action": e.action})
+                if status == "slow_down":
+                    pend["interval"] += 5
+                if status == "done":
+                    self.state.github_device.pop(who["user"], None)
+                    self.state.github.connect(who["user"], token, login, uid)
+                    self.state.github.log(who["user"], f"connected as {login} (GitHub sign-in)")
+                    self.state.auth.event("github_connected", who["user"], self._ip(), "device flow")
+                    return self._send(200, {"status": "done", **self.state.github.public(who["user"])})
+                if status in ("expired", "denied"):
+                    self.state.github_device.pop(who["user"], None)
+                    return self._send(200, {"status": status})
+                return self._send(200, {"status": "pending", "wait": pend["interval"]})
             if path == "/api/apps/github/connect":
                 try:
                     token = github_link.validate_token(body.get("token"))
@@ -1154,10 +1198,12 @@ class Handler(http.server.BaseHTTPRequestHandler):
                     return self._send(400, {"code": "github", "message": e.message, "action": e.action})
                 self.state.github.connect(who["user"], token, login, uid)
                 self.state.github.log(who["user"], f"connected as {login}")
+                self.state.auth.event("github_connected", who["user"], self._ip(), "pasted token")
                 return self._send(200, self.state.github.public(who["user"]))
             if path == "/api/apps/github/disconnect":
                 self.state.github.disconnect(who["user"])
                 self.state.github.log(who["user"], "disconnected (token deleted)")
+                self.state.auth.event("github_disconnected", who["user"], self._ip(), "")
                 return self._send(200, self.state.github.public(who["user"]))
             m = re.fullmatch(r"/api/apps/([a-z]+)/connect", path)
             if m:
