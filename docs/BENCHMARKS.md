@@ -15,7 +15,8 @@ Tools: `exam.py` / `exam_open.py` (HellaSwag), `evaluate.py` / `evaluate_open.py
 
 **One script runs the quick versions of everything on the cloud machine: `bash bench_all.sh`** (rules sheets, quick core and code benchmarks for Flare 2.5, Equinox 2 and Solstice 2, then the VryxCode exercise test on Qwen2.5-Coder-14B, Solstice 2 and Equinox 2). Estimated 4 to 6 hours, about $2 to $3; `MAX_HOURS=4` sets a spending guard. It has not been run yet.
 
-## 2. Public knowledge, reasoning and code benchmarks: `bench_open.py` (lm-evaluation-harness 0.4.13)
+**Rules sheet (30 questions: lookups, rules, honesty), Oct 6 2026, from `bench_all.sh` step 1 (tuned vs the plain open base):** Flare 2.5 **22/30 vs 23/30**, Equinox 2 **24/30 vs 7/30**, Solstice 2 **26/30 vs 9/30**. Read the Qwen3 gaps with care: the plain Qwen3 bases probably score so low partly because they do not follow our notes-and-rules format (and may write `<think>` reasoning first), which the sheet marks wrong (not checked); that measures how well the tuning teaches Emvryx's way of answering, not general intelligence. Flare 2.5 shows no gain on this sheet (-1), which is worth a look (one possible reason: Qwen 2.5 1.5B may already follow the format better than Qwen3; not checked). The next pings (core benchmarks, code, VryxCode exercises) are still running.
+ knowledge, reasoning and code benchmarks: `bench_open.py` (lm-evaluation-harness 0.4.13)
 `python bench_open.py --model flare-2.5 --suite core --limit 200` (a fast check), then without `--limit` for the real number. It runs the plain base and base + our adapter and prints the difference.
 
 | Suite | Task name in the harness | Type and metric | What it tests | Notes |
