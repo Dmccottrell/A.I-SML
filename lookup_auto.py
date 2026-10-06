@@ -28,6 +28,7 @@ TIME_WORDS = re.compile(r"\b(latest|newest|current|currently|today|tonight|yeste
                         r"right now|nowadays|recent|recently|news|score|scores|price|prices|weather|forecast|stock|released?|"
                         r"release date|upcoming|just (won|released|announced)|who won|who is the (current )?(president|prime minister|ceo)|"
                         r"20(2[4-9]|3\d))\b", re.I)
+WEATHER_WORDS = re.compile(r"\b(weather|forecast)\b", re.I)
 STOP = set("the a an of to in on at for and or is are was were be been do does did what who whom when where which why how "
            "can could will would should it its this that these those with as by from about me my you your i tell give name".split())
 
@@ -40,7 +41,7 @@ def wants_lookup(text):
         return False
     if TASK_START.match(t) and not t.endswith("?"):
         return False
-    return bool(t.endswith("?") or QUESTION_START.match(t) or FACT_SHAPES.search(t))
+    return bool(t.endswith("?") or QUESTION_START.match(t) or FACT_SHAPES.search(t) or WEATHER_WORDS.search(t))
 
 
 GAVE_UP = re.compile(r"\b(i (do not|don'?t) know|i'?m not sure|i am not sure|(the )?notes (do not|don'?t) (say|mention|have|cover|include)|"
