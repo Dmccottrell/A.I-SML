@@ -58,7 +58,7 @@ rem Written by windows\install_autostart.ps1. Edit the line that starts with pyt
 cd /d "$Repo"
 :again
 echo %date% %time% starting >> "$data\server.log"
-"$python" app_server.py --port $Port $llamaPart--llama-args "$LlamaArgs" >> "$data\server.log" 2>&1
+"$python" -u app_server.py --port $Port $llamaPart--llama-args "$LlamaArgs" >> "$data\server.log" 2>&1
 echo %date% %time% stopped, restarting in 15 seconds >> "$data\server.log"
 timeout /t 15 /nobreak > nul
 goto again
