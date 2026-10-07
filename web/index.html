@@ -392,7 +392,7 @@ function renderLinks() {
   const mk = (name, note, fn) => el('button', {class: 'link', disabled: fn ? false : true, onclick: () => { document.body.classList.remove('menu-open'); fn && fn(); }}, el('span', {}, name), el('small', {}, note));
   const l = $('links'); l.replaceChildren(
     mk('VryxCode', 'Coding assistant', openCode), mk('Private chat', 'Never saved', () => newChat(true)), mk('Usage', 'See what is left', openUsage),
-    mk('Connected apps', 'Coming soon', openApps), mk('Memory', 'Coming soon'), mk('Skills', 'Coming soon'), mk('Documents', 'Coming soon'),
+    mk('Connected apps', 'Coming soon', openApps), mk('Memory', 'What I know about you', openMemory), mk('Skills', 'Coming soon'), mk('Documents', 'Coming soon'),
     mk('Settings', '', openSettings));
 }
 
@@ -657,6 +657,27 @@ async function openSaved() {
   dialog(kids, 'Close');
 }
 
+// ---------------------------------------------------------------- memory (facts about you, shared by every model)
+async function openMemory() {
+  const r = await api('/api/memory'); const j = await r.json();
+  const list = el('div', {style: 'display:flex;flex-direction:column;gap:8px'});
+  const draw = (facts) => {
+    list.replaceChildren(...(facts.length ? facts.map((f) => { const row = el('div', {class: 'opt', style: 'cursor:default'}, el('span', {class: 'grow'}, f.text),
+      el('button', {class: 'chip', onclick: async () => { await post('/api/memory/delete', {id: f.id}); row.remove(); }}, 'Delete')); return row; })
+      : [el('div', {style: 'color:var(--muted)'}, 'Nothing yet. Say something like "my name is Sam" or "remember that I prefer Python" in any chat and every model will know it.')]));
+  };
+  draw(j.facts);
+  const input = el('input', {type: 'text', placeholder: 'Add something, e.g. I live in Austin', maxlength: 200, style: 'width:100%;padding:12px;border-radius:12px;border:1px solid var(--line);background:transparent;color:var(--text)'});
+  const msg = el('div', {style: 'color:var(--muted);font-size:14px'});
+  const add = async () => { if (!input.value.trim()) return; const rr = await post('/api/memory/add', {text: input.value}); const jj = await rr.json().catch(() => ({}));
+    if (rr.ok) { input.value = ''; msg.textContent = ''; draw(jj.facts); } else msg.textContent = (jj.message || 'Not saved.') + ' ' + (jj.action || ''); };
+  const kids = [el('h2', {}, 'Memory'),
+    el('div', {style: 'color:var(--muted);font-size:14px'}, 'These are kept on the server and given to whichever model you talk to, so a new chat or a different model already knows them. Private chats never save or read them. Passwords, card numbers and the like are never kept. Turn memory off in Settings.' + (j.on ? '' : ' It is OFF right now.')),
+    list, input, el('button', {class: 'btn', onclick: add}, 'Add'), msg];
+  if (j.facts.length) kids.push(el('button', {class: 'btn danger', onclick: async () => { if (confirm('Forget everything the app knows about you?')) { await post('/api/memory/clear'); draw([]); } }}, 'Forget everything'));
+  dialog(kids, 'Close');
+}
+
 // ---------------------------------------------------------------- settings
 async function openSettings() {
   const st = S.state, s = st.settings, w = st.window;
@@ -664,6 +685,7 @@ async function openSettings() {
   const kids = [el('h2', {}, 'Settings'),
     el('b', {}, 'Look'), seg([['auto', 'Automatic'], ['dark', 'Dark'], ['light', 'Light']], S.theme, (v) => { S.theme = v; try { localStorage.setItem('emvryx_theme', v); } catch (e) {} applyTheme(); }),
     el('b', {}, 'Text and button size'), seg([['0.85', 'Small'], ['1', 'Normal'], ['1.15', 'Large'], ['1.3', 'Extra large']], (() => { try { return String(parseFloat(localStorage.getItem('emvryx_size')) || 1); } catch (e) { return '1'; } })(), (v) => { try { localStorage.setItem('emvryx_size', v); } catch (e) {} applySize(); }),
+    el('b', {}, 'Remember things about me'), seg([['on', 'On'], ['off', 'Off']], s.memory === false ? 'off' : 'on', async (v) => { await post('/api/settings', {memory: v === 'on'}); await load(); }),
     el('b', {}, 'How long a chat can be'), seg([['everyday', 'Everyday (about 8K)'], ['long', 'Long (if allowed)']], s.window_mode, async (v) => { await post('/api/settings', {window_mode: v}); await load(); }),
     el('div', {style: 'color:var(--muted);font-size:14px'}, 'Right now: ' + fmt(w.window) + ' tokens, ' + w.reason + '. Long chats use more memory and are slower to read.'),
     el('b', {}, 'Looking things up'), seg([['auto', 'Auto'], ['off', 'Wikipedia only'], ['always', 'Always search the web'], ['none', 'Model only (no lookup)']], s.web_search || 'auto', async (v) => { await post('/api/settings', {web_search: v}); await load(); }),
@@ -754,6 +776,9 @@ async function send(regen, mode) {
           const old = aiWrap.querySelector('.note'); if (old) old.remove();
           const line = lookupLine(data); if (line) aiWrap.insertBefore(line, aiBubble);
         }
+      } else if (ev === 'memory') {
+        const bits = [...(data.saved || []).map((t) => t.replace(/^The user\W?s? ?/i, '').replace(/\.$/, '')), ...(data.forgot ? ['forgot ' + data.forgot + (data.forgot === 1 ? ' thing' : ' things')] : [])];
+        if (bits.length) $('thread').append(el('div', {class: 'note', style: 'align-self:flex-start', title: 'Open Memory in the menu to see or change what is kept'}, '\u2713 ' + (data.saved && data.saved.length ? 'Remembered: ' : '') + bits.join('; ')));
       } else if (ev === 'loading') {
         const w = think.querySelector('.word'); clearInterval(S.thinkTimer); S.thinkTimer = null; if (w) w.textContent = 'Loading ' + data.model + ' (first message only)';
       } else if (ev === 'piece') {
