@@ -4,7 +4,9 @@ usage_limits.py - Counting usage and enforcing limits (the plan in docs/APP_SPEC
 WHAT THIS FILE DOES
     Everything is counted in TOKENS and turned into plain "messages left" for the screen. Three separate numbers:
       * the context window    the most ONE request may hold (not an allowance; see context_window.py)
-      * the tank              what you can use right now; refills steadily (token bucket), so no cliff
+      * the tank              what you can use in one sitting. Default ("window" mode): the first message starts a 6-hour window and the tank is
+                              back to full exactly 6 hours after it started (like a session), so the meter does not creep up while you chat.
+                              "steady" mode (limits.json `refill_mode`): refills a little every hour (token bucket), no cliff
       * the weekly ceiling    the total of the week; resets at a fixed time in the person's own time zone
 
     A message costs:  (new text x 1 + earlier chat already held x 0.1 + what Emvryx writes x 1) x the model's weight x the effort level.
@@ -143,6 +145,62 @@ class Limiter:
     def message_cost(self, model_key, effort="balanced"):
         return self.cfg["message_tokens"] * self.weight(model_key) * self.cfg["effort"][effort]
 
+    # ---- the tank in "window" mode: full -> the first spend starts a window -> full again `refill_hours` after it started
+    def window_mode(self):
+        return self.cfg.get("refill_mode", "steady") == "window"
+
+    def refill_hours(self, t):
+        return float(t.get("refill_hours", self.cfg.get("refill_hours", 6)))
+
+    def _window(self, user, t, now):
+        """(level, start, end) of the person's active window, or None when there is none (the tank is full)."""
+        r = self.store.db.execute("SELECT level, at FROM tank WHERE user = ?", (user,)).fetchone()
+        if not r:
+            return None
+        end = r[1] + self.refill_hours(t) * 3600.0
+        return None if now >= end else (min(float(t["tank"]), r[0]), r[1], end)
+
+    def level_of(self, user, t, now):
+        """The tank level right now in whichever mode is on."""
+        if self.window_mode():
+            w = self._window(user, t, now)
+            return float(t["tank"]) if w is None else w[0]
+        return self.tank_level(user, t["tank"], t["refill_per_hour"], now)
+
+    def full_at(self, user, t, now, level):
+        if level >= t["tank"] - 1e-9:
+            return now
+        if self.window_mode():
+            w = self._window(user, t, now)
+            return w[2] if w else now
+        return now + (t["tank"] - level) / t["refill_per_hour"] * 3600.0
+
+    def wait_for(self, user, t, need, now, level):
+        """Seconds until `need` tokens are available."""
+        if self.window_mode():
+            w = self._window(user, t, now)
+            return max(1.0, (w[2] - now) if w else 1.0)
+        return (need - level) / t["refill_per_hour"] * 3600.0
+
+    def spend(self, user, t, new_level, now):
+        """Store the level after a request starts. In window mode the first spend starts the window."""
+        if self.window_mode():
+            w = self._window(user, t, now)
+            self.store.db.execute("INSERT OR REPLACE INTO tank VALUES (?, ?, ?)", (user, new_level, w[1] if w else now))
+        else:
+            self._set_tank(user, new_level, now)
+
+    def adjust(self, user, t, delta, now):
+        """Give back (+) or take (-) tokens after the fact. In window mode this never starts a window (and does nothing once the window has ended)."""
+        if self.window_mode():
+            w = self._window(user, t, now)
+            if w:
+                self.store.db.execute("INSERT OR REPLACE INTO tank VALUES (?, ?, ?)",
+                                      (user, max(0.0, min(float(t["tank"]), w[0] + delta)), w[1]))
+        else:
+            level = self.tank_level(user, t["tank"], t["refill_per_hour"], now)
+            self._set_tank(user, max(0.0, min(float(t["tank"]), level + delta)), now)
+
     def tank_level(self, user, cap, refill, now):
         r = self.store.db.execute("SELECT level, at FROM tank WHERE user = ?", (user,)).fetchone()
         if not r:
@@ -181,12 +239,12 @@ class Limiter:
         if used + est_counted > t["week"]:
             raise LimitError("week_limit", "You've used this week's allowance.", retry_after=max(1, resets_at - now),
                              resets_at=resets_at, choices=["smaller_model", "on_device", "wait"])
-        level = self.tank_level(user, t["tank"], t["refill_per_hour"], now)
+        level = self.level_of(user, t, now)
         if level < est_counted:
-            wait = (est_counted - level) / t["refill_per_hour"] * 3600.0
+            wait = self.wait_for(user, t, est_counted, now, level)
             raise LimitError("tank_empty", "Your tank is empty for now.", retry_after=wait,
                              choices=["smaller_model", "on_device", "wait"])
-        self._set_tank(user, level - est_counted, now)
+        self.spend(user, t, level - est_counted, now)
         cur = db.execute("INSERT INTO holds (user, model, est, at) VALUES (?, ?, ?, ?)", (user, model_key, est_counted, now))
         db.commit()
         return {"id": cur.lastrowid, "user": user, "model": model_key, "est": float(est_counted), "exempt": False}
@@ -199,8 +257,7 @@ class Limiter:
         db = self.store.db
         if not res["exempt"]:
             u, t = self.effective(res["user"])
-            level = self.tank_level(res["user"], t["tank"], t["refill_per_hour"], now)
-            self._set_tank(res["user"], max(0.0, min(float(t["tank"]), level + res["est"] - actual)), now)
+            self.adjust(res["user"], t, res["est"] - actual, now)
         db.execute("DELETE FROM holds WHERE id = ?", (res["id"],))
         db.execute("INSERT INTO usage (user, model, fresh_in, cached_in, out, counted, at) VALUES (?, ?, ?, ?, ?, ?, ?)",
                    (res["user"], res["model"], int(fresh_in), int(cached_in), int(out), actual, now))
@@ -213,8 +270,7 @@ class Limiter:
             return
         if not res["exempt"]:
             u, t = self.effective(res["user"])
-            level = self.tank_level(res["user"], t["tank"], t["refill_per_hour"], now)
-            self._set_tank(res["user"], min(float(t["tank"]), level + res["est"]), now)
+            self.adjust(res["user"], t, res["est"], now)
         self.store.db.execute("DELETE FROM holds WHERE id = ?", (res["id"],))
         self.store.db.commit()
 
@@ -223,8 +279,7 @@ class Limiter:
         rows = self.store.db.execute("SELECT id, est FROM holds WHERE user = ? AND at < ?", (user, now - older_than)).fetchall()
         for hid, est in rows:
             u, t = self.effective(user)
-            level = self.tank_level(user, t["tank"], t["refill_per_hour"], now)
-            self._set_tank(user, min(float(t["tank"]), level + est), now)
+            self.adjust(user, t, est, now)
             self.store.db.execute("DELETE FROM holds WHERE id = ?", (hid,))
         if rows:
             self.store.db.commit()
@@ -234,7 +289,7 @@ class Limiter:
         """Everything the Usage screen and the chat's usage line need, in plain numbers."""
         u, t = self.effective(user)
         cost = self.message_cost(model_key, effort)
-        level = self.tank_level(user, t["tank"], t["refill_per_hour"], now)
+        level = self.level_of(user, t, now)
         start, resets_at = self._week(user, u, now)
         used = self.store.week_used(user, start)
         left = max(0.0, t["week"] - used)
@@ -248,7 +303,8 @@ class Limiter:
         return {
             "plan": u["tier"], "exempt": u["owner"], "status": word,
             "tank": {"left": level, "cap": t["tank"], "pct": tank_pct, "messages_left": int(level // cost),
-                     "full_at": now + (t["tank"] - level) / t["refill_per_hour"] * 3600.0, "refill_per_hour": t["refill_per_hour"]},
+                     "full_at": self.full_at(user, t, now, level), "refill_per_hour": t["refill_per_hour"] if not self.window_mode() else t["tank"] / self.refill_hours(t),
+                     "mode": "window" if self.window_mode() else "steady", "refill_hours": self.refill_hours(t) if self.window_mode() else t["tank"] / t["refill_per_hour"]},
             "week": {"used": used, "left": left, "cap": t["week"], "pct_left": week_pct, "messages_left": int(left // cost),
                      "resets_at": resets_at},
             "can_send": int(min(level, left) // cost),          # messages that fit in BOTH the tank and the week
