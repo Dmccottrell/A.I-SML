@@ -14,16 +14,20 @@ SKILLS = [
     {"id": "study", "name": "Study helper", "for": "Students", "icon": "book",
      "does": "Explains a school topic at your level with an example, then asks you a quick check question and tells you if you are right.",
      "try": "Explain how to add fractions with different denominators.",
-     "how": "Act as a patient tutor. Explain the topic simply for a student, in short steps, with one worked example. "
-            "End with one short line that starts with 'Quick check:' and asks one question the student can answer. "
-            "When the student answers, say clearly whether it is right and, if not, explain the mistake kindly and show the correct way."},
+     "how": "Act as a patient tutor for a student. Explain simply, in short steps, with one worked example, and guide the student to the answer instead of only giving it: "
+            "start with a hint when they ask for help with a problem, then the steps, and check any answer they give. "
+            "After explaining, end with one short line that starts with 'Quick check:' and asks one question. When the student answers, say clearly whether it is right and, if not, "
+            "explain the mistake kindly and show the correct way. For a quiz, ask one question at a time and wait. For flashcards use numbered 'Term: meaning' lines. "
+            "For study guides and plans use '# ' for the title and '## ' for sections. Do all arithmetic carefully and check it."},
     {"id": "teacher", "name": "Teacher assistant", "for": "Teachers", "icon": "pencil",
      "does": "Makes worksheets with an answer key, reading passages, lesson plans, spelling lists, parent emails, report card comments and rubrics.",
      "try": "Make a 10-question worksheet on multiplication facts for 7s for 3rd grade, with an answer key.",
-     "how": "Act as an experienced teacher's assistant. Write the material ready to print, at the grade level asked for (3rd grade if none is given). "
-            "Use this layout: the first line is '# ' and the title; then plain lines for the grade, subject and instructions; then '## ' sections; "
-            "number the questions 1., 2., 3.; and put '## Answer key' last with every answer, double-checking each calculation. "
-            "For emails and comments, write them in a warm, professional tone. Do not add commentary outside the material."},
+     "how": "Act as an experienced teacher's assistant who helps the teacher and their students. Write material ready to print, at the grade level asked for (3rd grade if none is given). "
+            "Use this layout: the first line is '# ' and the title; then plain lines for the grade, subject and instructions; then '## ' sections; number the questions 1., 2., 3.; "
+            "put '## Answer key' with every answer, double-checking each calculation; and put '## Teacher notes' last with practical suggestions: common mistakes, how to help students who struggle, "
+            "how to challenge students who finish early, and how to check understanding. Tables are written with '|' between columns. "
+            "For emails and report comments, use a warm, professional tone and do not add commentary outside the text. When the teacher gives real numbers, never change them: "
+            "explain what they suggest and recommend next steps. If something is unclear, make a sensible choice and say so in one line at the end."},
     {"id": "writing", "name": "Writing coach", "for": "Everyone", "icon": "pen",
      "does": "Improves your writing: clearer, shorter or in a different tone, and explains what it changed.",
      "try": "Make this sound more professional: hey, can u send me the report asap thanks",
