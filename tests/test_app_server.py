@@ -353,6 +353,42 @@ class Stopping(Base):
         self.assertEqual(self.sam.call("GET", f"/api/chats/{cid}")[1]["messages"][-1]["status"], "done")
 
 
+class SlowWords:
+    """A model that writes 12 words, 30 ms apart."""
+    usage = None
+
+    def __init__(self):
+        self.prompts = []
+
+    def stream(self, ids, max_new):
+        self.prompts.append(list(ids))
+        for i in range(12):
+            threading.Event().wait(0.03)
+            yield f"w{i} "
+
+
+class LeavingTheApp(Base):
+    factory = staticmethod(lambda model, question: SlowWords())
+
+    def test_reply_keeps_being_written_when_the_page_goes_away(self):
+        cid = self.new_chat(self.sam)
+        c = http.client.HTTPConnection("127.0.0.1", self.port, timeout=20)
+        c.request("POST", f"/api/chats/{cid}/send", json.dumps({"text": "go on", "model": "flare-2", "effort": "balanced"}),
+                  {"Content-Type": "application/json", "Authorization": "Bearer " + self.sam_key})
+        r = c.getresponse()
+        r.fp.readline()                                            # the first bit of the stream arrives...
+        c.close()                                                  # ...and the app is closed
+        for _ in range(300):
+            j = self.sam.call("GET", f"/api/chats/{cid}")[1]
+            if not j["generating"] and j["messages"] and j["messages"][-1]["role"] == "assistant":
+                break
+            threading.Event().wait(0.05)
+        last = j["messages"][-1]
+        self.assertFalse(j["generating"])
+        self.assertEqual(last["status"], "done")
+        self.assertIn("w11", last["content"])                      # the whole reply, not the part written before they left
+
+
 class Privacy(Base):
     data_dir = True
 
