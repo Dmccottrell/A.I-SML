@@ -831,6 +831,16 @@ check that our trainer and llama.cpp support the Qwen3.5 design). The relabellin
   tagline texts, About/Models pages, benchmark tables (numbers belong to the weights, not the name), the family guide, and the `lookup` policy flags.
 * Where Apogee (14B, training now) and a Qwen3.5 model fit in the new ladder is still open.
 
+## To discuss: lessons made for Qwen, not for Flare 2 (Oct 7, 2026, the owner's decision to pursue)
+Flare 2.5, Equinox 2, Solstice 2 and Apogee 2 were all trained on `data/v3/chat.jsonl`, which `make_chat_data_v3.py` built to fix the mistakes of the tiny from-scratch v2 model (answer from notes, "I don't know" when the notes are
+silent, doubt when corrected, "unknowable" questions). Qwen already knows far more and answers well, so those lessons made it over-trust a wrong note and hedge. The owner wants Apogee (and the next models) trained on their own,
+Qwen-native lessons instead. Notes so far:
+* Apogee 2 has already been trained (1,266 steps, about 16 h, about $8) on the v3 lessons; a retrain on new lessons is a new run. Keep that run as the baseline and compare.
+* A Qwen-native set can be much smaller: the adapter only has to teach Emvryx's identity and manners, not knowledge. About 300 steps on the 14B would be about 4 h (about $2), against 16 h.
+* Candidate contents: identity (what Emvryx is, who made it, the base credit), everyday chat and instruction following (open data, licences checked), exact formats and counts, using a note only when it matches the question
+  and ignoring one that does not, saying "I'm not sure" only for things that really cannot be known (live, personal, made-up) and answering famous facts plainly, plus agent runs for VryxCode (collected from the coder model).
+* Drop the from-scratch lessons: `dont_know` for things the model does know, `memory_doubt`, and the "answer only from the notes" lesson. The app already looks things up only for recent questions or when the model is unsure.
+
 ## Model tiers (Lite, Standard, Pro, Max)
 
 Like the big labs' model families, tiers are **the same family at different sizes**: the same

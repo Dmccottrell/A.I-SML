@@ -24,6 +24,8 @@ import sys
 import torch
 import torch.nn.functional as F
 
+import open_models
+
 from exam import pick_questions
 
 
@@ -103,9 +105,9 @@ def load_base(model_id, device, quant4=False):
     if QUANT4:
         from transformers import BitsAndBytesConfig
         bnb = BitsAndBytesConfig(load_in_4bit=True, bnb_4bit_quant_type="nf4", bnb_4bit_compute_dtype=torch.bfloat16)
-        model = AutoModelForCausalLM.from_pretrained(model_id, dtype=dtype, quantization_config=bnb, device_map={"": 0})
+        model = open_models.load_lm(model_id, dtype=dtype, quantization_config=bnb, device_map={"": 0})
     else:
-        model = AutoModelForCausalLM.from_pretrained(model_id, dtype=dtype).to(device)
+        model = open_models.load_lm(model_id, dtype=dtype).to(device)
     return model, tok
 
 

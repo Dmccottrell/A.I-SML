@@ -29,6 +29,8 @@ import signal
 import sys
 import time
 
+import open_models
+
 DEFAULT_MODEL = "Qwen/Qwen2.5-1.5B-Instruct"
 LORA_TARGETS = ["q_proj", "k_proj", "v_proj", "o_proj", "gate_proj", "up_proj", "down_proj"]
 
@@ -134,13 +136,13 @@ def merge_and_export(base_model, adapter_dir, export_dir, torch, spread=False):
     if spread and torch.cuda.is_available():       # a 14B model is about 30 GB in bf16: more than a 30 GB machine's RAM, so fill the GPU first and spill the rest to RAM
         gpu_gb = torch.cuda.get_device_properties(0).total_memory / 2**30
         try:
-            model = AutoModelForCausalLM.from_pretrained(base_model, dtype=torch.bfloat16, device_map="auto",
+            model = open_models.load_lm(base_model, dtype=torch.bfloat16, device_map="auto",
                                                          max_memory={0: f"{int(gpu_gb * 0.9)}GiB", "cpu": "22GiB"})
         except Exception as e:                      # fall back to the plain load below
             print(f"merge: spreading over GPU and RAM failed ({e}); loading on the CPU instead", flush=True)
             model = None
     if model is None:
-        model = AutoModelForCausalLM.from_pretrained(base_model, dtype=torch.bfloat16)
+        model = open_models.load_lm(base_model, dtype=torch.bfloat16)
     model = PeftModel.from_pretrained(model, adapter_dir).merge_and_unload()
     os.makedirs(export_dir, exist_ok=True)
     # Small shards: with one big file (a 14B model is about 30 GB) saving collects every weight in RAM first, and a 30 GB machine's kernel kills the process
@@ -242,13 +244,13 @@ def main(argv=None):
         except ImportError:
             sys.exit("--quant4 needs bitsandbytes: pip install bitsandbytes")
         from peft import prepare_model_for_kbit_training
-        model = AutoModelForCausalLM.from_pretrained(
+        model = open_models.load_lm(
             a.model, dtype=dtype, device_map={"": 0},
             quantization_config=BitsAndBytesConfig(load_in_4bit=True, bnb_4bit_quant_type="nf4", bnb_4bit_use_double_quant=True,
                                                    bnb_4bit_compute_dtype=dtype))
         model = prepare_model_for_kbit_training(model, use_gradient_checkpointing=not a.no_grad_checkpoint)
     else:
-        model = AutoModelForCausalLM.from_pretrained(a.model, dtype=dtype).to(device)
+        model = open_models.load_lm(a.model, dtype=dtype).to(device)
     model.config.use_cache = False
     if not a.no_grad_checkpoint:
         model.gradient_checkpointing_enable()
