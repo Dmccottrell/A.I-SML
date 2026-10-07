@@ -1,8 +1,8 @@
 # Teacher mode
 
-**Menu > Teacher mode** has two sides, **For teachers** and **For students**. Each side has two kinds of tool.
+**Menu > Teacher mode** opens a chat with the Teacher assistant switched on. Type anything in your own words, or tap a tool chip: the tools open a short form and the answer lands in the same chat. A **Tools** button stays at the top of the chat so you can use a tool at any point. There are two sides, **For teachers** and **For students** (switch at the start of the chat), and each side has two kinds of tool.
 
-**Make** tools are short forms (grade, subject, topic ...). Pressing "Make it" starts a chat with the Teacher assistant (teachers) or the Study helper (students) switched on and sends the request for you.
+**Make** tools are short forms (grade, subject, topic ...). Pressing "Make it" sends the request into the current Teacher chat (or starts one with the Study helper for the student tools).
 
 | For teachers | For students |
 |---|---|

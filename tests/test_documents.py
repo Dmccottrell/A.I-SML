@@ -40,6 +40,38 @@ LONG = "\n\n".join(f"Section {i}. " + ("Filler sentence about nothing in particu
 LONG += "\n\nThe treasure is buried under the old oak tree behind the lighthouse. " + ("More filler text for padding. " * 30)
 
 
+class Pictures(unittest.TestCase):
+    PNG = (b"\x89PNG\r\n\x1a\n" + b"\x00" * 40)
+
+    def setUp(self):
+        self.saved = D._ocr
+
+    def tearDown(self):
+        D._ocr = self.saved
+
+    def test_text_in_a_picture_is_read_in_lines(self):
+        from PIL import Image
+        buf = io.BytesIO(); Image.new("RGB", (40, 40), "white").save(buf, "PNG")
+        box = lambda x, y: [[x, y], [x + 50, y], [x + 50, y + 10], [x, y + 10]]
+        D._ocr = lambda png: ([[box(200, 5), "world", 0.9], [box(5, 5), "hello", 0.9], [box(5, 60), "second line", 0.9]], None)
+        text = D.extract_text("shot.png", buf.getvalue())
+        self.assertEqual(text, "[Text read from a picture]\nhello\nworld\nsecond line")
+
+    def test_picture_without_words_says_so(self):
+        from PIL import Image
+        buf = io.BytesIO(); Image.new("RGB", (40, 40), "white").save(buf, "PNG")
+        D._ocr = lambda png: (None, None)
+        with self.assertRaises(ValueError) as c:
+            D.extract_text("photo.jpg", buf.getvalue())
+        self.assertIn("can't describe photos", str(c.exception))
+
+    def test_broken_picture(self):
+        D._ocr = lambda png: (None, None)
+        with self.assertRaises(ValueError) as c:
+            D.extract_text("x.png", b"not a picture")
+        self.assertIn("couldn't open", str(c.exception))
+
+
 class Extract(unittest.TestCase):
     def test_text_markdown_csv(self):
         self.assertEqual(D.extract_text("a.txt", b"hello\r\nworld"), "hello\nworld")
