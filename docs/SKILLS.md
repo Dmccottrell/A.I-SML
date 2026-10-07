@@ -1,3 +1,9 @@
+# Skills in the chat app (Qwen models)
+
+**Menu > Skills** starts a chat in a specialist mode: Study helper, Teacher assistant, Writing coach, Story writer, IT helper, Recipe and meal helper, Planner. A skill is a short set of instructions (`app_skills.py`) added, out of sight, to the end of each question in that chat. Nothing is trained and nothing is saved in the chat, so it works with every model and can be changed by editing the text. The chat remembers its skill (it shows "Study helper is on for this chat"). The Teacher assistant answers in the layout `export_doc.py` turns into a PDF or Word file.
+
+The trained "packs" below are the older approach, made for the from-scratch models.
+
 # Skill packs (Beta)
 
 A **skill pack** is a small add-on that makes the chat model a specialist, without changing the model
