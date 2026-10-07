@@ -164,3 +164,38 @@ class NoToolCallTests(unittest.TestCase):
         with harness.Sandbox(workspace=tempfile.mkdtemp()) as box:
             r = harness.run_agent("x", lambda m: next(replies), box, max_turns=12)
         self.assertTrue(r["finished"])
+
+
+class StuckLoopTests(unittest.TestCase):
+    def test_alternating_chat_and_the_same_tool_call_is_stopped(self):
+        import harness
+        listing = '<|tool_call|>{"name": "list_files", "args": {"path": "."}}<|end_tool_call|>'
+        replies = iter([listing, "I don't see any files. I can't write a function without knowing what it should do."] * 20)
+        calls = []
+
+        def model(messages):
+            calls.append(1)
+            return next(replies)
+        with harness.Sandbox(workspace=tempfile.mkdtemp()) as box:
+            r = harness.run_agent("write a function with a unit test", model, box, max_turns=30)
+        self.assertFalse(r["finished"])
+        self.assertLess(len(calls), 14)
+        self.assertIn(r["stopped"], ("no_tool", "stuck"))
+
+    def test_the_third_identical_step_gets_a_hint(self):
+        import harness
+        listing = '<|tool_call|>{"name": "list_files", "args": {"path": "."}}<|end_tool_call|>'
+        seen = []
+        replies = iter([listing] * 3 + ['<|tool_call|>{"name": "finish", "args": {"summary": "done"}}<|end_tool_call|>'])
+
+        def model(messages):
+            seen.append(messages[-1]["content"])
+            return next(replies)
+        with harness.Sandbox(workspace=tempfile.mkdtemp()) as box:
+            r = harness.run_agent("x", model, box, max_turns=10)
+        self.assertTrue(r["finished"])
+        self.assertIn("write_file", seen[3])
+
+    def test_the_prompt_tells_it_to_act_on_vague_tasks(self):
+        import vryxcode
+        self.assertIn("do not ask questions", vryxcode.SYSTEM)
