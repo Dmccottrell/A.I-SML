@@ -821,6 +821,16 @@ words kept are only used by niche AI tools. Earlier Norse working names: Rune = 
 Edda = Apogee. In this document, the tier names map as: Lite = Flare, Standard = Equinox, Pro = Solstice and Apogee,
 Max = the largest Apogee.
 
+## To discuss tomorrow: moving the model names up a size (Oct 7, 2026, the owner's idea, not decided)
+Today: Flare 2.5 = Qwen2.5-1.5B, Equinox 2 = Qwen3-4B, Solstice 2 = Qwen3-8B, Apogee 2 = Qwen3-14B (training).
+The idea, as the owner put it: "make 2.5 for Flare what Equinox is, make Equinox 2 what Solstice is, and make Solstice 3.5 4B." Open question to settle first: what "Solstice 3.5 4B" means
+(a Qwen3.5-4B based model? or a version label?). Notes so far:
+* Why it makes sense: the 1.5B Flare is weak at facts (it cannot name a famous person without a note); the 4B Equinox answered the same question well; the 8B and 14B are better again.
+* Cheapest way: relabel the models that already exist (no retraining): current Equinox 2 weights become the new Flare, current Solstice 2 weights the new Equinox. The 1.5B would be retired or kept as a small "other model".
+* Things to do if we go ahead: new model ids and versions (do not reuse "Flare 2.5" for different weights; saved chats store the model id), `models.json` sizes, `min_ram_gb`, `cost_weight` and plan tiers (free would then get a 4B/8B: check the server cost),
+  tagline texts, About/Models pages, benchmark tables (numbers belong to the weights, not the name), the family guide, and the `lookup` policy flags.
+* Where Apogee (14B, training now) and a Qwen3.5 model fit in the new ladder is still open.
+
 ## Model tiers (Lite, Standard, Pro, Max)
 
 Like the big labs' model families, tiers are **the same family at different sizes**: the same
