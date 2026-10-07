@@ -22,6 +22,7 @@ class Catalog(unittest.TestCase):
         self.assertEqual(K.hint(""), "")
         self.assertEqual(K.hint("nope"), "")
         self.assertIn("Quick check:", K.hint("study"))
+        self.assertIn("answer it normally", K.hint("recipe"))               # off-topic questions in a skill chat are answered normally
 
     def test_teacher_layout_matches_the_exporter(self):
         how = K.get("teacher")["how"]
@@ -34,6 +35,11 @@ class Store(unittest.TestCase):
         s = E.ChatStore()
         a, b, p = s.new_chat(skill="study"), s.new_chat(), s.new_chat(private=True, skill="story")
         self.assertEqual((s.skill(a), s.skill(b), s.skill(p)), ("study", "", "story"))
+
+    def test_chat_list_says_which_skill_each_chat_used(self):
+        s = E.ChatStore()
+        a, b = s.new_chat(skill="recipe"), s.new_chat()
+        self.assertEqual({c["id"]: c["skill"] for c in s.list_chats()}, {a: "recipe", b: ""})
 
 
 class Server(Base):
