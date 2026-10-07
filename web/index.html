@@ -148,6 +148,37 @@ svg .core { fill: var(--core); stroke: var(--sun); stroke-width: 3; transition: 
 .code .flist button { display: block; width: 100%; text-align: left; background: transparent; border: 0; border-radius: 8px; padding: 8px; font: 13px ui-monospace, Menlo, Consolas, monospace; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-height: 36px; }
 .code .flist button:hover, .code .flist button.on { background: var(--surface2); }
 .code .viewer { flex: 1; overflow: auto; padding: 10px 14px 14px; border-top: 1px solid var(--line); }
+/* VryxCode, laid out like a terminal coding assistant: a prompt line, plain text from the model, one row per tool with its result under it, a live "working" line */
+.code .feedin { font-family: ui-monospace, 'JetBrains Mono', Menlo, Consolas, monospace; font-size: 14px; line-height: 1.55; gap: 4px; }
+.code .cc-user { display: flex; gap: 10px; padding: 6px 0 12px; margin-bottom: 8px; border-bottom: 1px solid var(--line); color: var(--text); white-space: pre-wrap; word-break: break-word; }
+.code .cc-user .gt { color: var(--accent); font-weight: 700; flex-shrink: 0; }
+.code .cc-say { color: var(--text); white-space: pre-wrap; word-break: break-word; padding: 4px 0 2px; }
+.code .cc-tool { display: flex; flex-direction: column; gap: 1px; padding: 3px 0; }
+.code .cc-head { display: flex; gap: 8px; align-items: baseline; min-width: 0; }
+.code .cc-dot { flex-shrink: 0; color: var(--muted); }
+.code .cc-tool.ok .cc-dot { color: #3fb950; } .code .cc-tool.no .cc-dot { color: var(--danger); }
+.code .cc-tool.run .cc-dot { animation: ccblink 1s steps(2, start) infinite; }
+.code .cc-name { font-weight: 700; flex-shrink: 0; }
+.code .cc-arg { color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+.code .cc-res, .code .cc-diff, .code .cc-more { margin-left: 4px; padding-left: 14px; }
+.code .cc-res { color: var(--muted); display: flex; gap: 8px; align-items: baseline; cursor: pointer; }
+.code .cc-res .elb { flex-shrink: 0; } .code .cc-res .txt { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+.code .cc-tool.open .cc-res .txt { white-space: pre-wrap; word-break: break-word; }
+.code .cc-diff { border-left: 2px solid var(--line); margin-top: 2px; }
+.code .cc-diff div { white-space: pre-wrap; word-break: break-word; padding: 0 6px; }
+.code .cc-diff .add { color: #3fb950; background: rgba(63,185,80,.12); } .code .cc-diff .del { color: #f85149; background: rgba(248,81,73,.12); } .code .cc-diff .hdr { color: var(--muted); }
+.code .cc-more { color: var(--muted); max-height: 260px; overflow: auto; white-space: pre-wrap; word-break: break-word; display: none; }
+.code .cc-tool.open .cc-more { display: block; }
+.code .cc-live { display: flex; flex-direction: column; gap: 4px; padding: 8px 0 2px; color: var(--accenttext); }
+.code .cc-live .l1 { display: flex; gap: 10px; align-items: baseline; }
+.code .cc-live .glyph { display: inline-block; width: 1.2em; text-align: center; font-weight: 700; }
+.code .cc-live .meta { color: var(--muted); font-size: 13px; }
+.code .cc-live .prose { color: var(--muted); white-space: pre-wrap; word-break: break-word; max-height: 7.5em; overflow: hidden; }
+.code .cc-end { padding: 10px 0 4px; display: flex; gap: 10px; align-items: baseline; white-space: pre-wrap; word-break: break-word; }
+.code .cc-end.good .mark { color: #3fb950; } .code .cc-end.bad .mark { color: var(--danger); } .code .cc-end.stop .mark { color: var(--muted); }
+.code .cc-ask { border: 1px solid var(--accent); border-radius: 12px; padding: 10px 12px; display: flex; flex-direction: column; gap: 8px; margin: 6px 0; background: var(--surface); }
+.code .cc-ask .q { font-weight: 700; } .code .cc-ask pre { color: var(--muted); max-height: 220px; overflow: auto; }
+@keyframes ccblink { to { visibility: hidden; } }
 @media (max-width: 900px) { .code .drawer { width: 100%; box-shadow: none; } }
 /* dialogs */
 .modal { position: fixed; inset: 0; background: rgba(0,0,0,.6); display: grid; place-items: center; z-index: 50; padding: 16px; }
@@ -916,53 +947,96 @@ function showUsage(u) {
 }
 function note(cls, k, text) { $('codeIn').append(el('div', {class: cls}, el('b', {}, k), el('div', {}, text))); scrollCode(); }
 function scrollCode() { const f = $('codeFeed'); f.scrollTop = f.scrollHeight; }
-function headline(preview, tool) {
+const TOOL_LABEL = {read_file: 'Read', write_file: 'Write', edit_file: 'Update', run: 'Run', list_files: 'List', git: 'Git', diagnostics: 'Check', github: 'GitHub'};
+function toolParts(preview, tool) {   // "Read" + "main.py", "Run" + "python -m unittest"
   const first = String(preview || '').split('\n')[0];
-  const m = /^write (\S+)/.exec(first) || null;
-  if (m) return 'Wrote ' + m[1];
-  const e = /^edit (\S+)/.exec(first); if (e) return 'Edited ' + e[1];
-  const r = /^run (.*)$/.exec(first); if (r) { try { return 'Ran ' + (JSON.parse(r[1]).command || r[1]); } catch (x) { return first; } }
-  const rd = /^read_file (.*)$/.exec(first); if (rd) { try { return 'Read ' + (JSON.parse(rd[1]).path || rd[1]); } catch (x) { return first; } }
-  return first.length > 90 ? first.slice(0, 90) + '...' : first || tool;
+  const w = /^write (\S+)(?: \((\d+) lines?\))?/.exec(first); if (w) return [TOOL_LABEL.write_file, w[1], w[2] ? w[2] + ' lines' : ''];
+  const e = /^edit (\S+)/.exec(first); if (e) return [TOOL_LABEL.edit_file, e[1], ''];
+  const m = /^(\w+) (\{.*\})$/.exec(first);
+  if (m) { try { const a = JSON.parse(m[2]); const arg = a.path || a.command || a.args || a.action || ''; return [TOOL_LABEL[m[1]] || m[1], String(arg), '']; } catch (x) { /* fall through */ } }
+  return [TOOL_LABEL[tool] || tool || '', first.length > 90 ? first.slice(0, 90) + '...' : first, ''];
+}
+function diffNode(preview) {
+  const lines = String(preview || '').split('\n').slice(1); if (!lines.length) return null;
+  return el('div', {class: 'cc-diff'}, ...lines.map((l) => el('div', {class: /^\s*\+ /.test(l) ? 'add' : /^\s*- /.test(l) ? 'del' : 'hdr'}, l.replace(/^(\s*)([+-]) /, '$2 '))));
 }
 function cEvent(e) {
   const feed = $('codeIn');
-  if (e.kind === 'start') { feed.replaceChildren(el('div', {class: 'you'}, e.task)); C.last = null; return; }
+  if (e.kind === 'start') { feed.replaceChildren(el('div', {class: 'cc-user'}, el('span', {class: 'gt'}, '>'), el('span', {}, e.task))); C.last = null; return; }
   if (e.kind === 'step') {
-    if (e.tool === 'finish') { C.last = null; return; }
-    const node = el('details', {class: 'step'}, el('summary', {}, el('span', {class: 'dot'}), el('span', {class: 'what'}, headline(e.preview, e.tool))),
-      el('div', {class: 'more'}, el('pre', {}, e.preview)));
+    const prose = String(e.raw || '').split(/<\|tool_call\|>|<tool_call>/)[0].trim();
+    if (e.tool === 'finish') { if (prose) feed.append(el('div', {class: 'cc-say'}, prose)); C.last = null; return; }
+    if (!e.tool) { feed.append(el('div', {class: 'cc-say'}, e.preview)); C.last = null; return; }
+    if (prose) feed.append(el('div', {class: 'cc-say'}, prose));
+    const [name, arg, extra] = toolParts(e.preview, e.tool);
+    const node = el('div', {class: 'cc-tool run'}, el('div', {class: 'cc-head'}, el('span', {class: 'cc-dot'}, '●'), el('span', {class: 'cc-name'}, name),
+      el('span', {class: 'cc-arg'}, arg ? '(' + arg + (extra ? ', ' + extra : '') + ')' : '')));
+    const d = (e.tool === 'write_file' || e.tool === 'edit_file') ? diffNode(e.preview) : null; if (d) node.append(d);
     feed.append(node); C.last = node; return;
   }
   if (e.kind === 'result') {
     if (C.last) {
-      const bad = /^error|exit code [1-9]|Traceback|FAILED/m.test(e.text);
-      C.last.classList.add(bad ? 'no' : 'ok'); C.last.querySelector('.more').append(el('pre', {}, e.text)); C.last = null;
+      const t = String(e.text || ''), bad = /^error|exit code [1-9]|Traceback|FAILED/m.test(t), lines = t.split('\n').filter((x) => x.trim());
+      C.last.classList.remove('run'); C.last.classList.add(bad ? 'no' : 'ok');
+      const head = (lines[0] || 'Done').slice(0, 200) + (lines.length > 1 ? '  (+' + (lines.length - 1) + ' lines)' : '');
+      const res = el('div', {class: 'cc-res', title: 'Tap to show the whole output'}, el('span', {class: 'elb'}, '⎿'), el('span', {class: 'txt'}, head));
+      const node = C.last; res.onclick = () => node.classList.toggle('open');
+      node.append(res); if (lines.length > 1) node.append(el('div', {class: 'cc-more'}, t)); C.last = null;
     }
     return;
   }
   if (e.kind === 'answer') { const q = document.getElementById('ask' + e.id); if (q) q.remove(); return; }
   if (e.kind === 'ask') {
     const reply = (allow, always) => post('/api/code/sessions/' + C.sid + '/answer', {id: e.id, allow, always}).then(() => poll());
-    const node = el('div', {class: 'ask', id: 'ask' + e.id}, el('b', {}, 'Allow this?'), el('pre', {}, e.preview),
-      el('div', {class: 'row'}, el('button', {class: 'btn small', onclick: () => reply(true, false)}, 'Allow'), el('button', {class: 'chip', onclick: () => reply(true, true)}, 'Always allow this'), el('button', {class: 'chip', onclick: () => reply(false, false)}, 'No')));
+    const node = el('div', {class: 'cc-ask', id: 'ask' + e.id}, el('div', {class: 'q'}, 'Allow this?'), el('pre', {}, e.preview),
+      el('div', {class: 'row'}, el('button', {class: 'btn small', onclick: () => reply(true, false)}, 'Yes'), el('button', {class: 'chip', onclick: () => reply(true, true)}, 'Yes, and don\'t ask again for this'),
+        el('button', {class: 'chip', onclick: () => reply(false, false)}, 'No')));
     feed.append(node); return;
   }
-  if (e.kind === 'end') feed.append(el('div', {class: e.error || e.limited ? 'bad' : 'fin'}, el('b', {}, e.error ? 'Could not finish' : e.limited ? 'Usage ran out' : e.finished ? 'Done' : 'Stopped'),
-    el('div', {}, e.summary || (e.turns + ' steps used'))));
+  if (e.kind === 'end') {
+    const cls = e.error || e.limited ? 'bad' : e.finished ? 'good' : 'stop';
+    feed.append(el('div', {class: 'cc-end ' + cls}, el('span', {class: 'mark'}, e.finished ? '✓' : e.error || e.limited ? '✗' : '■'),
+      el('span', {}, (e.finished ? 'Done. ' : e.error ? 'Could not finish. ' : e.limited ? 'Stopped. ' : 'Stopped. ') + (e.summary || (e.turns + ' steps used')))));
+  }
 }
+// the live "working" line: a spinner, what the model is doing, seconds and words so far, and its text as it is written
+const SPIN = ['✻', '✽', '✶', '✳', '✢', '✳', '✶', '✽'];
+const WORKING = ['Thinking', 'Working', 'Reading the project', 'Planning', 'Figuring it out'];
+function renderLive(live, state) {
+  let n = document.getElementById('codeLive');
+  if (!live || state === 'asking' || !['starting', 'working'].includes(state)) { if (n) n.remove(); C.liveAt = null; return; }
+  if (!n) { n = el('div', {class: 'cc-live', id: 'codeLive'}, el('div', {class: 'l1'}, el('span', {class: 'glyph'}), el('span', {class: 'what'}), el('span', {class: 'meta'})), el('div', {class: 'prose'})); }
+  $('codeIn').append(n);     // always the last thing in the feed
+  C.live = live; C.liveAt = performance.now() - live.secs * 1000;
+  paintLive();
+}
+function paintLive() {
+  const n = document.getElementById('codeLive'); if (!n || !C.live || C.liveAt == null) return;
+  const l = C.live, secs = Math.max(0, Math.round((performance.now() - C.liveAt) / 1000));
+  const what = l.phase === 'running' ? 'Running ' + (TOOL_LABEL[l.tool] || l.tool || 'the step').toLowerCase()
+    : l.phase === 'calling' ? 'Using ' + (TOOL_LABEL[l.tool] || l.tool || 'a tool').toLowerCase()
+    : l.phase === 'writing' ? 'Writing' : WORKING[Math.floor(secs / 4) % WORKING.length];
+  n.querySelector('.glyph').textContent = SPIN[Math.floor(performance.now() / 160) % SPIN.length];
+  n.querySelector('.what').textContent = what + '…';
+  n.querySelector('.meta').textContent = '(' + secs + 's' + (l.tokens ? ' · ' + fmt(l.tokens) + ' tokens' : '') + ' · tap ■ to stop)';
+  n.querySelector('.prose').textContent = l.text || '';
+  const f = $('codeFeed'); if (f.scrollTop + f.clientHeight > f.scrollHeight - 160) scrollCode();
+}
+setInterval(() => { if (C && C.liveAt != null) paintLive(); }, 160);
 async function poll() {
   clearTimeout(C.timer); if (!C.sid || !cOn()) return;
   const r = await api('/api/code/sessions/' + C.sid + '?after=' + C.seen);
   if (!r.ok) { C.sid = null; return; }
   const j = await r.json(), feed = $('codeFeed'), atEnd = feed.scrollTop + feed.clientHeight > feed.scrollHeight - 120;
+  const old = document.getElementById('codeLive'); if (old) old.remove();      // the live line sits below the newest step, so take it out while steps are added
   for (const e of j.events) cEvent(e); C.seen += j.events.length;
   if (j.events.some((e) => e.kind === 'result' || e.kind === 'end')) refreshFiles();
+  renderLive(j.live, j.state);
   if (j.events.length && atEnd) scrollCode();
   showUsage(j.usage);
   const live = ['starting', 'working', 'asking'].includes(j.state);
   $('codeGo').hidden = live; $('codeStop').hidden = !live;
-  if (live) C.timer = setTimeout(poll, j.state === 'asking' ? 1500 : 700);
+  if (live) C.timer = setTimeout(poll, j.state === 'asking' ? 1500 : 350);
 }
 $('codeGo').onclick = async () => {
   const task = $('codeTask').value.trim(); if (!task || !C.model) return;
