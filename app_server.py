@@ -60,6 +60,7 @@ import lookup_auto
 import mailer
 import secret_box
 import saved_notes
+import user_memory
 import context_window as CW
 import effort_router
 import regen_modes
@@ -257,6 +258,7 @@ class AppState:
         self.clock, self.pace = clock, pace
         self.verbose = False                                   # print timings (set by the command line)
         self.saved = {}                                        # person -> saved_notes.SavedNotes (approved notes, usable offline)
+        self.memories = {}                                     # person -> user_memory.Memory (facts about them, shared by every model)
         self.lookups = {}                                      # (person, chat, message id) -> the notes that answer used, for the thumbs up
         self.wiki = None                                       # the local Wikipedia index (wiki_index.WikiIndex), if there is one
         self.web_fn = None                                     # web(question, k) -> notes; None = this server never searches the web
@@ -514,6 +516,13 @@ class AppState:
                 self.saved[user] = saved_notes.SavedNotes(path)
             return self.saved[user]
 
+    def memory_for(self, user):
+        with self.lock:
+            if user not in self.memories:
+                path = os.path.join(self.data_dir, f"memory-{user}.db") if self.data_dir else ":memory:"
+                self.memories[user] = user_memory.Memory(path)
+            return self.memories[user]
+
     def remember_lookup(self, user, chat_id, message_id, question, found):
         """Keep what an answer was written from (the last 200), so a thumbs up can save it. Private chats keep nothing."""
         if chat_id < 0 or not found["used"]:
@@ -524,7 +533,7 @@ class AppState:
                 self.lookups.pop(next(iter(self.lookups)))
 
     def get_settings(self, user):
-        s = {"window_mode": "everyday", "show_tokens": False, "web_search": "auto"}
+        s = {"window_mode": "everyday", "show_tokens": False, "web_search": "auto", "memory": True}
         s.update(self.settings.get(user, {}))
         return s
 
@@ -534,6 +543,8 @@ class AppState:
             s["window_mode"] = new["window_mode"]
         if isinstance(new.get("show_tokens"), bool):
             s["show_tokens"] = new["show_tokens"]
+        if isinstance(new.get("memory"), bool):
+            s["memory"] = new["memory"]
         if new.get("web_search") in lookup_auto.MODES:
             s["web_search"] = new["web_search"]
         self.settings[user] = s
@@ -846,6 +857,18 @@ def start_turn(state, who, chat_id, text, model_id, effort, regenerate=False, re
             if state.runner and not state.runner.ready(model["id"], window):
                 q.put(("loading", model["name"]))
             notes, found = None, None
+            mem_note = None
+            if chat_id >= 0 and state.get_settings(who["user"])["memory"]:         # what the app knows about this person: the same for every model
+                memory = state.memory_for(who["user"])
+                if text:
+                    learned = memory.learn(text)
+                    if learned["saved"] or learned["forgot"]:
+                        q.put(("memory", learned))
+                asked = text
+                if not asked:                                                       # a regenerate: the question is the last thing they said
+                    last = [m for m in store.messages(chat_id) if m["role"] == "user"]
+                    asked = last[-1]["content"] if last else ""
+                mem_note = memory.note(asked)
             if text:                                                               # Auto lookup (lookup_auto.py)
                 web_mode = state.get_settings(who["user"])["web_search"]
                 notes, found = lookup_auto.gather(text, state.wiki, state.web_fn, web_mode, private=chat_id < 0,
@@ -853,6 +876,8 @@ def start_turn(state, who, chat_id, text, model_id, effort, regenerate=False, re
                                                   saved=state.saved_for(who["user"]), now=state.clock(), policy=model.get("lookup", "always"))
                 if found["asked"]:
                     q.put(("notes", {k: v for k, v in found.items() if k != "used"}))
+            if mem_note:
+                notes = [mem_note] + list(notes or [])
             t_load = time.monotonic()
             backend = state.backend_for(model, text or "", window)     # may load the model the first time (can take a while)
             timing["load"] = time.monotonic() - t_load
@@ -880,7 +905,7 @@ def start_turn(state, who, chat_id, text, model_id, effort, regenerate=False, re
                     msgs = [m for m in store.messages(chat_id) if m["status"] != "compacted"]
                     if msgs and msgs[-1]["role"] == "assistant":
                         store.remove_message(chat_id, msgs[-1]["id"])
-                    r = E.run_turn(tok, store, chat_id, backend, counted_model, window, max_new, user_text=None, stop=stop, notes=notes2,
+                    r = E.run_turn(tok, store, chat_id, backend, counted_model, window, max_new, user_text=None, stop=stop, notes=([mem_note] if mem_note else []) + list(notes2 or []),
                                    limiter=state.limiter, user=who["user"], effort=effort, clock=state.clock, pacer=pacer)
                     found = found2
             if found and found["asked"] and text:
@@ -1191,6 +1216,8 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 cat["connections"] = {"github": dict(self.state.github.public(who["user"]), device=bool(self.state.github_client_id()),
                                                      encrypted=self.state.secrets.available)}
                 return self._send(200, cat)
+            if path == "/api/memory":
+                return self._send(200, {"facts": self.state.memory_for(who["user"]).list(), "on": self.state.get_settings(who["user"])["memory"]})
             if path == "/api/saved-notes":
                 return self._send(200, {"notes": self.state.saved_for(who["user"]).list(self.state.clock())})
             if path.startswith("/api/code"):
@@ -1368,6 +1395,17 @@ class Handler(http.server.BaseHTTPRequestHandler):
                     return self._send(200, {"saved": 0})
                 n = self.state.saved_for(who["user"]).save(used["question"], used["notes"], self.state.clock(), used["recent"])
                 return self._send(200, {"saved": n, "notes": len(used["notes"])})
+            if path == "/api/memory/add":
+                if not self.state.memory_for(who["user"]).add(str(body.get("text", ""))):
+                    return self._send(400, {"code": "not_saved", "message": "That was not saved.",
+                                            "action": "It is empty, already there, or looks like a password, number or address, which are never kept."})
+                return self._send(200, {"facts": self.state.memory_for(who["user"]).list()})
+            if path == "/api/memory/delete":
+                self.state.memory_for(who["user"]).delete(int(body.get("id", 0)))
+                return self._send(200, {"ok": True})
+            if path == "/api/memory/clear":
+                self.state.memory_for(who["user"]).clear()
+                return self._send(200, {"ok": True})
             if path == "/api/saved-notes/delete":
                 self.state.saved_for(who["user"]).delete(int(body.get("id", 0)))
                 return self._send(200, {"ok": True})
@@ -1741,6 +1779,8 @@ class Handler(http.server.BaseHTTPRequestHandler):
                     emit("loading", {"model": val})
                 elif kind == "notes":
                     emit("notes", val)
+                elif kind == "memory":
+                    emit("memory", val)
                 elif kind == "piece":
                     emit("piece", {"t": val})
                 elif kind == "done":
