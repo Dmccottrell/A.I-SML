@@ -27,7 +27,25 @@ FACT_SHAPES = re.compile(r"\b(capital of|population of|president of|prime minist
 TIME_WORDS = re.compile(r"\b(latest|newest|current|currently|today|tonight|yesterday|tomorrow|this (week|month|year|season)|"
                         r"right now|nowadays|recent|recently|news|score|scores|price|prices|weather|forecast|stock|released?|"
                         r"release date|upcoming|just (won|released|announced)|who won|who is the (current )?(president|prime minister|ceo)|"
+                        r"coming out|comes? out|come out|out yet|launch(es|ed|ing)?|release[sd]?|releasing|premieres?|"
+                        r"when (is|are|does|do|will|did) .{1,60}\b(out|release|drop|start|begin|air|launch)\w*|"
+                        r"next (game|movie|film|season|episode|version|update|album|model|iphone|console)|"
                         r"20(2[4-9]|3\d))\b", re.I)
+DATE_WORDS = re.compile(r"\b(today|tonight|tomorrow|yesterday|this (year|month|week|weekend|morning|evening)|current (year|month|date|day|time)|"
+                        r"what (day|date|year|month) is|what'?s the (date|day)|days? (until|till|left|from now)|how (long|many days|many weeks) until|"
+                        r"next (week|month|year)|last (week|month|year))\b", re.I)
+
+
+def date_note(question, now):
+    """A one-line note with today's date for questions that depend on it ("what day is Christmas this year?"): a model has no clock, so
+    without this it guesses or says it doesn't know. None for other questions."""
+    if not DATE_WORDS.search(question or ""):
+        return None
+    import time
+    t = time.localtime(now or time.time())
+    return {"title": "Today", "text": time.strftime("Today is %A, %B ", t) + str(t.tm_mday) + time.strftime(", %Y.", t)}
+
+
 WEATHER_WORDS = re.compile(r"\b(weather|forecast)\b", re.I)
 STOP = set("the a an of to in on at for and or is are was were be been do does did what who whom when where which why how "
            "can could will would should it its this that these those with as by from about me my you your i tell give name".split())
