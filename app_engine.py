@@ -186,11 +186,13 @@ class ChatStore:
             CREATE TABLE IF NOT EXISTS chats (id INTEGER PRIMARY KEY, title TEXT, created REAL);
             CREATE TABLE IF NOT EXISTS messages (id INTEGER PRIMARY KEY, chat_id INTEGER, role TEXT, content TEXT,
                 model_id TEXT, status TEXT, created REAL);""")
-        try:
-            self.db.execute("ALTER TABLE chats ADD COLUMN skill TEXT")     # chats made before Skills have none
-            self.db.commit()
-        except sqlite3.OperationalError:
-            pass
+        for column in ("skill TEXT", "docs TEXT"):                           # chats made before Skills / Documents have none
+            try:
+                self.db.execute("ALTER TABLE chats ADD COLUMN " + column)
+                self.db.commit()
+            except sqlite3.OperationalError:
+                pass
+        self.private_docs = {}
         self.private = {}                    # private chats live here only: {chat_id: [messages]}
         self.private_skill = {}
         self._next_private = -1
@@ -205,6 +207,24 @@ class ChatStore:
         cur = self.db.execute("INSERT INTO chats (title, created, skill) VALUES (?, ?, ?)", (title, time.time(), skill or None))
         self.db.commit()
         return cur.lastrowid
+
+    def docs(self, chat_id):
+        """Ids of the documents attached to this chat."""
+        if chat_id < 0:
+            return list(self.private_docs.get(chat_id, []))
+        r = self.db.execute("SELECT docs FROM chats WHERE id = ?", (chat_id,)).fetchone()
+        try:
+            return [int(x) for x in json.loads(r[0])] if r and r[0] else []
+        except (ValueError, TypeError):
+            return []
+
+    def set_docs(self, chat_id, ids):
+        ids = [int(i) for i in ids][:10]
+        if chat_id < 0:
+            self.private_docs[chat_id] = ids
+            return
+        self.db.execute("UPDATE chats SET docs = ? WHERE id = ?", (json.dumps(ids), chat_id))
+        self.db.commit()
 
     def skill(self, chat_id):
         """The skill switched on for this chat ('' for none)."""

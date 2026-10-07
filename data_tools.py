@@ -57,6 +57,7 @@ def export_zip(state, user):
                           "messages": [{"role": m["role"], "content": m["content"], "model": m["model_id"]} for m in store.messages(c["id"])
                                        if m["content"]]})
         z.writestr("chats.json", json.dumps(chats, indent=2))
+        z.writestr("documents.json", json.dumps([dict(d, text=state.docs_for(user).text(d["id"])) for d in state.docs_for(user).list()], indent=2))
         z.writestr("saved_notes.json", json.dumps(state.saved_for(user).list(now), indent=2))
         z.writestr("memory.json", json.dumps(state.memory_for(user).list(), indent=2))
         z.writestr("devices.json", json.dumps(state.auth.sessions_for(user), indent=2))
