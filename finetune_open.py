@@ -123,6 +123,9 @@ def lr_at(step, total, base, warmup):
     return base * (0.1 + 0.9 * 0.5 * (1 + math.cos(math.pi * min(1.0, t))))
 
 
+MERGE_SHARD_SIZE = "2GB"
+
+
 def merge_and_export(base_model, adapter_dir, export_dir, torch, spread=False):
     """Merge the LoRA adapter into the base weights and write a plain Hugging Face folder."""
     from peft import PeftModel
@@ -140,7 +143,9 @@ def merge_and_export(base_model, adapter_dir, export_dir, torch, spread=False):
         model = AutoModelForCausalLM.from_pretrained(base_model, dtype=torch.bfloat16)
     model = PeftModel.from_pretrained(model, adapter_dir).merge_and_unload()
     os.makedirs(export_dir, exist_ok=True)
-    model.save_pretrained(export_dir, safe_serialization=True)
+    # Small shards: with one big file (a 14B model is about 30 GB) saving collects every weight in RAM first, and a 30 GB machine's kernel kills the process
+    # (no error message, the log just ends after "Writing model shards 0/1"). Shards of 2 GB are written one at a time.
+    model.save_pretrained(export_dir, safe_serialization=True, max_shard_size=MERGE_SHARD_SIZE)
     AutoTokenizer.from_pretrained(base_model).save_pretrained(export_dir)
     return export_dir
 
