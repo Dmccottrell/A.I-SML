@@ -27,6 +27,7 @@ THINKING_SWITCH_S = 2.2
 MIN_FIRST_S = 1.5               # the pause for a normal message (Balanced, short): the others scale from it
 PAUSE_BASE = {"quick": 0.5, "balanced": 1.2, "deep": 2.4}   # seconds before the first word, by how hard the question is
 PAUSE_MAX = 3.2
+PAUSE_SCALE = {"off": 0.0, "short": 0.4, "natural": 1.0}   # the person's setting: how much of that pause to keep (the models answer fast now)
 RATE_CPS = 90.0                 # characters per second when text arrives faster than this (about 22 words a second)
 MAX_LAG_S = 1.5
 
