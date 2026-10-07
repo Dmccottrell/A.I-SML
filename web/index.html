@@ -148,37 +148,37 @@ svg .core { fill: var(--core); stroke: var(--sun); stroke-width: 3; transition: 
 .code .flist button { display: block; width: 100%; text-align: left; background: transparent; border: 0; border-radius: 8px; padding: 8px; font: 13px ui-monospace, Menlo, Consolas, monospace; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-height: 36px; }
 .code .flist button:hover, .code .flist button.on { background: var(--surface2); }
 .code .viewer { flex: 1; overflow: auto; padding: 10px 14px 14px; border-top: 1px solid var(--line); }
-/* VryxCode, laid out like a terminal coding assistant: a prompt line, plain text from the model, one row per tool with its result under it, a live "working" line */
-.code .feedin { font-family: ui-monospace, 'JetBrains Mono', Menlo, Consolas, monospace; font-size: 14px; line-height: 1.55; gap: 4px; }
-.code .cc-user { display: flex; gap: 10px; padding: 6px 0 12px; margin-bottom: 8px; border-bottom: 1px solid var(--line); color: var(--text); white-space: pre-wrap; word-break: break-word; }
-.code .cc-user .gt { color: var(--accent); font-weight: 700; flex-shrink: 0; }
+/* VryxCode: a work log in Emvryx's own style: an ember mark for you, plain words from the model, one card per action with a coloured edge, a living "working" line */
+.code .feedin { font-family: ui-monospace, 'JetBrains Mono', Menlo, Consolas, monospace; font-size: 14px; line-height: 1.55; gap: 6px; }
+.code .cc-user { display: flex; gap: 12px; align-items: flex-start; padding: 6px 0 14px; margin-bottom: 6px; border-bottom: 1px solid var(--line); color: var(--text); white-space: pre-wrap; word-break: break-word; }
+.code .cc-user .ember { flex-shrink: 0; width: 10px; height: 10px; margin-top: 6px; border-radius: 999px; background: var(--accent); box-shadow: 0 0 10px var(--accent); }
 .code .cc-say { color: var(--text); white-space: pre-wrap; word-break: break-word; padding: 4px 0 2px; }
-.code .cc-tool { display: flex; flex-direction: column; gap: 1px; padding: 3px 0; }
+.code .cc-tool { display: flex; flex-direction: column; gap: 2px; padding: 6px 10px 6px 12px; border-left: 3px solid var(--line); background: var(--surface); border-radius: 4px 12px 12px 4px; }
+.code .cc-tool.run { border-left-color: var(--accent); } .code .cc-tool.ok { border-left-color: #3fb950; } .code .cc-tool.no { border-left-color: var(--danger); }
 .code .cc-head { display: flex; gap: 8px; align-items: baseline; min-width: 0; }
-.code .cc-dot { flex-shrink: 0; color: var(--muted); }
-.code .cc-tool.ok .cc-dot { color: #3fb950; } .code .cc-tool.no .cc-dot { color: var(--danger); }
-.code .cc-tool.run .cc-dot { animation: ccblink 1s steps(2, start) infinite; }
-.code .cc-name { font-weight: 700; flex-shrink: 0; }
+.code .cc-verb { font-weight: 700; flex-shrink: 0; }
 .code .cc-arg { color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
-.code .cc-res, .code .cc-diff, .code .cc-more { margin-left: 4px; padding-left: 14px; }
+.code .cc-tool.run .cc-verb { animation: ccglow 1.4s ease-in-out infinite; }
+.code .cc-res, .code .cc-diff, .code .cc-more { padding-left: 2px; }
 .code .cc-res { color: var(--muted); display: flex; gap: 8px; align-items: baseline; cursor: pointer; }
-.code .cc-res .elb { flex-shrink: 0; } .code .cc-res .txt { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+.code .cc-res .arrow { flex-shrink: 0; } .code .cc-res .txt { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
 .code .cc-tool.open .cc-res .txt { white-space: pre-wrap; word-break: break-word; }
-.code .cc-diff { border-left: 2px solid var(--line); margin-top: 2px; }
-.code .cc-diff div { white-space: pre-wrap; word-break: break-word; padding: 0 6px; }
+.code .cc-diff { margin-top: 4px; border-radius: 8px; overflow: hidden; }
+.code .cc-diff div { white-space: pre-wrap; word-break: break-word; padding: 0 8px; }
 .code .cc-diff .add { color: #3fb950; background: rgba(63,185,80,.12); } .code .cc-diff .del { color: #f85149; background: rgba(248,81,73,.12); } .code .cc-diff .hdr { color: var(--muted); }
 .code .cc-more { color: var(--muted); max-height: 260px; overflow: auto; white-space: pre-wrap; word-break: break-word; display: none; }
 .code .cc-tool.open .cc-more { display: block; }
-.code .cc-live { display: flex; flex-direction: column; gap: 4px; padding: 8px 0 2px; color: var(--accenttext); }
-.code .cc-live .l1 { display: flex; gap: 10px; align-items: baseline; }
-.code .cc-live .glyph { display: inline-block; width: 1.2em; text-align: center; font-weight: 700; }
-.code .cc-live .meta { color: var(--muted); font-size: 13px; }
-.code .cc-live .prose { color: var(--muted); white-space: pre-wrap; word-break: break-word; max-height: 7.5em; overflow: hidden; }
-.code .cc-end { padding: 10px 0 4px; display: flex; gap: 10px; align-items: baseline; white-space: pre-wrap; word-break: break-word; }
+.code .cc-live { display: flex; flex-direction: column; gap: 4px; padding: 10px 0 2px; }
+.code .cc-live .l1 { display: flex; gap: 10px; align-items: center; color: var(--accenttext); }
+.code .cc-live .mark { display: inline-flex; animation: ccpulse 1.2s ease-in-out infinite; }
+.code .cc-live .what { transition: opacity .25s; } .code .cc-live .what.swap { opacity: 0; }
+.code .cc-live .meta { color: var(--muted); font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+.code .cc-live .prose { color: var(--muted); white-space: pre-wrap; word-break: break-word; max-height: 7.5em; overflow: hidden; padding-left: 30px; }
+.code .cc-end { padding: 12px 0 4px; display: flex; gap: 10px; align-items: baseline; white-space: pre-wrap; word-break: break-word; }
 .code .cc-end.good .mark { color: #3fb950; } .code .cc-end.bad .mark { color: var(--danger); } .code .cc-end.stop .mark { color: var(--muted); }
 .code .cc-ask { border: 1px solid var(--accent); border-radius: 12px; padding: 10px 12px; display: flex; flex-direction: column; gap: 8px; margin: 6px 0; background: var(--surface); }
 .code .cc-ask .q { font-weight: 700; } .code .cc-ask pre { color: var(--muted); max-height: 220px; overflow: auto; }
-@keyframes ccblink { to { visibility: hidden; } }
+@keyframes ccglow { 50% { opacity: .55; } } @keyframes ccpulse { 50% { transform: scale(.82); opacity: .7; } }
 @media (max-width: 900px) { .code .drawer { width: 100%; box-shadow: none; } }
 /* dialogs */
 .modal { position: fixed; inset: 0; background: rgba(0,0,0,.6); display: grid; place-items: center; z-index: 50; padding: 16px; }
@@ -947,14 +947,31 @@ function showUsage(u) {
 }
 function note(cls, k, text) { $('codeIn').append(el('div', {class: cls}, el('b', {}, k), el('div', {}, text))); scrollCode(); }
 function scrollCode() { const f = $('codeFeed'); f.scrollTop = f.scrollHeight; }
-const TOOL_LABEL = {read_file: 'Read', write_file: 'Write', edit_file: 'Update', run: 'Run', list_files: 'List', git: 'Git', diagnostics: 'Check', github: 'GitHub'};
-function toolParts(preview, tool) {   // "Read" + "main.py", "Run" + "python -m unittest"
+// Past-tense words for finished actions (what the card says), and rotating present-tense words for the live line (what it is doing right now)
+const DONE_VERB = {read_file: 'Read', write_file: 'Wrote', edit_file: 'Edited', run: 'Ran', list_files: 'Looked around', git: 'Git', diagnostics: 'Checked', github: 'GitHub'};
+const NOW_WORDS = {
+  thinking: ['Thinking', 'Pondering', 'Working it out', 'Mulling it over', 'Sketching a plan', 'Weighing it up', 'Figuring it out'],
+  writing: ['Writing', 'Drafting', 'Composing', 'Putting it into words', 'Shaping a reply'],
+  build: ['Building', 'Crafting', 'Assembling', 'Putting together', 'Shaping'],
+  test: ['Running the tests', 'Testing it', 'Checking it works', 'Trying it out', 'Putting it through its paces'],
+  run: ['Running', 'Executing', 'Trying', 'Working on'],
+  read: ['Reading', 'Studying', 'Looking through', 'Taking a look at'],
+  look: ['Looking around', 'Scanning the project', 'Seeing what is here'],
+  git: ['Working with git', 'Handling git'], github: ['Talking to GitHub', 'Syncing with GitHub'], check: ['Checking', 'Looking for problems']};
+const TOOL_KIND = {write_file: 'build', edit_file: 'build', run: 'run', read_file: 'read', list_files: 'look', git: 'git', github: 'github', diagnostics: 'check'};
+function nowKind(l) {
+  if (l.phase === 'thinking') return 'thinking';
+  if (l.phase === 'writing') return 'writing';
+  const k = TOOL_KIND[l.tool] || 'run';
+  return k === 'run' && /unittest|pytest|\btest/i.test(l.target || '') ? 'test' : k;
+}
+function toolParts(preview, tool) {   // "Wrote" + "main.py" + "2 lines"
   const first = String(preview || '').split('\n')[0];
-  const w = /^write (\S+)(?: \((\d+) lines?\))?/.exec(first); if (w) return [TOOL_LABEL.write_file, w[1], w[2] ? w[2] + ' lines' : ''];
-  const e = /^edit (\S+)/.exec(first); if (e) return [TOOL_LABEL.edit_file, e[1], ''];
+  const w = /^write (\S+)(?: \((\d+) lines?\))?/.exec(first); if (w) return [DONE_VERB.write_file, w[1], w[2] ? w[2] + ' lines' : ''];
+  const e = /^edit (\S+)/.exec(first); if (e) return [DONE_VERB.edit_file, e[1], ''];
   const m = /^(\w+) (\{.*\})$/.exec(first);
-  if (m) { try { const a = JSON.parse(m[2]); const arg = a.path || a.command || a.args || a.action || ''; return [TOOL_LABEL[m[1]] || m[1], String(arg), '']; } catch (x) { /* fall through */ } }
-  return [TOOL_LABEL[tool] || tool || '', first.length > 90 ? first.slice(0, 90) + '...' : first, ''];
+  if (m) { try { const a = JSON.parse(m[2]); const arg = a.path || a.command || a.args || a.action || ''; return [DONE_VERB[m[1]] || m[1], String(arg), '']; } catch (x) { /* fall through */ } }
+  return [DONE_VERB[tool] || tool || '', first.length > 90 ? first.slice(0, 90) + '...' : first, ''];
 }
 function diffNode(preview) {
   const lines = String(preview || '').split('\n').slice(1); if (!lines.length) return null;
@@ -962,15 +979,15 @@ function diffNode(preview) {
 }
 function cEvent(e) {
   const feed = $('codeIn');
-  if (e.kind === 'start') { feed.replaceChildren(el('div', {class: 'cc-user'}, el('span', {class: 'gt'}, '>'), el('span', {}, e.task))); C.last = null; return; }
+  if (e.kind === 'start') { feed.replaceChildren(el('div', {class: 'cc-user'}, el('span', {class: 'ember'}), el('span', {}, e.task))); C.last = null; return; }
   if (e.kind === 'step') {
     const prose = String(e.raw || '').split(/<\|tool_call\|>|<tool_call>/)[0].trim();
     if (e.tool === 'finish') { if (prose) feed.append(el('div', {class: 'cc-say'}, prose)); C.last = null; return; }
     if (!e.tool) { feed.append(el('div', {class: 'cc-say'}, e.preview)); C.last = null; return; }
     if (prose) feed.append(el('div', {class: 'cc-say'}, prose));
     const [name, arg, extra] = toolParts(e.preview, e.tool);
-    const node = el('div', {class: 'cc-tool run'}, el('div', {class: 'cc-head'}, el('span', {class: 'cc-dot'}, '●'), el('span', {class: 'cc-name'}, name),
-      el('span', {class: 'cc-arg'}, arg ? '(' + arg + (extra ? ', ' + extra : '') + ')' : '')));
+    const node = el('div', {class: 'cc-tool run'}, el('div', {class: 'cc-head'}, el('span', {class: 'cc-verb'}, name),
+      el('span', {class: 'cc-arg'}, arg ? arg + (extra ? '  \u00b7  ' + extra : '') : '')));
     const d = (e.tool === 'write_file' || e.tool === 'edit_file') ? diffNode(e.preview) : null; if (d) node.append(d);
     feed.append(node); C.last = node; return;
   }
@@ -979,7 +996,7 @@ function cEvent(e) {
       const t = String(e.text || ''), bad = /^error|exit code [1-9]|Traceback|FAILED/m.test(t), lines = t.split('\n').filter((x) => x.trim());
       C.last.classList.remove('run'); C.last.classList.add(bad ? 'no' : 'ok');
       const head = (lines[0] || 'Done').slice(0, 200) + (lines.length > 1 ? '  (+' + (lines.length - 1) + ' lines)' : '');
-      const res = el('div', {class: 'cc-res', title: 'Tap to show the whole output'}, el('span', {class: 'elb'}, '⎿'), el('span', {class: 'txt'}, head));
+      const res = el('div', {class: 'cc-res', title: 'Tap to show the whole output'}, el('span', {class: 'arrow'}, '\u2192'), el('span', {class: 'txt'}, head));
       const node = C.last; res.onclick = () => node.classList.toggle('open');
       node.append(res); if (lines.length > 1) node.append(el('div', {class: 'cc-more'}, t)); C.last = null;
     }
@@ -996,16 +1013,14 @@ function cEvent(e) {
   if (e.kind === 'end') {
     const cls = e.error || e.limited ? 'bad' : e.finished ? 'good' : 'stop';
     feed.append(el('div', {class: 'cc-end ' + cls}, el('span', {class: 'mark'}, e.finished ? '✓' : e.error || e.limited ? '✗' : '■'),
-      el('span', {}, (e.finished ? 'Done. ' : e.error ? 'Could not finish. ' : e.limited ? 'Stopped. ' : 'Stopped. ') + (e.summary || (e.turns + ' steps used')))));
+      el('span', {}, /^(Stopped|Paused)/i.test(e.summary || '') ? e.summary : (e.finished ? 'All done: ' : e.error ? 'Could not finish: ' : e.limited ? 'Paused: ' : 'Stopped: ') + (e.summary || (e.turns + ' steps used')))));
   }
 }
-// the live "working" line: a spinner, what the model is doing, seconds and words so far, and its text as it is written
-const SPIN = ['✻', '✽', '✶', '✳', '✢', '✳', '✶', '✽'];
-const WORKING = ['Thinking', 'Working', 'Reading the project', 'Planning', 'Figuring it out'];
+// the live "working" line: our ember mark pulsing, a word for what it is doing (it changes every few seconds), the file or command, seconds, and the text as it is written
 function renderLive(live, state) {
   let n = document.getElementById('codeLive');
   if (!live || state === 'asking' || !['starting', 'working'].includes(state)) { if (n) n.remove(); C.liveAt = null; return; }
-  if (!n) { n = el('div', {class: 'cc-live', id: 'codeLive'}, el('div', {class: 'l1'}, el('span', {class: 'glyph'}), el('span', {class: 'what'}), el('span', {class: 'meta'})), el('div', {class: 'prose'})); }
+  if (!n) { n = el('div', {class: 'cc-live', id: 'codeLive'}, el('div', {class: 'l1'}, el('span', {class: 'mark'}, logo(20, false, 'brand')), el('span', {class: 'what'}), el('span', {class: 'meta'})), el('div', {class: 'prose'})); }
   $('codeIn').append(n);     // always the last thing in the feed
   C.live = live; C.liveAt = performance.now() - live.secs * 1000;
   paintLive();
@@ -1013,12 +1028,12 @@ function renderLive(live, state) {
 function paintLive() {
   const n = document.getElementById('codeLive'); if (!n || !C.live || C.liveAt == null) return;
   const l = C.live, secs = Math.max(0, Math.round((performance.now() - C.liveAt) / 1000));
-  const what = l.phase === 'running' ? 'Running ' + (TOOL_LABEL[l.tool] || l.tool || 'the step').toLowerCase()
-    : l.phase === 'calling' ? 'Using ' + (TOOL_LABEL[l.tool] || l.tool || 'a tool').toLowerCase()
-    : l.phase === 'writing' ? 'Writing' : WORKING[Math.floor(secs / 4) % WORKING.length];
-  n.querySelector('.glyph').textContent = SPIN[Math.floor(performance.now() / 160) % SPIN.length];
-  n.querySelector('.what').textContent = what + '…';
-  n.querySelector('.meta').textContent = '(' + secs + 's' + (l.tokens ? ' · ' + fmt(l.tokens) + ' tokens' : '') + ' · tap ■ to stop)';
+  const kind = nowKind(l), words = NOW_WORDS[kind] || NOW_WORDS.thinking;
+  const word = C.stopping ? 'Stopping' : words[Math.floor(secs / 3) % words.length];
+  const what = n.querySelector('.what');
+  if (what.textContent !== word + '\u2026') { what.classList.add('swap'); setTimeout(() => { what.textContent = word + '\u2026'; what.classList.remove('swap'); }, 120); }
+  const target = (l.target || '').split('\n')[0].slice(0, 60);
+  n.querySelector('.meta').textContent = (target ? target + '  \u00b7  ' : '') + secs + 's' + (l.tokens ? '  \u00b7  ' + fmt(l.tokens) + ' words' : '');
   n.querySelector('.prose').textContent = l.text || '';
   const f = $('codeFeed'); if (f.scrollTop + f.clientHeight > f.scrollHeight - 160) scrollCode();
 }
@@ -1035,16 +1050,16 @@ async function poll() {
   if (j.events.length && atEnd) scrollCode();
   showUsage(j.usage);
   const live = ['starting', 'working', 'asking'].includes(j.state);
-  $('codeGo').hidden = live; $('codeStop').hidden = !live;
+  $('codeGo').hidden = live; $('codeStop').hidden = !live; if (!live) { C.stopping = false; $('codeStop').disabled = false; }
   if (live) C.timer = setTimeout(poll, j.state === 'asking' ? 1500 : 350);
 }
 $('codeGo').onclick = async () => {
   const task = $('codeTask').value.trim(); if (!task || !C.model) return;
   const r = await post('/api/code/start', {project: C.project, task, model: C.model, auto_edits: C.auto}); const j = await r.json();
   if (!r.ok) { note('bad', 'Could not start', j.message + ' ' + (j.action || '')); return; }
-  C.sid = j.id; C.seen = 0; $('codeTask').value = ''; $('codeIn').replaceChildren(); poll();
+  C.sid = j.id; C.seen = 0; C.stopping = false; $('codeStop').disabled = false; $('codeTask').value = ''; $('codeIn').replaceChildren(); poll();
 };
-$('codeStop').onclick = () => { if (C.sid) post('/api/code/sessions/' + C.sid + '/stop').then(() => poll()); };
+$('codeStop').onclick = () => { if (!C.sid || C.stopping) return; C.stopping = true; $('codeStop').disabled = true; paintLive(); post('/api/code/sessions/' + C.sid + '/stop').then(() => poll()); };
 $('codeTask').addEventListener('keydown', (e) => { if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); $('codeGo').click(); } });
 const b64 = (buf) => { let s = '', a = new Uint8Array(buf); for (let i = 0; i < a.length; i += 0x8000) s += String.fromCharCode.apply(null, a.subarray(i, i + 0x8000)); return btoa(s); };
 async function sendImport(body) {

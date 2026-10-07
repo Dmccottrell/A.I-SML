@@ -159,6 +159,10 @@ def total_memory_gb(fallback=8.0):
 
 
 # ------------------------------------------------------------------ running a GGUF model (llama.cpp's llama-server)
+class Cancelled(Exception):
+    """The person pressed Stop while a model was loading."""
+
+
 class ModelRunner:
     """Starts llama-server for the model the person picked and stops it when another one is picked (one at a time, so
     a small PC is not asked to hold two models). `files` is {model id: path to a .gguf}."""
@@ -190,8 +194,9 @@ class ModelRunner:
             except subprocess.TimeoutExpired:
                 proc.kill()
 
-    def ensure(self, model_id, ctx):
-        """The URL of a llama-server running this model with at least `ctx` tokens of memory. Starts it if needed."""
+    def ensure(self, model_id, ctx, cancel=None):
+        """The URL of a llama-server running this model with at least `ctx` tokens of memory. Starts it if needed.
+        `cancel()` is asked while it loads: when it says yes the half-loaded server is stopped and Cancelled is raised."""
         with self.lock:
             if self.proc and self.proc.poll() is None and self.model_id == model_id and (self.ctx or 0) >= ctx:
                 return self.url
@@ -209,6 +214,9 @@ class ModelRunner:
             self.model_id, self.ctx, self.url = model_id, ctx, f"http://{self.host}:{port}"
             deadline = time.monotonic() + self.timeout
             while time.monotonic() < deadline:
+                if cancel and cancel():
+                    self.stop()
+                    raise Cancelled()
                 if self.proc.poll() is not None:
                     self.stop()
                     raise AppError("The model stopped while loading.", "Check that the .gguf file is complete and fits in memory.")
@@ -690,13 +698,13 @@ class AppState:
             return False, "VryxCode is only open to the owner until the container sandbox is turned on."
         return True, ""
 
-    def code_backend(self, model):
+    def code_backend(self, model, cancel=None):
         """generate(messages) for a coding session on this model (the llama-server that runs it)."""
         if self.code_generate:
             return self.code_generate(model)
         ctx = min(int(model.get("context_tested") or 8192), 32768)
         if self.runner:
-            url = self.runner.ensure(model["id"], ctx)
+            url = self.runner.ensure(model["id"], ctx, cancel=cancel)
         elif self.llama_url:
             url = self.llama_url
         else:
@@ -1557,11 +1565,14 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 def generate(messages, model=model):          # the model loads on the first step, in the session's thread (it can take a minute)
                     if "fn" not in box:
                         try:
-                            box["fn"] = st.code_backend(model)
+                            box["fn"] = st.code_backend(model, cancel=getattr(generate, "should_stop", None))
+                        except Cancelled:
+                            raise vryxcode.Interrupted()
                         except AppError as e:
                             raise code_sessions.CodeError(e.message, e.action)
                     if hasattr(box["fn"], "on_delta"):
                         box["fn"].on_delta = getattr(generate, "on_delta", None)     # live progress for the page's "working" line
+                        box["fn"].should_stop = getattr(generate, "should_stop", None)     # Stop works while it is still reading the prompt
                     reply = box["fn"](messages)
                     generate.usage = getattr(box["fn"], "usage", None)      # the real counts, for the usage meter
                     return reply

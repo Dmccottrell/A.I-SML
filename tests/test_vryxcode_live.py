@@ -119,3 +119,86 @@ class LiveView(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class StopWorksAtOnce(unittest.TestCase):
+    def test_stop_ends_a_call_that_is_still_waiting_for_the_model(self):
+        gate = threading.Event()
+
+        class H(http.server.BaseHTTPRequestHandler):
+            def do_POST(self):
+                self.rfile.read(int(self.headers["Content-Length"]))
+                self.send_response(200)
+                self.send_header("Content-Type", "text/event-stream")
+                self.end_headers()
+                self.wfile.write(b"data: " + json.dumps(delta("start ")).encode() + b"\n\n")
+                self.wfile.flush()
+                gate.wait(10)                                # the model "thinks" for a long time
+
+            def log_message(self, *a):
+                pass
+        server = http.server.HTTPServer(("127.0.0.1", 0), H)
+        threading.Thread(target=server.serve_forever, daemon=True).start()
+        stop = threading.Event()
+        chat = V.LlamaChat(f"http://127.0.0.1:{server.server_port}")
+        chat.should_stop = stop.is_set
+        threading.Timer(0.4, stop.set).start()
+        t0 = time.time()
+        try:
+            with self.assertRaises(V.Interrupted):
+                chat([{"role": "user", "content": "x"}])
+        finally:
+            gate.set()
+            server.shutdown()
+            server.server_close()
+        self.assertLess(time.time() - t0, 2.0)
+
+    def test_a_stopped_session_ends_as_stopped_and_not_as_an_error(self):
+        class Waiting:
+            usage = None
+            on_delta = None
+            should_stop = None
+
+            def __call__(self, messages):
+                for _ in range(100):
+                    if self.should_stop and self.should_stop():
+                        raise V.Interrupted()
+                    time.sleep(0.02)
+                return V.harness_call("finish", summary="late")
+        s = CS.Session("s3", "sam", "p", "task", "equinox-2", workspace=__import__("tempfile").mkdtemp())
+        t = threading.Thread(target=s.run, args=(Waiting(), 4, None), daemon=True)
+        t.start()
+        time.sleep(0.2)
+        s.request_stop()
+        t.join(3)
+        self.assertEqual(s.state, "stopped")
+        self.assertEqual(s.events[-1]["summary"], "Stopped.")
+
+    def test_stop_cancels_a_model_that_is_still_loading(self):
+        import app_server as A
+
+        class Never:
+            """A llama-server that never becomes ready."""
+        r = A.ModelRunner("llama-server", {"m": __file__}, start_timeout=30)
+        calls = []
+
+        def fake_popen(*a, **k):
+            class P:
+                def poll(self):
+                    return None
+
+                def terminate(self):
+                    calls.append("terminate")
+
+                def wait(self, t=None):
+                    return 0
+            return P()
+        import unittest.mock as mock
+        stop = threading.Event()
+        threading.Timer(0.5, stop.set).start()
+        with mock.patch("subprocess.Popen", fake_popen), mock.patch("urllib.request.urlopen", side_effect=OSError("not yet")):
+            t0 = time.time()
+            with self.assertRaises(A.Cancelled):
+                r.ensure("m", 2048, cancel=stop.is_set)
+        self.assertLess(time.time() - t0, 3)
+        self.assertEqual(calls, ["terminate"])
