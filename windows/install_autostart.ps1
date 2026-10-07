@@ -7,7 +7,7 @@ Run it ONCE, in PowerShell opened as Administrator (right-click PowerShell, "Run
     powershell -ExecutionPolicy Bypass -File windows\install_autostart.ps1 -Llama "C:\Users\Darry\Downloads\llama-b11192-bin-win-cpu-x64\llama-server.exe"
 
 Add -Python "C:\path\to\python.exe" if the python you normally run the app with is not the first one on the PATH (find it with:  where.exe python  in a normal, non-admin window).
-Use the llama-server.exe that has CUDA (GPU) support if you have one, so the 4070 is used. Add -Preload flare-2.5 (a model id from models.json) to load that model at start, so the first message is not slow. Add -WeatherPlace "Austin, Texas" so a weather question that names no place uses yours. Add -Ram 16 (your PC's memory in GB) if the app misreads it and shows a model as 'Needs ... GB of memory'. Take it off with:  -Remove
+Use the llama-server.exe that has CUDA (GPU) support if you have one, so the 4070 is used. Add -Preload flare-2.5 (a model id from models.json) to load that model at start, so the first message is not slow. Add -WeatherPlace "Austin, Texas" so a weather question that names no place uses yours. Add -Ram 16 (your PC's memory in GB) if the app misreads it and shows a model as 'Needs ... GB of memory'. Add -CodeSandbox to run VryxCode's commands in Docker containers (needed before anyone but the owner can use VryxCode). Take it off with:  -Remove
 
 What it does:
   1. Writes .emvryx\start_emvryx.cmd: starts app_server.py, writes a log (.emvryx\server.log) and starts it again 15 seconds after it stops.
@@ -26,6 +26,7 @@ param(
     [string]$Preload = "",
     [string]$WeatherPlace = "",
     [int]$Ram = 0,
+    [switch]$CodeSandbox,
     [switch]$Remove
 )
 $ErrorActionPreference = "Stop"
@@ -48,6 +49,7 @@ New-Item -ItemType Directory -Force -Path $data | Out-Null
 # 1. the start file
 $llamaPart = if ($Llama) { "--llama-bin `"$Llama`" " } else { "" }
 if ($Preload) { $llamaPart += "--preload $Preload " }
+if ($CodeSandbox) { $llamaPart += "--code-sandbox docker " }
 if ($Ram -gt 0) { $llamaPart += "--ram $Ram " }
 if ($WeatherPlace) { $llamaPart += "--weather-place `"$WeatherPlace`" " }
 $cmd = @"
