@@ -5,6 +5,22 @@ It is the coding helper from the roadmap ("Agentic coding") given its own name, 
 
 > **First real-model results (Oct 6 2026):** on 10 practice exercises, first try / after a retry: Qwen2.5-Coder-14B (outside model) 8 / 9, Solstice 2 5 / 5, Equinox 2 4 / 5. The agent loop, tool format and permission flow all worked with real models. See [BENCHMARKS.md](BENCHMARKS.md).
 
+## Live preview
+When a project has a web page (an `.html` file, `index.html` first), the **Preview** button in VryxCode's header opens it live inside the app, in a phone, tablet or wide frame, and refreshes it when VryxCode finishes a change.
+The page's own problems are collected as it runs: script errors, failed promises, `console.error`, and files that do not load (a missing picture, stylesheet or script). They are listed under the preview with a button,
+**Ask VryxCode to fix these**, which sends them to VryxCode as your next message so it can repair them and you can reload. Safety: the preview is served only to the person who owns the project, through a link with a random token
+that expires after two hours, and every answer carries `Content-Security-Policy: sandbox`, so what VryxCode wrote runs with an empty identity (no access to the app's cookies, storage or data), also if you open it in its own tab.
+Files outside the project folder, `.git` and `.emvryx` are never served. Server programs (Flask, Node and so on) are not previewed, because the sandbox has no network: VryxCode tells you how to run those on your own computer.
+
+## Languages and frameworks
+VryxCode follows the language or framework you ask for. If you do not name one it recommends what fits and says why in a sentence (you can ask for something else): a website, landing page, small web app, browser game or tool
+with buttons gets plain HTML, CSS and JavaScript (no build step, so it previews at once, with libraries loaded from a CDN if needed); a script, automation or data job gets Python; a command-line tool gets Python (Go or Rust if you want one
+fast program); a server or API gets Python (Flask or FastAPI) or Node (Express) with SQLite; a phone app gets a phone-friendly web app first, or React Native or Flutter for a store app; a desktop app gets Python or a web page, or Electron or Tauri to
+package it; a game gets canvas JavaScript, or Godot or Unity for a bigger one. What it can **run** depends on the machine: the sandbox image has Python (with Flask, FastAPI, requests, numpy and pytest), Node.js, C and C++ compilers and SQLite
+(rebuild the image after updating: `docker build -t emvryx/code-sandbox:1 docker/code-sandbox`; add more languages in `docker/code-sandbox/Dockerfile`); without Docker it uses what is installed on the PC. Allowed programs: python, node, gcc, g++, go, java,
+php, ruby, rustc and sqlite3, plus the usual file tools. Package managers (npm, pip, cargo) and `make` are not allowed (they download and run other people's code, and there is no internet in the sandbox): for projects that need them
+VryxCode writes the code and tells you the commands to run yourself, such as `npm install` and `npm run dev`. Python, JSON and JavaScript changes are syntax-checked before they are saved (JavaScript when Node is installed).
+
 ## Checks before and after a change
 VryxCode looks at a Python or JSON change **before** it is made. If the file would not even parse (a syntax error, an invalid JSON file, or, when pyflakes is installed, an undefined name), nothing is saved, you are not asked
 to approve it, and the model is told what is wrong so it can fix it and try again. A good change shows "Checked: no problems found" on the approval card and "checked" on the result line. Before it finishes, if code changed

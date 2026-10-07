@@ -62,7 +62,10 @@ import tempfile
 TOOL_CALL = re.compile(r"<\|tool_call\|>(.*?)<\|end_tool_call\|>", re.S)
 QWEN_TOOL_CALL = re.compile(r"<tool_call>(.*?)</tool_call>", re.S)       # the format Qwen models already know
 ALLOWED_PROGRAMS = {"python", "python3", "pytest", "ls", "cat", "head", "tail", "grep", "wc",
-                    "echo", "pwd", "sort", "uniq", "diff"}
+                    "echo", "pwd", "sort", "uniq", "diff",
+                    # other languages, when they are installed (in the container image: node, gcc, g++, sqlite3). Not package managers (npm, pip, cargo: they download and run other
+                    # people's code) and not `make` (a Makefile can run anything); the person is told to run those themselves.
+                    "node", "gcc", "g++", "cc", "go", "java", "javac", "php", "ruby", "rustc", "sqlite3"}
 
 
 # git: only these subcommands, and never flags that point outside the workspace or run other programs.
@@ -366,11 +369,36 @@ def check_text(path, text):
             json.loads(text)
         except ValueError as e:
             return [f"{path}: not valid JSON: {e}"]
+    if low.endswith((".js", ".mjs")):
+        return _check_js(path, text)
     return []
 
 
 def checkable(path):
-    return str(path).lower().endswith((".py", ".json"))
+    return str(path).lower().endswith((".py", ".json", ".js", ".mjs"))
+
+
+def _check_js(path, text):
+    """A JavaScript syntax check with `node --check`, when Node is installed on this machine (otherwise not checked)."""
+    node = shutil.which("node")
+    if not node:
+        return []
+    import tempfile
+    with tempfile.TemporaryDirectory() as d:
+        f = os.path.join(d, "check" + (".mjs" if path.lower().endswith(".mjs") else ".js"))
+        with open(f, "w", encoding="utf-8") as fh:
+            fh.write(text)
+        try:
+            r = subprocess.run([node, "--check", f], capture_output=True, text=True, timeout=10, stdin=subprocess.DEVNULL)
+        except (OSError, subprocess.SubprocessError):
+            return []
+    if r.returncode == 0:
+        return []
+    lines = [l for l in r.stderr.splitlines() if l.strip()]
+    where = next((l for l in lines if l.startswith(f + ":")), "")
+    line_no = where.split(":")[-1] if where else "?"
+    msg = next((l for l in lines if "Error" in l), "invalid JavaScript")
+    return [f"{path}:{line_no}: syntax error: {msg.strip()}"]
 
 
 def proposed_text(root, name, args):
