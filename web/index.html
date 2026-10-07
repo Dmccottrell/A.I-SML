@@ -404,6 +404,14 @@ const S = {state: null, chatId: null, messages: [], title: 'New chat', private: 
 try { S.model = localStorage.getItem('emvryx_model'); S.effort = localStorage.getItem('emvryx_effort') || 'balanced'; } catch (e) {}
 if (!['auto', 'quick', 'balanced', 'deep'].includes(S.effort)) S.effort = 'balanced';
 
+function remember() {   // the open chat, so the home-screen app reopens where you were (a private chat is never saved, so it is not remembered)
+  try { if (S.chatId != null && S.chatId >= 0 && !S.private) localStorage.setItem('emvryx_chat', String(S.chatId)); else localStorage.removeItem('emvryx_chat'); } catch (e) {}
+}
+async function restoreChat() {   // once per page load, after the chat list is known
+  if (S.restored) return; S.restored = true;
+  let id = null; try { id = parseInt(localStorage.getItem('emvryx_chat'), 10); } catch (e) {}
+  if (S.chatId == null && id >= 0 && S.state.chats.some((c) => c.id === id)) await openChat(id);
+}
 async function api(path, opts) {
   const r = await fetch(path, Object.assign({credentials: 'same-origin', headers: {'Content-Type': 'application/json'}}, opts));
   if (r.status === 401) { showLogin(); throw new Error('login'); }
@@ -437,6 +445,7 @@ async function load() {
   if (!S.model || !allModels().some((m) => m.id === S.model && m.state === 'ready')) S.model = S.state.model;
   $('login').hidden = true; $('app').hidden = false;
   applyTheme(); renderAll();
+  await restoreChat();
 }
 function renderAll() {
   const st = S.state;
@@ -481,18 +490,18 @@ document.addEventListener('click', (e) => { if (!$('acctMenu').hidden && !$('acc
 async function newChat(isPrivate) {
   if (S.busy) return;
   S.chatId = null; S.messages = []; S.title = isPrivate ? 'Private chat' : 'New chat'; S.private = !!isPrivate;
-  document.body.classList.remove('menu-open'); renderThread(); $('input').focus(); renderChats();
+  document.body.classList.remove('menu-open'); remember(); renderThread(); $('input').focus(); renderChats();
 }
 async function openChat(id) {
   if (S.busy) return;
   const r = await api('/api/chats/' + id); if (!r.ok) return load();
   const c = await r.json(); S.chatId = c.id; S.messages = c.messages; S.title = c.title; S.private = c.private;
-  document.body.classList.remove('menu-open'); renderThread(true); renderChats();
+  remember(); document.body.classList.remove('menu-open'); renderThread(true); renderChats();
 }
 async function delChat(c) {
   if (!confirm('Delete "' + c.title + '"? This cannot be undone.')) return;
   await api('/api/chats/' + c.id, {method: 'DELETE'});
-  if (S.chatId === c.id) { S.chatId = null; S.messages = []; S.title = 'New chat'; }
+  if (S.chatId === c.id) { S.chatId = null; S.messages = []; S.title = 'New chat'; remember(); }
   await load();
 }
 
@@ -777,7 +786,7 @@ async function openSettings() {
     el('div', {style: 'color:var(--muted);font-size:14px'}, 'Notes you gave a thumbs up are kept here so the same question works offline. You can delete any of them.'),
     el('b', {}, 'Your data'),
     el('div', {style: 'color:var(--muted);font-size:14px'}, 'Chats are saved on the server you opened this page from. Private chats are never saved. Nothing leaves it unless you attach an online model.'),
-    el('button', {class: 'btn danger', onclick: async () => { if (confirm('Delete every chat? This cannot be undone.')) { await post('/api/delete-everything'); S.chatId = null; S.messages = []; await load(); } }}, 'Delete all my chats'),
+    el('button', {class: 'btn danger', onclick: async () => { if (confirm('Delete every chat? This cannot be undone.')) { await post('/api/delete-everything'); S.chatId = null; S.messages = []; remember(); await load(); } }}, 'Delete all my chats'),
     el('b', {}, 'Your data'),
     el('div', {style: 'display:flex;gap:8px;flex-wrap:wrap'}, el('a', {class: 'btn ghost', href: '/api/export', style: 'display:inline-flex;align-items:center;text-decoration:none', download: ''}, 'Download my data'),
       ...(st.owner ? [] : [el('button', {class: 'btn danger', onclick: async () => {
@@ -835,7 +844,7 @@ function thinkingNode() {
 async function send(regen, mode) {
   if (S.busy) return;
   const text = regen === true ? '' : input.value.trim(); if (regen !== true && !text) return;
-  if (!S.chatId) { const r = await post('/api/chats', {private: S.private}); if (!r.ok) return; S.chatId = (await r.json()).id; }
+  if (!S.chatId) { const r = await post('/api/chats', {private: S.private}); if (!r.ok) return; S.chatId = (await r.json()).id; remember(); }
   S.busy = true; S.stick = true; renderComposer(); closeMenus();
   if (regen === true) { const last = S.messages[S.messages.length - 1]; if (last && last.role === 'assistant') S.messages.pop(); }
   else { S.messages.push({id: 'u' + Date.now(), role: 'user', content: text}); input.value = ''; input.style.height = 'auto'; }
