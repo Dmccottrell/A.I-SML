@@ -33,7 +33,8 @@ THINK = re.compile(r"<think>.*?</think>", re.S)
 SYSTEM = ("You are VryxCode, Emvryx's coding assistant. You work in the user's project folder using tools. "
           + harness.TOOL_PROMPT +
           " Always write exactly one tool call per reply, and nothing after it. Read before you edit. Keep changes small and match the project's style. "
-          "Do not invent files or results: use the tools to look. When the work is done and the tests pass, call finish with a short summary.")
+          "Do not invent files or results: use the tools to look. If the task is vague or the folder is empty, do not ask questions or wait: choose something small and sensible yourself, "
+          "create the files with write_file, and run the tests. When the work is done and the tests pass, call finish with a short summary.")
 SAFE_RUNS = ("python -m unittest", "python3 -m unittest", "python -m pytest", "pytest")      # tests may run without asking
 ELIGIBLE_NOTE = {"equinox-2": "Equinox 2 is a small model: give it small tasks (one function, one file)."}
 

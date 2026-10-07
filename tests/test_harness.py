@@ -229,7 +229,7 @@ class AroundTheLoop(unittest.TestCase):
         self.assertEqual(seen[0], "fix it")
 
     def test_compaction_keeps_task_and_recent_steps(self):
-        steps = [call("read_file", path="a.py")] * 8 + [call("run", command="python -m unittest")] + [
+        steps = [call("read_file", path="a.py", start=i + 1, end=i + 3) for i in range(8)] + [call("run", command="python -m unittest")] + [
             call("finish", summary="done")]
         sizes = []
 

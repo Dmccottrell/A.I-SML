@@ -484,6 +484,9 @@ def compact(messages, keep=4):
 
 
 NO_CALL_LIMIT = 3          # stop after this many replies in a row without a tool call, instead of using every step on the same answer
+NO_CALL_TOTAL = 5          # ...or this many in one run (a model that alternates "I can't" with the same tool call is stuck too)
+REPEAT_HINT_AT = 3         # the same step with the same result this many times: tell the model to try something else
+REPEAT_STOP_AT = 5         # ...and stop the run at this many
 
 
 def run_agent(task, generate, sandbox, max_turns=8, system=None, project=True, hooks=None, permissions=None,
@@ -504,7 +507,7 @@ def run_agent(task, generate, sandbox, max_turns=8, system=None, project=True, h
     first = (f"Project notes:\n{notes}\n\nTask: {task}" if notes else task)
     messages = ([{"role": "system", "content": system}] if system else []) + [{"role": "user", "content": first}]
     episodes = []
-    no_call = 0                                       # replies in a row with no tool call at all (the model is chatting, not working)
+    no_call, no_call_total, repeats = 0, 0, {}        # replies with no tool call at all (the model is chatting, not working); steps repeated
     for turn in range(1, max_turns + 1):
         if context_tokens and estimate_tokens(messages) > context_tokens * 0.7:
             messages, dropped = compact(messages)
@@ -533,13 +536,24 @@ def run_agent(task, generate, sandbox, max_turns=8, system=None, project=True, h
         except ToolError as e:
             result, done = f"error: {e}", False
             no_call = no_call + 1 if str(e).startswith("no tool call found") else 0
-            if no_call >= NO_CALL_LIMIT:
+            no_call_total += 1 if str(e).startswith("no tool call found") else 0
+            if no_call >= NO_CALL_LIMIT or no_call_total >= NO_CALL_TOTAL:
                 said = " ".join(reply.split())[:300]
                 return {"finished": False, "turns": turn, "messages": messages, "episodes": episodes, "stopped": "no_tool",
                         "summary": f'The model kept answering in words instead of using its tools, so nothing was done. It said: "{said}" '
                                    "Try a specific task (for example: create hello.py that prints a greeting, with a test), or pick Solstice or the Qwen coder."}
         else:
             no_call = 0
+            if not done:
+                key = (name, json.dumps(args, sort_keys=True, default=str), str(result)[:300])     # the same step with the same result again
+                repeats[key] = repeats.get(key, 0) + 1
+                if repeats[key] >= REPEAT_STOP_AT:
+                    return {"finished": False, "turns": turn, "messages": messages, "episodes": episodes, "stopped": "stuck",
+                            "summary": f"The model kept repeating the same step ({name}) without making progress, so it was stopped. "
+                                       "Try a more specific task, or pick Solstice or the Qwen coder."}
+                if repeats[key] >= REPEAT_HINT_AT:
+                    result = str(result) + ("\nNote: you already did exactly this and got the same result. Do something different now. "
+                                           "If the folder is empty, create the file you need with write_file and test it; do not ask the user anything.")
         if done:
             return {"finished": True, "summary": result, "turns": turn, "messages": messages, "episodes": episodes}
         messages.append({"role": "user", "content": format_result(result)})
