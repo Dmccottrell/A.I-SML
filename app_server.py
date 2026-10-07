@@ -59,6 +59,7 @@ import export_doc
 import teacher_mode
 import connected_apps
 import documents
+import live_data
 import github_link
 import lookup_auto
 import mailer
@@ -277,6 +278,8 @@ class AppState:
         self.previews = code_preview.Previews()               # short-lived tokens for the live preview of a project
         self.lookups = {}                                      # (person, chat, message id) -> the notes that answer used, for the thumbs up
         self.wiki = None                                       # the local Wikipedia index (wiki_index.WikiIndex), if there is one
+        self.live_net = None                                   # live_data.Net (tests pass a fake)
+        self.default_place = ""                                # the weather place (--weather-place), also used for air quality
         self.web_fn = None                                     # web(question, k) -> notes; None = this server never searches the web
         self._demo_tok = None
         self.usage = U.UsageStore(os.path.join(data_dir, "usage.db") if data_dir else ":memory:")
@@ -556,7 +559,7 @@ class AppState:
                 self.lookups.pop(next(iter(self.lookups)))
 
     def get_settings(self, user):
-        s = {"window_mode": "everyday", "show_tokens": False, "web_search": "auto", "memory": True, "thinking_pause": "short"}
+        s = {"window_mode": "everyday", "show_tokens": False, "web_search": "auto", "memory": True, "thinking_pause": "short", "live_data": True}
         s.update(self.settings.get(user, {}))
         return s
 
@@ -570,6 +573,8 @@ class AppState:
             s["thinking_pause"] = new["thinking_pause"]
         if isinstance(new.get("memory"), bool):
             s["memory"] = new["memory"]
+        if isinstance(new.get("live_data"), bool):
+            s["live_data"] = new["live_data"]
         if new.get("web_search") in lookup_auto.MODES:
             s["web_search"] = new["web_search"]
         self.settings[user] = s
@@ -904,7 +909,15 @@ def start_turn(state, who, chat_id, text, model_id, effort, regenerate=False, re
             if attached:                                                           # the question is about the documents: no Wikipedia or web notes to distract
                 asked_doc = text or next((m["content"] for m in reversed(store.messages(chat_id)) if m["role"] == "user"), "")
                 doc_notes = documents.notes_for(library, [d["id"] for d in attached], asked_doc, budget=int(min(24000, max(3000, window * 3.5 * 0.45))))
-            if text and not attached:                                              # Auto lookup (lookup_auto.py)
+            live_notes = []
+            live_mode = state.get_settings(who["user"])["web_search"]
+            if not attached and live_mode != "none" and state.get_settings(who["user"]).get("live_data", True):
+                asked_live = text or next((m["content"] for m in reversed(store.messages(chat_id)) if m["role"] == "user"), "")
+                live_notes, live_found = live_data.gather(asked_live, state.clock(), online=(live_mode in ("auto", "always") and chat_id >= 0), net=state.live_net,
+                                                          default_place=state.default_place)
+                if live_notes:                                                     # exact facts (a sum, a date, a price): no Wikipedia or web notes needed
+                    q.put(("notes", dict(live_found, saved=0, wiki=0, web=0, web_tried=False, recent=False)))
+            if text and not attached and not live_notes:                           # Auto lookup (lookup_auto.py)
                 web_mode = state.get_settings(who["user"])["web_search"]
                 notes, found = lookup_auto.gather(text, state.wiki, state.web_fn, web_mode, private=chat_id < 0,
                                                   max_notes=5 if window >= 6000 else 3,
@@ -913,6 +926,8 @@ def start_turn(state, who, chat_id, text, model_id, effort, regenerate=False, re
                     q.put(("notes", {k: v for k, v in found.items() if k != "used"}))
             if doc_notes:
                 notes = doc_notes + list(notes or [])
+            if live_notes:
+                notes = [{"title": n["title"], "text": n["text"]} for n in live_notes] + list(notes or [])
             today = lookup_auto.date_note(text or (store.messages(chat_id)[-1]["content"] if regenerate and store.messages(chat_id) else ""), state.clock())
             if today:                                                              # "what day is Christmas this year": the model has no clock
                 notes = [today] + list(notes or [])
@@ -2040,6 +2055,7 @@ def main():
         print(f"No Wikipedia index at {args.wiki}: answers come from the model's memory (see wiki_index.py)")
     if not args.no_web:
         from web_search import web_answer
+        state.default_place = args.weather_place or ""
         state.web_fn = lambda question, k: web_answer(question, k, place=args.weather_place)        # Auto: only when the person's setting and the question call for it
     srv = make_server(state, args.host, args.port)
     if args.preload:

@@ -933,6 +933,8 @@ async function openSettings() {
     el('b', {}, 'Remember things about me'), seg([['on', 'On'], ['off', 'Off']], s.memory === false ? 'off' : 'on', async (v) => { await post('/api/settings', {memory: v === 'on'}); await load(); }),
     el('b', {}, 'How long a chat can be'), seg([['everyday', 'Everyday (about 8K)'], ['long', 'Long (if allowed)']], s.window_mode, async (v) => { await post('/api/settings', {window_mode: v}); await load(); }),
     el('div', {style: 'color:var(--muted);font-size:14px'}, 'Right now: ' + fmt(w.window) + ' tokens, ' + w.reason + '. Long chats use more memory and are slower to read.'),
+    el('b', {}, 'Live facts (sums, dates, prices, rates, scores, news)'), seg([['on', 'On'], ['off', 'Off']], s.live_data === false ? 'off' : 'on', async (v) => { await post('/api/settings', {live_data: v === 'on'}); await load(); }),
+    el('div', {style: 'color:var(--muted);font-size:14px'}, 'Exact answers come from code and free public services, not from the model\u2019s memory. Sums, dates and the time work offline. Prices, rates, scores, news and the rest send only the needed words (a place, a currency, a team) and never the chat. Off in private chats and in \u201cModel only\u201d.'),
     el('b', {}, 'Looking things up'), seg([['auto', 'Auto'], ['off', 'Wikipedia only'], ['always', 'Always search the web'], ['none', 'Model only (no lookup)']], s.web_search || 'auto', async (v) => { await post('/api/settings', {web_search: v}); await load(); }),
     el('div', {style: 'color:var(--muted);font-size:14px'}, 'Questions are first looked up in Wikipedia on the server. Auto also searches the web, when it is online, for recent things (news, scores, prices) or when Wikipedia does not have the answer; your question is sent to a search service then, and each answer says so. Private chats never search the web.'),
     el('button', {class: 'btn ghost', onclick: openSaved}, 'Saved notes'),
@@ -1054,9 +1056,10 @@ async function send(regen, mode) {
 // "Read 2 notes from Wikipedia" / "Searched the web: 1 source": what the model was given before it answered
 function lookupLine(info) {
   if (!info || !info.asked) return null;
-  const n = (info.saved || 0) + info.wiki + info.web;
+  const n = (info.saved || 0) + (info.wiki || 0) + (info.web || 0) + (info.live || 0);
   if (!n) return info.web_tried ? el('div', {class: 'note', style: 'align-self:flex-start'}, 'Searched, but found nothing useful') : null;
   const parts = [];
+  if (info.live) parts.push('Used live data: ' + (info.names || []).join(', '));
   if (info.saved) parts.push('Read ' + info.saved + (info.saved === 1 ? ' saved note' : ' saved notes') + (info.wiki ? ' and ' + info.wiki + ' from Wikipedia' : ''));
   else if (info.wiki) parts.push('Read ' + info.wiki + (info.wiki === 1 ? ' note' : ' notes') + ' from Wikipedia');
   if (info.web) parts.push(((info.wiki || info.saved) ? 'and searched' : 'Searched') + ' the web: ' + info.web + (info.web === 1 ? ' source' : ' sources'));
