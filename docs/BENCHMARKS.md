@@ -7,10 +7,10 @@ Numbers marked "(memory)" are published figures I recalled, not ours. Nothing in
 |---|---|---|---|---|---|
 | Ember 2 (v2) | 28.4% (full) | n/a | not run | not run | 18/20 |
 | Flare 2 (v3) | 36.2% pretrained, 34.8% after chat tuning (full) | n/a | 26-29 (with Wikipedia notes) | 10-11 | not run |
-| Flare 2.5 | 67.2% (2,000-question sample; plain Qwen 2.5 1.5B 65.6%) | 16/16 | not run | not run | not run |
-| Equinox 2 | 68.5% (2,000-question sample; plain Qwen3-4B 64.8%) | 16/16 | not run | not run | not run |
-| Solstice 2 | 73.6% (2,000-question sample; plain Qwen3-8B 71.9%) | 16/16 | not run | not run | not run |
-| Equinox 2, Solstice 2, Apogee 2 | pending | pending | pending | pending | pending |
+| Flare 2.5 | 65.3% (full, Qwen-native retrain; plain base 65.6%; earlier sample run 67.2%) | 16/16 (before retrain) | not run | 22/30 (base 23) | not run |
+| Equinox 2 | 69.1% (full, retrain; earlier 2,000-question sample 68.5% vs plain Qwen3-4B 64.8%) | 16/16 | not run | 24/30 (base 7) | not run |
+| Solstice 2 | 73.6% (2,000-question sample; plain Qwen3-8B 71.9%) | 16/16 | not run | 26/30 (base 9) | not run |
+| Apogee 2 | not run | 16/16 | not run | not run | not run |
 Tools: `evaluation/exam.py` / `evaluation/exam_open.py` (HellaSwag), `evaluation/evaluate.py` / `evaluation/evaluate_open.py` (our sheets, `eval/*.jsonl`).
 
 **One script runs the quick versions of everything on the cloud machine: `bash scripts/bench_all.sh`** (rules sheets, quick core and code benchmarks for Flare 2.5, Equinox 2 and Solstice 2, then the VryxCode exercise test on Qwen2.5-Coder-14B, Solstice 2 and Equinox 2). Estimated 4 to 6 hours, about $2 to $3; `MAX_HOURS=4` sets a spending guard. It has not been run yet.

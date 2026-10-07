@@ -2,7 +2,7 @@
 
 All versions side by side. v1 and v2 are finished and run on the phone. v3's pretraining finished at step 45,000 (October 2026; HellaSwag 37.1% on a 2,000-question sample, validation loss about 2.68); its chat tuning is next.
 v3.5, v4, v5, v6 and v6.5 are planned: their numbers are estimates and will change once v3's results are in.
-> **Status, Oct 6 2026 (measured):** HellaSwag on the same 2,000-question sample, tuned model vs its plain open base: **Flare 2.5 67.2% vs 65.6% (+1.6)**, **Equinox 2 68.5% vs 64.8% (+3.7)**, **Solstice 2 73.6% vs 71.9% (+1.7)**. Identity test 16/16 on all three. All three are trained and backed up to a private Hugging Face repo; Flare 2.5 is in the app as a beta, Equinox 2 and Solstice 2 await GGUF export and app testing. Apogee 2 is not started. Long-context test (`evaluation/bench_long.py`), public and agentic benchmarks (`scripts/bench_all.sh`) are built and running next. The chat app has a **VryxCode** code screen (usage-metered, zip download/import), and the chat hides Qwen3 `<think>` text. See [BENCHMARKS.md](BENCHMARKS.md) and [VRYXCODE.md](VRYXCODE.md).
+> **Status, Oct 2026 (measured; the models were retrained with the Qwen-native lessons, see [CHANGELOG.md](CHANGELOG.md)):** HellaSwag, tuned vs plain base: **Flare 2.5 65.3% vs 65.6%** (full set), **Equinox 2 69.1%** (full set; 2,000-question sample earlier: 68.5% vs 64.8%), **Solstice 2 73.6% vs 71.9%** (sample). Identity test 16/16 on Equinox, Solstice and Apogee. **Apogee 2 (Qwen3-14B) is trained**; its 4-bit file is 8.4 GB and awaits the PC. Flare 2.5 is a beta in the app; Equinox 2 and Solstice 2 are betas once their new GGUFs are swapped in. New in the app: Skills, Teacher mode, Documents, live facts, a 6-hour usage window. Code now lives in folders (see the README map). See [BENCHMARKS.md](BENCHMARKS.md), [VRYXCODE.md](VRYXCODE.md) and [CHANGELOG.md](CHANGELOG.md).
 
 > **Update (Oct 2026): Emvryx moves to open bases, as the 2.x series.** The whole family is the 2.x series: **Ember 2** (v2) and **Flare 2** (v3) were trained from scratch, and the open-base models are **Flare 2.5** (was v3.5), **Equinox 2** (was v4), **Solstice 2** (was v5), **Apogee 2** (was v6); a "+" refresh takes the next decimal (Flare 2.6). Generation 1 (Ember 2, Flare 2) was trained from scratch. From v3.5 on, models are fine-tuned from an open model instead of trained from scratch
 > (cheaper and stronger: about $183 for a forecast ~41-45% from scratch versus a few dollars for roughly 65% on a 1.5B open model).
@@ -49,7 +49,7 @@ The tables below show this version in the Flare 2.5 column (the old v3.5 slot). 
 | Steps | **988** (one pass), 8 micro-batches of up to 8,192 tokens each, saved every 100 |
 | Where / how long / cost | One RTX 5090, **7.1 s/step, 18.6 GB**, about 2 hours, about **$1** (the pilot; the full run is in progress) |
 | Not carried over | Saving things to memory with tool calls (no tool tokens in the open format) |
-| Quality | **HellaSwag 67.2%** (2,000-question sample; plain Qwen 2.5 1.5B 65.6%); identity test 16/16; the lookup and rules sheets are still to run |
+| Quality | **HellaSwag 65.3%** after the Qwen-native retrain (full set; plain Qwen 2.5 1.5B 65.6%, so level with base); identity 16/16; rules sheet 22/30 (base 23); MBPP 38% (base 40%); GSM8K 42.5% vs 21.5% |
 | Phone file | about 1 GB at Q4 (an estimate; the real size comes after conversion) |
 | Details | [OPEN_MODEL.md](OPEN_MODEL.md) |
 
