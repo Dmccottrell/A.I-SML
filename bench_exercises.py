@@ -100,7 +100,7 @@ def run_exercise(path, ex, generate, max_turns=12, context_tokens=None, tries=2)
             before = read_files(folder, ex["solution"])
             task = (PROMPT.format(solution=solution, tests=", ".join(ex["tests"]), module=module, instructions=ex["instructions"]) if attempt == 0
                     else RETRY.format(module=module, output=output, solution=solution))
-            V.run_task(task, generate, folder, V.make_ask(True), max_turns, context_tokens, out=lambda *_: None)
+            V.run_task(task, generate, folder, V.make_ask(True), max_turns, context_tokens, out=lambda *_: None, checks=False)   # no self-checks: a benchmark measures the model alone
             attempts += 1
             unchanged.append(read_files(folder, ex["solution"]) == before)
             passed, output = run_tests(folder, module)
