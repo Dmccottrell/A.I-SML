@@ -26,3 +26,9 @@ Ask the same questions that went wrong before (for example "Who is Gordon Ramsey
 - Cloud: press Stop (not Destroy) when finished; the machine bills while on.
 - Do not run benchmarks while training.
 - Keep the Hugging Face repo private.
+
+## 4. Merge and back up (cloud, one command for all trained models)
+
+    bash wrap_qwen.sh flare-2.5 equinox-2
+
+Merges each adapter, writes an identity sheet to `logs/<model>q-identity.md`, and uploads to the private Hugging Face repo under `<model>q/my-ai`. Your phone gets a message at each step. Then stop the instance (Stop, not Destroy) and convert to GGUF on your PC.
