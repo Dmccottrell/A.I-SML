@@ -636,6 +636,10 @@ async function refreshUsage() {
   S.state.usage = st.usage; S.state.window = st.window; renderUsage(st.usage);
 }
 $('usageBtn').onclick = openUsage;
+function untilText(epochSeconds) {   // "5 h 20 min": how long until a time
+  const m = Math.max(0, Math.round((epochSeconds * 1000 - Date.now()) / 60000));
+  return m >= 60 ? Math.floor(m / 60) + ' h' + (m % 60 ? ' ' + (m % 60) + ' min' : '') : m + ' min';
+}
 function openUsage() {
   const u = S.lastUsage || S.state.usage; const mk = (t, c) => el('div', {class: 'kv'}, el('span', {}, t), el('span', {}, c));
   const resets = new Date(u.week.resets_at * 1000), full = new Date(u.tank.full_at * 1000);
@@ -644,7 +648,8 @@ function openUsage() {
   else body.push(
     el('b', {}, 'Right now'), el('div', {class: 'big'}, el('div', {style: 'width:' + u.tank.pct + '%'})),
     mk('Left in your tank', fmt(u.tank.left) + ' of ' + fmt(u.tank.cap) + ' tokens'), mk('About', fmt(u.tank.messages_left) + ' messages'),
-    mk('Refills', fmt(u.tank.refill_per_hour) + ' tokens an hour'), mk('Full again', u.tank.pct >= 99.5 ? 'Already full' : full.toLocaleString([], {weekday: 'short', hour: 'numeric', minute: '2-digit'})),
+    mk('Refills', u.tank.mode === 'window' ? 'All at once, ' + u.tank.refill_hours + ' hours after your first message' : fmt(u.tank.refill_per_hour) + ' tokens an hour'),
+    mk('Full again', (u.tank.mode === 'window' ? u.tank.left >= u.tank.cap : u.tank.pct >= 99.5) ? 'Already full' : full.toLocaleString([], {weekday: 'short', hour: 'numeric', minute: '2-digit'}) + ' (in ' + untilText(u.tank.full_at) + ')'),
     el('b', {}, 'This week'), el('div', {class: 'big'}, el('div', {style: 'width:' + u.week.pct_left + '%'})),
     mk('Left this week', fmt(u.week.left) + ' of ' + fmt(u.week.cap) + ' tokens'), mk('About', fmt(u.week.messages_left) + ' messages'),
     mk('Resets', resets.toLocaleString([], {weekday: 'long', hour: 'numeric', minute: '2-digit'})),

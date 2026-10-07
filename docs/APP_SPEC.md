@@ -70,7 +70,7 @@ Emvryx's own way to show and limit usage. It is counted in **tokens**, shown as 
 | Number | What it is | Example (private testers) |
 |---|---|---|
 | **1. The context window** | The most ONE request can hold: the model's working memory for a single message and its history. It is a cap per request, **not an allowance** | Everyday 8,192; Long up to 32,768 |
-| **2. The tank** | How much a person can use *right now*. It refills steadily (a "token bucket"), so there is no cliff where everything resets at once | Capacity 200,000 tokens, refills 25,000 per hour (empty to full in 8 hours) |
+| **2. The tank** | How much a person can use in one sitting. **A 6-hour window** (`refill_mode: "window"`, `refill_hours: 6` in `limits.json`): the first message starts the window, the tank only goes down while you chat, and it is full again exactly 6 hours after that first message, all at once (like a session). The Usage screen shows "Full again" with the time and how long is left. The older steady mode (`refill_mode: "steady"`, a "token bucket" that refills `refill_per_hour` every hour) is still available | Capacity 200,000 tokens per window on Pro (Free 40,000, Mega 800,000) | A person who runs out waits until the window ends (the message says when) or switches to a smaller model or one on their own device |
 | **3. The weekly ceiling** | The total of every chat in 7 days. A hard stop for heavy use | 1,000,000 tokens, resets Mon 4:00 AM |
 
 So **32,768 is not "32,000 every few hours"**. It only limits how big a single request may be. What a person may use over time is the tank (short term) and
@@ -117,7 +117,7 @@ device are free and unlimited in every tier, which is the selling point of the f
 
 | | **Free** | **Pro** | **Mega** |
 |---|---|---|---|
-| Tank (capacity / refill per hour) | 40,000 / 5,000 (full in 8 h) | 200,000 / 25,000 (full in 8 h) | 800,000 / 100,000 (full in 8 h) |
+| Tank (per 6-hour window) | 40,000 | 200,000 | 800,000 |
 | Weekly ceiling | 150,000 | 1,000,000 | 5,000,000 |
 | Roughly, in short messages (~500 counted each) | ~300 a week | ~2,000 a week | ~10,000 a week |
 | Models from the server | Ember, Flare, Equinox | All five (Ember, Flare, Equinox, Solstice, Apogee) | All five |

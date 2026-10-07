@@ -17,10 +17,13 @@ def ts(y, mo, d, h=0, mi=0):
 NOW = ts(2026, 10, 7, 12)          # a Wednesday
 
 
-def make(tier="pro", **kw):
+STEADY = dict(CFG, refill_mode="steady")      # the older "refills a little every hour" mode; the shipped limits.json uses "window"
+
+
+def make(tier="pro", cfg=None, **kw):
     store = U.UsageStore()
     store.add_user("sam", tier, **kw)
-    return store, U.Limiter(store, CFG, MANIFEST)
+    return store, U.Limiter(store, cfg or STEADY, MANIFEST)
 
 
 class Counting(unittest.TestCase):
@@ -94,6 +97,85 @@ class Tank(unittest.TestCase):
         _, L = make("free")
         L.reserve("sam", "flare", "balanced", 10000, NOW)
         self.assertAlmostEqual(L.snapshot("sam", "flare", "balanced", NOW)["tank"]["full_at"], NOW + 7200)
+
+
+class Window(unittest.TestCase):
+    """The shipped mode: the first spend starts a 6-hour window, and the tank is full again exactly 6 hours after it started."""
+
+    def test_the_shipped_limits_use_a_six_hour_window(self):
+        self.assertEqual((CFG["refill_mode"], CFG["refill_hours"]), ("window", 6))
+
+    def test_nothing_creeps_back_during_the_window(self):
+        _, L = make("free", cfg=CFG)
+        L.reserve("sam", "flare", "balanced", 10000, NOW)
+        _, t = L.effective("sam")
+        self.assertEqual(L.level_of("sam", t, NOW), 30000)
+        self.assertEqual(L.level_of("sam", t, NOW + 3600), 30000)            # an hour later: still 30,000 (steady mode would show 35,000)
+        self.assertEqual(L.level_of("sam", t, NOW + 5.9 * 3600), 30000)
+
+    def test_full_again_exactly_six_hours_after_the_first_message(self):
+        _, L = make("free", cfg=CFG)
+        L.settle(L.reserve("sam", "flare", "balanced", 10000, NOW), 10000, 0, 0, "balanced", NOW)
+        L.reserve("sam", "flare", "balanced", 5000, NOW + 2 * 3600)          # a later message does not move the end of the window
+        _, t = L.effective("sam")
+        self.assertEqual(L.level_of("sam", t, NOW + 2 * 3600), 25000)
+        self.assertAlmostEqual(L.snapshot("sam", "flare", "balanced", NOW + 3600)["tank"]["full_at"], NOW + 6 * 3600)
+        self.assertEqual(L.level_of("sam", t, NOW + 6 * 3600), 40000)
+        self.assertEqual(L.snapshot("sam", "flare", "balanced", NOW + 6 * 3600)["tank"]["pct"], 100.0)
+
+    def test_a_new_window_starts_with_the_next_message(self):
+        _, L = make("free", cfg=CFG)
+        L.reserve("sam", "flare", "balanced", 10000, NOW)
+        later = NOW + 7 * 3600
+        L.reserve("sam", "flare", "balanced", 1000, later)
+        _, t = L.effective("sam")
+        self.assertEqual(L.level_of("sam", t, later), 39000)
+        self.assertAlmostEqual(L.snapshot("sam", "flare", "balanced", later)["tank"]["full_at"], later + 6 * 3600)
+
+    def test_empty_tank_waits_for_the_end_of_the_window(self):
+        _, L = make("free", cfg=CFG)
+        L.settle(L.reserve("sam", "flare", "balanced", 40000, NOW), 40000, 0, 0, "balanced", NOW)
+        with self.assertRaises(U.LimitError) as c:
+            L.reserve("sam", "flare", "balanced", 500, NOW + 3600)
+        self.assertEqual(c.exception.code, "tank_empty")
+        self.assertAlmostEqual(c.exception.retry_after, 5 * 3600)
+        L.reserve("sam", "flare", "balanced", 500, NOW + 6 * 3600)           # works again once the window ends
+
+    def test_settle_and_cancel_adjust_without_starting_or_moving_a_window(self):
+        store, L = make("pro", cfg=CFG)
+        r = L.reserve("sam", "flare", "balanced", 2000, NOW)
+        L.settle(r, 300, 0, 200, "balanced", NOW + 60)
+        _, t = L.effective("sam")
+        self.assertEqual(L.level_of("sam", t, NOW + 60), 200000 - 500)
+        r2 = L.reserve("sam", "flare", "balanced", 5000, NOW + 120)
+        L.cancel(r2, NOW + 130)
+        self.assertEqual(L.level_of("sam", t, NOW + 130), 200000 - 500)
+        self.assertAlmostEqual(L.snapshot("sam", "flare", "balanced", NOW + 130)["tank"]["full_at"], NOW + 6 * 3600)
+
+    def test_a_reply_that_finishes_after_the_window_ended_does_not_start_a_new_one(self):
+        store, L = make("free", cfg=CFG)
+        r = L.reserve("sam", "flare", "balanced", 1000, NOW)
+        L.settle(r, 100, 0, 100, "balanced", NOW + 6 * 3600 + 5)
+        _, t = L.effective("sam")
+        self.assertEqual(L.level_of("sam", t, NOW + 6 * 3600 + 5), 40000)
+
+    def test_snapshot_explains_the_window(self):
+        _, L = make("mega", cfg=CFG)
+        tank = L.snapshot("sam", "flare", "balanced", NOW)["tank"]
+        self.assertEqual((tank["mode"], tank["refill_hours"]), ("window", 6.0))
+        self.assertAlmostEqual(tank["refill_per_hour"], 800000 / 6)
+
+    def test_a_person_can_have_their_own_window_length(self):
+        _, L = make("free", cfg=CFG, overrides={"refill_hours": 2})
+        L.reserve("sam", "flare", "balanced", 10000, NOW)
+        _, t = L.effective("sam")
+        self.assertEqual(L.level_of("sam", t, NOW + 2 * 3600), 40000)
+
+    def test_the_owner_is_still_exempt(self):
+        _, L = make("free", cfg=CFG, owner=True)
+        L.reserve("sam", "apogee", "deep", 10**9, NOW)
+        _, t = L.effective("sam")
+        self.assertEqual(L.level_of("sam", t, NOW), 40000)
 
 
 class Flow(unittest.TestCase):
