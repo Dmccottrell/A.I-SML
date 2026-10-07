@@ -194,5 +194,17 @@ class Compact(unittest.TestCase):
         self.assertEqual(r["reason"], "stopped")
 
 
+
+class FollowUps(unittest.TestCase):
+    def test_short_follow_ups_get_the_note(self):
+        for q in ("Write it in java", "make it shorter", "Now in Spanish", "and with comments?", "Use that instead"):
+            self.assertTrue(P.follow_up_hint(q, True), q)
+
+    def test_new_questions_and_first_messages_do_not(self):
+        self.assertEqual(P.follow_up_hint("What is the capital of France?", True), "")
+        self.assertEqual(P.follow_up_hint("Write it in java", False), "")                      # nothing earlier to follow
+        self.assertEqual(P.follow_up_hint("Write a long story about a dragon who learns to bake bread for the whole village", True), "")
+
+
 if __name__ == "__main__":
     unittest.main()

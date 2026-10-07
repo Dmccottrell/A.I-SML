@@ -944,7 +944,8 @@ def start_turn(state, who, chat_id, text, model_id, effort, regenerate=False, re
                 backend.sampling = dict(backend.sampling, temperature=round(min(bounds[1], max(bounds[0], t)), 2))   # never outside the model's safe range
             r = E.run_turn(tok, store, chat_id, backend, counted_model, window, max_new, user_text=text, stop=stop, notes=notes or None,
                            limiter=state.limiter, user=who["user"], effort=effort, clock=state.clock, pacer=pacer,
-                           style_hint=(skill_hint + "\n\n" if skill_hint else "") + (regen_modes.get(mode)["hint"] if regenerate else ""))
+                           style_hint="\n\n".join(h for h in (skill_hint, regen_modes.get(mode)["hint"] if regenerate else "",
+                                                    "" if regenerate else chat_polish.follow_up_hint(text, any(m["role"] == "assistant" for m in store.messages(chat_id)))) if h))
             web_mode_now = state.get_settings(who["user"])["web_search"]
             knowledge_first = (model.get("lookup") == "when_needed" and found is not None and not found["asked"] and bool(text) and not regenerate
                                and web_mode_now != "none" and lookup_auto.wants_lookup(text))
