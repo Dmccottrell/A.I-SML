@@ -5,6 +5,14 @@ It is the coding helper from the roadmap ("Agentic coding") given its own name, 
 
 > **First real-model results (Oct 6 2026):** on 10 practice exercises, first try / after a retry: Qwen2.5-Coder-14B (outside model) 8 / 9, Solstice 2 5 / 5, Equinox 2 4 / 5. The agent loop, tool format and permission flow all worked with real models. See [BENCHMARKS.md](BENCHMARKS.md).
 
+## Talking to VryxCode (a conversation, not just a task)
+VryxCode can answer in plain words as well as use its tools. When it replies in words with no tool call, that ends its turn and shows as a message; you answer in the same box and the next
+message continues the same conversation (the model sees everything said and done so far, as long as the project and the model stay the same; pick another project or model to start fresh).
+It uses this to explain what it changed, to answer questions, to tell you what **you** have to do (for example a command to type in PowerShell, shown in a box with a **Copy** button),
+to say what it cannot do from inside the project folder (installing programs, using the internet, anything outside the folder), and to recommend what to do next. When it finishes work it calls
+`finish` with a friendly summary and up to three **Suggested next** buttons you can tap. If a model pastes program code into the chat before doing any work, it is told once to save the code
+with `write_file` instead; commands to type are fine. Stop works at once, also while it is thinking or the model is loading.
+
 ## Which models can run it
 VryxCode is **only offered on the higher models**:
 

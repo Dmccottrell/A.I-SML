@@ -33,11 +33,16 @@ import urllib.request
 import harness
 
 THINK = re.compile(r"<think>.*?</think>", re.S)
-SYSTEM = ("You are VryxCode, Emvryx's coding assistant. You work in the user's project folder using tools. "
+SYSTEM = ("You are VryxCode, Emvryx's coding assistant. You work in the user's project folder using tools, and you can talk to them. "
           + harness.TOOL_PROMPT +
-          " Always write exactly one tool call per reply, and nothing after it. Read before you edit. Keep changes small and match the project's style. "
+          " To use a tool, write exactly one tool call and nothing after it. Read before you edit. Keep changes small and match the project's style. "
           "Do not invent files or results: use the tools to look. If the task is vague or the folder is empty, do not ask questions or wait: choose something small and sensible yourself, "
-          "create the files with write_file, and run the tests. When the work is done and the tests pass, call finish with a short summary.")
+          "create the files with write_file, and run the tests. "
+          "You can also answer in plain words with no tool call: to answer a question, to explain, to say what the user has to do themselves (for example a command to type in "
+          "PowerShell, written in a code block), to say what you cannot do from inside the project folder (installing programs, using the internet, anything outside the folder), "
+          "or to recommend what to do next. A reply in plain words ends your turn and the user can answer. The user is not an expert: use plain language, short sentences, no jargon. "
+          "When the work is done and the tests pass, call finish. Its summary says, in a few friendly lines, what you changed, how to run it, and what you recommend next; "
+          'its optional next is a list of up to three short follow-up tasks the user could tap, for example ["Add a test for empty input"].')
 SAFE_RUNS = ("python -m unittest", "python3 -m unittest", "python -m pytest", "pytest")      # tests may run without asking
 ELIGIBLE_NOTE = {"equinox-2": "Equinox 2 is a small model: give it small tasks (one function, one file)."}
 
@@ -231,7 +236,8 @@ GITHUB_TOOL_NOTE = (" github(action) with action status, pull or push works with
                     "the user is asked before anything is pulled or pushed.")
 
 
-def run_task(task, generate, workspace, ask, max_turns=12, context_tokens=None, extra_programs=(), out=print, tools=None, git_identity=None, command_prefix=None, container=False):
+def run_task(task, generate, workspace, ask, max_turns=12, context_tokens=None, extra_programs=(), out=print, tools=None, git_identity=None, command_prefix=None, container=False,
+             history=None, chat_mode=False):
     """Run one task. Returns harness.run_agent's result (finished, summary, turns, messages).
     `tools` is {name: function(**args) -> text} of extra tools (the GitHub tool, run by the server, never by the sandbox)."""
     programs = set(harness.ALLOWED_PROGRAMS) | set(extra_programs)
@@ -244,7 +250,7 @@ def run_task(task, generate, workspace, ask, max_turns=12, context_tokens=None, 
             sandbox.register_tool(name, fn)
         system = SYSTEM + (GITHUB_TOOL_NOTE if "github" in (tools or {}) else "")
         result = harness.run_agent(task, generate, sandbox, max_turns=max_turns, system=system, ask=ask, context_tokens=context_tokens,
-                                   permissions=harness.Permissions(rules=rules, ask=ask))
+                                   permissions=harness.Permissions(rules=rules, ask=ask), history=history, chat_mode=chat_mode)
     out(("Done: " if result["finished"] else "Stopped without finishing: ") + (result["summary"] or f"{result['turns']} steps used") )
     return result
 

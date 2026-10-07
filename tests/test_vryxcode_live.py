@@ -202,3 +202,73 @@ class StopWorksAtOnce(unittest.TestCase):
                 r.ensure("m", 2048, cancel=stop.is_set)
         self.assertLess(time.time() - t0, 3)
         self.assertEqual(calls, ["terminate"])
+
+
+class Conversation(unittest.TestCase):
+    """VryxCode can talk: a reply in words ends the turn, the person answers, and the model sees the earlier steps."""
+
+    def session(self, replies):
+        model = V.ScriptedChat(replies)
+        s = CS.Session("c1", "sam", "p", "how do I run this?", "solstice-2", workspace=__import__("tempfile").mkdtemp())
+        return s, model
+
+    def wait_idle(self, s, secs=4):
+        end = time.time() + secs
+        while time.time() < end and s.state in ("starting", "working", "asking"):
+            time.sleep(0.02)
+        return s.state
+
+    def test_a_reply_in_words_ends_the_turn_and_the_next_message_continues(self):
+        s, model = self.session(["To run it, open PowerShell in the folder and type:\n```\npython main.py\n```",
+                                 V.harness_call("write_file", path="main.py", content="print(1)\n"),
+                                 V.harness_call("finish", summary="Made main.py. Run it with python main.py.", next=["Add a test", "Add a README", "x", "y"])])
+        s.auto_edits = True
+        s.run(model, 6, None)
+        self.assertEqual(s.state, "done")
+        end = s.events[-1]
+        self.assertTrue(end["said"])
+        self.assertIn("PowerShell", end["summary"])
+        s.send("please make a main.py that prints 1")
+        self.wait_idle(s)
+        self.assertEqual(s.state, "done")
+        self.assertEqual([e["kind"] for e in s.events if e["kind"] in ("start", "user", "end")], ["start", "end", "user", "end"])
+        last = s.events[-1]
+        self.assertTrue(last["finished"])
+        self.assertEqual(last["next"], ["Add a test", "Add a README", "x"])        # at most three
+        seen = model.seen[1]                                                       # what the model saw on the second turn
+        self.assertEqual(seen[-1]["content"], "please make a main.py that prints 1")
+        self.assertTrue(any("PowerShell" in m["content"] for m in seen if m["role"] == "assistant"))
+
+    def test_a_message_while_it_is_working_is_refused_and_an_empty_one_too(self):
+        s, model = self.session([])
+        s.state = "working"
+        with self.assertRaises(CS.CodeError):
+            s.send("hello")
+        s.state = "done"
+        s.generate = model
+        with self.assertRaises(CS.CodeError):
+            s.send("   ")
+
+    def test_code_pasted_into_the_chat_is_sent_back_once_to_be_saved(self):
+        s, model = self.session(["Here you go:\n```python\nprint(1)\n```",
+                                 V.harness_call("write_file", path="a.py", content="print(1)\n"), V.harness_call("finish", summary="saved")])
+        s.auto_edits = True
+        s.run(model, 6, None)
+        self.assertTrue(s.events[-1]["finished"])
+        self.assertIn("write_file", model.seen[1][-1]["content"])
+
+    def test_a_stopped_turn_is_remembered(self):
+        s = CS.Session("c2", "sam", "p", "task", "solstice-2", workspace=__import__("tempfile").mkdtemp())
+        s.live_messages = [{"role": "system", "content": "s"}, {"role": "user", "content": "task"}, {"role": "assistant", "content": "partial work"}]
+        s._keep_history()
+        self.assertEqual(s.history[-1]["content"], "partial work")
+
+
+class PastedCode(unittest.TestCase):
+    def test_commands_to_type_are_fine_but_program_code_is_not(self):
+        import harness
+        self.assertFalse(harness.pasted_code("Open PowerShell and run:\n```powershell\npython main.py\n```"))
+        self.assertFalse(harness.pasted_code("Run:\n```\npip install requests\n```"))
+        self.assertTrue(harness.pasted_code("Here:\n```python\nprint(1)\n```"))
+        self.assertTrue(harness.pasted_code("Here:\n```\ndef f():\n    return 1\n\nprint(f())\n```"))
+        self.assertFalse(harness.pasted_code("No code here."))
