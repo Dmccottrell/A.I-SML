@@ -115,7 +115,7 @@ svg .core { fill: var(--core); stroke: var(--sun); stroke-width: 3; transition: 
 .code[hidden] { display: none; }
 .code .top2 { height: 60px; flex-shrink: 0; display: flex; align-items: center; gap: 4px; padding: 0 8px 0 4px; }
 .code .top2 .title { font: 600 18px 'Sora', sans-serif; flex: 1; white-space: nowrap; padding-left: 4px; }
-.code .top2 .chip { max-width: 40vw; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.code .top2 .chip { max-width: 34vw; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; padding: 4px 11px; font-size: 13px; flex-shrink: 0; } .code .top2 #codeProj { flex-shrink: 1; min-width: 0; max-width: 26vw; }
 .code .main2 { flex: 1; min-height: 0; display: flex; position: relative; }
 .code .col { flex: 1; min-width: 0; display: flex; flex-direction: column; }
 .code .feed { flex: 1; overflow-y: auto; padding: 8px 16px 12px; }
@@ -188,6 +188,19 @@ svg .core { fill: var(--core); stroke: var(--sun); stroke-width: 3; transition: 
 .code .cc-block pre { padding: 8px 12px; overflow-x: auto; white-space: pre; }
 .code .cc-next { display: flex; flex-wrap: wrap; gap: 8px; padding: 2px 0 6px; }
 .code .cc-next .lead { color: var(--muted); font-size: 13px; width: 100%; }
+.code .pv { position: absolute; inset: 0; z-index: 7; background: var(--bg); display: flex; flex-direction: column; }
+.code .pv[hidden] { display: none; }
+.code .pvbar { height: 56px; flex-shrink: 0; display: flex; align-items: center; gap: 6px; padding: 0 8px 0 4px; border-bottom: 1px solid var(--line); }
+.code .pvbar .title { font: 600 17px 'Sora', sans-serif; flex: 1; white-space: nowrap; padding-left: 4px; }
+.code .pvbar .chip { min-height: 34px; padding: 4px 12px; text-decoration: none; display: inline-flex; align-items: center; }
+.code .pvbar .chip.on { border-color: var(--accent); color: var(--text); }
+.code .pvstage { flex: 1; min-height: 0; display: flex; justify-content: center; background: var(--surface2); padding: 0; }
+.code .pvstage iframe { border: 0; background: #fff; height: 100%; width: 100%; }
+.code .pvstage[data-size="phone"] iframe { width: min(390px, 100%); } .code .pvstage[data-size="tablet"] iframe { width: min(768px, 100%); }
+.code .pvfoot { flex-shrink: 0; border-top: 1px solid var(--line); padding: 10px 14px; display: flex; flex-direction: column; gap: 6px; font-size: 14px; background: var(--surface); }
+.code .pvfoot .good { color: #3fb950; } .code .pvfoot .bad { color: var(--danger); background: none; border: 0; padding: 0; display: block; }
+.code .pvfoot ul { margin: 0; padding-left: 18px; color: var(--muted); font: 13px ui-monospace, Menlo, Consolas, monospace; max-height: 96px; overflow: auto; word-break: break-word; }
+.code #codePreviewBtn.pulse { border-color: var(--accent); animation: ccglow 1.2s ease-in-out 4; }
 @keyframes ccglow { 50% { opacity: .55; } } @keyframes ccpulse { 50% { transform: scale(.82); opacity: .7; } }
 @media (max-width: 900px) { .code .drawer { width: 100%; box-shadow: none; } }
 /* dialogs */
@@ -274,6 +287,7 @@ svg .core { fill: var(--core); stroke: var(--sun); stroke-width: 3; transition: 
     <button class="icon" id="codeBack" aria-label="Back to chats"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M15 5l-7 7 7 7" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
     <span class="title">VryxCode</span>
     <div style="position:relative"><button class="chip" id="codeProj" aria-haspopup="true"></button><div class="menu" id="codeProjMenu" hidden></div></div>
+    <button class="chip" id="codePreviewBtn" disabled title="See what was built, live">Preview</button>
     <button class="chip" id="codeFilesBtn">Files</button>
   </div>
   <div class="main2">
@@ -294,6 +308,16 @@ svg .core { fill: var(--core); stroke: var(--sun); stroke-width: 3; transition: 
           <div class="tip" id="codeUsage"></div>
         </div>
       </div>
+    </div>
+    <div class="pv" id="codePv" hidden>
+      <div class="pvbar">
+        <button class="icon" id="pvBack" aria-label="Close preview"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M15 5l-7 7 7 7" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+        <span class="title">Preview</span>
+        <button class="chip" data-size="phone">Phone</button><button class="chip" data-size="tablet">Tablet</button><button class="chip" data-size="desktop">Wide</button>
+        <button class="chip" id="pvReload" aria-label="Reload the preview">&#8635;</button>
+      </div>
+      <div class="pvstage" id="pvStage" data-size="phone"><iframe id="pvFrame" title="Preview of your project" sandbox="allow-scripts allow-forms allow-popups allow-modals allow-pointer-lock" referrerpolicy="no-referrer"></iframe></div>
+      <div class="pvfoot" id="pvFoot"></div>
     </div>
     <div class="drawer" id="codeDrawer" hidden>
       <div class="dh"><span id="codeDrawerTitle">Files</span><button class="icon" id="codeDrawerX" aria-label="Close files"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg></button></div>
@@ -945,6 +969,7 @@ $('codeDrawerX').onclick = () => showDrawer(false);
 async function refreshFiles() {
   if (!C.project) return;
   const r = await api('/api/code/files?project=' + encodeURIComponent(C.project)); const j = await r.json(); C.files = j.files; renderCodeBar();
+  $('codePreviewBtn').disabled = !j.files.some((f) => /\.html?$/i.test(f));       // a web page can be previewed
   $('codeFiles').replaceChildren(...(j.files.length ? j.files.map((f) => el('button', {class: f === C.file ? 'on' : '', onclick: () => viewFile(f)}, f)) : [el('div', {style: 'color:var(--muted);padding:6px 8px;font-size:14px'}, 'No files yet.')]));
 }
 async function viewFile(f) {
@@ -1023,6 +1048,7 @@ function cEvent(e) {
   }
   if (e.kind === 'end') {
     if (e.finished || e.said) {                       // the model talking to the person: what it did, what to run, what it suggests
+      if (e.finished) setTimeout(() => { if (!$('codePv').hidden) reloadPreview(); else if (!$('codePreviewBtn').disabled) $('codePreviewBtn').classList.add('pulse'); }, 700);     // the page changed: refresh it, or point at Preview
       feed.append(renderMessage(e.summary || 'Done.', e.finished));
       if (e.next && e.next.length) feed.append(el('div', {class: 'cc-next'}, el('span', {class: 'lead'}, 'Suggested next:'),
         ...e.next.map((t) => el('button', {class: 'chip', onclick: () => { $('codeTask').value = t; $('codeGo').click(); }}, t))));
@@ -1101,6 +1127,41 @@ $('codeGo').onclick = async () => {
   if (!r.ok) { note('bad', 'Could not start', j.message + ' ' + (j.action || '')); return; }
   C.sid = j.id; C.chatKey = C.project + '|' + C.model; C.seen = 0; C.stopping = false; $('codeStop').disabled = false; $('codeTask').value = ''; $('codeIn').replaceChildren(); poll();
 };
+// ---------------------------------------------------------------- live preview of what was built (the page's own errors come back here)
+const PV = {url: null, errors: [], loaded: false, size: 'phone', entry: ''};
+function setPvSize(sz) { PV.size = sz; $('pvStage').dataset.size = sz; document.querySelectorAll('#codePv .pvbar [data-size]').forEach((b) => b.classList.toggle('on', b.dataset.size === sz)); }
+function paintPv() {
+  const foot = $('pvFoot'); foot.replaceChildren();
+  if (PV.errors.length) {
+    foot.append(el('div', {class: 'bad'}, PV.errors.length + (PV.errors.length === 1 ? ' problem' : ' problems') + ' found in ' + PV.entry),
+      el('ul', {}, ...PV.errors.slice(0, 6).map((m) => el('li', {}, m))),
+      el('div', {class: 'row'}, el('button', {class: 'btn small', onclick: fixPreviewErrors}, 'Ask VryxCode to fix these')));
+  } else foot.append(el('div', {class: PV.loaded ? 'good' : ''}, PV.loaded ? '✓ Loaded with no errors found' : 'Loading…'));
+}
+async function openPreview() {
+  if (!C.project) return;
+  const r = await post('/api/code/preview', {project: C.project}); const j = await r.json().catch(() => ({}));
+  if (!r.ok) { note('bad', 'Preview', (j.message || 'Could not open the preview.') + ' ' + (j.action || '')); return; }
+  if (!j.entry) { note('fin', 'Nothing to preview yet', 'Ask VryxCode to build a web page (an .html file) and it can be previewed here.'); return; }
+  $('codePreviewBtn').classList.remove('pulse');
+  PV.url = j.url; PV.entry = j.entry; PV.errors = []; PV.loaded = false; setPvSize(PV.size); paintPv();
+  $('codePv').hidden = false; $('pvFrame').src = j.url;
+}
+function reloadPreview() { if (!PV.url) return; PV.errors = []; PV.loaded = false; paintPv(); $('pvFrame').src = PV.url; }
+function fixPreviewErrors() {
+  const list = PV.errors.slice(0, 6).map((m) => '- ' + m).join('\n');
+  $('codePv').hidden = true;
+  $('codeTask').value = 'The preview of ' + PV.entry + ' shows these problems:\n' + list + '\nPlease fix them.';
+  $('codeGo').click();
+}
+window.addEventListener('message', (e) => {
+  const f = $('pvFrame'); if (!f || e.source !== f.contentWindow) return;
+  const d = e.data || {}; if (!d.vryxPreview) return;
+  if (d.loaded) { PV.loaded = true; paintPv(); return; }
+  if (typeof d.msg === 'string' && PV.errors.length < 10 && !PV.errors.includes(d.msg)) { PV.errors.push(d.msg); paintPv(); }
+});
+$('codePreviewBtn').onclick = openPreview; $('pvBack').onclick = () => { $('codePv').hidden = true; }; $('pvReload').onclick = reloadPreview;
+document.querySelectorAll('#codePv .pvbar [data-size]').forEach((b) => { b.onclick = () => setPvSize(b.dataset.size); });
 $('codeStop').onclick = () => { if (!C.sid || C.stopping) return; C.stopping = true; $('codeStop').disabled = true; paintLive(); post('/api/code/sessions/' + C.sid + '/stop').then(() => poll()); };
 $('codeTask').addEventListener('keydown', (e) => { if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); $('codeGo').click(); } });
 const b64 = (buf) => { let s = '', a = new Uint8Array(buf); for (let i = 0; i < a.length; i += 0x8000) s += String.fromCharCode.apply(null, a.subarray(i, i + 0x8000)); return btoa(s); };

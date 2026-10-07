@@ -61,6 +61,7 @@ import mailer
 import secret_box
 import saved_notes
 import user_memory
+import code_preview
 import context_window as CW
 import effort_router
 import regen_modes
@@ -267,6 +268,7 @@ class AppState:
         self.verbose = False                                   # print timings (set by the command line)
         self.saved = {}                                        # person -> saved_notes.SavedNotes (approved notes, usable offline)
         self.memories = {}                                     # person -> user_memory.Memory (facts about them, shared by every model)
+        self.previews = code_preview.Previews()               # short-lived tokens for the live preview of a project
         self.lookups = {}                                      # (person, chat, message id) -> the notes that answer used, for the thumbs up
         self.wiki = None                                       # the local Wikipedia index (wiki_index.WikiIndex), if there is one
         self.web_fn = None                                     # web(question, k) -> notes; None = this server never searches the web
@@ -1023,6 +1025,23 @@ class Handler(http.server.BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(body)
 
+    def _send_preview(self, status, ctype, body):
+        """A page of someone's project, for the preview frame: an empty identity (sandbox), no framing by other sites, readable by the sandboxed frame."""
+        self.send_response(status)
+        self.send_header("Content-Type", ctype)
+        self.send_header("Content-Length", str(len(body)))
+        self.send_header("Cache-Control", "no-store")
+        self.send_header("X-Content-Type-Options", "nosniff")
+        self.send_header("Content-Security-Policy", code_preview.PREVIEW_CSP)
+        self.send_header("Referrer-Policy", "no-referrer")
+        self.send_header("Cross-Origin-Resource-Policy", "cross-origin")      # the sandboxed frame has no origin of its own, so its own files count as cross-origin
+        self.send_header("Access-Control-Allow-Origin", "*")                  # ...and its scripts are fetched with CORS so their errors can be described
+        self.send_header("X-Robots-Tag", "noindex, nofollow")
+        if self._https():
+            self.send_header("Strict-Transport-Security", "max-age=31536000; includeSubDomains")
+        self.end_headers()
+        self.wfile.write(body)
+
     def _json(self):
         n = int(self.headers.get("Content-Length") or 0)
         if n > (MAX_UPLOAD if self.path.split("?")[0] == "/api/code/import" else MAX_BODY):
@@ -1171,6 +1190,12 @@ class Handler(http.server.BaseHTTPRequestHandler):
     def do_GET(self):
         url = urllib.parse.urlparse(self.path)
         path, qs = url.path, urllib.parse.parse_qs(url.query)
+        pv = re.fullmatch(r"/preview/([A-Za-z0-9_-]{16,64})/(.*)", path)
+        if pv:                                                   # the live preview: a token in the address instead of the cookie (the sandboxed frame sends none)
+            folder = self.state.previews.folder(pv.group(1))
+            if not folder:
+                return self._send(404, "This preview link has expired. Open Preview again.\n", "text/plain; charset=utf-8")
+            return self._send_preview(*code_preview.serve(folder, urllib.parse.unquote(pv.group(2))))
         try:
             if path == "/":
                 key = (qs.get("key") or [None])[0]
@@ -1593,6 +1618,16 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 s, note = st.code.start(user, project, body.get("task"), model["id"], generate, bool(body.get("auto_edits")),
                                         int(model.get("context_tested") or 8192), meter, outside=bool(model.get("outside")), tools=tools, identity=identity)
                 return self._send(200, {"id": s.id, "note": note})
+            if path == "/api/code/preview":
+                allowed, why = st.code_allowed(who)
+                if not allowed:
+                    raise code_sessions.CodeError(why, "Ask the owner about VryxCode access.")
+                folder = st.code.project_path(user, body.get("project"))
+                entry = code_preview.entry_page(folder) if os.path.isdir(folder) else None
+                if not entry:
+                    return self._send(200, {"entry": None})
+                token = st.previews.make(user, folder)
+                return self._send(200, {"entry": entry, "url": f"/preview/{token}/{urllib.parse.quote(entry)}"})
             m = re.fullmatch(r"/api/code/sessions/([\w-]+)/message", path)
             if m:                                                # the next message of a conversation that is already going
                 allowed, why = st.code_allowed(who)

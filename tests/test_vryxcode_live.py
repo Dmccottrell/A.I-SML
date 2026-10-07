@@ -341,3 +341,31 @@ class PreviewChecks(unittest.TestCase):
         self.assertIsNone(harness.preview_check(d, "write_file", {"path": "notes.txt", "content": "x = (\n"}))
         self.assertIsNone(harness.preview_check(d, "write_file", {"path": "../x.py", "content": "x = (\n"}))
         self.assertIsNone(harness.preview_check(d, "run", {"command": "ls"}))
+
+
+class Languages(unittest.TestCase):
+    def test_other_runtimes_are_allowed_but_not_package_managers_or_make(self):
+        import harness
+        for ok in ("node", "gcc", "g++", "go", "java", "php", "ruby", "sqlite3"):
+            self.assertIn(ok, harness.ALLOWED_PROGRAMS)
+        for no in ("npm", "npx", "pip", "cargo", "make", "curl", "bash", "sh", "rm"):
+            self.assertNotIn(no, harness.ALLOWED_PROGRAMS)
+
+    def test_the_prompt_recommends_by_what_is_asked_and_states_the_limits(self):
+        s = V.SYSTEM
+        for phrase in ("if the user names a language or framework, use it", "A website", "index.html", "Preview tab", "A script, automation", "A phone app", "A game",
+                       "no internet", "cannot install packages", "exact commands to run themselves"):
+            self.assertIn(phrase, s)
+
+    def test_javascript_syntax_is_checked_before_it_is_saved_when_node_is_installed(self):
+        import harness
+        import shutil
+        import tempfile
+        self.assertEqual(harness.preview_check(tempfile.mkdtemp(), "write_file", {"path": "a.txt", "content": "x ="}), None)
+        if not shutil.which("node"):
+            self.skipTest("node is not installed here")
+        d = tempfile.mkdtemp()
+        self.assertEqual(harness.preview_check(d, "write_file", {"path": "app.js", "content": "const a = 1;\nconsole.log(a);\n"}), "")
+        bad = harness.preview_check(d, "write_file", {"path": "app.js", "content": "const a = ;\n"})
+        self.assertIn("syntax error", bad)
+        self.assertIn("app.js:1", bad)
