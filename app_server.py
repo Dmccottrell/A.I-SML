@@ -54,6 +54,7 @@ import chat_polish
 import code_sessions
 import harness
 import vryxcode
+import app_skills
 import connected_apps
 import github_link
 import lookup_auto
@@ -844,6 +845,8 @@ def start_turn(state, who, chat_id, text, model_id, effort, regenerate=False, re
             store.remove_message(chat_id, msgs[-1]["id"])
         text = None
 
+    skill_hint = app_skills.hint(store.skill(chat_id))        # the chat's skill (Study helper ...): extra instructions for the model only
+
     timing = {}
 
     def timed(stream):
@@ -900,7 +903,7 @@ def start_turn(state, who, chat_id, text, model_id, effort, regenerate=False, re
                 backend.sampling = dict(backend.sampling, temperature=round(min(bounds[1], max(bounds[0], t)), 2))   # never outside the model's safe range
             r = E.run_turn(tok, store, chat_id, backend, counted_model, window, max_new, user_text=text, stop=stop, notes=notes or None,
                            limiter=state.limiter, user=who["user"], effort=effort, clock=state.clock, pacer=pacer,
-                           style_hint=regen_modes.get(mode)["hint"] if regenerate else "")
+                           style_hint=(skill_hint + "\n\n" if skill_hint else "") + (regen_modes.get(mode)["hint"] if regenerate else ""))
             web_mode_now = state.get_settings(who["user"])["web_search"]
             knowledge_first = (model.get("lookup") == "when_needed" and found is not None and not found["asked"] and bool(text) and not regenerate
                                and web_mode_now != "none" and lookup_auto.wants_lookup(text))
@@ -918,7 +921,7 @@ def start_turn(state, who, chat_id, text, model_id, effort, regenerate=False, re
                     if msgs and msgs[-1]["role"] == "assistant":
                         store.remove_message(chat_id, msgs[-1]["id"])
                     r = E.run_turn(tok, store, chat_id, backend, counted_model, window, max_new, user_text=None, stop=stop, notes=([mem_note] if mem_note else []) + list(notes2 or []),
-                                   limiter=state.limiter, user=who["user"], effort=effort, clock=state.clock, pacer=pacer)
+                                   limiter=state.limiter, user=who["user"], effort=effort, clock=state.clock, pacer=pacer, style_hint=skill_hint)
                     found = found2
             if found and found["asked"] and text:
                 state.remember_lookup(who["user"], chat_id, r["message_id"], text, found)
@@ -1246,6 +1249,8 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 return self.api_get_chat(who, int(m.group(1)))
             if path == "/api/settings":
                 return self._send(200, self.state.get_settings(who["user"]))
+            if path == "/api/skills":
+                return self._send(200, app_skills.catalog())
             if path == "/api/apps":
                 cat = connected_apps.catalog()
                 cat["connections"] = {"github": dict(self.state.github.public(who["user"]), device=bool(self.state.github_client_id()),
@@ -1342,7 +1347,10 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 self.state.auth.event("session_revoked", who["user"], self._ip(), f"{n} other devices")
                 return self._send(200, {"revoked": n})
             if path == "/api/chats":
-                cid = self.state.store(who["user"]).new_chat(private=bool(body.get("private")))
+                skill = str(body.get("skill") or "")
+                if skill and not app_skills.get(skill):
+                    return self._send(400, {"code": "bad_skill", "message": "That skill isn't available."})
+                cid = self.state.store(who["user"]).new_chat(private=bool(body.get("private")), skill=skill)
                 return self._send(200, {"id": cid})
             m = re.fullmatch(r"/api/chats/(-?\d+)/send", path)
             if m:
@@ -1687,7 +1695,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
             return self._send(404, {"code": "not_found", "message": "That chat is gone."})
         msgs = [{"id": m["id"], "role": m["role"], "content": m["content"], "model_id": m["model_id"], "status": m["status"]}
                 for m in store.messages(cid) if not (m["status"] == "compacted" and not m["content"])]
-        self._send(200, {"id": cid, "title": store.title(cid), "private": cid < 0, "messages": msgs})
+        self._send(200, {"id": cid, "title": store.title(cid), "private": cid < 0, "skill": store.skill(cid), "messages": msgs})
 
     def api_admin(self, path, body):
         st = self.state

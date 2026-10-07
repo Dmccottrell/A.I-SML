@@ -399,7 +399,7 @@ const fmt = (n) => Math.round(n).toLocaleString('en-US');
 const nice = (n) => fmt(n >= 100 ? Math.round(n / 10) * 10 : Math.round(n));
 
 // ---------------------------------------------------------------- state
-const S = {state: null, chatId: null, messages: [], title: 'New chat', private: false, model: null, effort: 'balanced', busy: false, abort: null,
+const S = {state: null, chatId: null, skill: '', skills: [], messages: [], title: 'New chat', private: false, model: null, effort: 'balanced', busy: false, abort: null,
            theme: localStorage.getItem('emvryx_theme') || 'dark', shown: null, stick: true, thinkTimer: null};
 try { S.model = localStorage.getItem('emvryx_model'); S.effort = localStorage.getItem('emvryx_effort') || 'balanced'; } catch (e) {}
 if (!['auto', 'quick', 'balanced', 'deep'].includes(S.effort)) S.effort = 'balanced';
@@ -444,6 +444,7 @@ async function load() {
   S.state = await r.json();
   if (!S.model || !allModels().some((m) => m.id === S.model && m.state === 'ready')) S.model = S.state.model;
   $('login').hidden = true; $('app').hidden = false;
+  if (!S.skills.length) { try { S.skills = (await (await api('/api/skills')).json()).skills; } catch (e) {} }
   applyTheme(); renderAll();
   await restoreChat();
 }
@@ -469,6 +470,7 @@ function renderChats() {
 }
 const ICONS = {code: 'M8 8l-4 4 4 4M16 8l4 4-4 4M13.5 6l-3 12', lock: 'M7 11V8a5 5 0 0 1 10 0v3M6 11h12v9H6z', chart: 'M5 20V10M12 20V4M19 20v-7',
                brain: 'M12 4a3 3 0 0 0-3 3 3 3 0 0 0-3 3 3 3 0 0 0 1 5 3 3 0 0 0 5 2zM12 4a3 3 0 0 1 3 3 3 3 0 0 1 3 3 3 3 0 0 1-1 5 3 3 0 0 1-5 2z',
+               spark: 'M12 3l2.2 5.8L20 11l-5.8 2.2L12 19l-2.2-5.8L4 11l5.8-2.2z',
                gear: 'M12 9a3 3 0 1 0 0 6 3 3 0 0 0 0-6zM12 3v3M12 18v3M3 12h3M18 12h3M5.6 5.6l2.1 2.1M16.3 16.3l2.1 2.1M5.6 18.4l2.1-2.1M16.3 7.7l2.1-2.1'};
 function icon(name) {
   const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
@@ -480,22 +482,22 @@ function icon(name) {
 function closeAcct() { $('acctMenu').hidden = true; $('account').setAttribute('aria-expanded', 'false'); }
 function renderLinks() {   // two tools in the list; Usage, Memory and Settings live in the account menu (Skills, Documents and Connected apps are hidden until they work)
   const mk = (ico, name, note, fn) => el('button', {class: 'link', onclick: () => { document.body.classList.remove('menu-open'); closeAcct(); fn(); }}, icon(ico), el('span', {}, name), note ? el('small', {}, note) : '');
-  $('links').replaceChildren(mk('code', 'VryxCode', '', openCode), mk('lock', 'Private chat', 'Never saved', () => newChat(true)));
+  $('links').replaceChildren(mk('code', 'VryxCode', '', openCode), mk('spark', 'Skills', '', openSkills), mk('lock', 'Private chat', 'Never saved', () => newChat(true)));
   $('acctMenu').replaceChildren(mk('chart', 'Usage', '', openUsage), mk('brain', 'Memory', '', openMemory), mk('gear', 'Settings', '', openSettings));
 }
 $('account').onclick = (e) => { e.stopPropagation(); const m = $('acctMenu'); m.hidden = !m.hidden; $('account').setAttribute('aria-expanded', String(!m.hidden)); };
 document.addEventListener('click', (e) => { if (!$('acctMenu').hidden && !$('acctMenu').contains(e.target)) closeAcct(); });
 
 // ---------------------------------------------------------------- chats
-async function newChat(isPrivate) {
+async function newChat(isPrivate, skill) {
   if (S.busy) return;
-  S.chatId = null; S.messages = []; S.title = isPrivate ? 'Private chat' : 'New chat'; S.private = !!isPrivate;
+  S.skill = skill || ''; S.chatId = null; S.messages = []; S.title = isPrivate ? 'Private chat' : 'New chat'; S.private = !!isPrivate;
   document.body.classList.remove('menu-open'); remember(); renderThread(); $('input').focus(); renderChats();
 }
 async function openChat(id) {
   if (S.busy) return;
   const r = await api('/api/chats/' + id); if (!r.ok) return load();
-  const c = await r.json(); S.chatId = c.id; S.messages = c.messages; S.title = c.title; S.private = c.private;
+  const c = await r.json(); S.chatId = c.id; S.messages = c.messages; S.title = c.title; S.private = c.private; S.skill = c.skill || '';
   remember(); document.body.classList.remove('menu-open'); renderThread(true); renderChats();
 }
 async function delChat(c) {
@@ -520,8 +522,12 @@ function bubble(m, last) {
 function renderThread(jump) {
   const t = $('thread'); t.replaceChildren();
   $('title').textContent = S.title;
+  const sk = S.skills.find((x) => x.id === S.skill);
   if (S.private) t.append(el('div', {class: 'note'}, 'Private chat: not saved, and gone when you leave it'));
-  if (!S.messages.length) t.append(el('div', {class: 'empty'}, logo(64), el('h1', {}, 'How can I help?'), el('div', {}, 'Ask anything. Pick a model and how much it should think under the box.')));
+  if (sk) t.append(el('div', {class: 'note'}, sk.name + ' is on for this chat'));
+  if (!S.messages.length) t.append(el('div', {class: 'empty'}, logo(64), el('h1', {}, sk ? sk.name : 'How can I help?'),
+    el('div', {}, sk ? sk.does : 'Ask anything. Pick a model and how much it should think under the box.'),
+    sk ? el('button', {class: 'chip', style: 'margin-top:12px', onclick: () => { $('input').value = sk.try; $('input').focus(); }}, 'Try: ' + sk.try) : ''));
   const last = [...S.messages].reverse().find((m) => m.role === 'assistant');
   S.messages.forEach((m) => t.append(bubble(m, last && m.id === last.id && m === S.messages[S.messages.length - 1])));
   if (jump !== false) scrollDown(true);
@@ -626,6 +632,14 @@ function dialog(children, closeText, extra) {
   const m = el('div', {class: 'modal', role: 'dialog', 'aria-modal': 'true', onclick: (e) => { if (e.target === m) m.remove(); }},
     el('div', {class: 'dialog'}, ...children, extra || null, el('button', {class: 'btn ghost', onclick: () => m.remove()}, closeText || 'Close')));
   $('dialogs').append(m); return m;
+}
+
+// ---------------------------------------------------------------- skills
+async function openSkills() {
+  const kids = [el('h2', {}, 'Skills'), el('div', {style: 'color:var(--muted)'}, 'Pick one to start a chat where Emvryx works as that specialist. It works with every model.')];
+  for (const k of S.skills) kids.push(el('button', {class: 'opt', onclick: () => { document.querySelectorAll('.modal').forEach((m) => m.remove()); newChat(false, k.id); }},
+    el('span', {class: 'grow'}, el('b', {}, k.name), el('small', {}, k.does), el('small', {style: 'font-size:13px'}, 'For: ' + k.for))));
+  dialog(kids, 'Close');
 }
 
 // ---------------------------------------------------------------- connected apps
@@ -844,7 +858,7 @@ function thinkingNode() {
 async function send(regen, mode) {
   if (S.busy) return;
   const text = regen === true ? '' : input.value.trim(); if (regen !== true && !text) return;
-  if (!S.chatId) { const r = await post('/api/chats', {private: S.private}); if (!r.ok) return; S.chatId = (await r.json()).id; remember(); }
+  if (!S.chatId) { const r = await post('/api/chats', {private: S.private, skill: S.skill}); if (!r.ok) return; S.chatId = (await r.json()).id; remember(); }
   S.busy = true; S.stick = true; renderComposer(); closeMenus();
   if (regen === true) { const last = S.messages[S.messages.length - 1]; if (last && last.role === 'assistant') S.messages.pop(); }
   else { S.messages.push({id: 'u' + Date.now(), role: 'user', content: text}); input.value = ''; input.style.height = 'auto'; }

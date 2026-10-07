@@ -186,17 +186,32 @@ class ChatStore:
             CREATE TABLE IF NOT EXISTS chats (id INTEGER PRIMARY KEY, title TEXT, created REAL);
             CREATE TABLE IF NOT EXISTS messages (id INTEGER PRIMARY KEY, chat_id INTEGER, role TEXT, content TEXT,
                 model_id TEXT, status TEXT, created REAL);""")
+        try:
+            self.db.execute("ALTER TABLE chats ADD COLUMN skill TEXT")     # chats made before Skills have none
+            self.db.commit()
+        except sqlite3.OperationalError:
+            pass
         self.private = {}                    # private chats live here only: {chat_id: [messages]}
+        self.private_skill = {}
         self._next_private = -1
 
-    def new_chat(self, title="New chat", private=False):
+    def new_chat(self, title="New chat", private=False, skill=None):
         if private:
             cid, self._next_private = self._next_private, self._next_private - 1
             self.private[cid] = []
+            if skill:
+                self.private_skill[cid] = skill
             return cid
-        cur = self.db.execute("INSERT INTO chats (title, created) VALUES (?, ?)", (title, time.time()))
+        cur = self.db.execute("INSERT INTO chats (title, created, skill) VALUES (?, ?, ?)", (title, time.time(), skill or None))
         self.db.commit()
         return cur.lastrowid
+
+    def skill(self, chat_id):
+        """The skill switched on for this chat ('' for none)."""
+        if chat_id < 0:
+            return self.private_skill.get(chat_id, "")
+        r = self.db.execute("SELECT skill FROM chats WHERE id = ?", (chat_id,)).fetchone()
+        return (r[0] or "") if r else ""
 
     def add(self, chat_id, role, content, model_id="", status="done"):
         if chat_id < 0:
