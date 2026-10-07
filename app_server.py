@@ -1522,7 +1522,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 events, state, pending = s.since(max(0, int(arg("after") or 0)))
                 return self._send(200, {"events": events, "state": state, "pending": pending, "task": s.task, "project": s.project, "model": s.model_id,
                                         "used": round(s.meter.counted) if s.meter else 0, "steps": s.meter.steps if s.meter else 0,
-                                        "usage": self._code_usage(who, s.model_id)})
+                                        "live": s.live_view(), "usage": self._code_usage(who, s.model_id)})
             return self._send(404, {"code": "not_found", "message": "Not found."})
         except code_sessions.CodeError as e:
             self._code_error(e)
@@ -1560,6 +1560,8 @@ class Handler(http.server.BaseHTTPRequestHandler):
                             box["fn"] = st.code_backend(model)
                         except AppError as e:
                             raise code_sessions.CodeError(e.message, e.action)
+                    if hasattr(box["fn"], "on_delta"):
+                        box["fn"].on_delta = getattr(generate, "on_delta", None)     # live progress for the page's "working" line
                     reply = box["fn"](messages)
                     generate.usage = getattr(box["fn"], "usage", None)      # the real counts, for the usage meter
                     return reply

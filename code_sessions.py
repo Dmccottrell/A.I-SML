@@ -99,11 +99,35 @@ class Session:
         self.stop = threading.Event()
         self.cv = threading.Condition()
         self.started = time.time()
+        self.live = None                               # what the model is doing right now (not part of `events`, which only record finished steps)
 
     def emit(self, kind, **data):
         with self.cv:
             self.events.append({"n": len(self.events), "kind": kind, "t": round(time.time() - self.started, 1), **data})
             self.cv.notify_all()
+
+    def _on_delta(self, info):
+        live = self.live
+        if live is not None and live.get("phase") != "running":
+            live.update(text=info.get("text", ""), chunks=info.get("chunks", 0), thinking=info.get("thinking_chars", 0))
+
+    def live_view(self):
+        """For the page's spinner: {"phase": thinking|writing|calling|running, "secs", "tokens", "text", "tool"} or None. Never the raw tool-call JSON."""
+        live = self.live
+        if not live:
+            return None
+        secs = round(time.time() - live["since"], 1)
+        if live["phase"] == "running":
+            return {"phase": "running", "secs": secs, "tokens": 0, "text": "", "tool": live.get("tool", "")}
+        text = live.get("text", "")
+        cut = min([i for i in (text.find("<|tool_call|>"), text.find("<tool_call>")) if i >= 0], default=-1)
+        prose = (text if cut < 0 else text[:cut]).strip()
+        tool = ""
+        if cut >= 0:
+            m = re.search(r'"name"\s*:\s*"(\w+)"', text[cut:])
+            tool = m.group(1) if m else ""
+        phase = "calling" if cut >= 0 else ("writing" if prose else "thinking")
+        return {"phase": phase, "secs": secs, "tokens": live.get("chunks", 0), "text": clip(prose, 400), "tool": tool}
 
     def since(self, after):
         with self.cv:
@@ -170,9 +194,15 @@ class Session:
                 self.check_limits()                                          # a step may have grown the project: check before going on
             seen["n"] += 1
             res = self.meter.reserve(messages) if self.meter else None       # raises U.LimitError when the plan has run out
+            self.live = {"phase": "thinking", "since": time.time(), "text": "", "chunks": 0, "thinking": 0}
+            try:
+                generate.on_delta = self._on_delta         # the model call reports its progress here (a plain function accepts the attribute too)
+            except AttributeError:
+                pass
             try:
                 reply = generate(messages)
             except BaseException:
+                self.live = None
                 if self.meter:
                     self.meter.cancel(res)
                 raise
@@ -180,9 +210,12 @@ class Session:
                 self.meter.settle(res, generate, messages, reply)
             if self.stop.is_set():
                 raise Stopped()
+            self.live = None
             try:
                 name, args = harness.parse_tool_call(reply)
                 self.emit("step", tool=name, preview=clip(vryxcode.preview(name, args), 2500), raw=clip(reply, 1500))
+                if name != "finish":
+                    self.live = {"phase": "running", "since": time.time(), "tool": name}      # the tool runs next; cleared when the next model call starts
             except harness.ToolError:
                 self.emit("step", tool="", preview=clip(reply, 1500), raw=clip(reply, 1500))
             return reply
@@ -211,6 +244,8 @@ class Session:
             msg = getattr(e, "message", None) or str(e) or e.__class__.__name__
             self.emit("end", finished=False, summary="It could not finish: " + clip(msg, 500), turns=0, error=True)
             self.state = "failed"
+        finally:
+            self.live = None
 
 
 class CodeManager:
