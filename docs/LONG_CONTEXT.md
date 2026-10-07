@@ -34,7 +34,7 @@ v3.5's stretch can't start until its 30B-token pretraining is done (months). v3 
 so **we run the whole recipe on v3 first**, at the same time as v3.5 pretrains:
 
 1. v3 finishes pretraining (about 2 weeks from the start of its run).
-2. **Baseline on v3:** `eval_long.py` at 2K and the normal exam (`exam.py`), saved.
+2. **Baseline on v3:** `evaluation/eval_long.py` at 2K and the normal exam (`evaluation/exam.py`), saved.
 3. **Stretch v3 (this is "v3-long"):** 2K -> 8K -> 16K, and 32K if the tests keep passing.
 4. v3.5 starts pretraining on the other machine.
 5. Everything learned on v3 (which RoPE recipe works, how much long data it needs, real seconds per
@@ -49,7 +49,7 @@ the stretch. The v3 stretch also has to wait for v3's chat-tuning decision: stre
 
 ## Running the v3 stretch (once v3 has finished)
 Each step is its own "version", so everything you know already works the same (pause with Ctrl+C,
-resume, `run_training.py`, `handoff.py`, `--notify`, backups):
+resume, `training/run_training.py`, `training/handoff.py`, `--notify`, backups):
 
 | Version | Context | RoPE base | Steps (~262k tokens each) | Starts from |
 |---|---|---|---|---|
@@ -58,33 +58,33 @@ resume, `run_training.py`, `handoff.py`, `--notify`, backups):
 | `v3-long-32k` | 32,768 | 8,000,000 | 1,500 (~0.39B) | `v3-long-16k/final.pt` |
 
 ```
-python prepare_long_data.py --version v3 --test        # 10-minute check that every source downloads
-python prepare_long_data.py --version v3               # ~1.4B tokens (~2.8 GB) into data/v3-long
-python eval_long.py --version v3                       # baseline (the 2K model)
-python train.py --version v3-long-8k --pilot           # speed + memory at 8K
-python run_training.py --version v3-long-8k            # the stretch
-python eval_long.py --version v3-long-8k               # the gate: go on only if it passes
-python exam.py --version v3-long-8k                    # "nothing got worse"
+python data_prep/prepare_long_data.py --version v3 --test        # 10-minute check that every source downloads
+python data_prep/prepare_long_data.py --version v3               # ~1.4B tokens (~2.8 GB) into data/v3-long
+python evaluation/eval_long.py --version v3                       # baseline (the 2K model)
+python training/train.py --version v3-long-8k --pilot           # speed + memory at 8K
+python training/run_training.py --version v3-long-8k            # the stretch
+python evaluation/eval_long.py --version v3-long-8k               # the gate: go on only if it passes
+python evaluation/exam.py --version v3-long-8k                    # "nothing got worse"
 ```
 then the same with `16k`, then `32k`. The learning rate (6e-5, gentle), RoPE bases and step counts
 are starting guesses that the 8K step tests.
 
 ### How far can v3 go? The full ladder (experiment)
 To find the limit instead of stopping at 32K, the ladder continues to **64K, 128K and 256K** (`v3-long-64k`, `-128k`, `-256k`: RoPE base
-16M, 32M, 64M; 1,000 / 800 / 600 steps of ~262k tokens, ~0.63B tokens more). **`stretch_ladder.py` runs it hands-off and stops
+16M, 32M, 64M; 1,000 / 800 / 600 steps of ~262k tokens, ~0.63B tokens more). **`training/stretch_ladder.py` runs it hands-off and stops
 at the first step that fails**, so nothing is trained past the point where v3 stops coping, and it tells you the last length that passed.
 ```
-python prepare_long_data.py --version v3 --total_tokens 2100000000   # enough data for the whole ladder (~2.1B tokens)
-python stretch_ladder.py --dry_run                                   # the plan and the exact commands
-python stretch_ladder.py                                             # run it (carry on by running it again)
-python stretch_ladder.py --stop_after v3-long-64k                    # or stop at a length you choose
-python stretch_ladder.py --stop_after v3-long-32k --train_args "--hub_backup Dmccottrell/aisml-checkpoints"   # on a rented machine: each step is also saved off it
+python data_prep/prepare_long_data.py --version v3 --total_tokens 2100000000   # enough data for the whole ladder (~2.1B tokens)
+python training/stretch_ladder.py --dry_run                                   # the plan and the exact commands
+python training/stretch_ladder.py                                             # run it (carry on by running it again)
+python training/stretch_ladder.py --stop_after v3-long-64k                    # or stop at a length you choose
+python training/stretch_ladder.py --stop_after v3-long-32k --train_args "--hub_backup Dmccottrell/aisml-checkpoints"   # on a rented machine: each step is also saved off it
 ```
 A step passes only if its long-context gate passes (needle at every depth, multi-fact, long-code, loss by position). It stops with
-a plain message if a step fails its tests, crashes, or runs out of GPU memory. "Nothing got worse" (`exam.py --version <step>`)
+a plain message if a step fails its tests, crashes, or runs out of GPU memory. "Nothing got worse" (`evaluation/exam.py --version <step>`)
 is still checked by you after each passing step, against v3's baseline. A passing step is the new starting point for the next.
 
-What to expect on the RTX 5090 (32 GB), as estimates the pilot (`train.py --version <step> --pilot`) will replace with facts:
+What to expect on the RTX 5090 (32 GB), as estimates the pilot (`training/train.py --version <step> --pilot`) will replace with facts:
 * **64K:** comfortable. **128K:** probably fits (with checkpointing and the chunked loss). **256K:** may not fit: the saved activations
   alone are ~17 GB on top of ~6 GB for weights and optimizer, so it is borderline. If the pilot runs out of memory, the ladder stops
   there; a 48-96 GB rented card would be the next try.
@@ -94,7 +94,7 @@ What to expect on the RTX 5090 (32 GB), as estimates the pilot (`train.py --vers
   64K and 256K; the loss-by-position and needle tests will show it.
 * **Phones:** a long memory costs RAM (the cache), so the app would use a shorter window on a phone even if v3-long can read 128K.
 
-### What the long data is (`prepare_long_data.py`)
+### What the long data is (`data_prep/prepare_long_data.py`)
 | Part | Share | Why |
 |---|---|---|
 | Books (PG-19, public-domain Project Gutenberg books) | 30% | the longest natural text there is: characters and plots span the whole book |
@@ -104,8 +104,8 @@ What to expect on the RTX 5090 (32 GB), as estimates the pilot (`train.py --vers
 | Recall practice (made up) | 5% | 2-6 facts hidden in real text, questions at the end, sometimes one the text can't answer ("The text doesn't say") |
 | v3's own short text | 30% | so it keeps its short-text skill |
 
-The recall practice never uses the tests' wording (eval_long.py's "secret code", "vault", "Mira",
-"get_port_"), so a pass means a real skill. val.bin holds only long natural text; eval_long.py
+The recall practice never uses the tests' wording (evaluation/eval_long.py's "secret code", "vault", "Mira",
+"get_port_"), so a pass means a real skill. val.bin holds only long natural text; evaluation/eval_long.py
 reads it as filler. Documents containing test questions are skipped, as in the main data.
 
 ## How the stretch works (three settings, no new architecture)
@@ -170,16 +170,16 @@ What a failure means:
   those tasks.
 
 ## What to build (in this order; all of it can be built while v3 trains)
-1. Context meter: **done** (`chat.py`, `generate.py --context`).
-2. `eval_long.py`, the needle / multi-fact / code / position tests with the thresholds above: **done
+1. Context meter: **done** (`core/chat.py`, `tools/generate.py --context`).
+2. `evaluation/eval_long.py`, the needle / multi-fact / code / position tests with the thresholds above: **done
    and unit-tested** on stand-in readers and tiny models. Not yet run on a real v3 checkpoint.
-3. Chunked loss and the stretch settings: **done** (`config.py` versions `v3-long-8k`, `v3-long-16k`,
-   `v3-long-32k`; `train.py` starts each from the previous one's `final.pt`). Tested on tiny models on
+3. Chunked loss and the stretch settings: **done** (`core/config.py` versions `v3-long-8k`, `v3-long-16k`,
+   `v3-long-32k`; `training/train.py` starts each from the previous one's `final.pt`). Tested on tiny models on
    a CPU; not yet run on a GPU.
-4. Long-document data builder: **done** (`prepare_long_data.py`). Tested offline with stand-in
+4. Long-document data builder: **done** (`data_prep/prepare_long_data.py`). Tested offline with stand-in
    data; the real data sets (PG-19 books, Wikipedia, FineWeb-Edu, codeparrot) are not yet checked
    from this code, so run its `--test` first.
-5. RoPE base / YaRN override when loading a checkpoint for extension (`eval_long.py` already has
+5. RoPE base / YaRN override when loading a checkpoint for extension (`evaluation/eval_long.py` already has
    `--seq_len` and `--rope_theta` to test a stretched checkpoint).
 6. Small-scale experiments before the big run: **local + global attention** and **MLA** (see below)
    on the 30M model, to learn whether they'd help at our sizes.
@@ -200,7 +200,7 @@ A long memory costs RAM (about 32 KB per token for v3 at 16-bit, ~16 KB with an 
 above what the model passed here. See [APP_SPEC.md, Context window and the device check](APP_SPEC.md#context-window-and-the-device-check-plan).
 
 ## Reading the context meter
-`python generate.py --version v3 --chat --context` prints after every reply:
+`python tools/generate.py --version v3 --chat --context` prints after every reply:
 ```
 Context window: 383 / 400 tokens (96%)
 [NNNNNNYYYYYYYYYYYYYYAAAAAAAAAAAAARRRRR..]

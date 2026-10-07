@@ -52,7 +52,7 @@ ssh -p 40022 root@203.0.113.5
 ```
 
 The number after `-p` is the **port**, and `root@203.0.113.5` is the **host**. You need both for
-`handoff.py`. **Look again each time you start the machine: they can change.** Run that line in
+`training/handoff.py`. **Look again each time you start the machine: they can change.** Run that line in
 PowerShell. The first time it asks "are you sure you want to continue connecting": type `yes`.
 You're now typing on the cloud machine.
 
@@ -72,7 +72,7 @@ training, this doesn't touch it):
 ```
 cd C:\Users\Darry\Projects\a.i-sml
 .venv\Scripts\activate
-python handoff.py up --host root@203.0.113.5 --port 40022 --with_tokenizer
+python training/handoff.py up --host root@203.0.113.5 --port 40022 --with_tokenizer
 ```
 
 That also sends your current `latest.pt` (4.7 GB, 10-30 minutes). It is only a first copy; the real
@@ -82,7 +82,7 @@ before building data.
 Back in the cloud window (inside tmux):
 
 ```bash
-bash cloud_setup.sh v3
+bash scripts/cloud_setup.sh v3
 ```
 
 It checks the GPU, installs the packages, builds the data (skipping the tokenizer because you sent
@@ -98,13 +98,13 @@ When your PC's current run is at a save point you're happy with, press Ctrl+C **
 and wait for `paused at iteration N`. Then follow the daily routine in [CLOUD.md](CLOUD.md):
 
 ```
-python run_training.py --version v3 --window 14:00-21:00 --exit_after_window --backup_dir C:\ai-backups
+python training/run_training.py --version v3 --window 14:00-21:00 --exit_after_window --backup_dir C:\ai-backups
 ```
 
-At 9pm it saves and stops. (Times are yours: `handoff.py --start` tells the cloud machine your time zone, because its own clock is usually UTC.) Start the cloud machine if it's stopped (check the port again), then:
+At 9pm it saves and stops. (Times are yours: `training/handoff.py --start` tells the cloud machine your time zone, because its own clock is usually UTC.) Start the cloud machine if it's stopped (check the port again), then:
 
 ```
-python handoff.py up --host root@<ip> --port <port> --start
+python training/handoff.py up --host root@<ip> --port <port> --start
 ```
 
 Check it worked: `ssh -p <port> root@<ip>`, then `tmux attach -t train`. You should see
@@ -113,12 +113,12 @@ Check it worked: `ssh -p <port> root@<ip>`, then `tmux attach -t train`. You sho
 ## 8. Day two, 1pm: did it switch itself off?
 At 1pm the cloud's window ends. On the Vast **Instances** page it should say **Stopped/Exited** by
 about 1:10pm. **If it still says Running:** stop it by hand on the site (this is the ~$0.17/hr you
-must not forget), and from then on add `--stop_command true` to `handoff.py up` and stop it by hand
-each day. Then `python handoff.py down ...` at 2pm as in the routine.
+must not forget), and from then on add `--stop_command true` to `training/handoff.py up` and stop it by hand
+each day. Then `python training/handoff.py down ...` at 2pm as in the routine.
 
 ## 9. When v3 finishes
 The last window ends with `done. best val loss ...`. Then:
-1. `python handoff.py down ...` also fetches `final.pt` (the finished model) into `checkpoints\dev\v3\`.
+1. `python training/handoff.py down ...` also fetches `final.pt` (the finished model) into `checkpoints\dev\v3\`.
 2. On Vast, **destroy** the instance (not just stop) so the disk stops costing money.
 3. Check the Billing page: no running instances.
 
@@ -128,6 +128,6 @@ The last window ends with `done. best val loss ...`. Then:
 | `ssh` says "Connection refused/timed out" | Instance not Running yet, or the port changed: re-read the Connect line |
 | `Permission denied (publickey)` | Key not added on Vast, or it was added after the machine started: recreate the instance, or add the key in the instance's settings |
 | Stopped instance won't start ("no GPUs available") | Someone else has the GPU. Wait, or rent a new machine and repeat steps 3-5 (it needs the tokenizer, data build and `up`) |
-| `handoff.py` says "STOPPED ... NEWER" | You'd overwrite newer training. Run `down` (or `up`) the other way first. Don't use `--force` unless you're sure |
+| `training/handoff.py` says "STOPPED ... NEWER" | You'd overwrite newer training. Run `down` (or `up`) the other way first. Don't use `--force` unless you're sure |
 | Out of GPU memory in the cloud | Should not happen on 24 GB. Send me the screen |
 | Disk full | Destroy `data/v3-test` (if you made one) and old `pilot` folders, or rent with more disk next time |

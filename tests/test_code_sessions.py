@@ -1,4 +1,5 @@
 """The VryxCode screen's server side: projects, a scripted session, permission questions, stopping, and the guards."""
+import os, sys; sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), os.pardir)); import emvryx_paths  # noqa: E402,F401  (the code folders become importable)
 import base64
 import http.client
 import io

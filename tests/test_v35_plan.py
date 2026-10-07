@@ -1,5 +1,6 @@
 """Tests for v3.5's final plan (1.12B, 40B tokens, new sources) and the v3plus A/B test.
 No internet needed. Run:  python -m unittest tests.test_v35_plan -v"""
+import os, sys; sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), os.pardir)); import emvryx_paths  # noqa: E402,F401  (the code folders become importable)
 import os
 import random
 import sys

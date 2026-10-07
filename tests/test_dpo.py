@@ -1,4 +1,5 @@
 """Tests for dpo.py, make_dpo_pairs.py and average_ckpts.py. Run:  python -m unittest tests.test_dpo -v"""
+import os, sys; sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), os.pardir)); import emvryx_paths  # noqa: E402,F401  (the code folders become importable)
 import json
 import math
 import os

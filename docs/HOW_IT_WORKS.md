@@ -14,7 +14,7 @@ adjusting numbers until the predictions get good.
 guess the next token -> measure how wrong (loss) -> compute gradients -> nudge weights -> repeat
 ```
 
-`bigram.py` shows this loop in about 40 lines. Every other file is a bigger
+`core/bigram.py` shows this loop in about 40 lines. Every other file is a bigger
 version of it.
 
 ## The pipeline
@@ -23,68 +23,68 @@ version of it.
  input text
      │
      ▼
- tokenizer.py ──────── text  <->  token IDs        (trained by prepare_data.py)
+ core/tokenizer.py ──────── text  <->  token IDs        (trained by data_prep/prepare_data.py)
      │
      ▼
- prepare_data.py ───── data/train.bin, data/val.bin (all stories as token IDs)
+ data_prep/prepare_data.py ───── data/train.bin, data/val.bin (all stories as token IDs)
      │
      ▼
- train.py  + model.py  checkpoints/dev/ckpt.pt     (the pretrained model)
+ training/train.py  + core/model.py  checkpoints/dev/ckpt.pt     (the pretrained model)
      │
-     ├──► generate.py  write stories / chat
-     │
-     ▼
- make_chat_data.py ── data/chat.jsonl            (chat examples)
+     ├──► tools/generate.py  write stories / chat
      │
      ▼
- finetune.py ───────── checkpoints/dev/chat.pt     (learns the chat format)
+ data_prep/make_chat_data.py ── data/chat.jsonl            (chat examples)
      │
      ▼
- export_hf.py ──────── export/dev/my-ai/           (standard Llama files)
+ training/finetune.py ───────── checkpoints/dev/chat.pt     (learns the chat format)
      │
      ▼
- to_gguf.py ────────── export/dev/my-ai-f16.gguf   (runs on phones via llama.cpp)
+ tools/export_hf.py ──────── export/dev/my-ai/           (standard Llama files)
+     │
+     ▼
+ tools/to_gguf.py ────────── export/dev/my-ai-f16.gguf   (runs on phones via llama.cpp)
 ```
 
 ## Files at a glance
 
 | File | Type | Key pieces | Read it when you want to understand... |
 |---|---|---|---|
-| `stage.py` | settings | `STAGE`, `CKPT_DIR`, `EXPORT_DIR` | where files are saved (dev / staging / production) |
-| `config.py` | settings | `VERSIONS`, `Version`, `TrainSettings`, `FinetuneSettings`, `get_version` | how v1 and v2 differ (size, folders, training) |
-| `chat.py` | library | `encode_conversation`, `build_prompt`, `context_report`, `normalize`, `CHAT_TEMPLATE` | the chat format (one place for training, chat and phone) and the context meter |
-| `bigram.py` | script | one table `W` | the training loop in its simplest form |
-| `tokenizer.py` | library | `BPETokenizer.train/train_fast/encode/decode/save/load`, `merge_ids` | how text becomes numbers |
-| `model.py` | library | `TinyLM`, `Block`, `Attention` (with GQA + KV cache), `FeedForward`, `RMSNorm`, RoPE helpers, `load_checkpoint` | the neural network itself |
-| `prepare_data.py` | script | `encode_split`, `encode_story`, `init_worker` | how the v1 dataset is built |
-| `prepare_web_data.py` | script | `LOADERS`, `sources_for`, `train_tokenizer`, `encode_source`, `join_files` | how the v2/v3 datasets are streamed, mixed and resumed |
-| `prepare_long_data.py` | script | `LONG_MIX`, `group_by_repo`, `recall_document`, `copy_replay` | the long-document data for stretching the context (docs/LONG_CONTEXT.md) |
-| `chat_memory.py` | library + script | `ChatMemory`, `notes`, `remember`, `forget`, `handle_command` | remembering earlier chats and saved facts (on this computer only) |
-| `muon.py`, `muon_test.py` | library + script | `Muon`, `orthogonalize`, `muon_param_groups`; `report` | the Muon optimizer, and the AdamW-vs-Muon experiment |
-| `hub_backup.py` | library + script | `HubBackup` (`check`, `upload_in_background`, `download`), `checkpoint_iter` | the off-machine checkpoint backup |
-| `dpo.py`, `make_dpo_pairs.py` | scripts | `dpo_loss`, `sequence_logps`, `encode_pair`; `score_lookup`, `pick_pair` | preference training and its checked answer pairs |
-| `average_ckpts.py` | script | `average_state_dicts`, `snapshot_paths` | averaging the last snapshots of a run |
-| `compare.py` | script | `score_version`, `run_skills`, `compare`, `print_table` | two versions on the same tests, side by side, with the release rule |
-| `eval_long.py` | script | `needle_case`, `run_retrieval`, `token_losses`, `position_verdict` | the long-context tests and their pass/fail rules |
-| `train.py` | script | `get_batch`, `get_lr`, `estimate_loss`, `save_latest`, main loop | how the model learns (and pauses/resumes) |
-| `generate.py` | script | `continue_ids`, chat loop with memory | how the model writes text |
-| `make_chat_data.py` | script | `story_to_examples`, `build_examples`, `BASICS` | how v1 chat examples are made |
-| `make_chat_data_v2.py` | script | `build`, `identity_conversations`, `IDENTITY` | how v2 multi-turn chat examples are made |
-| `evaluate.py` | script | `answer`, keyword scoring | how versions are compared |
-| `finetune.py` | script | `make_batch`, loss mask | how the model learns to chat |
-| `export_hf.py` | script | `export_tokenizer`, `export_model`, `bytes_to_unicode` | how files are converted to the standard format |
-| `to_gguf.py` | script | patch of `get_vocab_base_pre` | how the phone file is made |
+| `training/stage.py` | settings | `STAGE`, `CKPT_DIR`, `EXPORT_DIR` | where files are saved (dev / staging / production) |
+| `core/config.py` | settings | `VERSIONS`, `Version`, `TrainSettings`, `FinetuneSettings`, `get_version` | how v1 and v2 differ (size, folders, training) |
+| `core/chat.py` | library | `encode_conversation`, `build_prompt`, `context_report`, `normalize`, `CHAT_TEMPLATE` | the chat format (one place for training, chat and phone) and the context meter |
+| `core/bigram.py` | script | one table `W` | the training loop in its simplest form |
+| `core/tokenizer.py` | library | `BPETokenizer.train/train_fast/encode/decode/save/load`, `merge_ids` | how text becomes numbers |
+| `core/model.py` | library | `TinyLM`, `Block`, `Attention` (with GQA + KV cache), `FeedForward`, `RMSNorm`, RoPE helpers, `load_checkpoint` | the neural network itself |
+| `data_prep/prepare_data.py` | script | `encode_split`, `encode_story`, `init_worker` | how the v1 dataset is built |
+| `data_prep/prepare_web_data.py` | script | `LOADERS`, `sources_for`, `train_tokenizer`, `encode_source`, `join_files` | how the v2/v3 datasets are streamed, mixed and resumed |
+| `data_prep/prepare_long_data.py` | script | `LONG_MIX`, `group_by_repo`, `recall_document`, `copy_replay` | the long-document data for stretching the context (docs/LONG_CONTEXT.md) |
+| `app/chat_memory.py` | library + script | `ChatMemory`, `notes`, `remember`, `forget`, `handle_command` | remembering earlier chats and saved facts (on this computer only) |
+| `core/muon.py`, `training/muon_test.py` | library + script | `Muon`, `orthogonalize`, `muon_param_groups`; `report` | the Muon optimizer, and the AdamW-vs-Muon experiment |
+| `training/hub_backup.py` | library + script | `HubBackup` (`check`, `upload_in_background`, `download`), `checkpoint_iter` | the off-machine checkpoint backup |
+| `training/dpo.py`, `data_prep/make_dpo_pairs.py` | scripts | `dpo_loss`, `sequence_logps`, `encode_pair`; `score_lookup`, `pick_pair` | preference training and its checked answer pairs |
+| `training/average_ckpts.py` | script | `average_state_dicts`, `snapshot_paths` | averaging the last snapshots of a run |
+| `evaluation/compare.py` | script | `score_version`, `run_skills`, `compare`, `print_table` | two versions on the same tests, side by side, with the release rule |
+| `evaluation/eval_long.py` | script | `needle_case`, `run_retrieval`, `token_losses`, `position_verdict` | the long-context tests and their pass/fail rules |
+| `training/train.py` | script | `get_batch`, `get_lr`, `estimate_loss`, `save_latest`, main loop | how the model learns (and pauses/resumes) |
+| `tools/generate.py` | script | `continue_ids`, chat loop with memory | how the model writes text |
+| `data_prep/make_chat_data.py` | script | `story_to_examples`, `build_examples`, `BASICS` | how v1 chat examples are made |
+| `data_prep/make_chat_data_v2.py` | script | `build`, `identity_conversations`, `IDENTITY` | how v2 multi-turn chat examples are made |
+| `evaluation/evaluate.py` | script | `answer`, keyword scoring | how versions are compared |
+| `training/finetune.py` | script | `make_batch`, loss mask | how the model learns to chat |
+| `tools/export_hf.py` | script | `export_tokenizer`, `export_model`, `bytes_to_unicode` | how files are converted to the standard format |
+| `tools/to_gguf.py` | script | patch of `get_vocab_base_pre` | how the phone file is made |
 
 **Library** files are imported by others. **Script** files are run with `python <file>.py`.
 
 ## Suggested reading order
 
-1. `bigram.py`: the whole idea in 40 lines.
-2. `tokenizer.py`: start with `merge_ids`, then `train`, then `encode`.
-3. `model.py`: read bottom-up: `TinyLM.forward` first, then `Block`, then `Attention` and `FeedForward`.
-4. `train.py`: `get_batch` (note the one-token shift), then the main loop.
-5. `generate.py`, then `TinyLM.generate` in `model.py`.
-6. `finetune.py`: note how the loss mask ignores the question.
+1. `core/bigram.py`: the whole idea in 40 lines.
+2. `core/tokenizer.py`: start with `merge_ids`, then `train`, then `encode`.
+3. `core/model.py`: read bottom-up: `TinyLM.forward` first, then `Block`, then `Attention` and `FeedForward`.
+4. `training/train.py`: `get_batch` (note the one-token shift), then the main loop.
+5. `tools/generate.py`, then `TinyLM.generate` in `core/model.py`.
+6. `training/finetune.py`: note how the loss mask ignores the question.
 
 ## Tensor shapes cheat sheet
 
@@ -114,5 +114,5 @@ token IDs (B, T) → embed → (B, T, 512) → 8 × Block → (B, T, 512) → lm
 - **Learning rate**: how big each nudge is.
 - **Checkpoint**: a saved copy of the model's weights (`.pt` file).
 - **Train vs. val loss**: loss on data the model learns from vs. data it never sees. If they drift apart, it's memorizing.
-- **Pretraining**: learning language from lots of raw text (`train.py`).
-- **Fine-tuning**: short extra training to teach a specific behavior, like chat (`finetune.py`).
+- **Pretraining**: learning language from lots of raw text (`training/train.py`).
+- **Fine-tuning**: short extra training to teach a specific behavior, like chat (`training/finetune.py`).

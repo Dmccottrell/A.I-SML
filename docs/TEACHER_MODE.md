@@ -8,7 +8,7 @@
 |---|---|
 | Worksheet with answer key and teacher notes, quiz or test with marking guide, lesson plan, reading passage with questions, rubric (a table), email to a parent, report card comments, ideas for different learners | Explain it to me, help with a problem (hints first, not just the answer), study guide, quiz me (one question at a time), flashcards, study plan, feedback on my writing |
 
-**Calculate** tools are exact code (`teacher_tools.py`), never the model's guess: class results (average, median, pass rate, letter grades, who may need help), overall grade from weighted categories, curve scores (add points, top score to 100%, square root), points per question, reading level; for students, what they need on the final and their overall grade. After a calculation, **Get suggestions** hands the real numbers to the assistant, which is told never to change them, and asks what to reteach or focus on.
+**Calculate** tools are exact code (`app/teacher_tools.py`), never the model's guess: class results (average, median, pass rate, letter grades, who may need help), overall grade from weighted categories, curve scores (add points, top score to 100%, square root), points per question, reading level; for students, what they need on the final and their overall grade. After a calculation, **Get suggestions** hands the real numbers to the assistant, which is told never to change them, and asks what to reteach or focus on.
 
 ## Saving documents
 
@@ -20,4 +20,4 @@ Needs `pip install fpdf2 python-docx` (already in requirements.txt).
 
 ## Adding a tool
 
-Add an entry to `teacher_mode.py` (fields, and for "make" the prompt with `{field}` placeholders; for "calc" the calculator). The page builds the form from the list, and `tests/test_teacher.py` checks that every placeholder has a field.
+Add an entry to `app/teacher_mode.py` (fields, and for "make" the prompt with `{field}` placeholders; for "calc" the calculator). The page builds the form from the list, and `tests/test_teacher.py` checks that every placeholder has a field.

@@ -22,7 +22,7 @@ marked "guess". The settings every later version should start from are in
   when a newer one is checked and there is time for the multi-hour build.
 - **Some big articles were missing** from the finished index: "Illinois", "Chicago" and "Paris" had 0
   passages while "France", "Abraham Lincoln", "Albert Einstein" and "Springfield, Illinois" had 3 each.
-  Cause **not found**. `python wiki_index.py add Illinois Chicago Paris` fetches missing articles from live
+  Cause **not found**. `python data_prep/wiki_index.py add Illinois Chicago Paris` fetches missing articles from live
   Wikipedia. **Check a list of well-known titles after any rebuild** (count passages per title) before trusting it.
 - Passages end with Wikipedia **category lists** ("Men's association football forwards Bosnia and Herzegovina
   ..."). That clutter is probably why list-like junk passages rank so high in search. **Strip trailing
@@ -33,7 +33,7 @@ marked "guess". The settings every later version should start from are in
   unrelated pages (a pollution control board, a village) still outranked "Springfield, Illinois". **Stop
   hand-tuning.** The plan: a small separate **reranker** (a helper beside the model, allowed by the README's
   weights policy) that scores each candidate passage against the question. Build it after v3's chat tuning,
-  once `evaluate.py --lookup` shows whether search is what holds v3 back.
+  once `evaluation/evaluate.py --lookup` shows whether search is what holds v3 back.
 - The lookup **training** lessons do not depend on search: the teacher writes each question from a known
   passage. Search quality only matters at chat time.
 
@@ -59,7 +59,7 @@ marked "guess". The settings every later version should start from are in
   for a 394M model. Every model entry in `models.json` now has `sampling`, `temperature_bounds` and
   `max_reply_tokens`. The numbers for Flare 2 / 3.5 / Equinox / Solstice / Apogee are **starting guesses**
   (smaller model = lower temperature and a narrower range). Tune each with
-  `python evaluate.py --version vN --prompts eval/constraints.jsonl --temperature 0.3` against `0.6`.
+  `python evaluation/evaluate.py --version vN --prompts eval/constraints.jsonl --temperature 0.3` against `0.6`.
 - When a lookup supplies notes, answers should be steadier than free chat (lower temperature).
   Not built yet.
 
@@ -74,7 +74,7 @@ marked "guess". The settings every later version should start from are in
   text garbled (check with Python `encoding='utf-8'` before assuming the file is bad).
 
 ## Long-context baseline on v3's `final.pt` (cloud 5090, Oct 2026)
-`python eval_long.py --version v3` at the native 2,048 tokens, before any stretching:
+`python evaluation/eval_long.py --version v3` at the native 2,048 tokens, before any stretching:
 
 | Test | Result |
 |---|---|
@@ -96,11 +96,11 @@ marked "guess". The settings every later version should start from are in
   "should pass" every test was wrong. Judge the ladder by what the 8K step scores after training.
 - **Open risk:** if multi-fact is still ~0% after the 8K step, change the test (give a template, or allow more
   answer tokens) or add more recall practice before blaming the stretch.
-- `eval_long.py` exits with an error whenever a test fails, so a command chain joined with `&&` stops there.
+- `evaluation/eval_long.py` exits with an error whenever a test fails, so a command chain joined with `&&` stops there.
   Run the pilot as its own command.
 
 ## Bulk search must be fast (found Oct 2026)
-- `make_chat_data_v3.py` searches the 13M-passage index about **10,000 times** (once per lookup lesson). After the
+- `data_prep/make_chat_data_v3.py` searches the 13M-passage index about **10,000 times** (once per lookup lesson). After the
   search was upgraded for chat quality (title+body pair queries), each call ran up to 12 extra queries that rank
   every matching passage, and the build sat for a long time with no output. `WikiIndex.search(..., deep=False)` skips
   those queries and is what the lesson builder uses; chat and evaluation keep `deep=True`. The builder now
@@ -119,7 +119,7 @@ marked "guess". The settings every later version should start from are in
   The Stop button itself was fine.
 
 ## Chat tuning speed (found Oct 2026)
-- `finetune.py --version v3` on the 4070 ran at **5.1-5.2 s per step** (4 conversations a step) = **~77-79 hours** for 2 passes over
+- `training/finetune.py --version v3` on the 4070 ran at **5.1-5.2 s per step** (4 conversations a step) = **~77-79 hours** for 2 passes over
   109,914 examples (54,958 steps). The "44.6 h" on the first line was the first step only; steps 20 and 40 settled at ~5.1 s.
 - **Likely cause (not yet measured on the 4070):** every step padded its 4 conversations to the longest one and ran them
   together; with no gradient checkpointing, 4 sequences of up to 2,048 tokens on a 12 GB card probably spilled into
@@ -145,13 +145,13 @@ Trained 2,000 steps (0.52B tokens, 9.4 s/step on the rented 5090, ~5.2 h, ~$2.7)
   The stretch is under-trained, or the position scaling (RoPE base 2M for 4x) is wrong. Not yet tested which.
 - **The multi-fact test was a format test**, not a memory test (it needed "...number is X and her home town is Y" within 16 tokens;
   0% before and after the stretch). It now asks two separate questions on the same text and needs both right
-  (`eval_long.multi_case`). Re-run `python eval_long.py --version v3 --tests multi` for a baseline, and the 8K weights
+  (`eval_long.multi_case`). Re-run `python evaluation/eval_long.py --version v3 --tests multi` for a baseline, and the 8K weights
   (on Hugging Face as v3-long-8k/final.pt) to compare.
-- `stretch_ladder.py` stopped at 8K as designed; v3 stays a 2,048-token model. Options: continue the 8K step for 2,000-4,000 more
+- `training/stretch_ladder.py` stopped at 8K as designed; v3 stays a 2,048-token model. Options: continue the 8K step for 2,000-4,000 more
   steps (~5-10 h), try a different RoPE base or YaRN-style scaling, add more recall-practice data, or accept a ~4K model.
 
 ## DPO pair-making speed (found Oct 2026)
-- `make_dpo_pairs.py` timing test (20 questions x 2 answers, partly trained chat model) took **179 s** while another fine-tune
+- `data_prep/make_dpo_pairs.py` timing test (20 questions x 2 answers, partly trained chat model) took **179 s** while another fine-tune
   was using the same 4070: ~4.5 s per answer, so ~8-10 h for the real 2,000 x 4. A GPU shared with training roughly halves
   speed or worse, so **time things with the GPU otherwise idle**.
 - A second run printed **12.7 s** only because it **resumed from the first run's `dpo_pairs.jsonl.progress`** and had nothing
@@ -170,7 +170,7 @@ a probable small gain on lookups, nothing on rules. (The HellaSwag exam comparis
 - **Why:** facts fail mostly when the search doesn't put the right passage in the notes; the rule failures are data and size, not decoding.
 
 ## v3.5 pilot on one RTX 5090 (Oct 5 2026)
-The first pilot (`train.py --version v3.5 --cloud --pilot`, 8,192-token context, micro-batch 1 x 8,192, Muon on the GPU, no gradient
+The first pilot (`training/train.py --version v3.5 --cloud --pilot`, 8,192-token context, micro-batch 1 x 8,192, Muon on the GPU, no gradient
 checkpointing) ran out of GPU memory at iteration 1 on a 32 GB card (iteration 0 took 14.9 s, mostly torch.compile). Fix: cloud mode now keeps
 `grad_checkpoint=True` for v3.5 (about 30% slower per step). The whole data build (19.7B tokens + the final-phase set) finished in about 1 hour on 16 cores:
 the early "17 hours for code" worry came from the tiny test's startup time.
@@ -182,11 +182,11 @@ open model (Qwen 2.5 1.5B at 32K context: a few dollars, roughly 60%+ on the sam
 - Models are shown as Emvryx (name and version only). The base and its licence are credited in `NOTICE`, and the docs never say a Qwen-based model was trained from scratch.
 - v2, v3 and v3.5 (the from-scratch line) stay as they are, and the v3.5 run on Vast is the owner's call to finish, shorten or stop.
 - Qwen 2.5 1.5B facts: 32K native context, Apache 2.0 licence, about 28 KB of memory per token (32K is about 0.9 GB), so it fits an RTX 4070.
-- The tooling (`finetune_open.py`, `open_tokenizer.py`, `docs/OPEN_MODEL.md`) is tested only with a tiny offline model.
+- The tooling (`training/finetune_open.py`, `core/open_tokenizer.py`, `docs/OPEN_MODEL.md`) is tested only with a tiny offline model.
 - Budget rule: nothing is bought without the owner's approval; Vast auto top-up is on, so watch the balance.
 
 ## Pausing a paid run safely (v3.5)
-1. Stop cleanly: `pkill -INT -f run_training.py; pkill -INT -f "train.py --version"` (it saves a final checkpoint; at worst about 43 minutes of steps are lost if it is stopped without this).
-2. Copy the checkpoint off the machine: `python hub_backup.py up --version v3.5 --repo Dmccottrell/aisml-checkpoints`, then `python hub_backup.py status ...` to confirm the step.
+1. Stop cleanly: `pkill -INT -f training/run_training.py; pkill -INT -f "training/train.py --version"` (it saves a final checkpoint; at worst about 43 minutes of steps are lost if it is stopped without this).
+2. Copy the checkpoint off the machine: `python training/hub_backup.py up --version v3.5 --repo Dmccottrell/aisml-checkpoints`, then `python training/hub_backup.py status ...` to confirm the step.
 3. Back up the tokenizer: `hf upload Dmccottrell/aisml-checkpoints data/v3.5/tokenizer.json v3.5/tokenizer.json`.
 4. **Stop** (never Destroy) the instance. Resume later with the same training command. `--backup_dir` only copies to the same machine; it does not protect against losing the instance.

@@ -1,6 +1,7 @@
 """Tests for the app's failure handling (app_engine.py, app_download.py, app_errors.py): every row of docs/APP_SPEC.md
 "What can go wrong" is forced to happen against a fake model or a real local web server.
 Run:  python -m unittest tests.test_app_robust -v"""
+import os, sys; sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), os.pardir)); import emvryx_paths  # noqa: E402,F401  (the code folders become importable)
 import hashlib
 import http.server
 import json

@@ -1,4 +1,4 @@
-# Live facts (`live_data.py`)
+# Live facts (`app/live_data.py`)
 
 Questions where a **number must be right** are answered from code or a real source, and the model only puts it into words. The answer shows "Used live data: Calculator" (or the source's name) under the message. Settings has a **Live facts** switch (On by default). They are off in "Model only" mode. In private chats and "Wikipedia only" mode only the offline ones run.
 
@@ -27,10 +27,10 @@ Weather already has its own source (Open-Meteo). Web search (Tavily and others) 
 
 **Privacy:** only the part the source needs is sent (a place, a currency pair, a team, a word), never the chat. **Failures:** a source that is offline or changes its format returns nothing and the chat carries on. The sources are built from each service's documentation and tested with fakes; they have not all been tried against the live services, so tell me if one misbehaves.
 
-**Adding a source:** write a function `name(question, now, net, online)` that returns a list of notes, and add it to `PROVIDERS` in `live_data.py` (with `True` if it works offline). `tests/test_live_data.py` shows how to fake the internet.
+**Adding a source:** write a function `name(question, now, net, online)` that returns a list of notes, and add it to `PROVIDERS` in `app/live_data.py` (with `True` if it works offline). `tests/test_live_data.py` shows how to fake the internet.
 
 
-## Second batch (`live_more.py`)
+## Second batch (`app/live_more.py`)
 
 | Source | Asks like | Needs |
 |---|---|---|

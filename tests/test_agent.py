@@ -1,5 +1,6 @@
 """Tests for the coding-helper lessons (agent_tasks.py, agent_lessons.py, make_agent_data.py) and the commit loader.
 No internet and no model needed. Run:  python -m unittest tests.test_agent -v"""
+import os, sys; sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), os.pardir)); import emvryx_paths  # noqa: E402,F401  (the code folders become importable)
 import json
 import os
 import random

@@ -40,7 +40,7 @@ Guiding rules:
 - **Grow about 3× per step, with pilot runs.** Before each long run, train 5–10% of the steps
   first to catch problems cheaply.
 - **Better data beats a bigger model.** Most quality gains come from what the model reads.
-- **Measure everything.** Every version is scored on `eval/prompts.jsonl` (`evaluate.py`) and
+- **Measure everything.** Every version is scored on `eval/prompts.jsonl` (`evaluation/evaluate.py`) and
   compared with the last.
 - **Dev → staging → production.** New versions never overwrite the one you rely on.
 
@@ -59,14 +59,14 @@ Meta use). Each one is added when a version actually needs it, and several can s
 | **Keyword search** (SQLite FTS5 / BM25) | Finds the right Wikipedia passage by its words | **v3** | No extra AI model needed, tiny, works offline on a phone. The simplest start for lookups |
 | **FAISS + sentence-transformers** | Finds passages by *meaning* ("heart pump" finds "cardiac muscle") | **v3** (upgrade) | Uses a small pretrained search model (~22M), only for searching; the brain stays yours |
 | **A local teacher model** (llama.cpp) | A bigger open model that writes practice data and grades answers | **v3** | See [Learning from a bigger AI](#learning-from-a-bigger-ai-distillation) |
-| **lm-evaluation-harness** | Standard AI exams (HellaSwag, ARC, MMLU, GSM8K...) | **v3** | Works with `export_hf.py`'s output. Scores v2 and v3 on the same public tests |
+| **lm-evaluation-harness** | Standard AI exams (HellaSwag, ARC, MMLU, GSM8K...) | **v3** | Works with `tools/export_hf.py`'s output. Scores v2 and v3 on the same public tests |
 | **TensorBoard** | Live graphs of loss and speed while training | **v3** | Local and free. Handy for an 18-day run |
 | **bitsandbytes** (8-bit optimizer) | Cuts optimizer memory ~75% | v3 (optional) → **v3.5** (needed) | In v3 it could replace gradient checkpointing if the pilot runs out of memory, and it's a rehearsal for 1B |
 | **TRL-style DPO** | "Which answer is better" training | **v3** | Small enough to write ourselves, like the rest of the training code |
 | **PEFT / LoRA** | Small add-on skill packs | Try on v3 → **v4** | A first skill pack can be tested cheaply on v2/v3 |
-| **Web search** (`web_search.py`: Wikipedia's free search, or Brave Search with a key) | Online mode: our code searches the web and hands the results to the model as notes | **v3** (off by default) → better every version | See [Web search, version by version](#web-search-version-by-version) |
-| **Coding harness extras** (`harness.py`) | A safe git subset, syntax diagnostics, project notes, hooks with a finish gate, permissions, compaction, tool registry | ✅ built (Oct 2026) | See [Agentic coding](#agentic-coding-a-coding-helper-that-works-in-a-loop); the MCP client itself is not built |
-| **App reliability layer** (`app_engine.py`, `app_download.py`) | Plain errors, model choice, reply guard, chats saved as they stream, resumable checksum-checked downloads | ✅ built (Oct 2026) | See [APP_SPEC.md](APP_SPEC.md) |
+| **Web search** (`app/web_search.py`: Wikipedia's free search, or Brave Search with a key) | Online mode: our code searches the web and hands the results to the model as notes | **v3** (off by default) → better every version | See [Web search, version by version](#web-search-version-by-version) |
+| **Coding harness extras** (`coding/harness.py`) | A safe git subset, syntax diagnostics, project notes, hooks with a finish gate, permissions, compaction, tool registry | ✅ built (Oct 2026) | See [Agentic coding](#agentic-coding-a-coding-helper-that-works-in-a-loop); the MCP client itself is not built |
+| **App reliability layer** (`app/app_engine.py`, `app/app_download.py`) | Plain errors, model choice, reply guard, chats saved as they stream, resumable checksum-checked downloads | ✅ built (Oct 2026) | See [APP_SPEC.md](APP_SPEC.md) |
 | **Tool calling (MCP-style)** | The model asks for a tool, our code runs it | v3 (lookups) → **v4** | v3's "look it up" is the first tool; v4 adds calculator, clock, files, and lets the model call web search itself |
 | **Whisper** (OpenAI, open source) | Speech-to-text | **v4** (can try any time) | Independent of the brain, so it can be tested early |
 | **Text-to-speech** (e.g. Piper) | Speaks the answers | **v4** | Small, offline, open source |
@@ -84,10 +84,10 @@ later version (the scripts take `--version`):
 
 | Built once | Used by every later version |
 |---|---|
-| Chat lessons (`make_chat_data_v3.py --version ...`): lookups, "I don't know", corrections, instructions, memory, reply suggestions | v3.5, v3-long, v4, v5 ... reuse them in their own folder, with longer conversations when their context is longer; v3's teacher examples are reused, and each version adds its own |
-| Lookups (`wiki_index.py`), memory (`chat_memory.py`), the context meter, notes dropped from old turns | the same code for every model |
-| Long-context stretch (`v3-long-*` settings, `prepare_long_data.py`, `eval_long.py`) | rehearsed on v3, then the same recipe for v3.5 and later |
-| Tests: HellaSwag (`exam.py`), the test sheet (`evaluate.py`), the long-context tests, the unit tests | every version runs all of them |
+| Chat lessons (`data_prep/make_chat_data_v3.py --version ...`): lookups, "I don't know", corrections, instructions, memory, reply suggestions | v3.5, v3-long, v4, v5 ... reuse them in their own folder, with longer conversations when their context is longer; v3's teacher examples are reused, and each version adds its own |
+| Lookups (`data_prep/wiki_index.py`), memory (`app/chat_memory.py`), the context meter, notes dropped from old turns | the same code for every model |
+| Long-context stretch (`v3-long-*` settings, `data_prep/prepare_long_data.py`, `evaluation/eval_long.py`) | rehearsed on v3, then the same recipe for v3.5 and later |
+| Tests: HellaSwag (`evaluation/exam.py`), the test sheet (`evaluation/evaluate.py`), the long-context tests, the unit tests | every version runs all of them |
 
 **2. Each version grows every ability.**
 
@@ -107,7 +107,7 @@ the default, it runs the same tests as the version before and must:
 - keep every older skill (memory, suggestions, "I don't know", corrections): no row of the
   comparison may get worse by more than a small margin.
 If it doesn't, it isn't released yet: we find out why (data, training length, settings) and fix
-that first. `python compare.py --old v3 --new v3.5` runs all of this on both versions and prints
+that first. `python evaluation/compare.py --old v3 --new v3.5` runs all of this on both versions and prints
 one side-by-side scoreboard with the verdict (HellaSwag, the test sheet by category, skill checks for
 notes / "I don't know" / memory / secrets / suggestions, and `--long` for the long-context check).
 Scores are saved next to each checkpoint, so the old version isn't re-tested every time.
@@ -115,21 +115,21 @@ Scores are saved next to each checkpoint, so the old version isn't re-tested eve
 ## Fine-tuning ladder (from simple to advanced)
 | Technique | What it does | Status |
 |---|---|---|
-| Chat fine-tuning (`finetune.py`) | learns from the AI's answers only (and the user's follow-ups at 30%, for suggestions) | ✅ built |
+| Chat fine-tuning (`training/finetune.py`) | learns from the AI's answers only (and the user's follow-ups at 30%, for suggestions) | ✅ built |
 | NEFTune | a little noise on the word vectors while fine-tuning: better chat answers for free | ✅ built, on from v3 |
-| Checkpoint averaging (`average_ckpts.py`) | averages the last snapshots of the fade (v3: every 900 steps) | ✅ built, used when v3 finishes |
-| DPO (`make_dpo_pairs.py`, `dpo.py`) | prefers the better of two answers; pairs scored by checkable rules (facts from the notes, "I don't know" when right, counts), no grader to trust | ✅ built, first used on v3 |
+| Checkpoint averaging (`training/average_ckpts.py`) | averages the last snapshots of the fade (v3: every 900 steps) | ✅ built, used when v3 finishes |
+| DPO (`data_prep/make_dpo_pairs.py`, `training/dpo.py`) | prefers the better of two answers; pairs scored by checkable rules (facts from the notes, "I don't know" when right, counts), no grader to trust | ✅ built, first used on v3 |
 | Teacher-judged pairs | the teacher picks the better answer where no rule can check (style, helpfulness) | planned (v3.5) |
 | Verified self-training | several tries per math/code question; only checked-correct ones become lessons (teaches thinking) | v3.5 |
-| LoRA skill packs (`lora.py`, `skills.py`, `train_skill.py`) | small swappable add-ons per skill, a Beta router and an access toggle | ✅ built: **Study helper** and **Teacher assistant** (Betas), trained and tested on v3 once it's chat-tuned; real at v4 ([SKILLS.md](SKILLS.md)) |
+| LoRA skill packs (`core/lora.py`, `core/skills.py`, `training/train_skill.py`) | small swappable add-ons per skill, a Beta router and an access toggle | ✅ built: **Study helper** and **Teacher assistant** (Betas), trained and tested on v3 once it's chat-tuned; real at v4 ([SKILLS.md](SKILLS.md)) |
 | RL with verifiable rewards (GRPO) | rewards from passing tests / correct math | v4/v5 |
 | Logit distillation | learning a bigger model's full probabilities | v4/v5 (needs the shared tokenizer decision) |
 
 ## Speed and safety experiments
 | Idea | What it could give | Status |
 |---|---|---|
-| **Muon optimizer** (`muon.py`, `muon_test.py`) | the same quality in fewer steps | ✅ **tested and chosen for v3.5** (Oct 2): on a 39M test model it reached AdamW's final loss in ~33% fewer steps and ended 0.124 lower (3.809 vs 3.933). Its memory is on the GPU, so v3.5 trains on rented GPUs |
-| **Off-machine backup** (`hub_backup.py`) | a rented machine dying costs at most ~30 min of training | built and running for v3 |
+| **Muon optimizer** (`core/muon.py`, `training/muon_test.py`) | the same quality in fewer steps | ✅ **tested and chosen for v3.5** (Oct 2): on a 39M test model it reached AdamW's final loss in ~33% fewer steps and ended 0.124 lower (3.809 vs 3.933). Its memory is on the GPU, so v3.5 trains on rented GPUs |
+| **Off-machine backup** (`training/hub_backup.py`) | a rented machine dying costs at most ~30 min of training | built and running for v3 |
 | **Reliable hosts** | Vast.ai hosts vary; ours dropped from 98% to 73% reliability in a night | rent 99%+ reliability (or Secure Cloud) from now on |
 | **8-bit training on the 4070** | ~1.3-1.5x faster matrix math (the 3090 can't) | idea; needs a pilot |
 | **Better data mix** (some DCLM-style general web next to FineWeb-Edu) | better everyday common sense (HellaSwag) at the same cost | idea for v3.5's data build |
@@ -166,7 +166,7 @@ questions.jsonl ─► teacher (7B open model, llama.cpp on the 4070) ─► ans
                                   filter: drop wrong, too long or unsafe answers
                                                                        │
                                                                        ▼
-                                             chat.jsonl ─► finetune.py ─► student
+                                             chat.jsonl ─► training/finetune.py ─► student
 ```
 
 - **Teacher size:** a ~7B open model as a Q4 GGUF fits in 12 GB and writes roughly 40–60 words a
@@ -195,8 +195,8 @@ and has a test-sheet score recorded as the **baseline** for v3. ✅ All done.
 | Measure | Result |
 |---|---|
 | Val loss (pretraining) | 2.929 best, 2.984 final (20,000 steps, ~17.5–18 hours; data prep ~30 minutes) |
-| Test sheet (`evaluate.py`) | **18/20** (identity 2/2, facts 7/8, explain 5/5, advice 2/2, writing 1/1, stories 1/2) |
-| HellaSwag (`exam.py`) | **28.4%** (random 25%, GPT-2 124M ~29–31%) |
+| Test sheet (`evaluation/evaluate.py`) | **18/20** (identity 2/2, facts 7/8, explain 5/5, advice 2/2, writing 1/1, stories 1/2) |
+| HellaSwag (`evaluation/exam.py`) | **28.4%** (random 25%, GPT-2 124M ~29–31%) |
 | Phone | 89 MB (Q8_0), ~210–245 tokens/second in PocketPal, fully offline |
 
 ### What testing on the phone taught us
@@ -229,9 +229,9 @@ easier than the whole test. The full test (all 10,042) gave **31.7%** at step 15
 500), against v2's full-test 28.4%. Forecasts on the full test: **v3 ~34–38%, v3.5 ~44–51%** (1.12B, 40B
 tokens with everyday web), **v4 ~46–54%**. From now on versions are compared on the full test only.
 Two more exams (steps 6,000 and 8,000) confirm or undo this. Built while it trains and waiting for the finished model: chat lessons with memory and
-reply suggestions, NEFTune, checkpoint averaging, DPO with rule-checked pairs (`make_dpo_pairs.py`,
-`dpo.py`), `compare.py` (the release gate against v2), the context meter, long-context tools for v3-long,
-and an off-machine checkpoint backup (`hub_backup.py`). Next after pretraining: average → chat-tune →
+reply suggestions, NEFTune, checkpoint averaging, DPO with rule-checked pairs (`data_prep/make_dpo_pairs.py`,
+`training/dpo.py`), `evaluation/compare.py` (the release gate against v2), the context meter, long-context tools for v3-long,
+and an off-machine checkpoint backup (`training/hub_backup.py`). Next after pretraining: average → chat-tune →
 DPO → compare.
 
 Goal: **accurate when it answers, honest when it doesn't.** No AI is completely accurate
@@ -249,7 +249,7 @@ Goal: **accurate when it answers, honest when it doesn't.** No AI is completely 
 | **More Wikipedia** | 20% of the reading (up from 15%), stories down to 2% | Wikipedia packs the most facts per word. A small boost to what it remembers; lookups do the heavy lifting |
 | **Math in the training mix** | 5% FineMath (web pages that explain math step by step) | Better with numbers, word problems and step-by-step thinking |
 | **Bigger test sheet** | More questions, plus scoring for "admitted uncertainty correctly" | Proves accuracy actually improved |
-| **Web search (online mode, optional)** | `generate.py --web`: our code searches the web for each message; the model answers from the results, naming the site and date. ~1,500 chat lessons (`web_lessons.py`) plus honest answers about other AIs | v2 made up "metrics for Claude" and claimed "ChatGPT is better than Claude". See [Web search, version by version](#web-search-version-by-version) |
+| **Web search (online mode, optional)** | `tools/generate.py --web`: our code searches the web for each message; the model answers from the results, naming the site and date. ~1,500 chat lessons (`data_prep/web_lessons.py`) plus honest answers about other AIs | v2 made up "metrics for Claude" and claimed "ChatGPT is better than Claude". See [Web search, version by version](#web-search-version-by-version) |
 
 **Tools starting in v3:** keyword search for lookups (FAISS as an upgrade), a local teacher model
 that writes the lookup and "I don't know" examples (DPO pairs are scored by checkable rules instead of
@@ -263,12 +263,12 @@ the teacher, so no grader has to be trusted), standard AI exams
 - **"Study the best material last":** a steady learning rate, then a fade over the last 10% of steps
   while reading a higher-quality anneal set (top-rated web pages, Wikipedia, math)
 - **Longer-memory ready:** RoPE setting 500,000, so stretching to 8k tokens later is easier
-- **Mini-exam** (HellaSwag, 500 questions) every 2,000 steps, plus `exam.py` for the full test
+- **Mini-exam** (HellaSwag, 500 questions) every 2,000 steps, plus `evaluation/exam.py` for the full test
 - **metrics.csv + TensorBoard graphs**, **torch.compile** speed-up (automatic fallback),
   **`--backup_dir`** copies of `latest.pt`, and **`--hub_backup`**: a copy OFF the machine (a private
   Hugging Face repo) every 30 min-2 h, after a rented host went offline mid-run
 - **Phone alerts** (`--notify`), **snapshots during the fade** for checkpoint averaging, and PC/cloud
-  handoff (`handoff.py`)
+  handoff (`training/handoff.py`)
 - A `--pilot` option (speed, memory and finish-time report) and optional gradient checkpointing
 
 **Ready for later features without retraining:** the 20 spare special tokens are planned for thinking
@@ -285,7 +285,7 @@ it's on, only the question is sent to the search service.
 
 | Version | Who decides to search | What the model learns | Lessons | Test |
 |---|---|---|---|---|
-| **v3** | Our code, for every message (`--web`) | Answer from the results, name the site and date; newest result wins; say when sources disagree or don't answer it; honest about other AIs | ~1,500 web + 400 other-AI (`web_lessons.py`) | `eval/web.jsonl` |
+| **v3** | Our code, for every message (`--web`) | Answer from the results, name the site and date; newest result wins; say when sources disagree or don't answer it; honest about other AIs | ~1,500 web + 400 other-AI (`data_prep/web_lessons.py`) | `eval/web.jsonl` |
 | **v3.5** | Our code | The same, with twice the practice; reads longer, messier pages (its 32K memory fits whole pages) | ~3,000 (`WEB_LESSONS`) | same sheet, should score higher |
 | **v4** | **The model**: it writes a `search` tool call only when a question needs fresh facts, and can search again with better words | When to search, rewriting a query, a second round when the first results are thin | + tool-call lessons | + "should it have searched?" checks |
 | **v5** | The model | Combines several sources into one answer, notices a site that contradicts the others, prefers trusted sites | + multi-source lessons | + harder disagreement cases |
@@ -361,15 +361,15 @@ many thinly). With 1B parameters there's room for more:
   These require accepting their terms on Hugging Face and logging in with a token.
 
 **Built so far (tested on CPU with a tiny model; the real memory and speed need the RTX 4070 pilot):**
-- `v3.5` entry in `config.py` (1.124B parameters, 152,600 steps, `python train.py --version v3.5 --cloud --pilot`)
-- `offload_optim.py`: optimizer in system RAM (`optimizer="adamw_cpu"`); gives the same numbers as normal AdamW and resumes correctly
-- **Cloud mode** (`train.py --cloud`, `cloud_train` in `config.py`): on rented 32 GB cards (planned: **2x RTX 5090, ~2-2.5
+- `v3.5` entry in `core/config.py` (1.124B parameters, 152,600 steps, `python training/train.py --version v3.5 --cloud --pilot`)
+- `core/offload_optim.py`: optimizer in system RAM (`optimizer="adamw_cpu"`); gives the same numbers as normal AdamW and resumes correctly
+- **Cloud mode** (`training/train.py --cloud`, `cloud_train` in `core/config.py`): on rented 32 GB cards (planned: **2x RTX 5090, ~2-2.5
   weeks, ~$280-360**) the 12 GB workarounds come off (optimizer on the GPU, no gradient checkpointing, micro-batch 2 x 64,
   saves every 150 steps). Same steps and results, so one run moves between home and cloud at any step. See [V3_5.md](V3_5.md)
 - `checkpoint_every` setting: protect every block (1) or every 2nd block (2) with gradient checkpointing
 - `optimizer="adamw8bit"` (bitsandbytes) as a fallback (untested here)
 
-- **Data prep for v3.5** (`python prepare_web_data.py --version v3.5`): the bigger FineWeb-Edu slice
+- **Data prep for v3.5** (`python data_prep/prepare_web_data.py --version v3.5`): the bigger FineWeb-Edu slice
   (`sample-100BT`, main and score 4-5 anneal versions) and `code_multi`: Python 49%, JavaScript 14%,
   HTML 5%, CSS 4%, Java 7%, C# 6%, SQL 8%, shell 5%, PowerShell 2% from The Stack, mixed by character
   share so the tokenizer sees every language, and skipping minified/generated files. Tested end to end
@@ -378,7 +378,7 @@ many thinly). With 1B parameters there's room for more:
   `hf auth login` (older versions: `huggingface-cli login`).
 
 **Still to build:** the pilot runs on your PC, and checking the real dataset names and speeds on the first
-`--test` run (`python prepare_web_data.py --version v3.5 --test`, 20M tokens, minutes).
+`--test` run (`python data_prep/prepare_web_data.py --version v3.5 --test`, 20M tokens, minutes).
 
 **Code needed** (added when we get there):
 - **CPU offload for the optimizer** (and the 8-bit optimizer, bitsandbytes, as a fallback), **plus gradient checkpointing** (all layers, or every other layer for about half the time cost): together they bring GPU memory to ~10–11 GB
@@ -433,14 +433,14 @@ v3.5 run ── pre_decay.pt ── fade ── ships as v3.5 (the app and skill
 - **Data:** new pages, never repeated: more of FineWeb-Edu's `sample-100BT` than v3.5 read, more code
   and math, plus a few percent of **skill-aware text** (tool calls, thinking steps, code with tests), so
   the skill packs start from a base that already knows those formats. A second pass over v3.5's data is
-  the fallback. `prepare_web_data.py` will need a way to skip what v3.5 already read (to build).
+  the fallback. `data_prep/prepare_web_data.py` will need a way to skip what v3.5 already read (to build).
 - **How much:** +15B or +30B is decided once v3.5's scores are in.
-- **Gate:** v4's brain must beat v3.5 in `compare.py` before the skill packs move to it.
-- **Code needed** (small): a `v4` entry in `config.py` with `init_from` = v3.5's `pre_decay.pt`, the new
+- **Gate:** v4's brain must beat v3.5 in `evaluation/compare.py` before the skill packs move to it.
+- **Code needed** (small): a `v4` entry in `core/config.py` with `init_from` = v3.5's `pre_decay.pt`, the new
   step total and fade point, and the new data folder.
-- **Not chosen (for now):** growing v3.5 deeper (`grow.py`, 22 → 32 layers, ~1.5B) would add ~4–6 points
+- **Not chosen (for now):** growing v3.5 deeper (`core/grow.py`, 22 → 32 layers, ~1.5B) would add ~4–6 points
   but doesn't fit in the 4070's 12 GB (cloud only, ~$400–600) and is ~1.45× slower on phones. It stays
-  an option for a later PC/online model; `growth_test.py` measures what growth saves first.
+  an option for a later PC/online model; `training/growth_test.py` measures what growth saves first.
 
 ### Specialists (skill packs + router)
 
@@ -457,13 +457,13 @@ You ─► Router ─► Base ──┼─► IT helper       (printers, network
 - **More skill ideas (planned, to look at later):** writing coach, planner (with reminders), recipe and
   meal helper, budget helper, language tutor, resume and job helper, kids' mode. Which come first follows
   what Beta testers ask for. See [SKILLS.md](SKILLS.md).
-- **Save as PDF or Word (built, `export_doc.py`):** any answer, and above all the Teacher assistant's
+- **Save as PDF or Word (built, `app/export_doc.py`):** any answer, and above all the Teacher assistant's
   worksheets, saves as a printable PDF (answer key on its own page) or an editable Word file; the app
   gets a Download / Print button.
 - **One base model** (v4's brain: v3.5 trained longer; v3.5 or v3 until it's ready) holds general language and knowledge.
 - **Skill packs (LoRA adapters):** small add-ons (~19-25 MB each), trained in under an hour
   each. Adding one never breaks the others. llama.cpp supports them. **Built as a Beta:** the Study
-  helper, a keyword router (`generate.py --skill auto`) and an access toggle (everyone / beta testers / off),
+  helper, a keyword router (`tools/generate.py --skill auto`) and an access toggle (everyone / beta testers / off),
   tested on v3 first; see [SKILLS.md](SKILLS.md).
 - **Router:** a small classifier that picks the right skill pack for each question.
 - **Tiers:** the router also picks the model size: Lite for easy messages, Standard for harder ones. See [Model tiers](#model-tiers-lite-standard-pro-max).
@@ -481,7 +481,7 @@ You ─► Router ─► Base ──┼─► IT helper       (printers, network
 - **Voice:** Whisper turns your voice into text and Piper reads the answer aloud. Both are small,
   open source and offline, and run alongside the AI.
 - **Personal memory:** saved notes about you that it looks up in later chats. **Prototype built
-  early (`chat_memory.py`, `generate.py --chat --memory`):** past chats and facts you save
+  early (`app/chat_memory.py`, `tools/generate.py --chat --memory`):** past chats and facts you save
   (`remember: ...`) are kept on your computer and searched like the Wikipedia lookup; the best
   matches reach the model as notes ("Earlier chat (Sep 29)", "Saved memory"), a format v3 is already
   trained on. `memories` / `forget <n>` / `forget everything` / `--private`.
@@ -510,9 +510,9 @@ this (`<|tool_call|>`, `<|tool_result|>`) are already reserved in v3's tokenizer
 
 | Step | What | When |
 |---|---|---|
-| 1 | ✅ **Built and tested (`harness.py`):** read file, edit file, run command, run tests, all inside a **sandbox** (a temporary folder, no internet, time and memory limits, nothing outside it can be touched) | While v3.5 trains (CPU work) |
-| 1b | ✅ **Built and tested (Oct 2026): the "Claude Code"-style extras around the loop** (all plain code in `harness.py`): `git` (safe subset: status, diff, log, add, commit, branch, worktrees; no push, no config flags), `diagnostics` (syntax errors; more with pyflakes: our stand-in for LSP), **project notes** (EMVRYX.md / AGENTS.md shown at the start), **hooks** (`.emvryx/hooks.json`: after an edit, before a command, and a **finish gate**: the tests must pass before it may stop), **permissions** (allow / ask / deny; `git commit` asks first), **compaction** (old steps folded into an "Earlier steps" list when the 2,048-token memory fills) and a **tool registry** (`register_tool`: where MCP tools plug in; the MCP client itself is not built) | Done |
-| 1c | ✅ **Practice data made by our own code (`agent_tasks.py`, `agent_lessons.py`, `make_agent_data.py`):** tiny projects with a bug, solved by a scripted solver through the REAL harness; only runs whose tests pass are kept. Chat lessons: `tool_use` (incl. diagnostics-first and retry after a wrong fix), `project_context`, `ask_first` (and "refused: say so, don't retry"), `too_big` ("that's too big; start with one file") and `compaction`. v3.5 gets 2,500 of them (`AGENT_LESSONS`); its final-phase reading also has real commit data (`commits`, CommitPackFT Python, permissive licenses) and the practice runs as text (`agent_traces`, 0.2%) | Done; v3.5 trains on them |
+| 1 | ✅ **Built and tested (`coding/harness.py`):** read file, edit file, run command, run tests, all inside a **sandbox** (a temporary folder, no internet, time and memory limits, nothing outside it can be touched) | While v3.5 trains (CPU work) |
+| 1b | ✅ **Built and tested (Oct 2026): the "Claude Code"-style extras around the loop** (all plain code in `coding/harness.py`): `git` (safe subset: status, diff, log, add, commit, branch, worktrees; no push, no config flags), `diagnostics` (syntax errors; more with pyflakes: our stand-in for LSP), **project notes** (EMVRYX.md / AGENTS.md shown at the start), **hooks** (`.emvryx/hooks.json`: after an edit, before a command, and a **finish gate**: the tests must pass before it may stop), **permissions** (allow / ask / deny; `git commit` asks first), **compaction** (old steps folded into an "Earlier steps" list when the 2,048-token memory fills) and a **tool registry** (`register_tool`: where MCP tools plug in; the MCP client itself is not built) | Done |
+| 1c | ✅ **Practice data made by our own code (`coding/agent_tasks.py`, `coding/agent_lessons.py`, `coding/make_agent_data.py`):** tiny projects with a bug, solved by a scripted solver through the REAL harness; only runs whose tests pass are kept. Chat lessons: `tool_use` (incl. diagnostics-first and retry after a wrong fix), `project_context`, `ask_first` (and "refused: say so, don't retry"), `too_big` ("that's too big; start with one file") and `compaction`. v3.5 gets 2,500 of them (`AGENT_LESSONS`); its final-phase reading also has real commit data (`commits`, CommitPackFT Python, permissive licenses) and the practice runs as text (`agent_traces`, 0.2%) | Done; v3.5 trains on them |
 | 2 | **Training data (v4):** a coding-focused open teacher (e.g. Qwen2.5-Coder-7B, license to be checked) works through small coding tasks in the harness. Keep only runs where the **tests really pass** (checked by running them) | After v3.5 |
 | 3 | **Fine-tune** a "coding" skill pack (LoRA) on those runs | v4 |
 | 4 | **Measure** on a small test set of real tasks (fix this bug, add this function) | v4 |
@@ -594,7 +594,7 @@ One app and one website that work offline and online. The design and decisions a
 **Reply suggestions (already in v3's chat lessons):** after each answer, the model guesses what you
 might ask next and the app shows it greyed out in the message box (Tab or Enter to use it; never sent
 on its own). v3 learns it from the user's follow-ups in everyday chats (weight 0.3), and
-`generate.py --chat --suggest` shows it in the terminal. If v3's suggestions are too plain, v3.5/v4
+`tools/generate.py --chat --suggest` shows it in the terminal. If v3's suggestions are too plain, v3.5/v4
 can add teacher-written follow-up questions.
 
 **Skill pack access (built):** each pack has a switch (everyone / beta testers / off) in
@@ -611,7 +611,7 @@ Three routes:
 
 | Route | How | Time | Cost |
 |---|---|---|---|
-| **From scratch** | Rent cloud GPUs. The cheapest route: Vast.ai (or similar) interruptible GPUs, since `train.py` already resumes after interruptions. v3.5's 1B run at home is the rehearsal | ~4–7 days on 8 rented GPUs (longer on fewer) | ~$800–2,500 depending on GPU and pricing |
+| **From scratch** | Rent cloud GPUs. The cheapest route: Vast.ai (or similar) interruptible GPUs, since `training/train.py` already resumes after interruptions. v3.5's 1B run at home is the rehearsal | ~4–7 days on 8 rented GPUs (longer on fewer) | ~$800–2,500 depending on GPU and pricing |
 | **Free (if approved)** | Apply to Google's TPU Research Cloud for free TPU time (the code would need porting to JAX or PyTorch/XLA) | Varies | $0 |
 | **Fine-tune an open 3B model** | QLoRA on the RTX 4070, then add everything from v3/v4 (lookups, skill packs, personality, tools) | Hours | ~$0 |
 
@@ -633,7 +633,7 @@ run would take well over a year at home. So the split is by **job**, not by time
 About 95% of the steps happen at home; the cloud is one rental.
 
 **The rental can be split over time too.** Rent 1–2 days, save `latest.pt`, stop paying, and
-resume later (`train.py` already does this). The catch: a 3B checkpoint is ~35–40 GB with the
+resume later (`training/train.py` already does this). The catch: a 3B checkpoint is ~35–40 GB with the
 optimizer, so between rentals you either pay a little for cloud storage or download it (a few
 hours).
 
@@ -673,7 +673,7 @@ Gemini runs a small model on phones and a big one in the cloud).
 **Ways to keep the cost down:**
 - **Grow instead of starting over:** start v6 from v5's weights (copy and stack its layers,
   "depth up-scaling"), and v6.5 from v6. This is why they share v5's tokenizer.
-  `growth_test.py` measures how much this really saves (v2's 12 layers grown to 24, against a 24-layer model
+  `training/growth_test.py` measures how much this really saves (v2's 12 layers grown to 24, against a 24-layer model
   from scratch with the same total compute; ~20 hours on the 4070, run when the GPU is free).
 - **Free compute grants:** Google's TPU Research Cloud and similar programs. A documented
   project with results from v1–v5 is a strong application.
@@ -806,7 +806,7 @@ of the whole family (a new tokenizer or design, so old files and skill packs don
 | **A whole number** | A big step: trained from scratch, or a new size or new abilities | Flare 2, then Flare 5 (a fresh retrain at a new size) |
 | **.1, .2, ...** | A **"+" model**: the same weights read more (like v3+, continuing from `pre_decay.pt`), same size | Flare 3.1 (v3 + more reading) |
 | **.5** | The half-step slot: Flare 2.5 is the v3.5 slot built on an open base. A "+" refresh of an open-base model takes the next decimal (more lessons, DPO, skill packs) | Flare 2.5, then Flare 2.6 |
-| **Next whole number + .1** | A **grown model** (`grow.py` adds layers, so the size changes), started from the earlier weights | Flare 4.1 (Flare 2 grown deeper); its own "+" steps are 4.2, 4.5, ... |
+| **Next whole number + .1** | A **grown model** (`core/grow.py` adds layers, so the size changes), started from the earlier weights | Flare 4.1 (Flare 2 grown deeper); its own "+" steps are 4.2, 4.5, ... |
 
 **On an open base (Oct 2026):** a "+" model is the same open base with better or more lessons, DPO or skill packs (a few dollars, hours; see [OPEN_MODEL.md](OPEN_MODEL.md#upgrades--and-growth-on-an-open-base)). A grown model copies layers of the open base and needs real continued training, so it is expensive and only worth it when no open model of the size you want exists.
 
@@ -832,7 +832,7 @@ check that our trainer and llama.cpp support the Qwen3.5 design). The relabellin
 * Where Apogee (14B, training now) and a Qwen3.5 model fit in the new ladder is still open.
 
 ## To discuss: lessons made for Qwen, not for Flare 2 (Oct 7, 2026, the owner's decision to pursue)
-Flare 2.5, Equinox 2, Solstice 2 and Apogee 2 were all trained on `data/v3/chat.jsonl`, which `make_chat_data_v3.py` built to fix the mistakes of the tiny from-scratch v2 model (answer from notes, "I don't know" when the notes are
+Flare 2.5, Equinox 2, Solstice 2 and Apogee 2 were all trained on `data/v3/chat.jsonl`, which `data_prep/make_chat_data_v3.py` built to fix the mistakes of the tiny from-scratch v2 model (answer from notes, "I don't know" when the notes are
 silent, doubt when corrected, "unknowable" questions). Qwen already knows far more and answers well, so those lessons made it over-trust a wrong note and hedge. The owner wants Apogee (and the next models) trained on their own,
 Qwen-native lessons instead. Notes so far:
 * Apogee 2 has already been trained (1,266 steps, about 16 h, about $8) on the v3 lessons; a retrain on new lessons is a new run. Keep that run as the baseline and compare.
@@ -875,7 +875,7 @@ Max after that, when money and results allow.
 
 ## Where the models can run (beyond phones)
 
-Every model is exported as a **GGUF** file (`to_gguf.py`). That one format already works with
+Every model is exported as a **GGUF** file (`tools/to_gguf.py`). That one format already works with
 **llama.cpp, Ollama, LM Studio, llamafile** (one double-clickable file) and, in a browser, **wllama**
 (llama.cpp compiled to WebAssembly). So nothing extra needs building per platform. We are *not*
 planning an ONNX/WebLLM version: it would mean a second conversion path for little gain.
@@ -916,7 +916,7 @@ package it several ways:
 | Windows / Mac PC | Wrapped with **Tauri** (small) or Electron | llama.cpp (`llama-server`) or wllama |
 | iPhone | Same Capacitor wrapper; needs a Mac + Xcode ($99/year to keep installed) | llama.cpp |
 
-**Same files everywhere:** one `.gguf` per model size, exactly what `to_gguf.py` already makes. The
+**Same files everywhere:** one `.gguf` per model size, exactly what `tools/to_gguf.py` already makes. The
 chat format and prompts live in one shared file, so a chat behaves the same on every device.
 
 **Things that differ between phone and PC (decide early):**

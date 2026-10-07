@@ -1,4 +1,5 @@
 """Things found in the security review: spoofable addresses, link previews, timing, branch names, export size, health and alerts."""
+import os, sys; sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), os.pardir)); import emvryx_paths  # noqa: E402,F401  (the code folders become importable)
 import io
 import json
 import os

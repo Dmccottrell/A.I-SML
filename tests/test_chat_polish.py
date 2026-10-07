@@ -1,4 +1,5 @@
 """Tests for chat_polish.py: thinking words, the one-second pause, steady writing, and shortening a long chat."""
+import os, sys; sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), os.pardir)); import emvryx_paths  # noqa: E402,F401  (the code folders become importable)
 import threading
 import unittest
 

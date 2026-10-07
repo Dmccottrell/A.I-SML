@@ -2,7 +2,7 @@
 
 All versions side by side. v1 and v2 are finished and run on the phone. v3's pretraining finished at step 45,000 (October 2026; HellaSwag 37.1% on a 2,000-question sample, validation loss about 2.68); its chat tuning is next.
 v3.5, v4, v5, v6 and v6.5 are planned: their numbers are estimates and will change once v3's results are in.
-> **Status, Oct 6 2026 (measured):** HellaSwag on the same 2,000-question sample, tuned model vs its plain open base: **Flare 2.5 67.2% vs 65.6% (+1.6)**, **Equinox 2 68.5% vs 64.8% (+3.7)**, **Solstice 2 73.6% vs 71.9% (+1.7)**. Identity test 16/16 on all three. All three are trained and backed up to a private Hugging Face repo; Flare 2.5 is in the app as a beta, Equinox 2 and Solstice 2 await GGUF export and app testing. Apogee 2 is not started. Long-context test (`bench_long.py`), public and agentic benchmarks (`bench_all.sh`) are built and running next. The chat app has a **VryxCode** code screen (usage-metered, zip download/import), and the chat hides Qwen3 `<think>` text. See [BENCHMARKS.md](BENCHMARKS.md) and [VRYXCODE.md](VRYXCODE.md).
+> **Status, Oct 6 2026 (measured):** HellaSwag on the same 2,000-question sample, tuned model vs its plain open base: **Flare 2.5 67.2% vs 65.6% (+1.6)**, **Equinox 2 68.5% vs 64.8% (+3.7)**, **Solstice 2 73.6% vs 71.9% (+1.7)**. Identity test 16/16 on all three. All three are trained and backed up to a private Hugging Face repo; Flare 2.5 is in the app as a beta, Equinox 2 and Solstice 2 await GGUF export and app testing. Apogee 2 is not started. Long-context test (`evaluation/bench_long.py`), public and agentic benchmarks (`scripts/bench_all.sh`) are built and running next. The chat app has a **VryxCode** code screen (usage-metered, zip download/import), and the chat hides Qwen3 `<think>` text. See [BENCHMARKS.md](BENCHMARKS.md) and [VRYXCODE.md](VRYXCODE.md).
 
 > **Update (Oct 2026): Emvryx moves to open bases, as the 2.x series.** The whole family is the 2.x series: **Ember 2** (v2) and **Flare 2** (v3) were trained from scratch, and the open-base models are **Flare 2.5** (was v3.5), **Equinox 2** (was v4), **Solstice 2** (was v5), **Apogee 2** (was v6); a "+" refresh takes the next decimal (Flare 2.6). Generation 1 (Ember 2, Flare 2) was trained from scratch. From v3.5 on, models are fine-tuned from an open model instead of trained from scratch
 > (cheaper and stronger: about $183 for a forecast ~41-45% from scratch versus a few dollars for roughly 65% on a 1.5B open model).
@@ -14,7 +14,7 @@ v3.5, v4, v5, v6 and v6.5 are planned: their numbers are estimates and will chan
 > **Order of work:** all the 2.0 builds first (Flare 2.5, Equinox 2, Solstice 2, Apogee 2), then the improved Equinox 2.5, Solstice 2.5 and Apogee 2.5 (see [OPEN_MODEL.md](OPEN_MODEL.md)).
 > The rest of this file was written for the from-scratch plan: where it says a version's brain is trained from scratch or grown from v3.5, read it with this update.
 
-Details: [V2.md](V2.md), [V3.md](V3.md), [ROADMAP.md](ROADMAP.md), [LESSONS.md](LESSONS.md) (what we learned). Settings live in `config.py`.
+Details: [V2.md](V2.md), [V3.md](V3.md), [ROADMAP.md](ROADMAP.md), [LESSONS.md](LESSONS.md) (what we learned). Settings live in `core/config.py`.
 
 **The app and the model family are called Emvryx** (working name, Emvryx.AI; see [APP.md](APP.md)). Each model is the
 umbrella name plus one of **five role names** plus a generation number (checked by web search only; no trademark search yet):
@@ -82,16 +82,16 @@ the long-context tests pass at that length (docs/LONG_CONTEXT.md). "Memory (cont
 | Reading per parameter | ~44 | ~30 | ~30 | n/a (fine-tune) | n/a (fine-tune) | n/a | n/a | TBD |
 | **Training time** | **~4 hours** | **~17.5–18 hours** (measured; data prep ~30 min) | **~13–14 days nonstop on the 4070** (measured: ~25.8 s/step); ran as PC afternoons + a rented RTX 3090 overnight (17.5 s/step), then from step 6,054 on a rented **RTX 5090 (6.9 s/step, measured)**: done ~Oct 3 | **~2 hours** on one RTX 5090 (7.1 s/step, 18.6 GB); the RTX 4070 also works, slower | **~5 h** on one RTX 5090 (18 s/step, estimate) | **~10 h** on one RTX 5090 (38 s/step, estimate) | **~24 h** on one RTX 5090 with 4-bit weights (89 s/step, estimate) | TBD |
 | Cost | < $1 | ~$1 | ~$50–70 (3090 nights, then the RTX 5090 at ~$0.51/hr, + electricity) | **~$1** rented (one RTX 5090 at ~$0.51/hr) | **~$2.60** rented (RTX 5090 at ~$0.51/hr) | **~$5** rented | **~$12** rented | TBD |
-| Chat fine-tuning | 5k single messages, ~10 min | ~105k multi-turn chats, ~1–2 hrs | Multi-turn + lookup + "I don't know" + memory + reply-suggestion lessons, NEFTune, then DPO on rule-checked answer pairs | LoRA rank 64, learning rate 2e-4, one pass (`finetune_open.py`) | LoRA rank 64, learning rate 2e-4, one pass (`finetune_open.py --model equinox-4`) | LoRA rank 32 (`--model solstice-5`) | QLoRA rank 32, 4-bit base (`--model apogee-6`) | TBD |
+| Chat fine-tuning | 5k single messages, ~10 min | ~105k multi-turn chats, ~1–2 hrs | Multi-turn + lookup + "I don't know" + memory + reply-suggestion lessons, NEFTune, then DPO on rule-checked answer pairs | LoRA rank 64, learning rate 2e-4, one pass (`training/finetune_open.py`) | LoRA rank 64, learning rate 2e-4, one pass (`training/finetune_open.py --model equinox-4`) | LoRA rank 32 (`--model solstice-5`) | QLoRA rank 32, 4-bit base (`--model apogee-6`) | TBD |
 | Teacher model (a bigger open AI helping) | — | — (its chat data was partly written by bigger AIs) | **Yes:** a ~7B open model (or a hosted one) writes lookup and "I don't know" examples; DPO pairs are scored by checkable rules | Same as v3 (the lessons already exist) | Same as v3 | Same as v3 | Same as v3 | TBD |
-| Main tools added | PyTorch, CUDA, llama.cpp | Hugging Face `datasets` | Keyword search (SQLite FTS5), FAISS (optional), lm-evaluation-harness, TensorBoard, 8-bit optimizer (optional), a rented cloud GPU (Vast.ai), phone alerts (ntfy), Hugging Face Hub (off-machine backup), a small embedding model (memory search), web search (online mode) | `finetune_open.py`, `open_tokenizer.py`, a ChatML branch in `chat.py`, `NOTICE` | `open_models.py` presets, skill packs + router, tools, voice | Same presets | Same presets, `--quant4` (bitsandbytes) | TBD |
-| New code needed | — | Pause/resume, KV cache | Pilot runs, gradient checkpointing, lookup index, teacher script, DPO, NEFTune, checkpoint averaging, memory, suggestions, context meter, `compare.py`, PC/cloud handoff, off-machine backup, long-context tools, Muon (to test) | Done and tested with a tiny model; the real run is in progress | Pilot on the real weights (first guesses not yet run) | Same pilot | Same pilot; merge needs ~30 GB | TBD |
+| Main tools added | PyTorch, CUDA, llama.cpp | Hugging Face `datasets` | Keyword search (SQLite FTS5), FAISS (optional), lm-evaluation-harness, TensorBoard, 8-bit optimizer (optional), a rented cloud GPU (Vast.ai), phone alerts (ntfy), Hugging Face Hub (off-machine backup), a small embedding model (memory search), web search (online mode) | `training/finetune_open.py`, `core/open_tokenizer.py`, a ChatML branch in `core/chat.py`, `NOTICE` | `core/open_models.py` presets, skill packs + router, tools, voice | Same presets | Same presets, `--quant4` (bitsandbytes) | TBD |
+| New code needed | — | Pause/resume, KV cache | Pilot runs, gradient checkpointing, lookup index, teacher script, DPO, NEFTune, checkpoint averaging, memory, suggestions, context meter, `evaluation/compare.py`, PC/cloud handoff, off-machine backup, long-context tools, Muon (to test) | Done and tested with a tiny model; the real run is in progress | Pilot on the real weights (first guesses not yet run) | Same pilot | Same pilot; merge needs ~30 GB | TBD |
 
 ## Settings carried forward by version
 
-What each version trains with (v1–v3.5 are the real values in `config.py`) and what v4–v6.5 should **start
+What each version trains with (v1–v3.5 are the real values in `core/config.py`) and what v4–v6.5 should **start
 with**, given what changed for v3, v3.5 and v4. **v4 and later are starting guesses, not measured**: each one
-is confirmed or changed by its own pilot run (`train.py --pilot`). Why each choice was made is in
+is confirmed or changed by its own pilot run (`training/train.py --pilot`). Why each choice was made is in
 [LESSONS.md](LESSONS.md).
 
 | Setting | **v1** | **v2** | **v3** | **Flare 2.5** (was v3.5, Qwen base) | **Equinox 2** (was v4, Qwen3-4B) | **Solstice 2** (was v5, Qwen3-8B) | **Apogee 2** (was v6, Qwen3-14B) | **v6.5** (TBD base) |
@@ -104,7 +104,7 @@ is confirmed or changed by its own pilot run (`train.py --pilot`). Why each choi
 | Peak learning rate | 6e-4 | 6e-4 | 4e-4 | 2e-4 | 2e-4 (lower it if the loss jumps) | 1e-4 to 2e-4 (to be tuned) | 1e-4 (QLoRA; to be tuned) | TBD |
 | Final learning rate | 6e-5 | 6e-5 | 4e-5 | 2e-5 | 10% of peak | 10% of peak | 10% of peak | TBD |
 | Fade length (`decay_frac`) | – | – | 10% | cosine over the whole run | cosine over the whole run | cosine over the whole run | cosine over the whole run | TBD |
-| Mini-exam | off | off | every 2,000 steps, 500 questions, first N (≈5 points too easy) | after training (`benchmarks.py`) | after training (`benchmarks.py`) | after training (`benchmarks.py`) | after training (`benchmarks.py`) | TBD |
+| Mini-exam | off | off | every 2,000 steps, 500 questions, first N (≈5 points too easy) | after training (`evaluation/benchmarks.py`) | after training (`evaluation/benchmarks.py`) | after training (`evaluation/benchmarks.py`) | after training (`evaluation/benchmarks.py`) | TBD |
 | Snapshots for averaging (`snapshot_every`) | off | off | 900 (5 in the fade) | none | none | none | none | TBD |
 | Gradient checkpointing | off | off | off | on | on | on | on | TBD |
 | Saves (`save_every`) | 250 | 200 | 100 | every 100 steps | every 100 steps | every 100 steps | every 100 steps | TBD |
@@ -117,14 +117,14 @@ is confirmed or changed by its own pilot run (`train.py --pilot`). Why each choi
 **How the guesses were made:**
 - **Peak learning rate** falls with size as roughly `size^-0.27`: v2 (88M) 6e-4 → v3 (394M) 4e-4 → v3.5 (1.12B)
   3e-4 fits that line, so v5 (3B) ≈ 2.3e-4, v6 (5B) ≈ 2.0e-4, v6.5 (7B) ≈ 1.8e-4. The final rate is a tenth of the peak.
-  This is a line through three points, and Muon sets its own step size for the weight matrices (`muon.py`), so each
+  This is a line through three points, and Muon sets its own step size for the weight matrices (`core/muon.py`), so each
   value is checked at the pilot.
 - **Snapshot spacing** is the fade length (10% of the steps) divided by 5, like v3 (4,500 ÷ 5 = 900) and v3.5 (15,260 ÷ 5 ≈ 3,050).
 - **Mini-exam from v3.5 on is spread over the whole test**, because v3's first-500 version read ~5 points high; v4+ use every question.
-- **Muon's saving (~33% fewer steps for the same loss) was measured only on a 39M model** (`muon_test.py`),
+- **Muon's saving (~33% fewer steps for the same loss) was measured only on a 39M model** (`training/muon_test.py`),
   so v5's trim is an option, not a plan. Whether Muon works with FSDP is not known yet.
 - **Sampling** starts lower and narrower for smaller models (Ember's 0.3–0.6 is the narrowest). These are in
-  `models.json` and are tuned with `evaluate.py --temperature`.
+  `models.json` and are tuned with `evaluation/evaluate.py --temperature`.
 
 **Reading per parameter** is total tokens ÷ parameters: v3 reads 11.8B tokens with 394M parameters, **about 30 per parameter** (v2 ~30, v3.5 ~29). "Compute-optimal" is about 20; today's best small models read far more (SmolLM2-360M ~11,000 per parameter), which is the main reason they score higher. See [Speed and safety experiments](ROADMAP.md#speed-and-safety-experiments).
 
@@ -145,10 +145,10 @@ real GSM8K questions (a well-known math test) are kept for testing only, never f
 |---|---|---|---|---|---|---|---|---|
 | Final val loss | **1.279** | **2.929** (best), 2.984 at the last step | **≈2.68** (step 45,000) | Training loss 0.95 at the start, about 0.75 at the end (988 steps) | Measured when trained | Measured when trained | Measured when trained | TBD |
 | Phone file | 32 MB | **89 MB** | ~420 MB (Q8) or **~240 MB (Q4)** | **~1 GB (Q4)** (estimate) | ~2.5 GB (Q4) | ~5 GB (Q4) | ~9 GB (Q4) | TBD |
-| Test sheet (`evaluate.py`, /20) | Only identity and story questions | **18/20** (baseline) | Goal: clearly beat v2 | Measured after training | Goal: beat Flare 2.5 | Goal: beat Flare 2.5 | Goal: beat Flare 2.5 | TBD |
+| Test sheet (`evaluation/evaluate.py`, /20) | Only identity and story questions | **18/20** (baseline) | Goal: clearly beat v2 | Measured after training | Goal: beat Flare 2.5 | Goal: beat Flare 2.5 | Goal: beat Flare 2.5 | TBD |
 | v3 test sheet (`prompts_v3.jsonl`, /41) | — | Run to set the baseline* | Goal: clearly beat v2, most of all on facts_hard, instructions, topic_switch, honesty, correction | Goal: beat v3 | Goal: beat Flare 2.5 | Goal: beat Flare 2.5 | Goal: beat Flare 2.5 | TBD |
 | Phone speed (PocketPal, Q8_0) | — | **~210–245 tokens/s**, first word in <0.1 s | Slower (4.5× bigger); measured when done | Slower than v3 (~4× bigger); measured when done | Slower than Flare 2.5 (~2.6× bigger); measured when done | ~5× bigger; measured when done | ~10× bigger; PC or server | TBD |
-| HellaSwag (`exam.py`, full test, random = 25%) | — | **28.4%** (baseline) | **31.7% at step 15,000** (full test; the 500-question mini-exam reads ~5 points high); forecast **~34–38%** | **67.2%** (2,000-question sample; plain Qwen 2.5 1.5B 65.6%) | Not measured. Run `exam.py` after training | Not measured. Run `exam.py` after training | Not measured. Run `exam.py` after training | TBD |
+| HellaSwag (`evaluation/exam.py`, full test, random = 25%) | — | **28.4%** (baseline) | **31.7% at step 15,000** (full test; the 500-question mini-exam reads ~5 points high); forecast **~34–38%** | **67.2%** (2,000-question sample; plain Qwen 2.5 1.5B 65.6%) | Not measured. Run `evaluation/exam.py` after training | Not measured. Run `evaluation/exam.py` after training | Not measured. Run `evaluation/exam.py` after training | TBD |
 | Public yardsticks (`lm-evaluation-harness`: ARC, MMLU; small GSM8K-style math) | — | Run to set the baseline | Goal: beat v2 | Goal: beat v3 | Base model, published and from memory: MMLU about 73% (ours measured after training) | Base model MMLU about 77% (from memory) | Base model MMLU about 81% (from memory) | TBD |
 | Tool, thinking and coding tests (v4+) | — | — | — | — | Goal: tools and thinking from v4 on (see the roadmap) | Goal: tools and thinking from v4 on (see the roadmap) | Goal: tools and thinking from v4 on (see the roadmap) | TBD |
 
@@ -156,7 +156,7 @@ real GSM8K questions (a well-known math test) are kept for testing only, never f
 data, and kids' stories are far easier to predict than Wikipedia and code. The test sheet
 (`eval/prompts.jsonl`) is the fair comparison.
 
-\* v2 on v3's bigger test sheet: `python evaluate.py --version v2 --prompts eval/prompts_v3.jsonl`.
+\* v2 on v3's bigger test sheet: `python evaluation/evaluate.py --version v2 --prompts eval/prompts_v3.jsonl`.
 It adds the mistakes found on the phone, so v2 is expected to score low on the new categories.
 
 ## v2 on the phone: what testing taught us
@@ -203,8 +203,8 @@ It adds the mistakes found on the phone, so v2 is expected to score low on the n
 ## v3 up close: lookups and the teacher
 
 v3 phase 2 turns the model into a **system**: our code finds facts, and the model learns to answer
-from them. **Built and tested** (`wiki_index.py`, `make_teacher_data.py` with Qwen2.5-7B-Instruct as
-the teacher, `make_chat_data_v3.py`); it runs on your PC before and after pretraining (see [V3.md](V3.md)).
+from them. **Built and tested** (`data_prep/wiki_index.py`, `data_prep/make_teacher_data.py` with Qwen2.5-7B-Instruct as
+the teacher, `data_prep/make_chat_data_v3.py`); it runs on your PC before and after pretraining (see [V3.md](V3.md)).
 
 ### What a chat will look like
 
@@ -300,7 +300,7 @@ v5 is the first **genuinely capable** assistant: a 3B brain, about 3× v3.5, rea
 
 | Route | How | Time | Cost |
 |---|---|---|---|
-| **From scratch** (fully yours) | Rent cloud GPUs (Vast.ai interruptible is cheapest; `train.py` already resumes). v3.5's 1B run at home is the rehearsal | ~4–7 days on 8 GPUs | ~$800–2,500 |
+| **From scratch** (fully yours) | Rent cloud GPUs (Vast.ai interruptible is cheapest; `training/train.py` already resumes). v3.5's 1B run at home is the rehearsal | ~4–7 days on 8 GPUs | ~$800–2,500 |
 | **Free TPU grant** | Apply to Google's TPU Research Cloud (code would need porting) | Varies | $0 if approved |
 | **Fine-tune an open 3B** | QLoRA on the RTX 4070, then add everything from v3–v4 | Hours | ~$0 |
 
@@ -325,7 +325,7 @@ run would take well over a year at home. So the split is by **job**, not by time
 About 95% of the steps happen at home; the cloud is one rental.
 
 **The rental can be split over time too.** Rent 1–2 days, save `latest.pt`, stop paying, and
-resume later (`train.py` already does this). The catch: a 3B checkpoint is ~35–40 GB with the
+resume later (`training/train.py` already does this). The catch: a 3B checkpoint is ~35–40 GB with the
 optimizer, so between rentals you either pay a little for cloud storage or download it (a few
 hours).
 
@@ -377,7 +377,7 @@ Fill in real numbers as each version finishes:
 | v1 | 1.279 | — | Runs on the phone (PocketPal, 32 MB) |
 | v2 | 2.929 best, 2.984 final | 18/20 (identity 2/2, facts 7/8, explain 5/5, advice 2/2, writing 1/1, stories 1/2) | HellaSwag 28.4% (ckpt.pt), about GPT-2 (124M) level. 20,000 steps at ~3.5 s/step on the RTX 4070; chat fine-tuning ~1.5 hours. Phone: 89 MB, ~210–245 tokens/s. The test sheet checks key words, so answers can pass with wrong details. Phone tests found wrong rare facts (Illinois), no self-correction, topic stickiness and settings problems (see above) |
 | v3 | | Pending: run after training | Data ready: 12.0B training tokens + 1.3B anneal tokens + 10M val; 222 documents with test questions removed (193 web, 14 math, 10 top-rated web, 5 anneal math); prepared in 1 hour 26 minutes (~2.6M tokens/s on average). Pilot (RTX 4070, 394.3M parameters): `torch.compile` works once its cache folder is short (Windows 260-character path limit); ~25 s/step compiled vs ~30–38 s without, identical loss, GPU memory ~10.2 GB vs ~11.1 GB; so the full run is ~13–14 days. Cloud pilot (rented RTX 3090): 17.5 s/step, 10.1 GB. Pretraining started; resumed on the cloud at step 1,383; step 1,000 val 3.755, step 1,500 val 3.457, **step 2,000 val 3.426 and HellaSwag 33.4%** (500-question mini-exam, ±2 points; v2 finished at 28.4%); step 3,000 val 3.194, step 3,500 val 2.947, **step 4,000 val 2.900 and HellaSwag 35.6%**, ahead of the forecast (final forecast raised from 37–42% to ~40–45%). Added while it trains: the first skill packs (**Study helper** and **Teacher assistant**, Betas, with a router, an access toggle and PDF/Word export; see SKILLS.md), reply suggestions, remembering you (saved facts, earlier chats, search by meaning), the context meter, old lookup notes dropped (7–12 turns instead of 2–3), and the long-context tools for v3-long Moved to a rented **RTX 5090** at step 6,054 (6.9 s/step). Mini-exam (first 500 questions): 33.6% at 6,000, 36.6% at 8,000, 37.0% at 10,000, 38.0% at 14,000, 36% at 16,000, **39.4% at 18,000**; **full test (all 10,042): 31.7% at step 15,000** (37% on the first 500, which are ~5 points easier; v2: 28.4%). Best val loss **2.636 at step 17,500**. Added while it trains: web search (online mode) with web-reading lessons, honest answers about other AIs, the spread-out exam for v3.5, and the app design (APP.md) |
-| v3.5 | | | Plan locked (Oct 2): 1.12B, 40B tokens with everyday web, Muon (won `muon_test.py`: AdamW's final loss in ~33% fewer steps, 3.809 vs 3.933 at the end), 2× RTX 5090. Data built on the PC in ~3.5 hours (~3.6M tokens/s). First the v3plus vs v3plus-edu A/B test of the new mix |
+| v3.5 | | | Plan locked (Oct 2): 1.12B, 40B tokens with everyday web, Muon (won `training/muon_test.py`: AdamW's final loss in ~33% fewer steps, 3.809 vs 3.933 at the end), 2× RTX 5090. Data built on the PC in ~3.5 hours (~3.6M tokens/s). First the v3plus vs v3plus-edu A/B test of the new mix |
 | v4 | | | Brain = v3.5 continued from `pre_decay.pt` (+15–30B tokens), trained while the app and skills are built |
 | v5 | | | |
 | v6 | | | |

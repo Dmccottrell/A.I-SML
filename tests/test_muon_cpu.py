@@ -1,5 +1,6 @@
 """Tests for Muon with its memory in RAM (muon.MuonCPUOffload, optimizer "muon_cpu").
 Run:  python -m unittest tests.test_muon_cpu -v"""
+import os, sys; sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), os.pardir)); import emvryx_paths  # noqa: E402,F401  (the code folders become importable)
 import copy
 import os
 import subprocess
@@ -99,6 +100,7 @@ LAUNCH = textwrap.dedent("""
     import os, runpy, sys
     from dataclasses import replace
     sys.path.insert(0, {root!r})
+    import emvryx_paths
     import config
     v = config.VERSIONS["v3.5"]
     config.VERSIONS["vtiny"] = replace(v, name="vtiny", data_dir={data!r}, ckpt_dir={ck!r}, export_dir={ck!r},
@@ -125,7 +127,7 @@ class EndToEnd(unittest.TestCase):
         make_tok().save(os.path.join(data, "tokenizer.json"))
         launch = os.path.join(d, "launch.py")
         with open(launch, "w") as f:
-            f.write(LAUNCH.format(root=ROOT, data=data, ck=os.path.join(d, "ck"), train=os.path.join(ROOT, "train.py")))
+            f.write(LAUNCH.format(root=ROOT, data=data, ck=os.path.join(d, "ck"), train=emvryx_paths.script("train.py")))
 
         def run(iters, *extra):
             r = subprocess.run([sys.executable, launch, "--version", "vtiny", *extra], capture_output=True, text=True,

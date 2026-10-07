@@ -4,21 +4,21 @@ The old lessons (`data/v3/chat.jsonl`) were written for the tiny from-scratch mo
 
 ## 1. Build the lessons (once, any computer; needs `pip install datasets` and internet)
 
-    python make_chat_data_qwen.py
+    python data_prep/make_chat_data_qwen.py
 
 Writes `data/qwen/chat.jsonl` (about 12-17K conversations) and prints the kinds and an estimate of optimizer steps. Estimates only; real speed is shown by the pilot.
 
 ## 2. Train one model (pilot first, new folders so the old results stay)
 
-    python finetune_open.py --model apogee-2 --pilot --data data/qwen/chat.jsonl --grad_accum 2
-    python finetune_open.py --model apogee-2 --data data/qwen/chat.jsonl --out checkpoints/dev/open/apogee-2q --export export/open/apogee-2q/my-ai --grad_accum 2
+    python training/finetune_open.py --model apogee-2 --pilot --data data/qwen/chat.jsonl --grad_accum 2
+    python training/finetune_open.py --model apogee-2 --data data/qwen/chat.jsonl --out checkpoints/dev/open/apogee-2q --export export/open/apogee-2q/my-ai --grad_accum 2
 
 Same for `solstice-2`, `equinox-2`, `flare-2.5` (change the name and the folder names: `solstice-2q` ...). Each model is trained on its own, from the Qwen base, never from another Emvryx model.
 
 ## 3. Check it
 
-    python exam_open.py --model apogee-2 --adapter checkpoints/dev/open/apogee-2q/adapter
-    python evaluate_open.py --model apogee-2 --adapter checkpoints/dev/open/apogee-2q/adapter
+    python evaluation/exam_open.py --model apogee-2 --adapter checkpoints/dev/open/apogee-2q/adapter
+    python evaluation/evaluate_open.py --model apogee-2 --adapter checkpoints/dev/open/apogee-2q/adapter
 
 Ask the same questions that went wrong before (for example "Who is Gordon Ramsey?") and compare with the old version before replacing it.
 
@@ -29,6 +29,6 @@ Ask the same questions that went wrong before (for example "Who is Gordon Ramsey
 
 ## 4. Merge and back up (cloud, one command for all trained models)
 
-    bash wrap_qwen.sh flare-2.5 equinox-2
+    bash scripts/wrap_qwen.sh flare-2.5 equinox-2
 
 Merges each adapter, writes an identity sheet to `logs/<model>q-identity.md`, and uploads to the private Hugging Face repo under `<model>q/my-ai`. Your phone gets a message at each step. Then stop the instance (Stop, not Destroy) and convert to GGUF on your PC.
