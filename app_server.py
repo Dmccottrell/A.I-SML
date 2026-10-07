@@ -96,7 +96,8 @@ PAIR_PAGE = ('<!doctype html><html lang="en"><head><meta charset="utf-8"><meta n
 MAX_DOC_BODY = 15_000_000                              # a document upload (base64): documents.MAX_FILE_BYTES is 10 MB
 MAX_UPLOAD = 30_000_000                                # a project upload (base64): see code_sessions.MAX_IMPORT_BYTES
 MAX_TEXT = 20_000
-EFFORTS = {"quick": 160, "balanced": 320, "deep": 700}          # most words a reply may have, per effort level
+EFFORTS = {"quick": 160, "balanced": 320, "deep": 700}          # most tokens a reply may have, per effort level (the small from-scratch models)
+OPEN_EFFORTS = {"quick": 512, "balanced": 1536, "deep": 4096}   # the open-base models know and write much more: a code answer was cut off at about 300 tokens
 TEMPERATURE = {"quick": 0.7, "balanced": 0.8, "deep": 0.8}
 DEMO_TEXT = ("hello there this is a demo reply no model is connected yet so i am a stand in the real answer will appear "
              "here once you start the server with a model attached")
@@ -842,7 +843,8 @@ def start_turn(state, who, chat_id, text, model_id, effort, regenerate=False, re
     window = win["window"]
     mode = regen_mode if regenerate else None
     regen_modes.get(mode)                                      # an unknown option is a ValueError (a 400 for the page)
-    max_new = min(EFFORTS[effort], max(32, window // 2), model.get("max_reply_tokens", EFFORTS[effort]))
+    caps = OPEN_EFFORTS if model.get("open") else EFFORTS
+    max_new = min(caps[effort], max(32, window // 2), model.get("max_reply_tokens", caps[effort]))
     if mode:
         max_new = min(regen_modes.length_for(max_new, mode), max(32, window // 2))
     pause = round(chat_polish.pause_for(question, effort) * chat_polish.PAUSE_SCALE[state.get_settings(who["user"])["thinking_pause"]], 2)   # fits the message, then the person's setting

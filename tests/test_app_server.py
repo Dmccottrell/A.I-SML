@@ -389,6 +389,26 @@ class LeavingTheApp(Base):
         self.assertIn("w11", last["content"])                      # the whole reply, not the part written before they left
 
 
+class ReplyLength(Base):
+    made = []
+
+    def factory(model, question):                                  # noqa: N805
+        b = E.FakeBackend()
+        ReplyLength.made.append((model["id"], b))
+        return b
+
+    factory = staticmethod(factory)
+
+    def test_open_models_may_write_long_answers(self):
+        ReplyLength.made.clear()
+        owner = self.owner
+        for model in ("flare-2", "equinox-2"):
+            self.ask(owner, self.new_chat(owner), "hello", model=model)
+        limits = {mid: b.limits[-1] for mid, b in ReplyLength.made}
+        self.assertEqual(limits["flare-2"], 320)                     # the small from-scratch model: unchanged
+        self.assertEqual(limits["equinox-2"], 1536)                  # an open-base model: room for a whole code answer
+
+
 class Privacy(Base):
     data_dir = True
 
