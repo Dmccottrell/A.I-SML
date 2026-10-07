@@ -258,10 +258,10 @@ class ChatStore:
         return [dict(zip(("id", "role", "content", "model_id", "status"), r)) for r in rows]
 
     def list_chats(self):
-        """Saved chats, newest first: [{"id", "title", "updated"}]. Private chats are never listed."""
-        rows = self.db.execute("SELECT c.id, c.title, COALESCE(MAX(m.created), c.created) AS t FROM chats c "
+        """Saved chats, newest first: [{"id", "title", "updated", "skill"}]. Private chats are never listed."""
+        rows = self.db.execute("SELECT c.id, c.title, COALESCE(MAX(m.created), c.created) AS t, c.skill FROM chats c "
                                "LEFT JOIN messages m ON m.chat_id = c.id GROUP BY c.id ORDER BY t DESC, c.id DESC").fetchall()
-        return [{"id": r[0], "title": r[1], "updated": r[2]} for r in rows]
+        return [{"id": r[0], "title": r[1], "updated": r[2], "skill": r[3] or ""} for r in rows]
 
     def exists(self, chat_id):
         if chat_id < 0:

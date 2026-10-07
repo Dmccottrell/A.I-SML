@@ -471,12 +471,16 @@ function renderAll() {
 function renderChats() {
   const box = $('chatList'); box.replaceChildren();
   const day = new Date(); day.setHours(0, 0, 0, 0);
-  const today = S.state.chats.filter((c) => c.updated * 1000 >= day.getTime()), earlier = S.state.chats.filter((c) => c.updated * 1000 < day.getTime());
+  const plain = S.state.chats.filter((c) => !c.skill);
+  const today = plain.filter((c) => c.updated * 1000 >= day.getTime()), earlier = plain.filter((c) => c.updated * 1000 < day.getTime());
   const group = (name, list) => { if (!list.length) return; box.append(el('div', {class: 'label'}, name));
     for (const c of list) box.append(el('div', {class: 'row' + (c.id === S.chatId ? ' cur' : '')},
       el('button', {class: 'open', onclick: () => openChat(c.id)}, c.title),
       el('button', {class: 'del', 'aria-label': 'Delete chat ' + c.title, onclick: () => delChat(c)}, '×'))); };
   group('TODAY', today); group('EARLIER', earlier);
+  const names = {teacher: 'TEACHER MODE', study: 'STUDY HELPER'};   // chats started from a skill or Teacher mode keep their own list, so they never mix with ordinary chats
+  const seen = [...new Set(S.state.chats.filter((c) => c.skill).map((c) => c.skill))];
+  for (const id of seen) group(names[id] || (((S.skills.find((k) => k.id === id) || {}).name) || id).toUpperCase(), S.state.chats.filter((c) => c.skill === id));
   if (!S.state.chats.length) box.append(el('div', {class: 'label'}, 'NO CHATS YET'));
 }
 const ICONS = {code: 'M8 8l-4 4 4 4M16 8l4 4-4 4M13.5 6l-3 12', lock: 'M7 11V8a5 5 0 0 1 10 0v3M6 11h12v9H6z', chart: 'M5 20V10M12 20V4M19 20v-7',
