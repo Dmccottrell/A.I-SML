@@ -55,6 +55,8 @@ import code_sessions
 import harness
 import vryxcode
 import app_skills
+import export_doc
+import teacher_mode
 import connected_apps
 import github_link
 import lookup_auto
@@ -1251,6 +1253,8 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 return self._send(200, self.state.get_settings(who["user"]))
             if path == "/api/skills":
                 return self._send(200, app_skills.catalog())
+            if path == "/api/teacher/tools":
+                return self._send(200, teacher_mode.catalog())
             if path == "/api/apps":
                 cat = connected_apps.catalog()
                 cat["connections"] = {"github": dict(self.state.github.public(who["user"]), device=bool(self.state.github_client_id()),
@@ -1352,6 +1356,30 @@ class Handler(http.server.BaseHTTPRequestHandler):
                     return self._send(400, {"code": "bad_skill", "message": "That skill isn't available."})
                 cid = self.state.store(who["user"]).new_chat(private=bool(body.get("private")), skill=skill)
                 return self._send(200, {"id": cid})
+            if path == "/api/teacher/calc":
+                try:
+                    return self._send(200, teacher_mode.calculate(str(body.get("tool", "")), body.get("values") or {}))
+                except ValueError as e:
+                    return self._send(400, {"code": "bad_numbers", "message": str(e)})
+            if path == "/api/teacher/prompt":
+                try:
+                    return self._send(200, {"prompt": teacher_mode.fill(str(body.get("tool", "")), body.get("values") or {}),
+                                            "skill": "teacher" if teacher_mode.BY_ID[str(body["tool"])]["side"] == "teacher" else "study"})
+                except (ValueError, KeyError):
+                    return self._send(400, {"code": "bad_tool", "message": "That tool doesn't exist."})
+            if path == "/api/export-doc":
+                text = str(body.get("text", ""))
+                ext = "." + str(body.get("format", "pdf")).lower().lstrip(".")
+                if not text.strip() or len(text) > 200_000:
+                    return self._send(400, {"code": "empty", "message": "There is nothing to save."})
+                if ext not in export_doc.MIME:
+                    return self._send(400, {"code": "bad_format", "message": "Pick PDF, Word or Markdown."})
+                try:
+                    data, mime, title = export_doc.to_bytes(text, ext)
+                except RuntimeError as e:
+                    return self._send(501, {"code": "needs_package", "message": str(e)})
+                name = re.sub(r"[^A-Za-z0-9 _-]", "", str(body.get("title") or title)).strip()[:60] or "document"
+                return self._send(200, data, mime, {"Content-Disposition": f'attachment; filename="{name}{ext}"'})
             m = re.fullmatch(r"/api/chats/(-?\d+)/send", path)
             if m:
                 return self.api_send(who, int(m.group(1)), body)

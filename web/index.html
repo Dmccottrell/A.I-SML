@@ -213,6 +213,12 @@ svg .core { fill: var(--core); stroke: var(--sun); stroke-width: 3; transition: 
 .dialog > * { flex-shrink: 0; }   /* a long list scrolls instead of squashing its rows on top of each other */
 .dialog h2 { margin: 0; font: 600 22px 'Sora', sans-serif; }
 .dialog input[type=text], .dialog input[type=password] { background: var(--bg); border: 1px solid var(--line); border-radius: 12px; color: var(--text); padding: 12px; font: inherit; width: 100%; min-height: 44px; }
+.dialog select, .dialog input[type=number], .dialog textarea.f { background: var(--bg); border: 1px solid var(--line); border-radius: 12px; color: var(--text); padding: 12px; font: inherit; width: 100%; min-height: 44px; }
+.dialog textarea.f { min-height: 110px; resize: vertical; }
+.dialog label.f { display: flex; flex-direction: column; gap: 6px; font-weight: 600; font-size: 14px; }
+.tabs { display: flex; gap: 8px; } .tabs .chip.on { background: var(--accent); color: var(--onaccent); border-color: var(--accent); }
+.report { white-space: pre-wrap; background: var(--bg); border: 1px solid var(--line); border-radius: 14px; padding: 14px; font-size: 15px; line-height: 1.5; }
+.btnrow { display: flex; flex-wrap: wrap; gap: 8px; } .btnrow .btn { flex: 1 1 140px; }
 .btn { background: var(--accent); color: var(--onaccent); border: 0; border-radius: 12px; min-height: 44px; padding: 0 18px; font-weight: 600; }
 .btn.ghost { background: transparent; color: var(--text); border: 1px solid var(--line); }
 .btn.danger { background: transparent; color: var(--danger); border: 1px solid var(--danger); }
@@ -470,6 +476,7 @@ function renderChats() {
 }
 const ICONS = {code: 'M8 8l-4 4 4 4M16 8l4 4-4 4M13.5 6l-3 12', lock: 'M7 11V8a5 5 0 0 1 10 0v3M6 11h12v9H6z', chart: 'M5 20V10M12 20V4M19 20v-7',
                brain: 'M12 4a3 3 0 0 0-3 3 3 3 0 0 0-3 3 3 3 0 0 0 1 5 3 3 0 0 0 5 2zM12 4a3 3 0 0 1 3 3 3 3 0 0 1 3 3 3 3 0 0 1-1 5 3 3 0 0 1-5 2z',
+               pencil: 'M4 20l1-4L16 5l3 3L8 19zM14 7l3 3',
                spark: 'M12 3l2.2 5.8L20 11l-5.8 2.2L12 19l-2.2-5.8L4 11l5.8-2.2z',
                gear: 'M12 9a3 3 0 1 0 0 6 3 3 0 0 0 0-6zM12 3v3M12 18v3M3 12h3M18 12h3M5.6 5.6l2.1 2.1M16.3 16.3l2.1 2.1M5.6 18.4l2.1-2.1M16.3 7.7l2.1-2.1'};
 function icon(name) {
@@ -482,7 +489,7 @@ function icon(name) {
 function closeAcct() { $('acctMenu').hidden = true; $('account').setAttribute('aria-expanded', 'false'); }
 function renderLinks() {   // two tools in the list; Usage, Memory and Settings live in the account menu (Skills, Documents and Connected apps are hidden until they work)
   const mk = (ico, name, note, fn) => el('button', {class: 'link', onclick: () => { document.body.classList.remove('menu-open'); closeAcct(); fn(); }}, icon(ico), el('span', {}, name), note ? el('small', {}, note) : '');
-  $('links').replaceChildren(mk('code', 'VryxCode', '', openCode), mk('spark', 'Skills', '', openSkills), mk('lock', 'Private chat', 'Never saved', () => newChat(true)));
+  $('links').replaceChildren(mk('code', 'VryxCode', '', openCode), mk('spark', 'Skills', '', openSkills), mk('pencil', 'Teacher mode', '', () => openTeacher()), mk('lock', 'Private chat', 'Never saved', () => newChat(true)));
   $('acctMenu').replaceChildren(mk('chart', 'Usage', '', openUsage), mk('brain', 'Memory', '', openMemory), mk('gear', 'Settings', '', openSettings));
 }
 $('account').onclick = (e) => { e.stopPropagation(); const m = $('acctMenu'); m.hidden = !m.hidden; $('account').setAttribute('aria-expanded', String(!m.hidden)); };
@@ -516,6 +523,7 @@ function bubble(m, last) {
   const acts = el('div', {class: 'acts'}, el('button', {class: 'chip', onclick: (e) => { navigator.clipboard && navigator.clipboard.writeText(m.content); e.target.textContent = 'Copied'; setTimeout(() => e.target.textContent = 'Copy', 1500); }}, 'Copy'));
   if (S.chatId != null && S.chatId >= 0 && m.status === 'done') acts.append(el('button', {class: 'chip', title: 'Right answer: keep the notes it used, so it can answer this again offline', onclick: async (e) => {
     const b = e.currentTarget; b.disabled = true; try { const r = await post('/api/chats/' + S.chatId + '/messages/' + m.id + '/like'); const j = await r.json(); b.textContent = j.saved ? 'Saved' : 'Thanks'; } catch (x) { b.disabled = false; } }}, '\ud83d\udc4d Right'));
+  if (m.status === 'done' && (S.skill || m.content.length > 300)) acts.append(el('button', {class: 'chip', onclick: () => saveAs(m.content)}, 'Save as\u2026'));
   if (last && !S.busy) acts.append(el('button', {class: 'chip', 'aria-haspopup': 'true', onclick: (e) => regenMenu(e.currentTarget)}, 'Regenerate \u25be'));
   return el('div', {class: 'msg ai', 'data-id': m.id}, meta, el('div', {class: 'bubble'}, m.content), acts);
 }
@@ -632,6 +640,72 @@ function dialog(children, closeText, extra) {
   const m = el('div', {class: 'modal', role: 'dialog', 'aria-modal': 'true', onclick: (e) => { if (e.target === m) m.remove(); }},
     el('div', {class: 'dialog'}, ...children, extra || null, el('button', {class: 'btn ghost', onclick: () => m.remove()}, closeText || 'Close')));
   $('dialogs').append(m); return m;
+}
+
+// ---------------------------------------------------------------- saving documents (PDF, Word, Google Docs)
+function closeModals() { document.querySelectorAll('.modal').forEach((m) => m.remove()); }
+async function downloadDoc(text, format, title) {
+  const r = await post('/api/export-doc', {text, format, title});
+  if (!r.ok) { const j = await r.json().catch(() => ({})); alert(j.message || 'Could not save that.'); return false; }
+  const blob = await r.blob(), a = el('a', {href: URL.createObjectURL(blob), download: ((r.headers.get('Content-Disposition') || '').match(/filename="([^"]+)"/) || [])[1] || 'document.' + format});
+  document.body.append(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 4000); return true;
+}
+function saveAs(text, title) {
+  const note = el('div', {style: 'color:var(--muted);font-size:14px'}, 'Worksheets keep the answer key and teacher notes on their own pages, so you can print page 1 for the class.');
+  const done = (msg) => note.replaceChildren(msg);
+  const m = dialog([el('h2', {}, 'Save as'), note, el('div', {class: 'btnrow'},
+    el('button', {class: 'btn', onclick: async () => { if (await downloadDoc(text, 'pdf', title)) done('Saved as a PDF.'); }}, 'PDF'),
+    el('button', {class: 'btn', onclick: async () => { if (await downloadDoc(text, 'docx', title)) done('Saved as a Word file.'); }}, 'Word'),
+    el('button', {class: 'btn', onclick: async () => { if (await downloadDoc(text, 'docx', title)) { done('Saved as a Word file. To make it a Google Doc: on a phone, tap the file and choose Docs; on a computer open docs.google.com, then File > Open > Upload and pick it.'); window.open('https://docs.google.com/document/', '_blank', 'noopener'); } }}, 'Google Docs'),
+    el('button', {class: 'btn ghost', onclick: () => { navigator.clipboard && navigator.clipboard.writeText(text); done('Copied.'); }}, 'Copy text'))], 'Close');
+}
+
+// ---------------------------------------------------------------- teacher mode
+async function loadTeacher() { if (!S.tools) S.tools = (await (await api('/api/teacher/tools')).json()).tools; return S.tools; }
+async function openTeacher(side) {
+  const tools = await loadTeacher(); side = side || S.teacherSide || 'teacher'; S.teacherSide = side; closeModals(); document.body.classList.remove('menu-open');
+  const tab = (id, label) => el('button', {class: 'chip' + (side === id ? ' on' : ''), onclick: () => openTeacher(id)}, label);
+  const kids = [el('h2', {}, 'Teacher mode'), el('div', {style: 'color:var(--muted)'}, side === 'teacher' ? 'Make classroom materials, check the numbers and get suggestions. Every number comes from an exact calculator, never a guess.' : 'Learn it, practise it and plan your studying. It guides you to the answer instead of just giving it.'),
+    el('div', {class: 'tabs'}, tab('teacher', 'For teachers'), tab('student', 'For students'))];
+  for (const [kind, label] of [['make', 'MAKE'], ['calc', 'CALCULATE']]) {
+    const list = tools.filter((t) => t.side === side && t.kind === kind); if (!list.length) continue;
+    kids.push(el('div', {class: 'label', style: 'padding:4px 0 0'}, label));
+    for (const t of list) kids.push(el('button', {class: 'opt', onclick: () => openTool(t)}, el('span', {class: 'grow'}, el('b', {}, t.name), el('small', {}, t.blurb))));
+  }
+  dialog(kids, 'Close');
+}
+function openTool(t) {
+  closeModals();
+  const inputs = {}, fields = t.fields.map((f) => {
+    let c;
+    if (f.type === 'choice') { c = el('select', {}); for (const o of f.options) c.append(el('option', {value: o, selected: o === f.default ? 'selected' : null}, o)); }
+    else if (f.type === 'area') c = el('textarea', {class: 'f', placeholder: f.placeholder || ''}, '');
+    else if (f.type === 'number') c = el('input', {type: 'number', value: f.default, min: f.min, max: f.max, inputmode: 'decimal'});
+    else c = el('input', {type: 'text', value: f.default || '', placeholder: f.placeholder || ''});
+    inputs[f.key] = c; return el('label', {class: 'f'}, f.label, c);
+  });
+  const err = el('div', {style: 'color:var(--danger);font-size:14px', role: 'alert'});
+  const values = () => Object.fromEntries(Object.entries(inputs).map(([k, c]) => [k, c.value]));
+  const go = el('button', {class: 'btn', onclick: async () => {
+    go.disabled = true; err.textContent = '';
+    try { t.kind === 'make' ? await runMake(t, values()) : await runCalc(t, values(), err); } finally { go.disabled = false; }
+  }}, t.kind === 'make' ? 'Make it' : 'Calculate');
+  dialog([el('h2', {}, t.name), el('div', {style: 'color:var(--muted)'}, t.blurb), ...fields, err, go,
+    el('button', {class: 'btn ghost', onclick: () => openTeacher(t.side)}, 'Back')], 'Close');
+}
+async function runMake(t, values) {
+  const r = await post('/api/teacher/prompt', {tool: t.id, values}); const j = await r.json(); if (!r.ok) return alert(j.message || 'Something went wrong.');
+  closeModals(); await newChat(false, j.skill); input.value = j.prompt; send();
+}
+async function runCalc(t, values, err) {
+  const r = await post('/api/teacher/calc', {tool: t.id, values}); const j = await r.json();
+  if (!r.ok) { err.textContent = j.message || 'Check the numbers and try again.'; return; }
+  closeModals();
+  const shown = j.text.split('\n').filter((l) => !l.startsWith('# ')).map((l) => l.replace(/^## /, '').replace(/^- /, '\u2022 ')).join('\n');
+  const kids = [el('h2', {}, j.title), el('div', {class: 'report'}, shown)], row = el('div', {class: 'btnrow'});
+  if (j.advice_prompt) row.append(el('button', {class: 'btn', onclick: async () => { closeModals(); await newChat(false, t.side === 'teacher' ? 'teacher' : 'study'); input.value = j.advice_prompt; send(); }}, 'Get suggestions'));
+  row.append(el('button', {class: 'btn ghost', onclick: () => saveAs(j.text, j.title)}, 'Save as\u2026'), el('button', {class: 'btn ghost', onclick: () => openTool(t)}, 'Change numbers'));
+  dialog([...kids, row], 'Close');
 }
 
 // ---------------------------------------------------------------- skills

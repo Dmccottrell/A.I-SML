@@ -44,6 +44,15 @@ class Section:
         return bool(re.search(r"\banswer key\b|\banswers\b", self.heading, re.I))
 
     @property
+    def is_notes(self):
+        """Pages for the teacher only (notes, tips, suggestions): they start on a new page, after the part students use."""
+        return bool(re.search(r"\bteacher'?s? notes?\b|\bnotes for (the )?teacher\b|\bteaching tips\b|\bsuggestions\b|\brecommendations\b", self.heading, re.I))
+
+    @property
+    def starts_page(self):
+        return self.is_key or self.is_notes
+
+    @property
     def is_questions(self):
         return bool(re.search(r"\bquestions?\b|\bproblems?\b|\bpractice\b|\bexercises?\b", self.heading, re.I))
 
@@ -72,12 +81,21 @@ def parse(text):
     """Doc from the model's text. Lines that don't match anything special become paragraphs."""
     doc = Doc()
     cur = Section()
+    rows = None
     doc.sections.append(cur)
     for raw in text.replace("\r\n", "\n").split("\n"):
         line = raw.strip()
         if not line:
             continue
         line = re.sub(r"\*\*(.+?)\*\*", r"\1", line)                  # **bold** -> plain
+        if line.startswith("|") and line.count("|") >= 2:                 # a table row: | a | b |
+            cells = [c.strip() for c in line.strip("|").split("|")]
+            if all(re.fullmatch(r":?-{2,}:?", c) for c in cells if c):    # the |---|---| line under the header
+                continue
+            if not (cur.blocks and cur.blocks[-1][0] == "table"):
+                cur.blocks.append(("table", []))
+            cur.blocks[-1][1].append(cells)
+            continue
         if line.startswith("# ") and not doc.title:
             doc.title = line[2:].strip()
             continue
@@ -133,7 +151,7 @@ def to_pdf(doc, path):
         text("Name: ______________________________    Date: ______________", 13)
     pdf.ln(4)
     for sec in doc.sections:
-        if sec.is_key:
+        if sec.starts_page:
             pdf.add_page()
             text(doc.title, 11, "I")                                  # which worksheet this key belongs to
         if sec.heading:
@@ -144,10 +162,19 @@ def to_pdf(doc, path):
             if kind == "para":
                 text(v)
                 pdf.ln(1.5)
+            elif kind == "table":
+                pdf.set_font("Helvetica", "", 12)
+                width = max(len(r) for r in v)
+                with pdf.table(first_row_as_headings=True, line_height=7) as table:
+                    for r in v:
+                        row = table.row()
+                        for c in (r + [""] * width)[:width]:
+                            row.cell(_latin1(c))
+                pdf.ln(3)
             else:
                 for i, item in enumerate(v, 1):
                     text((f"{i}. " if kind == "numbered" else "-  ") + item, indent=2)
-                    if kind == "numbered" and sec.is_questions and not sec.is_key:
+                    if kind == "numbered" and sec.is_questions and not sec.starts_page:
                         pdf.ln(5 if "____" in item else 16)          # room to write the answer
                     else:
                         pdf.ln(1.5)
@@ -164,17 +191,25 @@ def to_docx(doc, path):
     if doc.for_students:
         d.add_paragraph("Name: ______________________________    Date: ______________")
     for sec in doc.sections:
-        if sec.is_key:
+        if sec.starts_page:
             d.add_paragraph().add_run().add_break(WD_BREAK.PAGE)
         if sec.heading:
             d.add_heading(sec.heading, level=1)
         for kind, v in sec.blocks:
             if kind == "para":
                 d.add_paragraph(v)
+            elif kind == "table":
+                width = max(len(r) for r in v)
+                t = d.add_table(rows=len(v), cols=width)
+                t.style = "Table Grid"
+                for ri, r in enumerate(v):
+                    for ci, c in enumerate((r + [""] * width)[:width]):
+                        t.cell(ri, ci).text = c
+                d.add_paragraph("")
             else:
                 for i, item in enumerate(v, 1):
                     d.add_paragraph((f"{i}. " if kind == "numbered" else "• ") + item)
-                    if kind == "numbered" and sec.is_questions and not sec.is_key and "____" not in item:
+                    if kind == "numbered" and sec.is_questions and not sec.starts_page and "____" not in item:
                         d.add_paragraph("")                           # room to write the answer
     d.save(path)
 
@@ -189,6 +224,10 @@ def to_markdown(doc):
         for kind, v in sec.blocks:
             if kind == "para":
                 out += [v, ""]
+            elif kind == "table":
+                width = max(len(r) for r in v)
+                rows = [(r + [""] * width)[:width] for r in v]
+                out += ["| " + " | ".join(rows[0]) + " |", "|" + "---|" * width] + ["| " + " | ".join(r) + " |" for r in rows[1:]] + [""]
             else:
                 out += [(f"{i}. " if kind == "numbered" else "- ") + it for i, it in enumerate(v, 1)] + [""]
     return "\n".join(out).rstrip() + "\n"
@@ -213,6 +252,24 @@ def export(text, path):
     except ImportError as e:
         raise SystemExit(f"saving {ext} files needs an extra package: pip install fpdf2 python-docx ({e})") from None
     return path
+
+
+MIME = {".pdf": "application/pdf", ".md": "text/markdown; charset=utf-8", ".txt": "text/plain; charset=utf-8",
+        ".docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document"}
+
+
+def to_bytes(text, ext):
+    """(file bytes, mime type, the document's title) for the chat app's Save as PDF / Word. A missing package is a RuntimeError the page can show."""
+    import tempfile
+    with tempfile.TemporaryDirectory() as tmp:
+        path = os.path.join(tmp, "doc" + ext)
+        try:
+            export(text, path)
+        except SystemExit as e:
+            raise RuntimeError(str(e)) from None
+        with open(path, "rb") as f:
+            data = f.read()
+    return data, MIME[ext], parse(text).title
 
 
 def safe_name(name, default="document.pdf"):
