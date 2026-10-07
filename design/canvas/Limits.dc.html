@@ -42,9 +42,9 @@ body{margin:0}
 <div style="display: flex; justify-content: space-between"><b>1. The tank</b><span style="color: var(--muted); font-size: 14px">short-term: how much at once</span></div>
 <div style="display: flex; gap: 14px">
 <div style="flex: 1"><label class="lab" for="cap">CAPACITY (TOKENS)</label><input id="cap" class="fld" value="{{cap}}"></div>
-<div style="flex: 1"><label class="lab" for="refill">REFILLS (TOKENS PER HOUR)</label><input id="refill" class="fld" value="{{refill}}"></div>
+<div style="flex: 1"><label class="lab" for="refill">FULL AGAIN AFTER (HOURS)</label><input id="refill" class="fld" value="6"></div>
 </div>
-<div style="color: var(--muted); font-size: 14px">Empty to full in 8 hours. It refills steadily, so there is no &ldquo;wait for the reset&rdquo; cliff.</div>
+<div style="color: var(--muted); font-size: 14px">The first message starts a window, and the tank is full again exactly this many hours later (6 by default), all at once. The tank only goes down while people chat.</div>
 </div>
 
 <div style="background: var(--surface); border: 1px solid var(--line); border-radius: 20px; padding: 20px 24px; display: flex; flex-direction: column; gap: 12px">

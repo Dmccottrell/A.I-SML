@@ -1,0 +1,33 @@
+# Changelog
+
+What changed, newest first. Measured numbers live in [BENCHMARKS.md](BENCHMARKS.md); each model's details are in [VERSIONS.md](VERSIONS.md).
+
+## October 2026 (late)
+
+### Models
+- **All four open-base models were retrained with the Qwen-native lessons** (`data/qwen/chat.jsonl`, 10,419 chats plus 1,000 corrected identity lessons; see [QWEN_LESSONS.md](QWEN_LESSONS.md)). Cloud runs on rented GPUs, each backed up to the private Hugging Face repo.
+- **Apogee 2 (Qwen3-14B) is trained.** Identity 16/16. Its 4-bit file (Q4_K_M) is 8.4 GB instead of 28.2 GB; it is in the app as "planned" until the file is on the PC.
+- **Measured (full HellaSwag):** Flare 2.5 **65.3%** (plain base 65.6%), Equinox 2 **69.1%**. Solstice 2 73.6% (base 71.9%). Identity 16/16 on Equinox 2, Solstice 2 and Apogee 2.
+- Rules sheet: Flare 22/30 (base 23), Equinox 24/30 (base 7), Solstice 26/30 (base 9). MBPP: Equinox 62%, Solstice 66%. VryxCode exercises (10): Equinox 4 first try / 5 after a retry, Solstice 5 / 5.
+- Picker taglines: Flare "Fastest", Equinox "Everyday" (the one to leave loaded), Solstice "Stronger", Apogee "Strongest".
+
+### App
+- **Skills**: seven reply styles per chat (study, teacher, writing, story, IT, recipe, planner). [SKILLS.md](SKILLS.md)
+- **Teacher mode**: lesson plans, quizzes, rubrics, parent emails and more; calculators for class stats, weighted grade, needed-on-final, curve, points plan and reading level; save as PDF, Word or Google Docs. [TEACHER_MODE.md](TEACHER_MODE.md)
+- **Documents**: upload PDF, Word or text files (10 MB each, 40 per person) and attach them to a chat; answers use them first. [DOCUMENTS.md](DOCUMENTS.md)
+- **Live facts**: about 50 free sources (exact maths, dates, time zones, currency, crypto, stocks, sports, weather history, holidays, news, books, recipes, nutrition, earthquakes, filings, papers and more), always labelled with their source and skipped in private chats. [LIVE_DATA.md](LIVE_DATA.md)
+- **Usage tank is a 6-hour window**: your first message starts it; everything refills together six hours later. Pulling updates or restarting no longer refills it.
+- The app reopens the chat you were last in; the sidebar is tidier; the lookup falls back correctly for "look up online"; cloud commands were added to the docs.
+
+### Repository
+- Code moved into folders: `app/`, `coding/`, `core/`, `training/`, `data_prep/`, `evaluation/`, `tools/`, `scripts/`. `app_server.py` stays at the top (the Windows autostart runs it from there). Commands now read `python training/finetune_open.py ...` and `bash scripts/wrap_qwen.sh ...`. The README has a "Where things are" map.
+- 931 tests pass.
+
+### Website
+- Models page: a test-scores table (HellaSwag, identity, rules, MBPP, VryxCode) with base comparisons, updated statuses (Equinox and Solstice beta, Apogee trained and testing).
+- Home page: new cards for looked-up facts, exact numbers, Skills and Teacher mode, documents and VryxCode. Usage and plans pages describe the 6-hour window.
+
+### Lessons learned
+- Hugging Face private storage counts about 15 minutes late after deletes: upload small adapters and the 4-bit file, not the 29 GB merged model.
+- Conversion needs free disk; `llama-quantize` must be built on a fresh cloud machine.
+- Plain Qwen3 bases score near zero on some of our sheets because of the hidden `<think>` block, so those gaps are not quoted as gains.
