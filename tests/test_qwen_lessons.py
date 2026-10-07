@@ -1,4 +1,5 @@
 """The lessons for Qwen-based models: plain facts, honest limits, notes used only when they match, and none of the habits that made Qwen hedge."""
+import os, sys; sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), os.pardir)); import emvryx_paths  # noqa: E402,F401  (the code folders become importable)
 import json
 import os
 import random

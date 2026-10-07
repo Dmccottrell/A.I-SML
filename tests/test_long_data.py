@@ -1,4 +1,5 @@
 """Tests for prepare_long_data.py (no internet needed). Run:  python -m unittest tests.test_long_data -v"""
+import os, sys; sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), os.pardir)); import emvryx_paths  # noqa: E402,F401  (the code folders become importable)
 import itertools
 import os
 import random

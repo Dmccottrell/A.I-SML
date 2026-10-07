@@ -6,7 +6,7 @@ control. You do not need Supabase yet.** (Written Oct 2026. Prices and plan rule
 ## What runs where
 | Piece | What it is | Where it goes | Why |
 |---|---|---|---|
-| **Website** (`site/`: Home, Models, Plans, How usage works, About) | Plain static HTML pages made by `build_site.py` from the designs | **Vercel** | Static pages are exactly what Vercel is for; free to start; every merge to `main` redeploys |
+| **Website** (`site/`: Home, Models, Plans, How usage works, About) | Plain static HTML pages made by `tools/build_site.py` from the designs | **Vercel** | Static pages are exactly what Vercel is for; free to start; every merge to `main` redeploys |
 | **Chat app** (`app_server.py` + `web/`) | A Python server that keeps chats in files (SQLite), counts usage and starts `llama-server` for the model | **Your PC** now; a **rented server** later | It is a long-running process that needs disk, memory and (for big models) a GPU. Vercel runs short, stateless functions with no GPU and no permanent disk, so it can't hold this |
 | **Models** (`.gguf` files) | The trained models | Next to the app server | Too big and too slow for Vercel |
 | **Accounts, payments, cross-device sync** | Not built yet | **Supabase** (later) | See "Do we need Supabase?" |
@@ -43,7 +43,7 @@ needs **no build step**.
 7. **A domain (later):** Project > Settings > Domains > add `emvryx.ai` (or whichever you buy; check it is free first, see
    `docs/APP.md`). Vercel shows the DNS records to add at your registrar.
 
-If the designs change: `python build_site.py`, commit `site/`, merge to `main`. Vercel does the rest.
+If the designs change: `python tools/build_site.py`, commit `site/`, merge to `main`. Vercel does the rest.
 
 Plan note: Vercel's free **Hobby** plan is for personal, non-commercial use. The moment you charge for Pro or Mega, move the site
 to Vercel's paid plan (or another host). Check their current terms.
@@ -97,7 +97,7 @@ Gmail and Indeed connected.
 
 **2. "Connected apps" inside Emvryx (for the people who use it).** A new screen, Menu > Connected apps, lists the apps Emvryx
 will be able to work with (Google Calendar, Gmail, Google Drive, Notion, Slack, GitHub, Vercel, Supabase). **Nothing is
-connected yet**: the list and the rules are built (`connected_apps.py`), and every app says "Coming soon". The rules: off until the
+connected yet**: the list and the rules are built (`app/connected_apps.py`), and every app says "Coming soon". The rules: off until the
 person connects it with their own sign-in; read-only first; anything that sends, posts, edits or deletes needs a tap on Confirm
 every time; Emvryx only sees what an app returns for the question asked; disconnecting deletes the access at once; on-device models
 never send an app's data anywhere. Real connections need sign-in with each service, so they come with accounts (Supabase).
@@ -123,7 +123,7 @@ Today Emvryx is for you and the people you give a key to. Opening it to anyone i
 
 **3. Browser protections (not built).** `Secure` on the cookie (it has HttpOnly and SameSite=Strict already), a Content-Security-Policy and HSTS, an Origin check on every POST (CSRF), and no secrets in URLs (the `?key=` link would go).
 
-**4. VryxCode must not run on the shared machine for strangers.** The sandbox protects against a small model's mistakes, not a hostile user (see `harness.py`). For the public: run each coding session in a throwaway container (Docker with gVisor or a micro-VM) with no network, hard CPU, memory, disk and time limits, a per-person quota, and a separate machine from the models. Until then, keep VryxCode to people you trust (a tier that is off by default).
+**4. VryxCode must not run on the shared machine for strangers.** The sandbox protects against a small model's mistakes, not a hostile user (see `coding/harness.py`). For the public: run each coding session in a throwaway container (Docker with gVisor or a micro-VM) with no network, hard CPU, memory, disk and time limits, a per-person quota, and a separate machine from the models. Until then, keep VryxCode to people you trust (a tier that is off by default).
 
 **5. Connected accounts.** Replace the pasted GitHub token with GitHub's own sign-in (OAuth), encrypt tokens at rest with a server key, show a clear log, and keep pull and push confirmed every time.
 
@@ -138,4 +138,4 @@ Start with 1, 2 and 3: they are small. 4 and 6 are the big ones and decide when 
 
 ## Backups on a schedule
 
-Windows (Task Scheduler, daily at 3 AM): Action "Start a program": `python` with arguments `backup_data.py --data .emvryx --out D:\emvryx-backups --keep 14`, start in the project folder. Linux: `0 3 * * * cd /path/to/A.I-SML && python backup_data.py --data .emvryx --out /backups/emvryx --keep 14`. Keep `secret.key` somewhere else (it is not in the zip): without it a restore asks people to connect GitHub again, which is fine. Test a restore once: `python backup_data.py --restore <zip> --to <empty folder>`. See [SECURITY.md](SECURITY.md).
+Windows (Task Scheduler, daily at 3 AM): Action "Start a program": `python` with arguments `tools/backup_data.py --data .emvryx --out D:\emvryx-backups --keep 14`, start in the project folder. Linux: `0 3 * * * cd /path/to/A.I-SML && python tools/backup_data.py --data .emvryx --out /backups/emvryx --keep 14`. Keep `secret.key` somewhere else (it is not in the zip): without it a restore asks people to connect GitHub again, which is fine. Test a restore once: `python tools/backup_data.py --restore <zip> --to <empty folder>`. See [SECURITY.md](SECURITY.md).

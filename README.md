@@ -13,17 +13,17 @@ you and your testers, or public). Where it runs is a choice per chat, not a prop
 | **v3-long** | v3 stretched to 8K → 16K → 32K tokens after it finishes (the rehearsal for v3.5's 75K–100K) | Code ready, tested on small models: see **[docs/LONG_CONTEXT.md](docs/LONG_CONTEXT.md)** |
 | **v3.5** | ~1.12B (24 layers), ~20B tokens (75,000 steps, 8K context), Muon optimizer; then stretched to 32K+ (goal 75K–100K) | Code ready, data build in progress: see **[docs/V3_5.md](docs/V3_5.md)** |
 
-**After v3's pretraining:** average the last snapshots → chat fine-tune (with NEFTune) → DPO → `compare.py --old v2 --new v3`. Steps in [docs/V3.md](docs/V3.md).
+**After v3's pretraining:** average the last snapshots → chat fine-tune (with NEFTune) → DPO → `evaluation/compare.py --old v2 --new v3`. Steps in [docs/V3.md](docs/V3.md).
 
 **Every version builds on the last:** each new one keeps everything the previous could do (the
 lessons, memory, suggestions, lookups and tests are shared code) and must score better on the same
 tests before it replaces it. See [Every version builds on the last](docs/ROADMAP.md#every-version-builds-on-the-last).
 
 Every script takes `--version` (`v1` is the default; `v2`, `v3`, `v3.5`, `v3-long-8k` ...). Settings for each version
-live in `config.py`.
+live in `core/config.py`.
 
 > **Current stage: DEVELOPMENT.** Every script reads and writes only `checkpoints/dev/`
-> and `export/dev/` (set in `stage.py`). Nothing touches staging or production until you
+> and `export/dev/` (set in `training/stage.py`). Nothing touches staging or production until you
 > promote it by hand.
 
 ## Model family names (working names)
@@ -57,72 +57,94 @@ Rules:
 - Other open models may also be used as **helpers beside a model** (a teacher that writes practice examples and grades answers, an optional search model, Whisper and Piper for voice). Only their text or audio output is used.
 - Some training data (for example the smol-smoltalk conversations) was written by other AIs. It shapes the chat *style*.
 
+## Where things are
+
+The code lives in folders by job. Run everything from the project folder, for example `python training/finetune_open.py ...` or `bash scripts/chain_open.sh`.
+
+| Folder | What is in it |
+|---|---|
+| `app_server.py`, `web/` | The Emvryx app: the server (`python app_server.py`) and the chat page. Kept in the project folder because the Windows start-up task runs it from there |
+| `app/` | Everything behind the chat page: reliability and errors, sign-in and plans, usage limits, memory, look-ups (Wikipedia, web search), **live facts**, **Skills**, **Teacher mode**, **Documents**, saving answers as PDF or Word, connected apps |
+| `coding/` | **VryxCode**: the coding assistant, its tools and loop, the safe sandbox, live preview, and the coding benchmarks |
+| `core/` | The model itself: the transformer, tokenizer, chat format, settings for each version, LoRA, and the open-base model list |
+| `training/` | Pretraining, fine-tuning (from scratch and on open bases), preference training, run supervision, backups and cloud hand-off |
+| `data_prep/` | Building the training data and the chat lessons (including the Qwen-native lessons) |
+| `evaluation/` | The exams, test sheets, public benchmarks and the side-by-side comparison |
+| `tools/` | Export and convert (Hugging Face layout, GGUF), generate text, build the website, back up server data |
+| `scripts/` | The shell scripts for cloud runs (`chain_open.sh`, `wrap_qwen.sh`, `bench_all.sh`, `cloud_setup.sh`) |
+| `tests/` | The automatic tests (`python -m unittest discover -s tests`) |
+| `docs/` | The guides: [Family guide](docs/FAMILY_GUIDE.md), versions, roadmap, benchmarks, how each feature works |
+| `site/`, `design/` | The website (built pages and design sources) and the brand |
+| `eval/`, `examples/`, `docker/`, `windows/` | Test sheets, sample data, the VryxCode sandbox image, the Windows start-up installer |
+
+Each script starts with `import emvryx_paths`, which makes all the code folders importable by plain name (`import chat`), so the files did not have to change how they find each other.
+
 ## Files
 
 | File | Phase | What it does |
 |---|---|---|
-| `stage.py` | all | Sets the working stage (`dev`) and its folders |
-| `config.py` | all | Settings for each version (model size, folders, training) |
-| `chat.py` | 6–8 | The chat format, shared by fine-tuning, chat and export |
-| `bigram.py` | 1 | Warm-up: tiny character model that learns from `input.txt` |
-| `tokenizer.py` | 2 | Byte-level BPE tokenizer written from scratch |
-| `model.py` | 3 | The transformer (RMSNorm, RoPE, attention, SwiGLU) |
-| `prepare_data.py` | 4 | v1 data: downloads TinyStories, trains the tokenizer, writes `data/train.bin` / `val.bin` |
-| `prepare_web_data.py` | 4 | v2+ data: streams FineWeb-Edu + Wikipedia (+ code for v3) + TinyStories into `data/<version>/` (resumable) |
-| `prepare_data_v2.py` | 4 | Shortcut for `prepare_web_data.py --version v2` |
-| `train.py` | 5 | Pretraining loop. Ctrl+C pauses; run again to resume. Also trains on several GPUs of one machine (DDP, via torchrun or `run_training.py --gpus N`) |
-| `run_training.py` | 5 | Runs `train.py` and restarts it automatically after a crash (for long runs) |
-| `offload_optim.py` | 5 | AdamW that keeps its memory in system RAM, so a 1B model fits on a 12 GB GPU (v3.5) |
+| `training/stage.py` | all | Sets the working stage (`dev`) and its folders |
+| `core/config.py` | all | Settings for each version (model size, folders, training) |
+| `core/chat.py` | 6–8 | The chat format, shared by fine-tuning, chat and export |
+| `core/bigram.py` | 1 | Warm-up: tiny character model that learns from `examples/input.txt` |
+| `core/tokenizer.py` | 2 | Byte-level BPE tokenizer written from scratch |
+| `core/model.py` | 3 | The transformer (RMSNorm, RoPE, attention, SwiGLU) |
+| `data_prep/prepare_data.py` | 4 | v1 data: downloads TinyStories, trains the tokenizer, writes `data/train.bin` / `val.bin` |
+| `data_prep/prepare_web_data.py` | 4 | v2+ data: streams FineWeb-Edu + Wikipedia (+ code for v3) + TinyStories into `data/<version>/` (resumable) |
+| `data_prep/prepare_data_v2.py` | 4 | Shortcut for `data_prep/prepare_web_data.py --version v2` |
+| `training/train.py` | 5 | Pretraining loop. Ctrl+C pauses; run again to resume. Also trains on several GPUs of one machine (DDP, via torchrun or `training/run_training.py --gpus N`) |
+| `training/run_training.py` | 5 | Runs `training/train.py` and restarts it automatically after a crash (for long runs) |
+| `core/offload_optim.py` | 5 | AdamW that keeps its memory in system RAM, so a 1B model fits on a 12 GB GPU (v3.5) |
 | `docs/CLOUD.md` | - | How to rent a GPU and train there when your PC is off (or for big runs) |
-| `handoff.py` | 5 | Moves a training run between your PC and a rented cloud GPU (one command each way) |
-| `hub_backup.py` | 5 | Off-machine backup of the checkpoint to a private Hugging Face repo (`--hub_backup`), so a rented machine going offline doesn't take the run with it |
-| `notify.py` | 5 | Push messages to your phone about training progress, crashes and finish (free, via ntfy.sh); see `docs/PHONE.md` |
-| `app_errors.py`, `app_engine.py`, `app_download.py` | app | The app's reliability layer: plain-language errors, model choice (too big / PC off), reply guard (length cap, loop detector, Stop), chats saved while they stream, the llama-server client, "Test connection", and resumable checksum-verified downloads |
+| `training/handoff.py` | 5 | Moves a training run between your PC and a rented cloud GPU (one command each way) |
+| `training/hub_backup.py` | 5 | Off-machine backup of the checkpoint to a private Hugging Face repo (`--hub_backup`), so a rented machine going offline doesn't take the run with it |
+| `training/notify.py` | 5 | Push messages to your phone about training progress, crashes and finish (free, via ntfy.sh); see `docs/PHONE.md` |
+| `app/app_errors.py`, `app/app_engine.py`, `app/app_download.py` | app | The app's reliability layer: plain-language errors, model choice (too big / PC off), reply guard (length cap, loop detector, Stop), chats saved while they stream, the llama-server client, "Test connection", and resumable checksum-verified downloads |
 | `design/` | app | The Emvryx website, app and logo concept: logo SVGs, brand colours per model, and the design canvas sources (see `design/README.md`) |
-| `models.json`, `models.py` | app | The app's model list (Ember, Flare, Equinox, Solstice, Apogee, each with its own version) and the "Select model" picker logic; see `docs/APP_SPEC.md` |
-| `harness.py` | 6 | The coding helper's tools and loop (no model needed; tests in `tests/`): safe file/command tools, a safe git subset, syntax diagnostics, project notes (EMVRYX.md / AGENTS.md), hooks with a finish gate, permissions (ask before commits), compaction of long runs, and a tool registry (where MCP tools plug in) |
-| `agent_tasks.py`, `agent_lessons.py`, `make_agent_data.py` | 6 | Coding practice made by our own code: tiny bug-fix projects solved by a scripted solver through the real harness (only passing runs kept). Become chat lessons (`tool_use`, `project_context`, `ask_first`, `too_big`, `compaction`) and `data/v3.5/agent_traces.jsonl` for v3.5's final phase. Run `python make_agent_data.py --version v3.5` before building v3.5's data |
-| `stretch_ladder.py` | 6 | Stretches v3's memory step by step (8K, 16K, 32K, 64K, 128K, 256K) and stops at the first step that fails its long-context tests, so you find how far it can go without wasted training (see `docs/LONG_CONTEXT.md`) |
-| `usage_limits.py`, `limits.json` | 6 | Plans (Free, Pro, Mega), token counting, the tank and the fixed weekly reset, plain numbers for the Usage screen (see `docs/APP_SPEC.md`) |
-| `context_window.py` | 6 | The device check: picks the context window from what the model passed, free memory, speed and the plan |
+| `models.json`, `app/models.py` | app | The app's model list (Ember, Flare, Equinox, Solstice, Apogee, each with its own version) and the "Select model" picker logic; see `docs/APP_SPEC.md` |
+| `coding/harness.py` | 6 | The coding helper's tools and loop (no model needed; tests in `tests/`): safe file/command tools, a safe git subset, syntax diagnostics, project notes (EMVRYX.md / AGENTS.md), hooks with a finish gate, permissions (ask before commits), compaction of long runs, and a tool registry (where MCP tools plug in) |
+| `coding/agent_tasks.py`, `coding/agent_lessons.py`, `coding/make_agent_data.py` | 6 | Coding practice made by our own code: tiny bug-fix projects solved by a scripted solver through the real harness (only passing runs kept). Become chat lessons (`tool_use`, `project_context`, `ask_first`, `too_big`, `compaction`) and `data/v3.5/agent_traces.jsonl` for v3.5's final phase. Run `python coding/make_agent_data.py --version v3.5` before building v3.5's data |
+| `training/stretch_ladder.py` | 6 | Stretches v3's memory step by step (8K, 16K, 32K, 64K, 128K, 256K) and stops at the first step that fails its long-context tests, so you find how far it can go without wasted training (see `docs/LONG_CONTEXT.md`) |
+| `app/usage_limits.py`, `limits.json` | 6 | Plans (Free, Pro, Mega), token counting, the tank and the fixed weekly reset, plain numbers for the Usage screen (see `docs/APP_SPEC.md`) |
+| `app/context_window.py` | 6 | The device check: picks the context window from what the model passed, free memory, speed and the plan |
 | `app_server.py`, `web/` | 6 | The Emvryx app: a web server and chat page (`python app_server.py`), with plans and usage, model picker, thinking animation, private chats and a Usage screen. Demo mode until a model is attached |
-| `effort_router.py` | 6 | "Auto" effort: picks Quick, Balanced or Deep from the message (plain rules, with a reason), and sizes the thinking pause to it |
-| `regen_modes.py` | 6 | The Regenerate menu: try again, a different answer, explain it differently, simpler, more detail, shorter, or three choices |
-| `connected_apps.py` | 6 | The "Connected apps" list and rules (Calendar, Gmail, Drive, Notion, Slack, GitHub, Vercel, Supabase; all coming soon) |
-| `build_site.py`, `site/`, `docs/DEPLOY.md` | 6 | Builds the website designs into static pages for Vercel; DEPLOY.md says what goes where (Vercel, Supabase, the app server) |
-| `muon.py`, `muon_test.py` | 5 | The Muon optimizer (`optimizer="muon"` in config.py; `"muon_cpu"` keeps its memory in RAM so it fits a 12 GB card), and an experiment that measures whether it needs fewer steps than AdamW on our models (~1–2 h on the 4070) |
-| `grow.py`, `growth_test.py` | 6 | Grow a trained model into a deeper one, and an experiment that measures how much training compute that saves (run when the GPU is free) |
-| `generate.py` | 6 | Generate text or chat with your model. Chat options: `--lookup` (Wikipedia notes), `--web` (web search, online mode), `--memory` (remembers you), `--suggest` (reply suggestions), `--context` (memory meter), `--skill` (skill packs) |
-| `make_chat_data.py` | 7 | v1: builds `data/chat.jsonl` fine-tuning examples automatically |
-| `make_chat_data_v2.py` | 7 | v2: builds `data/v2/chat.jsonl` (multi-turn conversations) |
-| `finetune.py` | 7 | Teach it a chat format using the version's `chat.jsonl`. Ctrl+C pauses; run again to resume. NEFTune (a little noise while training, for better answers) is on from v3 |
-| `make_dpo_pairs.py`, `dpo.py` | 7 | Preference training: the chat model answers each question several times, answers are scored by checkable rules (facts from the notes, "I don't know" when right, counts), and it learns to prefer the better one |
-| `bench_open.py` | 7 | Runs public benchmarks (ARC, WinoGrande, MMLU, GSM8K, TruthfulQA, MMLU-Pro, GPQA, IFEval, MATH, MuSR, BBH, HumanEval, MBPP) on an open model, plain base versus our tuned one. See [`docs/BENCHMARKS.md`](docs/BENCHMARKS.md), which also plans the agentic ones (SWE-bench, Terminal-Bench, Aider, LiveCodeBench) |
-| `collect_runs.py` | 7 | Collects training runs for VryxCode: a model works on practice tasks and only the runs that really pass (tests run by us, no test-file edits) are kept as training examples. See [`docs/VRYXCODE.md`](docs/VRYXCODE.md) |
-| `bench_exercises.py`, `vryx_swe.py` | 7 | Agentic coding benchmarks for VryxCode: Aider-style Exercism exercises (two tries, no Docker) and SWE-bench-style patch predictions (scored on a Docker machine). See [`docs/BENCHMARKS.md`](docs/BENCHMARKS.md) |
-| `auth.py`, `mailer.py`, `secret_box.py`, `code_sandbox.py`, `data_tools.py`, `backup_data.py` | 7 | Security and data rights for opening Emvryx to more people: sessions, pairing links and email-code sign-in, rate limits and bans, encrypted tokens, a Docker sandbox for VryxCode, quotas, data export and deletion, backups. See [`docs/SECURITY.md`](docs/SECURITY.md) |
-| `github_link.py` | 7 | GitHub as a connected app: connect with a token, create or link a repository for a VryxCode project, pull and push, with the token kept private on the server. See [`docs/VRYXCODE.md`](docs/VRYXCODE.md) |
-| `code_sessions.py` | 7 | VryxCode inside the chat app: the Code screen's server side (projects, sessions, permission questions). See [`docs/VRYXCODE.md`](docs/VRYXCODE.md) |
-| `vryxcode.py`, `harness.py` | 7 | VryxCode, the coding assistant for Equinox 2 and above: a terminal tool that reads, edits and tests your project in a sandbox, asking before it changes anything. See [`docs/VRYXCODE.md`](docs/VRYXCODE.md) |
-| `finetune_open.py`, `open_models.py`, `open_tokenizer.py`, `exam_open.py`, `evaluate_open.py`, `identity_lessons.py`, `NOTICE` | 7 | Emvryx models built on an open base (Qwen 2.5 1.5B, 32K context): LoRA fine-tune on our lessons, model presets, ChatML tokenizer adapter, the HellaSwag exam for open models, and Qwen's licence notice. See [`docs/OPEN_MODEL.md`](docs/OPEN_MODEL.md) |
-| `lora.py`, `skills.py`, `make_skill_data.py`, `train_skill.py`, `skill_test.py` | 7 | Skill packs (Beta): small LoRA add-ons that make the chat model a specialist. First packs: the **Study helper** and the **Teacher assistant** (`classroom.py`: 3rd-grade requests and checks). Includes a Beta router (`generate.py --chat --skill auto`) and an access toggle (everyone / beta testers / off: `python skills.py access`). See [`docs/SKILLS.md`](docs/SKILLS.md) |
-| `export_doc.py` | 7 | Saves an answer as a printable PDF or an editable Word file (in chat: `save worksheet.pdf`); worksheets get a Name/Date line and the answer key on its own page |
-| `average_ckpts.py` | 6 | Averages the last few snapshots of a run (kept during the fade) for a small free improvement |
-| `evaluate.py` + `eval/prompts.jsonl` | 6–7 | 20-question test sheet that scores a chat model |
-| `exam.py` | 6 | HellaSwag, a public common-sense test (works on pretrained models; compare versions) |
-| `wiki_index.py` | v3 | Searchable copy of Wikipedia for lookups (build + search) |
-| `web_search.py` | v3 | Web search for online mode (Wikipedia's free search or Brave Search); results become notes |
-| `typo_lessons.py` | v3 | Chat lessons for messy typing: copies of ordinary lessons with the user's message typed carelessly (slips, no apostrophes, text-speak) and the clean answer; on by default in `make_chat_data_v3.py` (`--typos`) |
-| `web_lessons.py` | v3 | Chat lessons for reading web results and honest answers about other AIs (used by make_chat_data_v3.py) |
-| `make_teacher_data.py` | v3 | The teacher model (Qwen2.5-7B via llama.cpp, or rented per token from a hosting API) writes practice examples |
-| `make_chat_data_v3.py` | 7 | v3 and every later version (`--version`): chat lessons that fix v2's mistakes (lookups, "I don't know", corrections, instructions, topic switches), remembering you, and reply suggestions |
-| `chat_memory.py` | 7 | Remembers earlier chats and facts about you, on your computer only (`generate.py --chat --memory`); search by keywords and by meaning |
-| `compare.py` | 6 | Side-by-side scoreboard of two versions on the same tests, and whether the new one may replace the old (`--old v3 --new v3.5`) |
-| `eval_long.py` | 6 | Long-context tests (needle in a haystack, multi-fact, code recall, loss by position) with pass/fail rules |
-| `prepare_long_data.py` | 4 | Long-document data (books, long articles, code by repository, recall practice) for stretching the context |
-| `benchmarks.py` | 4–6 | Downloads the public test sets (HellaSwag, GSM8K), used by `exam.py` and to keep them out of training data |
-| `export_hf.py` | 8 | Save in standard Llama layout (safetensors + tokenizer.json) |
-| `to_gguf.py` | 8 | Convert to GGUF with llama.cpp for phone apps |
+| `app/effort_router.py` | 6 | "Auto" effort: picks Quick, Balanced or Deep from the message (plain rules, with a reason), and sizes the thinking pause to it |
+| `app/regen_modes.py` | 6 | The Regenerate menu: try again, a different answer, explain it differently, simpler, more detail, shorter, or three choices |
+| `app/connected_apps.py` | 6 | The "Connected apps" list and rules (Calendar, Gmail, Drive, Notion, Slack, GitHub, Vercel, Supabase; all coming soon) |
+| `tools/build_site.py`, `site/`, `docs/DEPLOY.md` | 6 | Builds the website designs into static pages for Vercel; DEPLOY.md says what goes where (Vercel, Supabase, the app server) |
+| `core/muon.py`, `training/muon_test.py` | 5 | The Muon optimizer (`optimizer="muon"` in core/config.py; `"muon_cpu"` keeps its memory in RAM so it fits a 12 GB card), and an experiment that measures whether it needs fewer steps than AdamW on our models (~1–2 h on the 4070) |
+| `core/grow.py`, `training/growth_test.py` | 6 | Grow a trained model into a deeper one, and an experiment that measures how much training compute that saves (run when the GPU is free) |
+| `tools/generate.py` | 6 | Generate text or chat with your model. Chat options: `--lookup` (Wikipedia notes), `--web` (web search, online mode), `--memory` (remembers you), `--suggest` (reply suggestions), `--context` (memory meter), `--skill` (skill packs) |
+| `data_prep/make_chat_data.py` | 7 | v1: builds `data/chat.jsonl` fine-tuning examples automatically |
+| `data_prep/make_chat_data_v2.py` | 7 | v2: builds `data/v2/chat.jsonl` (multi-turn conversations) |
+| `training/finetune.py` | 7 | Teach it a chat format using the version's `chat.jsonl`. Ctrl+C pauses; run again to resume. NEFTune (a little noise while training, for better answers) is on from v3 |
+| `data_prep/make_dpo_pairs.py`, `training/dpo.py` | 7 | Preference training: the chat model answers each question several times, answers are scored by checkable rules (facts from the notes, "I don't know" when right, counts), and it learns to prefer the better one |
+| `evaluation/bench_open.py` | 7 | Runs public benchmarks (ARC, WinoGrande, MMLU, GSM8K, TruthfulQA, MMLU-Pro, GPQA, IFEval, MATH, MuSR, BBH, HumanEval, MBPP) on an open model, plain base versus our tuned one. See [`docs/BENCHMARKS.md`](docs/BENCHMARKS.md), which also plans the agentic ones (SWE-bench, Terminal-Bench, Aider, LiveCodeBench) |
+| `coding/collect_runs.py` | 7 | Collects training runs for VryxCode: a model works on practice tasks and only the runs that really pass (tests run by us, no test-file edits) are kept as training examples. See [`docs/VRYXCODE.md`](docs/VRYXCODE.md) |
+| `coding/bench_exercises.py`, `coding/vryx_swe.py` | 7 | Agentic coding benchmarks for VryxCode: Aider-style Exercism exercises (two tries, no Docker) and SWE-bench-style patch predictions (scored on a Docker machine). See [`docs/BENCHMARKS.md`](docs/BENCHMARKS.md) |
+| `app/auth.py`, `app/mailer.py`, `app/secret_box.py`, `coding/code_sandbox.py`, `app/data_tools.py`, `tools/backup_data.py` | 7 | Security and data rights for opening Emvryx to more people: sessions, pairing links and email-code sign-in, rate limits and bans, encrypted tokens, a Docker sandbox for VryxCode, quotas, data export and deletion, backups. See [`docs/SECURITY.md`](docs/SECURITY.md) |
+| `app/github_link.py` | 7 | GitHub as a connected app: connect with a token, create or link a repository for a VryxCode project, pull and push, with the token kept private on the server. See [`docs/VRYXCODE.md`](docs/VRYXCODE.md) |
+| `coding/code_sessions.py` | 7 | VryxCode inside the chat app: the Code screen's server side (projects, sessions, permission questions). See [`docs/VRYXCODE.md`](docs/VRYXCODE.md) |
+| `coding/vryxcode.py`, `coding/harness.py` | 7 | VryxCode, the coding assistant for Equinox 2 and above: a terminal tool that reads, edits and tests your project in a sandbox, asking before it changes anything. See [`docs/VRYXCODE.md`](docs/VRYXCODE.md) |
+| `training/finetune_open.py`, `core/open_models.py`, `core/open_tokenizer.py`, `evaluation/exam_open.py`, `evaluation/evaluate_open.py`, `data_prep/identity_lessons.py`, `NOTICE` | 7 | Emvryx models built on an open base (Qwen 2.5 1.5B, 32K context): LoRA fine-tune on our lessons, model presets, ChatML tokenizer adapter, the HellaSwag exam for open models, and Qwen's licence notice. See [`docs/OPEN_MODEL.md`](docs/OPEN_MODEL.md) |
+| `core/lora.py`, `core/skills.py`, `data_prep/make_skill_data.py`, `training/train_skill.py`, `evaluation/skill_test.py` | 7 | Skill packs (Beta): small LoRA add-ons that make the chat model a specialist. First packs: the **Study helper** and the **Teacher assistant** (`evaluation/classroom.py`: 3rd-grade requests and checks). Includes a Beta router (`tools/generate.py --chat --skill auto`) and an access toggle (everyone / beta testers / off: `python core/skills.py access`). See [`docs/SKILLS.md`](docs/SKILLS.md) |
+| `app/export_doc.py` | 7 | Saves an answer as a printable PDF or an editable Word file (in chat: `save worksheet.pdf`); worksheets get a Name/Date line and the answer key on its own page |
+| `training/average_ckpts.py` | 6 | Averages the last few snapshots of a run (kept during the fade) for a small free improvement |
+| `evaluation/evaluate.py` + `eval/prompts.jsonl` | 6–7 | 20-question test sheet that scores a chat model |
+| `evaluation/exam.py` | 6 | HellaSwag, a public common-sense test (works on pretrained models; compare versions) |
+| `data_prep/wiki_index.py` | v3 | Searchable copy of Wikipedia for lookups (build + search) |
+| `app/web_search.py` | v3 | Web search for online mode (Wikipedia's free search or Brave Search); results become notes |
+| `data_prep/typo_lessons.py` | v3 | Chat lessons for messy typing: copies of ordinary lessons with the user's message typed carelessly (slips, no apostrophes, text-speak) and the clean answer; on by default in `data_prep/make_chat_data_v3.py` (`--typos`) |
+| `data_prep/web_lessons.py` | v3 | Chat lessons for reading web results and honest answers about other AIs (used by data_prep/make_chat_data_v3.py) |
+| `data_prep/make_teacher_data.py` | v3 | The teacher model (Qwen2.5-7B via llama.cpp, or rented per token from a hosting API) writes practice examples |
+| `data_prep/make_chat_data_v3.py` | 7 | v3 and every later version (`--version`): chat lessons that fix v2's mistakes (lookups, "I don't know", corrections, instructions, topic switches), remembering you, and reply suggestions |
+| `app/chat_memory.py` | 7 | Remembers earlier chats and facts about you, on your computer only (`tools/generate.py --chat --memory`); search by keywords and by meaning |
+| `evaluation/compare.py` | 6 | Side-by-side scoreboard of two versions on the same tests, and whether the new one may replace the old (`--old v3 --new v3.5`) |
+| `evaluation/eval_long.py` | 6 | Long-context tests (needle in a haystack, multi-fact, code recall, loss by position) with pass/fail rules |
+| `data_prep/prepare_long_data.py` | 4 | Long-document data (books, long articles, code by repository, recall practice) for stretching the context |
+| `evaluation/benchmarks.py` | 4–6 | Downloads the public test sets (HellaSwag, GSM8K), used by `evaluation/exam.py` and to keep them out of training data |
+| `tools/export_hf.py` | 8 | Save in standard Llama layout (safetensors + tokenizer.json) |
+| `tools/to_gguf.py` | 8 | Convert to GGUF with llama.cpp for phone apps |
 | `examples/chat_sample.jsonl` | 7 | Example fine-tuning data format |
 
 Version side-by-side: [`docs/VERSIONS.md`](docs/VERSIONS.md) (with the settings each version trains with). What we learned along the way: [`docs/LESSONS.md`](docs/LESSONS.md). Where the project is heading: [`docs/ROADMAP.md`](docs/ROADMAP.md).
@@ -144,18 +166,18 @@ pip install -r requirements.txt
 python -c "import torch; print(torch.cuda.is_available(), torch.cuda.get_device_name(0))"
 
 # Phases 1-3: sanity checks
-python bigram.py        # loss drops, prints gibberish (expected!)
-python tokenizer.py     # prints "tokenizer OK"
-python model.py         # ~29.5M parameters, initial loss ~9.0
+python core/bigram.py        # loss drops, prints gibberish (expected!)
+python core/tokenizer.py     # prints "tokenizer OK"
+python core/model.py         # ~29.5M parameters, initial loss ~9.0
 
 # Phase 4: data (~2GB download, 30-70 min total, run once)
-python prepare_data.py
+python data_prep/prepare_data.py
 
 # Phase 5: train (5-10 hours on an 8GB card)
-python train.py
+python training/train.py
 
 # Phase 6: try it
-python generate.py --prompt "Once upon a time"
+python tools/generate.py --prompt "Once upon a time"
 ```
 
 Checkpoints land in `checkpoints/dev/`.
@@ -163,12 +185,12 @@ Checkpoints land in `checkpoints/dev/`.
 ## Fine-tuning (Phase 7)
 
 ```powershell
-python make_chat_data.py        # builds data/chat.jsonl (~5,000 examples) from TinyStories
-python finetune.py              # ~5-10 min -> checkpoints/dev/chat.pt
-python generate.py --ckpt checkpoints/dev/chat.pt --chat
+python data_prep/make_chat_data.py        # builds data/chat.jsonl (~5,000 examples) from TinyStories
+python training/finetune.py              # ~5-10 min -> checkpoints/dev/chat.pt
+python tools/generate.py --ckpt checkpoints/dev/chat.pt --chat
 ```
 
-`make_chat_data.py` turns stories into requests like *"Tell me a story about Lily."* and adds
+`data_prep/make_chat_data.py` turns stories into requests like *"Tell me a story about Lily."* and adds
 greetings and "who are you?" answers (edit `BASICS` in the file to change its personality).
 Add your own examples to `data/my_examples.jsonl` (same format as
 `examples/chat_sample.jsonl`); they are included 3 times so they count more.
@@ -177,10 +199,10 @@ Add your own examples to `data/my_examples.jsonl` (same format as
 
 **1. Export and convert (once per model version):**
 ```powershell
-python export_hf.py                          # checkpoints/dev/chat.pt -> export/dev/my-ai
+python tools/export_hf.py                          # checkpoints/dev/chat.pt -> export/dev/my-ai
 git clone https://github.com/ggml-org/llama.cpp ..\llama.cpp
 pip install ..\llama.cpp\gguf-py sentencepiece
-python to_gguf.py --llama_cpp ..\llama.cpp   # -> export/dev/my-ai-f16.gguf (~60MB)
+python tools/to_gguf.py --llama_cpp ..\llama.cpp   # -> export/dev/my-ai-f16.gguf (~60MB)
 ```
 
 **2. Shrink it (quantize):** download the latest Windows build from
@@ -209,25 +231,25 @@ files, pick the `.gguf`, then in its settings:
 The project is currently in **development**: training, fine-tuning, generation and export
 all use `checkpoints/dev/` and `export/dev/`. When a checkpoint passes your tests, copy it
 to `checkpoints/staging/`; when a `.gguf` works well on your phone, copy it to
-`checkpoints/production/`. To work from another stage later, change `STAGE` in `stage.py`. `data/`, `checkpoints/` and `export/` are
+`checkpoints/production/`. To work from another stage later, change `STAGE` in `training/stage.py`. `data/`, `checkpoints/` and `export/` are
 git-ignored because they're large.
 
 ## Troubleshooting
 
 - **`torch.cuda.is_available()` is False**: you installed the CPU-only PyTorch. Uninstall torch and reinstall with the CUDA command.
-- **Out of memory**: in `train.py`, halve `batch_size` and double `grad_accum` (e.g. 16 and 8).
+- **Out of memory**: in `training/train.py`, halve `batch_size` and double `grad_accum` (e.g. 16 and 8).
 - **Loss becomes NaN**: lower `lr_max` to `3e-4`.
 - **Train loss far below val loss**: the model is memorizing; stop early or use more data.
 
 ## Progress checklist
 
 - [ ] Phase 0: GPU verified in PyTorch
-- [ ] Phase 1: `bigram.py` trains and generates
-- [ ] Phase 2: `tokenizer.py` self-test passes
-- [ ] Phase 3: `model.py` shows ~29.5M params, loss ~9.0
+- [ ] Phase 1: `core/bigram.py` trains and generates
+- [ ] Phase 2: `core/tokenizer.py` self-test passes
+- [ ] Phase 3: `core/model.py` shows ~29.5M params, loss ~9.0
 - [ ] Phase 4: `train.bin` and `val.bin` created
 - [ ] Phase 5: val loss at or below ~1.5
-- [ ] Phase 6: coherent stories from `generate.py`; checkpoint in staging
+- [ ] Phase 6: coherent stories from `tools/generate.py`; checkpoint in staging
 - [ ] Phase 7: chat mode answers in the right format
 - [ ] Phase 8: GGUF runs on your phone offline; copied to production
 - [ ] Phase 9: first model trained on your own data

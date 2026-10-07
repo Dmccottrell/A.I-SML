@@ -18,7 +18,7 @@ existing Python features plug in, the two modes, the screens, and the build orde
 ## Principles
 1. **Private first.** Offline is the default. A message leaves the device only when the user turns on
    online mode or web search, and the screen always says when that happens.
-2. **Same behaviour everywhere.** One chat format (`chat.py`'s `CHAT_TEMPLATE`), one notes format,
+2. **Same behaviour everywhere.** One chat format (`core/chat.py`'s `CHAT_TEMPLATE`), one notes format,
    one `.gguf` per model, so a chat acts the same on the phone, the PC and the website.
 3. **Swap the brain, keep the app.** v3 → v3.5 → v4 is a new `.gguf` file (and skill packs), not a new app.
 4. **Honest.** Shows its sources (lookups, web results), says "I don't know", and says which model
@@ -52,13 +52,13 @@ within days and becomes online mode for the phone:
 
 | Feature | Python today | On the phone (offline) |
 |---|---|---|
-| Chat format, notes, memory calls | `chat.py` | Ported to TypeScript (small, shared by every platform) |
-| Memory of you | `chat_memory.py` (SQLite) | Ported (SQLite works on phones); export/import to sync |
-| Wikipedia lookups | `wiki_index.py` (~10 GB) | A small index (most-read articles, ~1-2 GB), or ask the PC when online |
-| Web search | `web_search.py` | Ported (plain web requests); off unless switched on |
-| Skill packs + router + access toggle | `skills.py`, `lora.py` | llama.cpp loads LoRA adapters; router and `can_use()` ported |
-| Save as PDF / Word | `export_doc.py` | First: ask the PC; later a phone PDF library with the same layout |
-| Context meter, reply suggestions | `chat.py` | Ported |
+| Chat format, notes, memory calls | `core/chat.py` | Ported to TypeScript (small, shared by every platform) |
+| Memory of you | `app/chat_memory.py` (SQLite) | Ported (SQLite works on phones); export/import to sync |
+| Wikipedia lookups | `data_prep/wiki_index.py` (~10 GB) | A small index (most-read articles, ~1-2 GB), or ask the PC when online |
+| Web search | `app/web_search.py` | Ported (plain web requests); off unless switched on |
+| Skill packs + router + access toggle | `core/skills.py`, `core/lora.py` | llama.cpp loads LoRA adapters; router and `can_use()` ported |
+| Save as PDF / Word | `app/export_doc.py` | First: ask the PC; later a phone PDF library with the same layout |
+| Context meter, reply suggestions | `core/chat.py` | Ported |
 
 ## Screens (first version)
 1. **Chat:** messages, a "thinking" indicator, sources under answers, a badge saying where it was
@@ -66,7 +66,7 @@ within days and becomes online mode for the phone:
 2. **Chats list:** history, search, delete; private chats that aren't saved.
 3. **Memory:** what it remembers about you; edit, delete, "forget everything"; export/import.
 4. **Skills:** Study helper and Teacher assistant (Betas) with on/off switches; only packs the account
-   may use are shown (`skills.py` access toggle); "Auto" lets the router pick.
+   may use are shown (`core/skills.py` access toggle); "Auto" lets the router pick.
 5. **Settings:** model picker (see below), online mode on/off and the PC's address, web search on/off,
    lookups on/off, text size, dark mode, privacy summary.
 6. **Documents:** saved worksheets and lesson plans (PDF/Word) for the Teacher assistant.
@@ -106,7 +106,7 @@ you choose the model, the effort, and see where each one runs. Works the same on
   "Where models run" below), and each answer says where it ran. A check mark shows the current choice.
 - **The picker sits under the message box**, next to + and Send, so the model is easy to see and change; the chip
   shows just the name.
-- **Auto** (the default) hands the choice to the router (`skills.py` today; a small trained classifier in v4),
+- **Auto** (the default) hands the choice to the router (`core/skills.py` today; a small trained classifier in v4),
   which picks the size, the effort and the skill pack per question, and the chat says what it picked.
 - **Effort:** Quick / Balanced / Deep, the thinking dial from the roadmap. Greyed out for models that can't think yet.
 - **Skills:** the same on/off list as the Skills screen, shortcut included.
@@ -188,7 +188,7 @@ Both are planned, and they are separate choices:
 - Icon, and the badge wording ("Online: your PC" vs "Remote: your PC").
 
 ## Built so far
-`models.json` + `models.py` (the picker's list), `app_errors.py`, `app_engine.py`, `app_download.py` (failure handling, tested in
+`models.json` + `app/models.py` (the picker's list), `app/app_errors.py`, `app/app_engine.py`, `app/app_download.py` (failure handling, tested in
 `tests/test_app_robust.py`). Next: `app_server.py` and the chat page.
-`limits.json` + `usage_limits.py` (plans, token counting, tank, weekly reset), `context_window.py` (the device check for the context window), both tested; `run_turn` can count usage per person.
+`limits.json` + `app/usage_limits.py` (plans, token counting, tank, weekly reset), `app/context_window.py` (the device check for the context window), both tested; `run_turn` can count usage per person.
 `app_server.py` + `web/`: the first working app (browser, PC). Run `python app_server.py`. Android comes next.

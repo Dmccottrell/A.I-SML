@@ -1,4 +1,5 @@
 """Tests for Teacher mode: the calculators, the tool catalog, the exports and the server endpoints."""
+import os, sys; sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), os.pardir)); import emvryx_paths  # noqa: E402,F401  (the code folders become importable)
 import re
 import unittest
 

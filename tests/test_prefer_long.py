@@ -1,4 +1,5 @@
 """Tests for prepare_web_data.prefer_long: short web pages are thinned out for long-context versions, deterministically."""
+import os, sys; sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), os.pardir)); import emvryx_paths  # noqa: E402,F401  (the code folders become importable)
 import unittest
 
 import config

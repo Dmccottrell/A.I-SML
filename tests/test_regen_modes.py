@@ -1,4 +1,5 @@
 """Tests for Regenerate options: regen_modes.py and how the server uses them."""
+import os, sys; sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), os.pardir)); import emvryx_paths  # noqa: E402,F401  (the code folders become importable)
 import unittest
 
 import app_engine as E

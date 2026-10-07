@@ -1,5 +1,6 @@
 """Tests for running a .gguf through llama-server: the launcher, per-model files and tokenizers, the picker's states.
 A tiny fake llama-server (a Python script) stands in for the real one, so the real start / wait / stop / stream path runs."""
+import os, sys; sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), os.pardir)); import emvryx_paths  # noqa: E402,F401  (the code folders become importable)
 import json
 import os
 import stat

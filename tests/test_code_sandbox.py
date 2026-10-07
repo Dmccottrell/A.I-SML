@@ -1,4 +1,5 @@
 """VryxCode's container sandbox, who may use VryxCode, quotas, and the guard on git settings."""
+import os, sys; sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), os.pardir)); import emvryx_paths  # noqa: E402,F401  (the code folders become importable)
 import os
 import subprocess
 import tempfile
@@ -214,7 +215,7 @@ class GitSettingsGuard(unittest.TestCase):
 
 class Image(unittest.TestCase):
     def test_the_dockerfile_is_there_and_is_small_and_plain(self):
-        text = open(os.path.join(os.path.dirname(harness.__file__), "docker", "code-sandbox", "Dockerfile")).read()
+        text = open(os.path.join(emvryx_paths.ROOT, "docker", "code-sandbox", "Dockerfile")).read()
         self.assertIn("FROM python:3.12-slim", text)
         self.assertIn("git", text)
         self.assertNotIn("sudo", text)

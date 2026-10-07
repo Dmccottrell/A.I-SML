@@ -1,4 +1,5 @@
 """Tests for vryx_swe.py (patches for SWE-bench-style issues) and bench_exercises.py (Aider-style exercises), with scripted stand-in models."""
+import os, sys; sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), os.pardir)); import emvryx_paths  # noqa: E402,F401  (the code folders become importable)
 import json
 import os
 import subprocess

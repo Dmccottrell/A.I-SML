@@ -1,7 +1,7 @@
 # Following your training run on your phone
 
 Training runs for days on a machine you can't see (your PC at home, or a rented cloud machine).
-`notify.py` sends short push messages to your phone through **ntfy.sh**: free, no account, and there
+`training/notify.py` sends short push messages to your phone through **ntfy.sh**: free, no account, and there
 are apps for Android and iPhone.
 
 ## Set up (3 minutes, once)
@@ -10,16 +10,16 @@ are apps for Android and iPhone.
    digits). **Topics are public: the random part is your password.** Don't share it or reuse it. Subscribe to it in the app.
 3. Test it from your PC (in the project folder, with `.venv` active):
    ```
-   python notify.py aisml-k4x9q2m7z1 "hello from my PC"
+   python training/notify.py aisml-k4x9q2m7z1 "hello from my PC"
    ```
    Your phone should buzz within a few seconds.
 
 ## Use it
 Add `--notify <your topic>` to the training command:
 ```
-python run_training.py --version v3 --backup_dir C:\ai-backups --backup_every_hours 6 --notify aisml-k4x9q2m7z1
+python training/run_training.py --version v3 --backup_dir C:\ai-backups --backup_every_hours 6 --notify aisml-k4x9q2m7z1
 ```
-For the cloud, add it to the handoff command: `python handoff.py up --host ... --port ... --start --notify aisml-k4x9q2m7z1`.
+For the cloud, add it to the handoff command: `python training/handoff.py up --host ... --port ... --start --notify aisml-k4x9q2m7z1`.
 (Or set the `NTFY_TOPIC` environment variable instead of typing it every time.)
 
 ## What you get

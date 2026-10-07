@@ -1,4 +1,5 @@
 """Memory shared by every model: what the app learns about a person and gives to whichever model answers."""
+import os, sys; sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), os.pardir)); import emvryx_paths  # noqa: E402,F401  (the code folders become importable)
 import json
 import unittest
 

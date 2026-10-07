@@ -11,10 +11,10 @@ tests, and what "done" means for the first version).
 ### 1. A model runner (the engine)
 | Need | Detail |
 |---|---|
-| Run a `.gguf` offline | **llama.cpp**: `llama-server` on the PC, and llama.cpp inside the Android app (via a plugin such as llama.rn). Same file format as `to_gguf.py` already makes |
-| Our own prompt format | The model was trained with special tokens (`<|user|>`, `<|assistant|>`, `<|notes|>`, `<|tool_call|>`). The chat template stored in the file only knows plain user/assistant text, so **the app builds the prompt itself** (a port of `chat.py`: notes in front of the question, old notes dropped, oldest turns forgotten) and sends it to the raw completion endpoint. Check special-token handling in the first pilot |
-| Generation settings | temperature 0.8, top-k 50, repetition penalty 1.15 (the values `generate.py` uses); stop at `<|endoftext|>`; streaming |
-| Open-base models | A model entry with `"open": true` uses Qwen's own tokenizer (`open_tokenizer.py`) and the ChatML format that `chat.py` writes for it; notes go in as plain text, no memory tool calls. The prompt is still built by the app as token ids (`/completion`), so the same context meter works |
+| Run a `.gguf` offline | **llama.cpp**: `llama-server` on the PC, and llama.cpp inside the Android app (via a plugin such as llama.rn). Same file format as `tools/to_gguf.py` already makes |
+| Our own prompt format | The model was trained with special tokens (`<|user|>`, `<|assistant|>`, `<|notes|>`, `<|tool_call|>`). The chat template stored in the file only knows plain user/assistant text, so **the app builds the prompt itself** (a port of `core/chat.py`: notes in front of the question, old notes dropped, oldest turns forgotten) and sends it to the raw completion endpoint. Check special-token handling in the first pilot |
+| Generation settings | temperature 0.8, top-k 50, repetition penalty 1.15 (the values `tools/generate.py` uses); stop at `<|endoftext|>`; streaming |
+| Open-base models | A model entry with `"open": true` uses Qwen's own tokenizer (`core/open_tokenizer.py`) and the ChatML format that `core/chat.py` writes for it; notes go in as plain text, no memory tool calls. The prompt is still built by the app as token ids (`/completion`), so the same context meter works |
 | Context management | 2,048 tokens for Flare 2 (**32,768 for the Qwen-based Flare 2.5**, about 28 KB of memory per token, set by the model's `context` in `models.json`). A **context meter** (exact token counts from the server's tokenizer) and a quiet "older messages forgotten" marker |
 | Tool calls | Read `<|tool_call|>{"name": "remember", ...}` out of the reply (`split_memory_calls`) and act on it; v4 adds calculator, clock, files |
 
@@ -23,15 +23,15 @@ tests, and what "done" means for the first version).
 |---|---|
 | Memory of you | SQLite on the device: saved facts, earlier chats, search by meaning (a small embedding model, optional) with keyword search as the fallback. A Memory screen to see, edit and delete. Private chats are never saved |
 | Wikipedia lookups | PC: the full index (~10 GB). Phone: a small index (most-read articles, ~1-2 GB) or ask the PC when online. Notes show their source |
-| Web search | `web_search.py` ported; **off by default**, clearly labelled when on; trusted sites first; failures never stop the chat |
+| Web search | `app/web_search.py` ported; **off by default**, clearly labelled when on; trusted sites first; failures never stop the chat |
 | Sources everywhere | Any answer that used notes shows where they came from (tap to open) |
 
 ### 3. Skills and documents
 | Need | Detail |
 |---|---|
 | Skill packs | Study helper, Teacher assistant (Beta). First version ships **merged model files** (`chat_study.gguf`); LoRA adapters next to the main file later (needs a converter from our LoRA format) |
-| Router + access | Auto picks the pack per message (`skills.py`); the access toggle (everyone / beta / off, beta list) decides which packs a person sees |
-| Save as PDF / Word | The fixed layout from `export_doc.py` (Name/Date line, answer key on its own page). PC first; phone later, with the share sheet |
+| Router + access | Auto picks the pack per message (`core/skills.py`); the access toggle (everyone / beta / off, beta list) decides which packs a person sees |
+| Save as PDF / Word | The fixed layout from `app/export_doc.py` (Name/Date line, answer key on its own page). PC first; phone later, with the share sheet |
 
 ### 4. Models and where they run
 | Need | Detail |
@@ -130,7 +130,7 @@ Free is limited to Ember, Flare and Equinox; Pro and Mega can use all five model
 changed without touching code. Pricing is not decided; the tiers only decide access and amounts. The owner screen has a tab for each tier.
 
 **How the server enforces it (details):**
-- **Exact counts.** The server counts tokens with the model's own tokenizer (`chat.py` builds the prompt) and takes the figures llama-server reports for each
+- **Exact counts.** The server counts tokens with the model's own tokenizer (`core/chat.py` builds the prompt) and takes the figures llama-server reports for each
   reply (tokens read, tokens written, tokens already cached). Never character counts.
 - **Check, reserve, settle.** Before a request runs, estimate its cost and check the tank and the week. If there is room, **reserve** the estimate (so two requests
   at once cannot both slip under the limit), then **settle** with the real numbers when the reply ends and give back the difference. A stopped or failed reply is
@@ -176,7 +176,7 @@ the window per device and per model, and never lets it exceed what the model can
 | Rule | Detail |
 |---|---|
 | **Cost per token** | Cache bytes per token = 2 x layers x key/value heads x head size x bytes. Flare 2 (v3): 32 KB at 16-bit, ~16 KB with an 8-bit cache. Flare 2.5 (Qwen 2.5 1.5B): 28 KB at 16-bit (Equinox 2 and Solstice 2: 144 KB, Apogee 2: 160 KB). Weights on top: ~240 MB (v3 Q4), ~700 MB (v3.5 Q4) |
-| **The window is the smallest of three numbers** | (1) what the model **passed** on the long-context ladder (`stretch_ladder.py`, `eval_long.py`), (2) what the free RAM can hold, (3) the speed limit below. A window the model didn't pass adds nothing |
+| **The window is the smallest of three numbers** | (1) what the model **passed** on the long-context ladder (`training/stretch_ladder.py`, `evaluation/eval_long.py`), (2) what the free RAM can hold, (3) the speed limit below. A window the model didn't pass adds nothing |
 | **Free RAM, not total RAM** | Checked at load time (Android's available-memory figure, not "12 GB installed"): a usable budget is about half the phone's RAM at most (roughly 2.5 GB on 8 GB phones, 4 GB on 12 GB phones), less when other apps are open. Storage and swap such as Samsung's RAM Plus do not count: too slow for a cache read on every word |
 | **Three modes** | **Everyday** (default): about 8K tokens, ~0.3 GB of cache, cool and quick. **Long** (Settings, only if the device and the model allow it): up to the smaller of what the model passed and what fits; a warning says the first reply after pasting a long document can take minutes and warm the phone. **Remote**: the PC or a server, any length the server handles, nothing extra on the phone |
 | **8-bit cache** | A setting (default on for Long mode): halves the cache with a small quality cost; the app measures nothing it can't test, so the long-context tests are re-run with it before it is the default |
@@ -192,7 +192,7 @@ Manifest fields this needs (in `models.json`): `context` (trained length), `cont
 the ladder has run), `kv_kb_per_token` (16-bit) and `weights_mb`. Tests: with a fake device (RAM, free RAM) the chosen window must never exceed
 the smallest of the three limits, must drop and say so when memory falls, and must never be chosen above `context_tested`.
 
-### How a reply feels (built: `chat_polish.py`)
+### How a reply feels (built: `app/chat_polish.py`)
 | Part | Behaviour |
 |---|---|
 | **Thinking** | After Send, the small Emvryx logo animates (the ring at the end of the E pulses) next to a label that changes every ~2 seconds and never repeats twice in a row: Thinking, Pondering, Reasoning, Working it out, Considering, Mulling it over, Figuring it out, Reflecting, Weighing it up, Putting it together |
@@ -261,7 +261,7 @@ Rubric, Brain breaks), a short form (grade, topic, how many questions), then the
 you type
   -> router: which skill pack? which model and effort? (Auto, or your choice)
   -> notes: memory (earlier chats, saved facts) + Wikipedia + web search (if on)
-  -> prompt builder (the port of chat.py): notes, history, context limit, forgotten turns
+  -> prompt builder (the port of core/chat.py): notes, history, context limit, forgotten turns
   -> model (phone or your PC) streams the reply
   -> parse: remember-calls out, sources attached, document layout detected
   -> save the chat; update memory; show the answer with its badge and sources
@@ -275,26 +275,26 @@ load it (with a spinner); PC unreachable -> offer the phone model.
 | Not enough memory for the model | Greyed out with the reason; suggest the smaller one |
 | PC off or unreachable (online mode) | Switches to the on-device model right away and labels the answer ("PC off: answered by Equinox on this device"); a Setting can make it ask first instead. Never the other way: going from device to online is always the person's choice |
 | Download interrupted | Resumes; verifies the checksum; never loads a half-file |
-| Context full | Drops the oldest turns and old notes (as chat.py does), shows the marker; the meter explains |
+| Context full | Drops the oldest turns and old notes (as core/chat.py does), shows the marker; the meter explains |
 | Model answers badly (small model) | The "that's wrong" flow rechecks notes; the "I don't know" lessons; a visible reminder to double-check |
 | Reply never ends / loops | Hard cap on length, a Stop button, repetition penalty |
 | App closed mid-reply | Draft and partial reply are saved |
 | Wrong key / server not found | A clear message and a "Test connection" button, never a blank screen |
 
 **Built and tested (Oct 2026):** every row above is now code with a test that forces the failure (`tests/test_app_robust.py`,
-23 tests, against a fake model and real local web servers). `app_errors.py` gives each failure a plain message and one next
-step (and buttons where there is a choice); `app_engine.py` has `choose_model` (too big: refused and the next smaller one
+23 tests, against a fake model and real local web servers). `app/app_errors.py` gives each failure a plain message and one next
+step (and buttons where there is a choice); `app/app_engine.py` has `choose_model` (too big: refused and the next smaller one
 offered; PC off: switches to the device model and says so, or asks first if the Setting says so), `Guard` (length cap, loop detector, Stop button that closes the
 connection), `ChatStore` (the reply is saved while it streams; a cut-off reply is found again after a restart; private chats
-never touch the disk), `run_turn` (uses `chat.py`'s prompt builder, returns how many old messages were forgotten for the
+never touch the disk), `run_turn` (uses `core/chat.py`'s prompt builder, returns how many old messages were forgotten for the
 marker), `LlamaServer` (the real client for llama-server) and `test_connection` (the button: unreachable / wrong key /
-not our server). `app_download.py` resumes from a `.part` file, starts over if the server can't resume, throws away a file
+not our server). `app/app_download.py` resumes from a `.part` file, starts over if the server can't resume, throws away a file
 with a bad checksum, and requires a checksum for every model (fill in `sha256` in `models.json` when a file is built).
 Not covered here: the "small model answers badly" row, which only better training fixes (the honesty tests stay the check).
 
 ### How we know it works (tests)
 1. **Prompt parity tests (the most important):** the app's prompt builder must produce **exactly the same tokens** as
-   `chat.py` for the same conversation (golden files generated by the Python code). If these fail, the model gets
+   `core/chat.py` for the same conversation (golden files generated by the Python code). If these fail, the model gets
    a format it wasn't trained on and answers get worse in ways that are hard to see.
 2. **Unit tests** for memory (save, recall, forget, private chats), the router, access rules, export layout.
 3. **End-to-end tests** with a tiny model (fast, in CI): send a message, stream a reply, save, reload, find it.
@@ -305,7 +305,7 @@ Not covered here: the "small model answers badly" row, which only better trainin
 
 ### What "done" means for the first version (phase 1: web app on the PC)
 - [x] `python app_server.py` starts the server; a browser page opens and chats with a model, streaming. (Built: demo mode without a model, `--llama` for a real one. Not yet tried against a real llama-server and a trained model.)
-- [ ] The prompt builder matches `chat.py` token for token (golden tests pass).
+- [ ] The prompt builder matches `core/chat.py` token for token (golden tests pass).
 - [x] Chats are saved and listed; Stop and Regenerate work; private chat mode works.
 - [ ] Memory: it saves "my name is Sam", recalls it in a new chat, and the Memory screen can delete it.
 - [x] The model picker lists the models in `models.json`, shows the right badges, switches mid-chat.
@@ -323,11 +323,11 @@ Android. Each has its place in [APP.md](APP.md) (build order); none is needed to
 ## Decisions that shape the build (decided Oct 2026)
 1. **Platform: PC/web first.** The local server and browser page come first; they also become the online-mode server. Android follows.
 2. **Who first: a small test group** (not family-only). So the beta access list matters from day one: `models.json` status
-   `beta` + the same beta-user list as the skill packs (`skills.py`), and each tester is a named user. Public later.
+   `beta` + the same beta-user list as the skill packs (`core/skills.py`), and each tester is a named user. Public later.
 3. **Skill packs: LoRA adapters** next to the main model file (not merged copies). Needs a converter from our LoRA format
-   (`lora.py`) to llama.cpp's adapter format, with a test that the adapter gives the same answers as the merged model.
+   (`core/lora.py`) to llama.cpp's adapter format, with a test that the adapter gives the same answers as the merged model.
    Until the converter exists, the first build can load merged files (`chat_study.gguf`) behind the same switch.
-4. **Memory search: keyword AND meaning from day one**, using the small embedding model (already in `chat_memory.py`);
+4. **Memory search: keyword AND meaning from day one**, using the small embedding model (already in `app/chat_memory.py`);
    keyword search stays as the fallback if the embedding model is missing.
 5. **App lock and encryption: a setting, off by default.** Turn on in Settings (device PIN/biometrics); the chat database is
    encrypted when it is on.
@@ -336,18 +336,18 @@ What this changes in the first version's checklist: add "adapter converter + sam
 beta list", and "memory finds an earlier chat by meaning, not only by words".
 
 ## Built so far
-- `models.json` + `models.py` (+ `tests/test_models.py`): the model list and the picker logic (one card per name, newest
+- `models.json` + `app/models.py` (+ `tests/test_models.py`): the model list and the picker logic (one card per name, newest
   first; older ones under Other models with the retention rule; greyed out when the device is too small; online models
-  need the PC; beta models only for the beta list). Try it: `python models.py`.
-- `limits.json` + `usage_limits.py` (+ `tests/test_usage_limits.py`): the plans (Free, Pro, Mega), token counting, the tank, the
+  need the PC; beta models only for the beta list). Try it: `python app/models.py`.
+- `limits.json` + `app/usage_limits.py` (+ `tests/test_usage_limits.py`): the plans (Free, Pro, Mega), token counting, the tank, the
   fixed weekly reset (in the person's time zone), reserve / settle / cancel, 429 / 403 / 503 answers, and the plain numbers for
   the Usage screen (`Limiter.snapshot`). `app_engine.run_turn` takes an optional `limiter` and `user`
   (`tests/test_usage_turn.py`): the message is checked first, the real tokens are counted after, a failed reply is given back,
   and a model on the device is never counted.
-- `context_window.py` (+ `tests/test_context_window.py`): the device check. The window is the smallest of what the model passed,
+- `app/context_window.py` (+ `tests/test_context_window.py`): the device check. The window is the smallest of what the model passed,
   free memory, reading speed and the plan; it says why, and `shrink` drops it when memory falls. Try it:
-  `python context_window.py --ram 8 --mode long`.
-- `chat_polish.py` (+ `tests/test_chat_polish.py`): the thinking words, the one-second pause, steady word-by-word writing, and automatic shortening of a long chat; wired into `run_turn`.
+  `python app/context_window.py --ram 8 --mode long`.
+- `app/chat_polish.py` (+ `tests/test_chat_polish.py`): the thinking words, the one-second pause, steady word-by-word writing, and automatic shortening of a long chat; wired into `run_turn`.
 - `app_server.py` + `web/` (+ `tests/test_app_server.py`, 31 tests): the app server and the chat page. Run `python app_server.py`
   (demo mode) or `python app_server.py --llama http://127.0.0.1:8080 --tokenizer data/v3/tokenizer.json`. It prints a link with your
   owner key; `--add-user sam pro` makes a tester's link; `--host 0.0.0.0` opens it to your network (phone). The page has the
@@ -362,26 +362,26 @@ beta list", and "memory finds an earlier chat by meaning, not only by words".
   `llama-server` for the model you pick (one at a time), finds the exported `.gguf` and the model's own `tokenizer.json` by
   itself, and the picker shows which models are on this computer (`tests/test_model_runner.py`, with a fake llama-server).
   See `docs/V2.md`, "Step 6b".
-- **Auto effort** (`effort_router.py`, `tests/test_effort_router.py`): the effort menu has **Auto** first. It reads the message and picks Quick
+- **Auto effort** (`app/effort_router.py`, `tests/test_effort_router.py`): the effort menu has **Auto** first. It reads the message and picks Quick
   (greetings, thanks, short or simple questions, "briefly" / "tl;dr"), Balanced (normal questions) or Deep (code and errors, maths,
   "step by step", comparisons, essays, long text, several questions) with plain rules, so it is instant and free, and says why. Models
   with no Deep (Ember only; Flare and bigger have it) are held to Balanced, and when the tank is nearly empty Auto thinks less (below 20% left: at most
   Balanced; below 5%: Quick). The page shows "Auto · Quick" on the chip and "Auto chose Quick" under the reply, and the usage is
   counted at the level it chose. The thinking pause above is sized from the same decision.
-- **Regenerate options** (`regen_modes.py`, `tests/test_regen_modes.py`): the Regenerate chip opens a menu: **Try again**, **A different answer**
+- **Regenerate options** (`app/regen_modes.py`, `tests/test_regen_modes.py`): the Regenerate chip opens a menu: **Try again**, **A different answer**
   (more variety), **Explain it differently** (another way, with an example), **Make it simpler** (plain words), **More detail**,
   **Shorter**, **Give me choices** (three numbered options). A choice adds a one-time hint to the end of the question in the prompt only
   (the saved chat keeps your original question), changes how much it may write and how adventurous the wording is, and replaces the
-  previous answer. Small models follow the hints only roughly; the options are easy to retune in `regen_modes.py`. Designs: not yet
+  previous answer. Small models follow the hints only roughly; the options are easy to retune in `app/regen_modes.py`. Designs: not yet
   drawn in the `Chat` / `Phone` mock-ups (they have no Regenerate button).
-- **Connected apps** (`connected_apps.py`, `tests/test_connected_apps.py`): Menu > Connected apps lists the apps planned (Google Calendar, Gmail,
+- **Connected apps** (`app/connected_apps.py`, `tests/test_connected_apps.py`): Menu > Connected apps lists the apps planned (Google Calendar, Gmail,
   Google Drive, Notion, Slack, GitHub, Vercel, Supabase) with what each would do and the permission it needs, and the rules (off until
   connected with your own sign-in; read-only first; Confirm for anything that changes something; only what is asked for is seen;
-  disconnect deletes access; on-device models never share). **GitHub is the first one that is connectable** (`github_link.py`,
+  disconnect deletes access; on-device models never share). **GitHub is the first one that is connectable** (`app/github_link.py`,
   `POST /api/apps/github/connect` with a pasted token, `/disconnect` deletes it; `GET /api/apps` also returns the person's `connections`
   with a short activity log, never the token); it powers create / link / clone / pull / push for VryxCode projects (see `docs/VRYXCODE.md`).
   The others still answer "coming soon" until real sign-in with each service exists (see `docs/DEPLOY.md`).
-- **The website** (`build_site.py` -> `site/`): the five website designs as plain static pages with a dark/light switch, ready for
+- **The website** (`tools/build_site.py` -> `site/`): the five website designs as plain static pages with a dark/light switch, ready for
   Vercel (`docs/DEPLOY.md`). Rename note: the app was called Yuvra until Oct 2026; it is now **Emvryx** with an E-and-ring mark;
   the app moves an old `.yuvra` data folder to `.emvryx` by itself on start.
 - **Auto temperature** (`effort_router.choose_temperature`): with Auto effort the server also picks how adventurous the wording is: cool (0.2)
@@ -394,7 +394,7 @@ beta list", and "memory finds an earlier chat by meaning, not only by words".
 
 
 ## Auto lookup (Oct 2026)
-The app looks things up before the model answers (`lookup_auto.py`), the way `generate.py --lookup/--web` does, and shows what it used
+The app looks things up before the model answers (`app/lookup_auto.py`), the way `tools/generate.py --lookup/--web` does, and shows what it used
 ("Read 2 notes from Wikipedia", "Searched the web: 1 source") above the reply. Rules: only factual questions (not "hi", jobs such as
 "write a poem", or "list 3 fruits"); the local Wikipedia index first (`--wiki`, default `data/wiki/wiki.db`; skipped if absent); the web
 too when the person's setting allows it and the question is about something recent or the Wikipedia notes barely match it; never in a
@@ -403,7 +403,7 @@ private chat; a failed or offline search just means fewer notes. Per-person sett
 
 **Second try and saved notes (Oct 2026).** If the model answers "I don't know" (or "the notes don't say") and the web has not been searched yet
 (and the setting isn't Wikipedia only, and the chat isn't private), the app searches the web and has the model answer again; the page
-replaces the first answer and says it searched. A thumbs up ("Right") under an answer saves the notes it used (`saved_notes.py`, one
+replaces the first answer and says it searched. A thumbs up ("Right") under an answer saves the notes it used (`app/saved_notes.py`, one
 SQLite file per person: `saved-<name>.db`); the next similar question reads them first, offline, and the line above the answer says
 "Read 1 saved note". Recent things (news, scores, prices) are kept for a day, stable facts for 180 days. Settings has a Saved notes list with
 Delete and Delete all; "Delete all my chats" also clears them. Private chats never save or read saved notes. The model's weights never change.

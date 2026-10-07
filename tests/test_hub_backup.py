@@ -1,4 +1,5 @@
 """Tests for hub_backup.py with a stand-in for Hugging Face (no internet). Run:  python -m unittest tests.test_hub_backup -v"""
+import os, sys; sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), os.pardir)); import emvryx_paths  # noqa: E402,F401  (the code folders become importable)
 import json
 import os
 import shutil

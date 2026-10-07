@@ -1,4 +1,5 @@
 """Tests for build_site.py: the website designs become plain static pages that Vercel can serve."""
+import os, sys; sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), os.pardir)); import emvryx_paths  # noqa: E402,F401  (the code folders become importable)
 import json
 import os
 import re
@@ -61,10 +62,10 @@ class Site(unittest.TestCase):
         self.assertNotIn("[YEAR]", self.read("index.html"))
 
     def test_committed_site_is_up_to_date(self):
-        here = os.path.dirname(os.path.abspath(build_site.__file__))
+        here = emvryx_paths.ROOT
         for name in self.written:
             with open(os.path.join(here, "site", name), encoding="utf-8") as f:
-                self.assertEqual(f.read(), self.read(name), f"site/{name} is stale: run python build_site.py")
+                self.assertEqual(f.read(), self.read(name), f"site/{name} is stale: run python tools/build_site.py")
 
 
 if __name__ == "__main__":

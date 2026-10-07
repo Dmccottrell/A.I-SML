@@ -1,4 +1,5 @@
 """Tests for collect_runs.py: only genuinely successful runs are kept, cheating and shortcuts are rejected, and the output trains."""
+import os, sys; sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), os.pardir)); import emvryx_paths  # noqa: E402,F401  (the code folders become importable)
 import json
 import os
 import random

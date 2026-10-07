@@ -1,4 +1,5 @@
 """Tests for usage_limits.py: counting, the tank, the weekly reset, reserve/settle/cancel and the numbers the screen shows."""
+import os, sys; sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), os.pardir)); import emvryx_paths  # noqa: E402,F401  (the code folders become importable)
 import unittest
 from datetime import datetime, timezone
 

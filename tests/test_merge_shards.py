@@ -1,4 +1,5 @@
 """The merged model is written in small shards, so a 14B model does not need all of its weights in RAM at once (it was killed that way on a 30 GB machine)."""
+import os, sys; sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), os.pardir)); import emvryx_paths  # noqa: E402,F401  (the code folders become importable)
 import sys
 import types
 import unittest

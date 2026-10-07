@@ -25,6 +25,7 @@ Usage:
     python app_server.py --add-user sam pro           (a tester: prints their key; plans: free, pro, mega)
     python app_server.py --host 0.0.0.0               (reachable from your phone on the same network)
 """
+import emvryx_paths  # noqa: E402,F401  (the code folders become importable)
 import argparse
 import atexit
 import hmac
