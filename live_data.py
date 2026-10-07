@@ -402,7 +402,10 @@ CURRENCIES = {"usd": "USD", "dollar": "USD", "dollars": "USD", "us dollar": "USD
               "rupees": "INR", "mxn": "MXN", "peso": "MXN", "pesos": "MXN", "mexican peso": "MXN", "mexican pesos": "MXN", "brl": "BRL", "real": "BRL", "reais": "BRL",
               "krw": "KRW", "won": "KRW", "sek": "SEK", "krona": "SEK", "nok": "NOK", "dkk": "DKK", "nzd": "NZD", "new zealand dollar": "NZD", "sgd": "SGD",
               "hkd": "HKD", "zar": "ZAR", "rand": "ZAR", "try": "TRY", "lira": "TRY", "pln": "PLN", "zloty": "PLN", "czk": "CZK", "huf": "HUF", "thb": "THB",
-              "baht": "THB", "idr": "IDR", "myr": "MYR", "php": "PHP", "ils": "ILS", "shekel": "ILS", "isk": "ISK", "ron": "RON", "bgn": "BGN"}
+              "baht": "THB", "idr": "IDR", "myr": "MYR", "php": "PHP", "ils": "ILS", "shekel": "ILS", "isk": "ISK", "ron": "RON", "bgn": "BGN",
+              "aed": "AED", "dirham": "AED", "dirhams": "AED", "sar": "SAR", "riyal": "SAR", "egp": "EGP", "ngn": "NGN", "naira": "NGN", "kes": "KES", "vnd": "VND", "dong": "VND",
+              "pkr": "PKR", "bdt": "BDT", "taka": "BDT", "ars": "ARS", "cop": "COP", "clp": "CLP", "uah": "UAH", "hryvnia": "UAH", "twd": "TWD", "qar": "QAR", "kwd": "KWD",
+              "mad": "MAD", "lkr": "LKR", "rub": "RUB", "ruble": "RUB", "rubles": "RUB", "pen": "PEN", "ghs": "GHS", "ils ": "ILS"}
 CUR_RE = "|".join(re.escape(c) for c in sorted(CURRENCIES, key=len, reverse=True))
 CUR_Q = re.compile(rf"(?:(?P<amt>\d[\d,]*\.?\d*)\s*)?\b(?P<a>{CUR_RE})\b\s*(?:to|in|into|=|vs\.?|versus|->)\s*(?:how many\s+)?\b(?P<b>{CUR_RE})\b", re.I)
 CUR_Q2 = re.compile(rf"how (?:much|many)\s+(?:is|are)?\s*(?P<amt>\d[\d,]*\.?\d*)\s*\b(?P<a>{CUR_RE})\b\s*(?:in|worth in|to)\s*\b(?P<b>{CUR_RE})\b", re.I)
@@ -425,7 +428,14 @@ def currency(q, now, net, online):
         got = data["rates"][b]
     except Exception as e:
         print(f"(currency lookup failed: {e})")
-        return []
+        try:                                                      # currencies the European Central Bank does not publish (AED, NGN ...): a second free source
+            alt = net.json(f"https://open.er-api.com/v6/latest/{a}")
+            got = alt["rates"][b] * amt
+            return [_note("Exchange rate - open.er-api.com, " + str(alt.get("time_last_update_utc", ""))[:16],
+                          f"{_fmt(amt)} {a} = {_fmt(round(got, 4))} {b} (market rate; banks and cards add their own margin).", "https://www.exchangerate-api.com/")]
+        except Exception as e2:
+            print(f"(second currency source failed: {e2})")
+            return []
     return [_note("Exchange rate - European Central Bank via frankfurter.app, " + str(data.get("date", "")),
                   f"{_fmt(amt)} {a} = {_fmt(got)} {b} (reference rate of {data.get('date', 'the latest working day')}; banks and cards add their own margin).",
                   "https://www.frankfurter.app/")]
@@ -728,6 +738,8 @@ def recipes(q, now, net, online):
     if not m or FOOD_STOP.search(q) or not re.search(r"\b(recipe|ingredients|cook|bake)\b", q, re.I) and not re.search(r"how (do i|to|can i) make", q, re.I):
         return []
     dish = re.sub(r"\b(please|at home|quickly|easily)\b", "", m.group("d"), flags=re.I).strip()
+    if re.fullmatch(r"(a |an |some |the )?(good |easy |quick |simple |healthy |nice )?(one|dinner|lunch|breakfast|dessert|snack|meal|something|anything|tonight|food|recipe|ideas?|today)s?", dish, re.I) or len(dish) < 3:
+        return []
     try:
         meals = net.json("https://www.themealdb.com/api/json/v1/1/search.php?s=" + urllib.parse.quote(dish)).get("meals") or []
     except Exception as e:
@@ -878,6 +890,13 @@ PROVIDERS = [
 ]
 
 
+import live_more                                  # the second batch (imported here, after everything it uses is defined)
+
+_online = [p for p in PROVIDERS if not p[2] and p[0] != "releases"]
+_release = [p for p in PROVIDERS if p[0] == "releases"]
+PROVIDERS = [p for p in PROVIDERS if p[2]] + [m for m in live_more.MORE if m[2]] + _online + [m for m in live_more.MORE if not m[2]] + _release
+
+
 def gather(question, now=None, online=True, net=None, offline_ok=True, default_place=""):
     """(notes, info). `online` lets the internet providers run; `offline_ok` lets the plain-code ones run (False = no live data at all).
     info: {"asked": bool, "live": number of notes, "names": [labels], "sources": [{"title", "kind": "live", "url"}]}."""
@@ -893,7 +912,7 @@ def gather(question, now=None, online=True, net=None, offline_ok=True, default_p
         if not offline and not online:
             continue
         try:
-            got = fn(q, now, net, online, default_place) if fn is air_quality else fn(q, now, net, online)
+            got = fn(q, now, net, online, default_place) if (fn is air_quality or getattr(fn, "needs_place", False)) else fn(q, now, net, online)
         except Exception as e:                     # a provider must never break the chat
             print(f"(live data '{name}' failed: {e})")
             got = []

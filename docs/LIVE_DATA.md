@@ -28,3 +28,34 @@ Weather already has its own source (Open-Meteo). Web search (Tavily and others) 
 **Privacy:** only the part the source needs is sent (a place, a currency pair, a team, a word), never the chat. **Failures:** a source that is offline or changes its format returns nothing and the chat carries on. The sources are built from each service's documentation and tested with fakes; they have not all been tried against the live services, so tell me if one misbehaves.
 
 **Adding a source:** write a function `name(question, now, net, online)` that returns a list of notes, and add it to `PROVIDERS` in `live_data.py` (with `True` if it works offline). `tests/test_live_data.py` shows how to fake the internet.
+
+
+## Second batch (`live_more.py`)
+
+| Source | Asks like | Needs |
+|---|---|---|
+| Finance calculator | "monthly payment on a $300,000 mortgage at 6.5% for 30 years", "invest $1000 at 5% for 10 years and add $100 a month", "bmi 70 kg 175 cm", "percent change from 50 to 75" | offline, exact |
+| Time zones | "3pm EST in PST", "9 am London time in Tokyo" (daylight saving for today included) | offline |
+| Moon | "what's the moon phase", "when is the next full moon" (calculated, about a day accurate) | offline |
+| Dice and coins | "roll 2d6", "flip a coin", "pick a number between 1 and 10" (truly random, which a model can't do) | offline |
+| Number bases | "255 in hex", "2026 in roman numerals", "what is XIV in numbers" | offline |
+| People | "how old is Tom Hanks", "when did X die", "how tall is X" (age worked out exactly) | free, Wikidata |
+| Packages | "latest version of requests", "latest version of react", "latest version of owner/repo" | free, PyPI / npm / GitHub |
+| TV | "when is the next episode of Severance" | free, TVmaze |
+| Steam | "is dota 2 free on steam", "price of Hades on steam" (say Steam) | free |
+| Music | "albums by Adele", "who sings easy on me" | free, iTunes search |
+| Nutrition | "calories in a banana" | free, Open Food Facts; better with a free `USDA_API_KEY` |
+| Sun | "when does the sun set in Denver" | free, Open-Meteo |
+| Distance | "how far is Paris from London", "how long to drive from Austin to Dallas" | free, Open-Meteo + OSRM |
+| Past weather, elevation, surf | "what was the weather in Austin on October 1, 2026", "elevation of Denver", "how are the waves in Malibu" | free, Open-Meteo |
+| US weather alerts | "any weather alerts in Miami" (US only) | free, weather.gov |
+| Country statistics | "GDP of Japan", "inflation in Brazil", "life expectancy in Japan" | free, World Bank |
+| US economy | "US unemployment rate", "30 year mortgage rate", "fed funds rate" | free `FRED_API_KEY` |
+| Research | "latest papers on language models", "pubmed studies on diabetes" (titles only, not medical advice) | free, arXiv / PubMed |
+| Coding errors | "stack overflow KeyError", or any message with an error name | free, Stack Exchange (titles and links) |
+| Trivia | "give me 5 trivia questions" | free, Open Trivia DB |
+| SEC filings | "latest 10-K for Apple" | free, SEC EDGAR |
+| Hard maths and science | "boiling point of nitrogen", "integral of x^2" | free `WOLFRAM_APPID` (Wolfram|Alpha) |
+| More currencies | "100 usd to aed" falls back to open.er-api.com when the European Central Bank does not have it | free |
+
+Keys are optional: set them with `setx NAME "value"` and sign out and in. Without a key those providers simply do nothing.
