@@ -43,3 +43,48 @@ class MergeShards(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class LoadLm(unittest.TestCase):
+    def fake_transformers(self, plain_fails, has_vlm=True):
+        calls = []
+
+        class Plain:
+            @staticmethod
+            def from_pretrained(model_id, **kw):
+                calls.append(("plain", model_id))
+                if plain_fails:
+                    raise ValueError("Unrecognized configuration class Qwen3_5Config for this kind of AutoModel")
+                return "plain-model"
+
+        class Vlm:
+            @staticmethod
+            def from_pretrained(model_id, **kw):
+                calls.append(("vlm", model_id))
+                return "vlm-model"
+        mod = types.ModuleType("transformers")
+        mod.AutoModelForCausalLM = Plain
+        if has_vlm:
+            mod.AutoModelForImageTextToText = Vlm
+        return mod, calls
+
+    def test_a_normal_model_loads_as_a_language_model(self):
+        import open_models
+        mod, calls = self.fake_transformers(False)
+        with mock.patch.dict(sys.modules, {"transformers": mod}):
+            self.assertEqual(open_models.load_lm("Qwen/Qwen3-4B", dtype="bf16"), "plain-model")
+        self.assertEqual(calls, [("plain", "Qwen/Qwen3-4B")])
+
+    def test_a_vision_and_text_model_falls_back_to_the_image_text_class(self):
+        import open_models
+        mod, calls = self.fake_transformers(True)
+        with mock.patch.dict(sys.modules, {"transformers": mod}):
+            self.assertEqual(open_models.load_lm("Qwen/Qwen3.5-4B"), "vlm-model")
+        self.assertEqual([c[0] for c in calls], ["plain", "vlm"])
+
+    def test_with_no_fallback_class_the_original_error_is_raised(self):
+        import open_models
+        mod, _ = self.fake_transformers(True, has_vlm=False)
+        with mock.patch.dict(sys.modules, {"transformers": mod}):
+            with self.assertRaises(ValueError):
+                open_models.load_lm("x")

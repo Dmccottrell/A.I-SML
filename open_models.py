@@ -65,3 +65,18 @@ def estimate(preset, steps=988, slowdown_4bit=1.3):
     sec = BASE_STEP_SECONDS * preset["params_b"] / BASE_PARAMS_B * (slowdown_4bit if preset["quant4"] else 1.0)
     hours = sec * steps / 3600
     return sec, hours, hours * 0.51
+
+
+def load_lm(model_id, **kw):
+    """The model as a plain language model (AutoModelForCausalLM). When this version of transformers does not know the design as one (Qwen3.5 is a vision-and-text model), it is
+    loaded as a vision-and-text model instead: we only ever feed it text, so only its text side is trained and used."""
+    from transformers import AutoModelForCausalLM
+    try:
+        return AutoModelForCausalLM.from_pretrained(model_id, **kw)
+    except (ValueError, KeyError) as e:
+        try:
+            from transformers import AutoModelForImageTextToText
+        except ImportError:
+            raise e
+        print(f"loading {model_id} as a vision-and-text model ({str(e)[:100]}); only its text side is used", flush=True)
+        return AutoModelForImageTextToText.from_pretrained(model_id, **kw)
