@@ -285,8 +285,8 @@
   "keep_latest_per_name": 2,
   "coders": [
     {
-      "id": "qwen2.5-coder-14b",
-      "label": "Qwen2.5-Coder-14B",
+      "id": "coder-14b",
+      "label": "Coder 14B (outside model)",
       "outside": true,
       "licence": "Apache 2.0",
       "hf": "Qwen/Qwen2.5-Coder-14B-Instruct-GGUF",

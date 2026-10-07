@@ -1,14 +1,14 @@
 #!/bin/bash
-# scripts/wrap_qwen.sh - Merge, check and back up models trained on the Qwen-native lessons (folders like checkpoints/dev/open/equinox-2q).
+# scripts/wrap_open.sh - Merge, check and back up models trained on the Qwen-native lessons (folders like checkpoints/dev/open/equinox-2q).
 #
 #   cd /workspace/A.I-SML && source /venv/main/bin/activate
-#   bash scripts/wrap_qwen.sh flare-2.5 equinox-2          # any models you trained with docs/QWEN_LESSONS.md
+#   bash scripts/wrap_open.sh flare-2.5 equinox-2          # any models you trained with docs/OPEN_LESSONS.md
 #
 # Per model: merge -> identity sheet -> upload to the private Hugging Face repo (folder <model>q/my-ai). Pings your phone (ntfy) and STOPS on a failure.
 # It never presses Stop on the Vast instance: when it pings "all done", stop the instance yourself (Stop, not Destroy).
 NTFY="${NTFY_TOPIC:-v35-AI}"
 REPO="Dmccottrell/aisml-checkpoints"
-[ "$#" -eq 0 ] && { echo "usage: bash scripts/wrap_qwen.sh <model> [<model> ...]   e.g. flare-2.5 equinox-2"; exit 1; }
+[ "$#" -eq 0 ] && { echo "usage: bash scripts/wrap_open.sh <model> [<model> ...]   e.g. flare-2.5 equinox-2"; exit 1; }
 mkdir -p logs
 ping() { echo "$(date +%H:%M) $1"; curl -s -d "$1" "ntfy.sh/$NTFY" > /dev/null || true; }
 fail() { ping "STOPPED: $1"; exit 1; }
@@ -22,4 +22,4 @@ for m in "$@"; do
     ping "$m: backing up to Hugging Face"
     hf upload "$REPO" "$export_dir" "${m}q/my-ai" > "logs/${m}q-upload.txt" 2>&1 || ping "$m: upload failed (logs/${m}q-upload.txt), the files are still on this machine"
 done
-ping "wrap_qwen: all done. Stop the Vast instance (not Destroy)."
+ping "wrap_open: all done. Stop the Vast instance (not Destroy)."

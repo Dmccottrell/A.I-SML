@@ -7,13 +7,13 @@ version's test-sheet results decide what the next one focuses on.
 > (cheaper and stronger: about $183 for a forecast ~41-45% from scratch versus a few dollars for roughly 65% on a 1.5B open model).
 > They carry the Emvryx name only; the base and its licence are credited in `NOTICE`, and the docs never call a fine-tuned model "from scratch".
 > **v1, v2 and v3 (Ember 2, Flare 2) stay from scratch**, and the from-scratch v3.5 run was **stopped** (step recorded in `docs/V3_5.md`).
-> **The open-base models are the 2.x series** (generation 2): **Flare 2.5** is Qwen 2.5 1.5B with a 32K context ([OPEN_MODEL.md](OPEN_MODEL.md)), and a
+> **The open-base models are the 2.x series** (generation 2): **Flare 2.5** is the 1.5B open base with a 32K context ([OPEN_MODEL.md](OPEN_MODEL.md)), and a
 > "+" refresh takes the next decimal (Flare 2.6). Later rungs (suggestions, not chosen): **Equinox 2** about a 4B base, **Solstice 2** about an 8B base,
 > **Apogee 2** about a 14B base on rented GPUs; pick each base when its turn comes, because better open models will exist.
 > The version slots map as: v3 -> Flare 2 (from scratch), v3.5 -> Flare 2.5, v4 -> Equinox 2, v5 -> Solstice 2, v6 -> Apogee 2. Text below that uses the old names describes the from-scratch plan.
 > The rest of this file was written for the from-scratch plan: where it says a version's brain is trained from scratch or grown from v3.5, read it with this update.
 
-> **Later generations (planned):** 3.x on **Qwen3.5** (2B, 4B, 9B, 27B) and 4.x on **Qwen3.8** or the newest base; each needs a short pilot first. See [OPEN_MODEL.md](OPEN_MODEL.md#later-generations-3x-on-qwen35-4x-on-qwen38-or-the-newest-planned-oct-2026).
+> **Later generations (planned):** 3.x on a newer open generation (2B, 4B, 9B, 27B) and 4.x on newer open bases or the newest base; each needs a short pilot first. See [OPEN_MODEL.md](OPEN_MODEL.md).
 >
 > **Public access (later):** staying on keys for now; the plan to open it to anyone, with the security work it needs, is the "Going public" checklist in [DEPLOY.md](DEPLOY.md).
 >
@@ -28,10 +28,10 @@ version's test-sheet results decide what the next one focuses on.
 | **v1** ✅ | Learn the pipeline | 30M | Tells children's stories; runs offline on the phone | RTX 4070, 4 hours | $0 |
 | **v2** ✅ | Knowledge | 88M | General Q&A, explanations, multi-turn chat | RTX 4070, ~18 hours | $0 |
 | **v3** 🛠️ | Accuracy | ~400M | Looks things up (RAG), says "I don't know", handles corrections, exact instructions, preference training (DPO), remembers you, reply suggestions, basic code; v3-long stretches it to 8K–32K | RTX 4070 afternoons + a rented RTX 3090 overnight (25.8 / 17.5 s/step) | ~$30–40 cloud + electricity |
-| **Flare 2.5** (was v3.5) | Scale | **1.5B open base (Qwen 2.5), 32K context** | Same lessons as v3 (lookups, "I don't know", corrections, instructions) on a stronger base. *(The from-scratch ~1.12B / 40B-token plan below was stopped.)* | RTX 4070 (LoRA, free) or one rented RTX 5090 | $0 or a few dollars |
-| **Equinox 2** (was v4) | Abilities | **Qwen3-4B** open base (suggested), 32K context, up to 128K | Specialist skill packs + router, tools, voice, own app | One rented RTX 5090, about 5 hours per fine-tune | about $3 per fine-tune |
-| **Solstice 2** (was v5) | Scale | **Qwen3-8B** open base (suggested), 32K context, up to 128K | Genuinely capable assistant | One rented RTX 5090, about 10 hours per fine-tune; runs on the 4070 at Q4 | about $5 per fine-tune |
-| **Apogee 2** (was v6) | Bigger small | **Qwen3-14B** open base (suggested), 32K context, up to 128K | Stronger reasoning, coding and knowledge; powers online mode | One rented RTX 5090 with 4-bit weights (QLoRA), about 24 hours per fine-tune | about $12 per fine-tune |
+| **Flare 2.5** (was v3.5) | Scale | **1.5B open base (the 1.5B base), 32K context** | Same lessons as v3 (lookups, "I don't know", corrections, instructions) on a stronger base. *(The from-scratch ~1.12B / 40B-token plan below was stopped.)* | RTX 4070 (LoRA, free) or one rented RTX 5090 | $0 or a few dollars |
+| **Equinox 2** (was v4) | Abilities | **the 4B open base** open base (suggested), 32K context, up to 128K | Specialist skill packs + router, tools, voice, own app | One rented RTX 5090, about 5 hours per fine-tune | about $3 per fine-tune |
+| **Solstice 2** (was v5) | Scale | **the 8B open base** open base (suggested), 32K context, up to 128K | Genuinely capable assistant | One rented RTX 5090, about 10 hours per fine-tune; runs on the 4070 at Q4 | about $5 per fine-tune |
+| **Apogee 2** (was v6) | Bigger small | **the 14B open base** open base (suggested), 32K context, up to 128K | Stronger reasoning, coding and knowledge; powers online mode | One rented RTX 5090 with 4-bit weights (QLoRA), about 24 hours per fine-tune | about $12 per fine-tune |
 | **Apogee 2.5 or later** (was v6.5) | Borderline medium | A bigger open base, chosen when it is time (about 30B class) | The best model for PC and server; the app's online brain | Rented 48–80 GB GPU | to be measured |
 
 Guiding rules:
@@ -137,7 +137,7 @@ Scores are saved next to each checkpoint, so the old version isn't re-tested eve
 
 **Tokens per parameter (how much each version reads for its size):** v2 ~30, v3 ~30 (11.8B tokens /
 394M), v3.5 ~29. "Compute-optimal" is ~20; modern small models read far more (SmolLM2-360M: ~11,000,
-Qwen2.5-0.5B: ~36,000), which is the main reason they score higher. Reading 1T tokens would take v3
+a 0.5B open model: ~36,000), which is the main reason they score higher. Reading 1T tokens would take v3
 ~2 years on one RTX 3090 or ~70 days on one H100 (~$3,700 either way; preparing the data is fast:
 ~4-5 days). Better data, Muon and distillation get part of that gain for much less.
 
@@ -173,7 +173,7 @@ questions.jsonl ─► teacher (7B open model, llama.cpp on the 4070) ─► ans
   second. With several answers in parallel, ~50,000 answers takes about a day or two, and costs a
   few dollars of electricity.
 - **Pick a teacher whose license allows training on its outputs.** Good candidates use permissive
-  licenses such as Apache 2.0 (for example OLMo, Mistral 7B, Qwen2.5-7B, or OpenAI's gpt-oss).
+  licenses such as Apache 2.0 (for example OLMo, Mistral 7B, a 7B open model, or OpenAI's gpt-oss).
   Check each license before using it.
 - **Don't use the ChatGPT, Claude or Gemini APIs as teachers.** Their terms restrict using outputs
   to build competing models.
@@ -513,7 +513,7 @@ this (`<|tool_call|>`, `<|tool_result|>`) are already reserved in v3's tokenizer
 | 1 | ✅ **Built and tested (`coding/harness.py`):** read file, edit file, run command, run tests, all inside a **sandbox** (a temporary folder, no internet, time and memory limits, nothing outside it can be touched) | While v3.5 trains (CPU work) |
 | 1b | ✅ **Built and tested (Oct 2026): the "Claude Code"-style extras around the loop** (all plain code in `coding/harness.py`): `git` (safe subset: status, diff, log, add, commit, branch, worktrees; no push, no config flags), `diagnostics` (syntax errors; more with pyflakes: our stand-in for LSP), **project notes** (EMVRYX.md / AGENTS.md shown at the start), **hooks** (`.emvryx/hooks.json`: after an edit, before a command, and a **finish gate**: the tests must pass before it may stop), **permissions** (allow / ask / deny; `git commit` asks first), **compaction** (old steps folded into an "Earlier steps" list when the 2,048-token memory fills) and a **tool registry** (`register_tool`: where MCP tools plug in; the MCP client itself is not built) | Done |
 | 1c | ✅ **Practice data made by our own code (`coding/agent_tasks.py`, `coding/agent_lessons.py`, `coding/make_agent_data.py`):** tiny projects with a bug, solved by a scripted solver through the REAL harness; only runs whose tests pass are kept. Chat lessons: `tool_use` (incl. diagnostics-first and retry after a wrong fix), `project_context`, `ask_first` (and "refused: say so, don't retry"), `too_big` ("that's too big; start with one file") and `compaction`. v3.5 gets 2,500 of them (`AGENT_LESSONS`); its final-phase reading also has real commit data (`commits`, CommitPackFT Python, permissive licenses) and the practice runs as text (`agent_traces`, 0.2%) | Done; v3.5 trains on them |
-| 2 | **Training data (v4):** a coding-focused open teacher (e.g. Qwen2.5-Coder-7B, license to be checked) works through small coding tasks in the harness. Keep only runs where the **tests really pass** (checked by running them) | After v3.5 |
+| 2 | **Training data (v4):** a coding-focused open teacher (e.g. an outside coding model, license to be checked) works through small coding tasks in the harness. Keep only runs where the **tests really pass** (checked by running them) | After v3.5 |
 | 3 | **Fine-tune** a "coding" skill pack (LoRA) on those runs | v4 |
 | 4 | **Measure** on a small test set of real tasks (fix this bug, add this function) | v4 |
 
@@ -568,7 +568,7 @@ question -> router picks effort (Quick / Balanced / Deep) + size (Lite / Standar
 | **Auto** | The router decides | The router decides | The default |
 
 **The cheapest first experiment (thinking-lite, on v3):** after v3's chat fine-tuning, a small
-fine-tune where the teacher (Qwen) solves math problems that come with known answers, keeping only
+fine-tune where the teacher (the open base) solves math problems that come with known answers, keeping only
 correct solutions. Then score v3 on the held-out test. If it helps at 394M, scale it up at v3.5.
 The real GSM8K *test* questions stay out of training. Nothing about pretraining changes.
 
@@ -719,7 +719,7 @@ limits, or a paid plan. That is a product decision for later.
 - **Thinking, tools, lookups and the coding harness**, all already planned.
 
 **The payoff loop:** Max teaches Pro, Standard and Lite. Every step up makes the whole family
-better without training the small ones from scratch. The Qwen teacher stays until Max replaces it.
+better without training the small ones from scratch. The open teacher stays until Max replaces it.
 
 **Engineering changes at this size:** many-GPU and multi-machine training with automatic recovery
 from failures, terabyte-scale data pipelines, a broader test suite (MMLU, GSM8K, coding tasks, safety
@@ -766,9 +766,9 @@ battery, not a bigger download.
 | Tier class | Model name | Size | Versions |
 |---|---|---|---|
 | Lite (fast and light) | **Emvryx Flare 2** (from scratch), then **Emvryx Flare 2.5** (open base) | ~400M, then ~1.5B | v3, then v3.5 |
-| Everyday | **Emvryx Equinox 2** | ~4B (Qwen3-4B, suggested) | with skill packs, the router, tools, thinking, effort levels and the app |
-| Balanced | **Emvryx Solstice 2** | ~8B (Qwen3-8B, suggested) | one rented RTX 5090 to fine-tune |
-| Most capable | **Emvryx Apogee 2** | ~14B (Qwen3-14B, suggested) | 4-bit fine-tune on a rented RTX 5090 |
+| Everyday | **Emvryx Equinox 2** | ~4B (the 4B open base, suggested) | with skill packs, the router, tools, thinking, effort levels and the app |
+| Balanced | **Emvryx Solstice 2** | ~8B (the 8B open base, suggested) | one rented RTX 5090 to fine-tune |
+| Most capable | **Emvryx Apogee 2** | ~14B (the 14B open base, suggested) | 4-bit fine-tune on a rented RTX 5090 |
 | Top | A bigger Apogee | 30B class | chosen when it is time (see [Beyond v6.5](#beyond-v65-v7-v8-and-max)) |
 
 (The text from here to the end of this section describes the old from-scratch plan, where v4 (Equinox 2) was Flare 2.5's brain **trained longer**
@@ -822,21 +822,21 @@ Edda = Apogee. In this document, the tier names map as: Lite = Flare, Standard =
 Max = the largest Apogee.
 
 ## To discuss tomorrow: moving the model names up a size (Oct 7, 2026, the owner's idea, not decided)
-Today: Flare 2.5 = Qwen2.5-1.5B, Equinox 2 = Qwen3-4B, Solstice 2 = Qwen3-8B, Apogee 2 = Qwen3-14B (training).
-The idea, as the owner put it: "make 2.5 for Flare what Equinox is, make Equinox 2 what Solstice is, and make Solstice 3.5 4B." Clarified Oct 7: "Solstice 3.5" = a model on the new **Qwen3.5-4B** base, to be tried (a pilot first: it must really beat the 8B, or the top-tier name would mislead;
-check that our trainer and llama.cpp support the Qwen3.5 design). The relabelling of Flare and Equinox does not depend on it and can be done first. Notes so far:
+Today: Flare 2.5 = the 1.5B open base, Equinox 2 = the 4B open base, Solstice 2 = the 8B open base, Apogee 2 = the 14B open base (training).
+The idea, as the owner put it: "make 2.5 for Flare what Equinox is, make Equinox 2 what Solstice is, and make Solstice 3.5 4B." Clarified Oct 7: "Solstice 3.5" = a model on the new **a newer 4B open base** base, to be tried (a pilot first: it must really beat the 8B, or the top-tier name would mislead;
+check that our trainer and llama.cpp support the a newer open generation design). The relabelling of Flare and Equinox does not depend on it and can be done first. Notes so far:
 * Why it makes sense: the 1.5B Flare is weak at facts (it cannot name a famous person without a note); the 4B Equinox answered the same question well; the 8B and 14B are better again.
 * Cheapest way: relabel the models that already exist (no retraining): current Equinox 2 weights become the new Flare, current Solstice 2 weights the new Equinox. The 1.5B would be retired or kept as a small "other model".
 * Things to do if we go ahead: new model ids and versions (do not reuse "Flare 2.5" for different weights; saved chats store the model id), `models.json` sizes, `min_ram_gb`, `cost_weight` and plan tiers (free would then get a 4B/8B: check the server cost),
   tagline texts, About/Models pages, benchmark tables (numbers belong to the weights, not the name), the family guide, and the `lookup` policy flags.
-* Where Apogee (14B, training now) and a Qwen3.5 model fit in the new ladder is still open.
+* Where Apogee (14B, training now) and a a newer open generation model fit in the new ladder is still open.
 
-## To discuss: lessons made for Qwen, not for Flare 2 (Oct 7, 2026, the owner's decision to pursue)
+## To discuss: lessons made for the open base, not for Flare 2 (Oct 7, 2026, the owner's decision to pursue)
 Flare 2.5, Equinox 2, Solstice 2 and Apogee 2 were all trained on `data/v3/chat.jsonl`, which `data_prep/make_chat_data_v3.py` built to fix the mistakes of the tiny from-scratch v2 model (answer from notes, "I don't know" when the notes are
-silent, doubt when corrected, "unknowable" questions). Qwen already knows far more and answers well, so those lessons made it over-trust a wrong note and hedge. The owner wants Apogee (and the next models) trained on their own,
-Qwen-native lessons instead. Notes so far:
+silent, doubt when corrected, "unknowable" questions). the open base already knows far more and answers well, so those lessons made it over-trust a wrong note and hedge. The owner wants Apogee (and the next models) trained on their own,
+open-base lessons instead. Notes so far:
 * Apogee 2 has already been trained (1,266 steps, about 16 h, about $8) on the v3 lessons; a retrain on new lessons is a new run. Keep that run as the baseline and compare.
-* A Qwen-native set can be much smaller: the adapter only has to teach Emvryx's identity and manners, not knowledge. About 300 steps on the 14B would be about 4 h (about $2), against 16 h.
+* A open-base set can be much smaller: the adapter only has to teach Emvryx's identity and manners, not knowledge. About 300 steps on the 14B would be about 4 h (about $2), against 16 h.
 * Candidate contents: identity (what Emvryx is, who made it, the base credit), everyday chat and instruction following (open data, licences checked), exact formats and counts, using a note only when it matches the question
   and ignoring one that does not, saying "I'm not sure" only for things that really cannot be known (live, personal, made-up) and answering famous facts plainly, plus agent runs for VryxCode (collected from the coder model).
 * Drop the from-scratch lessons: `dont_know` for things the model does know, `memory_doubt`, and the "answer only from the notes" lesson. The app already looks things up only for recent questions or when the model is unsure.
@@ -860,7 +860,7 @@ The names are working names (see above).
 - **Same recipe for every tier:** same tokenizer, data mix and chat lessons, so they behave alike
   and differ mainly in how much they know and how well they reason.
 - **The big tier teaches the small ones:** once v3.5's 1B exists, it becomes the teacher for Lite
-  (instead of Qwen). Small models trained this way get noticeably smarter for their size, and there
+  (instead of the open base). Small models trained this way get noticeably smarter for their size, and there
   are no license questions because every model is yours.
 - **Automatic choice (v4):** the router sends easy messages ("hi", "list 3 fruits") to Lite and hard
   ones to Standard or Pro, like an "auto" mode.

@@ -1,5 +1,5 @@
 """
-qwen_lessons.py - Lessons written for models that are built on Qwen (Flare, Equinox, Solstice, Apogee), not for the tiny from-scratch models.
+open_lessons.py - Lessons written for models that are built on Qwen (Flare, Equinox, Solstice, Apogee), not for the tiny from-scratch models.
 
 WHY THIS FILE EXISTS
     data/v3/chat.jsonl was made to repair the mistakes of Ember 2 and Flare 2, models trained from scratch that knew almost nothing: it taught them to answer only from
@@ -11,7 +11,7 @@ WHY THIS FILE EXISTS
       names          well-known people, also when the name is spelt wrongly: the answer gives the right spelling, then the answer
       unknowable     live or personal things it really cannot know (the time, your phone number, tomorrow's weather): say so briefly and say who can help
       unfamiliar     a name that is made up: "I'm not familiar with that. Could you check the spelling?" (never "it might be fictional")
-    Lessons that use the app's notes (notes_use, notes_ignored, stand_firm) are built in make_chat_data_qwen.py from the teacher examples.
+    Lessons that use the app's notes (notes_use, notes_ignored, stand_firm) are built in make_chat_data_open.py from the teacher examples.
 
     Every fact below is one the author is sure of; keep it that way when adding more (a wrong fact here would be taught as true).
 """

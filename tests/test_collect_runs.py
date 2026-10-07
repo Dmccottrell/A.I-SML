@@ -91,7 +91,7 @@ class Output(unittest.TestCase):
         with self.assertRaises(SystemExit):
             C.main(["--model", "flare-2.5", "--synthetic", "1"])
         with self.assertRaises(SystemExit) as c:
-            C.main(["--coder", "qwen2.5-coder-14b", "--synthetic", "1", "--llama", "http://127.0.0.1:9", "--out", os.path.join(tempfile.mkdtemp(), "o.jsonl")])
+            C.main(["--coder", "coder-14b", "--synthetic", "1", "--llama", "http://127.0.0.1:9", "--out", os.path.join(tempfile.mkdtemp(), "o.jsonl")])
         self.assertIn("llama-server", str(c.exception))
         with self.assertRaises(SystemExit):
             C.main(["--model", "solstice-2"])                             # no tasks given

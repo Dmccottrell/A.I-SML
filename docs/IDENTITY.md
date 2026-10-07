@@ -1,13 +1,13 @@
 # Making Emvryx ours on an open base
 
-The model underneath is Qwen's. What makes it Emvryx is everything we put around and on top of it. Other companies do the same (from memory:
-Nous Research's Hermes models are tuned from Llama and Mistral; DeepSeek released reasoning models on Qwen and Llama; Perplexity has described building search models on Llama).
+The foundation underneath is an open model. What makes it Emvryx is everything we put around and on top of it. Other companies do the same (from memory:
+Nous Research's Hermes models are tuned from Llama and Mistral; DeepSeek released reasoning models on open models; Perplexity has described building search models on Llama).
 The edge is rarely the base: it is the lessons, the tests that decide what ships, and the product.
 
 ## What Emvryx says about itself (keep it true)
-Edit the answers in `data_prep/identity_lessons.py` (`qa()`); they are trained in. Today, in short: "I'm Emvryx <name>, an AI assistant, built on Qwen (an open model from Alibaba Cloud)
+Edit the answers in `data_prep/identity_lessons.py` (`qa()`); they are trained in. Today, in short: "I'm Emvryx <name>, an AI assistant, built on an open foundation model
 and tuned by Emvryx with its own lessons. I'm still small, so I can make mistakes." It says plainly that Ember 2 and Flare 2 were the models trained from scratch.
-- Never "trained from scratch" for an open-base model, and keep `NOTICE` (Qwen's licence) with the weights.
+- Never "trained from scratch" for an open-base model, and keep `NOTICE` (the foundation's licence) with the weights.
 - The old lessons said "trained from scratch on a home computer": `training/finetune_open.py` now drops every lesson that says so and adds the corrected ones.
   Flare 2.5's first run learned the old answers, so it gets a short corrective pass (`training/finetune_open.py --patch`, done by `scripts/chain_open.sh`).
 - Check it with `python evaluation/evaluate_open.py --model flare-2.5 --tuned` (the sheet is `eval/identity_open.jsonl`: who it is, who made it, what it is built on, not other AIs, honest limits).
