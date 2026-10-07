@@ -131,7 +131,7 @@
         "repeat_penalty": 1.05,
         "repeat_last_n": 64
       },
-      "max_reply_tokens": 768,
+      "max_reply_tokens": 1536,
       "temperature_bounds": [
         0.2,
         0.9
@@ -172,7 +172,7 @@
         "repeat_penalty": 1.1,
         "repeat_last_n": 64
       },
-      "max_reply_tokens": 1024,
+      "max_reply_tokens": 3072,
       "temperature_bounds": [
         0.2,
         0.9
@@ -220,7 +220,7 @@
         "repeat_penalty": 1.05,
         "repeat_last_n": 64
       },
-      "max_reply_tokens": 2048,
+      "max_reply_tokens": 4096,
       "temperature_bounds": [
         0.2,
         1.0
@@ -268,7 +268,7 @@
         "repeat_penalty": 1.05,
         "repeat_last_n": 64
       },
-      "max_reply_tokens": 2048,
+      "max_reply_tokens": 4096,
       "temperature_bounds": [
         0.2,
         1.0

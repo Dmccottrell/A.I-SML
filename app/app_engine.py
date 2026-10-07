@@ -366,7 +366,7 @@ def run_turn(tok, store, chat_id, backend, model, window, max_new, user_text=Non
             raise
     row = store.add(chat_id, "assistant", "", model["id"], "partial")
     stream = strip_source(strip_think(backend.stream(ids, max_new)))
-    guard = Guard(pacer(stream) if pacer else stream, stop=stop)
+    guard = Guard(pacer(stream) if pacer else stream, stop=stop, max_chars=max(MAX_REPLY_CHARS, int(max_new * 5)))   # a long answer is not a loop: room for what the model was allowed
     count = 0
     try:
         for _ in guard:
@@ -407,10 +407,12 @@ class FakeBackend:
 
     def __init__(self, script="Hello there, how can I help?", mode="ok", die_after=3, pause=0.0):
         self.script, self.mode, self.die_after, self.prompts = script, mode, die_after, []
+        self.limits = []                   # the most tokens each reply was allowed (max_new)
         self.pause = pause                 # seconds between words in "forever" mode: a reply a test can interrupt
 
     def stream(self, ids, max_new):
         self.prompts.append(list(ids))
+        self.limits.append(max_new)
         if self.mode == "dead":
             raise PcUnreachable()
         if self.mode == "loop":
