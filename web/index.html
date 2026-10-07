@@ -178,6 +178,16 @@ svg .core { fill: var(--core); stroke: var(--sun); stroke-width: 3; transition: 
 .code .cc-end.good .mark { color: #3fb950; } .code .cc-end.bad .mark { color: var(--danger); } .code .cc-end.stop .mark { color: var(--muted); }
 .code .cc-ask { border: 1px solid var(--accent); border-radius: 12px; padding: 10px 12px; display: flex; flex-direction: column; gap: 8px; margin: 6px 0; background: var(--surface); }
 .code .cc-ask .q { font-weight: 700; } .code .cc-ask pre { color: var(--muted); max-height: 220px; overflow: auto; }
+.code .cc-msg { color: var(--text); padding: 6px 0 2px; display: flex; flex-direction: column; gap: 8px; font-family: 'DM Sans', system-ui, sans-serif; font-size: 15px; line-height: 1.6; }
+.code .cc-msg p { margin: 0; white-space: pre-wrap; word-break: break-word; }
+.code .cc-msg code.in { font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 13px; background: var(--surface2); border-radius: 6px; padding: 1px 6px; }
+.code .cc-msg.good { border-left: 3px solid #3fb950; padding-left: 12px; }
+.code .cc-block { border: 1px solid var(--line); border-radius: 10px; background: var(--surface); overflow: hidden; }
+.code .cc-block .bh { display: flex; justify-content: space-between; align-items: center; padding: 4px 6px 4px 12px; color: var(--muted); font: 12px ui-monospace, Menlo, Consolas, monospace; border-bottom: 1px solid var(--line); }
+.code .cc-block .copy { background: transparent; border: 1px solid var(--line); border-radius: 999px; color: var(--muted); padding: 2px 12px; min-height: 28px; font-size: 12px; }
+.code .cc-block pre { padding: 8px 12px; overflow-x: auto; white-space: pre; }
+.code .cc-next { display: flex; flex-wrap: wrap; gap: 8px; padding: 2px 0 6px; }
+.code .cc-next .lead { color: var(--muted); font-size: 13px; width: 100%; }
 @keyframes ccglow { 50% { opacity: .55; } } @keyframes ccpulse { 50% { transform: scale(.82); opacity: .7; } }
 @media (max-width: 900px) { .code .drawer { width: 100%; box-shadow: none; } }
 /* dialogs */
@@ -274,7 +284,7 @@ svg .core { fill: var(--core); stroke: var(--sun); stroke-width: 3; transition: 
           <div class="menu" id="codeModelMenu" hidden style="top:auto;bottom:100%;left:0;right:auto;margin:0 0 10px"></div>
           <div class="card">
             <label class="sr" for="codeTask">Task</label>
-            <textarea id="codeTask" rows="2" maxlength="8000" placeholder="What should VryxCode build or fix?"></textarea>
+            <textarea id="codeTask" rows="2" maxlength="8000" placeholder="Ask, answer, or tell VryxCode what to build or fix"></textarea>
             <div class="tools">
               <div class="left"><button class="pill" id="codeModelBtn" aria-haspopup="true" aria-label="Choose model"></button><button class="pill plain" id="codeAuto" aria-pressed="false">Auto-approve: off</button></div>
               <button class="send" id="codeGo" aria-label="Run">&uarr;</button>
@@ -880,7 +890,7 @@ async function openCode() {
   const usable = C.info.models.filter((m) => m.state === 'ready');
   if (!cModel() || cModel().state !== 'ready') C.model = (usable.find((m) => m.id === S.model) || usable[0] || C.info.models[0] || {}).id;
   C.project = C.project || C.info.running && C.info.project || C.info.projects[0] || 'my-project';
-  if (C.info.running && C.info.running !== C.sid) { C.sid = C.info.running; C.seen = 0; C.last = null; $('codeIn').replaceChildren(); C.project = C.info.project; }
+  if (C.info.running && C.info.running !== C.sid) { C.sid = C.info.running; C.seen = 0; C.last = null; $('codeIn').replaceChildren(); C.project = C.info.project; C.chatKey = C.project + '|' + C.model; }
   renderCodeBar(); if (!C.sid) emptyFeed();
   refreshFiles(); if (C.sid) poll();
 }
@@ -979,6 +989,7 @@ function diffNode(preview) {
 }
 function cEvent(e) {
   const feed = $('codeIn');
+  if (e.kind === 'user') { feed.append(el('div', {class: 'cc-user'}, el('span', {class: 'ember'}), el('span', {}, e.text))); C.last = null; return; }
   if (e.kind === 'start') { feed.replaceChildren(el('div', {class: 'cc-user'}, el('span', {class: 'ember'}), el('span', {}, e.task))); C.last = null; return; }
   if (e.kind === 'step') {
     const prose = String(e.raw || '').split(/<\|tool_call\|>|<tool_call>/)[0].trim();
@@ -1011,10 +1022,35 @@ function cEvent(e) {
     feed.append(node); return;
   }
   if (e.kind === 'end') {
-    const cls = e.error || e.limited ? 'bad' : e.finished ? 'good' : 'stop';
-    feed.append(el('div', {class: 'cc-end ' + cls}, el('span', {class: 'mark'}, e.finished ? '✓' : e.error || e.limited ? '✗' : '■'),
-      el('span', {}, /^(Stopped|Paused)/i.test(e.summary || '') ? e.summary : (e.finished ? 'All done: ' : e.error ? 'Could not finish: ' : e.limited ? 'Paused: ' : 'Stopped: ') + (e.summary || (e.turns + ' steps used')))));
+    if (e.finished || e.said) {                       // the model talking to the person: what it did, what to run, what it suggests
+      feed.append(renderMessage(e.summary || 'Done.', e.finished));
+      if (e.next && e.next.length) feed.append(el('div', {class: 'cc-next'}, el('span', {class: 'lead'}, 'Suggested next:'),
+        ...e.next.map((t) => el('button', {class: 'chip', onclick: () => { $('codeTask').value = t; $('codeGo').click(); }}, t))));
+      return;
+    }
+    const cls = e.error || e.limited ? 'bad' : 'stop';
+    feed.append(el('div', {class: 'cc-end ' + cls}, el('span', {class: 'mark'}, e.error || e.limited ? '\u2717' : '\u25a0'),
+      el('span', {}, /^(Stopped|Paused)/i.test(e.summary || '') ? e.summary : (e.error ? 'Could not finish: ' : e.limited ? 'Paused: ' : 'Stopped: ') + (e.summary || (e.turns + ' steps used')))));
   }
+}
+// a message from the model: paragraphs, `inline code`, and fenced blocks (commands to run) with a Copy button
+function renderMessage(text, good) {
+  const box = el('div', {class: 'cc-msg' + (good ? ' good' : '')});
+  const parts = String(text).split(/```/);
+  parts.forEach((part, i) => {
+    if (i % 2 === 0) {
+      part.split(/\n{2,}/).map((x) => x.trim()).filter(Boolean).forEach((para) => {
+        const p = el('p', {}); para.split(/(`[^`\n]+`)/).forEach((bit) => p.append(bit.length > 2 && bit[0] === '`' && bit.endsWith('`') ? el('code', {class: 'in'}, bit.slice(1, -1)) : document.createTextNode(bit)));
+        box.append(p);
+      });
+    } else {
+      const nl = part.indexOf('\n'), first = nl >= 0 ? part.slice(0, nl).trim() : '', lang = /^[A-Za-z0-9_+-]{1,14}$/.test(first) ? first : '';
+      const code = (lang || nl < 0 ? part.slice(nl + 1) : part).replace(/^\n|\n$/g, '');
+      const btn = el('button', {class: 'copy', onclick: async () => { try { await navigator.clipboard.writeText(code); btn.textContent = 'Copied'; } catch (x) { btn.textContent = 'Select and copy'; } setTimeout(() => { btn.textContent = 'Copy'; }, 1500); }}, 'Copy');
+      box.append(el('div', {class: 'cc-block'}, el('div', {class: 'bh'}, el('span', {}, lang || 'run this'), btn), el('pre', {}, code)));
+    }
+  });
+  return box;
 }
 // the live "working" line: our ember mark pulsing, a word for what it is doing (it changes every few seconds), the file or command, seconds, and the text as it is written
 function renderLive(live, state) {
@@ -1055,9 +1091,15 @@ async function poll() {
 }
 $('codeGo').onclick = async () => {
   const task = $('codeTask').value.trim(); if (!task || !C.model) return;
+  if (C.sid && C.chatKey === C.project + '|' + C.model) {         // a conversation is going in this project with this model: this is its next message
+    const r = await post('/api/code/sessions/' + C.sid + '/message', {text: task}); const j = await r.json().catch(() => ({}));
+    if (r.ok) { C.stopping = false; $('codeStop').disabled = false; $('codeTask').value = ''; poll(); return; }
+    if (r.status !== 404 && r.status !== 400) { note('bad', 'Could not send', (j.message || '') + ' ' + (j.action || '')); return; }
+    if (r.status === 400 && /still working/i.test(j.message || '')) { note('bad', 'Still working', 'Press Stop first, or wait for it to finish.'); return; }
+  }
   const r = await post('/api/code/start', {project: C.project, task, model: C.model, auto_edits: C.auto}); const j = await r.json();
   if (!r.ok) { note('bad', 'Could not start', j.message + ' ' + (j.action || '')); return; }
-  C.sid = j.id; C.seen = 0; C.stopping = false; $('codeStop').disabled = false; $('codeTask').value = ''; $('codeIn').replaceChildren(); poll();
+  C.sid = j.id; C.chatKey = C.project + '|' + C.model; C.seen = 0; C.stopping = false; $('codeStop').disabled = false; $('codeTask').value = ''; $('codeIn').replaceChildren(); poll();
 };
 $('codeStop').onclick = () => { if (!C.sid || C.stopping) return; C.stopping = true; $('codeStop').disabled = true; paintLive(); post('/api/code/sessions/' + C.sid + '/stop').then(() => poll()); };
 $('codeTask').addEventListener('keydown', (e) => { if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); $('codeGo').click(); } });

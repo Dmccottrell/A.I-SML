@@ -79,7 +79,7 @@ HOOKS_FILE = os.path.join(".emvryx", "hooks.json")
 TOOL_PROMPT = ("You can use tools. Write one call at a time: <|tool_call|>{\"name\": \"read_file\", \"args\": "
                "{\"path\": \"main.py\"}}<|end_tool_call|> and wait for the result. Tools: list_files(path), "
                "read_file(path, start, end), write_file(path, content), edit_file(path, old, new), run(command), "
-               "git(args), diagnostics(path), finish(summary). Small steps; run the tests before you finish; "
+               "git(args), diagnostics(path), finish(summary, next). Small steps; run the tests before you finish; "
                "if a task is too big, say so and suggest a first step.")
 
 
@@ -483,20 +483,42 @@ def compact(messages, keep=4):
     return system + [head] + tail, middle
 
 
+THINK_TAGS = re.compile(r"<think>.*?</think>", re.S)
 NO_CALL_LIMIT = 3          # stop after this many replies in a row without a tool call, instead of using every step on the same answer
 NO_CALL_TOTAL = 5          # ...or this many in one run (a model that alternates "I can't" with the same tool call is stuck too)
 REPEAT_HINT_AT = 3         # the same step with the same result this many times: tell the model to try something else
 REPEAT_STOP_AT = 5         # ...and stop the run at this many
 
 
+SHELL_FENCES = {"powershell", "ps1", "pwsh", "bash", "sh", "shell", "zsh", "cmd", "bat", "console", "terminal", "text", "txt", ""}
+
+
+def pasted_code(words):
+    """True when a reply in words contains a block of program code (not just a command to type): a fenced block in a programming language, or a long one."""
+    for m in re.finditer(r"```([A-Za-z0-9_+-]*)[^\n]*\n(.*?)```", words, re.S):
+        lang, body = m.group(1).lower(), m.group(2).strip("\n")
+        if lang in SHELL_FENCES and len(body.splitlines()) < 4:
+            continue
+        return True
+    return False
+
+
+CODE_NUDGE = ("Do not paste code into the chat. Save it in the project with write_file (one file per call), then run it or its tests. "
+              "If you really cannot do this, say so in a sentence and say what the user could do.")
+
+
 def run_agent(task, generate, sandbox, max_turns=8, system=None, project=True, hooks=None, permissions=None,
-              ask=None, context_tokens=None):
+              ask=None, context_tokens=None, history=None, chat_mode=False):
     """Let a model work on `task`. `generate(messages)` returns the model's next reply as text.
 
     project        show the workspace's EMVRYX.md / AGENTS.md as "Project notes" before the task
     hooks          a Hooks object (default: .emvryx/hooks.json in the workspace, if any)
     permissions    a Permissions object (default: the defaults; `ask(name, args) -> bool` is used for "ask")
     context_tokens when the conversation gets near this size, old steps are compacted (see `compact`)
+
+    history        the conversation so far (the `messages` an earlier call returned): `task` is then the person's next message, not a new task
+    chat_mode      a reply in plain words (no tool call) is a message to the person, not a mistake: it ends the turn and `said` is True, so the person can
+                   answer. (Once, if the model pastes code into the chat before doing any work, it is told to save the code in the project instead.)
 
     Returns {"finished", "summary", "turns", "messages", "episodes"}. The messages are the whole conversation: exactly
     what a training example for the coding skill pack looks like. `episodes` holds the steps that compaction dropped.
@@ -505,8 +527,12 @@ def run_agent(task, generate, sandbox, max_turns=8, system=None, project=True, h
     permissions = permissions or Permissions(ask=ask)
     notes = load_project_notes(sandbox) if project else ""
     first = (f"Project notes:\n{notes}\n\nTask: {task}" if notes else task)
-    messages = ([{"role": "system", "content": system}] if system else []) + [{"role": "user", "content": first}]
+    if history:
+        messages = list(history) + [{"role": "user", "content": task}]
+    else:
+        messages = ([{"role": "system", "content": system}] if system else []) + [{"role": "user", "content": first}]
     episodes = []
+    used_tools, nudged = 0, False
     no_call, no_call_total, repeats = 0, 0, {}        # replies with no tool call at all (the model is chatting, not working); steps repeated
     for turn in range(1, max_turns + 1):
         if context_tokens and estimate_tokens(messages) > context_tokens * 0.7:
@@ -534,6 +560,13 @@ def run_agent(task, generate, sandbox, max_turns=8, system=None, project=True, h
                 if problems:
                     result += "\n" + "\n".join(problems)
         except ToolError as e:
+            if chat_mode and str(e).startswith("no tool call found"):
+                words = THINK_TAGS.sub("", reply).strip()
+                if pasted_code(words) and used_tools == 0 and not nudged:           # code pasted into the chat instead of saved: once, tell it to use the tools
+                    nudged = True
+                    messages.append({"role": "user", "content": CODE_NUDGE})
+                    continue
+                return {"finished": False, "said": True, "summary": words, "turns": turn, "messages": messages, "episodes": episodes}
             result, done = f"error: {e}", False
             no_call = no_call + 1 if str(e).startswith("no tool call found") else 0
             no_call_total += 1 if str(e).startswith("no tool call found") else 0
@@ -544,6 +577,7 @@ def run_agent(task, generate, sandbox, max_turns=8, system=None, project=True, h
                                    "Try a specific task (for example: create hello.py that prints a greeting, with a test), or pick Solstice or the Qwen coder."}
         else:
             no_call = 0
+            used_tools += 1
             if not done:
                 key = (name, json.dumps(args, sort_keys=True, default=str), str(result)[:300])     # the same step with the same result again
                 repeats[key] = repeats.get(key, 0) + 1

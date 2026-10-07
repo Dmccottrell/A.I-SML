@@ -100,6 +100,10 @@ class Session:
         self.cv = threading.Condition()
         self.started = time.time()
         self.live = None                               # what the model is doing right now (not part of `events`, which only record finished steps)
+        self.history = None                            # the whole conversation so far, so a follow-up message continues it
+        self.live_messages = None                      # the conversation as it grows during a turn (kept if the turn is stopped)
+        self.generate, self.max_turns, self.context_tokens, self.extra_programs = None, 12, None, ()
+        self.turns_run = 0
 
     def emit(self, kind, **data):
         with self.cv:
@@ -189,6 +193,7 @@ class Session:
         seen = {"n": 0}
 
         def call(messages):
+            self.live_messages = messages
             if self.stop.is_set():
                 raise Stopped()
             if seen["n"] and messages and messages[-1]["role"] == "user":
@@ -219,39 +224,82 @@ class Session:
             try:
                 name, args = harness.parse_tool_call(reply)
                 self.emit("step", tool=name, preview=clip(vryxcode.preview(name, args), 2500), raw=clip(reply, 1500))
+                if name == "finish" and isinstance(args, dict):
+                    nxt = args.get("next")
+                    self.next_steps = [clip(str(x), 120) for x in nxt[:3]] if isinstance(nxt, list) else []
                 if name != "finish":
                     target = str(args.get("path") or args.get("command") or args.get("args") or args.get("action") or "") if isinstance(args, dict) else ""
                     self.live = {"phase": "running", "since": time.time(), "tool": name, "target": target[:120]}      # the tool runs next; cleared when the next model call starts
             except harness.ToolError:
-                self.emit("step", tool="", preview=clip(reply, 1500), raw=clip(reply, 1500))
+                pass                                       # words with no tool call: if the turn ends on them they arrive as the "end" message, so no step is shown
             return reply
         return call
 
     def run(self, generate, max_turns, context_tokens, extra_programs=()):
+        """The first turn of the conversation (the task the person typed)."""
+        self.generate, self.max_turns, self.context_tokens, self.extra_programs = generate, max_turns, context_tokens, tuple(extra_programs)
+        self._turn(self.task, first=True)
+
+    def send(self, text):
+        """The person's next message: another turn of the same conversation (the model sees everything said and done so far)."""
+        text = str(text or "").strip()
+        if not text:
+            raise CodeError("Write a message first.")
+        if len(text) > 8000:
+            raise CodeError("That message is too long.", "Keep it under 8,000 characters.")
+        with self.cv:
+            if self.state in ("starting", "working", "asking"):
+                raise CodeError("It is still working.", "Wait for it to finish, or press Stop.")
+            if self.generate is None:
+                raise CodeError("This session cannot continue.", "Start a new one.")
+            self.state = "working"
+            self.stop.clear()
+        threading.Thread(target=self._turn, args=(text, False), daemon=True).start()
+
+    def _turn(self, text, first):
         self.state = "working"
-        self.emit("start", task=self.task, model=self.model_id, project=self.project)
+        self.next_steps = []
+        self.turns_run += 1
+        if self.quotas:
+            self.deadline = self.quotas.session_deadline()          # each message gets its own time allowance
+        if first:
+            self.emit("start", task=text, model=self.model_id, project=self.project)
+        else:
+            self.emit("user", text=text)
+        self.live_messages = None
         try:
-            result = vryxcode.run_task(self.task, self.wrap(generate), self.workspace, self.ask, max_turns, context_tokens, extra_programs,
+            result = vryxcode.run_task(text, self.wrap(self.generate), self.workspace, self.ask, self.max_turns, self.context_tokens, self.extra_programs,
                                        out=lambda *_: None, tools=self.tools, git_identity=self.identity,
-                                       command_prefix=self.prefix, container=bool(self.prefix))
-            self.emit("end", finished=result["finished"], summary=clip(result["summary"]), turns=result["turns"])
-            self.state = "done" if result["finished"] else "stopped"
+                                       command_prefix=self.prefix, container=bool(self.prefix), history=self.history, chat_mode=True)
+            self.history = result["messages"]
+            self.emit("end", finished=result["finished"], said=bool(result.get("said")), summary=clip(result["summary"], 4000), turns=result["turns"],
+                      next=self.next_steps if result["finished"] else [])
+            self.state = "done" if (result["finished"] or result.get("said")) else "stopped"
         except U.LimitError as e:
+            self._keep_history()
             when = f" Try again in about {max(1, int((e.retry_after or 0) // 60))} minutes." if e.retry_after else ""
             self.emit("end", finished=False, summary=f"Your usage ran out: {e.message}{when} Your files so far are kept.", turns=0, limited=True)
             self.state = "limited"
         except QuotaStop as e:
+            self._keep_history()
             self.emit("end", finished=False, summary="Stopped: " + e.message + " Your files so far are kept.", turns=0, limited=True)
             self.state = "limited"
         except Stopped:
+            self._keep_history()
             self.emit("end", finished=False, summary="Stopped.", turns=0)
             self.state = "stopped"
         except BaseException as e:                     # a model that cannot be reached, a full disk, ...
+            self._keep_history()
             msg = getattr(e, "message", None) or str(e) or e.__class__.__name__
             self.emit("end", finished=False, summary="It could not finish: " + clip(msg, 500), turns=0, error=True)
             self.state = "failed"
         finally:
             self.live = None
+
+    def _keep_history(self):
+        """A stopped or failed turn still happened: the next message continues from where it got to."""
+        if self.live_messages:
+            self.history = list(self.live_messages)
 
 
 class CodeManager:
