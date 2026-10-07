@@ -264,6 +264,7 @@ class Chatting(Base):
         self.assertFalse(self.ask(self.owner, self.new_chat(self.owner), "hi", effort="quick")[2][0][1]["auto"])
 
     def test_the_thinking_pause_fits_the_message(self):
+        self.owner.call("POST", "/api/settings", {"thinking_pause": "natural"})
         hello = self.ask(self.owner, self.new_chat(self.owner), "hi", effort="auto")[2][0][1]["min_first_s"]
         hard = self.ask(self.owner, self.new_chat(self.owner), "Explain step by step how to solve 3x + 7 = 22",
                         effort="auto", model="equinox-2")[2][0][1]["min_first_s"]

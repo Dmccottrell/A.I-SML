@@ -141,3 +141,16 @@ class Relevance(Base):
         self.assertLessEqual(len(m.note()["text"]), 700)
         self.assertIn("number 59", m.note()["text"])
         self.assertIsNone(m.note("who was the first president?"))
+
+
+class PauseSetting(Base):
+    def ask_pause(self, who, effort="balanced"):
+        return self.ask(who, self.new_chat(who), "tell me about cats", effort=effort)[2][0][1]["min_first_s"]
+
+    def test_the_pause_is_short_by_default_and_can_be_off_or_natural(self):
+        self.assertEqual(self.ask_pause(self.owner), 0.48)             # 1.2 s x 0.4
+        self.owner.call("POST", "/api/settings", {"thinking_pause": "off"})
+        self.assertEqual(self.ask_pause(self.owner), 0.0)
+        self.owner.call("POST", "/api/settings", {"thinking_pause": "natural"})
+        self.assertEqual(self.ask_pause(self.owner), 1.2)
+        self.assertEqual(self.owner.call("POST", "/api/settings", {"thinking_pause": "bogus"})[1]["thinking_pause"], "natural")

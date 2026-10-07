@@ -533,7 +533,7 @@ class AppState:
                 self.lookups.pop(next(iter(self.lookups)))
 
     def get_settings(self, user):
-        s = {"window_mode": "everyday", "show_tokens": False, "web_search": "auto", "memory": True}
+        s = {"window_mode": "everyday", "show_tokens": False, "web_search": "auto", "memory": True, "thinking_pause": "short"}
         s.update(self.settings.get(user, {}))
         return s
 
@@ -543,6 +543,8 @@ class AppState:
             s["window_mode"] = new["window_mode"]
         if isinstance(new.get("show_tokens"), bool):
             s["show_tokens"] = new["show_tokens"]
+        if new.get("thinking_pause") in chat_polish.PAUSE_SCALE:
+            s["thinking_pause"] = new["thinking_pause"]
         if isinstance(new.get("memory"), bool):
             s["memory"] = new["memory"]
         if new.get("web_search") in lookup_auto.MODES:
@@ -814,7 +816,7 @@ def start_turn(state, who, chat_id, text, model_id, effort, regenerate=False, re
     max_new = min(EFFORTS[effort], max(32, window // 2), model.get("max_reply_tokens", EFFORTS[effort]))
     if mode:
         max_new = min(regen_modes.length_for(max_new, mode), max(32, window // 2))
-    pause = chat_polish.pause_for(question, effort)            # the thinking pause fits the message
+    pause = round(chat_polish.pause_for(question, effort) * chat_polish.PAUSE_SCALE[state.get_settings(who["user"])["thinking_pause"]], 2)   # fits the message, then the person's setting
     decision["pause"] = pause
     bounds = tuple(model.get("temperature_bounds", effort_router.DEFAULT_BOUNDS))
     base_temp = model.get("sampling", {}).get("temperature", TEMPERATURE["balanced"])
