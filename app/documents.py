@@ -26,7 +26,32 @@ MAX_DOCS = 40
 TEXT_EXTS = {".txt", ".md", ".markdown", ".csv", ".tsv", ".json", ".log", ".py", ".js", ".ts", ".java", ".c", ".cpp", ".h", ".cs", ".go", ".rs",
              ".rb", ".php", ".sql", ".yaml", ".yml", ".toml", ".ini", ".xml", ".css", ".sh", ".bat", ".tex", ".rst"}
 HTML_EXTS = {".html", ".htm"}
-KINDS = "PDF, Word (.docx), HTML, or a text file (.txt, .md, .csv, .json, code)"
+IMAGE_EXTS = {".png", ".jpg", ".jpeg", ".webp", ".bmp", ".gif", ".heic"}
+KINDS = "PDF, Word (.docx), HTML, a picture or screenshot (its text is read), or a text file (.txt, .md, .csv, .json, code)"
+_ocr = None                                                                 # the text reader is loaded on first use (it takes a second)
+
+
+def ocr_image(data):
+    """The text in a picture, read top to bottom. The models can't see pictures yet; this is what lets a screenshot of text be used."""
+    global _ocr
+    try:
+        from PIL import Image
+        if _ocr is None:
+            from rapidocr_onnxruntime import RapidOCR
+            _ocr = RapidOCR()
+    except ImportError:
+        raise ValueError("Reading text in pictures needs one extra package on the computer that runs the app: pip install rapidocr-onnxruntime") from None
+    try:
+        img = Image.open(io.BytesIO(data)).convert("RGB")
+        if max(img.size) > 3000:
+            img.thumbnail((3000, 3000))
+        buf = io.BytesIO()
+        img.save(buf, "PNG")
+        result, _ = _ocr(buf.getvalue())
+    except Exception:
+        raise ValueError("I couldn't open that picture. Is it a PNG, JPG or WebP?") from None
+    rows = sorted(result or [], key=lambda r: (round(min(p[1] for p in r[0]) / 12), min(p[0] for p in r[0])))   # lines, then left to right
+    return "\n".join(r[1] for r in rows)
 
 
 def _ext(name):
@@ -95,6 +120,11 @@ def extract_text(name, data):
             for row in t.rows:
                 parts.append(" | ".join(c.text.strip() for c in row.cells))
         text = "\n".join(parts)
+    elif ext in IMAGE_EXTS:
+        text = ocr_image(data)
+        if not text.strip():
+            raise ValueError("I couldn't find any text in that picture. Emvryx can read the words in a picture or screenshot, but it can't describe photos yet.")
+        text = "[Text read from a picture]\n" + text
     elif ext in HTML_EXTS:
         raw = _decode(data)
         raw = re.sub(r"(?is)<(script|style).*?</\1>", " ", raw)

@@ -4,6 +4,11 @@ What changed, newest first. Measured numbers live in [BENCHMARKS.md](BENCHMARKS.
 
 ## October 2026 (late)
 
+### Latest
+- Apogee 2 is a beta in the app (its 4-bit file is on the PC).
+- **Attach menu:** the + button is now a small menu (files, photos or screenshots, a folder, your documents) instead of a full-screen box. Pictures have their words read; photos can't be described yet.
+- **Teacher mode is its own chat:** type anything, or tap a tool chip; a Tools button stays in the chat.
+
 ### Models
 - **All four open-base models were retrained with the Qwen-native lessons** (`data/qwen/chat.jsonl`, 10,419 chats plus 1,000 corrected identity lessons; see [QWEN_LESSONS.md](QWEN_LESSONS.md)). Cloud runs on rented GPUs, each backed up to the private Hugging Face repo.
 - **Apogee 2 (Qwen3-14B) is trained.** Identity 16/16. Its 4-bit file (Q4_K_M) is 8.4 GB instead of 28.2 GB; it is in the app as "planned" until the file is on the PC.

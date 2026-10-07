@@ -278,13 +278,14 @@ svg .core { fill: var(--core); stroke: var(--sun); stroke-width: 3; transition: 
       <div class="box" id="box">
         <div class="menu" id="modelMenu" hidden></div>
         <div class="menu" id="effortMenu" hidden></div>
+        <div class="menu" id="attachMenu" hidden style="width:min(300px,100%)"></div>
         <div class="card">
           <label class="sr" for="input">Message</label>
           <div class="attached" id="attached" hidden></div>
           <textarea id="input" rows="1" placeholder="Message Emvryx..." maxlength="20000"></textarea>
           <div class="tools">
             <div class="left">
-              <button class="pill plain" id="plus" aria-label="Attach a document" title="Attach a document" style="width:44px;justify-content:center;font-size:22px">+</button>
+              <button class="pill plain" id="plus" aria-label="Add files or photos" title="Add files or photos" aria-haspopup="true" style="width:44px;justify-content:center;font-size:22px">+</button>
               <button class="pill" id="modelBtn" aria-haspopup="true" aria-label="Choose model"></button>
               <button class="pill plain" id="effortBtn" aria-haspopup="true" aria-label="Choose effort"></button>
             </div>
@@ -494,7 +495,7 @@ function icon(name) {
 function closeAcct() { $('acctMenu').hidden = true; $('account').setAttribute('aria-expanded', 'false'); }
 function renderLinks() {   // two tools in the list; Usage, Memory and Settings live in the account menu (Skills, Documents and Connected apps are hidden until they work)
   const mk = (ico, name, note, fn) => el('button', {class: 'link', onclick: () => { document.body.classList.remove('menu-open'); closeAcct(); fn(); }}, icon(ico), el('span', {}, name), note ? el('small', {}, note) : '');
-  $('links').replaceChildren(mk('code', 'VryxCode', '', openCode), mk('spark', 'Skills', '', openSkills), mk('pencil', 'Teacher mode', '', () => openTeacher()), mk('doc', 'Documents', '', openDocs), mk('lock', 'Private chat', 'Never saved', () => newChat(true)));
+  $('links').replaceChildren(mk('code', 'VryxCode', '', openCode), mk('spark', 'Skills', '', openSkills), mk('pencil', 'Teacher mode', '', () => newChat(false, 'teacher')), mk('doc', 'Documents', '', openDocs), mk('lock', 'Private chat', 'Never saved', () => newChat(true)));
   $('acctMenu').replaceChildren(mk('chart', 'Usage', '', openUsage), mk('brain', 'Memory', '', openMemory), mk('gear', 'Settings', '', openSettings));
 }
 $('account').onclick = (e) => { e.stopPropagation(); const m = $('acctMenu'); m.hidden = !m.hidden; $('account').setAttribute('aria-expanded', String(!m.hidden)); };
@@ -532,13 +533,30 @@ function bubble(m, last) {
   if (last && !S.busy) acts.append(el('button', {class: 'chip', 'aria-haspopup': 'true', onclick: (e) => regenMenu(e.currentTarget)}, 'Regenerate \u25be'));
   return el('div', {class: 'msg ai', 'data-id': m.id}, meta, el('div', {class: 'bubble'}, m.content), acts);
 }
+function isTeacherChat() { return S.skill === 'teacher' || S.skill === 'study'; }
+function teacherHome(sk) {   // the start of a Teacher mode chat: type anything, or tap a tool
+  const side = S.skill === 'study' ? 'student' : 'teacher';
+  const tab = (id, skill, label) => el('button', {class: 'chip' + (side === id ? ' on' : ''), onclick: () => { S.skill = skill; remember(); renderThread(false); }}, label);
+  const box = el('div', {class: 'empty', style: 'padding:24px 0'}, logo(56), el('h1', {}, 'Teacher mode'),
+    el('div', {}, side === 'teacher' ? 'Ask for anything in your own words, or tap a tool below. Every number comes from an exact calculator, never a guess.' : 'Ask anything, or tap a tool. It guides you to the answer instead of just giving it.'),
+    el('div', {class: 'tabs', style: 'justify-content:center;margin:14px 0 6px'}, tab('teacher', 'teacher', 'For teachers'), tab('student', 'study', 'For students')));
+  if (!S.tools) { loadTeacher().then(() => { if (!S.messages.length && isTeacherChat()) renderThread(false); }).catch(() => {}); return box; }
+  for (const [kind, label] of [['make', 'MAKE'], ['calc', 'CALCULATE']]) {
+    const list = S.tools.filter((t) => t.side === side && t.kind === kind); if (!list.length) continue;
+    box.append(el('div', {class: 'label', style: 'padding:12px 0 6px'}, label),
+      el('div', {style: 'display:flex;flex-wrap:wrap;gap:8px;justify-content:center'}, ...list.map((t) => el('button', {class: 'chip', title: t.blurb, onclick: () => openTool(t)}, t.name))));
+  }
+  return box;
+}
 function renderThread(jump) {
   const t = $('thread'); t.replaceChildren();
   $('title').textContent = S.title;
   const sk = S.skills.find((x) => x.id === S.skill);
   if (S.private) t.append(el('div', {class: 'note'}, 'Private chat: not saved, and gone when you leave it'));
-  if (sk) t.append(el('div', {class: 'note'}, sk.name + ' is on for this chat'));
-  if (!S.messages.length) t.append(el('div', {class: 'empty'}, logo(64), el('h1', {}, sk ? sk.name : 'How can I help?'),
+  const tc = isTeacherChat();
+  if (sk) t.append(el('div', {class: 'note'}, sk.name + ' is on for this chat', tc ? el('button', {class: 'chip', style: 'margin-left:10px;min-height:30px;padding:2px 12px', onclick: () => openTeacher()}, 'Tools') : ''));
+  if (!S.messages.length && tc) { t.append(teacherHome(sk)); }
+  else if (!S.messages.length) t.append(el('div', {class: 'empty'}, logo(64), el('h1', {}, sk ? sk.name : 'How can I help?'),
     el('div', {}, sk ? sk.does : 'Ask anything. Pick a model and how much it should think under the box.'),
     sk ? el('button', {class: 'chip', style: 'margin-top:12px', onclick: () => { $('input').value = sk.try; $('input').focus(); }}, 'Try: ' + sk.try) : ''));
   const last = [...S.messages].reverse().find((m) => m.role === 'assistant');
@@ -569,7 +587,7 @@ function renderComposer() {
   $('effortBtn').replaceChildren(shown, el('span', {}, '▾'));
   const s = $('send'); s.className = 'send' + (S.busy ? ' stop' : ''); s.innerHTML = S.busy ? '&#9632;' : '&uarr;'; s.setAttribute('aria-label', S.busy ? 'Stop' : 'Send');
 }
-function closeMenus() { $('modelMenu').hidden = true; $('effortMenu').hidden = true; }
+function closeMenus() { $('modelMenu').hidden = true; $('effortMenu').hidden = true; $('attachMenu').hidden = true; }
 $('modelBtn').onclick = () => {
   const open = !$('modelMenu').hidden; closeMenus(); if (open) return;
   const m = $('modelMenu'); m.replaceChildren(el('div', {class: 'head'}, 'SELECT MODEL'));
@@ -600,7 +618,15 @@ const input = $('input');
 input.addEventListener('input', () => { input.style.height = 'auto'; input.style.height = Math.min(160, input.scrollHeight) + 'px'; });
 input.addEventListener('keydown', (e) => { if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) { e.preventDefault(); send(); } });
 $('send').onclick = () => (S.busy ? stop() : send());
-$('plus').onclick = () => openAttach();
+$('plus').onclick = () => {
+  const open = !$('attachMenu').hidden; closeMenus(); if (open) return;
+  const m = $('attachMenu'); const row = (icon, title, sub, fn) => el('button', {class: 'opt', onclick: () => { closeMenus(); fn(); }}, el('span', {style: 'font-size:20px;width:26px;text-align:center'}, icon), el('span', {class: 'grow'}, el('b', {}, title), el('small', {}, sub)));
+  m.replaceChildren(row('\ud83d\udcc4', 'Upload files', 'PDF, Word, text', () => pickMany({accept: DOC_ACCEPT})),
+    row('\ud83d\uddbc\ufe0f', 'Photos or screenshots', 'Its words are read', () => pickMany({accept: 'image/*'})),
+    row('\ud83d\udcc1', 'Upload a folder', 'Every file inside', () => pickMany({folder: true})),
+    row('\ud83d\udcda', 'Your documents', 'Pick ones you added before', openAttach));
+  m.hidden = false;
+};
 $('newChat').onclick = () => newChat(false); $('newTop').onclick = () => newChat(false);
 $('burger').onclick = () => document.body.classList.add('menu-open');
 $('scrim').onclick = () => document.body.classList.remove('menu-open');
@@ -665,15 +691,42 @@ function dialog(children, closeText, extra) {
 
 // ---------------------------------------------------------------- documents (files you add so a chat can answer about them)
 function sizeText(chars) { return chars < 1000 ? chars + ' letters' : chars < 1e6 ? Math.round(chars / 1000) + 'K letters' : (chars / 1e6).toFixed(1) + 'M letters'; }
+const DOC_ACCEPT = '.pdf,.docx,.txt,.md,.csv,.tsv,.json,.html,.htm,.log,.py,.js,.ts,.java,.c,.cpp,.cs,.go,.rs,.sql,.yaml,.yml,.xml,.css,.sh,.tex';
+const SKIP_DIRS = /(^|\/)(\.git|node_modules|__pycache__|\.venv|venv|dist|build|\.idea|\.vscode)\//;
+async function fileToB64(f) { const buf = new Uint8Array(await f.arrayBuffer()); let bin = ''; for (let i = 0; i < buf.length; i += 0x8000) bin += String.fromCharCode.apply(null, buf.subarray(i, i + 0x8000)); return btoa(bin); }
 function pickFile(onDone) {
-  const inp = el('input', {type: 'file', accept: '.pdf,.docx,.txt,.md,.csv,.tsv,.json,.html,.htm,.log,.py,.js,.ts,.java,.c,.cpp,.cs,.go,.rs,.sql,.yaml,.yml,.xml,.css,.sh,.tex', style: 'display:none'});
+  const inp = el('input', {type: 'file', accept: DOC_ACCEPT + ',image/*', style: 'display:none'});
   inp.onchange = async () => {
     const f = inp.files[0]; if (!f) return;
     if (f.size > 10e6) return alert('That file is too big. The limit is 10 MB.');
-    const buf = new Uint8Array(await f.arrayBuffer()); let bin = ''; for (let i = 0; i < buf.length; i += 0x8000) bin += String.fromCharCode.apply(null, buf.subarray(i, i + 0x8000));
-    await onDone(f.name, btoa(bin));
+    await onDone(f.name, await fileToB64(f));
   };
   document.body.append(inp); inp.click(); setTimeout(() => inp.remove(), 60000);
+}
+function pickMany({accept, folder}) {   // files, photos or a whole folder: each one is added to your documents and attached to this chat
+  const inp = el('input', {type: 'file', multiple: true, style: 'display:none'});
+  if (accept) inp.accept = accept; if (folder) inp.setAttribute('webkitdirectory', '');
+  inp.onchange = () => { const list = [...inp.files]; inp.remove(); if (list.length) addFiles(list); };
+  document.body.append(inp); inp.click(); setTimeout(() => inp.remove(), 60000);
+}
+async function addFiles(list) {
+  const box = $('attached'); const note = el('span', {class: 'chip', role: 'status'}, ''); box.hidden = false; box.append(note);
+  const added = []; const skipped = [];
+  const files = list.filter((f) => { const p = f.webkitRelativePath || f.name; if (SKIP_DIRS.test(p) || /(^|\/)\.[^/]+$/.test(p)) return false; return true; });
+  let n = 0;
+  for (const f of files) {
+    n++; note.textContent = 'Reading ' + n + ' of ' + files.length + '...';
+    if (f.size > 10e6) { skipped.push(f.name + ' (over 10 MB)'); continue; }
+    try {
+      const r = await post('/api/documents', {name: f.name, data: await fileToB64(f)}); const j = await r.json().catch(() => ({}));
+      if (r.ok) added.push({id: j.id, name: j.name}); else skipped.push(f.name + ' (' + (j.message || 'could not be added').replace(/\.$/, '') + ')');
+    } catch (e) { skipped.push(f.name); }
+    if (added.length >= 40) break;
+  }
+  note.remove();
+  if (added.length) await setDocs([...S.docs, ...added.filter((a) => !S.docs.some((d) => d.id === a.id))]);
+  if (skipped.length) alert((added.length ? 'Added ' + added.length + '. ' : 'Nothing was added. ') + 'Skipped ' + skipped.length + ':\n' + skipped.slice(0, 8).join('\n') + (skipped.length > 8 ? '\n...' : ''));
+  input.focus();
 }
 async function uploadDoc(status) {
   return new Promise((resolve) => pickFile(async (name, data) => {
@@ -686,7 +739,7 @@ async function uploadDoc(status) {
 async function openDocs() {
   closeModals(); document.body.classList.remove('menu-open');
   const j = await (await api('/api/documents')).json();
-  const status = el('div', {style: 'color:var(--muted);font-size:14px', role: 'status'}, 'Add a PDF, Word or text file, then ask questions about it, or have it summarized. It stays on this computer, in your own space.');
+  const status = el('div', {style: 'color:var(--muted);font-size:14px', role: 'status'}, 'Add a PDF, Word or text file, or a picture of text, then ask questions about it, or have it summarized. It stays on this computer, in your own space.');
   const kids = [el('h2', {}, 'Documents'), status,
     el('button', {class: 'btn', onclick: async () => { if (await uploadDoc(status)) setTimeout(openDocs, 900); }}, 'Add a document')];
   if (!j.documents.length) kids.push(el('div', {style: 'color:var(--muted)'}, 'No documents yet.'));
@@ -735,7 +788,7 @@ async function loadTeacher() { if (!S.tools) S.tools = (await (await api('/api/t
 async function openTeacher(side) {
   const tools = await loadTeacher(); side = side || S.teacherSide || 'teacher'; S.teacherSide = side; closeModals(); document.body.classList.remove('menu-open');
   const tab = (id, label) => el('button', {class: 'chip' + (side === id ? ' on' : ''), onclick: () => openTeacher(id)}, label);
-  const kids = [el('h2', {}, 'Teacher mode'), el('div', {style: 'color:var(--muted)'}, side === 'teacher' ? 'Make classroom materials, check the numbers and get suggestions. Every number comes from an exact calculator, never a guess.' : 'Learn it, practise it and plan your studying. It guides you to the answer instead of just giving it.'),
+  const kids = [el('h2', {}, 'Teacher tools'), el('div', {style: 'color:var(--muted)'}, side === 'teacher' ? 'Make classroom materials, check the numbers and get suggestions. Every number comes from an exact calculator, never a guess.' : 'Learn it, practise it and plan your studying. It guides you to the answer instead of just giving it.'),
     el('div', {class: 'tabs'}, tab('teacher', 'For teachers'), tab('student', 'For students'))];
   for (const [kind, label] of [['make', 'MAKE'], ['calc', 'CALCULATE']]) {
     const list = tools.filter((t) => t.side === side && t.kind === kind); if (!list.length) continue;
@@ -765,7 +818,7 @@ function openTool(t) {
 }
 async function runMake(t, values) {
   const r = await post('/api/teacher/prompt', {tool: t.id, values}); const j = await r.json(); if (!r.ok) return alert(j.message || 'Something went wrong.');
-  closeModals(); await newChat(false, j.skill); input.value = j.prompt; send();
+  closeModals(); if (!isTeacherChat() || S.skill !== j.skill || S.busy) await newChat(false, j.skill); input.value = j.prompt; send();
 }
 async function runCalc(t, values, err) {
   const r = await post('/api/teacher/calc', {tool: t.id, values}); const j = await r.json();
@@ -773,7 +826,7 @@ async function runCalc(t, values, err) {
   closeModals();
   const shown = j.text.split('\n').filter((l) => !l.startsWith('# ')).map((l) => l.replace(/^## /, '').replace(/^- /, '\u2022 ')).join('\n');
   const kids = [el('h2', {}, j.title), el('div', {class: 'report'}, shown)], row = el('div', {class: 'btnrow'});
-  if (j.advice_prompt) row.append(el('button', {class: 'btn', onclick: async () => { closeModals(); await newChat(false, t.side === 'teacher' ? 'teacher' : 'study'); input.value = j.advice_prompt; send(); }}, 'Get suggestions'));
+  if (j.advice_prompt) row.append(el('button', {class: 'btn', onclick: async () => { closeModals(); const sk = t.side === 'teacher' ? 'teacher' : 'study'; if (S.skill !== sk || S.busy) await newChat(false, sk); input.value = j.advice_prompt; send(); }}, 'Get suggestions'));
   row.append(el('button', {class: 'btn ghost', onclick: () => saveAs(j.text, j.title)}, 'Save as\u2026'), el('button', {class: 'btn ghost', onclick: () => openTool(t)}, 'Change numbers'));
   dialog([...kids, row], 'Close');
 }

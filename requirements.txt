@@ -16,3 +16,4 @@ pypdf
 cryptography>=42.0.4
 # time zones on Windows (live_data.py: the time in another city)
 tzdata
+rapidocr-onnxruntime
