@@ -150,7 +150,7 @@ def collect(tasks, generate, label, samples=1, max_turns=12, context_tokens=None
             work, folder = task.prepare()
             try:
                 before = file_hashes(folder, task.protected)
-                result = V.run_task(task.prompt, generate, folder, V.make_ask(True), max_turns, context_tokens, out=lambda *_: None)
+                result = V.run_task(task.prompt, generate, folder, V.make_ask(True), max_turns, context_tokens, out=lambda *_: None, checks=False)
                 reason = judge(task, result, folder, before)
                 key = (task.id, solution_hash(folder, task))
             finally:

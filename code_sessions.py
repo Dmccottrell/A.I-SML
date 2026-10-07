@@ -163,8 +163,11 @@ class Session:
         if name in getattr(self, "_always", set()) and name != "github":       # pulling and pushing always ask, every time
             return True
         qid = len(self.events)
+        shown = vryxcode.preview(name, args)
+        if harness.preview_check(self.workspace, name, args) == "":
+            shown += "\n\u2713 Checked: no problems found in this change"          # a change with a problem never gets this far: the model is told to fix it first
         with self.cv:
-            self.pending, self.answer, self.state = {"id": qid, "tool": name, "preview": clip(vryxcode.preview(name, args), 2500)}, None, "asking"
+            self.pending, self.answer, self.state = {"id": qid, "tool": name, "preview": clip(shown, 2500)}, None, "asking"
         self.emit("ask", id=qid, tool=name, preview=self.pending["preview"])
         with self.cv:
             while self.answer is None and not self.stop.is_set():

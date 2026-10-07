@@ -272,3 +272,72 @@ class PastedCode(unittest.TestCase):
         self.assertTrue(harness.pasted_code("Here:\n```python\nprint(1)\n```"))
         self.assertTrue(harness.pasted_code("Here:\n```\ndef f():\n    return 1\n\nprint(f())\n```"))
         self.assertFalse(harness.pasted_code("No code here."))
+
+
+class PreviewChecks(unittest.TestCase):
+    """A change is looked at before it is made, so nobody is asked to approve code that would not even run."""
+
+    def agent(self, replies, folder=None, files=None, ask=None):
+        import harness
+        import os
+        import tempfile
+        folder = folder or tempfile.mkdtemp()
+        for name, text in (files or {}).items():
+            os.makedirs(os.path.dirname(os.path.join(folder, name)) or folder, exist_ok=True)
+            open(os.path.join(folder, name), "w").write(text)
+        asked = []
+        model = V.ScriptedChat(list(replies))
+        with harness.Sandbox(workspace=folder) as box:
+            r = harness.run_agent("go", model, box, max_turns=10, checks=True, permissions=harness.Permissions(ask=lambda n, a: asked.append(n) or True))
+        return r, model, asked, folder
+
+    def test_broken_python_is_refused_before_asking_and_is_not_saved(self):
+        import os
+        r, model, asked, folder = self.agent([V.harness_call("write_file", path="a.py", content="def f(:\n    pass\n"),
+                                              V.harness_call("write_file", path="a.py", content="def f():\n    return 1\n"), V.harness_call("finish", summary="ok")])
+        self.assertTrue(r["finished"])
+        self.assertEqual(asked, [])                                                     # write_file is allowed without asking here; nothing was asked either time
+        told = [m["content"] for m in model.seen[1] if m["role"] == "user"][-1]
+        self.assertIn("preview check", told)
+        self.assertIn("syntax error", told)
+        self.assertEqual(open(os.path.join(folder, "a.py")).read(), "def f():\n    return 1\n")
+
+    def test_the_good_change_says_checked(self):
+        r, model, _, _ = self.agent([V.harness_call("write_file", path="a.py", content="x = 1\n"), V.harness_call("finish", summary="ok")])
+        self.assertIn("checked", [m["content"] for m in model.seen[1] if m["role"] == "user"][-1])
+
+    def test_an_edit_that_breaks_the_file_is_refused_and_json_is_checked_too(self):
+        import os
+        r, model, _, folder = self.agent([V.harness_call("edit_file", path="a.py", old="return 1", new="return ("),
+                                          V.harness_call("write_file", path="c.json", content="{bad"), V.harness_call("finish", summary="ok")],
+                                         files={"a.py": "def f():\n    return 1\n"})
+        self.assertEqual(open(os.path.join(folder, "a.py")).read(), "def f():\n    return 1\n")
+        self.assertFalse(os.path.exists(os.path.join(folder, "c.json")))
+        users = [m["content"] for m in model.seen[-1] if m["role"] == "user"]
+        self.assertTrue(any("syntax error" in u for u in users))
+        self.assertTrue(any("not valid JSON" in u for u in users))
+
+    def test_it_must_run_the_tests_once_before_finishing_when_the_project_has_them(self):
+        files = {"test_a.py": "import unittest\n\n\nclass T(unittest.TestCase):\n    def test_x(self):\n        self.assertTrue(True)\n"}
+        r, model, _, _ = self.agent([V.harness_call("write_file", path="a.py", content="x = 1\n"), V.harness_call("finish", summary="done"),
+                                     V.harness_call("run", command="python -m unittest"), V.harness_call("finish", summary="done")], files=files)
+        self.assertTrue(r["finished"])
+        self.assertEqual(r["turns"], 4)
+        self.assertIn("not finished yet", [m["content"] for m in model.seen[2] if m["role"] == "user"][-1])
+
+    def test_the_tests_nudge_comes_only_once(self):
+        files = {"test_a.py": "x = 1\n"}
+        r, model, _, _ = self.agent([V.harness_call("write_file", path="a.py", content="x = 1\n"), V.harness_call("finish", summary="done"),
+                                     V.harness_call("finish", summary="done")], files=files)
+        self.assertTrue(r["finished"])
+        self.assertEqual(r["turns"], 3)
+
+    def test_preview_check_reports_good_bad_and_not_applicable(self):
+        import harness
+        import tempfile
+        d = tempfile.mkdtemp()
+        self.assertEqual(harness.preview_check(d, "write_file", {"path": "a.py", "content": "x = 1\n"}), "")
+        self.assertIn("syntax error", harness.preview_check(d, "write_file", {"path": "a.py", "content": "x = (\n"}))
+        self.assertIsNone(harness.preview_check(d, "write_file", {"path": "notes.txt", "content": "x = (\n"}))
+        self.assertIsNone(harness.preview_check(d, "write_file", {"path": "../x.py", "content": "x = (\n"}))
+        self.assertIsNone(harness.preview_check(d, "run", {"command": "ls"}))

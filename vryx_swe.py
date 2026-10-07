@@ -70,7 +70,7 @@ def solve(instance, generate, repos_dir, ask=None, max_turns=20, context_tokens=
     work, repo_dir = prepare_repo(instance, repos_dir, clone)
     try:
         result = V.run_task(PROMPT.format(issue=instance["problem_statement"]), generate, repo_dir, ask or V.make_ask(True),
-                            max_turns, context_tokens, out=lambda *_: None)
+                            max_turns, context_tokens, out=lambda *_: None, checks=False)       # no self-checks: this measures the model alone
         patch = collect_patch(repo_dir)
     finally:
         shutil.rmtree(work, ignore_errors=True)

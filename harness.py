@@ -344,6 +344,74 @@ class Sandbox:
             raise ToolError(f"wrong arguments for {name}: {e}")
 
 
+# -------------------------------------------------------------------- checks before and after a change
+def check_text(path, text):
+    """Problems found in the text a file would hold: a Python syntax error, an undefined name (when pyflakes is installed), or invalid JSON. [] = fine or not checked."""
+    low = path.lower()
+    if low.endswith(".py"):
+        try:
+            ast.parse(text, filename=path)
+        except SyntaxError as e:
+            return [f"{path}:{e.lineno}: syntax error: {e.msg}"]
+        try:
+            from pyflakes import api, reporter
+            import io
+            out = io.StringIO()
+            api.check(text, path, reporter.Reporter(out, out))
+            return [l for l in out.getvalue().splitlines() if "undefined name" in l][:5]       # not unused imports: they are noise that sends a small model in circles
+        except ImportError:
+            return []
+    if low.endswith(".json"):
+        try:
+            json.loads(text)
+        except ValueError as e:
+            return [f"{path}: not valid JSON: {e}"]
+    return []
+
+
+def checkable(path):
+    return str(path).lower().endswith((".py", ".json"))
+
+
+def proposed_text(root, name, args):
+    """(path, the text the file would hold after this write_file/edit_file), or None when that cannot be worked out (the tool then reports its own error)."""
+    if name not in ("write_file", "edit_file") or not isinstance(args, dict) or not isinstance(args.get("path"), str) or not checkable(args["path"]):
+        return None
+    full = os.path.realpath(os.path.join(root, args["path"]))
+    if full != root and not full.startswith(root + os.sep):
+        return None
+    if name == "write_file":
+        return args["path"], str(args.get("content", ""))
+    try:
+        with open(full, encoding="utf-8") as f:
+            text = f.read()
+    except OSError:
+        return None
+    old, new = str(args.get("old", "")), str(args.get("new", ""))
+    return (args["path"], text.replace(old, new, 1)) if old and text.count(old) == 1 else None
+
+
+def preview_check(root, name, args):
+    """Look at a change BEFORE it is made. None = nothing to check, "" = it looks fine, else the problem(s) it would cause."""
+    got = proposed_text(os.path.realpath(root), name, args)
+    if got is None:
+        return None
+    return "; ".join(check_text(*got))
+
+
+def has_tests(root):
+    for dirpath, dirs, names in os.walk(root):
+        dirs[:] = [d for d in dirs if d not in (".git", "node_modules", "__pycache__", ".venv", "venv")]
+        if dirpath[len(root):].count(os.sep) > 2:
+            dirs[:] = []
+        if any((n.startswith("test_") or n.endswith("_test.py")) and n.endswith(".py") for n in names):
+            return True
+    return False
+
+
+TEST_COMMAND = re.compile(r"unittest|pytest")
+
+
 # -------------------------------------------------------------------- the loop
 def parse_tool_call(text):
     """The first tool call in the model's text -> (name, args). Raises ToolError if it can't be read."""
@@ -508,7 +576,7 @@ CODE_NUDGE = ("Do not paste code into the chat. Save it in the project with writ
 
 
 def run_agent(task, generate, sandbox, max_turns=8, system=None, project=True, hooks=None, permissions=None,
-              ask=None, context_tokens=None, history=None, chat_mode=False):
+              ask=None, context_tokens=None, history=None, chat_mode=False, checks=False):
     """Let a model work on `task`. `generate(messages)` returns the model's next reply as text.
 
     project        show the workspace's EMVRYX.md / AGENTS.md as "Project notes" before the task
@@ -519,6 +587,10 @@ def run_agent(task, generate, sandbox, max_turns=8, system=None, project=True, h
     history        the conversation so far (the `messages` an earlier call returned): `task` is then the person's next message, not a new task
     chat_mode      a reply in plain words (no tool call) is a message to the person, not a mistake: it ends the turn and `said` is True, so the person can
                    answer. (Once, if the model pastes code into the chat before doing any work, it is told to save the code in the project instead.)
+
+    checks         look at a Python or JSON change before it is made and refuse it if it would not even parse (nothing is saved and the model is told what is wrong, so
+                   the person is not asked to approve broken code); say "checked" after a good change; and, once, ask for the tests to be run before finishing if code
+                   changed since they last passed and the project has tests.
 
     Returns {"finished", "summary", "turns", "messages", "episodes"}. The messages are the whole conversation: exactly
     what a training example for the coding skill pack looks like. `episodes` holds the steps that compaction dropped.
@@ -533,6 +605,7 @@ def run_agent(task, generate, sandbox, max_turns=8, system=None, project=True, h
         messages = ([{"role": "system", "content": system}] if system else []) + [{"role": "user", "content": first}]
     episodes = []
     used_tools, nudged = 0, False
+    edited_since_test, test_nudged = False, False
     no_call, no_call_total, repeats = 0, 0, {}        # replies with no tool call at all (the model is chatting, not working); steps repeated
     for turn in range(1, max_turns + 1):
         if context_tokens and estimate_tokens(messages) > context_tokens * 0.7:
@@ -543,6 +616,10 @@ def run_agent(task, generate, sandbox, max_turns=8, system=None, project=True, h
         done = False
         try:
             name, args = parse_tool_call(reply)
+            if checks and name in ("write_file", "edit_file"):
+                problem = preview_check(sandbox.root, name, args)
+                if problem:
+                    raise ToolError("preview check: this change would break the file, so nothing was saved. " + problem + ". Fix it and send it again.")
             refusal = permissions.check(name, args)
             if refusal:
                 raise ToolError(refusal)
@@ -551,10 +628,18 @@ def run_agent(task, generate, sandbox, max_turns=8, system=None, project=True, h
                 if blocked:
                     raise ToolError("; ".join(blocked))
             if name == "finish":
+                if checks and edited_since_test and not test_nudged and has_tests(sandbox.root):
+                    test_nudged = True
+                    raise ToolError("not finished yet: code changed since the tests last passed. Run them first (python -m unittest), then finish.")
                 problems = hooks.run(sandbox, "on_finish")
                 if problems:
                     raise ToolError("not finished yet: " + "; ".join(problems))
             result, done = sandbox.call(name, args)
+            if checks and name in ("write_file", "edit_file") and isinstance(args, dict) and checkable(args.get("path", "")):
+                result += " \u00b7 checked \u2713"
+                edited_since_test = edited_since_test or str(args.get("path", "")).endswith(".py")
+            if checks and name == "run" and isinstance(args, dict) and TEST_COMMAND.search(str(args.get("command", ""))) and str(result).startswith("exit code 0"):
+                edited_since_test = False
             if name in ("write_file", "edit_file") and not done:
                 problems = hooks.run(sandbox, "after_edit", str(args.get("path", "")))
                 if problems:

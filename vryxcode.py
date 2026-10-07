@@ -237,7 +237,7 @@ GITHUB_TOOL_NOTE = (" github(action) with action status, pull or push works with
 
 
 def run_task(task, generate, workspace, ask, max_turns=12, context_tokens=None, extra_programs=(), out=print, tools=None, git_identity=None, command_prefix=None, container=False,
-             history=None, chat_mode=False):
+             history=None, chat_mode=False, checks=True):
     """Run one task. Returns harness.run_agent's result (finished, summary, turns, messages).
     `tools` is {name: function(**args) -> text} of extra tools (the GitHub tool, run by the server, never by the sandbox)."""
     programs = set(harness.ALLOWED_PROGRAMS) | set(extra_programs)
@@ -250,7 +250,7 @@ def run_task(task, generate, workspace, ask, max_turns=12, context_tokens=None, 
             sandbox.register_tool(name, fn)
         system = SYSTEM + (GITHUB_TOOL_NOTE if "github" in (tools or {}) else "")
         result = harness.run_agent(task, generate, sandbox, max_turns=max_turns, system=system, ask=ask, context_tokens=context_tokens,
-                                   permissions=harness.Permissions(rules=rules, ask=ask), history=history, chat_mode=chat_mode)
+                                   permissions=harness.Permissions(rules=rules, ask=ask), history=history, chat_mode=chat_mode, checks=checks)
     out(("Done: " if result["finished"] else "Stopped without finishing: ") + (result["summary"] or f"{result['turns']} steps used") )
     return result
 

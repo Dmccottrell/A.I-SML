@@ -5,6 +5,12 @@ It is the coding helper from the roadmap ("Agentic coding") given its own name, 
 
 > **First real-model results (Oct 6 2026):** on 10 practice exercises, first try / after a retry: Qwen2.5-Coder-14B (outside model) 8 / 9, Solstice 2 5 / 5, Equinox 2 4 / 5. The agent loop, tool format and permission flow all worked with real models. See [BENCHMARKS.md](BENCHMARKS.md).
 
+## Checks before and after a change
+VryxCode looks at a Python or JSON change **before** it is made. If the file would not even parse (a syntax error, an invalid JSON file, or, when pyflakes is installed, an undefined name), nothing is saved, you are not asked
+to approve it, and the model is told what is wrong so it can fix it and try again. A good change shows "Checked: no problems found" on the approval card and "checked" on the result line. Before it finishes, if code changed
+since the tests last passed and the project has tests, it is asked once to run them first. Benchmarks and data collection (`bench_exercises.py`, `vryx_swe.py`, `collect_runs.py`) switch these checks off (`checks=False`),
+because they measure the model on its own and must stay comparable with earlier results.
+
 ## Talking to VryxCode (a conversation, not just a task)
 VryxCode can answer in plain words as well as use its tools. When it replies in words with no tool call, that ends its turn and shows as a message; you answer in the same box and the next
 message continues the same conversation (the model sees everything said and done so far, as long as the project and the model stay the same; pick another project or model to start fresh).
