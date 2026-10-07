@@ -58,6 +58,7 @@ import app_skills
 import export_doc
 import teacher_mode
 import connected_apps
+import documents
 import github_link
 import lookup_auto
 import mailer
@@ -90,6 +91,7 @@ PAIR_PAGE = ('<!doctype html><html lang="en"><head><meta charset="utf-8"><meta n
              'p{color:#9AA3BC}button{width:100%;min-height:48px;border:0;border-radius:12px;background:#F5A524;color:#1A1204;font:600 17px system-ui;cursor:pointer}'
              '</style></head><body><main><h1>Sign in to Emvryx</h1><p>This link signs in <b>one device</b>, once. Only continue if you asked for it.</p>'
              '<form method="post" action="/pair/{{token}}"><button type="submit">Sign in on this device</button></form></main></body></html>')
+MAX_DOC_BODY = 15_000_000                              # a document upload (base64): documents.MAX_FILE_BYTES is 10 MB
 MAX_UPLOAD = 30_000_000                                # a project upload (base64): see code_sessions.MAX_IMPORT_BYTES
 MAX_TEXT = 20_000
 EFFORTS = {"quick": 160, "balanced": 320, "deep": 700}          # most words a reply may have, per effort level
@@ -269,6 +271,7 @@ class AppState:
         self.ram_gb = ram_gb or total_memory_gb()
         self.clock, self.pace = clock, pace
         self.verbose = False                                   # print timings (set by the command line)
+        self.libraries = {}                                    # person -> documents.Library (files they added)
         self.saved = {}                                        # person -> saved_notes.SavedNotes (approved notes, usable offline)
         self.memories = {}                                     # person -> user_memory.Memory (facts about them, shared by every model)
         self.previews = code_preview.Previews()               # short-lived tokens for the live preview of a project
@@ -521,6 +524,13 @@ class AppState:
                 path = os.path.join(self.data_dir, f"chats-{user}.db") if self.data_dir else ":memory:"
                 self.stores[user] = E.ChatStore(path)
             return self.stores[user]
+
+    def docs_for(self, user):
+        with self.lock:
+            if user not in self.libraries:
+                path = os.path.join(self.data_dir, f"docs-{user}.db") if self.data_dir else ":memory:"
+                self.libraries[user] = documents.Library(path, clock=self.clock)
+            return self.libraries[user]
 
     def saved_for(self, user):
         with self.lock:
@@ -848,6 +858,10 @@ def start_turn(state, who, chat_id, text, model_id, effort, regenerate=False, re
         text = None
 
     skill_hint = app_skills.hint(store.skill(chat_id))        # the chat's skill (Study helper ...): extra instructions for the model only
+    library = state.docs_for(who["user"])
+    attached = [d for d in (library.info(i) for i in store.docs(chat_id)) if d]     # documents attached to this chat: their passages go in as notes
+    if attached:
+        skill_hint = (skill_hint + "\n\n" if skill_hint else "") + documents.hint([d["name"] for d in attached])
 
     timing = {}
 
@@ -886,13 +900,19 @@ def start_turn(state, who, chat_id, text, model_id, effort, regenerate=False, re
                     last = [m for m in store.messages(chat_id) if m["role"] == "user"]
                     asked = last[-1]["content"] if last else ""
                 mem_note = memory.note(asked)
-            if text:                                                               # Auto lookup (lookup_auto.py)
+            doc_notes = []
+            if attached:                                                           # the question is about the documents: no Wikipedia or web notes to distract
+                asked_doc = text or next((m["content"] for m in reversed(store.messages(chat_id)) if m["role"] == "user"), "")
+                doc_notes = documents.notes_for(library, [d["id"] for d in attached], asked_doc, budget=int(min(24000, max(3000, window * 3.5 * 0.45))))
+            if text and not attached:                                              # Auto lookup (lookup_auto.py)
                 web_mode = state.get_settings(who["user"])["web_search"]
                 notes, found = lookup_auto.gather(text, state.wiki, state.web_fn, web_mode, private=chat_id < 0,
                                                   max_notes=5 if window >= 6000 else 3,
                                                   saved=state.saved_for(who["user"]), now=state.clock(), policy=model.get("lookup", "always"))
                 if found["asked"]:
                     q.put(("notes", {k: v for k, v in found.items() if k != "used"}))
+            if doc_notes:
+                notes = doc_notes + list(notes or [])
             if mem_note:
                 notes = [mem_note] + list(notes or [])
             t_load = time.monotonic()
@@ -1049,7 +1069,8 @@ class Handler(http.server.BaseHTTPRequestHandler):
 
     def _json(self):
         n = int(self.headers.get("Content-Length") or 0)
-        if n > (MAX_UPLOAD if self.path.split("?")[0] == "/api/code/import" else MAX_BODY):
+        limit = {"/api/code/import": MAX_UPLOAD, "/api/documents": MAX_DOC_BODY}.get(self.path.split("?")[0], MAX_BODY)
+        if n > limit:
             raise ValueError("too big")
         raw = self.rfile.read(n) if n else b""
         return json.loads(raw) if raw else {}
@@ -1251,6 +1272,9 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 return self.api_get_chat(who, int(m.group(1)))
             if path == "/api/settings":
                 return self._send(200, self.state.get_settings(who["user"]))
+            if path == "/api/documents":
+                return self._send(200, {"documents": self.state.docs_for(who["user"]).list(), "max_mb": documents.MAX_FILE_BYTES // 1_000_000,
+                                        "kinds": documents.KINDS})
             if path == "/api/skills":
                 return self._send(200, app_skills.catalog())
             if path == "/api/teacher/tools":
@@ -1354,8 +1378,28 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 skill = str(body.get("skill") or "")
                 if skill and not app_skills.get(skill):
                     return self._send(400, {"code": "bad_skill", "message": "That skill isn't available."})
-                cid = self.state.store(who["user"]).new_chat(private=bool(body.get("private")), skill=skill)
+                store = self.state.store(who["user"])
+                cid = store.new_chat(private=bool(body.get("private")), skill=skill)
+                lib = self.state.docs_for(who["user"])
+                store.set_docs(cid, [i for i in (body.get("docs") or []) if isinstance(i, int) and lib.info(i)])
                 return self._send(200, {"id": cid})
+            if path == "/api/documents":
+                import base64
+                try:
+                    data = base64.b64decode(str(body.get("data", "")), validate=False)
+                    return self._send(200, self.state.docs_for(who["user"]).add(str(body.get("name", "")), data))
+                except (ValueError, TypeError) as e:
+                    return self._send(400, {"code": "bad_document", "message": str(e) if isinstance(e, ValueError) and not str(e).startswith("Incorrect padding") else "That file couldn't be read."})
+            m = re.fullmatch(r"/api/chats/(-?\d+)/docs", path)
+            if m:
+                cid = int(m.group(1))
+                store = self.state.store(who["user"])
+                if not store.exists(cid):
+                    return self._send(404, {"code": "not_found", "message": "That chat is gone."})
+                lib = self.state.docs_for(who["user"])
+                ids = [i for i in (body.get("ids") or []) if isinstance(i, int) and lib.info(i)]
+                store.set_docs(cid, ids)
+                return self._send(200, {"docs": [lib.info(i) for i in store.docs(cid)]})
             if path == "/api/teacher/calc":
                 try:
                     return self._send(200, teacher_mode.calculate(str(body.get("tool", "")), body.get("values") or {}))
@@ -1455,6 +1499,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
             if path == "/api/delete-everything":
                 self.state.store(who["user"]).delete_everything()
                 self.state.saved_for(who["user"]).clear()
+                self.state.docs_for(who["user"]).clear()
                 return self._send(200, {"ok": True})
             m = re.fullmatch(r"/api/chats/(-?\d+)/messages/(\d+)/like", path)
             if m:
@@ -1503,6 +1548,9 @@ class Handler(http.server.BaseHTTPRequestHandler):
         who = self._who()
         if not who:
             return
+        m = re.fullmatch(r"/api/documents/(\d+)", path)
+        if m:
+            return self._send(200, {"ok": self.state.docs_for(who["user"]).delete(int(m.group(1)))})
         m = re.fullmatch(r"/api/chats/(-?\d+)", path)
         if not m:
             return self._send(404, {"code": "not_found", "message": "Not found."})
@@ -1723,7 +1771,8 @@ class Handler(http.server.BaseHTTPRequestHandler):
             return self._send(404, {"code": "not_found", "message": "That chat is gone."})
         msgs = [{"id": m["id"], "role": m["role"], "content": m["content"], "model_id": m["model_id"], "status": m["status"]}
                 for m in store.messages(cid) if not (m["status"] == "compacted" and not m["content"])]
-        self._send(200, {"id": cid, "title": store.title(cid), "private": cid < 0, "skill": store.skill(cid), "messages": msgs})
+        self._send(200, {"id": cid, "title": store.title(cid), "private": cid < 0, "skill": store.skill(cid), "messages": msgs,
+                         "docs": [d for d in (self.state.docs_for(who["user"]).info(i) for i in store.docs(cid)) if d]})
 
     def api_admin(self, path, body):
         st = self.state

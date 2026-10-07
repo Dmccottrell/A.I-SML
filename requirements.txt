@@ -10,5 +10,7 @@ transformers
 # saving answers as PDF / Word files (export_doc.py, the Teacher assistant)
 fpdf2
 python-docx
+# reading PDFs you add under Documents (documents.py)
+pypdf
 # keeping saved tokens (GitHub) encrypted on disk (secret_box.py)
 cryptography>=42.0.4

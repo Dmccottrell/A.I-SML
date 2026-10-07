@@ -92,6 +92,9 @@ svg .core { fill: var(--core); stroke: var(--sun); stroke-width: 3; transition: 
 .composer { flex-shrink: 0; padding: 0 16px calc(12px + env(safe-area-inset-bottom)); }
 .box { max-width: 760px; margin: 0 auto; position: relative; }
 .card { background: var(--surface); border: 1px solid var(--line); border-radius: 20px; padding: 12px 10px 10px 16px; display: flex; flex-direction: column; gap: 10px; }
+.attached { display: flex; flex-wrap: wrap; gap: 6px; } .attached[hidden] { display: none; }
+.attached .chip { display: inline-flex; align-items: center; gap: 6px; max-width: 100%; min-height: 32px; padding: 4px 10px; }
+.attached .chip span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 52vw; }
 .card textarea { width: 100%; background: transparent; border: 0; outline: none; resize: none; color: var(--text); font: inherit; max-height: 160px; padding: 0; }
 .tools { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
 .tools .left { display: flex; align-items: center; gap: 8px; min-width: 0; flex-wrap: wrap; }
@@ -277,10 +280,11 @@ svg .core { fill: var(--core); stroke: var(--sun); stroke-width: 3; transition: 
         <div class="menu" id="effortMenu" hidden></div>
         <div class="card">
           <label class="sr" for="input">Message</label>
+          <div class="attached" id="attached" hidden></div>
           <textarea id="input" rows="1" placeholder="Message Emvryx..." maxlength="20000"></textarea>
           <div class="tools">
             <div class="left">
-              <button class="pill plain" id="plus" aria-label="Attach, skills, web search (coming soon)" disabled style="width:44px;justify-content:center;font-size:22px">+</button>
+              <button class="pill plain" id="plus" aria-label="Attach a document" title="Attach a document" style="width:44px;justify-content:center;font-size:22px">+</button>
               <button class="pill" id="modelBtn" aria-haspopup="true" aria-label="Choose model"></button>
               <button class="pill plain" id="effortBtn" aria-haspopup="true" aria-label="Choose effort"></button>
             </div>
@@ -405,7 +409,7 @@ const fmt = (n) => Math.round(n).toLocaleString('en-US');
 const nice = (n) => fmt(n >= 100 ? Math.round(n / 10) * 10 : Math.round(n));
 
 // ---------------------------------------------------------------- state
-const S = {state: null, chatId: null, skill: '', skills: [], messages: [], title: 'New chat', private: false, model: null, effort: 'balanced', busy: false, abort: null,
+const S = {state: null, chatId: null, skill: '', skills: [], docs: [], messages: [], title: 'New chat', private: false, model: null, effort: 'balanced', busy: false, abort: null,
            theme: localStorage.getItem('emvryx_theme') || 'dark', shown: null, stick: true, thinkTimer: null};
 try { S.model = localStorage.getItem('emvryx_model'); S.effort = localStorage.getItem('emvryx_effort') || 'balanced'; } catch (e) {}
 if (!['auto', 'quick', 'balanced', 'deep'].includes(S.effort)) S.effort = 'balanced';
@@ -476,6 +480,7 @@ function renderChats() {
 }
 const ICONS = {code: 'M8 8l-4 4 4 4M16 8l4 4-4 4M13.5 6l-3 12', lock: 'M7 11V8a5 5 0 0 1 10 0v3M6 11h12v9H6z', chart: 'M5 20V10M12 20V4M19 20v-7',
                brain: 'M12 4a3 3 0 0 0-3 3 3 3 0 0 0-3 3 3 3 0 0 0 1 5 3 3 0 0 0 5 2zM12 4a3 3 0 0 1 3 3 3 3 0 0 1 3 3 3 3 0 0 1-1 5 3 3 0 0 1-5 2z',
+               doc: 'M7 3h7l4 4v14H7zM14 3v4h4M9.5 12h5M9.5 16h5',
                pencil: 'M4 20l1-4L16 5l3 3L8 19zM14 7l3 3',
                spark: 'M12 3l2.2 5.8L20 11l-5.8 2.2L12 19l-2.2-5.8L4 11l5.8-2.2z',
                gear: 'M12 9a3 3 0 1 0 0 6 3 3 0 0 0 0-6zM12 3v3M12 18v3M3 12h3M18 12h3M5.6 5.6l2.1 2.1M16.3 16.3l2.1 2.1M5.6 18.4l2.1-2.1M16.3 7.7l2.1-2.1'};
@@ -489,23 +494,23 @@ function icon(name) {
 function closeAcct() { $('acctMenu').hidden = true; $('account').setAttribute('aria-expanded', 'false'); }
 function renderLinks() {   // two tools in the list; Usage, Memory and Settings live in the account menu (Skills, Documents and Connected apps are hidden until they work)
   const mk = (ico, name, note, fn) => el('button', {class: 'link', onclick: () => { document.body.classList.remove('menu-open'); closeAcct(); fn(); }}, icon(ico), el('span', {}, name), note ? el('small', {}, note) : '');
-  $('links').replaceChildren(mk('code', 'VryxCode', '', openCode), mk('spark', 'Skills', '', openSkills), mk('pencil', 'Teacher mode', '', () => openTeacher()), mk('lock', 'Private chat', 'Never saved', () => newChat(true)));
+  $('links').replaceChildren(mk('code', 'VryxCode', '', openCode), mk('spark', 'Skills', '', openSkills), mk('pencil', 'Teacher mode', '', () => openTeacher()), mk('doc', 'Documents', '', openDocs), mk('lock', 'Private chat', 'Never saved', () => newChat(true)));
   $('acctMenu').replaceChildren(mk('chart', 'Usage', '', openUsage), mk('brain', 'Memory', '', openMemory), mk('gear', 'Settings', '', openSettings));
 }
 $('account').onclick = (e) => { e.stopPropagation(); const m = $('acctMenu'); m.hidden = !m.hidden; $('account').setAttribute('aria-expanded', String(!m.hidden)); };
 document.addEventListener('click', (e) => { if (!$('acctMenu').hidden && !$('acctMenu').contains(e.target)) closeAcct(); });
 
 // ---------------------------------------------------------------- chats
-async function newChat(isPrivate, skill) {
+async function newChat(isPrivate, skill, docs) {
   if (S.busy) return;
-  S.skill = skill || ''; S.chatId = null; S.messages = []; S.title = isPrivate ? 'Private chat' : 'New chat'; S.private = !!isPrivate;
-  document.body.classList.remove('menu-open'); remember(); renderThread(); $('input').focus(); renderChats();
+  S.skill = skill || ''; S.docs = docs || []; S.chatId = null; S.messages = []; S.title = isPrivate ? 'Private chat' : 'New chat'; S.private = !!isPrivate;
+  document.body.classList.remove('menu-open'); remember(); renderThread(); renderAttached(); $('input').focus(); renderChats();
 }
 async function openChat(id) {
   if (S.busy) return;
   const r = await api('/api/chats/' + id); if (!r.ok) return load();
-  const c = await r.json(); S.chatId = c.id; S.messages = c.messages; S.title = c.title; S.private = c.private; S.skill = c.skill || '';
-  remember(); document.body.classList.remove('menu-open'); renderThread(true); renderChats();
+  const c = await r.json(); S.chatId = c.id; S.messages = c.messages; S.title = c.title; S.private = c.private; S.skill = c.skill || ''; S.docs = c.docs || [];
+  remember(); document.body.classList.remove('menu-open'); renderThread(true); renderAttached(); renderChats();
 }
 async function delChat(c) {
   if (!confirm('Delete "' + c.title + '"? This cannot be undone.')) return;
@@ -545,7 +550,17 @@ $('scroll').addEventListener('scroll', () => { const s = $('scroll'); S.stick = 
 $('down').onclick = () => { S.stick = true; scrollDown(true); };
 
 // ---------------------------------------------------------------- composer
+function renderAttached() {
+  const box = $('attached'); box.hidden = !S.docs.length;
+  box.replaceChildren(...S.docs.map((d) => el('span', {class: 'chip', title: d.name}, '\ud83d\udcc4 ', el('span', {}, d.name),
+    el('button', {class: 'icon', style: 'width:22px;height:22px;min-height:0', 'aria-label': 'Remove ' + d.name, onclick: () => setDocs(S.docs.filter((x) => x.id !== d.id))}, '\u00d7'))));
+}
+async function setDocs(list) {
+  S.docs = list; renderAttached();
+  if (S.chatId != null) { const r = await post('/api/chats/' + S.chatId + '/docs', {ids: list.map((d) => d.id)}); if (r.ok) { S.docs = (await r.json()).docs; renderAttached(); } }
+}
 function renderComposer() {
+  renderAttached();
   const m = curModel(); if (!m) return;
   $('modelBtn').replaceChildren(logo(22), mname(m), el('span', {style: 'color:var(--muted)'}, '▾'));
   $('modelBtn').setAttribute('aria-label', 'Choose model: ' + mname(m));
@@ -585,6 +600,7 @@ const input = $('input');
 input.addEventListener('input', () => { input.style.height = 'auto'; input.style.height = Math.min(160, input.scrollHeight) + 'px'; });
 input.addEventListener('keydown', (e) => { if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) { e.preventDefault(); send(); } });
 $('send').onclick = () => (S.busy ? stop() : send());
+$('plus').onclick = () => openAttach();
 $('newChat').onclick = () => newChat(false); $('newTop').onclick = () => newChat(false);
 $('burger').onclick = () => document.body.classList.add('menu-open');
 $('scrim').onclick = () => document.body.classList.remove('menu-open');
@@ -640,6 +656,55 @@ function dialog(children, closeText, extra) {
   const m = el('div', {class: 'modal', role: 'dialog', 'aria-modal': 'true', onclick: (e) => { if (e.target === m) m.remove(); }},
     el('div', {class: 'dialog'}, ...children, extra || null, el('button', {class: 'btn ghost', onclick: () => m.remove()}, closeText || 'Close')));
   $('dialogs').append(m); return m;
+}
+
+// ---------------------------------------------------------------- documents (files you add so a chat can answer about them)
+function sizeText(chars) { return chars < 1000 ? chars + ' letters' : chars < 1e6 ? Math.round(chars / 1000) + 'K letters' : (chars / 1e6).toFixed(1) + 'M letters'; }
+function pickFile(onDone) {
+  const inp = el('input', {type: 'file', accept: '.pdf,.docx,.txt,.md,.csv,.tsv,.json,.html,.htm,.log,.py,.js,.ts,.java,.c,.cpp,.cs,.go,.rs,.sql,.yaml,.yml,.xml,.css,.sh,.tex', style: 'display:none'});
+  inp.onchange = async () => {
+    const f = inp.files[0]; if (!f) return;
+    if (f.size > 10e6) return alert('That file is too big. The limit is 10 MB.');
+    const buf = new Uint8Array(await f.arrayBuffer()); let bin = ''; for (let i = 0; i < buf.length; i += 0x8000) bin += String.fromCharCode.apply(null, buf.subarray(i, i + 0x8000));
+    await onDone(f.name, btoa(bin));
+  };
+  document.body.append(inp); inp.click(); setTimeout(() => inp.remove(), 60000);
+}
+async function uploadDoc(status) {
+  return new Promise((resolve) => pickFile(async (name, data) => {
+    status.textContent = 'Reading ' + name + '...';
+    const r = await post('/api/documents', {name, data}); const j = await r.json().catch(() => ({}));
+    status.textContent = r.ok ? 'Added ' + j.name + '. ' + (j.note || '') : (j.message || 'That file could not be added.');
+    resolve(r.ok ? j : null);
+  }));
+}
+async function openDocs() {
+  closeModals(); document.body.classList.remove('menu-open');
+  const j = await (await api('/api/documents')).json();
+  const status = el('div', {style: 'color:var(--muted);font-size:14px', role: 'status'}, 'Add a PDF, Word or text file, then ask questions about it, or have it summarized. It stays on this computer, in your own space.');
+  const kids = [el('h2', {}, 'Documents'), status,
+    el('button', {class: 'btn', onclick: async () => { if (await uploadDoc(status)) setTimeout(openDocs, 900); }}, 'Add a document')];
+  if (!j.documents.length) kids.push(el('div', {style: 'color:var(--muted)'}, 'No documents yet.'));
+  for (const d of j.documents) kids.push(el('div', {class: 'opt', style: 'cursor:default'},
+    el('span', {class: 'grow'}, el('b', {style: 'overflow-wrap:anywhere'}, d.name), el('small', {}, d.kind.toUpperCase() + ' \u00b7 ' + sizeText(d.chars))),
+    el('button', {class: 'chip', onclick: () => { closeModals(); newChat(false, '', [{id: d.id, name: d.name}]); renderComposer(); input.focus(); }}, 'Ask'),
+    el('button', {class: 'chip', 'aria-label': 'Delete ' + d.name, onclick: async () => { if (confirm('Delete "' + d.name + '"?')) { await api('/api/documents/' + d.id, {method: 'DELETE'}); S.docs = S.docs.filter((x) => x.id !== d.id); openDocs(); } }}, '\u00d7')));
+  dialog(kids, 'Close');
+}
+async function openAttach() {
+  closeModals();
+  const j = await (await api('/api/documents')).json();
+  const chosen = new Set(S.docs.map((d) => d.id));
+  const status = el('div', {style: 'color:var(--muted);font-size:14px', role: 'status'}, 'Pick the documents this chat should read. Its answers will come from them.');
+  const rows = el('div', {style: 'display:flex;flex-direction:column;gap:8px'});
+  const draw = (docs) => rows.replaceChildren(...docs.map((d) => el('button', {class: 'opt' + (chosen.has(d.id) ? ' sel' : ''), onclick: (e) => {
+      chosen.has(d.id) ? chosen.delete(d.id) : chosen.add(d.id); e.currentTarget.classList.toggle('sel'); }},
+    el('span', {class: 'grow'}, el('b', {style: 'overflow-wrap:anywhere'}, d.name), el('small', {}, d.kind.toUpperCase() + ' \u00b7 ' + sizeText(d.chars))))));
+  let docs = j.documents; draw(docs.length ? docs : []);
+  if (!docs.length) rows.append(el('div', {style: 'color:var(--muted)'}, 'No documents yet. Add one below.'));
+  const done = el('button', {class: 'btn', onclick: async () => { await setDocs(docs.filter((d) => chosen.has(d.id)).map((d) => ({id: d.id, name: d.name}))); closeModals(); input.focus(); }}, 'Use these');
+  dialog([el('h2', {}, 'Attach documents'), status, rows,
+    el('button', {class: 'btn ghost', onclick: async () => { const d = await uploadDoc(status); if (d) { docs = [d, ...docs]; chosen.add(d.id); draw(docs); } }}, 'Add a new document'), done], 'Cancel');
 }
 
 // ---------------------------------------------------------------- saving documents (PDF, Word, Google Docs)
@@ -932,7 +997,7 @@ function thinkingNode() {
 async function send(regen, mode) {
   if (S.busy) return;
   const text = regen === true ? '' : input.value.trim(); if (regen !== true && !text) return;
-  if (!S.chatId) { const r = await post('/api/chats', {private: S.private, skill: S.skill}); if (!r.ok) return; S.chatId = (await r.json()).id; remember(); }
+  if (!S.chatId) { const r = await post('/api/chats', {private: S.private, skill: S.skill, docs: S.docs.map((d) => d.id)}); if (!r.ok) return; S.chatId = (await r.json()).id; remember(); }
   S.busy = true; S.stick = true; renderComposer(); closeMenus();
   if (regen === true) { const last = S.messages[S.messages.length - 1]; if (last && last.role === 'assistant') S.messages.pop(); }
   else { S.messages.push({id: 'u' + Date.now(), role: 'user', content: text}); input.value = ''; input.style.height = 'auto'; }
