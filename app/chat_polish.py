@@ -42,6 +42,23 @@ def pause_for(text, effort="balanced"):
     return round(min(PAUSE_MAX, base + min(0.8, words // 20 * 0.1)), 1)
 
 
+FOLLOW_REF = re.compile(r"\b(it|that|this|those|these|them|same|above|previous|again|instead|too|also|one)\b", re.I)
+FOLLOW_START = re.compile(r"^(now|then|and|also|but|ok(ay)?|and then|make|change|use|write|do|try|show|give|translate|convert|add|remove|shorter|longer|simpler|more|less|in |with |without )", re.I)
+FOLLOW_HINT = ("[This message follows on from your last reply in this chat. Do what it asks with that reply, or with what that reply was about. "
+               "Do not go back to earlier topics and do not start something new.]")
+
+
+def follow_up_hint(text, has_reply, max_words=10):
+    """A short note for the model when a message is a short follow-up ("write it in java", "make it shorter", "now in Spanish"): on its own it names no
+    subject, and a model tuned on one-question chats may answer an older message instead of the one just before. Shown to the model only, never saved."""
+    words = str(text or "").split()
+    if not has_reply or not words or len(words) > max_words:
+        return ""
+    if FOLLOW_REF.search(text) or FOLLOW_START.match(text.strip()):
+        return FOLLOW_HINT
+    return ""
+
+
 def thinking_word(n):
     """The n-th label (0, 1, 2, ...): cycles through the list, so two in a row are never the same."""
     return THINKING_WORDS[n % len(THINKING_WORDS)]
