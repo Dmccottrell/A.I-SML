@@ -24,7 +24,10 @@ import json
 import os
 import re
 import sys
+import queue
+import socket
 import tempfile
+import threading
 import urllib.request
 
 import harness
@@ -39,33 +42,75 @@ SAFE_RUNS = ("python -m unittest", "python3 -m unittest", "python -m pytest", "p
 ELIGIBLE_NOTE = {"equinox-2": "Equinox 2 is a small model: give it small tasks (one function, one file)."}
 
 
+def _hang_up(response):
+    """Cut the connection right now, even while another thread is blocked reading it (closing the response would wait for that read).
+    llama-server stops generating when its client leaves, so the graphics card is free again at once."""
+    sock = getattr(getattr(getattr(response, "fp", None), "raw", None), "_sock", None)
+    try:
+        if sock is not None:
+            sock.shutdown(socket.SHUT_RDWR)
+        else:
+            response.close()
+    except (OSError, ValueError):
+        pass
+
+
+class Interrupted(Exception):
+    """The person pressed Stop while the model was loading or writing."""
+
+
 class LlamaChat:
     """A llama-server (llama.cpp) chat endpoint: the server applies the model's own chat template.
 
     The reply is STREAMED: while it is being written `on_delta(info)` is called with what is known so far, so the page can show that the model is working
     (see Session.wrap). Qwen3 models "think" before every answer by default, which can take most of a step's time and tokens; for coding steps that is
-    switched off (`thinking=False`, sent as chat_template_kwargs) because the steps are short and the thinking is thrown away anyway."""
+    switched off (`thinking=False`, sent as chat_template_kwargs) because the steps are short and the thinking is thrown away anyway.
+    `should_stop()` is asked every fifth of a second, also while the model is still reading the prompt and nothing has come back yet: when it says yes
+    the connection is closed (llama-server stops writing when the client leaves) and Interrupted is raised, so Stop works at once."""
 
     def __init__(self, url="http://127.0.0.1:8080", temperature=0.2, max_tokens=1024, timeout=600, thinking=False):
         self.url, self.temperature, self.max_tokens, self.timeout, self.thinking = url.rstrip("/"), temperature, max_tokens, timeout, thinking
         self.usage = None                                  # {"fresh_in", "cached_in", "out"} of the last call (the app counts it)
         self.on_delta = None                               # function(info) or None; info = {"text", "thinking_chars", "chunks"}
+        self.should_stop = None                            # function() -> bool, or None
 
     def __call__(self, messages):
         body = json.dumps({"model": "local", "messages": messages, "temperature": self.temperature, "max_tokens": self.max_tokens,
                            "stream": True, "stream_options": {"include_usage": True}, "cache_prompt": True,
                            "chat_template_kwargs": {"enable_thinking": bool(self.thinking)}}).encode()
-        req = urllib.request.Request(self.url + "/v1/chat/completions", data=body, headers={"Content-Type": "application/json"})
-        try:
-            with urllib.request.urlopen(req, timeout=self.timeout) as r:
-                if "text/event-stream" in (r.headers.get("Content-Type") or ""):
-                    text, usage, timings = self._read_stream(r)
-                else:                                      # a server that answered in one piece
-                    data = json.load(r)
-                    text = data["choices"][0]["message"]["content"]
-                    usage, timings = data.get("usage") or {}, data.get("timings") or {}
-        except OSError as e:
-            raise SystemExit(f"can't reach the model at {self.url} ({e}). Start llama-server first (see the top of vryxcode.py).")
+        box, out = {}, queue.Queue()
+
+        def work():
+            req = urllib.request.Request(self.url + "/v1/chat/completions", data=body, headers={"Content-Type": "application/json"})
+            try:
+                with urllib.request.urlopen(req, timeout=self.timeout) as r:
+                    box["r"] = r
+                    if box.get("stopped"):                 # Stop was pressed before the first byte came back
+                        _hang_up(r)
+                        return
+                    if "text/event-stream" in (r.headers.get("Content-Type") or ""):
+                        out.put(("done", self._read_stream(r)))
+                    else:                                  # a server that answered in one piece
+                        data = json.load(r)
+                        out.put(("done", (data["choices"][0]["message"]["content"], data.get("usage") or {}, data.get("timings") or {})))
+            except BaseException as e:                     # noqa: BLE001 - handed to the caller's thread
+                out.put(("error", e))
+        threading.Thread(target=work, daemon=True).start()
+        while True:
+            try:
+                kind, val = out.get(timeout=0.2)
+                break
+            except queue.Empty:
+                if self.should_stop and self.should_stop():
+                    box["stopped"] = True
+                    if box.get("r") is not None:
+                        _hang_up(box["r"])
+                    raise Interrupted()
+        if kind == "error":
+            if isinstance(val, OSError):
+                raise SystemExit(f"can't reach the model at {self.url} ({val}). Start llama-server first (see the top of vryxcode.py).")
+            raise val
+        text, usage, timings = val
         cached = int(timings.get("cache_n") or 0)
         if "prompt_tokens" in usage:
             prompt = int(usage["prompt_tokens"])

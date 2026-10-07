@@ -118,16 +118,18 @@ class Session:
             return None
         secs = round(time.time() - live["since"], 1)
         if live["phase"] == "running":
-            return {"phase": "running", "secs": secs, "tokens": 0, "text": "", "tool": live.get("tool", "")}
+            return {"phase": "running", "secs": secs, "tokens": 0, "text": "", "tool": live.get("tool", ""), "target": live.get("target", "")}
         text = live.get("text", "")
         cut = min([i for i in (text.find("<|tool_call|>"), text.find("<tool_call>")) if i >= 0], default=-1)
         prose = (text if cut < 0 else text[:cut]).strip()
-        tool = ""
+        tool = target = ""
         if cut >= 0:
             m = re.search(r'"name"\s*:\s*"(\w+)"', text[cut:])
             tool = m.group(1) if m else ""
+            t = re.search(r'"(?:path|command)"\s*:\s*"([^"]{1,120})', text[cut:])      # the file or command, as soon as it has been written
+            target = t.group(1) if t else ""
         phase = "calling" if cut >= 0 else ("writing" if prose else "thinking")
-        return {"phase": phase, "secs": secs, "tokens": live.get("chunks", 0), "text": clip(prose, 400), "tool": tool}
+        return {"phase": phase, "secs": secs, "tokens": live.get("chunks", 0), "text": clip(prose, 400), "tool": tool, "target": target}
 
     def since(self, after):
         with self.cv:
@@ -197,14 +199,17 @@ class Session:
             self.live = {"phase": "thinking", "since": time.time(), "text": "", "chunks": 0, "thinking": 0}
             try:
                 generate.on_delta = self._on_delta         # the model call reports its progress here (a plain function accepts the attribute too)
+                generate.should_stop = self.stop.is_set    # ...and asks here whether Stop was pressed
             except AttributeError:
                 pass
             try:
                 reply = generate(messages)
-            except BaseException:
+            except BaseException as e:
                 self.live = None
                 if self.meter:
                     self.meter.cancel(res)
+                if isinstance(e, vryxcode.Interrupted):
+                    raise Stopped()
                 raise
             if self.meter:
                 self.meter.settle(res, generate, messages, reply)
@@ -215,7 +220,8 @@ class Session:
                 name, args = harness.parse_tool_call(reply)
                 self.emit("step", tool=name, preview=clip(vryxcode.preview(name, args), 2500), raw=clip(reply, 1500))
                 if name != "finish":
-                    self.live = {"phase": "running", "since": time.time(), "tool": name}      # the tool runs next; cleared when the next model call starts
+                    target = str(args.get("path") or args.get("command") or args.get("args") or args.get("action") or "") if isinstance(args, dict) else ""
+                    self.live = {"phase": "running", "since": time.time(), "tool": name, "target": target[:120]}      # the tool runs next; cleared when the next model call starts
             except harness.ToolError:
                 self.emit("step", tool="", preview=clip(reply, 1500), raw=clip(reply, 1500))
             return reply
