@@ -1,16 +1,16 @@
 """
-make_chat_data_qwen.py - Build the lessons for Qwen-based Emvryx models -> data/qwen/chat.jsonl
+make_chat_data_open.py - Build the lessons for Qwen-based Emvryx models -> data/open/chat.jsonl
 
 WHAT THIS FILE DOES
     Makes a SMALL set of conversations (about 12,000, not the 80,000+ of data/v3/chat.jsonl) that teach manners and honesty, not knowledge. A Qwen model already knows
-    its facts; what the old lessons (made for the tiny from-scratch models) taught it was to over-trust a wrong note and to hedge about real people. See qwen_lessons.py.
+    its facts; what the old lessons (made for the tiny from-scratch models) taught it was to over-trust a wrong note and to hedge about real people. See open_lessons.py.
 
       kind            teaches
       --------------  ---------------------------------------------------------------------------------------------------------
       general         everyday chat and instructions, answers by an open model (smol-smoltalk); boilerplate like "As an AI language model" is dropped
       topic_switch    answer the NEWEST question, not an older one
       instruction     exact counts and formats ("List 3 ..."), from the teacher's instruction examples (make_teacher_data.py), if you have them
-      facts / names   plain, confident answers about well-known things and people, also when a name is spelt wrongly (qwen_lessons.py)
+      facts / names   plain, confident answers about well-known things and people, also when a name is spelt wrongly (open_lessons.py)
       unknowable      live or personal things it cannot know: say so briefly and say who can help
       unfamiliar      a made-up name: ask about the spelling, never "it might be fictional"
       notes_use       the notes match the question: answer from them (no "(Source: ...)" tag: the app shows where an answer came from)
@@ -21,10 +21,10 @@ WHAT THIS FILE DOES
     NOT in this set, on purpose: "I don't know" when the notes are silent, doubting yourself when corrected, "it might be fictional", remembering-you tool calls (the app now
     keeps those itself), coding-helper lessons (VryxCode will learn from real runs), and identity (finetune_open.py adds corrected identity lessons for each model by itself).
 
-Usage:  python data_prep/make_chat_data_qwen.py                       (needs `pip install datasets` and the internet once for smol-smoltalk)
-        python data_prep/make_chat_data_qwen.py --general 4000 --notes_use 800
-        then, for each model (see docs/QWEN_LESSONS.md for the exact commands):
-        python training/finetune_open.py --model apogee-2 --data data/qwen/chat.jsonl --out checkpoints/dev/open/apogee-2q --export export/open/apogee-2q/my-ai --grad_accum 2
+Usage:  python data_prep/make_chat_data_open.py                       (needs `pip install datasets` and the internet once for smol-smoltalk)
+        python data_prep/make_chat_data_open.py --general 4000 --notes_use 800
+        then, for each model (see docs/OPEN_LESSONS.md for the exact commands):
+        python training/finetune_open.py --model apogee-2 --data data/open/chat.jsonl --out checkpoints/dev/open/apogee-2q --export export/open/apogee-2q/my-ai --grad_accum 2
 """
 import os, sys; sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), os.pardir)); import emvryx_paths  # noqa: E402,F401  (the code folders become importable)
 import argparse
@@ -34,7 +34,7 @@ import os
 import random
 
 import make_chat_data_v3 as V3
-import qwen_lessons as Q
+import open_lessons as Q
 
 OUT_PATH = os.path.join("data", "qwen", "chat.jsonl")
 TEACHER_DIR = os.path.join("data", "v3", "teacher")      # the teacher's examples are plain text: the same ones serve every model

@@ -25,4 +25,4 @@
 1. Search the official registers for EMVRYX and the sound-alikes (EMRYX, EMVRIX, EMVYRX...). Take screenshots with dates.
 2. Check domain names and handles (emvryx.app is in use; also .com, and the main social names).
 3. Talk to a trademark attorney before launching publicly or spending money on branding. Many offer a fixed-fee clearance.
-4. Keep the open-model credits: the models built on Qwen are credited in `NOTICE` and labelled as built on it. If you ever use a name or logo belonging to a model's makers, check their brand rules first.
+4. Keep the open-model credits: the models built on the open base are credited in `NOTICE` and labelled as built on it. If you ever use a name or logo belonging to a model's makers, check their brand rules first.

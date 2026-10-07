@@ -8,8 +8,8 @@ import tempfile
 import types
 import unittest
 
-import make_chat_data_qwen as M
-import qwen_lessons as Q
+import make_chat_data_open as M
+import open_lessons as Q
 
 
 def convo(q, a):

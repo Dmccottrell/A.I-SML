@@ -223,7 +223,7 @@ class OutsideCoder(Base):
 
     def test_listed_as_an_outside_model_with_its_own_label(self):
         models = {m["id"]: m for m in self.owner.call("GET", "/api/code")[1]["models"]}
-        c = models["qwen2.5-coder-14b"]
+        c = models["coder-14b"]
         self.assertTrue(c["outside"])
         self.assertIn("outside model", c["label"])
         self.assertIn("not an Emvryx model", c["note"])
@@ -233,7 +233,7 @@ class OutsideCoder(Base):
         st, j = self.owner.call("POST", "/api/admin/users", {"user": "lee", "tier": "pro"})
         lee = Client(self.port, j["key"])
         before = self.state.limiter.snapshot("lee", "solstice", "balanced", self.state.clock())["week"]["used"]
-        r = lee.call("POST", "/api/code/start", {"project": "demo", "task": "x", "model": "qwen2.5-coder-14b", "auto_edits": True})
+        r = lee.call("POST", "/api/code/start", {"project": "demo", "task": "x", "model": "coder-14b", "auto_edits": True})
         self.assertEqual(r[0], 200, r)
         wait_for(lambda: lee.call("GET", f"/api/code/sessions/{r[1]['id']}")[1]["state"] == "done")
         after = self.state.limiter.snapshot("lee", "solstice", "balanced", self.state.clock())["week"]["used"]
@@ -243,9 +243,9 @@ class OutsideCoder(Base):
     def test_not_in_a_plan_without_solstice(self):
         st, j = self.owner.call("POST", "/api/admin/users", {"user": "kid", "tier": "free"})
         kid = Client(self.port, j["key"])
-        c = {m["id"]: m for m in kid.call("GET", "/api/code")[1]["models"]}["qwen2.5-coder-14b"]
+        c = {m["id"]: m for m in kid.call("GET", "/api/code")[1]["models"]}["coder-14b"]
         self.assertEqual(c["state"], "locked")
-        self.assertEqual(kid.call("POST", "/api/code/start", {"project": "p", "task": "x", "model": "qwen2.5-coder-14b"})[0], 400)
+        self.assertEqual(kid.call("POST", "/api/code/start", {"project": "p", "task": "x", "model": "coder-14b"})[0], 400)
 
     def test_small_emvryx_models_still_refused(self):
         self.assertEqual(self.owner.call("POST", "/api/code/start", {"project": "p", "task": "x", "model": "flare-2.5"})[0], 400)

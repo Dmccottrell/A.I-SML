@@ -83,7 +83,7 @@ serve_and_run_collect() {
     "$LLAMA/build/bin/llama-server" -m "$1" -c 16384 -ngl 99 --port $LPORT > logs/bench/llama-server.txt 2>&1 &
     local pid=$!
     for i in $(seq 1 120); do curl -s localhost:$LPORT/health | grep -q ok && break; sleep 5; done
-    python coding/collect_runs.py --coder qwen2.5-coder-14b --exercises "$EX" --limit 20 --synthetic 40 --llama http://127.0.0.1:$LPORT --out logs/bench/agent_runs.jsonl
+    python coding/collect_runs.py --coder coder-14b --exercises "$EX" --limit 20 --synthetic 40 --llama http://127.0.0.1:$LPORT --out logs/bench/agent_runs.jsonl
     local rc=$?
     kill $pid 2>/dev/null; wait $pid 2>/dev/null
     return $rc
@@ -100,7 +100,7 @@ if [ -x "$LLAMA/build/bin/llama-server" ] && [ -d "$EX" ]; then
     stage "downloading Qwen2.5-Coder-14B (8-bit)" logs/bench/coder-download.txt hf download Qwen/Qwen2.5-Coder-14B-Instruct-GGUF --include "*q8_0*" --local-dir "$MODELDIR/coder"
     CODER=$(ls "$MODELDIR"/coder/*q8_0*00001-of-*.gguf 2>/dev/null | head -n 1); [ -n "$CODER" ] || CODER=$(ls "$MODELDIR"/coder/*q8_0*.gguf 2>/dev/null | head -n 1)
     if [ -n "$CODER" ]; then
-        stage "exercises: Qwen2.5-Coder-14B (outside model)" logs/bench/coder14b-exercises.txt serve_and_run "$CODER" --coder qwen2.5-coder-14b --exercises "$EX" --out logs/bench/coder14b-exercises.json \
+        stage "exercises: Coder-14B (outside model)" logs/bench/coder14b-exercises.txt serve_and_run "$CODER" --coder coder-14b --exercises "$EX" --out logs/bench/coder14b-exercises.json \
             && ping "Qwen2.5-Coder-14B exercises: $(summary logs/bench/coder14b-exercises.json)"
     fi
     if [ "${COLLECT:-0}" = "1" ] && [ -n "$CODER" ]; then      # COLLECT=1 bash scripts/bench_all.sh: also keep the coder's successful runs as training data (about 1 hour more)

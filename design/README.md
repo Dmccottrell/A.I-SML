@@ -43,7 +43,7 @@ Choosing a model re-colours the whole page and plays a short transition.
 The original amber (`#F5A524`) stays as the brand colour for the website home and the logo.
 
 ## Names (as of this design)
-Flare 2 (v3, beta, trained from scratch), **Flare 2.5** (Qwen-based, in training), **Equinox 2**, Solstice 2, Apogee 2 (the 2.x series). The cards show only the
+Flare 2 (v3, beta, trained from scratch), **Flare 2.5** (open-base, in training), **Equinox 2**, Solstice 2, Apogee 2 (the 2.x series). The cards show only the
 name; the version appears as a small grey number in the model sheet.
 
 ## Website: five pages, not one long page

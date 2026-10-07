@@ -191,7 +191,7 @@ python training/hub_backup.py status --version v3 --repo yourname/aisml-checkpoi
 
 - **Shut the machine down (or delete it) when finished.** Billing continues while it is on, even idle.
 - Tokens/passwords: never commit them to the repo. Use the provider's secrets or type them in the terminal.
-- The Wikipedia lookup index and Qwen teacher steps (see `docs/V3.md`) are cheap on CPU/GPU; you can
+- The Wikipedia lookup index and open teacher steps (see `docs/V3.md`) are cheap on CPU/GPU; you can
   do them at home after downloading the model.
 
 ## Rough costs (estimates, prices change)

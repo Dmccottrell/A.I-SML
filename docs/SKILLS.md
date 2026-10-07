@@ -1,4 +1,4 @@
-# Skills in the chat app (Qwen models)
+# Skills in the chat app (the open base models)
 
 **Menu > Skills** starts a chat in a specialist mode: Study helper, Teacher assistant, Writing coach, Story writer, IT helper, Recipe and meal helper, Planner. A skill is a short set of instructions (`app/app_skills.py`) added, out of sight, to the end of each question in that chat. Nothing is trained and nothing is saved in the chat, so it works with every model and can be changed by editing the text. The chat remembers its skill (it shows "Study helper is on for this chat"). The Teacher assistant answers in the layout `app/export_doc.py` turns into a PDF or Word file.
 
@@ -162,8 +162,8 @@ switch, and the app's settings screen can show only the packs a user is allowed 
 - **Router:** a small trained classifier instead of keywords; also picks Lite/Standard and the effort level.
 - **Phone:** llama.cpp can load LoRA adapters next to the main file; the Beta ships merged files first.
 
-## For Equinox 2 and later (open bases, Oct 2026): what a Qwen3 base makes possible
-The two Betas (Study helper, Teacher assistant) were built on our small from-scratch v3. On Qwen3-4B (Equinox 2) they are retrained from the same lessons, and these
+## For Equinox 2 and later (open bases, Oct 2026): what a the newer open bases base makes possible
+The two Betas (Study helper, Teacher assistant) were built on our small from-scratch v3. On the 4B open base (Equinox 2) they are retrained from the same lessons, and these
 skills move from "too much for a 394M model" to realistic. Every one still needs its data builder, a test and an entry in the skills list (the code in `core/lora.py` / `core/skills.py`
 is for our own model; open-base packs are LoRA adapters trained with `training/finetune_open.py` on that skill's lessons and loaded next to the base, e.g. with llama.cpp's `--lora`).
 
@@ -175,13 +175,13 @@ is for our own model; open-base packs are LoRA adapters trained with `training/f
 | **Document helper for long files** | planned, short documents | whole PDFs and long chats (32K, up to 128K) | long-document lessons; chunk and lookup for very long files |
 | **Data extractor** (receipts, forms, tables to JSON) | not possible | clean structured output | JSON lessons, `eval_checks` JSON tests |
 | **Research assistant** | idea | search, compare sources, cite | tool calling, the web source, the reranker |
-| **Fact checker** | planned | stronger with better notes and a reranker | the reranker (Qwen3-Reranker family, from memory) |
+| **Fact checker** | planned | stronger with better notes and a reranker | the reranker (a matching reranker, from memory) |
 | **Maths and science tutor** | weak | step-by-step with a thinking mode | the thinking dial, the calculator tool |
 | **Writing coach / editor** | idea | feasible | style lessons |
 | **Planner (reminders, calendar)** | idea | feasible with tools | app integrations (calendar, reminders) |
 | **Resume and job helper, budget helper, recipes** | ideas | feasible; the budget helper checks sums with the calculator | tools for sums, templates |
 | **Kids' mode** | idea | feasible: simple words, safe topics | a safety test sheet |
-| **Voice and pictures** | v4/v5 plan | easier (Whisper and Piper for voice; a Qwen vision sibling for pictures, from memory) | separate helper models and licence checks |
+| **Voice and pictures** | v4/v5 plan | easier (Whisper and Piper for voice; a the open base vision sibling for pictures, from memory) | separate helper models and licence checks |
 
 **Router:** with a stronger base, the model itself can pick the skill and the effort level (Quick / Balanced / Deep) instead of keywords; a small trained classifier is the cheaper backup.
 These are possibilities, not promises: build one at a time, test each with its own sheet, and drop any that the 4B model cannot do well.

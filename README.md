@@ -35,9 +35,9 @@ number: **Emvryx Ember** (small and quick), **Emvryx Flare** (fast and light), *
 | Generation | Models | How they are made |
 |---|---|---|
 | **1: trained from scratch here** (the original line) | Ember 2 (88M), Flare 2 (394M) | Our own tokenizer, transformer and training run |
-| **2: the 2.x series, built on open bases** | **Flare 2.5** (Qwen 2.5 1.5B), **Equinox 2** (about 4B), **Solstice 2** (about 8B), **Apogee 2** (about 14B) | Fine-tuned here on Emvryx's own lessons, with the base credited in `NOTICE` |
+| **2: the 2.x series, built on open bases** | **Flare 2.5** (the 1.5B open base), **Equinox 2** (about 4B), **Solstice 2** (about 8B), **Apogee 2** (about 14B) | Fine-tuned here on Emvryx's own lessons, with the base credited in `NOTICE` |
 
-Planned: a 3.x series on Qwen3.5 and a 4.x series on Qwen3.8 or the newest base (`docs/OPEN_MODEL.md`). A newer generation takes the main spot in the app's picker. Each name has
+Planned: a 3.x series on a newer open generation and a 4.x series on newer open bases or the newest base (`docs/OPEN_MODEL.md`). A newer generation takes the main spot in the app's picker. Each name has
 its own number that goes up only when that model is updated ("+" refreshes take the next decimal: Flare 2.5 to Flare 2.6). The from-scratch v3.5 run was
 stopped (see `docs/V3_5.md`). They are placeholders: no trademark check has been done yet. See `docs/ROADMAP.md`, `docs/OPEN_MODEL.md` and `docs/APP.md`. For non-technical readers, see the plain-language **[Family guide](docs/FAMILY_GUIDE.md)**. Measured so far (HellaSwag, tuned vs plain base): Flare 2.5 65.3% vs 65.6%, Equinox 2 69.1%, Solstice 2 73.6% vs 71.9%; identity 16/16 on Equinox, Solstice and Apogee (trained, 8.4 GB 4-bit file). What changed lately is in **[docs/CHANGELOG.md](docs/CHANGELOG.md)**. The app also has Skills, Teacher mode, Documents, live facts and a 6-hour usage window ([SKILLS](docs/SKILLS.md), [TEACHER_MODE](docs/TEACHER_MODE.md), [DOCUMENTS](docs/DOCUMENTS.md), [LIVE_DATA](docs/LIVE_DATA.md)). A coding assistant, **VryxCode** (built: terminal tool and a Code screen in the chat app, usage-metered; only on Equinox 2 and above), is described in `docs/VRYXCODE.md`.
 
@@ -48,7 +48,7 @@ Two kinds of models, each described honestly:
 | Models | How they are made |
 |---|---|
 | **v1, v2, v3** (Ember 2, Flare 2) | Trained **from scratch** here: random numbers at the start, learning only from the text we give them. No one else's weights are used |
-| **The 2.x series, built on an open base** (the first: Flare 2.5 on Qwen 2.5 1.5B, 32K context; see `docs/OPEN_MODEL.md`) | Start from an open model's weights and are fine-tuned here on our lessons. They carry the Emvryx name; the base model and its licence are credited in `NOTICE` |
+| **The 2.x series, built on an open base** (the first: Flare 2.5 on the 1.5B open base, 32K context; see `docs/OPEN_MODEL.md`) | Start from an open model's weights and are fine-tuned here on our lessons. They carry the Emvryx name; the base model and its licence are credited in `NOTICE` |
 
 Rules:
 - Only open models whose licence allows this. Keep each licence's notice (`NOTICE`) and check it before sharing a model.
@@ -68,10 +68,10 @@ The code lives in folders by job. Run everything from the project folder, for ex
 | `coding/` | **VryxCode**: the coding assistant, its tools and loop, the safe sandbox, live preview, and the coding benchmarks |
 | `core/` | The model itself: the transformer, tokenizer, chat format, settings for each version, LoRA, and the open-base model list |
 | `training/` | Pretraining, fine-tuning (from scratch and on open bases), preference training, run supervision, backups and cloud hand-off |
-| `data_prep/` | Building the training data and the chat lessons (including the Qwen-native lessons) |
+| `data_prep/` | Building the training data and the chat lessons (including the open-base lessons) |
 | `evaluation/` | The exams, test sheets, public benchmarks and the side-by-side comparison |
 | `tools/` | Export and convert (Hugging Face layout, GGUF), generate text, build the website, back up server data |
-| `scripts/` | The shell scripts for cloud runs (`chain_open.sh`, `wrap_qwen.sh`, `bench_all.sh`, `cloud_setup.sh`) |
+| `scripts/` | The shell scripts for cloud runs (`chain_open.sh`, `wrap_open.sh`, `bench_all.sh`, `cloud_setup.sh`) |
 | `tests/` | The automatic tests (`python -m unittest discover -s tests`) |
 | `docs/` | The guides: [Family guide](docs/FAMILY_GUIDE.md), versions, roadmap, benchmarks, how each feature works |
 | `site/`, `design/` | The website (built pages and design sources) and the brand |
@@ -126,7 +126,7 @@ Each script starts with `import emvryx_paths`, which makes all the code folders 
 | `app/github_link.py` | 7 | GitHub as a connected app: connect with a token, create or link a repository for a VryxCode project, pull and push, with the token kept private on the server. See [`docs/VRYXCODE.md`](docs/VRYXCODE.md) |
 | `coding/code_sessions.py` | 7 | VryxCode inside the chat app: the Code screen's server side (projects, sessions, permission questions). See [`docs/VRYXCODE.md`](docs/VRYXCODE.md) |
 | `coding/vryxcode.py`, `coding/harness.py` | 7 | VryxCode, the coding assistant for Equinox 2 and above: a terminal tool that reads, edits and tests your project in a sandbox, asking before it changes anything. See [`docs/VRYXCODE.md`](docs/VRYXCODE.md) |
-| `training/finetune_open.py`, `core/open_models.py`, `core/open_tokenizer.py`, `evaluation/exam_open.py`, `evaluation/evaluate_open.py`, `data_prep/identity_lessons.py`, `NOTICE` | 7 | Emvryx models built on an open base (Qwen 2.5 1.5B, 32K context): LoRA fine-tune on our lessons, model presets, ChatML tokenizer adapter, the HellaSwag exam for open models, and Qwen's licence notice. See [`docs/OPEN_MODEL.md`](docs/OPEN_MODEL.md) |
+| `training/finetune_open.py`, `core/open_models.py`, `core/open_tokenizer.py`, `evaluation/exam_open.py`, `evaluation/evaluate_open.py`, `data_prep/identity_lessons.py`, `NOTICE` | 7 | Emvryx models built on an open base (the 1.5B open base, 32K context): LoRA fine-tune on our lessons, model presets, ChatML tokenizer adapter, the HellaSwag exam for open models, and the base's licence notice. See [`docs/OPEN_MODEL.md`](docs/OPEN_MODEL.md) |
 | `core/lora.py`, `core/skills.py`, `data_prep/make_skill_data.py`, `training/train_skill.py`, `evaluation/skill_test.py` | 7 | Skill packs (Beta): small LoRA add-ons that make the chat model a specialist. First packs: the **Study helper** and the **Teacher assistant** (`evaluation/classroom.py`: 3rd-grade requests and checks). Includes a Beta router (`tools/generate.py --chat --skill auto`) and an access toggle (everyone / beta testers / off: `python core/skills.py access`). See [`docs/SKILLS.md`](docs/SKILLS.md) |
 | `app/export_doc.py` | 7 | Saves an answer as a printable PDF or an editable Word file (in chat: `save worksheet.pdf`); worksheets get a Name/Date line and the answer key on its own page |
 | `training/average_ckpts.py` | 6 | Averages the last few snapshots of a run (kept during the fade) for a small free improvement |
@@ -136,7 +136,7 @@ Each script starts with `import emvryx_paths`, which makes all the code folders 
 | `app/web_search.py` | v3 | Web search for online mode (Wikipedia's free search or Brave Search); results become notes |
 | `data_prep/typo_lessons.py` | v3 | Chat lessons for messy typing: copies of ordinary lessons with the user's message typed carelessly (slips, no apostrophes, text-speak) and the clean answer; on by default in `data_prep/make_chat_data_v3.py` (`--typos`) |
 | `data_prep/web_lessons.py` | v3 | Chat lessons for reading web results and honest answers about other AIs (used by data_prep/make_chat_data_v3.py) |
-| `data_prep/make_teacher_data.py` | v3 | The teacher model (Qwen2.5-7B via llama.cpp, or rented per token from a hosting API) writes practice examples |
+| `data_prep/make_teacher_data.py` | v3 | The teacher model (a 7B open model via llama.cpp, or rented per token from a hosting API) writes practice examples |
 | `data_prep/make_chat_data_v3.py` | 7 | v3 and every later version (`--version`): chat lessons that fix v2's mistakes (lookups, "I don't know", corrections, instructions, topic switches), remembering you, and reply suggestions |
 | `app/chat_memory.py` | 7 | Remembers earlier chats and facts about you, on your computer only (`tools/generate.py --chat --memory`); search by keywords and by meaning |
 | `evaluation/compare.py` | 6 | Side-by-side scoreboard of two versions on the same tests, and whether the new one may replace the old (`--old v3 --new v3.5`) |

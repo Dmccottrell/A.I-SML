@@ -38,7 +38,7 @@ marked "guess". The settings every later version should start from are in
   passage. Search quality only matters at chat time.
 
 ## The teacher
-- **Local is free and fast enough.** Qwen2.5-7B-Instruct (Q4) on the 4070 with the llama.cpp **CUDA 12** build
+- **Local is free and fast enough.** the 7B open teacher model (Q4) on the 4070 with the llama.cpp **CUDA 12** build
   (b11392): **instructions ~0.35 s per lesson** (about 4 per second), **lookups ~0.6 s**, with 4 slots
   (`-np 4`). Kept after the rule checks: **19 of 20** instruction lessons, **13 of 20** lookups (65%,
   as the docs predicted). The old "1–2 days" estimate was too slow; the first batch ran at ~4 lessons/second.
@@ -178,10 +178,10 @@ the early "17 hours for code" worry came from the tiny test's startup time.
 
 ## Decision: Emvryx moves to open bases (Oct 5 2026)
 We compared finishing v3.5 from scratch (75,000 steps, about $183 on one rented RTX 5090, HellaSwag forecast 41-45%) with fine-tuning an
-open model (Qwen 2.5 1.5B at 32K context: a few dollars, roughly 60%+ on the same test). **The owner chose the open base for Emvryx.**
-- Models are shown as Emvryx (name and version only). The base and its licence are credited in `NOTICE`, and the docs never say a Qwen-based model was trained from scratch.
+open model (the 1.5B open base at 32K context: a few dollars, roughly 60%+ on the same test). **The owner chose the open base for Emvryx.**
+- Models are shown as Emvryx (name and version only). The base and its licence are credited in `NOTICE`, and the docs never say a open-base model was trained from scratch.
 - v2, v3 and v3.5 (the from-scratch line) stay as they are, and the v3.5 run on Vast is the owner's call to finish, shorten or stop.
-- Qwen 2.5 1.5B facts: 32K native context, Apache 2.0 licence, about 28 KB of memory per token (32K is about 0.9 GB), so it fits an RTX 4070.
+- the 1.5B open base facts: 32K native context, Apache 2.0 licence, about 28 KB of memory per token (32K is about 0.9 GB), so it fits an RTX 4070.
 - The tooling (`training/finetune_open.py`, `core/open_tokenizer.py`, `docs/OPEN_MODEL.md`) is tested only with a tiny offline model.
 - Budget rule: nothing is bought without the owner's approval; Vast auto top-up is on, so watch the balance.
 

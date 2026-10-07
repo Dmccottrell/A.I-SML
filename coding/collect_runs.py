@@ -13,7 +13,7 @@ WHAT THIS FILE DOES
     Training on the output: python training/finetune_open.py --model solstice-2 --patch --data logs/agent_runs.jsonl   (a short extra pass on top of the saved adapter).
     Only open-model output is used (policy: never ChatGPT, Claude or Gemini output), and the output keeps the label of the model that wrote it.
 
-Usage:  python coding/collect_runs.py --coder qwen2.5-coder-14b --exercises python/exercises/practice --limit 20 --synthetic 40 --out logs/agent_runs.jsonl
+Usage:  python coding/collect_runs.py --coder coder-14b --exercises python/exercises/practice --limit 20 --synthetic 40 --out logs/agent_runs.jsonl
         --samples K tries each task K times (more successes per task); --format qwen writes Qwen's own <tool_call> markers instead of ours.
 """
 import os, sys; sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), os.pardir)); import emvryx_paths  # noqa: E402,F401  (the code folders become importable)
