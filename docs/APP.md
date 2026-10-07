@@ -84,11 +84,11 @@ you choose the model, the effort, and see where each one runs. Works the same on
   Emvryx Flare 2.5
          Fastest for quick answers
   Emvryx Equinox 2
-         For everyday work and homework
+         Everyday work and homework: the one to leave loaded, quick to switch to
   Emvryx Solstice 2
-         For harder questions and long writing
+         Stronger: harder questions and long writing
   Emvryx Apogee 2         [PC off]
-         For your toughest challenges
+         Strongest: your toughest questions, slower to load
  -------------------------------------------------
   Effort                              Balanced  >
  -------------------------------------------------

@@ -913,6 +913,9 @@ def start_turn(state, who, chat_id, text, model_id, effort, regenerate=False, re
                     q.put(("notes", {k: v for k, v in found.items() if k != "used"}))
             if doc_notes:
                 notes = doc_notes + list(notes or [])
+            today = lookup_auto.date_note(text or (store.messages(chat_id)[-1]["content"] if regenerate and store.messages(chat_id) else ""), state.clock())
+            if today:                                                              # "what day is Christmas this year": the model has no clock
+                notes = [today] + list(notes or [])
             if mem_note:
                 notes = [mem_note] + list(notes or [])
             t_load = time.monotonic()

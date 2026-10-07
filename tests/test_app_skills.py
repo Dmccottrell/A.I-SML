@@ -64,6 +64,13 @@ class Server(Base):
         self.assertEqual(chat["skill"], "study")
         self.assertNotIn("Quick check", chat["messages"][0]["content"])
 
+    def test_the_date_reaches_the_model_when_the_question_needs_it(self):
+        cid = self.new_chat(self.sam)
+        self.ask(self.sam, cid, "What day is christmas this year?")
+        self.assertIn("Today is", self.decode(Server.backend.prompts[-1]))
+        self.ask(self.sam, cid, "What is the capital of France?")
+        self.assertNotIn("Today is", self.decode(Server.backend.prompts[-1]))
+
     def test_a_chat_without_a_skill_gets_no_instructions(self):
         cid = self.new_chat(self.sam)
         self.ask(self.sam, cid, "How do fractions work")

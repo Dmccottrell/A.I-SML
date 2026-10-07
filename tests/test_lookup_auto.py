@@ -46,6 +46,20 @@ class WhenToLookUp(unittest.TestCase):
             self.assertTrue(L.time_sensitive(q), q)
         self.assertFalse(L.time_sensitive("What is the capital of Illinois?"))
 
+    def test_upcoming_releases_count_as_recent(self):
+        for q in ("When is gta 6 coming out", "when does the new iphone launch", "when is the next season of Severance out", "release date of the new Zelda"):
+            self.assertTrue(L.time_sensitive(q), q)
+        for q in ("Who is gordon ramsay", "when was the printing press invented", "how do plants make food"):
+            self.assertFalse(L.time_sensitive(q), q)
+
+    def test_date_note_only_for_questions_that_need_the_date(self):
+        import time
+        now = time.mktime((2026, 10, 7, 12, 0, 0, 0, 0, -1))
+        self.assertEqual(L.date_note("What day is christmas this year?", now)["text"], "Today is Wednesday, October 7, 2026.")
+        self.assertIsNotNone(L.date_note("what's the date today", now))
+        self.assertIsNone(L.date_note("What is the capital of Illinois?", now))
+        self.assertIsNone(L.date_note("", now))
+
     def test_weak_notes_do_not_match_the_question(self):
         self.assertFalse(L.notes_weak([SPRINGFIELD], "What is the capital of Illinois?"))
         self.assertTrue(L.notes_weak([BANANA], "What is the capital of Illinois?"))
