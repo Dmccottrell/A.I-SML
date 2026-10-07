@@ -1792,6 +1792,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
         msgs = [{"id": m["id"], "role": m["role"], "content": m["content"], "model_id": m["model_id"], "status": m["status"]}
                 for m in store.messages(cid) if not (m["status"] == "compacted" and not m["content"])]
         self._send(200, {"id": cid, "title": store.title(cid), "private": cid < 0, "skill": store.skill(cid), "messages": msgs,
+                         "generating": (who["user"], cid) in self.state.stops,
                          "docs": [d for d in (self.state.docs_for(who["user"]).info(i) for i in store.docs(cid)) if d]})
 
     def api_admin(self, path, body):
@@ -1957,7 +1958,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
                     emit("error", payload)
                     return
         except (BrokenPipeError, ConnectionResetError, OSError):
-            stop.set()                                         # the page went away: stop writing, keep what was written
+            pass                                               # the page went away (the app was closed or switched away from): the reply keeps being written and saved, and shows when they come back
 
 
 class Server(socketserver.ThreadingMixIn, http.server.HTTPServer):

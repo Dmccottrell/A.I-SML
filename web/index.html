@@ -516,6 +516,7 @@ async function openChat(id) {
   const r = await api('/api/chats/' + id); if (!r.ok) return load();
   const c = await r.json(); S.chatId = c.id; S.messages = c.messages; S.title = c.title; S.private = c.private; S.skill = c.skill || ''; S.docs = c.docs || [];
   remember(); document.body.classList.remove('menu-open'); renderThread(true); renderAttached(); renderChats();
+  if (c.generating) followReply();
 }
 async function delChat(c) {
   if (!confirm('Delete "' + c.title + '"? This cannot be undone.')) return;
@@ -1067,7 +1068,7 @@ async function send(regen, mode) {
   else { S.messages.push({id: 'u' + Date.now(), role: 'user', content: text}); input.value = ''; input.style.height = 'auto'; }
   renderThread(); const before = S.lastUsage;
   const think = thinkingNode(); $('thread').append(think); scrollDown(true);
-  let aiBubble = null, aiWrap = null, got = '', errCard = null, looked = null;
+  let aiBubble = null, aiWrap = null, got = '', errCard = null, looked = null, lost = false, finished = false;
   S.abort = new AbortController();
   try {
     const r = await fetch('/api/chats/' + S.chatId + '/send', {method: 'POST', credentials: 'same-origin', signal: S.abort.signal, headers: {'Content-Type': 'application/json'},
@@ -1096,7 +1097,7 @@ async function send(regen, mode) {
           const line = lookupLine(looked); if (line) aiWrap.insertBefore(line, aiBubble); }
         got += data.t; aiBubble.replaceChildren(got, el('span', {class: 'cursor'}, '▍')); scrollDown();
       } else if (ev === 'done') {
-        S.title = data.title || S.title; S.state.usage = data.usage; renderUsage(data.usage); popTokens(before, data.usage);
+        finished = true; S.title = data.title || S.title; S.state.usage = data.usage; renderUsage(data.usage); popTokens(before, data.usage);
         if (data.compacted) $('thread').insertBefore(el('div', {class: 'note'}, 'Earlier messages were summarized to save room'), aiWrap);
       } else if (ev === 'error') { throw Object.assign(new Error(data.message), {info: data, status: data.http}); }
     };
@@ -1106,15 +1107,47 @@ async function send(regen, mode) {
         for (const line of block.split('\n')) { if (line.startsWith('event:')) ev = line.slice(6).trim(); else if (line.startsWith('data:')) data += line.slice(5).trim(); }
         if (data) handle(ev, JSON.parse(data)); }
     }
+    if (!finished) lost = true;   // the connection ended without the "done" message: the app was probably switched away from
   } catch (e) {
-    if (e.name !== 'AbortError' && e.message !== 'login') errCard = errorCard(e);
+    if (e.name === 'AbortError') { if (S.resume) lost = true; }
+    else if (e.message !== 'login') { if (e instanceof TypeError || /network|fetch|load failed|terminated|connection/i.test(e.message || '')) lost = true; else errCard = errorCard(e); }
   } finally {
-    think._stop && think._stop(); think.remove(); S.busy = false; S.abort = null;
+    think._stop && think._stop(); think.remove(); S.busy = false; S.abort = null; S.resume = false;
   }
+  if (lost) return followReply();   // the reply keeps being written on the server: show it when it is ready
     try { const r = await api('/api/chats/' + S.chatId); if (r.ok) { const c = await r.json(); S.messages = c.messages; S.title = c.title; } } catch (e) {}
   renderThread(); if (errCard) { $('thread').append(errCard); scrollDown(true); if (!got && regen !== true) input.value = text; }
   renderComposer(); try { const q = new URLSearchParams({effort: S.effort, model: S.model}); const r = await api('/api/state?' + q); const st = await r.json(); S.state.chats = st.chats; S.state.usage = st.usage; renderChats(); renderUsage(st.usage); } catch (e) {}
 }
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+async function followReply() {   // the reply is still being written on the server (the app was closed or switched away from): watch it until it is done
+  if (S.following || S.chatId == null) return;
+  const id = S.chatId; S.following = true; S.busy = true; S.stick = true; renderComposer();
+  const think = thinkingNode(); let lastLen = -1;
+  try {
+    for (let i = 0; i < 600; i++) {   // up to about 15 minutes
+      let c; try { const r = await api('/api/chats/' + id); if (!r.ok) break; c = await r.json(); } catch (e) { if (e.message === 'login') break; await sleep(2000); continue; }
+      if (id !== S.chatId) break;
+      const len = JSON.stringify(c.messages).length;
+      if (len !== lastLen) { lastLen = len; S.messages = c.messages; S.title = c.title; renderThread(false); if (c.generating) $('thread').append(think); scrollDown(); }
+      if (!c.generating) break;
+      await sleep(1200);
+    }
+  } finally { think._stop && think._stop(); think.remove(); S.busy = false; S.following = false; }
+  renderThread(); renderComposer();
+  try { const q = new URLSearchParams({effort: S.effort, model: S.model}); const r = await api('/api/state?' + q); const st = await r.json(); S.state.chats = st.chats; S.state.usage = st.usage; renderChats(); renderUsage(st.usage); } catch (e) {}
+}
+let hiddenAt = 0;
+document.addEventListener('visibilitychange', async () => {
+  if (document.hidden) { hiddenAt = Date.now(); return; }
+  if (!S.state || S.chatId == null || S.following) return;
+  const away = Date.now() - hiddenAt; hiddenAt = 0;
+  if (S.busy && S.abort && away > 3000) { S.resume = true; S.abort.abort(); return; }   // the phone may have cut the live connection: carry on by watching the saved reply
+  if (S.busy) return;
+  try { const r = await api('/api/chats/' + S.chatId); if (!r.ok) return; const c = await r.json();
+    if (c.generating) return followReply();
+    if (JSON.stringify(c.messages) !== JSON.stringify(S.messages)) { S.messages = c.messages; S.title = c.title; renderThread(true); } } catch (e) {}
+});
 // "Read 2 notes from Wikipedia" / "Searched the web: 1 source": what the model was given before it answered
 function lookupLine(info) {
   if (!info || !info.asked) return null;
