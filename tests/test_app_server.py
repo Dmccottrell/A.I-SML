@@ -170,7 +170,7 @@ class State(Base):
         cards = {m["name"]: m for m in self.sam.call("GET", "/api/state")[1]["models"]["cards"]}
         self.assertEqual(cards["Equinox"]["state"], "ready")
         self.assertEqual(cards["Solstice"]["state"], "locked")
-        self.assertEqual(cards["Apogee"]["state"], "soon")
+        self.assertEqual(cards["Apogee"]["state"], "locked")
 
     def test_window_comes_from_the_device_check(self):
         j = self.sam.call("GET", "/api/state")[1]
