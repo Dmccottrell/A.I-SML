@@ -230,7 +230,8 @@ class ModelRunner:
             except OSError as e:
                 raise AppError("llama-server could not be started.", f"Check the path given with --llama-bin ({e.strerror}).")
             self.model_id, self.ctx, self.url = model_id, ctx, f"http://{self.host}:{port}"
-            deadline = time.monotonic() + self.timeout
+            began = time.monotonic()
+            deadline = began + self.timeout
             while time.monotonic() < deadline:
                 if cancel and cancel():
                     self.stop()
@@ -241,12 +242,30 @@ class ModelRunner:
                 try:
                     with urllib.request.urlopen(self.url + "/health", timeout=2) as r:
                         if json.loads(r.read() or b"{}").get("status", "ok") == "ok":
+                            took = time.monotonic() - began
+                            if took > 15:                      # a slow load is worth a line in the log: it is what makes the first answer late
+                                print(f"(loading {model_id} took {took:.0f} s; switching models reloads it each time)", flush=True)
                             return self.url
                 except (urllib.error.URLError, OSError, ValueError):
                     pass                                         # still loading (llama-server answers 503 until ready)
                 time.sleep(0.25)
             self.stop()
             raise AppError("The model took too long to load.", "Try a smaller model or check the memory it needs.")
+
+
+def gpu_note(llama_bin, extra_args):
+    """One plain line at start-up saying whether the models will use the graphics card, or None when it looks fine."""
+    args = [str(a) for a in (extra_args or [])]
+    path = str(llama_bin or "")
+    gpu = any(a in ("-ngl", "--n-gpu-layers", "--gpu-layers") or a.startswith(("-ngl=", "--n-gpu-layers=")) for a in args)
+    low = path.lower()
+    if re.search(r"(^|[\\/_.-])cpu([\\/_.-]|$)", low):
+        return ("This llama-server looks like a CPU-only build (its path says cpu), so every model runs on the processor and answers can take minutes. "
+                "Use the CUDA build instead and add --llama-args \"-ngl 99\".")
+    if not gpu:
+        return ("No graphics-card option was given. Many llama-server builds then use the processor only, which is slow. "
+                "Add --llama-args \"-ngl 99\" to use the graphics card (Apogee 2 may need a smaller number such as -ngl 40 if it does not fit).")
+    return None
 
 
 def find_llama_server():
@@ -3079,6 +3098,9 @@ def main():
     runner = None
     if files and not args.llama:
         runner = ModelRunner(args.llama_bin or find_llama_server(), files, extra_args=args.llama_args.split())
+        note = gpu_note(args.llama_bin or find_llama_server(), args.llama_args.split())
+        if note:
+            print("Speed: " + note, flush=True)
     got = load_keys_file(os.path.join(args.data, "keys.env"))
     if got:
         print("Keys loaded from " + os.path.join(args.data, "keys.env") + ": " + ", ".join(got), flush=True)      # the names only, never the keys
