@@ -1483,9 +1483,9 @@ function sxSections(id) {
   return A[id] || [];
 }
 const SX_NAV = [['general', 'General', 'gear'], ['chat', 'Chat and lookups', 'spark'], ['memory', 'Memory', 'brain'], ['data', 'Data controls', 'folder'], ['apps', 'Connected apps', 'code'], ['security', 'Security', 'lock'], ['account', 'Account', 'eye'], ['about', 'About', 'doc']];
-const SX_OWNER = [['a-overview', 'Overview', 'chart'], ['a-people', 'People', 'eye'], ['a-signups', 'Sign-ups and invites', 'pencil'], ['a-feedback', 'Answer reports', 'pencil'], ['a-cloud', 'Cloud machine', 'cloud'], ['a-log', 'Security log', 'lock']];
+const SX_OWNER = [['a-overview', 'Overview', 'chart'], ['a-people', 'People', 'eye'], ['a-signups', 'Sign-ups and invites', 'pencil'], ['a-feedback', 'Answer reports', 'pencil'], ['a-backups', 'Backups', 'folder'], ['a-cloud', 'Cloud machine', 'cloud'], ['a-log', 'Security log', 'lock']];
 const SX_LEAD = {general: 'How Emvryx looks and feels on this device.', chat: 'How it finds facts and how much of a chat it keeps in mind.', memory: 'What it knows about you, shared by every model.', data: 'Your files, your downloads and what gets deleted.', apps: 'Other services Emvryx can work with.', security: 'Protect your account: password, two-step sign-in and your devices.', account: 'Who you are and your plan.', about: 'About this Emvryx.',
-  'a-overview': 'How safe this server is to share, and how it is doing.', 'a-people': 'Everyone with an account.', 'a-signups': 'Who may create an account, and invite codes.', 'a-feedback': 'What people said went wrong with an answer, newest first.', 'a-cloud': 'A computer elsewhere (like a rented GPU box) where VryxCode can run your code.', 'a-log': 'Sign-ins, failures and changes, newest first.'};
+  'a-overview': 'How safe this server is to share, and how it is doing.', 'a-people': 'Everyone with an account.', 'a-signups': 'Who may create an account, and invite codes.', 'a-feedback': 'What people said went wrong with an answer, newest first.', 'a-backups': 'Copies of everything this server keeps, so a broken disk is not the end.', 'a-cloud': 'A computer elsewhere (like a rented GPU box) where VryxCode can run your code.', 'a-log': 'Sign-ins, failures and changes, newest first.'};
 
 function closeSettings() { document.querySelectorAll('.sx').forEach((n) => n.remove()); }
 async function openSettings(page) {
@@ -1693,6 +1693,9 @@ async function adminPage(id) {
         el('div', {class: 'sx-sec'}, 'Last hour'), el('div', {class: 'stats'}, ...[[h.last_hour.sign_ins, 'sign-ins'], [h.last_hour.failed_tries, 'wrong tries'], [h.last_hour.lockouts, 'lockouts'], [h.devices_signed_in, 'devices signed in'], [h.server_errors, 'server errors'], [h.uptime_minutes + 'm', 'uptime']].map(([n, l]) => el('div', {class: 'stat'}, el('b', {}, n), el('span', {}, l)))),
         el('div', {class: 'sx-sec'}, 'Controls'), sxCard([{title: 'Pause everyone', desc: 'Stops chats for everyone except you. Restart the server to clear it, or press Resume.', ctl: el('div', {style: 'display:flex;gap:8px'}, sxBtn('Pause', async () => { await post('/api/admin/pause', {paused: true}); toast('Paused for everyone but you.'); }, 'bad'), sxBtn('Resume', async () => { await post('/api/admin/pause', {paused: false}); toast('Resumed.'); }))},
           {title: 'Let people share chats by link', desc: 'Each link shows a read-only copy of one chat to anyone who has it, expires (1 to 30 days) and can be cancelled. Turning this off stops every link at once.', ctl: sxSwitch(o.sharing, async (v) => { await post('/api/admin/sharing', {on: v}); }, 'Let people share chats by link')},
+          {title: 'Weekly summary', desc: 'Once a week: people, sign-ins, wrong tries, messages by model, reports to read, errors and how old your newest backup is. Counts only, no chats are read. Sent to your owner email (if mail is set up) and as a phone alert (if alerts are set up).', ctl: el('div', {style: 'display:flex;gap:8px;align-items:center;flex-wrap:wrap'}, sxSwitch(o.weekly_summary, async (v) => { await post('/api/admin/summary-settings', {on: v}); }, 'Weekly summary'),
+            sxBtn('Preview', async () => { const r = await post('/api/admin/summary', {}); const j = await r.json(); dialog([el('h2', {}, 'This week'), el('pre', {style: 'white-space:pre-wrap;margin:0;font:inherit'}, j.text)], 'Close'); }),
+            sxBtn('Send now', async () => { const r = await post('/api/admin/summary', {send: true}); const j = await r.json(); toast(j.emailed ? 'Emailed to you.' : j.alerted ? 'Sent as a phone alert.' : 'Nothing was sent: set up mail or alerts first.'); }))},
           {title: 'Send a test email', desc: 'Sends a message to your owner email, so you know sign-in codes will arrive. Needs EMVRYX_SMTP_* in .emvryx\\keys.env.', ctl: sxBtn('Send test', async () => { const r = await post('/api/admin/mail-test'); const j = await r.json(); toast(r.ok ? 'Sent to ' + j.to : (j.message + ' ' + (j.action || ''))); })},
           {title: 'Live sources and keys', desc: 'Which lookups work and which keys are missing.', ctl: sxBtn('See sources', openSources)}]));
     } else if (id === 'a-people') {
@@ -1735,6 +1738,23 @@ async function adminPage(id) {
           el('div', {style: 'font-size:14px'}, el('b', {}, 'Asked: '), clip(i.question, 300)), el('div', {style: 'font-size:14px;color:var(--muted)'}, el('b', {style: 'color:var(--text)'}, 'Answered: '), clip(i.answer, 400)),
           i.note ? el('div', {style: 'font-size:14px'}, el('b', {}, 'They said: '), i.note) : null,
           el('div', {}, sxBtn('Mark handled', async () => { await post('/api/admin/feedback/handle', {id: i.id}); adminPage(id); })))) : [el('div', {class: 'srow'}, 'Nothing new. Nice.')])));
+    } else if (id === 'a-backups') {
+      const b = await (await api('/api/admin/backups')).json();
+      const size = (n) => n > 1e6 ? (n / 1e6).toFixed(1) + ' MB' : Math.max(1, Math.round(n / 1000)) + ' KB';
+      const out = el('div', {role: 'status', style: 'color:var(--muted);font-size:14px;word-break:break-word'});
+      host.replaceChildren(
+        el('div', {class: 'sx-card'}, el('div', {class: 'srow stack'},
+          el('div', {class: 'stxt'}, el('b', {}, b.items.length ? 'Newest backup: ' + sxWhen(b.items[0].at) : 'No backups yet'), el('small', {}, 'A backup is one zip of everything this server keeps (chats, people, notes, projects), made safely while the app runs. The newest ' + b.keep + ' are kept.')),
+          el('div', {style: 'display:flex;gap:8px;flex-wrap:wrap'}, sxBtn('Make a backup now', async (e) => { e.target.disabled = true; out.textContent = 'Making a backup...'; const r = await post('/api/admin/backups/now', {}); const j = await r.json(); e.target.disabled = false;
+            if (r.ok) adminPage(id); else { out.style.color = 'var(--danger)'; out.textContent = j.message; } }, 'primary')), out)),
+        el('div', {class: 'sx-sec'}, 'Your backups'),
+        el('div', {class: 'sx-card'}, ...(b.items.length ? b.items.map((i) => el('div', {class: 'srow inline'}, el('div', {class: 'stxt'}, el('b', {}, i.name), el('small', {}, sxWhen(i.at) + ' · ' + size(i.size))),
+          el('div', {class: 'sctl'}, el('a', {class: 'sbtn', href: '/api/admin/backups/' + i.name, download: ''}, 'Download')))) : [el('div', {class: 'srow'}, 'None yet.')])),
+        el('div', {class: 'sx-sec'}, 'Good to know'),
+        el('div', {class: 'sx-card'}, el('div', {class: 'srow stack'},
+          el('small', {style: 'color:var(--muted)'}, 'They are stored in ' + b.dir + ', next to the data folder. A backup on the same computer does not help if the computer dies: download one now and then and keep it somewhere else (another disk, your cloud drive). It holds everyone’s chats, so keep it private.'),
+          el('small', {style: 'color:var(--muted)'}, 'The key that protects saved tokens (secret.key) is not inside a backup on purpose. Keep a copy of it somewhere else too, or people will have to connect their apps again after a restore.'),
+          el('small', {style: 'color:var(--muted)'}, 'To restore, stop the app, then in PowerShell: python tools/backup_data.py --restore ' + (b.items[0] ? b.items[0].name : 'emvryx-DATE.zip') + ' --to .emvryx-restored, check the folder, then swap it in for .emvryx and start the app. Restoring while the app runs is not offered because it could corrupt the live data.'))));
     } else if (id === 'a-cloud') {
       const c = await (await api('/api/admin/cloud')).json();
       const hostIn = sxInput('text', 'ssh5.vast.ai or 203.0.113.7', {'aria-label': 'Host', value: c.host || '', inputmode: 'url'});

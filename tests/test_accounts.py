@@ -261,7 +261,7 @@ class Flows(Base):
         self.assertEqual(self.sam.call("POST", "/api/admin/invites", {"tier": "pro"})[0], 403)
         st, j = self.owner.call("GET", "/api/admin/overview")
         self.assertEqual(st, 200)
-        self.assertEqual({c["id"] for c in j["checklist"]}, {"password", "mfa", "email", "encryption", "alerts", "mail"})
+        self.assertEqual({c["id"] for c in j["checklist"]}, {"password", "mfa", "email", "encryption", "alerts", "mail", "backup"})
         self.assertFalse(next(c for c in j["checklist"] if c["id"] == "mfa")["ok"])
 
     def test_settings_survive_a_restart(self):

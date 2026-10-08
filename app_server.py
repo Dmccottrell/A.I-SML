@@ -73,6 +73,7 @@ import mailer
 import passkeys
 import secret_box
 import shares
+import summary
 import saved_notes
 import user_memory
 import code_preview
@@ -93,7 +94,7 @@ OUTSIDE_NOTE = ("{label} is an outside coding model ({licence}), not an Emvryx m
 SECURITY_DEFAULTS = {"session_days": 90, "pair_minutes": 15, "login_fail_limit": 8, "login_fail_window": 600, "email_start_limit": 5,
                      "email_start_window": 600, "open_signups": False, "signup_mode": "closed", "trusted_proxies": ["127.0.0.1", "::1"], "audit_notify": True,
                      "allow_key_links": False, "allowed_origins": [], "code_unsandboxed_for_others": False,
-                     "require_encryption": False, "public_url": "", "sharing": False, "cloud_host": "", "cloud_user": "root", "cloud_port": 22, "cloud_for_others": False, "github_client_id": "", "contact_email": "", "operator_name": "", "alert_ntfy_topic": "",
+                     "require_encryption": False, "public_url": "", "sharing": False, "weekly_summary": False, "backup_dir": "", "cloud_host": "", "cloud_user": "root", "cloud_port": 22, "cloud_for_others": False, "github_client_id": "", "contact_email": "", "operator_name": "", "alert_ntfy_topic": "",
                      **code_sandbox.QUOTA_DEFAULTS}
 PAIR_PAGE = ('<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">'
              '<meta name="robots" content="noindex"><title>Sign in: Emvryx</title><style>body{margin:0;min-height:100vh;display:grid;place-items:center;'
@@ -266,6 +267,9 @@ def discover_ggufs(manifest, root=HERE):
 
 
 # ------------------------------------------------------------------ everything the server holds
+BACKUP_NAME = re.compile(r"emvryx-\d{4}-\d{2}-\d{2}-\d{4}\.zip")
+
+
 class AppState:
     def __init__(self, data_dir=None, llama_url=None, llama_key=None, tok=None, manifest=None, cfg=None, ram_gb=None,
                  backend_factory=None, clock=time.time, pace=True, runner=None, root=HERE):
@@ -961,7 +965,7 @@ class AppState:
         mfa = bool((rec.get("mfa") or {}).get("on"))
         check = lambda id_, ok, title, how: {"id": id_, "ok": bool(ok), "title": title, "how": how}
         people = list({u["user"]: u for u in self.users.values()}.values())
-        return {"signup_mode": self.signup_mode(), "sharing": bool(self.security.get("sharing")), "invites": self.auth.invites(), "people": len(people), "banned": sum(1 for u in people if u.get("banned")),
+        return {"signup_mode": self.signup_mode(), "sharing": bool(self.security.get("sharing")), "weekly_summary": bool(self.security.get("weekly_summary")), "invites": self.auth.invites(), "people": len(people), "banned": sum(1 for u in people if u.get("banned")),
                 "plans": {t: sum(1 for u in people if self.usage.get_user(u["user"])["tier"] == t) for t in self.cfg["tiers"]},
                 "checklist": [
                     check("password", rec.get("pw"), "Your owner account has a password", "Settings > Security > Set a password."),
@@ -969,6 +973,7 @@ class AppState:
                     check("email", rec.get("email") and rec.get("email_verified") is not False, "Your owner account has an email address", "Settings > Account."),
                     check("encryption", self.secrets.available, "Saved tokens and two-step secrets are encrypted", "pip install cryptography, then restart."),
                     check("alerts", self.security.get("alert_ntfy_topic"), "Security alerts reach your phone", "Set alert_ntfy_topic in security.json (see docs/SECURITY.md)."),
+                    check("backup", (summary.latest_backup_age_days(self, time.time()) is not None and summary.latest_backup_age_days(self, time.time()) <= 7), "A backup from the last 7 days exists", "Settings > Owner > Backups > Make a backup now."),
                     check("mail", self.mailer, "Email sign-in codes work", "Set EMVRYX_SMTP_* (see docs/DEPLOY.md). Optional.")],
                 "health": self.health()}
 
@@ -1646,6 +1651,11 @@ class Handler(http.server.BaseHTTPRequestHandler):
                                       csp="default-src 'none'; style-src 'unsafe-inline'; form-action 'self'; frame-ancestors 'none'; base-uri 'none'")
                 self._fail("bad pairing link")
                 return self._send(410, "This pairing link was already used or has expired. Ask for a new one.\n", "text/plain; charset=utf-8")
+            if path == "/api/status":                          # for the website's "is Emvryx on?" line and its Open page: harmless, no sign-in, readable from the website
+                st = self.state
+                ready = sum(1 for m in st.catalog({"user": "", "owner": True, "tier": "mega", "banned": False})["cards"] if m["state"] == "ready")
+                return self._send(200, {"up": True, "paused": bool(st.cfg.get("paused")), "demo": bool(st.demo), "models_ready": ready, "signup": st.signup_mode()},
+                                  headers={"Access-Control-Allow-Origin": "*", "Cache-Control": "no-store"})
             if path == "/api/auth-options":
                 return self._send(200, {"email": bool(self.state.mailer), "signups": bool(self.state.mailer and self.state.security["open_signups"]),
                                         "password": True, "signup": self.state.signup_mode(), "google": self.state.google_on(), "passkeys": passkeys.AVAILABLE})
@@ -1730,6 +1740,20 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 return self.api_account_get(who)
             if path == "/api/account/activity":
                 return self._send(200, {"events": self.state.auth.events(30, None, who["user"])})
+            if path == "/api/admin/backups" and who["owner"]:
+                d = data_tools.backup_dir(self.state)
+                files = sorted((f for f in (os.listdir(d) if os.path.isdir(d) else []) if BACKUP_NAME.fullmatch(f)), reverse=True)
+                return self._send(200, {"dir": d, "items": [{"name": f, "size": os.path.getsize(os.path.join(d, f)), "at": os.path.getmtime(os.path.join(d, f))} for f in files],
+                                        "keep": 14, "data": self.state.data_dir or ""})
+            mb = re.fullmatch(r"/api/admin/backups/(emvryx-[0-9-]+\.zip)", path)
+            if mb and who["owner"]:
+                full = os.path.join(data_tools.backup_dir(self.state), mb.group(1))
+                if not BACKUP_NAME.fullmatch(mb.group(1)) or not os.path.isfile(full):
+                    return self._send(404, {"code": "not_found", "message": "No such backup."})
+                with open(full, "rb") as f:
+                    data = f.read()
+                self.state.auth.event("backup_downloaded", "owner", self._ip(), mb.group(1))
+                return self._send(200, data, "application/zip", {"Content-Disposition": f'attachment; filename="{mb.group(1)}"'})
             if path == "/api/admin/feedback" and who["owner"]:
                 fb = self.state.feedback
                 return self._send(200, {"counts": fb.counts(), "kinds": feedback.KINDS, "items": fb.list(int((qs.get("limit") or ["50"])[0]), (qs.get("status") or ["new"])[0] or None,
@@ -2633,6 +2657,30 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 return self._send(400, {"code": "cloud", "message": "Could not connect: " + (r.stderr.strip()[-220:] or f"ssh exit {r.returncode}"),
                                         "action": "Check the host, port and user, and that the public key is added to the machine."})
             return self._send(200, {"ok": True, "text": r.stdout.strip()})
+        if path == "/api/admin/backups/now":
+            if not st.data_dir:
+                return self._send(400, {"code": "no_data", "message": "This server keeps nothing on disk (demo mode), so there is nothing to back up."})
+            import backup_data
+            try:
+                target, count, removed = backup_data.make_backup(st.data_dir, data_tools.backup_dir(st), keep=14, projects=bool(body.get("projects", True)))
+            except (OSError, SystemExit) as e:
+                return self._send(400, {"code": "backup_failed", "message": "The backup did not work: " + str(e)[:160]})
+            st.auth.event("backup_made", "owner", self._ip(), os.path.basename(target))
+            return self._send(200, {"name": os.path.basename(target), "files": count, "removed": removed})
+        if path == "/api/admin/summary":
+            import summary as summary_mod
+            if body.get("send"):
+                return self._send(200, summary_mod.deliver(st))
+            built = summary_mod.build(st)
+            return self._send(200, {"text": built["text"], "subject": built["subject"]})
+        if path == "/api/admin/summary-settings":
+            on = bool(body.get("on"))
+            st.save_security(weekly_summary=on)
+            if on:
+                import summary as summary_mod
+                if not summary_mod.last_sent(st):
+                    summary_mod.set_last(st, time.time())                  # the first one comes a week after switching on
+            return self._send(200, {"on": on})
         if path == "/api/admin/sharing":
             st.save_security(sharing=bool(body.get("on")))
             st.auth.event("sharing_changed", "owner", self._ip(), "on" if body.get("on") else "off")
@@ -3116,6 +3164,7 @@ def main():
     if args.host == "0.0.0.0":
         print("Reachable from your network. Anyone with a key can use it; keep keys private.")
     try:
+        summary.start(state)                                # the owner's weekly summary, when switched on
         srv.serve_forever()
     except KeyboardInterrupt:
         print("\nStopped.")
