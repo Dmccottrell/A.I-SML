@@ -5,6 +5,7 @@ What changed, newest first. Measured numbers live in [BENCHMARKS.md](BENCHMARKS.
 ## October 2026 (late)
 
 ### Latest
+- **Cleaner website menu:** every page now has one menu. Desktop shows Models, Plans, How usage works, About and a **More** menu (What's new, Scorecard, What's next) beside the Open Emvryx button. On a phone it is a single row with the button and a menu (hamburger) button that opens a tidy list. The page you are on is marked. Fixed the What's next heading showing a raw code.
 - **Roadmap:** added the **Emvryx API** (so your own apps can ask your models questions) with a plan for connecting the household finance and charting practice apps, set for Oct 11. Nothing built yet.
 - **Calmer chat, and a real test for the sources:** under each answer only Copy, Right, Regenerate (and Continue when needed) stay visible; Save as, Ask a stronger model, Branch and Report moved behind one **...** button. In Settings > Owner > Live sources and keys (and the Live sources dialog), **Test them now** really asks Tavily, Brave, Gemini, Wikipedia and seven main data sources one tiny question each and shows a tick or a cross with the reason. A source with no key shows as off, not broken.
 - **What's next:** the roadmap has a new section, the plan for the 2.5 models (measure first, preference training, tools the model asks for, thinking dial, native pictures, voice) and 25 ideas with effort guesses. The website shows it on a new **What's next** page and a home-page teaser, built from the same roadmap text. Direction only, nothing in it is promised.

@@ -83,6 +83,19 @@ class Site(unittest.TestCase):
         for name in ("index", "models", "plans", "usage", "about", "whatsnew", "scorecard", "next", "open"):       # "&amp;rsquo;" in the source is what shows up as the visible text "&rsquo;"
             self.assertNotRegex(self.read(name + ".html"), r"&amp;(rsquo|lsquo|ldquo|rdquo|middot|mdash|ndash|hellip|amp);", name)
 
+    def test_every_page_has_the_same_clean_menu(self):
+        for name in ("index", "models", "plans", "usage", "about", "whatsnew", "scorecard", "next", "open"):
+            html = self.read(name + ".html")
+            self.assertEqual(html.count('class="nav"'), 1, name)
+            self.assertIn('class="burger"', html, name)
+            self.assertIn("\u2630</button>", html, name)                     # the real symbol, not the text "\\u2630"
+            self.assertNotIn("\\u2630</button>", html, name)
+            nav = html.split('class="nav"', 1)[1].split("</nav>", 1)[0]
+            for page in ("models.html", "plans.html", "usage.html", "about.html", "whatsnew.html", "scorecard.html", "next.html"):
+                self.assertIn(f'href="{page}"', nav, (name, page))
+            self.assertIn('class="cta" href="open.html"', html, name)
+        self.assertIn('class="on" aria-current="page">Plans', self.read("plans.html"))                  # the page you are on is marked
+
     def test_scorecard_and_whats_new_say_what_is_not_measured(self):
         card = re.sub(r"<[^>]+>", " ", self.read("scorecard.html"))
         for model in ("Ember 2", "Flare 2", "Flare 2.5", "Equinox 2", "Solstice 2", "Apogee 2"):
