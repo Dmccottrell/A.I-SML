@@ -28,6 +28,7 @@ saved_notes.json    notes you asked to keep so answers work offline
 memory.json         what the app remembers about you (your name and so on), shared by every model
 devices.json        the devices that are signed in
 github.json         the GitHub account you connected and a short activity log (never the token)
+connected_apps.json the other apps you connected and what was read (never the secrets)
 projects/           your VryxCode projects, file by file
 
 To remove it all from the server: Settings > Delete my account.
@@ -62,6 +63,7 @@ def export_zip(state, user):
         z.writestr("memory.json", json.dumps(state.memory_for(user).list(), indent=2))
         z.writestr("devices.json", json.dumps(state.auth.sessions_for(user), indent=2))
         z.writestr("github.json", json.dumps(state.github.public(user), indent=2))
+        z.writestr("connected_apps.json", json.dumps(state.links.store.public(user), indent=2))
         total, skipped = 0, []
         for project in state.code.projects(user):
             for rel in state.code.files(user, project):
@@ -105,6 +107,7 @@ def delete_account(state, user):
     state.auth.scrub_user(user)
     state.github.disconnect(user)
     state.github.forget(user)
+    state.links.store.forget(user)
     state.usage.delete_user(user)
     if state.data_dir:
         for name in (f"chats-{user}.db", f"saved-{user}.db", f"memory-{user}.db"):

@@ -59,6 +59,7 @@ import vryxcode
 import app_skills
 import export_doc
 import teacher_mode
+import app_links
 import connected_apps
 import documents
 import vision
@@ -305,6 +306,7 @@ class AppState:
         self.code = code_sessions.CodeManager(data_dir, quotas=code_sandbox.Quotas(self.security))       # VryxCode sessions (projects live under <data>/code/)
         self.secrets = secret_box.SecretBox(data_dir, require=self.security["require_encryption"])
         self.github = github_link.Store(data_dir, self.secrets)  # connected GitHub accounts (tokens encrypted, files mode 600)
+        self.links = app_links.Hub(app_links.Store(data_dir, self.secrets))   # the other connected apps (a token, link or app password; read-only)
         self.metrics = {"errors": 0, "started": time.time()}
         self._alerted = {}
         self.mail_async = True                                  # send the sign-in email in the background so the answer takes the same time for every address
@@ -756,7 +758,7 @@ class AppState:
             pass
 
     def get_settings(self, user):
-        s = {"window_mode": "everyday", "show_tokens": False, "web_search": "auto", "memory": True, "thinking_pause": "short", "live_data": True}
+        s = {"window_mode": "everyday", "show_tokens": False, "web_search": "auto", "memory": True, "thinking_pause": "short", "live_data": True, "connected_apps": True}
         s.update(self.settings.get(user, {}))
         return s
 
@@ -772,6 +774,8 @@ class AppState:
             s["memory"] = new["memory"]
         if isinstance(new.get("live_data"), bool):
             s["live_data"] = new["live_data"]
+        if isinstance(new.get("connected_apps"), bool):
+            s["connected_apps"] = new["connected_apps"]
         if new.get("web_search") in lookup_auto.MODES:
             s["web_search"] = new["web_search"]
         self.settings[user] = s
@@ -1185,7 +1189,14 @@ def start_turn(state, who, chat_id, text, model_id, effort, regenerate=False, re
                                                           default_place=state.default_place)
                 if live_notes:                                                     # exact facts (a sum, a date, a price): no Wikipedia or web notes needed
                     q.put(("notes", dict(live_found, saved=0, wiki=0, web=0, web_tried=False, recent=False)))
-            if text and not attached and not live_notes:                           # Auto lookup (lookup_auto.py)
+            app_notes = []
+            if (chat_id >= 0 and not attached and live_mode != "none" and state.get_settings(who["user"]).get("connected_apps", True)
+                    and state.links.store.connected(who["user"])):                  # the person's own connected apps (calendar, notes, tasks...): only when the question is about them
+                asked_app = text or next((m["content"] for m in reversed(store.messages(chat_id)) if m["role"] == "user"), "")
+                app_notes, app_found = state.links.gather(who["user"], asked_app, state.usage.get_user(who["user"]).get("tz_minutes", 0))
+                if app_notes:
+                    q.put(("notes", {"asked": True, "saved": 0, "wiki": 0, "web": 0, "web_tried": False, "recent": False, "live": 0, "names": [], "sources": [], "apps": app_found["apps"]}))
+            if text and not attached and not live_notes and not app_notes:         # Auto lookup (lookup_auto.py)
                 web_mode = state.get_settings(who["user"])["web_search"]
                 notes, found = lookup_auto.gather(text, state.wiki, state.web_fn, web_mode, private=chat_id < 0,
                                                   max_notes=5 if window >= 6000 else 3,
@@ -1197,6 +1208,8 @@ def start_turn(state, who, chat_id, text, model_id, effort, regenerate=False, re
                 notes = doc_notes + list(notes or [])
             if live_notes:
                 notes = [{"title": n["title"], "text": n["text"]} for n in live_notes] + list(notes or [])
+            if app_notes:
+                notes = list(app_notes) + list(notes or [])
             today = lookup_auto.date_note(text or (store.messages(chat_id)[-1]["content"] if regenerate and store.messages(chat_id) else ""), state.clock())
             if today:                                                              # "what day is Christmas this year": the model has no clock
                 notes = [today] + list(notes or [])
@@ -1580,8 +1593,10 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 return self._send(200, teacher_mode.catalog())
             if path == "/api/apps":
                 cat = connected_apps.catalog()
-                cat["connections"] = {"github": dict(self.state.github.public(who["user"]), device=bool(self.state.github_client_id()),
-                                                     encrypted=self.state.secrets.available)}
+                cat["connections"] = dict(self.state.links.store.public(who["user"]),
+                                          github=dict(self.state.github.public(who["user"]), device=bool(self.state.github_client_id()), encrypted=self.state.secrets.available))
+                cat["apps"] = [a for a in cat["apps"] if who["owner"] or not a.get("owner_only")]
+                cat["encrypted"] = self.state.secrets.available
                 return self._send(200, cat)
             if path == "/api/memory":
                 return self._send(200, {"facts": self.state.memory_for(who["user"]).list(), "on": self.state.get_settings(who["user"])["memory"]})
@@ -1807,6 +1822,9 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 self.state.github.log(who["user"], "disconnected (token deleted)")
                 self.state.auth.event("github_disconnected", who["user"], self._ip(), "")
                 return self._send(200, self.state.github.public(who["user"]))
+            m = re.fullmatch(r"/api/apps/([a-z]+)/(connect|disconnect|ask)", path)
+            if m and m.group(1) in app_links.BY_ID:
+                return self.api_app_link(who, m.group(1), m.group(2), body)
             m = re.fullmatch(r"/api/apps/([a-z]+)/connect", path)
             if m:
                 try:
@@ -2290,6 +2308,29 @@ class Handler(http.server.BaseHTTPRequestHandler):
             except ValueError as e:
                 return bad(str(e))
         return self._send(404, {"code": "not_found", "message": "Not found."})
+
+    def api_app_link(self, who, sid, action, body):
+        st, user = self.state, who["user"]
+        tz = st.usage.get_user(user).get("tz_minutes", 0)
+        try:
+            if action == "connect":
+                if st.links.store.connected(user) and sid not in st.links.store.connected(user) and len(st.links.store.connected(user)) >= 25:
+                    return self._send(400, {"code": "too_many", "message": "That is a lot of connected apps already.", "action": "Disconnect one you do not use."})
+                label = st.links.connect(user, sid, body.get("fields") if isinstance(body.get("fields"), dict) else {}, owner=who["owner"], tz=tz)
+                st.auth.event("app_connected", user, self._ip(), sid)
+                return self._send(200, {"ok": True, "label": label, "connection": st.links.store.public(user).get(sid)})
+            if action == "disconnect":
+                st.links.store.disconnect(user, sid)
+                st.links.store.log(user, sid, "disconnected (saved secret deleted)")
+                st.auth.event("app_disconnected", user, self._ip(), sid)
+                return self._send(200, {"ok": True})
+            q = str(body.get("query", ""))[:200]                       # "Try it": what was typed is both the search words and the question (so "tomorrow" works for a calendar)
+            items = st.links.ask(user, sid, app_links.question_words(q, app_links.BY_ID[sid]), tz, q)
+            return self._send(200, {"items": [{"title": i["title"], "text": i.get("text", ""), "url": i.get("url")} for i in items]})
+        except app_links.LinkError as e:
+            return self._send(400, {"code": "app", "message": e.message, "action": e.action})
+        except KeyError:
+            return self._send(404, {"code": "not_found", "message": "That app isn't in the list."})
 
     def api_admin(self, path, body):
         st = self.state

@@ -10,8 +10,10 @@ class Catalog(unittest.TestCase):
     def test_list_is_valid(self):
         self.assertEqual(C.check(), [])
 
-    def test_only_github_is_connectable_so_far(self):
+    def test_github_and_the_pasted_secret_apps_are_connectable(self):
+        import app_links
         self.assertEqual({a["id"] for a in C.APPS if a["status"] == "available"}, {"github"})      # GitHub is the first real one
+        self.assertEqual({a["id"] for a in C.services()}, {s["id"] for s in app_links.SERVICES})   # and the read-only ones that use a token, link or app password
 
     def test_every_app_that_changes_things_asks_first(self):
         for a in C.APPS:
@@ -28,11 +30,11 @@ class Server(Base):
     def test_the_page_gets_the_list(self):
         s, j = self.sam.call("GET", "/api/apps")
         self.assertEqual(s, 200)
-        self.assertEqual({a["id"] for a in j["apps"]}, {a["id"] for a in C.APPS})
+        self.assertEqual({a["id"] for a in j["apps"]}, {a["id"] for a in C.APPS} | {a["id"] for a in C.services() if not a.get("owner_only")})
         self.assertTrue(j["rules"])
 
     def test_connecting_the_others_says_coming_soon(self):
-        s, j = self.sam.call("POST", "/api/apps/gmail/connect", {})
+        s, j = self.sam.call("POST", "/api/apps/drive/connect", {})
         self.assertEqual((s, j["code"]), (501, "coming_soon"))
         s, j = self.sam.call("POST", "/api/apps/github/connect", {})          # GitHub is real: an empty token is a plain error
         self.assertEqual((s, j["code"]), (400, "github"))
