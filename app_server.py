@@ -63,6 +63,7 @@ import teacher_mode
 import app_links
 import connected_apps
 import documents
+import feedback
 import vision
 import live_data
 import github_link
@@ -309,6 +310,7 @@ class AppState:
         self.code = code_sessions.CodeManager(data_dir, quotas=code_sandbox.Quotas(self.security))       # VryxCode sessions (projects live under <data>/code/)
         self.secrets = secret_box.SecretBox(data_dir, require=self.security["require_encryption"])
         self.github = github_link.Store(data_dir, self.secrets)  # connected GitHub accounts (tokens encrypted, files mode 600)
+        self.feedback = feedback.Feedback(os.path.join(data_dir, "feedback.db") if data_dir else ":memory:")   # "That didn't work" reports, for the owner
         self.links = app_links.Hub(app_links.Store(data_dir, self.secrets))   # the other connected apps (a token, link or app password; read-only)
         self.apply_cloud()
         self.metrics = {"errors": 0, "started": time.time()}
@@ -1139,7 +1141,10 @@ class AppState:
 
 
 # ------------------------------------------------------------------ one message, streamed to the browser
-def start_turn(state, who, chat_id, text, model_id, effort, regenerate=False, regen_mode=None):
+CONTINUE_HINT = "[Your last answer was cut off because it hit the length limit. Continue it from exactly where it stopped. Do not repeat anything you already wrote, do not start over and do not apologise.]"
+
+
+def start_turn(state, who, chat_id, text, model_id, effort, regenerate=False, regen_mode=None, cont=False):
     """Begin a reply in a worker thread. Returns (queue, stop_event); the queue yields ("piece", text), then
     ("done", result) or ("error", exception). With effort "auto" the level is chosen from the message (effort_router);
     the page is told which one in `decision`."""
@@ -1194,7 +1199,8 @@ def start_turn(state, who, chat_id, text, model_id, effort, regenerate=False, re
         text = None
 
     skill_hint = "\n\n".join(h for h in (app_skills.custom_hint(state.get_settings(who["user"]).get("custom_instructions")),
-                                         app_skills.hint(store.skill(chat_id))) if h)   # the person's own preference, then the chat's skill (Study helper ...): extra instructions for the model only
+                                         app_skills.hint(store.skill(chat_id)),
+                                         CONTINUE_HINT if cont else "") if h)   # the person's own preference, then the chat's skill (Study helper ...), then "continue": extra instructions for the model only
     library = state.docs_for(who["user"])
     attached = [d for d in (library.info(i) for i in store.docs(chat_id)) if d]     # documents attached to this chat: their passages go in as notes
     if attached:
@@ -1655,6 +1661,8 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 return
             if path == "/api/state":
                 return self._send(200, self.api_state(who, qs))
+            if path == "/api/chats/search":
+                return self._send(200, {"results": self.state.store(who["user"]).search((qs.get("q") or [""])[0])})
             m = re.fullmatch(r"/api/chats/(-?\d+)", path)
             if m:
                 return self.api_get_chat(who, int(m.group(1)))
@@ -1697,6 +1705,13 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 return self.api_account_get(who)
             if path == "/api/account/activity":
                 return self._send(200, {"events": self.state.auth.events(30, None, who["user"])})
+            if path == "/api/admin/feedback" and who["owner"]:
+                fb = self.state.feedback
+                return self._send(200, {"counts": fb.counts(), "kinds": feedback.KINDS, "items": fb.list(int((qs.get("limit") or ["50"])[0]), (qs.get("status") or ["new"])[0] or None,
+                                                                                                            (qs.get("kind") or [None])[0], (qs.get("model") or [None])[0])})
+            if path == "/api/admin/feedback/export" and who["owner"]:
+                lines = "\n".join(self.state.feedback.export_lines((qs.get("status") or ["new"])[0])) + "\n"
+                return self._send(200, lines.encode("utf-8"), "application/x-ndjson", {"Content-Disposition": 'attachment; filename="feedback_export.jsonl"'})
             if path == "/api/admin/cloud" and who["owner"]:
                 return self._send(200, self.state.cloud_status())
             if path == "/api/admin/overview" and who["owner"]:
@@ -1926,6 +1941,48 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 self.state.store(who["user"]).delete_everything()
                 self.state.saved_for(who["user"]).clear()
                 self.state.docs_for(who["user"]).clear()
+                return self._send(200, {"ok": True})
+            m = re.fullmatch(r"/api/chats/(-?\d+)/(pin|folder|branch)", path)
+            if m:
+                cid, what, store = int(m.group(1)), m.group(2), self.state.store(who["user"])
+                if not store.exists(cid):
+                    return self._send(404, {"code": "not_found", "message": "That chat is gone."})
+                if what == "pin":
+                    store.set_pinned(cid, bool(body.get("pinned", True)))
+                    return self._send(200, store.meta(cid))
+                if what == "folder":
+                    store.set_folder(cid, body.get("folder", ""))
+                    return self._send(200, store.meta(cid))
+                new = store.branch(cid, int(body.get("message_id", -1)))
+                if new is None:
+                    return self._send(400, {"code": "bad_request", "message": "That message isn't in this chat."})
+                return self._send(200, {"id": new, "title": store.title(new)})
+            m = re.fullmatch(r"/api/chats/(-?\d+)/messages/(\d+)/(edit|feedback)", path)
+            if m:
+                cid, mid, what, store = int(m.group(1)), int(m.group(2)), m.group(3), self.state.store(who["user"])
+                if not store.exists(cid):
+                    return self._send(404, {"code": "not_found", "message": "That chat is gone."})
+                if what == "edit":
+                    if (who["user"], cid) in self.state.stops:
+                        return self._send(400, {"code": "busy", "message": "It is still answering.", "action": "Wait for it to finish, or press Stop."})
+                    text = str(body.get("text", "")).strip()
+                    if len(text) > MAX_TEXT:
+                        return self._send(400, {"code": "too_long", "message": "That message is too long. Please shorten it."})
+                    if not store.edit_message(cid, mid, text):
+                        return self._send(400, {"code": "bad_request", "message": "Only your own messages can be edited."})
+                    return self._send(200, {"ok": True})
+                if cid < 0:
+                    return self._send(400, {"code": "private", "message": "Private chats can't be reported: nothing about them is saved."})
+                msgs = store.messages(cid)
+                i = next((n for n, x in enumerate(msgs) if x["id"] == mid and x["role"] == "assistant"), None)
+                if i is None:
+                    return self._send(400, {"code": "bad_request", "message": "That answer isn't here."})
+                question = next((x["content"] for x in reversed(msgs[:i]) if x["role"] == "user" and x["status"] != "summary"), "")
+                kind = str(body.get("kind", "other"))
+                used = self.state.lookups.get((who["user"], cid, mid)) or {}
+                self.state.feedback.add(who["user"], msgs[i]["model_id"], kind, body.get("note"), question, msgs[i]["content"], [n.get("title") for n in used.get("notes", [])])
+                store.set_flag(cid, mid, "fb", kind if kind in feedback.KINDS else "other")
+                self.state.auth.event("feedback", who["user"], self._ip(), kind)
                 return self._send(200, {"ok": True})
             m = re.fullmatch(r"/api/chats/(-?\d+)/messages/(\d+)/like", path)
             if m:
@@ -2218,9 +2275,10 @@ class Handler(http.server.BaseHTTPRequestHandler):
             return self._send(404, {"code": "not_found", "message": "That chat is gone."})
         lib = self.state.docs_for(who["user"])
         msgs = [{"id": m["id"], "role": m["role"], "content": m["content"], "model_id": m["model_id"], "status": m["status"],
+                 "cut": bool((m.get("flags") or {}).get("cut")), "fb": (m.get("flags") or {}).get("fb", ""),
                  "docs": [{"id": d["id"], "name": d["name"], "kind": d["kind"]} for d in (lib.info(i) for i in m.get("docs") or []) if d]}
                 for m in store.messages(cid) if not (m["status"] == "compacted" and not m["content"])]
-        self._send(200, {"id": cid, "title": store.title(cid), "private": cid < 0, "skill": store.skill(cid), "messages": msgs,
+        self._send(200, {"id": cid, "title": store.title(cid), "private": cid < 0, "skill": store.skill(cid), "messages": msgs, **store.meta(cid),
                          "generating": (who["user"], cid) in self.state.stops,
                          "docs": [d for d in (self.state.docs_for(who["user"]).info(i) for i in store.docs(cid)) if d]})
 
@@ -2529,6 +2587,8 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 return self._send(400, {"code": "cloud", "message": "Could not connect: " + (r.stderr.strip()[-220:] or f"ssh exit {r.returncode}"),
                                         "action": "Check the host, port and user, and that the public key is added to the machine."})
             return self._send(200, {"ok": True, "text": r.stdout.strip()})
+        if path == "/api/admin/feedback/handle":
+            return self._send(200, {"ok": st.feedback.set_status(body.get("id", 0), "handled" if body.get("handled", True) else "new")})
         if path == "/api/admin/mail-test":
             rec = st.user_record("owner") or {}
             if not st.mailer:
@@ -2754,7 +2814,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
             return self._send(400, {"code": "too_long", "message": "That message is too long. Please shorten it."})
         try:
             q, stop, model, win, decision = start_turn(st, who, cid, text, str(body.get("model", "")), str(body.get("effort", "balanced")),
-                                             regenerate, body.get("regen_mode") or None)
+                                             regenerate, body.get("regen_mode") or None, cont=bool(body.get("continue")))
         except ValueError as e:
             return self._send(400, {"code": "bad_option", "message": str(e)})
         except KeyError:
@@ -2810,7 +2870,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
                     snap = st.usage_snapshot(who, model, decision["effort"])
                     emit("done", {"reason": val["reason"], "compacted": val["compacted_messages"],
                                   "forgotten": val["forgotten_messages"], "message_id": val["message_id"],
-                                  "title": store.title(cid), "usage": snap, "effort": decision["effort"], "auto": decision["auto"]})
+                                  "title": store.title(cid), "usage": snap, "effort": decision["effort"], "auto": decision["auto"], "cut": bool(val.get("cut"))})
                     return
                 else:
                     status, headers, payload = error_payload(val)
