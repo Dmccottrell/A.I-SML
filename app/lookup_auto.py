@@ -66,9 +66,15 @@ GAVE_UP = re.compile(r"\b(i (do not|don'?t) know|i'?m not sure|i am not sure|(th
                      r"(no|not enough) (information|notes)|can(no|')t find|could(n'?t| not) find|i have no)\b", re.I)
 
 
+GAVE_UP_LATE = re.compile(r"\b(no specific information|(does|do|did) not (directly )?(mention|provide|say|cover|include|relate)|(is|are) not (mentioned|provided|included|stated)|"
+                          r"(additional|more|further) information (would|will) (need|be needed)|not (enough|any) (information|details) (is |are )?(provided|available))\b", re.I)
+
+
 def gave_up(reply):
-    """True when the model's answer says it doesn't know (v3 is trained to say so when the notes don't cover the question)."""
-    return bool(GAVE_UP.search((reply or "")[:400]))
+    """True when the model's answer says it doesn't know (v3 is trained to say so when the notes don't cover the question). The "notes don't say" wording
+    can come late in a longer answer ("Lamine Yamal is doing well. However, there is no specific information about this season..."), so those phrases are looked for further in."""
+    reply = reply or ""
+    return bool(GAVE_UP.search(reply[:400]) or GAVE_UP_LATE.search(reply[:1500]))
 
 
 def time_sensitive(text):

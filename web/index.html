@@ -1274,13 +1274,14 @@ function lookupLine(info) {
   if (!info || !info.asked) return null;
   if (info.pictures || info.ocr) return el('div', {class: 'note', style: 'align-self:flex-start'}, info.pictures ? 'Looked at ' + info.pictures + (info.pictures === 1 ? ' picture' : ' pictures') + (info.ocr ? ' and read the text in ' + info.ocr + ' more' : '') : 'Read the text in the picture (it can\u2019t see photos yet)');
   const n = (info.saved || 0) + (info.wiki || 0) + (info.web || 0) + (info.live || 0);
-  if (!n) return info.web_tried ? el('div', {class: 'note', style: 'align-self:flex-start'}, 'Searched, but found nothing useful') : null;
+  const noKey = info.web_source === 'wikipedia' ? ' Only Wikipedia was searched: no web search key is active (Settings > Live facts > See which sources are on).' : '';
+  if (!n) return info.web_tried ? el('div', {class: 'note', style: 'align-self:flex-start'}, 'Searched, but found nothing useful.' + noKey) : null;
   const parts = [];
   if (info.live) parts.push('Used live data: ' + (info.names || []).join(', '));
   if (info.saved) parts.push('Read ' + info.saved + (info.saved === 1 ? ' saved note' : ' saved notes') + (info.wiki ? ' and ' + info.wiki + ' from Wikipedia' : ''));
   else if (info.wiki) parts.push('Read ' + info.wiki + (info.wiki === 1 ? ' note' : ' notes') + ' from Wikipedia');
   if (info.web) parts.push(((info.wiki || info.saved) ? 'and searched' : 'Searched') + ' the web: ' + info.web + (info.web === 1 ? ' source' : ' sources'));
-  return el('div', {class: 'note', style: 'align-self:flex-start', title: info.sources.map((x) => x.title + (x.url ? ' (' + x.url + ')' : '')).join('\n')}, parts.join(' '));
+  return el('div', {class: 'note', style: 'align-self:flex-start', title: info.sources.map((x) => x.title + (x.url ? ' (' + x.url + ')' : '')).join('\n')}, parts.join(' ') + noKey);
 }
 function errorCard(e) {
   const i = e.info || {}, card = el('div', {class: 'err', role: 'alert'}, el('b', {}, e.message || 'Something went wrong.'));

@@ -84,3 +84,27 @@ class Endpoint(Base):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class Keys(unittest.TestCase):
+    def test_keys_file_fills_the_environment_without_overriding(self):
+        import tempfile
+        import app_server as A
+        with tempfile.TemporaryDirectory() as d:
+            path = os.path.join(d, "keys.env")
+            with open(path, "w") as f:
+                f.write('# my keys\nTAVILY_API_KEY="abc123"\nFRED_API_KEY = fred1\nNOT_A_KEY=zzz\nBRAVE_API_KEY=\nWOLFRAM_APPID=mine\n')
+            env = {"WOLFRAM_APPID": "already-set"}
+            self.assertEqual(sorted(A.load_keys_file(path, env)), ["FRED_API_KEY", "TAVILY_API_KEY"])
+            self.assertEqual((env["TAVILY_API_KEY"], env["FRED_API_KEY"], env["WOLFRAM_APPID"]), ("abc123", "fred1", "already-set"))
+            self.assertNotIn("NOT_A_KEY", env)
+            self.assertEqual(A.load_keys_file(os.path.join(d, "missing.env"), {}), [])
+
+
+class GaveUp(unittest.TestCase):
+    def test_answers_that_say_the_notes_do_not_cover_it_are_noticed_even_late(self):
+        import lookup_auto as L
+        late = "Lamine Yamal is performing well for Barcelona. He trained with the first team in 2022. However, there is no specific information about his goals for the 2026 season."
+        self.assertTrue(L.gave_up(late))
+        self.assertTrue(L.gave_up("The text does not mention his goals. Additional information would need to be provided."))
+        self.assertFalse(L.gave_up("Lamine Yamal scored 5 goals in 12 games, according to the match reports."))
