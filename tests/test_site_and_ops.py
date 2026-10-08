@@ -159,6 +159,15 @@ class Ops(Base):
         self.assertIn("web-wikipedia", {r["id"] for r in j["rows"]})
         self.assertTrue(next(r for r in j["rows"] if r["id"] == "web-wikipedia")["ok"])
 
+    def test_the_start_up_speed_note_catches_a_cpu_build_and_a_missing_gpu_option(self):
+        import app_server
+        cpu = r"C:\Users\x\Downloads\llama-b1-bin-win-cpu-x64\llama-server.exe"
+        cuda = r"C:\Users\x\Downloads\llama-b1-bin-win-cuda-12.4-x64\llama-server.exe"
+        self.assertIn("CPU-only build", app_server.gpu_note(cpu, ["-ngl", "99"]))
+        self.assertIn("No graphics-card option", app_server.gpu_note(cuda, []))
+        self.assertIsNone(app_server.gpu_note(cuda, ["-ngl", "99"]))
+        self.assertIsNone(app_server.gpu_note("/usr/bin/llama-server", ["--n-gpu-layers=40"]))
+
     def test_backups_can_be_made_listed_and_downloaded_by_the_owner_only(self):
         self.assertEqual(self.sam.call("GET", "/api/admin/backups")[0], 404)
         self.assertEqual(self.sam.call("POST", "/api/admin/backups/now", {})[0], 403)
