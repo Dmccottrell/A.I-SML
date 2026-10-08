@@ -1049,7 +1049,7 @@ class Hub:
 
     def gather(self, user, question, tz=0):
         """(notes, info) for a chat message: notes from the connected services it is about. Never raises."""
-        info = {"apps": [], "asked": False}
+        info = {"apps": [], "errors": [], "asked": False}
         try:
             connected = self.store.connected(user)
             chosen = picks(question, connected) if connected else []
@@ -1060,11 +1060,12 @@ class Hub:
             s = BY_ID[sid]
             try:
                 items = self.ask(user, sid, question_words(question, s), tz, question, 6)
-            except LinkError as e:
-                print(f"(connected app {sid}: {e.message})")
-                continue
-            except Exception as e:
-                print(f"(connected app {sid} failed: {e})")
+            except (LinkError, Exception) as e:                    # the app is down or refused: say so (the model is told not to guess)
+                msg = e.message if isinstance(e, LinkError) else "It did not answer."
+                name = s["name"].split(" (")[0]
+                print(f"(connected app {sid}: {msg})")
+                info["errors"].append({"app": name, "message": msg})
+                notes.append({"title": f"Your {name} could not be read", "text": f"{msg} Tell the person that their {name} could not be read just now, and why. Do not guess what is in it."})
                 continue
             if items:
                 text = " | ".join(f"{i['title']}: {i['text']}" if i.get("text") else i["title"] for i in items)
@@ -1072,3 +1073,36 @@ class Hub:
                 info["apps"].append(s["name"].split(" (")[0])
         info["asked"] = bool(notes)
         return notes, info
+
+
+# ---------------------------------------------------------------- "your day": what the connected apps hold for today, no model needed
+TASK_APPS = ("todoist", "asana", "clickup", "linear", "trello", "jira")
+BRIEF_APPS = ("calendar",) + TASK_APPS + ("email", "feeds")
+
+
+def briefing(hub, user, tz=0):
+    """{"sections": [{"app", "kind", "items": [{"title", "text", "url"}], "error"}]}: today's calendar, open tasks, the newest mail and feed posts from whatever is connected.
+    One failing app only marks its own section; nothing is guessed."""
+    connected = hub.store.connected(user)
+    out = []
+    for sid in BRIEF_APPS:
+        if sid not in connected:
+            continue
+        s = BY_ID[sid]
+        kind = "Calendar today" if sid == "calendar" else "Open tasks" if sid in TASK_APPS else "Newest email" if sid == "email" else "Latest posts"
+        name = s["name"].split(" (")[0]
+        try:
+            items = hub.ask(user, sid, "", tz, "today" if sid == "calendar" else "", 8 if sid == "calendar" else 5)
+            out.append({"app": name, "kind": kind, "items": [{"title": i["title"], "text": i.get("text", ""), "url": i.get("url")} for i in items], "error": None})
+        except Exception as e:
+            out.append({"app": name, "kind": kind, "items": [], "error": e.message if isinstance(e, LinkError) else "It did not answer."})
+    return {"sections": out}
+
+
+def briefing_text(brief):
+    """The same thing as plain text, for asking the model to plan the day from it."""
+    lines = []
+    for sec in brief["sections"]:
+        lines.append(f"{sec['kind']} ({sec['app']}):")
+        lines += [f"- {i['title']}" + (f" ({i['text']})" if i["text"] else "") for i in sec["items"]] or [f"- (could not be read: {sec['error']})" if sec["error"] else "- nothing"]
+    return "\n".join(lines)

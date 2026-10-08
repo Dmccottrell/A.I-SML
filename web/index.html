@@ -443,6 +443,7 @@ svg .core { fill: var(--core); stroke: var(--sun); stroke-width: 3; transition: 
       </div>
       <div style="display:flex;align-items:center">
         <button class="icon" id="themeBtn" aria-label="Switch dark or light"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M20 14.5A8 8 0 0 1 9.5 4 8 8 0 1 0 20 14.5Z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></svg></button>
+        <button class="icon" id="chatMore" aria-label="More for this chat" aria-haspopup="true" hidden><svg width="22" height="22" viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="5" cy="12" r="1.8" fill="currentColor"/><circle cx="12" cy="12" r="1.8" fill="currentColor"/><circle cx="19" cy="12" r="1.8" fill="currentColor"/></svg></button>
         <button class="icon" id="newTop" aria-label="New chat"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M12 5v14M5 12h14" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg></button>
       </div>
     </div>
@@ -736,10 +737,18 @@ function bubble(m, last) {
     const b = e.currentTarget; b.disabled = true; try { const r = await post('/api/chats/' + S.chatId + '/messages/' + m.id + '/like'); const j = await r.json(); b.textContent = j.saved ? 'Saved' : 'Thanks'; } catch (x) { b.disabled = false; } }}, '\ud83d\udc4d Right'));
   if (m.status === 'done' && (S.skill || m.content.length > 300)) acts.append(el('button', {class: 'chip', onclick: () => saveAs(m.content)}, 'Save as\u2026'));
   if (last && !S.busy && m.cut && S.chatId != null) acts.append(el('button', {class: 'chip on', title: 'The answer stopped at its length limit: carry on from there', onclick: () => { S.cont = true; $('input').value = 'Continue'; send(); }}, 'Continue \u2192'));
+  const up = last && !S.busy && m.status === 'done' ? strongerModel(m.model_id) : null;
+  if (up) acts.append(el('button', {class: 'chip', title: 'Ask the same question again with ' + mname(up) + ', a stronger model', onclick: () => { S.model = up.id; remember(); renderComposer(); send(true); }}, 'Ask ' + up.name + ' \u2191'));
   if (S.chatId != null && typeof m.id === 'number' && m.status === 'done' && !S.busy) acts.append(el('button', {class: 'chip', title: 'Start a new chat from here, and keep this one as it is', onclick: () => branchChat(m)}, 'Branch'));
   if (S.chatId != null && S.chatId >= 0 && m.status === 'done') acts.append(el('button', {class: 'chip', title: 'Tell the owner what was wrong with this answer', onclick: (e) => reportAnswer(m, e.currentTarget)}, m.fb ? 'Reported' : 'Report'));
   if (last && !S.busy) acts.append(el('button', {class: 'chip', 'aria-haspopup': 'true', onclick: (e) => regenMenu(e.currentTarget)}, 'Regenerate \u25be'));
   return el('div', {class: 'msg ai', 'data-id': m.id}, meta, el('div', {class: 'bubble'}, m.content), acts);
+}
+const MODEL_RANK = ['Ember', 'Flare', 'Equinox', 'Solstice', 'Apogee'];   // small and quick to strong and slow
+function strongerModel(modelId) {   // the next stronger model that is ready for this person, or null
+  const cur = allModels().find((x) => x.id === modelId); if (!cur) return null;
+  const rank = (x) => MODEL_RANK.indexOf(x.name) + (x.version ? x.version / 100 : 0);
+  return allModels().filter((x) => x.state === 'ready' && MODEL_RANK.includes(x.name) && rank(x) > rank(cur) && x.name !== cur.name).sort((a, b) => rank(a) - rank(b))[0] || null;
 }
 function editMessage(m, node) {   // change what you asked, forget the answers after it, and ask again
   const ta = el('textarea', {class: 'f', style: 'width:100%;min-height:80px;background:var(--bg);border:1px solid var(--line);border-radius:12px;color:var(--text);padding:10px;font:inherit', 'aria-label': 'Edit your message'}, m.content);
@@ -767,6 +776,42 @@ function reportAnswer(m, btn) {
     el('button', {class: 'btn', type: 'button', onclick: async () => { const r = await post('/api/chats/' + S.chatId + '/messages/' + m.id + '/feedback', {kind, note: note.value}); const j = await r.json().catch(() => ({}));
       if (!r.ok) { out.style.color = 'var(--danger)'; out.textContent = j.message || 'That did not work.'; return; } m.fb = kind; btn.textContent = 'Reported'; d.remove(); toast('Thanks. The owner will see it.'); }}, 'Send report')], 'Cancel');
 }
+function dayCard() {   // "Your day": one tap reads today from the connected apps (nothing is read until you tap)
+  const box = el('div', {class: 'sx-card', style: 'max-width:560px;margin:18px auto 0;padding:14px 16px;display:flex;flex-direction:column;gap:10px'});
+  const show = async (btn) => {
+    btn.disabled = true; btn.textContent = 'Reading your apps...';
+    let j; try { j = await (await api('/api/briefing')).json(); } catch (e) { btn.disabled = false; btn.textContent = 'Show my day'; return; }
+    const text = j.sections.map((s) => s.kind + ' (' + s.app + '):\n' + (s.items.length ? s.items.map((i) => '- ' + i.title + (i.text ? ' (' + i.text + ')' : '')).join('\n') : s.error ? '- (could not be read: ' + s.error + ')' : '- nothing')).join('\n');
+    box.replaceChildren(el('b', {}, 'Your day'), ...j.sections.map((s) => el('div', {}, el('div', {style: 'font-weight:600;font-size:14px'}, s.kind + '  \u00b7  ' + s.app),
+      ...(s.items.length ? s.items.map((i) => el('div', {style: 'font-size:14px;color:var(--muted)'}, '\u2022 ' + i.title + (i.text ? '  (' + i.text + ')' : ''))) : [el('div', {style: s.error ? 'color:var(--danger);font-size:14px' : 'color:var(--muted);font-size:14px'}, s.error ? 'Could not read it: ' + s.error : 'Nothing.')]))),
+      el('div', {style: 'display:flex;gap:8px;flex-wrap:wrap'}, el('button', {class: 'chip on', onclick: () => { $('input').value = 'Here is my day. Please give me a short plan: what to do first, and anything I should not forget.\n\n' + text; send(); }}, 'Plan my day with Emvryx'), el('button', {class: 'chip', onclick: () => renderThread(false)}, 'Hide')));
+  };
+  box.append(el('b', {}, 'Your day'), el('div', {style: 'color:var(--muted);font-size:14px'}, 'See today\u2019s calendar, open tasks and newest mail from the apps you connected. Nothing is read until you tap.'), el('button', {class: 'btn small', style: 'align-self:flex-start', onclick: (e) => show(e.currentTarget)}, 'Show my day'));
+  return box;
+}
+function chatAsText() {
+  const names = {}; allModels().forEach((m) => { names[m.id] = mname(m); });
+  return '# ' + S.title + '\n\n' + S.messages.filter((m) => m.content && !m.content.startsWith(SUMMARY_MARK)).map((m) => (m.role === 'user' ? '**You:** ' : '**' + (names[m.model_id] || 'Emvryx') + ':** ') + m.content).join('\n\n');
+}
+$('chatMore').onclick = (e) => {
+  e.stopPropagation(); document.querySelectorAll('.chatmenu').forEach((m) => m.remove());
+  const r = e.currentTarget.getBoundingClientRect(), item = (label, fn) => el('button', {class: 'link', style: 'min-height:42px', onclick: () => { menu.remove(); fn(); }}, label);
+  const menu = el('div', {class: 'acctmenu chatmenu', style: 'position:fixed;top:' + (r.bottom + 4) + 'px;right:10px;left:auto;bottom:auto;width:220px;z-index:60'},
+    ...(S.chatId >= 0 ? [item('Share a link\u2026', shareDialog)] : []), item('Save as PDF or Word\u2026', () => saveAs(chatAsText(), S.title)), ...(S.chatId >= 0 ? [item('Delete this chat', () => delChat({id: S.chatId, title: S.title}))] : []));
+  document.body.append(menu); setTimeout(() => document.addEventListener('click', () => menu.remove(), {once: true}), 0);
+};
+async function shareDialog() {
+  const j = await (await api('/api/shares')).json(), out = el('div', {role: 'status', style: 'color:var(--muted);font-size:14px;word-break:break-all'}), listBox = el('div', {style: 'display:flex;flex-direction:column;gap:8px'});
+  const refresh = (shares) => listBox.replaceChildren(...(shares.length ? [el('b', {}, 'Your links')] : []), ...shares.map((s) => el('div', {class: 'opt', style: 'cursor:default'}, el('span', {class: 'grow'}, el('b', {}, s.title), el('small', {}, 'Works until ' + new Date(s.expires * 1000).toLocaleDateString())),
+    el('button', {class: 'chip', onclick: async () => { await post('/api/shares/revoke', {id: s.id}); refresh((await (await api('/api/shares')).json()).shares); }}, 'Cancel link'))));
+  refresh(j.shares);
+  if (!j.on) { dialog([el('h2', {}, 'Share a link'), el('p', {style: 'margin:0;color:var(--muted)'}, 'Sharing links is switched off on this Emvryx. The owner can turn it on in Settings > Owner > Overview.'), listBox], 'Close'); return; }
+  let days = 7;
+  const seg = el('div', {class: 'seg'}, ...[[1, '1 day'], [7, '7 days'], [30, '30 days']].map(([d, t]) => el('button', {class: d === 7 ? 'on' : '', type: 'button', onclick: (e) => { days = d; [...seg.children].forEach((b) => b.classList.remove('on')); e.currentTarget.classList.add('on'); }}, t)));
+  dialog([el('h2', {}, 'Share a link'), el('p', {style: 'margin:0;color:var(--muted)'}, 'Anyone who has the link can read a copy of this chat as it is now: only the words, not pictures, files or later messages. You can cancel the link any time. Private chats can\u2019t be shared.'), seg,
+    el('button', {class: 'btn', onclick: async (e) => { const r = await post('/api/chats/' + S.chatId + '/share', {days}); const k = await r.json().catch(() => ({})); if (!r.ok) { out.style.color = 'var(--danger)'; out.textContent = (k.message || 'That did not work.') + ' ' + (k.action || ''); return; }
+      const url = location.origin + k.url; out.style.color = 'var(--text)'; out.replaceChildren(el('div', {style: 'margin-bottom:8px'}, url), el('button', {class: 'chip', onclick: async (b) => { try { await navigator.clipboard.writeText(url); b.target.textContent = 'Copied'; } catch (x) { b.target.textContent = 'Press and hold the link to copy'; } }}, 'Copy link')); refresh(k.shares); }}, 'Make a link'), out, listBox], 'Close');
+}
 function isTeacherChat() { return S.skill === 'teacher' || S.skill === 'study'; }
 function teacherHome(sk) {   // the start of a Teacher mode chat: type anything, or tap a tool
   const side = S.skill === 'study' ? 'student' : 'teacher';
@@ -783,7 +828,7 @@ function teacherHome(sk) {   // the start of a Teacher mode chat: type anything,
   return box;
 }
 function renderThread(jump) {
-  const t = $('thread'); t.replaceChildren();
+  const t = $('thread'); t.replaceChildren(); $('chatMore').hidden = !(S.chatId != null && S.messages.length);
   $('title').textContent = S.title;
   const sk = S.skills.find((x) => x.id === S.skill);
   if (S.private) t.append(el('div', {class: 'note'}, 'Private chat: not saved, and gone when you leave it'));
@@ -793,6 +838,7 @@ function renderThread(jump) {
   else if (!S.messages.length) t.append(el('div', {class: 'empty'}, logo(64), el('h1', {}, sk ? sk.name : 'How can I help?'),
     el('div', {}, sk ? sk.does : 'Ask anything. Pick a model and how much it should think under the box.'),
     sk ? el('button', {class: 'chip', style: 'margin-top:12px', onclick: () => { $('input').value = sk.try; $('input').focus(); }}, 'Try: ' + sk.try) : ''));
+  if (!S.messages.length && !tc && !sk && !S.private && S.state && S.state.briefing) t.append(dayCard());
   const last = [...S.messages].reverse().find((m) => m.role === 'assistant');
   S.messages.forEach((m) => t.append(bubble(m, last && m.id === last.id && m === S.messages[S.messages.length - 1])));
   if (jump !== false) scrollDown(true);
@@ -1646,6 +1692,7 @@ async function adminPage(id) {
         el('div', {class: 'sx-sec'}, 'People'), el('div', {class: 'stats'}, ...[[o.people, 'people'], [o.banned, 'turned off'], ...Object.entries(o.plans).map(([k, v]) => [v, k + ' plan'])].map(([n, l]) => el('div', {class: 'stat'}, el('b', {}, n), el('span', {}, l)))),
         el('div', {class: 'sx-sec'}, 'Last hour'), el('div', {class: 'stats'}, ...[[h.last_hour.sign_ins, 'sign-ins'], [h.last_hour.failed_tries, 'wrong tries'], [h.last_hour.lockouts, 'lockouts'], [h.devices_signed_in, 'devices signed in'], [h.server_errors, 'server errors'], [h.uptime_minutes + 'm', 'uptime']].map(([n, l]) => el('div', {class: 'stat'}, el('b', {}, n), el('span', {}, l)))),
         el('div', {class: 'sx-sec'}, 'Controls'), sxCard([{title: 'Pause everyone', desc: 'Stops chats for everyone except you. Restart the server to clear it, or press Resume.', ctl: el('div', {style: 'display:flex;gap:8px'}, sxBtn('Pause', async () => { await post('/api/admin/pause', {paused: true}); toast('Paused for everyone but you.'); }, 'bad'), sxBtn('Resume', async () => { await post('/api/admin/pause', {paused: false}); toast('Resumed.'); }))},
+          {title: 'Let people share chats by link', desc: 'Each link shows a read-only copy of one chat to anyone who has it, expires (1 to 30 days) and can be cancelled. Turning this off stops every link at once.', ctl: sxSwitch(o.sharing, async (v) => { await post('/api/admin/sharing', {on: v}); }, 'Let people share chats by link')},
           {title: 'Send a test email', desc: 'Sends a message to your owner email, so you know sign-in codes will arrive. Needs EMVRYX_SMTP_* in .emvryx\\keys.env.', ctl: sxBtn('Send test', async () => { const r = await post('/api/admin/mail-test'); const j = await r.json(); toast(r.ok ? 'Sent to ' + j.to : (j.message + ' ' + (j.action || ''))); })},
           {title: 'Live sources and keys', desc: 'Which lookups work and which keys are missing.', ctl: sxBtn('See sources', openSources)}]));
     } else if (id === 'a-people') {
@@ -1834,12 +1881,14 @@ document.addEventListener('visibilitychange', async () => {
 // "Read 2 notes from Wikipedia" / "Searched the web: 1 source": what the model was given before it answered
 function lookupLine(info) {
   if (!info || !info.asked) return null;
+  const cant = [...(info.unreadable || []).map((x) => 'Couldn\u2019t read ' + x), ...(info.app_errors || []).map((x) => 'Couldn\u2019t read your ' + x.app + ': ' + x.message)];
   if (info.pictures || info.ocr) return el('div', {class: 'note', style: 'align-self:flex-start'}, info.pictures ? 'Looked at ' + info.pictures + (info.pictures === 1 ? ' picture' : ' pictures') + (info.ocr ? ' and read the text in ' + info.ocr + ' more' : '') : 'Read the text in the picture (it can\u2019t see photos yet)');
-  const n = (info.saved || 0) + (info.wiki || 0) + (info.web || 0) + (info.live || 0) + ((info.apps || []).length);
+  const n = (info.saved || 0) + (info.wiki || 0) + (info.web || 0) + (info.live || 0) + ((info.apps || []).length) + cant.length;
   const noKey = info.web_source === 'wikipedia' ? ' Only Wikipedia was searched: no web search key is active (Settings > Live facts > See which sources are on).' : '';
   if (!n) return info.web_tried ? el('div', {class: 'note', style: 'align-self:flex-start'}, 'Searched, but found nothing useful.' + noKey) : null;
   const parts = [];
   if ((info.apps || []).length) parts.push('Looked in your ' + info.apps.join(' and ') + '.');
+  if (cant.length) parts.push(cant.join(' '));
   if (info.live) parts.push('Used live data: ' + (info.names || []).join(', '));
   if (info.saved) parts.push('Read ' + info.saved + (info.saved === 1 ? ' saved note' : ' saved notes') + (info.wiki ? ' and ' + info.wiki + ' from Wikipedia' : ''));
   else if (info.wiki) parts.push('Read ' + info.wiki + (info.wiki === 1 ? ' note' : ' notes') + ' from Wikipedia');

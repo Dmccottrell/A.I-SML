@@ -72,6 +72,7 @@ import lookup_auto
 import mailer
 import passkeys
 import secret_box
+import shares
 import saved_notes
 import user_memory
 import code_preview
@@ -92,7 +93,7 @@ OUTSIDE_NOTE = ("{label} is an outside coding model ({licence}), not an Emvryx m
 SECURITY_DEFAULTS = {"session_days": 90, "pair_minutes": 15, "login_fail_limit": 8, "login_fail_window": 600, "email_start_limit": 5,
                      "email_start_window": 600, "open_signups": False, "signup_mode": "closed", "trusted_proxies": ["127.0.0.1", "::1"], "audit_notify": True,
                      "allow_key_links": False, "allowed_origins": [], "code_unsandboxed_for_others": False,
-                     "require_encryption": False, "public_url": "", "cloud_host": "", "cloud_user": "root", "cloud_port": 22, "cloud_for_others": False, "github_client_id": "", "contact_email": "", "operator_name": "", "alert_ntfy_topic": "",
+                     "require_encryption": False, "public_url": "", "sharing": False, "cloud_host": "", "cloud_user": "root", "cloud_port": 22, "cloud_for_others": False, "github_client_id": "", "contact_email": "", "operator_name": "", "alert_ntfy_topic": "",
                      **code_sandbox.QUOTA_DEFAULTS}
 PAIR_PAGE = ('<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">'
              '<meta name="robots" content="noindex"><title>Sign in: Emvryx</title><style>body{margin:0;min-height:100vh;display:grid;place-items:center;'
@@ -310,6 +311,7 @@ class AppState:
         self.code = code_sessions.CodeManager(data_dir, quotas=code_sandbox.Quotas(self.security))       # VryxCode sessions (projects live under <data>/code/)
         self.secrets = secret_box.SecretBox(data_dir, require=self.security["require_encryption"])
         self.github = github_link.Store(data_dir, self.secrets)  # connected GitHub accounts (tokens encrypted, files mode 600)
+        self.shares = shares.Shares(os.path.join(data_dir, "shares.db") if data_dir else ":memory:")   # read-only links to a copy of a chat (the owner switches sharing on)
         self.feedback = feedback.Feedback(os.path.join(data_dir, "feedback.db") if data_dir else ":memory:")   # "That didn't work" reports, for the owner
         self.links = app_links.Hub(app_links.Store(data_dir, self.secrets))   # the other connected apps (a token, link or app password; read-only)
         self.apply_cloud()
@@ -959,7 +961,7 @@ class AppState:
         mfa = bool((rec.get("mfa") or {}).get("on"))
         check = lambda id_, ok, title, how: {"id": id_, "ok": bool(ok), "title": title, "how": how}
         people = list({u["user"]: u for u in self.users.values()}.values())
-        return {"signup_mode": self.signup_mode(), "invites": self.auth.invites(), "people": len(people), "banned": sum(1 for u in people if u.get("banned")),
+        return {"signup_mode": self.signup_mode(), "sharing": bool(self.security.get("sharing")), "invites": self.auth.invites(), "people": len(people), "banned": sum(1 for u in people if u.get("banned")),
                 "plans": {t: sum(1 for u in people if self.usage.get_user(u["user"])["tier"] == t) for t in self.cfg["tiers"]},
                 "checklist": [
                     check("password", rec.get("pw"), "Your owner account has a password", "Settings > Security > Set a password."),
@@ -1265,9 +1267,15 @@ def start_turn(state, who, chat_id, text, model_id, effort, regenerate=False, re
                         sys.stderr.write(f"vision: {e}\n")
                 rest = [d["id"] for d in attached if d["id"] not in described]
                 doc_notes = picture_notes + (documents.notes_for(library, rest, asked_doc, budget=int(min(24000, max(3000, window * 3.5 * 0.45)))) if rest else [])
-                if pictures["read"]:
+                unreadable = [d["name"] for d in attached if d["id"] not in described and (not (library.text(d["id"]) or "").strip() or (library.text(d["id"]) or "").startswith(documents.PICTURE_ONLY))]      # nothing could be read from it (a scan, a photo with no text)
+                if unreadable:                                                     # say so, instead of letting the model answer around it
+                    shown = ", ".join(f'"{n}"' for n in unreadable[:3])
+                    doc_notes.append({"title": "Could not read: " + ", ".join(unreadable[:3]),
+                                      "text": f"No text could be read from {shown} (it has no readable text, and the picture reader is not available). Tell the person you could not read it "
+                                              "and ask them to type out the part they mean. Do not guess what it says."})
+                if pictures["read"] or unreadable:
                     q.put(("notes", {"asked": True, "saved": 0, "wiki": 0, "web": 0, "web_tried": False, "recent": False, "live": 0, "names": [], "sources": [],
-                                     "pictures": pictures["looked"], "ocr": pictures["read"] - pictures["looked"]}))
+                                     "pictures": pictures["looked"], "ocr": pictures["read"] - pictures["looked"], "unreadable": unreadable}))
             live_notes = []
             live_mode = state.get_settings(who["user"])["web_search"]
             if not attached and live_mode != "none" and state.get_settings(who["user"]).get("live_data", True):
@@ -1282,7 +1290,8 @@ def start_turn(state, who, chat_id, text, model_id, effort, regenerate=False, re
                 asked_app = text or next((m["content"] for m in reversed(store.messages(chat_id)) if m["role"] == "user"), "")
                 app_notes, app_found = state.links.gather(who["user"], asked_app, state.usage.get_user(who["user"]).get("tz_minutes", 0))
                 if app_notes:
-                    q.put(("notes", {"asked": True, "saved": 0, "wiki": 0, "web": 0, "web_tried": False, "recent": False, "live": 0, "names": [], "sources": [], "apps": app_found["apps"]}))
+                    q.put(("notes", {"asked": True, "saved": 0, "wiki": 0, "web": 0, "web_tried": False, "recent": False, "live": 0, "names": [], "sources": [], "apps": app_found["apps"],
+                                     "app_errors": app_found["errors"]}))
             if text and not attached and not live_notes and not app_notes:         # Auto lookup (lookup_auto.py)
                 web_mode = state.get_settings(who["user"])["web_search"]
                 notes, found = lookup_auto.gather(text, state.wiki, state.web_fn, web_mode, private=chat_id < 0,
@@ -1640,6 +1649,16 @@ class Handler(http.server.BaseHTTPRequestHandler):
             if path == "/api/auth-options":
                 return self._send(200, {"email": bool(self.state.mailer), "signups": bool(self.state.mailer and self.state.security["open_signups"]),
                                         "password": True, "signup": self.state.signup_mode(), "google": self.state.google_on(), "passkeys": passkeys.AVAILABLE})
+            ms = re.fullmatch(r"/s/([A-Za-z0-9_-]{16,80})", path)
+            if ms:                                              # a shared chat: no sign-in, a copy of the words only
+                if self._locked():
+                    return
+                snap = self.state.shares.get(ms.group(1)) if self.state.security.get("sharing") else None
+                if not snap:
+                    self._fail("bad share link")
+                    return self._send(404, "This link doesn't work any more: it expired, was cancelled, or sharing was switched off.\n", "text/plain; charset=utf-8")
+                return self._send(200, shares.render(snap).encode("utf-8"), "text/html; charset=utf-8",
+                                  csp="default-src 'none'; style-src 'unsafe-inline'; frame-ancestors 'none'; base-uri 'none'")
             if path == "/auth/google/start":
                 return self.google_start(qs)
             if path == "/auth/google/callback":
@@ -1661,6 +1680,12 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 return
             if path == "/api/state":
                 return self._send(200, self.api_state(who, qs))
+            if path == "/api/briefing":
+                if not self.state.get_settings(who["user"]).get("connected_apps", True):
+                    return self._send(200, {"sections": [], "off": True})
+                return self._send(200, app_links.briefing(self.state.links, who["user"], self.state.usage.get_user(who["user"]).get("tz_minutes", 0)))
+            if path == "/api/shares":
+                return self._send(200, {"shares": self.state.shares.list(who["user"]), "on": bool(self.state.security.get("sharing"))})
             if path == "/api/chats/search":
                 return self._send(200, {"results": self.state.store(who["user"]).search((qs.get("q") or [""])[0])})
             m = re.fullmatch(r"/api/chats/(-?\d+)", path)
@@ -1823,7 +1848,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 import base64
                 try:
                     data = base64.b64decode(str(body.get("data", "")), validate=False)
-                    return self._send(200, self.state.docs_for(who["user"]).add(str(body.get("name", "")), data))
+                    return self._send(200, self.state.docs_for(who["user"]).add(str(body.get("name", "")), data, allow_picture=bool(self.state.vision and self.state.vision.available())))
                 except (ValueError, TypeError) as e:
                     return self._send(400, {"code": "bad_document", "message": str(e) if isinstance(e, ValueError) and not str(e).startswith("Incorrect padding") else "That file couldn't be read."})
             m = re.fullmatch(r"/api/chats/(-?\d+)/docs", path)
@@ -1942,6 +1967,26 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 self.state.saved_for(who["user"]).clear()
                 self.state.docs_for(who["user"]).clear()
                 return self._send(200, {"ok": True})
+            if path == "/api/shares/revoke":
+                return self._send(200, {"ok": self.state.shares.revoke(who["user"], body.get("id", ""))})
+            m = re.fullmatch(r"/api/chats/(-?\d+)/share", path)
+            if m:
+                cid, store = int(m.group(1)), self.state.store(who["user"])
+                if not self.state.security.get("sharing"):
+                    return self._send(403, {"code": "sharing_off", "message": "Sharing links is switched off.", "action": "Ask the owner to turn it on (Settings > Owner > Overview)."})
+                if cid < 0:
+                    return self._send(400, {"code": "private", "message": "Private chats can't be shared: nothing about them is saved."})
+                if not store.exists(cid):
+                    return self._send(404, {"code": "not_found", "message": "That chat is gone."})
+                models_by_id = {x["id"]: x for x in self.state.catalog(who)["cards"] + self.state.catalog(who)["other"]}
+                msgs = [{"role": x["role"], "content": x["content"], "model": (models_by_id.get(x["model_id"]) or {}).get("name", "")} for x in store.messages(cid)
+                        if x["status"] not in ("compacted", "summary") and x["content"]]
+                try:
+                    token = self.state.shares.create(who["user"], cid, store.title(cid), msgs, int(body.get("days") or 7))
+                except ValueError as e:
+                    return self._send(400, {"code": "bad_request", "message": str(e)})
+                self.state.auth.event("share_made", who["user"], self._ip(), "")
+                return self._send(200, {"url": "/s/" + token, "shares": self.state.shares.list(who["user"])})
             m = re.fullmatch(r"/api/chats/(-?\d+)/(pin|folder|branch)", path)
             if m:
                 cid, what, store = int(m.group(1)), m.group(2), self.state.store(who["user"])
@@ -2266,6 +2311,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
                      "blurb": "Takes longer: thinks it through and checks its work. More accurate on hard questions."}],
                 "usage": snap, "window": {k: win[k] for k in ("window", "reason", "mode", "limited_by", "cache_bits", "cache_mb")},
                 "chats": st.store(who["user"]).list_chats(), "settings": st.get_settings(who["user"]),
+                "briefing": bool(st.get_settings(who["user"]).get("connected_apps", True) and st.links.store.connected(who["user"]) & set(app_links.BRIEF_APPS)),
                 "thinking_words": list(chat_polish.THINKING_WORDS), "think_switch_s": chat_polish.THINKING_SWITCH_S,
                 "pause_by_effort": chat_polish.PAUSE_BASE, "regen_options": regen_modes.menu()}
 
@@ -2587,6 +2633,10 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 return self._send(400, {"code": "cloud", "message": "Could not connect: " + (r.stderr.strip()[-220:] or f"ssh exit {r.returncode}"),
                                         "action": "Check the host, port and user, and that the public key is added to the machine."})
             return self._send(200, {"ok": True, "text": r.stdout.strip()})
+        if path == "/api/admin/sharing":
+            st.save_security(sharing=bool(body.get("on")))
+            st.auth.event("sharing_changed", "owner", self._ip(), "on" if body.get("on") else "off")
+            return self._send(200, {"on": bool(st.security.get("sharing"))})
         if path == "/api/admin/feedback/handle":
             return self._send(200, {"ok": st.feedback.set_status(body.get("id", 0), "handled" if body.get("handled", True) else "new")})
         if path == "/api/admin/mail-test":
