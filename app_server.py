@@ -2687,6 +2687,18 @@ class Handler(http.server.BaseHTTPRequestHandler):
             return self._send(200, {"on": bool(st.security.get("sharing"))})
         if path == "/api/admin/feedback/handle":
             return self._send(200, {"ok": st.feedback.set_status(body.get("id", 0), "handled" if body.get("handled", True) else "new")})
+        if path == "/api/admin/sources/test":
+            import web_search
+
+            def web_check(name):
+                try:
+                    got = web_search.SOURCES[name]("who won the most recent world cup", 3, fetch=web_search.get_json)
+                except Exception as e:
+                    return False, "failed: " + str(e)[:140]
+                return bool(got), (f"returned {len(got)} results" if got else "answered, but with no results")
+            rows = live_data.check_sources(web_check=web_check)
+            st.auth.event("sources_test", "owner", self._ip(), "")
+            return self._send(200, {"rows": rows, "using": web_search.pick_source("auto")})
         if path == "/api/admin/mail-test":
             rec = st.user_record("owner") or {}
             if not st.mailer:
