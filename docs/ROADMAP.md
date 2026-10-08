@@ -21,6 +21,64 @@ version's test-sheet results decide what the next one focuses on.
 >
 > **Order of work (decided Oct 2026):** build all the 2.0 models first (Flare 2.5, Equinox 2, Solstice 2, Apogee 2), then the improved **Equinox 2.5, Solstice 2.5 and Apogee 2.5** releases (new lessons, DPO, skill packs, tools, thinking dial). Details: [OPEN_MODEL.md](OPEN_MODEL.md#order-of-work-all-the-20-builds-first-then-the-improved-25-releases-decided-oct-2026).
 
+<!-- next:start -->
+## What's next: the 2.5 plan and 25 ideas
+
+This is a **direction, not a promise**. Nothing below is built unless it says so, and the order can change once the quality check and language benchmark show what the models actually get wrong. Costs are estimates from the figures elsewhere in this roadmap.
+
+### The 2.5 plan, in order
+
+| Step | What we do | Why |
+|---|---|---|
+| 1. Measure | Run the quality check (`evaluation/quality_check.py`) and the language benchmark (`coding/bench_languages.py`) on every model, one at a time, never during training. | The 2.5 lessons should fix what really fails, not what we guess fails. |
+| 2. Preference training (DPO) | Teach the models which of two answers is better, using answers people reported, "Ask Solstice" comparisons and cut-off or could-not-read cases. | The cheapest big gain. The app already collects the raw material. |
+| 3. Tools the model asks for itself | The model says "look this up" or "run this" and our code does it, instead of our code guessing when. | Moves Equinox, Solstice and Apogee from chatbot toward assistant. Helps VryxCode most. |
+| 4. Thinking dial and reasoning lessons | A "think first" mode, trained on worked step-by-step solutions from a larger teacher model. | Small models are weakest at multi-step reasoning. Expect gains on math and logic, not miracles. |
+| 5. Pictures natively | A base that sees pictures directly, instead of a helper that describes them first. | The helper loses detail in screenshots, charts and handwriting. |
+| 6. Long-document test | Check that the models really use their long context (answer from page 40 of a PDF). | Small models often claim more context than they use well. |
+| 7. Voice | Speech in (Whisper) and out (Piper), both free and offline. | Independent of the brain, so it can ship any time. |
+| 8. Identity wording | Put "built on an open foundation model" into the lessons so it is baked in. | Avoids patching it later. Owner's choice pending. |
+| 9. Newer bases | Pick each base when its turn comes, after a short pilot run. | Better open models will exist by then. |
+
+**Suggested order of models:** Solstice 2.5 first (best mix of quality and cost to retrain, about $5 per fine-tune), then Equinox 2.5 (about $3), then Apogee 2.5 (about $12). Flare 2.5 can be refreshed on the home GPU for free.
+
+### 25 ideas to push Emvryx further
+
+Effort is a guess: **S** is days, **M** is a couple of weeks, **L** is a big project. "New model" means it needs a retrain; the others are app or tool work.
+
+| # | Idea | What it would do | Effort | New model? |
+|---|---|---|---|---|
+| 1 | **Receipts on every answer** | Tap a reply to see what it used: the notes it read, the live source, memory or lookup, and when it is guessing. | M | No |
+| 2 | **Visible confidence** | A small "sure / not sure" marker, trained on whether past answers turned out right. | L | Yes |
+| 3 | **Checked quotes** | After answering, compare each claim with the source text and flag lines the source does not support. | M | No |
+| 4 | **Never guesses a number** | For any number the model writes a few lines of code, runs them and shows the working. | M | No |
+| 5 | **Second opinion** | A "Check this" button asks another model and shows where the two agree and differ. | S | No |
+| 6 | **What left this computer** | A list of every outside request the app made, with time and source. Chats and files stay local. | S | No |
+| 7 | **Projects** | A folder per topic (Homework, My business) with its own files, instructions, memory and chats. | M | No |
+| 8 | **Memory you can see** | One page showing what Emvryx remembers about you, with edit and forget buttons. | S | No |
+| 9 | **Search my files** | Index a folder of PDFs and notes on your PC and answer from them with sources. Stays private on the PC. | M | No |
+| 10 | **Scheduled tasks** | "Every Monday, read my calendar and mail and send me a summary." Builds on the weekly summary and connected apps. | M | No |
+| 11 | **Data analyst mode** | Upload a spreadsheet, ask questions, get tables and charts made by code you can read. | M | No |
+| 12 | **Smarter Auto** | Start on the smallest model that can answer, move up only when unsure. Saves your usage. | M | Some |
+| 13 | **Careful mode** | The model drafts, critiques its own draft and fixes it, for answers that matter. Slower, optional. | S | No |
+| 14 | **Faster big models** | A small model drafts and the big one checks (speculative decoding), so Apogee feels quicker on the RTX 4070. | M | No |
+| 15 | **Regression guard** | Every retrain must pass a frozen set of everyday questions and past reports before it replaces the current model. | S | No |
+| 16 | **Many languages** | Test and train for languages other than English, starting with the ones people ask for. | L | Yes |
+| 17 | **Native vision** | See photos, charts and handwriting directly. | L | Yes |
+| 18 | **Voice** | Dictate and read aloud, then a hands-free mode. | M | No |
+| 19 | **Ask about this page** | Share a web page or photo from your phone straight into Emvryx. | S | No |
+| 20 | **Explain mode in VryxCode** | "Explain each step in plain English" and "teach me what you just built" for people who are not programmers. | S | No |
+| 21 | **"Done" means tests pass** | VryxCode keeps going until the checks you named pass, and builds a map of a big project first. | M | No |
+| 22 | **Code review mode** | Read a change (a GitHub pull request, read-only) and list the problems worst first. | M | No |
+| 23 | **Family accounts and learning loop** | A parent view with budgets, a kid-safe mode with reading level, and flashcards and quizzes made from your own documents. | L | No |
+| 24 | **Emvryx API** | An OpenAI-style address so your own programs can use your models with your keys and limits. | M | No |
+| 25 | **Shareable skill packs** | Export a specialist mode (Study helper, Lawyer's checklist) as a file and import one someone sent you. | S | No |
+
+**Also worth doing, smaller:** screen-reader and large-text checks across the app, a dyslexia-friendly font option, a "where it fails" note on each model's scorecard entry, and keeping the website's numbers in step with `limits.json`.
+
+**What we will not do:** train on people's chats without a clear opt-in, or let an answer claim a source it did not read.
+<!-- next:end -->
+
 ## At a glance
 
 | Version | Theme | Brain | Main new abilities | Where it trains | Cost |
