@@ -270,7 +270,7 @@ def make_todo():
 
 
 def run_task(task, generate, workspace, ask, max_turns=12, context_tokens=None, extra_programs=(), out=print, tools=None, git_identity=None, command_prefix=None, container=False,
-             history=None, chat_mode=False, checks=True, plan=False, todo=False, remote=False):
+             history=None, chat_mode=False, checks=True, plan=False, todo=False, remote=False, lang_note=""):
     """Run one task. Returns harness.run_agent's result (finished, summary, turns, messages).
     `tools` is {name: function(**args) -> text} of extra tools (the GitHub tool, run by the server, never by the sandbox).
     `plan` looks only (no edits, runs or git changes) and answers with a plan; `todo` adds the checklist tool the page shows as a to-do list."""
@@ -290,7 +290,7 @@ def run_task(task, generate, workspace, ask, max_turns=12, context_tokens=None, 
     with harness.Sandbox(workspace=workspace, allowed_programs=programs, **kw) as sandbox:
         for name, fn in (tools or {}).items():
             sandbox.register_tool(name, fn)
-        system = SYSTEM + (GITHUB_TOOL_NOTE if "github" in (tools or {}) else "") + (TODO_NOTE if todo else "") + (PLAN_NOTE if plan else "")
+        system = SYSTEM + (GITHUB_TOOL_NOTE if "github" in (tools or {}) else "") + (TODO_NOTE if todo else "") + (PLAN_NOTE if plan else "") + (lang_note or "")
         result = harness.run_agent(task, generate, sandbox, max_turns=max_turns, system=system, ask=ask, context_tokens=context_tokens,
                                    permissions=harness.Permissions(rules=rules, ask=ask), history=history, chat_mode=chat_mode, checks=checks)
     out(("Done: " if result["finished"] else "Stopped without finishing: ") + (result["summary"] or f"{result['turns']} steps used") )

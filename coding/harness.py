@@ -372,11 +372,59 @@ def check_text(path, text):
             return [f"{path}: not valid JSON: {e}"]
     if low.endswith((".js", ".mjs")):
         return _check_js(path, text)
-    return []
+    other = _check_other(path, text)
+    return other
 
 
 def checkable(path):
-    return str(path).lower().endswith((".py", ".json", ".js", ".mjs"))
+    return str(path).lower().endswith((".py", ".json", ".js", ".mjs") + tuple(OTHER_CHECKS))
+
+
+# Other languages: only a SYNTAX check, and only when that language's tool is installed on this machine (nothing is reported otherwise).
+# Each entry: file ending -> (program, a function that makes the command from a temp file path, a pattern a real syntax error line matches).
+# Errors about things in OTHER files of the project (a missing import, an unknown name) are left out on purpose: the text is checked alone.
+_SYNTAX_WORDS = re.compile(r"expected|unexpected|syntax error|stray|unterminated|missing terminating|unbalanced|extra tokens|illegal start|reached end of file|unclosed|parse error|invalid token|before .* token", re.I)
+OTHER_CHECKS = {
+    ".go": ("gofmt", lambda f, d: ["gofmt", "-e", f], re.compile(r"")),
+    ".php": ("php", lambda f, d: ["php", "-l", f], re.compile(r"Parse error|syntax error", re.I)),
+    ".rb": ("ruby", lambda f, d: ["ruby", "-c", f], re.compile(r"syntax error|unexpected|expecting", re.I)),
+    ".c": ("gcc", lambda f, d: ["gcc", "-fsyntax-only", "-x", "c", f], _SYNTAX_WORDS),
+    ".h": ("gcc", lambda f, d: ["gcc", "-fsyntax-only", "-x", "c", f], _SYNTAX_WORDS),
+    ".cpp": ("g++", lambda f, d: ["g++", "-fsyntax-only", "-x", "c++", f], _SYNTAX_WORDS),
+    ".cc": ("g++", lambda f, d: ["g++", "-fsyntax-only", "-x", "c++", f], _SYNTAX_WORDS),
+    ".java": ("javac", lambda f, d: ["javac", "-proc:none", "-d", d, f], _SYNTAX_WORDS),
+}
+
+
+def _check_other(path, text):
+    ext = os.path.splitext(str(path).lower())[1]
+    spec = OTHER_CHECKS.get(ext)
+    if not spec or not shutil.which(spec[0]):
+        return []
+    import tempfile
+    with tempfile.TemporaryDirectory() as d:
+        name = os.path.basename(str(path)) if ext == ".java" else "check" + ext         # a Java file must be named after its public class
+        f = os.path.join(d, name)
+        with open(f, "w", encoding="utf-8", newline="\n") as fh:
+            fh.write(text)
+        try:
+            r = subprocess.run(spec[1](f, d), capture_output=True, text=True, timeout=15, stdin=subprocess.DEVNULL, cwd=d)
+        except (OSError, subprocess.SubprocessError):
+            return []
+    if r.returncode == 0:
+        return []
+    out = []
+    for line in (r.stderr + "\n" + r.stdout).splitlines():
+        if not line.strip() or not spec[2].search(line):
+            continue
+        if ext == ".java" and re.search(r"cannot find symbol|does not exist|should be declared in a file|incompatible types|cannot be applied", line):
+            continue
+        clean = line.replace(f, str(path)).replace(d + os.sep, "").strip()
+        m = re.search(r":(\d+)(?::\d+)?:?\s*(.*)", clean)
+        out.append(f"{path}:{m.group(1)}: syntax error: {m.group(2).strip()}" if m else f"{path}: syntax error: {clean}")
+        if len(out) >= 3:
+            break
+    return out
 
 
 def _check_js(path, text):
