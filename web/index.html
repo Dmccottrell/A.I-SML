@@ -247,6 +247,19 @@ svg .core { fill: var(--core); stroke: var(--sun); stroke-width: 3; transition: 
   .hamburger { display: grid; }
   .down { bottom: 190px; right: 16px; }
 }
+/* phone fit: keep the + / model / effort row on one line, and keep VryxCode's menus and top bar on the screen */
+.tools .left { flex-wrap: nowrap; flex: 1; gap: 6px; }
+#modelBtn { min-width: 0; flex-shrink: 1; overflow: hidden; white-space: nowrap; } #modelBtn span, #modelBtn b { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+#effortBtn { flex-shrink: 0; white-space: nowrap; }
+.code .empty { text-align: left; }
+@media (max-width: 520px) {
+  .pill { padding: 6px 8px; } #plus { width: 40px !important; }
+  .tools .left { gap: 4px; } .send { width: 42px; height: 42px; } #effortBtn { font-size: 13px; padding: 6px 7px; } #modelBtn { padding: 6px 7px; }
+  .code .top2 { gap: 2px; padding: 0 6px 0 0; } .code .top2 .title { flex: 0 1 auto; font-size: 16px; padding-left: 0; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+  .code .top2 .chip { flex-shrink: 1; min-width: 0; max-width: none; padding: 4px 9px; font-size: 12.5px; min-height: 34px; } .code .top2 #codeProj { flex: 1 1 0; max-width: none; }
+  .code .menu { position: fixed; left: 12px; right: 12px; top: 64px; width: auto; max-height: calc(100dvh - 90px); overflow-y: auto; margin: 0; }
+  .menu { max-width: calc(100vw - 24px); }
+}
 @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; } }
 </style>
 </head>
