@@ -231,7 +231,7 @@ def extra_pages():
     with open(os.path.join(HERE, "docs", "ROADMAP.md"), encoding="utf-8") as f:
         road = f.read()
     part = road.split("<!-- next:start -->", 1)[1].split("<!-- next:end -->", 1)[0].strip().splitlines()[1:]       # the section without its own heading
-    intro = "# What&rsquo;s next\n\nWhere Emvryx could go from here: the plan for the 2.5 models and 25 ideas.\n"
+    intro = "# What\u2019s next\n\nWhere Emvryx could go from here: the plan for the 2.5 models and 25 ideas.\n"
     out["next.html"] = extra_page("What's next".replace("'", "&rsquo;"), '<div class="doc">' + md_to_html(intro + "\n".join(part)) + "</div>", "next.html")
     out["open.html"] = extra_page("Open Emvryx", OPEN_BODY, extra_head='<meta name="robots" content="noindex">\n', extra_js=OPEN_JS)
     return out
