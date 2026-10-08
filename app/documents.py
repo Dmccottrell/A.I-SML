@@ -28,7 +28,19 @@ TEXT_EXTS = {".txt", ".md", ".markdown", ".csv", ".tsv", ".json", ".log", ".py",
 HTML_EXTS = {".html", ".htm"}
 IMAGE_EXTS = {".png", ".jpg", ".jpeg", ".webp", ".bmp", ".gif", ".heic"}
 KINDS = "PDF, Word (.docx), HTML, a picture or screenshot (its text is read), or a text file (.txt, .md, .csv, .json, code)"
+IMAGE_KINDS = {e.lstrip(".") for e in IMAGE_EXTS}
 _ocr = None                                                                 # the text reader is loaded on first use (it takes a second)
+
+
+def warm_ocr():
+    """Load the picture reader ahead of time (the app does this in the background when it starts), so the first picture isn't slow. Quietly does nothing if it isn't installed."""
+    global _ocr
+    try:
+        if _ocr is None:
+            from rapidocr_onnxruntime import RapidOCR
+            _ocr = RapidOCR()
+    except Exception:
+        pass
 
 
 def ocr_image(data):
@@ -149,6 +161,11 @@ class Library:
         self.db = sqlite3.connect(path, check_same_thread=False)
         self.clock = clock
         self.db.execute("CREATE TABLE IF NOT EXISTS docs (id INTEGER PRIMARY KEY, name TEXT, kind TEXT, chars INTEGER, created REAL, text TEXT)")
+        try:
+            self.db.execute("ALTER TABLE docs ADD COLUMN image BLOB")          # a picture is kept as it was sent, so it can be shown and looked at
+            self.db.commit()
+        except sqlite3.OperationalError:
+            pass
         self.db.commit()
 
     def add(self, name, data):
@@ -159,10 +176,18 @@ class Library:
             text, note = text[:MAX_CHARS], f"Only the first {MAX_CHARS // 1000:,}K letters were kept."
         if self.db.execute("SELECT COUNT(*) FROM docs").fetchone()[0] >= MAX_DOCS:
             raise ValueError(f"You can keep {MAX_DOCS} documents. Delete one you no longer need first.")
-        cur = self.db.execute("INSERT INTO docs (name, kind, chars, created, text) VALUES (?, ?, ?, ?, ?)",
-                              (name, _ext(name).lstrip(".") or "txt", len(text), self.clock(), text))
+        cur = self.db.execute("INSERT INTO docs (name, kind, chars, created, text, image) VALUES (?, ?, ?, ?, ?, ?)",
+                              (name, _ext(name).lstrip(".") or "txt", len(text), self.clock(), text, data if _ext(name) in IMAGE_EXTS else None))
         self.db.commit()
         return dict(self.info(cur.lastrowid), note=note)
+
+    def image(self, doc_id):
+        """(bytes, mime type) of a picture that was added, or None."""
+        r = self.db.execute("SELECT name, image FROM docs WHERE id = ?", (doc_id,)).fetchone()
+        if not r or not r[1]:
+            return None
+        ext = _ext(r[0])
+        return bytes(r[1]), {".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".png": "image/png", ".webp": "image/webp", ".gif": "image/gif", ".bmp": "image/bmp"}.get(ext, "image/png")
 
     def info(self, doc_id):
         r = self.db.execute("SELECT id, name, kind, chars, created FROM docs WHERE id = ?", (doc_id,)).fetchone()

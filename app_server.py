@@ -60,6 +60,7 @@ import export_doc
 import teacher_mode
 import connected_apps
 import documents
+import vision
 import live_data
 import github_link
 import lookup_auto
@@ -283,6 +284,7 @@ class AppState:
         self.live_net = None                                   # live_data.Net (tests pass a fake)
         self.default_place = ""                                # the weather place (--weather-place), also used for air quality
         self.web_fn = None                                     # web(question, k) -> notes; None = this server never searches the web
+        self.vision = None                                     # vision.VisionHelper: describes pictures for the models (None = only the words in a picture are read)
         self._demo_tok = None
         self.usage = U.UsageStore(os.path.join(data_dir, "usage.db") if data_dir else ":memory:")
         self.limiter = U.Limiter(self.usage, self.cfg, self.manifest)
@@ -871,6 +873,7 @@ def start_turn(state, who, chat_id, text, model_id, effort, regenerate=False, re
     if attached:
         skill_hint = (skill_hint + "\n\n" if skill_hint else "") + documents.hint([d["name"] for d in attached])
 
+    sent_before = store.sent_docs(chat_id)                     # pictures and files that went with an earlier message: only new ones go with this one
     timing = {}
 
     def timed(stream):
@@ -909,9 +912,29 @@ def start_turn(state, who, chat_id, text, model_id, effort, regenerate=False, re
                     asked = last[-1]["content"] if last else ""
                 mem_note = memory.note(asked)
             doc_notes = []
+            pictures = {"looked": 0, "read": 0}
             if attached:                                                           # the question is about the documents: no Wikipedia or web notes to distract
                 asked_doc = text or next((m["content"] for m in reversed(store.messages(chat_id)) if m["role"] == "user"), "")
-                doc_notes = documents.notes_for(library, [d["id"] for d in attached], asked_doc, budget=int(min(24000, max(3000, window * 3.5 * 0.45))))
+                described, picture_notes = set(), []
+                helper = state.vision if (state.vision and state.vision.available()) else None
+                for d in attached:
+                    if d["kind"] not in documents.IMAGE_KINDS:
+                        continue
+                    pictures["read"] += 1
+                    img = library.image(d["id"]) if helper else None
+                    if not img:
+                        continue
+                    try:
+                        q.put(("loading", "the picture reader")) if not helper.proc and not helper.fixed_url else None
+                        picture_notes.append({"title": "Picture: " + d["name"], "text": helper.describe(d["id"], img[0], img[1], asked_doc)})
+                        described.add(d["id"]); pictures["looked"] += 1
+                    except RuntimeError as e:
+                        sys.stderr.write(f"vision: {e}\n")
+                rest = [d["id"] for d in attached if d["id"] not in described]
+                doc_notes = picture_notes + (documents.notes_for(library, rest, asked_doc, budget=int(min(24000, max(3000, window * 3.5 * 0.45)))) if rest else [])
+                if pictures["read"]:
+                    q.put(("notes", {"asked": True, "saved": 0, "wiki": 0, "web": 0, "web_tried": False, "recent": False, "live": 0, "names": [], "sources": [],
+                                     "pictures": pictures["looked"], "ocr": pictures["read"] - pictures["looked"]}))
             live_notes = []
             live_mode = state.get_settings(who["user"])["web_search"]
             if not attached and live_mode != "none" and state.get_settings(who["user"]).get("live_data", True):
@@ -945,6 +968,7 @@ def start_turn(state, who, chat_id, text, model_id, effort, regenerate=False, re
                 t = regen_modes.sampling_for(backend.sampling.get("temperature", 0.8), mode)
                 backend.sampling = dict(backend.sampling, temperature=round(min(bounds[1], max(bounds[0], t)), 2))   # never outside the model's safe range
             r = E.run_turn(tok, store, chat_id, backend, counted_model, window, max_new, user_text=text, stop=stop, notes=notes or None,
+                           user_docs=[d["id"] for d in attached if d["id"] not in sent_before] if text else None,
                            limiter=state.limiter, user=who["user"], effort=effort, clock=state.clock, pacer=pacer,
                            style_hint="\n\n".join(h for h in (skill_hint, regen_modes.get(mode)["hint"] if regenerate else "",
                                                     "" if regenerate else chat_polish.follow_up_hint(text, any(m["role"] == "assistant" for m in store.messages(chat_id)))) if h))
@@ -1294,6 +1318,12 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 return self.api_get_chat(who, int(m.group(1)))
             if path == "/api/settings":
                 return self._send(200, self.state.get_settings(who["user"]))
+            m = re.fullmatch(r"/api/documents/(\d+)/image", path)
+            if m:
+                img = self.state.docs_for(who["user"]).image(int(m.group(1)))
+                if not img:
+                    return self._send(404, {"code": "not_found", "message": "No picture."})
+                return self._send(200, img[0], ctype=img[1], headers={"Cache-Control": "private, max-age=3600"})
             if path == "/api/documents":
                 return self._send(200, {"documents": self.state.docs_for(who["user"]).list(), "max_mb": documents.MAX_FILE_BYTES // 1_000_000,
                                         "kinds": documents.KINDS})
@@ -1791,7 +1821,9 @@ class Handler(http.server.BaseHTTPRequestHandler):
         store = self.state.store(who["user"])
         if not store.exists(cid):
             return self._send(404, {"code": "not_found", "message": "That chat is gone."})
-        msgs = [{"id": m["id"], "role": m["role"], "content": m["content"], "model_id": m["model_id"], "status": m["status"]}
+        lib = self.state.docs_for(who["user"])
+        msgs = [{"id": m["id"], "role": m["role"], "content": m["content"], "model_id": m["model_id"], "status": m["status"],
+                 "docs": [{"id": d["id"], "name": d["name"], "kind": d["kind"]} for d in (lib.info(i) for i in m.get("docs") or []) if d]}
                 for m in store.messages(cid) if not (m["status"] == "compacted" and not m["content"])]
         self._send(200, {"id": cid, "title": store.title(cid), "private": cid < 0, "skill": store.skill(cid), "messages": msgs,
                          "generating": (who["user"], cid) in self.state.stops,
@@ -1988,6 +2020,8 @@ def main():
     ap.add_argument("--gguf", action="append", default=[], metavar="ID=PATH",
                     help="a model file to run, e.g. ember-2=export/dev/v2/my-ai-q8_0.gguf (the exports are found by themselves)")
     ap.add_argument("--llama-args", default="", help="extra options for llama-server, e.g. \"-ngl 99\" to use the GPU")
+    ap.add_argument("--vision-gguf", default=None, help="a vision model file, so pictures can be looked at (found by itself in export/open/vision)")
+    ap.add_argument("--vision-mmproj", default=None, help="the picture reader (mmproj .gguf) that goes with --vision-gguf")
     ap.add_argument("--ram", type=float, default=None, help="this computer's memory in GB (default: detected)")
     ap.add_argument("--wiki", default=os.path.join("data", "wiki", "wiki.db"),
                     help="the Wikipedia index (wiki_index.py) the chat looks things up in; skipped if the file isn't there")
@@ -2023,6 +2057,11 @@ def main():
         runner = ModelRunner(args.llama_bin or find_llama_server(), files, extra_args=args.llama_args.split())
     state = AppState(args.data, args.llama, args.llama_key, tok, manifest=manifest, ram_gb=args.ram, runner=runner)
     state.verbose = args.timings
+    v_model, v_proj = vision.discover(HERE)
+    if args.vision_gguf and args.vision_mmproj:
+        v_model, v_proj = args.vision_gguf, args.vision_mmproj
+    if v_model and v_proj and (args.llama_bin or find_llama_server()):
+        state.vision = vision.VisionHelper(args.llama_bin or find_llama_server(), v_model, v_proj, extra_args=args.llama_args.split())
     state.code.sandbox = {"mode": args.code_sandbox, "image": args.code_image, "runtime": args.code_runtime, "cpus": args.code_cpus, "memory": args.code_memory}
     base = f"http://localhost:{args.port}"
     if args.rotate_key:
@@ -2063,6 +2102,7 @@ def main():
         state.default_place = args.weather_place or ""
         state.web_fn = lambda question, k: web_answer(question, k, place=args.weather_place)        # Auto: only when the person's setting and the question call for it
     srv = make_server(state, args.host, args.port)
+    threading.Thread(target=documents.warm_ocr, daemon=True).start()          # loads the picture reader now, so the first screenshot is quick
     if args.preload:
         def _preload():
             print("Preload: " + state.preload(args.preload), flush=True)
