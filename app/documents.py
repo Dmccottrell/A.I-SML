@@ -89,7 +89,10 @@ def _decode(data):
         return data.decode("cp1252", "replace")
 
 
-def extract_text(name, data):
+PICTURE_ONLY = "[A picture with no readable text]"      # a photo with no words in it: accepted only when the picture reader can look at it
+
+
+def extract_text(name, data, allow_picture=False):
     """Plain text of an uploaded file. A problem with the file is a ValueError with a message for the person."""
     if not data:
         raise ValueError("That file is empty.")
@@ -134,6 +137,8 @@ def extract_text(name, data):
         text = "\n".join(parts)
     elif ext in IMAGE_EXTS:
         text = ocr_image(data)
+        if not text.strip() and allow_picture:                       # no words, but the picture reader can look at it when it is asked about
+            return PICTURE_ONLY
         if not text.strip():
             raise ValueError("I couldn't find any text in that picture. Emvryx can read the words in a picture or screenshot, but it can't describe photos yet.")
         text = "[Text read from a picture]\n" + text
@@ -168,9 +173,9 @@ class Library:
             pass
         self.db.commit()
 
-    def add(self, name, data):
+    def add(self, name, data, allow_picture=False):
         name = re.sub(r"[\x00-\x1f/\\]", "", str(name or "document")).strip()[:120] or "document"
-        text = extract_text(name, data)
+        text = extract_text(name, data, allow_picture)
         note = ""
         if len(text) > MAX_CHARS:
             text, note = text[:MAX_CHARS], f"Only the first {MAX_CHARS // 1000:,}K letters were kept."

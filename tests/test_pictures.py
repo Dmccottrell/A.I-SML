@@ -60,9 +60,15 @@ class Helper(unittest.TestCase):
 
 class InChat(Base):
     def setUp(self):
+        self.factory = lambda model, question: self._backend(question)
         super().setUp()
         self.saved_ocr = D._ocr
         D._ocr = lambda b: ([[[[0, 0], [50, 0], [50, 10], [0, 10]], "he said it", 0.9]], None)
+
+    def _backend(self, question):
+        import app_engine as E
+        self.state_backend = E.FakeBackend()
+        return self.state_backend
 
     def tearDown(self):
         D._ocr = self.saved_ocr
@@ -95,6 +101,22 @@ class InChat(Base):
         ev = self.ask(self.sam, cid, "Did he actually say this?")[2]
         self.assertEqual([d for e, d in ev if e == "notes"][0]["pictures"], 1)
         self.assertIn("Did he actually say this?", helper.calls[0]["messages"][0]["content"][1]["text"])
+
+    def test_a_picture_the_helper_could_not_read_and_with_no_text_is_said_plainly(self):
+        class Broken(FakeHelper):
+            def _post(self, url, body):
+                raise OSError("the picture reader stopped")
+        D._ocr = lambda b: ([], None)                                  # no words in the picture
+        self.state.vision = Broken()                                   # a helper exists, so the picture is accepted ...
+        did = self.add_picture(self.sam, "blurry.png")
+        cid = self.new_chat(self.sam)
+        self.sam.call("POST", f"/api/chats/{cid}/docs", {"ids": [did]})
+        ev = self.ask(self.sam, cid, "What does this say?")[2]         # ... but it fails when asked: the model must not answer around it
+        note = [d for e, d in ev if e == "notes"][0]
+        self.assertEqual(note["unreadable"], ["blurry.png"])
+        prompt = self.state.tok_for({"id": "flare-2"}).decode(self.state_backend.prompts[-1])
+        self.assertIn("Could not read", prompt)
+        self.assertIn("Do not guess what it says", prompt)
 
     def test_picture_can_be_fetched_by_its_owner_only(self):
         did = self.add_picture(self.sam)

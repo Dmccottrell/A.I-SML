@@ -301,7 +301,10 @@ class Gather(unittest.TestCase):
         self.assertEqual(h.gather("sam", "why is the sky blue")[0], [])
         broken = hub({"cal.example": (500, b"")})
         broken.store.connect("sam", "calendar", {"url": "https://cal.example/x.ics"}, "x")
-        self.assertEqual(broken.gather("sam", "what is on my calendar")[0], [])             # a service that is down just means no notes
+        notes, info = broken.gather("sam", "what is on my calendar")                          # a service that is down is SAID, so the model does not guess
+        self.assertEqual(info["errors"][0]["app"], "Calendar")
+        self.assertIn("could not be read", notes[0]["title"])
+        self.assertIn("Do not guess", notes[0]["text"])
 
     def test_results_are_cached_for_a_minute(self):
         h = hub({"cal.example": reply(ICS.encode())})

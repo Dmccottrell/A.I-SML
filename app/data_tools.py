@@ -64,6 +64,7 @@ def export_zip(state, user):
         z.writestr("devices.json", json.dumps(state.auth.sessions_for(user), indent=2))
         z.writestr("github.json", json.dumps(state.github.public(user), indent=2))
         z.writestr("connected_apps.json", json.dumps(state.links.store.public(user), indent=2))
+        z.writestr("share_links_you_made.json", json.dumps(state.shares.list(user), indent=2))
         z.writestr("feedback_you_sent.json", json.dumps(state.feedback.for_user(user), indent=2))
         total, skipped = 0, []
         for project in state.code.projects(user):
@@ -110,6 +111,7 @@ def delete_account(state, user):
     state.github.forget(user)
     state.links.store.forget(user)
     state.feedback.forget_user(user)
+    state.shares.forget_user(user)
     state.usage.delete_user(user)
     if state.data_dir:
         for name in (f"chats-{user}.db", f"saved-{user}.db", f"memory-{user}.db"):
