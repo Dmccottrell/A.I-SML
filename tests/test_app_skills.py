@@ -84,6 +84,33 @@ class Server(Base):
         self.assertNotIn("How to answer this chat", self.decode(Server.backend.prompts[-1]))
         self.assertEqual(self.sam.call("GET", f"/api/chats/{cid}")[1]["skill"], "")
 
+    # ---- custom instructions (Settings > Memory)
+    def test_custom_hint(self):
+        self.assertEqual(K.custom_hint(""), "")
+        self.assertEqual(K.custom_hint("   "), "")
+        h = K.custom_hint("Keep answers short.\n I am a nurse.")
+        self.assertIn("Keep answers short. I am a nurse.", h)
+        self.assertIn("answer normally", h)
+        self.assertLessEqual(len(K.custom_hint("x" * 5000)), 600)
+
+    def test_custom_instructions_reach_the_model_with_the_skill_but_are_never_saved(self):
+        self.sam.call("POST", "/api/settings", {"custom_instructions": "Keep answers short."})
+        self.assertEqual(self.sam.call("GET", "/api/settings")[1]["custom_instructions"], "Keep answers short.")
+        cid = self.sam.call("POST", "/api/chats", {"skill": "study"})[1]["id"]
+        self.ask(self.sam, cid, "How do fractions work")
+        prompt = self.decode(Server.backend.prompts[-1])
+        self.assertIn("Keep answers short.", prompt)
+        self.assertIn("Quick check:", prompt)
+        self.assertNotIn("Keep answers short", self.sam.call("GET", f"/api/chats/{cid}")[1]["messages"][0]["content"])
+        self.sam.call("POST", "/api/settings", {"custom_instructions": ""})
+        self.ask(self.sam, cid, "And decimals?")
+        self.assertNotIn("Keep answers short.", self.decode(Server.backend.prompts[-1]))
+
+    def test_custom_instructions_are_per_person_and_limited(self):
+        self.sam.call("POST", "/api/settings", {"custom_instructions": "y" * 900})
+        self.assertEqual(len(self.sam.call("GET", "/api/settings")[1]["custom_instructions"]), K.MAX_CUSTOM)
+        self.assertEqual(self.owner.call("GET", "/api/settings")[1].get("custom_instructions", ""), "")
+
 
 if __name__ == "__main__":
     unittest.main()

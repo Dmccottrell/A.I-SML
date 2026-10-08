@@ -270,7 +270,7 @@ def make_todo():
 
 
 def run_task(task, generate, workspace, ask, max_turns=12, context_tokens=None, extra_programs=(), out=print, tools=None, git_identity=None, command_prefix=None, container=False,
-             history=None, chat_mode=False, checks=True, plan=False, todo=False):
+             history=None, chat_mode=False, checks=True, plan=False, todo=False, remote=False):
     """Run one task. Returns harness.run_agent's result (finished, summary, turns, messages).
     `tools` is {name: function(**args) -> text} of extra tools (the GitHub tool, run by the server, never by the sandbox).
     `plan` looks only (no edits, runs or git changes) and answers with a plan; `todo` adds the checklist tool the page shows as a to-do list."""
@@ -284,7 +284,9 @@ def run_task(task, generate, workspace, ask, max_turns=12, context_tokens=None, 
         rules["todo"] = "allow"
     kw = {"git_identity": git_identity} if git_identity else {}
     if command_prefix:
-        kw.update(command_prefix=command_prefix, container=container)
+        kw.update(command_prefix=command_prefix, container=container, remote=remote)
+        if remote:
+            kw["command_timeout"] = 120                       # copying the project over and back takes a while
     with harness.Sandbox(workspace=workspace, allowed_programs=programs, **kw) as sandbox:
         for name, fn in (tools or {}).items():
             sandbox.register_tool(name, fn)

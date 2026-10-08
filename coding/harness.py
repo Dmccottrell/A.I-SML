@@ -121,9 +121,10 @@ class Sandbox:
     """One workspace folder plus the tools that work inside it."""
 
     def __init__(self, workspace=None, command_timeout=20, output_limit=1500, max_read_lines=80,
-                 command_prefix=None, allowed_programs=ALLOWED_PROGRAMS, git_identity=("Emvryx agent", "agent@localhost"), container=False):
+                 command_prefix=None, allowed_programs=ALLOWED_PROGRAMS, git_identity=("Emvryx agent", "agent@localhost"), container=False, remote=False):
         self.git_identity = tuple(git_identity)
         self.container = bool(container)         # True when command_prefix is a `docker run ...` (code_sandbox.docker_prefix): commands run inside it
+        self.remote = bool(remote)               # True when command_prefix runs the command on another machine (cloud_run.py): its Python is not ours, and git stays here
         self.own_dir = workspace is None
         self.root = os.path.realpath(workspace or tempfile.mkdtemp(prefix="agent_"))
         os.makedirs(self.root, exist_ok=True)
@@ -218,7 +219,7 @@ class Sandbox:
         if os.name == "nt":
             env["SYSTEMROOT"] = os.environ.get("SYSTEMROOT", "")
         env.update(extra_env or {})
-        kwargs = {"preexec_fn": _limits} if sys.platform.startswith("linux") and not self.container else {}
+        kwargs = {"preexec_fn": _limits} if sys.platform.startswith("linux") and not self.container and not self.remote else {}
         if self.container and wrap:
             # the container is a separate world: environment variables must be passed in with -e (before the image name, the last word of the prefix)
             inside = dict(extra_env or {})
@@ -248,8 +249,8 @@ class Sandbox:
         program = os.path.basename(argv[0])
         if program not in self.allowed:
             raise ToolError(f"{program!r} is not allowed. Allowed: {', '.join(sorted(self.allowed))}")
-        if program in ("python", "python3") and not self.container:
-            argv[0] = sys.executable                     # the same Python we are running (inside a container, the image's own python is used)
+        if program in ("python", "python3") and not self.container and not self.remote:
+            argv[0] = sys.executable                     # the same Python we are running (inside a container, or on a remote machine, that one's own python is used)
         return self._exec(argv)
 
     # ---------------------------------------------------------------- git (a safe subset)
@@ -279,7 +280,7 @@ class Sandbox:
                "GIT_TERMINAL_PROMPT": "0", "GIT_EDITOR": "true", "GIT_PAGER": "cat", "HOME": self.root,
                "GIT_AUTHOR_NAME": self.git_identity[0], "GIT_AUTHOR_EMAIL": self.git_identity[1],
                "GIT_COMMITTER_NAME": self.git_identity[0], "GIT_COMMITTER_EMAIL": self.git_identity[1]}
-        return self._exec(["git", "-c", f"core.hooksPath={os.devnull}", "-c", "init.defaultBranch=main"] + argv, env)
+        return self._exec(["git", "-c", f"core.hooksPath={os.devnull}", "-c", "init.defaultBranch=main"] + argv, env, wrap=not self.remote)
 
     def _worktree(self, args):
         """worktree list | add NAME [BRANCH] | remove NAME: always under .worktrees/ inside the workspace."""
