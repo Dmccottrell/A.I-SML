@@ -342,6 +342,12 @@ class ChatStore:
                 out.append({"id": r[0], "title": r[1], "snippet": "", "message_id": None, "updated": r[2]})
         return out
 
+    def stats(self, since):
+        """(questions asked since `since`, {model id: answers given}) in saved chats: counts only, nothing is read back."""
+        asked = self.db.execute("SELECT COUNT(*) FROM messages WHERE created >= ? AND role = 'user' AND status != 'compacted' AND status != 'summary'", (since,)).fetchone()[0]
+        by = dict(self.db.execute("SELECT model_id, COUNT(*) FROM messages WHERE created >= ? AND role = 'assistant' AND content != '' GROUP BY model_id", (since,)).fetchall())
+        return asked, by
+
     def edit_message(self, chat_id, message_id, text):
         """Change what a user message says and forget everything after it (the page then asks for a new answer). False if it is not a user message."""
         text = str(text or "").strip()

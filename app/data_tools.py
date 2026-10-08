@@ -121,3 +121,12 @@ def delete_account(state, user):
                 pass
     shutil.rmtree(state.code.base(user), ignore_errors=True)
     state.auth.event("account_deleted", "(deleted)", "", "by the person")
+
+
+def backup_dir(state):
+    """Where backups made from Settings are kept: next to the data folder, never inside it (a backup must not contain the earlier ones)."""
+    import emvryx_paths
+    if state.security.get("backup_dir"):
+        return str(state.security["backup_dir"])
+    base = os.path.dirname(os.path.abspath(state.data_dir)) if state.data_dir else os.path.join(emvryx_paths.ROOT, ".emvryx-backups")
+    return os.path.join(base, "emvryx-backups")

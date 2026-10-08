@@ -15,6 +15,15 @@ circle[style*="fill: var(--sun)"] { fill: var(--core) !important; stroke: var(--
 a{color:var(--text);text-decoration:none}
 a:hover{color:var(--accenttext)}
 </style>
+<meta name="description" content="Emvryx is a family of five AI models that think on your own device or its own computer, show where an answer came from, and say so when they don't know.">
+<meta name="theme-color" content="#07080D">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Emvryx">
+<meta property="og:title" content="Emvryx plans">
+<meta property="og:description" content="Emvryx is a family of five AI models that think on your own device or its own computer, show where an answer came from, and say so when they don't know.">
+<meta property="og:image" content="https://emvryx.app/og.png">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:image" content="https://emvryx.app/og.png">
 
 <style>
 :root{--bg:#07080D;--side:#0A0B11;--surface:#0F1119;--surface2:#161926;--line:#232739;--text:#EEF0F6;--muted:#9AA3BC;--accent:#F5A524;--onaccent:#1A1204;--accenttext:#F5A524;--sun:#F5A524;--core:#F5A524;--glow:rgba(245,165,36,.14)}
@@ -40,6 +49,8 @@ html,body{margin:0;background:var(--bg)}
 <a href="plans.html" style="color: var(--accenttext); border-bottom: 2px solid var(--accent); padding-bottom: 2px">Plans</a>
 <a href="usage.html">How usage works</a>
 <a href="about.html">About</a>
+<a href="whatsnew.html">What&rsquo;s new</a>
+<a href="scorecard.html">Scorecard</a>
 <a href="index.html#try" style="background: var(--accent); color: var(--onaccent); border-radius: 999px; padding: 12px 22px; font-weight: 600">Open Emvryx</a>
 </div>
 </div>
@@ -60,6 +71,7 @@ html,body{margin:0;background:var(--bg)}
 <div><b>About 300 messages a week</b><div style="color: var(--muted); font-size: 14px">Resets Monday 4 AM</div></div>
 <div><b>About 80 in one sitting</b><div style="color: var(--muted); font-size: 14px">Then it is full again 6 hours after you started</div></div>
 <div><b>Ember, Flare and Equinox</b></div>
+<div><b>VryxCode coding assistant: not included</b></div>
 <div><b>Documents up to about 12 pages</b></div>
 </div>
 </div>
@@ -72,6 +84,7 @@ html,body{margin:0;background:var(--bg)}
 <div><b>About 2,000 messages a week</b><div style="color: var(--muted); font-size: 14px">Resets Monday 4 AM</div></div>
 <div><b>About 400 in one sitting</b><div style="color: var(--muted); font-size: 14px">Full again 6 hours after you start</div></div>
 <div><b>All five models</b></div>
+<div><b>VryxCode coding assistant: included</b></div>
 <div><b>Documents up to about 50 pages</b></div>
 </div>
 </div>
@@ -84,6 +97,7 @@ html,body{margin:0;background:var(--bg)}
 <div><b>About 10,000 messages a week</b><div style="color: var(--muted); font-size: 14px">Resets Monday 4 AM</div></div>
 <div><b>About 1,600 in one sitting</b><div style="color: var(--muted); font-size: 14px">Full again 6 hours after you start</div></div>
 <div><b>All five models, first in line</b></div>
+<div><b>VryxCode coding assistant: included</b></div>
 <div><b>The longest documents the model can read</b></div>
 </div>
 </div>
@@ -118,6 +132,25 @@ html,body{margin:0;background:var(--bg)}
     var next = root.getAttribute('data-theme') === 'light' ? 'dark' : 'light';
     root.setAttribute('data-theme', next);
     try { localStorage.setItem(key, next); } catch (e) {}
+  });
+})();
+</script>
+<script>
+(function () {
+  var APP = 'https://chat.emvryx.app';
+  var params = new URLSearchParams(location.search), code = params.get('invite');
+  var box = document.getElementById('inviteCode');                       // arriving from an invite link: the code is already in the box
+  if (box && code) box.value = code.slice(0, 60);
+  var els = document.querySelectorAll('[data-status]');
+  if (!els.length || !window.fetch) return;
+  var done = false, ctl = window.AbortController ? new AbortController() : null;
+  setTimeout(function () { if (!done && ctl) ctl.abort(); }, 6000);
+  fetch(APP + '/api/status', {cache: 'no-store', signal: ctl ? ctl.signal : undefined}).then(function (r) { return r.json(); }).then(function (j) {
+    done = true;
+    els.forEach(function (e) { e.textContent = j.paused ? '○ Emvryx is paused right now.' : '● Emvryx is on now.'; e.style.color = j.paused ? '' : '#3FB950'; });
+  }).catch(function () {
+    done = true;
+    els.forEach(function (e) { e.textContent = '○ Emvryx is off right now.'; });
   });
 })();
 </script>

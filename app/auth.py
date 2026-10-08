@@ -262,6 +262,10 @@ class AuthDB:
             self.db.execute("DELETE FROM pairs WHERE user = ?", (user,))
             self.db.commit()
 
+    def count(self, kind, since=0):
+        with self.lock:
+            return self.db.execute("SELECT COUNT(*) FROM events WHERE kind = ? AND at >= ?", (kind, since)).fetchone()[0]
+
     def events(self, limit=100, kind=None, user=None):
         q, args = "SELECT at, kind, user, ip, detail FROM events", []
         conds = []
