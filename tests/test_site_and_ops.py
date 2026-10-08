@@ -80,9 +80,8 @@ class Site(unittest.TestCase):
         self.assertIn("next.html", self.read("index.html"))
 
     def test_no_page_shows_a_raw_html_code_as_text(self):
-        for name in ("index", "models", "plans", "usage", "about", "whatsnew", "scorecard", "next", "open"):
-            text = re.sub(r"<(script|style)[^>]*>.*?</\1>", "", self.read(name + ".html"), flags=re.S)
-            self.assertNotRegex(re.sub(r"<[^>]+>", " ", text), r"&(amp;)?(rsquo|lsquo|ldquo|rdquo|middot|mdash|ndash);", name)
+        for name in ("index", "models", "plans", "usage", "about", "whatsnew", "scorecard", "next", "open"):       # "&amp;rsquo;" in the source is what shows up as the visible text "&rsquo;"
+            self.assertNotRegex(self.read(name + ".html"), r"&amp;(rsquo|lsquo|ldquo|rdquo|middot|mdash|ndash|hellip|amp);", name)
 
     def test_scorecard_and_whats_new_say_what_is_not_measured(self):
         card = re.sub(r"<[^>]+>", " ", self.read("scorecard.html"))
