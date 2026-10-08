@@ -52,6 +52,10 @@ SYSTEM = ("You are VryxCode, Emvryx's coding assistant. You work in the user's p
           "(for example npm install, then npm run dev) in a code block. "
           "When the work is done and the tests pass, call finish. Its summary says, in a few friendly lines, what you changed, how to run it, and what you recommend next; "
           'its optional next is a list of up to three short follow-up tasks the user could tap, for example ["Add a test for empty input"].')
+PLAN_NOTE = (" PLAN MODE: do not change anything in this turn. You may look around with list_files, read_file and diagnostics. Then reply in plain words with a short numbered plan "
+             "(3 to 7 steps): what you will build or change, in which files, and how you will check it works. End by asking whether to go ahead. Do not write code in the reply, and do not call finish.")
+TODO_NOTE = (" For a job with more than two steps, first call todo with a short checklist, for example {\"name\": \"todo\", \"args\": {\"items\": [{\"text\": \"Write slug.py\", \"done\": false}, "
+             "{\"text\": \"Run the tests\", \"done\": false}]}}, and call it again to tick items off as you finish them. Keep each item a few words.")
 SAFE_RUNS = ("python -m unittest", "python3 -m unittest", "python -m pytest", "pytest")      # tests may run without asking
 ELIGIBLE_NOTE = {"equinox-2": "Equinox 2 is a small model: give it small tasks (one function, one file)."}
 
@@ -216,6 +220,8 @@ def preview(name, args):
         return f"write {args.get('path')} ({len(text.splitlines())} lines)\n{shown}"
     if name == "edit_file":
         return f"edit {args.get('path')}\n  - {str(args.get('old', ''))[:300]}\n  + {str(args.get('new', ''))[:300]}"
+    if name == "todo":
+        return "todo " + json.dumps(args)[:1500]
     if name == "github":
         return {"pull": "github pull: fetch new work from the linked GitHub repository (fast-forward only)",
                 "push": "github push: send this project's current branch to the linked GitHub repository"}.get(str(args.get("action")), f"github {args.get('action')}")
@@ -245,19 +251,44 @@ GITHUB_TOOL_NOTE = (" github(action) with action status, pull or push works with
                     "the user is asked before anything is pulled or pushed.")
 
 
+def make_todo():
+    """The checklist tool: todo(items=[{"text", "done"}]). It only records the list (the page shows it); it changes nothing in the project."""
+    def todo(items=None):
+        if not isinstance(items, list) or not items:
+            raise harness.ToolError('todo needs items: a list like [{"text": "Write slug.py", "done": false}]')
+        clean = []
+        for it in items[:12]:
+            if isinstance(it, dict):
+                clean.append({"text": str(it.get("text", "")).strip()[:100], "done": bool(it.get("done"))})
+            else:
+                clean.append({"text": str(it).strip()[:100], "done": False})
+        clean = [c for c in clean if c["text"]]
+        if not clean:
+            raise harness.ToolError("todo items need some text")
+        return f"todo list saved: {sum(c['done'] for c in clean)} of {len(clean)} done. Carry on with the next item."
+    return todo
+
+
 def run_task(task, generate, workspace, ask, max_turns=12, context_tokens=None, extra_programs=(), out=print, tools=None, git_identity=None, command_prefix=None, container=False,
-             history=None, chat_mode=False, checks=True):
+             history=None, chat_mode=False, checks=True, plan=False, todo=False):
     """Run one task. Returns harness.run_agent's result (finished, summary, turns, messages).
-    `tools` is {name: function(**args) -> text} of extra tools (the GitHub tool, run by the server, never by the sandbox)."""
+    `tools` is {name: function(**args) -> text} of extra tools (the GitHub tool, run by the server, never by the sandbox).
+    `plan` looks only (no edits, runs or git changes) and answers with a plan; `todo` adds the checklist tool the page shows as a to-do list."""
     programs = set(harness.ALLOWED_PROGRAMS) | set(extra_programs)
     rules = {"write_file": "ask", "edit_file": "ask", "run": "ask"}
+    if plan:
+        rules = {"write_file": "deny", "edit_file": "deny", "run": "deny", "git": "deny", "github": "deny"}
+    tools = dict(tools or {})
+    if todo:
+        tools["todo"] = make_todo()
+        rules["todo"] = "allow"
     kw = {"git_identity": git_identity} if git_identity else {}
     if command_prefix:
         kw.update(command_prefix=command_prefix, container=container)
     with harness.Sandbox(workspace=workspace, allowed_programs=programs, **kw) as sandbox:
         for name, fn in (tools or {}).items():
             sandbox.register_tool(name, fn)
-        system = SYSTEM + (GITHUB_TOOL_NOTE if "github" in (tools or {}) else "")
+        system = SYSTEM + (GITHUB_TOOL_NOTE if "github" in (tools or {}) else "") + (TODO_NOTE if todo else "") + (PLAN_NOTE if plan else "")
         result = harness.run_agent(task, generate, sandbox, max_turns=max_turns, system=system, ask=ask, context_tokens=context_tokens,
                                    permissions=harness.Permissions(rules=rules, ask=ask), history=history, chat_mode=chat_mode, checks=checks)
     out(("Done: " if result["finished"] else "Stopped without finishing: ") + (result["summary"] or f"{result['turns']} steps used") )

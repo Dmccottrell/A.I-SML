@@ -249,7 +249,7 @@ svg .core { fill: var(--core); stroke: var(--sun); stroke-width: 3; transition: 
 }
 /* VryxCode home: the Sessions list */
 .code .home { flex: 1; min-height: 0; overflow-y: auto; padding: 4px 16px 110px; display: none; }
-.code.home .home { display: block; } .code.home .main2, .code.home #codeProj, .code.home #codePreviewBtn, .code.home #codeFilesBtn, .code.home #codeRewind { display: none; } .code:not(.home) .fab { display: none; }
+.code.home .home { display: block; } .code.home .main2, .code.home #codeProj, .code.home #codePreviewBtn, .code.home #codeFilesBtn { display: none; } .code:not(.home) .fab { display: none; }
 .code .home .envs { display: flex; flex-wrap: wrap; gap: 8px; padding: 6px 0 14px; align-items: center; } .code .home .lbl { color: var(--muted); font-size: 15px; }
 .code .home .chead { display: flex; justify-content: space-between; align-items: center; padding: 6px 0 10px; }
 .code .home .chead .menu { right: 0; left: auto; width: 200px; }
@@ -270,6 +270,19 @@ svg .core { fill: var(--core); stroke: var(--sun); stroke-width: 3; transition: 
 .code .fab { position: absolute; right: 18px; bottom: calc(22px + env(safe-area-inset-bottom)); background: var(--text); color: var(--bg); border: 0; border-radius: 999px; min-height: 52px; padding: 0 22px; font-weight: 600; font-size: 17px; display: flex; align-items: center; gap: 8px; box-shadow: 0 8px 28px rgba(0,0,0,.35); z-index: 6; }
 .code .empty-list { color: var(--muted); text-align: center; padding: 40px 12px; line-height: 1.5; }
 @media (min-width: 1000px) { .code .pv { position: static; flex: 0 0 46%; border-left: 1px solid var(--line); z-index: auto; } .code .home { padding: 8px max(16px, calc((100% - 760px) / 2)) 110px; } }
+/* VryxCode workflow: to-do list, slash and @ suggestions, the Files / Changes / Rewind panel */
+.code .todo { flex-shrink: 0; margin: 4px 16px 0; background: var(--surface); border: 1px solid var(--line); border-radius: 16px; padding: 8px 12px; font-size: 14px; }
+.code .todo[hidden] { display: none; } .code .todo .th { display: flex; align-items: center; gap: 8px; font-weight: 600; cursor: pointer; min-height: 30px; } .code .todo .th .bar { flex: 1; height: 5px; background: var(--surface2); border-radius: 999px; overflow: hidden; } .code .todo .th .bar i { display: block; height: 100%; background: var(--accent); }
+.code .todo ul { list-style: none; margin: 6px 0 2px; padding: 0; display: flex; flex-direction: column; gap: 4px; } .code .todo li { display: flex; gap: 8px; align-items: flex-start; } .code .todo li .bx { width: 16px; height: 16px; border-radius: 5px; border: 2px solid var(--muted); flex-shrink: 0; margin-top: 2px; display: grid; place-items: center; font-size: 11px; line-height: 1; } .code .todo li.done { color: var(--muted); text-decoration: line-through; } .code .todo li.done .bx { background: var(--accent); border-color: var(--accent); color: var(--onaccent); }
+.code .suggest { max-height: 260px; overflow-y: auto; padding: 6px; } .code .suggest .opt { min-height: 44px; padding: 8px 12px; } .code .suggest .opt code { font-weight: 700; margin-right: 8px; } .code .suggest .opt.hi { border-color: var(--accent); }
+.code .dtabs { display: flex; gap: 4px; flex: 1; } .code .dtabs button { background: transparent; border: 0; color: var(--muted); font-weight: 600; padding: 8px 12px; border-radius: 10px; min-height: 40px; } .code .dtabs button.on { background: var(--surface2); color: var(--text); }
+.code .dpane { flex: 1; min-height: 0; display: flex; flex-direction: column; overflow-y: auto; padding: 4px 10px 14px; } .code .dpane[hidden] { display: none; } .code #tabFiles { padding: 0; overflow: hidden; }
+.code .chg { border: 1px solid var(--line); border-radius: 14px; background: var(--bg); margin-bottom: 8px; overflow: hidden; } .code .chg summary { list-style: none; cursor: pointer; display: flex; gap: 8px; align-items: center; padding: 10px 12px; min-height: 44px; } .code .chg summary::-webkit-details-marker { display: none; }
+.code .chg .nm { flex: 1; min-width: 0; font: 13px ui-monospace, Menlo, Consolas, monospace; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; } .code .chg .a { color: #3fb950; font-weight: 600; } .code .chg .d { color: var(--danger); font-weight: 600; }
+.code .chg pre { border-top: 1px solid var(--line); padding: 8px 12px; font-size: 12.5px; max-height: 260px; overflow: auto; } .code .chg pre .add { color: #3fb950; display: block; } .code .chg pre .del { color: var(--danger); display: block; }
+.code .chg .acts { display: flex; gap: 8px; padding: 0 12px 10px; }
+.code .hint { color: var(--muted); font-size: 13px; padding: 6px 4px 10px; line-height: 1.4; }
+.code .plan-actions { display: flex; gap: 8px; flex-wrap: wrap; padding: 4px 0; }
 /* phone fit: keep the + / model / effort row on one line, and keep VryxCode's menus and top bar on the screen */
 .tools .left { flex-wrap: nowrap; flex: 1; gap: 6px; }
 #modelBtn { min-width: 0; flex-shrink: 1; overflow: hidden; white-space: nowrap; } #modelBtn span, #modelBtn b { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -286,8 +299,8 @@ svg .core { fill: var(--core); stroke: var(--sun); stroke-width: 3; transition: 
 .code .top2 .chip { display: inline-flex; align-items: center; gap: 6px; } .code .top2 .chip svg { flex-shrink: 0; }
 #codeEnv, #codeAuto, #codeModelBtn { white-space: nowrap; }
 @media (max-width: 520px) {
-  .code .top2 #codePreviewBtn .lab, .code .top2 #codeRewind .lab, .code .top2 #codeFilesBtn .lab { display: none; }
-  .code .top2 #codePreviewBtn, .code .top2 #codeRewind, .code .top2 #codeFilesBtn { width: 38px; padding: 0; justify-content: center; flex-shrink: 0; }
+  .code .top2 #codePreviewBtn .lab, .code .top2 #codeFilesBtn .lab { display: none; }
+  .code .top2 #codePreviewBtn, .code .top2 #codeFilesBtn { width: 38px; padding: 0; justify-content: center; flex-shrink: 0; }
   .code .top2 #codeFilesBtn { width: auto; padding: 0 8px; gap: 3px; } .code .top2 #codeFilesBtn .lab { display: inline; font-size: 12px; }
   #codeEnv .lab { display: none; } #codeEnv { padding: 6px 10px; } #codeAuto { padding: 6px 8px; font-size: 13px; }
   #codeModelBtn { padding: 6px 8px; max-width: 46vw; overflow: hidden; text-overflow: ellipsis; }
@@ -350,7 +363,6 @@ svg .core { fill: var(--core); stroke: var(--sun); stroke-width: 3; transition: 
     <span class="title" id="codeTitle">Code</span>
     <div style="position:relative"><button class="chip" id="codeProj" aria-haspopup="true"></button><div class="menu" id="codeProjMenu" hidden></div></div>
     <button class="chip" id="codePreviewBtn" disabled title="See what was built, live">Preview</button>
-    <button class="chip" id="codeRewind" hidden title="Put the files back as they were before an earlier message">Rewind</button>
     <button class="chip" id="codeFilesBtn">Files</button>
   </div>
   <div class="home" id="codeHome">
@@ -361,11 +373,14 @@ svg .core { fill: var(--core); stroke: var(--sun); stroke-width: 3; transition: 
   <button class="fab" id="codeNew"><span style="font-size:22px;line-height:1">+</span> New session</button>
   <div class="main2">
     <div class="col">
+      <div class="todo" id="codeTodo" hidden></div>
       <div class="feed" id="codeFeed" aria-live="polite"><div class="feedin" id="codeIn"></div></div>
       <div class="composer">
         <div class="box">
           <div class="menu" id="codeModelMenu" hidden style="top:auto;bottom:100%;left:0;right:auto;margin:0 0 10px"></div>
           <div class="menu" id="codeEnvMenu" hidden style="top:auto;bottom:100%;left:0;right:auto;margin:0 0 10px"></div>
+          <div class="menu" id="codeModeMenu" hidden style="top:auto;bottom:100%;left:0;right:auto;margin:0 0 10px"></div>
+          <div class="menu suggest" id="codeSuggest" hidden style="top:auto;bottom:100%;left:0;right:auto;margin:0 0 10px;width:min(440px,100%)"></div>
           <div class="card">
             <label class="sr" for="codeTask">Task</label>
             <textarea id="codeTask" rows="2" maxlength="8000" placeholder="Ask, answer, or tell VryxCode what to build or fix"></textarea>
@@ -390,9 +405,10 @@ svg .core { fill: var(--core); stroke: var(--sun); stroke-width: 3; transition: 
       <div class="pvfoot" id="pvFoot"></div>
     </div>
     <div class="drawer" id="codeDrawer" hidden>
-      <div class="dh"><span id="codeDrawerTitle">Files</span><button class="icon" id="codeDrawerX" aria-label="Close files"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg></button></div>
-      <div class="flist" id="codeFiles"></div>
-      <div class="viewer"><pre id="codeView">Pick a file to read it.</pre></div>
+      <div class="dh"><div class="dtabs" role="tablist"><button data-tab="files" class="on">Files</button><button data-tab="changes">Changes</button><button data-tab="rewind">Rewind</button></div><button class="icon" id="codeDrawerX" aria-label="Close"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg></button></div>
+      <div class="dpane" id="tabFiles"><div class="flist" id="codeFiles"></div><div class="viewer"><pre id="codeView">Pick a file to read it.</pre></div></div>
+      <div class="dpane" id="tabChanges" hidden></div>
+      <div class="dpane" id="tabRewind" hidden></div>
     </div>
   </div>
   <input type="file" id="codeZipIn" accept=".zip,application/zip" hidden><input type="file" id="codeDirIn" webkitdirectory multiple hidden>
@@ -1272,7 +1288,7 @@ function regenMenu(btn) {
 }
 
 // ---------------------------------------------------------------- VryxCode
-const C = {info: null, sid: null, seen: 0, timer: null, project: null, file: null, model: null, auto: false, last: null, files: [], view: 'home', filter: 'all', env: 'local', saved: false, checkpoints: [], sessions: [], pvAuto: false};
+const C = {info: null, sid: null, seen: 0, timer: null, project: null, file: null, model: null, auto: false, last: null, files: [], view: 'home', filter: 'all', env: 'local', saved: false, checkpoints: [], sessions: [], pvAuto: false, mode: 'ask', prevMode: 'ask', todo: [], events: [], todoOpen: true};
 try { C.env = localStorage.getItem('emvryx_code_env') || 'local'; } catch (e) {}
 const cOn = () => !$('code').hidden;
 const cModel = () => (C.info ? C.info.models.find((m) => m.id === C.model) : null);
@@ -1317,14 +1333,15 @@ function envInfo() {
     ...C.info.environments.map((e) => el('div', {class: 'opt', style: 'cursor:default'}, el('span', {class: 'sicon', style: 'width:36px;height:36px;border-radius:10px;background:var(--surface2);display:grid;place-items:center'}, icon(ENV_ICON(e.id))),
       el('span', {class: 'grow'}, el('b', {}, e.name + (e.available ? '' : ' \u00b7 not available')), el('small', {}, e.note))))], 'Close');
 }
+function resetWork() { C.todo = []; C.events = []; renderTodo(); }
 function newSession() {
   C.view = 'session'; $('code').classList.remove('home'); $('codeTitle').textContent = 'VryxCode'; C.sid = null; C.saved = false; C.checkpoints = []; C.seen = 0; C.last = null; C.pvAuto = false;
-  $('codeIn').replaceChildren(); $('codeGo').hidden = false; $('codeStop').hidden = true; $('codeRewind').hidden = true; renderCodeBar(); emptyFeed(); refreshFiles(); $('codeTask').focus();
+  $('codeIn').replaceChildren(); $('codeGo').hidden = false; $('codeStop').hidden = true; resetWork(); renderCodeBar(); emptyFeed(); refreshFiles(); $('codeTask').focus();
 }
 function openSession(m) {
   C.view = 'session'; $('code').classList.remove('home'); $('codeTitle').textContent = 'VryxCode'; C.sid = m.id; C.project = m.project; C.saved = false; C.checkpoints = m.checkpoints || []; C.pvAuto = false;
   if (C.info.models.some((x) => x.id === m.model && x.state === 'ready')) C.model = m.model;
-  C.seen = 0; C.last = null; $('codeIn').replaceChildren(); C.chatKey = C.project + '|' + C.model; renderCodeBar(); refreshFiles(); poll();
+  C.seen = 0; C.last = null; $('codeIn').replaceChildren(); resetWork(); C.chatKey = C.project + '|' + C.model; renderCodeBar(); refreshFiles(); poll();
 }
 $('codeNew').onclick = newSession;
 $('codeFilter').onclick = (e) => {
@@ -1338,25 +1355,14 @@ $('codeEnv').onclick = (e) => {
     icon(ENV_ICON(x.id)), el('span', {class: 'grow'}, el('b', {}, x.name), el('small', {}, x.note)))));
   m.hidden = false;
 };
-$('codeRewind').onclick = () => {
-  const cps = [...(C.checkpoints || [])].reverse();
-  if (!cps.length) return;
-  const m = dialog([el('h2', {}, 'Rewind'), el('div', {style: 'color:var(--muted)'}, 'Put the files back as they were before one of your messages. Files made after that point are removed. Your other projects are not touched.'),
-    ...cps.map((c) => el('button', {class: 'opt', onclick: async () => {
-      if (!confirm('Put the files back as they were before "' + (c.label || 'message ' + c.turn) + '"?')) return;
-      const r = await post('/api/code/sessions/' + C.sid + '/rewind', {turn: c.turn}); const j = await r.json().catch(() => ({})); m.remove();
-      if (!r.ok) { note('bad', 'Could not rewind', (j.message || '') + ' ' + (j.action || '')); return; }
-      poll(); refreshFiles(); if (!$('codePv').hidden) reloadPreview();
-    }}, icon('undo'), el('span', {class: 'grow'}, el('b', {}, 'Before message ' + c.turn), el('small', {}, c.label || ''))))], 'Cancel');
-};
 function renderCodeBar() {
   $('codeProj').textContent = C.project + ' ▾';
   const m = cModel();
   $('codeModelBtn').replaceChildren(m ? (m.outside ? m.name + ' · outside' : m.label) : 'No model', el('span', {style: 'color:var(--muted)'}, '▾'));
   const env = C.info && C.info.environments.find((x) => x.id === C.env); $('codeEnv').replaceChildren(icon(ENV_ICON(C.env)), el('span', {class: 'lab'}, (env ? env.name : ENV_NAME[C.env] || 'This computer'))); $('codeEnv').disabled = !!(C.sid && !C.saved);
-  $('codeAuto').textContent = (matchMedia('(max-width: 520px)').matches ? 'Auto: ' : 'Auto-approve: ') + (C.auto ? 'on' : 'off'); $('codeAuto').setAttribute('aria-pressed', C.auto);
+  C.auto = C.mode === 'auto'; $('codeAuto').replaceChildren(MODES[C.mode].short); $('codeAuto').setAttribute('aria-label', 'How VryxCode works: ' + MODES[C.mode].name);
   $('codeFilesBtn').replaceChildren(icon('folder'), el('span', {class: 'lab'}, 'Files' + (C.files.length ? ' (' + C.files.length + ')' : '')));
-  $('codePreviewBtn').replaceChildren(icon('eye'), el('span', {class: 'lab'}, 'Preview')); $('codeRewind').replaceChildren(icon('undo'), el('span', {class: 'lab'}, 'Rewind'));
+  $('codePreviewBtn').replaceChildren(icon('eye'), el('span', {class: 'lab'}, 'Preview'));
 }
 function emptyFeed() {
   if (C.info && C.info.allowed === false) { $('codeIn').replaceChildren(el('div', {class: 'empty'}, el('h1', {}, 'VryxCode is not open to you yet'), el('p', {}, C.info.why_not || 'Ask the owner for access.'))); $('codeGo').disabled = true; return; }
@@ -1364,9 +1370,10 @@ function emptyFeed() {
   const tip = (t) => el('button', {class: 'chip', onclick: () => { $('codeTask').value = t; $('codeTask').focus(); }}, t);
   $('codeIn').replaceChildren(el('div', {class: 'empty'}, el('h1', {}, 'What should we build?'),
     el('p', {}, 'Describe one task. VryxCode works in its own project folder: it reads, edits, runs the tests and tries again, and asks before it changes anything.'),
-    el('div', {class: 'row'}, tip('Write a function with a unit test'), tip('Fix the failing test in this project'), tip('Explain what this project does'))));
+    el('div', {class: 'row'}, tip('Write a function with a unit test'), tip('Fix the failing test in this project'), tip('Explain what this project does')),
+    el('p', {style: 'font-size:13px'}, C.files.includes('VRYX.md') ? 'Using the notes in VRYX.md. Type / for commands and @ to point at a file.' : 'Type / for commands and @ to point at a file. /init creates VRYX.md, notes VryxCode reads every time.')));
 }
-function closeCodeMenus() { $('codeProjMenu').hidden = true; $('codeModelMenu').hidden = true; $('codeEnvMenu').hidden = true; $('codeFilterMenu').hidden = true; }
+function closeCodeMenus() { $('codeProjMenu').hidden = true; $('codeModelMenu').hidden = true; $('codeEnvMenu').hidden = true; $('codeFilterMenu').hidden = true; $('codeModeMenu').hidden = true; $('codeSuggest').hidden = true; }
 $('codeProj').onclick = (e) => {
   e.stopPropagation(); const m = $('codeProjMenu'); if (!m.hidden) { m.hidden = true; return; } closeCodeMenus();
   const item = (label, fn, cls) => el('button', {class: 'opt' + (cls ? ' ' + cls : ''), onclick: () => { closeCodeMenus(); fn(); }}, el('span', {class: 'grow'}, label));
@@ -1394,9 +1401,86 @@ $('codeModelBtn').onclick = (e) => {
   m.hidden = false;
 };
 document.addEventListener('click', (e) => { if (cOn() && !e.target.closest('.menu')) closeCodeMenus(); });
-$('codeAuto').onclick = () => { C.auto = !C.auto; renderCodeBar(); };
+const MODES = {ask: {short: 'Ask', name: 'Ask before editing', note: 'It asks you before it changes a file or runs something.'},
+  auto: {short: 'Auto-edit', name: 'Edit without asking', note: 'It writes and edits files by itself. It still asks before anything riskier.'},
+  plan: {short: 'Plan', name: 'Plan first', note: 'It only looks around and writes a plan. Nothing is changed until you tap Build it.'}};
+function setMode(m) { if (m === 'plan' && C.mode !== 'plan') C.prevMode = C.mode; C.mode = m; renderCodeBar(); }
+$('codeAuto').onclick = (e) => {
+  e.stopPropagation(); const m = $('codeModeMenu'); if (!m.hidden) { m.hidden = true; return; } closeCodeMenus();
+  m.replaceChildren(el('div', {class: 'head'}, 'HOW SHOULD IT WORK?'), ...Object.entries(MODES).map(([id, x]) => el('button', {class: 'opt' + (id === C.mode ? ' sel' : ''), onclick: () => { closeCodeMenus(); setMode(id); }},
+    el('span', {class: 'grow'}, el('b', {}, x.name), el('small', {}, x.note)))));
+  m.hidden = false;
+};
 $('codeBack').onclick = () => { if (C.view === 'session') { showHome(); return; } $('code').hidden = true; clearTimeout(C.timer); closeCodeMenus(); };
-function showDrawer(on) { $('codeDrawer').hidden = !on; }
+function showDrawer(on, tab) {
+  $('codeDrawer').hidden = !on; if (!on) return; tab = tab || C.tab || 'files'; C.tab = tab;
+  document.querySelectorAll('#codeDrawer .dtabs button').forEach((b) => b.classList.toggle('on', b.dataset.tab === tab));
+  $('tabFiles').hidden = tab !== 'files'; $('tabChanges').hidden = tab !== 'changes'; $('tabRewind').hidden = tab !== 'rewind';
+  if (tab === 'changes') renderChanges(); if (tab === 'rewind') renderRewind();
+}
+document.querySelectorAll('#codeDrawer .dtabs button').forEach((b) => { b.onclick = () => showDrawer(true, b.dataset.tab); });
+// what this session changed, from the steps it took (the diff lines each edit showed)
+function changesFromEvents() {
+  const files = new Map();
+  for (const e of C.events) {
+    if (e.kind !== 'step' || (e.tool !== 'write_file' && e.tool !== 'edit_file')) continue;
+    const lines = String(e.preview || '').split('\n'), m = /^(?:write|edit) (\S+)/.exec(lines[0] || ''); if (!m) continue;
+    const f = files.get(m[1]) || {path: m[1], add: 0, del: 0, lines: []};
+    for (const l of lines.slice(1)) { if (/^\s*\+ /.test(l)) f.add++; else if (/^\s*- /.test(l)) f.del++; f.lines.push(l); }
+    f.lines.push('');
+    files.set(m[1], f);
+  }
+  return [...files.values()];
+}
+function renderChanges() {
+  const list = changesFromEvents(), pane = $('tabChanges');
+  if (!list.length) { pane.replaceChildren(el('div', {class: 'hint'}, 'Nothing has been changed in this session yet. When VryxCode edits files they are listed here with what was added and removed.')); return; }
+  pane.replaceChildren(el('div', {class: 'hint'}, list.length + (list.length === 1 ? ' file' : ' files') + ' changed in this session. Long edits show only their first lines here; open the file to see all of it.'),
+    ...list.map((f) => el('details', {class: 'chg'}, el('summary', {}, el('span', {class: 'nm'}, f.path), f.add ? el('span', {class: 'a'}, '+' + f.add) : '', f.del ? el('span', {class: 'd'}, '\u2212' + f.del) : ''),
+      el('pre', {}, ...f.lines.filter((l) => l !== '').map((l) => el('span', {class: /^\s*\+ /.test(l) ? 'add' : /^\s*- /.test(l) ? 'del' : ''}, l))),
+      el('div', {class: 'acts'}, el('button', {class: 'chip', onclick: () => { showDrawer(true, 'files'); viewFile(f.path); }}, 'Open the file')))));
+}
+function renderRewind() {
+  const cps = [...(C.checkpoints || [])].reverse(), pane = $('tabRewind');
+  if (!C.sid || !cps.length) { pane.replaceChildren(el('div', {class: 'hint'}, 'Before each of your messages VryxCode saves the project, so you can put the files back as they were. Nothing is saved yet for this session.')); return; }
+  pane.replaceChildren(el('div', {class: 'hint'}, 'Put the files back as they were before one of your messages. Files made after that point are removed. Your other projects are not touched.'),
+    ...cps.map((c) => el('button', {class: 'opt', onclick: async () => {
+      if (!confirm('Put the files back as they were before "' + (c.label || 'message ' + c.turn) + '"?')) return;
+      const r = await post('/api/code/sessions/' + C.sid + '/rewind', {turn: c.turn}); const j = await r.json().catch(() => ({}));
+      if (!r.ok) { note('bad', 'Could not rewind', (j.message || '') + ' ' + (j.action || '')); return; }
+      showDrawer(false); poll(); refreshFiles(); if (!$('codePv').hidden) reloadPreview();
+    }}, icon('undo'), el('span', {class: 'grow'}, el('b', {}, 'Before message ' + c.turn), el('small', {}, c.label || '')))));
+}
+// the to-do list the model keeps (its todo tool): a card above the feed that fills in as items are ticked off
+function renderTodo() {
+  const box = $('codeTodo'), items = C.todo || [];
+  if (!items.length) { box.hidden = true; box.replaceChildren(); return; }
+  const done = items.filter((i) => i.done).length;
+  box.hidden = false;
+  box.replaceChildren(el('div', {class: 'th', onclick: () => { C.todoOpen = !C.todoOpen; renderTodo(); }}, el('span', {}, 'To-do ' + done + '/' + items.length), el('span', {class: 'bar'}, el('i', {style: 'width:' + Math.round(100 * done / items.length) + '%'})), el('span', {style: 'color:var(--muted)'}, C.todoOpen ? '\u25b4' : '\u25be')),
+    C.todoOpen ? el('ul', {}, ...items.map((i) => el('li', {class: i.done ? 'done' : ''}, el('span', {class: 'bx'}, i.done ? '\u2713' : ''), el('span', {}, i.text)))) : '');
+}
+// "/" commands and "@" file mentions in the message box
+const SLASH = [['plan', 'Plan first: look and plan, change nothing', () => setMode('plan')], ['ask', 'Ask before editing', () => setMode('ask')], ['auto', 'Edit without asking', () => setMode('auto')],
+  ['init', 'Create VRYX.md, notes VryxCode reads every session', async () => { const r = await post('/api/code/init', {project: C.project}); const j = await r.json().catch(() => ({})); note('fin', j.created ? 'Created VRYX.md' : 'VRYX.md is already there', 'Open it from Files and fill it in: what the project is, how to test it, your style rules.'); refreshFiles(); }],
+  ['review', 'See what this session changed', () => showDrawer(true, 'changes')], ['rewind', 'Put the files back to an earlier point', () => showDrawer(true, 'rewind')],
+  ['files', 'Browse the project files', () => showDrawer(true, 'files')], ['preview', 'Open the live preview', () => openPreview()], ['new', 'Start a new session', () => newSession()],
+  ['help', 'List these commands', () => note('fin', 'Commands', SLASH.map((x) => '/' + x[0] + ' \u2014 ' + x[1]).join('\n') + '\n@filename \u2014 point at a file in your message')]];
+let SUG = {items: [], at: -1};
+function suggest() {
+  const t = $('codeTask'), box = $('codeSuggest'), pos = t.selectionStart, before = t.value.slice(0, pos);
+  let items = [];
+  const sl = /^\/(\w*)$/.exec(before);
+  if (sl) items = SLASH.filter((x) => x[0].startsWith(sl[1].toLowerCase())).map((x) => ({label: '/' + x[0], sub: x[1], run: () => { t.value = ''; closeCodeMenus(); x[2](); }}));
+  else { const at = /(?:^|\s)@([\w./-]*)$/.exec(before);
+    if (at) { const q = at[1].toLowerCase(); items = C.files.filter((f) => f.toLowerCase().includes(q)).slice(0, 8).map((f) => ({label: '@' + f, sub: '', run: () => { const start = before.length - at[1].length - 1; t.value = t.value.slice(0, start) + '@' + f + ' ' + t.value.slice(pos); closeCodeMenus(); t.focus(); }})); } }
+  SUG = {items, at: items.length ? 0 : -1};
+  if (!items.length) { box.hidden = true; return; }
+  box.replaceChildren(...items.map((x, i) => el('button', {class: 'opt' + (i === 0 ? ' hi' : ''), onmousedown: (e) => e.preventDefault(), onclick: x.run}, el('code', {}, x.label), x.sub ? el('span', {class: 'grow'}, el('small', {}, x.sub)) : '')));
+  box.hidden = false;
+}
+$('codeTask').addEventListener('input', suggest);
+$('codeTask').addEventListener('keydown', (e) => { if (!$('codeSuggest').hidden && SUG.items.length && (e.key === 'Tab' || (e.key === 'Enter' && !e.shiftKey && !e.ctrlKey && !e.metaKey))) { e.preventDefault(); SUG.items[SUG.at].run(); } else if (e.key === 'Escape') $('codeSuggest').hidden = true; });
 $('codeFilesBtn').onclick = () => showDrawer($('codeDrawer').hidden);
 $('codeDrawerX').onclick = () => showDrawer(false);
 async function refreshFiles() {
@@ -1446,11 +1530,12 @@ function diffNode(preview) {
   return el('div', {class: 'cc-diff'}, ...lines.map((l) => el('div', {class: /^\s*\+ /.test(l) ? 'add' : /^\s*- /.test(l) ? 'del' : 'hdr'}, l.replace(/^(\s*)([+-]) /, '$2 '))));
 }
 function cEvent(e) {
-  const feed = $('codeIn');
-  if (e.kind === 'user') { feed.append(el('div', {class: 'cc-user'}, el('span', {class: 'ember'}), el('span', {}, e.text))); C.last = null; return; }
-  if (e.kind === 'start') { feed.replaceChildren(el('div', {class: 'cc-user'}, el('span', {class: 'ember'}), el('span', {}, e.task))); C.last = null; return; }
+  const feed = $('codeIn'); C.events.push(e);
+  if (e.kind === 'user') { feed.append(el('div', {class: 'cc-user'}, el('span', {class: 'ember'}), el('span', {}, (e.plan ? '[Plan] ' : '') + e.text))); C.last = null; return; }
+  if (e.kind === 'start') { feed.replaceChildren(el('div', {class: 'cc-user'}, el('span', {class: 'ember'}), el('span', {}, (e.plan ? '[Plan] ' : '') + e.task))); C.last = null; return; }
   if (e.kind === 'step') {
     const prose = String(e.raw || '').split(/<\|tool_call\|>|<tool_call>/)[0].trim();
+    if (e.tool === 'todo') { try { C.todo = JSON.parse(String(e.preview).replace(/^todo /, '')).items || C.todo; } catch (x) { /* a very long list was shortened: keep the last good one */ } renderTodo(); C.last = null; return; }
     if (e.tool === 'finish') { if (prose) feed.append(el('div', {class: 'cc-say'}, prose)); C.last = null; return; }
     if (!e.tool) { feed.append(el('div', {class: 'cc-say'}, e.preview)); C.last = null; return; }
     if (prose) feed.append(el('div', {class: 'cc-say'}, prose));
@@ -1484,6 +1569,7 @@ function cEvent(e) {
     if (e.finished || e.said) {                       // the model talking to the person: what it did, what to run, what it suggests
       if (e.finished) setTimeout(() => { if (!$('codePv').hidden) reloadPreview(); else if (!$('codePreviewBtn').disabled) $('codePreviewBtn').classList.add('pulse'); }, 700);     // the page changed: refresh it, or point at Preview
       feed.append(renderMessage(e.summary || 'Done.', e.finished));
+      if (e.plan) feed.append(el('div', {class: 'plan-actions'}, el('button', {class: 'btn small', onclick: () => { setMode(C.prevMode === 'plan' ? 'ask' : C.prevMode); $('codeTask').value = 'Go ahead and build it as planned.'; $('codeGo').click(); }}, 'Build it'), el('button', {class: 'chip', onclick: () => { $('codeTask').value = 'Change the plan: '; $('codeTask').focus(); }}, 'Change the plan')));
       if (e.next && e.next.length) feed.append(el('div', {class: 'cc-next'}, el('span', {class: 'lead'}, 'Suggested next:'),
         ...e.next.map((t) => el('button', {class: 'chip', onclick: () => { $('codeTask').value = t; $('codeGo').click(); }}, t))));
       return;
@@ -1544,23 +1630,23 @@ async function poll() {
   C.saved = !!j.saved; C.checkpoints = j.checkpoints || C.checkpoints || [];
   $('codeTask').placeholder = C.saved ? 'Start a follow-up session in ' + C.project + '...' : 'Ask, answer, or tell VryxCode what to build or fix';
   if (j.events.some((e) => e.kind === 'result' || e.kind === 'end' || e.kind === 'rewind')) refreshFiles().then(() => livePreview(j.events));
+  if (j.events.length && !$('codeDrawer').hidden && C.tab !== 'files') showDrawer(true, C.tab);
   renderLive(j.live, j.state);
   if (j.events.length && atEnd) scrollCode();
   showUsage(j.usage);
   const live = ['starting', 'working', 'asking'].includes(j.state);
-  $('codeRewind').hidden = live || !(C.checkpoints && C.checkpoints.length) || C.view !== 'session';
   $('codeGo').hidden = live; $('codeStop').hidden = !live; if (!live) { C.stopping = false; $('codeStop').disabled = false; }
   if (live) C.timer = setTimeout(poll, j.state === 'asking' ? 1500 : 350);
 }
 $('codeGo').onclick = async () => {
   const task = $('codeTask').value.trim(); if (!task || !C.model) return;
   if (C.sid && !C.saved && C.chatKey === C.project + '|' + C.model) {         // a conversation is going in this project with this model: this is its next message
-    const r = await post('/api/code/sessions/' + C.sid + '/message', {text: task}); const j = await r.json().catch(() => ({}));
+    const r = await post('/api/code/sessions/' + C.sid + '/message', {text: task, plan: C.mode === 'plan'}); const j = await r.json().catch(() => ({}));
     if (r.ok) { C.stopping = false; $('codeStop').disabled = false; $('codeTask').value = ''; poll(); return; }
     if (r.status !== 404 && r.status !== 400) { note('bad', 'Could not send', (j.message || '') + ' ' + (j.action || '')); return; }
     if (r.status === 400 && /still working/i.test(j.message || '')) { note('bad', 'Still working', 'Press Stop first, or wait for it to finish.'); return; }
   }
-  const r = await post('/api/code/start', {project: C.project, task, model: C.model, auto_edits: C.auto, env: C.env}); const j = await r.json();
+  const r = await post('/api/code/start', {project: C.project, task, model: C.model, auto_edits: C.mode === 'auto', plan: C.mode === 'plan', env: C.env}); const j = await r.json();
   if (!r.ok) { note('bad', 'Could not start', j.message + ' ' + (j.action || '')); return; }
   C.sid = j.id; C.saved = false; C.checkpoints = []; C.pvAuto = false; C.chatKey = C.project + '|' + C.model; C.seen = 0; C.stopping = false; $('codeStop').disabled = false; $('codeTask').value = ''; $('codeIn').replaceChildren(); poll();
 };
