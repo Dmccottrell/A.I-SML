@@ -25,6 +25,7 @@ import zipfile
 import code_log
 import code_sandbox
 import harness
+import languages
 import usage_limits as U
 import vryxcode
 
@@ -322,8 +323,12 @@ class Session:
         else:
             self.emit("user", text=text, plan=plan)
         self.live_messages = None
+        lang = languages.decide(text, self.env, self.workspace)                  # which language fits, and what can run here: told to the person and to the model
+        line = languages.page_line(lang)
+        if line:
+            self.emit("language", text=line, language=lang["name"], mode=lang["mode"])
         try:
-            result = vryxcode.run_task(self.expand(text), self.wrap(self.generate), self.workspace, self.ask, self.max_turns, self.context_tokens, self.extra_programs,
+            result = vryxcode.run_task(self.expand(text), self.wrap(self.generate), self.workspace, self.ask, self.max_turns, self.context_tokens, self.extra_programs, lang_note=languages.note_for(lang),
                                        out=lambda *_: None, tools=self.tools, git_identity=self.identity,
                                        command_prefix=self.prefix, container=bool(self.prefix) and not self.remote, history=self.history, chat_mode=True, plan=plan, todo=True, remote=self.remote)
             self.history = result["messages"]
