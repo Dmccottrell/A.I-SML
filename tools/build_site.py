@@ -75,7 +75,7 @@ STATUS_JS = """<script>
 })();
 </script>"""
 
-NAV_EXTRA = '<a href="whatsnew.html">What&rsquo;s new</a>\n<a href="scorecard.html">Scorecard</a>\n'
+NAV_EXTRA = '<a href="whatsnew.html">What&rsquo;s new</a>\n<a href="scorecard.html">Scorecard</a>\n<a href="next.html">What&rsquo;s next</a>\n'
 SITE = "https://emvryx.app"
 DESCRIPTION = "Emvryx is a family of five AI models that think on your own device or its own computer, show where an answer came from, and say so when they don't know."
 HEAD_META = ('<meta name="description" content="{desc}">\n<meta name="theme-color" content="#07080D">\n<meta property="og:type" content="website">\n'
@@ -173,7 +173,7 @@ PAGE_CSS = (".doc{max-width:860px;margin:0 auto;padding:40px 24px 80px}.doc h1{f
             ".nav{max-width:1200px;margin:0 auto;padding:24px;display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:16px}.nav .links{display:flex;flex-wrap:wrap;align-items:center;gap:22px;font-size:16px;font-weight:500}"
             ".cta{background:var(--accent);color:var(--onaccent)!important;border-radius:999px;padding:12px 22px;font-weight:600}.foot{border-top:1px solid var(--line)}"
             ".foot div{max-width:1200px;margin:0 auto;padding:32px 24px 48px;display:flex;flex-wrap:wrap;justify-content:space-between;gap:16px;color:var(--muted);font-size:15px}"
-            "@media(max-width:700px){.tw{border:0;overflow:visible}table,thead,tbody,tr,td{display:block;min-width:0;width:100%}thead{display:none}tr{background:var(--surface);border:1px solid var(--line);border-radius:16px;padding:6px 14px;margin:0 0 14px}"
+            "@media(max-width:700px){.tw{border:0;overflow:visible}table,thead,tbody,tr,td{display:block;min-width:0;width:100%}thead{display:none}tr{box-sizing:border-box;background:var(--surface);border:1px solid var(--line);border-radius:16px;padding:6px 14px;margin:0 0 14px}"
             "td{border-top:1px solid var(--line);padding:10px 0;white-space:normal!important}td:first-child{border-top:0;font-family:'Sora',sans-serif;font-size:20px;font-weight:600}td[data-label]:not(:first-child)::before{content:attr(data-label);display:block;color:var(--muted);font-size:12px;letter-spacing:.06em;text-transform:uppercase;margin-bottom:2px}}"
             "a{color:var(--text);text-decoration:none}a:hover{color:var(--accenttext)}.center{display:grid;place-items:center;min-height:60vh;text-align:center;padding:40px 24px}")
 LOGO = ('<svg width="38" height="38" viewBox="0 0 64 64" fill="none" aria-label="Emvryx"><circle cx="46" cy="32" r="12" style="fill: var(--sun)" fill-opacity="0.16"/>'
@@ -185,10 +185,10 @@ def extra_page(title, body, active="", description=DESCRIPTION, extra_head="", e
     def link(href, label):
         return f'<a href="{href}"' + (' style="color: var(--accenttext); border-bottom: 2px solid var(--accent); padding-bottom: 2px"' if href == active else "") + f">{label}</a>"
     nav = (f'<div class="nav"><a href="index.html" style="display:flex;align-items:center;gap:10px">{LOGO}<span style="font-family:\'Sora\',sans-serif;font-weight:600;font-size:24px;letter-spacing:-0.02em">Emvryx</span></a>'
-           f'<div class="links">{link("models.html", "Models")}{link("plans.html", "Plans")}{link("usage.html", "How usage works")}{link("about.html", "About")}{link("whatsnew.html", "What&rsquo;s new")}{link("scorecard.html", "Scorecard")}'
+           f'<div class="links">{link("models.html", "Models")}{link("plans.html", "Plans")}{link("usage.html", "How usage works")}{link("about.html", "About")}{link("whatsnew.html", "What&rsquo;s new")}{link("scorecard.html", "Scorecard")}{link("next.html", "What&rsquo;s next")}'
            f'<a href="open.html" class="cta">Open Emvryx</a></div></div>')
     foot = (f'<div class="foot"><div><span>&copy; Emvryx.AI {YEAR}. Private by design.</span><span><a href="models.html">Models</a> &middot; <a href="plans.html">Plans</a> &middot; <a href="usage.html">How usage works</a> '
-            f'&middot; <a href="about.html">About</a> &middot; <a href="whatsnew.html">What&rsquo;s new</a> &middot; <a href="scorecard.html">Scorecard</a></span></div></div>')
+            f'&middot; <a href="about.html">About</a> &middot; <a href="whatsnew.html">What&rsquo;s new</a> &middot; <a href="scorecard.html">Scorecard</a> &middot; <a href="next.html">What&rsquo;s next</a></span></div></div>')
     return (f'<!doctype html>\n<html lang="en" data-theme="dark">\n<head>\n<meta charset="utf-8">\n<meta name="viewport" content="width=device-width, initial-scale=1">\n<title>{title} - Emvryx</title>\n'
             f'<link rel="icon" href="/icon.svg" type="image/svg+xml">\n<link rel="preconnect" href="https://fonts.googleapis.com">\n'
             f'<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Sora:wght@500;600;700&family=DM+Sans:wght@400;500;600&display=swap">\n'
@@ -228,6 +228,11 @@ def extra_pages():
     for name, doc, title, active in (("whatsnew.html", "WHATS_NEW.md", "What's new", "whatsnew.html"), ("scorecard.html", "SCORECARD.md", "Scorecard", "scorecard.html")):
         with open(os.path.join(HERE, "docs", doc), encoding="utf-8") as f:
             out[name] = extra_page(title.replace("'", "&rsquo;"), '<div class="doc">' + md_to_html(f.read()) + "</div>", active)
+    with open(os.path.join(HERE, "docs", "ROADMAP.md"), encoding="utf-8") as f:
+        road = f.read()
+    part = road.split("<!-- next:start -->", 1)[1].split("<!-- next:end -->", 1)[0].strip().splitlines()[1:]       # the section without its own heading
+    intro = "# What&rsquo;s next\n\nWhere Emvryx could go from here: the plan for the 2.5 models and 25 ideas.\n"
+    out["next.html"] = extra_page("What's next".replace("'", "&rsquo;"), '<div class="doc">' + md_to_html(intro + "\n".join(part)) + "</div>", "next.html")
     out["open.html"] = extra_page("Open Emvryx", OPEN_BODY, extra_head='<meta name="robots" content="noindex">\n', extra_js=OPEN_JS)
     return out
 

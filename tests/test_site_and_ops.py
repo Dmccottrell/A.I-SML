@@ -72,6 +72,13 @@ class Site(unittest.TestCase):
         self.assertIn('<td data-label="A">1</td>', h)
         self.assertIn("&lt;", BS.md_to_html("a <script> b"))
 
+    def test_whats_next_page_lists_all_25_ideas_and_says_it_is_not_a_promise(self):
+        html = self.read("next.html")
+        self.assertEqual(len(re.findall(r'<tr><td data-label="#">(\d+)</td>', html)), 25)
+        self.assertIn("not a promise", html)
+        self.assertNotIn("next:start", html)
+        self.assertIn("next.html", self.read("index.html"))
+
     def test_scorecard_and_whats_new_say_what_is_not_measured(self):
         card = re.sub(r"<[^>]+>", " ", self.read("scorecard.html"))
         for model in ("Ember 2", "Flare 2", "Flare 2.5", "Equinox 2", "Solstice 2", "Apogee 2"):
