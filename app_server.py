@@ -1668,7 +1668,9 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 allowed, why = st.code_allowed(who)
                 return self._send(200, {"allowed": allowed, "why_not": why, "sandbox": st.code.sandbox.get("mode", "none"),
                                         "usage": self._code_usage(who, None), "models": st.code_models(who), "projects": st.code.projects(user),
-                                        "running": run.id if run else None, "project": run.project if run else None})
+                                        "running": run.id if run else None, "project": run.project if run else None, "environments": st.code.environments()})
+            if path == "/api/code/sessions":
+                return self._send(200, {"sessions": st.code.list_sessions(user)})
             if path == "/api/code/git":
                 project = st.code.check_name(arg("project"))
                 g = st.git_for(user, project)
@@ -1687,9 +1689,17 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 return self._send(200, st.code.read(user, arg("project"), arg("path")))
             m = re.fullmatch(r"/api/code/sessions/([\w-]+)", path)
             if m:
+                if m.group(1) not in st.code.sessions:                  # a finished session from the history (read-only): also after a restart
+                    d = st.code.saved(user, m.group(1))
+                    after = max(0, int(arg("after") or 0))
+                    return self._send(200, {"events": d["events"][max(0, after - d.get("offset", 0)):], "state": d["meta"].get("state", "done"), "pending": None, "saved": True,
+                                            "task": d["meta"]["title"], "project": d["meta"]["project"], "model": d["meta"]["model"], "env": d["meta"].get("env", "local"),
+                                            "checkpoints": d["meta"].get("checkpoints", []), "used": 0, "steps": d["meta"].get("steps", 0), "live": None,
+                                            "usage": self._code_usage(who, d["meta"]["model"])})
                 s = st.code.get(user, m.group(1))
                 events, state, pending = s.since(max(0, int(arg("after") or 0)))
                 return self._send(200, {"events": events, "state": state, "pending": pending, "task": s.task, "project": s.project, "model": s.model_id,
+                                        "env": s.env, "checkpoints": list(s.checkpoints),
                                         "used": round(s.meter.counted) if s.meter else 0, "steps": s.meter.steps if s.meter else 0,
                                         "live": s.live_view(), "usage": self._code_usage(who, s.model_id)})
             return self._send(404, {"code": "not_found", "message": "Not found."})
@@ -1752,7 +1762,8 @@ class Handler(http.server.BaseHTTPRequestHandler):
                     if linked:
                         tools = {"github": st.github_tool(user, project)}
                 s, note = st.code.start(user, project, body.get("task"), model["id"], generate, bool(body.get("auto_edits")),
-                                        int(model.get("context_tested") or 8192), meter, outside=bool(model.get("outside")), tools=tools, identity=identity)
+                                        int(model.get("context_tested") or 8192), meter, outside=bool(model.get("outside")), tools=tools, identity=identity,
+                                        env=str(body.get("env") or "local"))
                 return self._send(200, {"id": s.id, "note": note})
             if path == "/api/code/preview":
                 allowed, why = st.code_allowed(who)
@@ -1778,6 +1789,13 @@ class Handler(http.server.BaseHTTPRequestHandler):
             m = re.fullmatch(r"/api/code/sessions/([\w-]+)/stop", path)
             if m:
                 st.code.get(user, m.group(1)).request_stop()
+                return self._send(200, {"ok": True})
+            m = re.fullmatch(r"/api/code/sessions/([\w-]+)/rewind", path)
+            if m:
+                return self._send(200, st.code.rewind(user, m.group(1), int(body.get("turn", -1))))
+            m = re.fullmatch(r"/api/code/sessions/([\w-]+)/delete", path)
+            if m:
+                st.code.delete_session(user, m.group(1))
                 return self._send(200, {"ok": True})
             if path == "/api/code/git":
                 return self._send(200, self.api_code_git(who, body))

@@ -5,6 +5,8 @@ What changed, newest first. Measured numbers live in [BENCHMARKS.md](BENCHMARKS.
 ## October 2026 (late)
 
 ### Latest
+- **VryxCode home:** a Sessions list with cards (title, project, where it ran, time, spinner, summary), saved on disk; per-session **environments** (this computer, isolated sandbox, cloud placeholder); **Rewind** to before any of the last 8 messages; the preview opens beside the chat on wide screens. See [VRYXCODE.md](VRYXCODE.md).
+- Phone fit fixes for VryxCode's menus and top bar; pictures: preview, sent with the message, optional vision helper ([VISION.md](VISION.md)).
 - **Wording and names:** the website and docs now present Emvryx as one family of five models and no longer name the open foundation models (credits stay in `NOTICE`, as the licence requires). The lesson files were renamed to match: `data_prep/make_chat_data_open.py`, `data_prep/open_lessons.py`, `scripts/wrap_open.sh`, `docs/OPEN_LESSONS.md`, `data/open/`. The outside coding model's id is now `coder-14b`.
 - Apogee 2 is a beta in the app (its 4-bit file is on the PC).
 - **Attach menu:** the + button is now a small menu (files, photos or screenshots, a folder, your documents) instead of a full-screen box. Pictures have their words read; photos can't be described yet.
