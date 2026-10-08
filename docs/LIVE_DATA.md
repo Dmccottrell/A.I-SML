@@ -59,3 +59,5 @@ Weather already has its own source (Open-Meteo). Web search (Tavily and others) 
 | More currencies | "100 usd to aed" falls back to open.er-api.com when the European Central Bank does not have it | free |
 
 Keys are optional: set them with `setx NAME "value"` and sign out and in. Without a key those providers simply do nothing.
+
+**Which sources are on right now:** Settings > Live facts > **See which sources are on** lists every source with a green dot when it works, which ones are waiting for a key, and which web search is in use (Tavily, Brave, Gemini or Wikipedia only).

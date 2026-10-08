@@ -536,7 +536,7 @@ function renderAll() {
   $('avatar').textContent = (st.user[0] || 'Y').toUpperCase();
   $('plan').textContent = (st.owner ? 'Owner, no limits' : st.plan[0].toUpperCase() + st.plan.slice(1) + ' plan');
   if (st.demo) { $('banner').hidden = false; $('banner').replaceChildren(el('b', {}, 'Demo mode. '), 'No model is attached, so replies are a stand-in. Start the server with --llama to use a real model.'); } else $('banner').hidden = true;
-  renderChats(); renderLinks(); renderComposer(); renderUsage(st.usage, true); renderThread();
+  renderChats(); renderLinks(); renderComposer(); renderUsage(st.usage, true); renderThread(); warmModel();
 }
 function renderChats() {
   const box = $('chatList'); box.replaceChildren();
@@ -579,7 +579,7 @@ document.addEventListener('click', (e) => { if (!$('acctMenu').hidden && !$('acc
 async function newChat(isPrivate, skill, docs) {
   if (S.busy) return;
   S.skill = skill || ''; S.docs = docs || []; S.chatId = null; S.messages = []; S.title = isPrivate ? 'Private chat' : 'New chat'; S.private = !!isPrivate;
-  document.body.classList.remove('menu-open'); remember(); renderThread(); renderAttached(); $('input').focus(); renderChats();
+  document.body.classList.remove('menu-open'); remember(); renderThread(); renderAttached(); $('input').focus(); renderChats(); warmModel();
 }
 async function openChat(id) {
   if (S.busy) return;
@@ -688,11 +688,15 @@ $('effortBtn').onclick = () => {
   m.hidden = false;
 };
 document.addEventListener('click', (e) => { if (!e.target.closest('.box')) closeMenus(); });
+let warmTimer = null;
+function warmModel() {   // load the picked model in the background, so the next message does not wait for it
+  clearTimeout(warmTimer); warmTimer = setTimeout(() => { if (S.state && S.model && !S.busy) post('/api/models/warm', {model: S.model}).catch(() => {}); }, 500);
+}
 async function chooseModel(c) {
   closeMenus(); if (c.id === S.model) return;
   S.model = c.id; try { localStorage.setItem('emvryx_model', c.id); } catch (e) {}
   if (c.efforts && S.effort !== 'auto' && !c.efforts.includes(S.effort)) S.effort = 'balanced';
-  wash(); applyTheme(); renderComposer(); renderThread(false); await refreshUsage();
+  wash(); applyTheme(); renderComposer(); renderThread(false); warmModel(); await refreshUsage();
 }
 const input = $('input');
 input.addEventListener('input', () => { input.style.height = 'auto'; input.style.height = Math.min(160, input.scrollHeight) + 'px'; });
@@ -1090,6 +1094,17 @@ async function openMemory() {
 }
 
 // ---------------------------------------------------------------- settings
+async function openSources() {
+  const j = await (await api('/api/live/sources')).json();
+  const row = (x) => el('div', {style: 'display:flex;gap:8px;align-items:baseline;padding:2px 0'}, el('span', {style: 'color:' + (x.active ? '#3fb950' : 'var(--muted)')}, x.active ? '\u25cf' : '\u25cb'), el('span', {}, x.name), x.needs_key && !x.active ? el('small', {style: 'color:var(--muted)'}, 'needs ' + x.keys.join(' or ')) : x.note ? el('small', {style: 'color:var(--muted)'}, x.note) : '');
+  const grp = (title, list) => list.length ? [el('b', {style: 'margin-top:8px'}, title + ' (' + list.length + ')'), ...list.map(row)] : [];
+  const web = j.web === 'wikipedia' ? 'Wikipedia only (no web search key is set)' : j.web[0].toUpperCase() + j.web.slice(1);
+  dialog([el('h2', {}, 'Live sources'), el('div', {style: 'color:var(--muted);font-size:14px'}, 'Green means it works now. Keys are set on the computer that runs Emvryx (see docs/LIVE_DATA.md).'),
+    el('b', {}, 'Web search: ' + web),
+    ...grp('Always on, no internet needed', j.sources.filter((x) => x.where === 'offline')),
+    ...grp('Free online services, no key', j.sources.filter((x) => x.where === 'online' && !x.keys.length)),
+    ...grp('Online services that use a key', j.sources.filter((x) => x.keys.length))], 'Close');
+}
 async function openSettings() {
   const st = S.state, s = st.settings, w = st.window;
   const seg = (opts, cur, fn) => el('div', {class: 'seg'}, ...opts.map(([v, t]) => el('button', {class: cur === v ? 'on' : '', onclick: (e) => { fn(v); [...e.target.parentNode.children].forEach((b) => b.classList.remove('on')); e.target.classList.add('on'); }}, t)));
@@ -1102,6 +1117,7 @@ async function openSettings() {
     el('div', {style: 'color:var(--muted);font-size:14px'}, 'Right now: ' + fmt(w.window) + ' tokens, ' + w.reason + '. Long chats use more memory and are slower to read.'),
     el('b', {}, 'Live facts (sums, dates, prices, rates, scores, news)'), seg([['on', 'On'], ['off', 'Off']], s.live_data === false ? 'off' : 'on', async (v) => { await post('/api/settings', {live_data: v === 'on'}); await load(); }),
     el('div', {style: 'color:var(--muted);font-size:14px'}, 'Exact answers come from code and free public services, not from the model\u2019s memory. Sums, dates and the time work offline. Prices, rates, scores, news and the rest send only the needed words (a place, a currency, a team) and never the chat. Off in private chats and in \u201cModel only\u201d.'),
+    el('button', {class: 'btn ghost', onclick: openSources}, 'See which sources are on'),
     el('b', {}, 'Looking things up'), seg([['auto', 'Auto'], ['off', 'Wikipedia only'], ['always', 'Always search the web'], ['none', 'Model only (no lookup)']], s.web_search || 'auto', async (v) => { await post('/api/settings', {web_search: v}); await load(); }),
     el('div', {style: 'color:var(--muted);font-size:14px'}, 'Questions are first looked up in Wikipedia on the server. Auto also searches the web, when it is online, for recent things (news, scores, prices) or when Wikipedia does not have the answer; your question is sent to a search service then, and each answer says so. Private chats never search the web.'),
     el('button', {class: 'btn ghost', onclick: openSaved}, 'Saved notes'),
@@ -1195,8 +1211,7 @@ async function send(regen, mode) {
       } else if (ev === 'memory') {
         const bits = [...(data.saved || []).map((t) => t.replace(/^The user\W?s? ?/i, '').replace(/\.$/, '')), ...(data.forgot ? ['forgot ' + data.forgot + (data.forgot === 1 ? ' thing' : ' things')] : [])];
         if (bits.length) $('thread').append(el('div', {class: 'note', style: 'align-self:flex-start', title: 'Open Memory in the menu to see or change what is kept'}, '\u2713 ' + (data.saved && data.saved.length ? 'Remembered: ' : '') + bits.join('; ')));
-      } else if (ev === 'loading') {
-        const w = think.querySelector('.word'); clearInterval(S.thinkTimer); S.thinkTimer = null; if (w) w.textContent = 'Loading ' + data.model + ' (first message only)';
+      } else if (ev === 'loading') {   // the model is still starting: the normal thinking words carry on (no extra message)
       } else if (ev === 'piece') {
         if (!aiWrap) { think._stop(); think.remove(); const m = curModel(); aiBubble = el('div', {class: 'bubble'}); const note = S.autoNote ? el('span', {title: S.autoNote.reason}, ' \u00b7 Auto chose ' + S.autoNote.effort[0].toUpperCase() + S.autoNote.effort.slice(1)) : null;
         aiWrap = el('div', {class: 'msg ai'}, el('div', {class: 'meta'}, logo(14, false, m ? m.name : 'brand'), mname(m), note), aiBubble); $('thread').append(aiWrap);

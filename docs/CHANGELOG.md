@@ -5,6 +5,7 @@ What changed, newest first. Measured numbers live in [BENCHMARKS.md](BENCHMARKS.
 ## October 2026 (late)
 
 ### Latest
+- No more "Loading model (first message only)" message: the picked model is loaded in the background when you choose it, open the app or start a new chat, and the normal thinking words carry on if it is still starting. Settings can list which live sources are on.
 - **VryxCode workflow:** modes (Ask / Auto-edit / Plan first, with Build it), a to-do list the model keeps, `/` commands, `@file` mentions, `VRYX.md` project instructions (`/init`), and a Files / Changes / Rewind panel.
 - **VryxCode home:** a Sessions list with cards (title, project, where it ran, time, spinner, summary), saved on disk; per-session **environments** (this computer, isolated sandbox, cloud placeholder); **Rewind** to before any of the last 8 messages; the preview opens beside the chat on wide screens. See [VRYXCODE.md](VRYXCODE.md).
 - Phone fit fixes for VryxCode's menus and top bar; pictures: preview, sent with the message, optional vision helper ([VISION.md](VISION.md)).

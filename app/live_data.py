@@ -923,3 +923,22 @@ def gather(question, now=None, online=True, net=None, offline_ok=True, default_p
     if notes:
         info.update(asked=True, live=len(notes), sources=[{"title": n["title"], "kind": "live", "url": n.get("url")} for n in notes])
     return notes, info
+
+
+# which sources need a key (the environment variable names), and whether the source works without one
+KEYED = {"releases": (("RAWG_API_KEY", "TMDB_API_KEY"), True), "fred": (("FRED_API_KEY",), True), "wolfram": (("WOLFRAM_APPID",), True), "nutrition": (("USDA_API_KEY",), False)}
+
+
+def sources_status(env=None):
+    """Every live source and whether it is on right now: [{"id", "name", "where": offline|online, "keys": [...], "needs_key", "active", "note"}]."""
+    env = os.environ if env is None else env
+    rows = []
+    for name, fn, offline, label in PROVIDERS:
+        keys, required = KEYED.get(name, ((), False))
+        have = [k for k in keys if env.get(k)]
+        row = {"id": name, "name": label, "where": "offline" if offline else "online", "keys": list(keys), "needs_key": bool(keys and required),
+               "active": not (keys and required and not have), "note": ""}
+        if keys and not required:
+            row["note"] = "Works without a key; " + ("using your key." if have else "a key makes it better.")
+        rows.append(row)
+    return rows
