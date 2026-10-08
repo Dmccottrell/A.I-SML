@@ -192,6 +192,11 @@ class ChatStore:
                 self.db.commit()
             except sqlite3.OperationalError:
                 pass
+        try:
+            self.db.execute("ALTER TABLE messages ADD COLUMN docs TEXT")       # the pictures and files that were sent with a message
+            self.db.commit()
+        except sqlite3.OperationalError:
+            pass
         self.private_docs = {}
         self.private = {}                    # private chats live here only: {chat_id: [messages]}
         self.private_skill = {}
@@ -233,13 +238,14 @@ class ChatStore:
         r = self.db.execute("SELECT skill FROM chats WHERE id = ?", (chat_id,)).fetchone()
         return (r[0] or "") if r else ""
 
-    def add(self, chat_id, role, content, model_id="", status="done"):
+    def add(self, chat_id, role, content, model_id="", status="done", docs=None):
+        docs = [int(i) for i in (docs or [])][:10]
         if chat_id < 0:
             self.private[chat_id].append({"id": len(self.private[chat_id]), "role": role, "content": content,
-                                          "model_id": model_id, "status": status})
+                                          "model_id": model_id, "status": status, "docs": docs})
             return len(self.private[chat_id]) - 1
-        cur = self.db.execute("INSERT INTO messages (chat_id, role, content, model_id, status, created) "
-                              "VALUES (?, ?, ?, ?, ?, ?)", (chat_id, role, content, model_id, status, time.time()))
+        cur = self.db.execute("INSERT INTO messages (chat_id, role, content, model_id, status, created, docs) "
+                              "VALUES (?, ?, ?, ?, ?, ?, ?)", (chat_id, role, content, model_id, status, time.time(), json.dumps(docs) if docs else None))
         self.db.commit()
         return cur.lastrowid
 
@@ -253,9 +259,21 @@ class ChatStore:
     def messages(self, chat_id):
         if chat_id < 0:
             return [dict(m) for m in self.private[chat_id]]
-        rows = self.db.execute("SELECT id, role, content, model_id, status FROM messages WHERE chat_id = ? ORDER BY id",
+        rows = self.db.execute("SELECT id, role, content, model_id, status, docs FROM messages WHERE chat_id = ? ORDER BY id",
                                (chat_id,)).fetchall()
-        return [dict(zip(("id", "role", "content", "model_id", "status"), r)) for r in rows]
+        out = []
+        for r in rows:
+            m = dict(zip(("id", "role", "content", "model_id", "status", "docs"), r))
+            try:
+                m["docs"] = [int(x) for x in json.loads(m["docs"])] if m["docs"] else []
+            except (ValueError, TypeError):
+                m["docs"] = []
+            out.append(m)
+        return out
+
+    def sent_docs(self, chat_id):
+        """Ids of the files and pictures already sent with an earlier message of this chat."""
+        return {i for m in self.messages(chat_id) for i in (m.get("docs") or [])}
 
     def list_chats(self):
         """Saved chats, newest first: [{"id", "title", "updated", "skill"}]. Private chats are never listed."""
@@ -328,7 +346,7 @@ class ChatStore:
 # ------------------------------------------------------------------ one message, start to finish
 def run_turn(tok, store, chat_id, backend, model, window, max_new, user_text=None, stop=None, save_every=8,
              keep_notes=1, notes=None, limiter=None, user=None, effort="balanced", clock=time.time,
-             pacer=None, auto_compact=True, summarize=None, style_hint=""):
+             pacer=None, auto_compact=True, summarize=None, style_hint="", user_docs=None):
     """Answer one message. Adds the user's message (if given), streams the reply while saving it, and returns
     {"text", "reason", "forgotten_messages"}. If the model fails mid-reply, what was written is kept (marked
     partial) and the AppError is re-raised, so the screen can offer "Continue".
@@ -342,7 +360,7 @@ def run_turn(tok, store, chat_id, backend, model, window, max_new, user_text=Non
     `pacer` (chat_polish.paced, with the time of sending) makes the reply appear after a short pause and write out
     steadily. `auto_compact` shortens a chat that fills the model's memory (chat_polish.compact_chat).
     """
-    user_row = store.add(chat_id, "user", user_text) if user_text is not None else None
+    user_row = store.add(chat_id, "user", user_text, docs=user_docs) if user_text is not None else None
     folded = 0
     if auto_compact:
         folded = chat_polish.compact_chat(tok, store, chat_id, window, max_new, summarize=summarize, keep_notes=keep_notes)

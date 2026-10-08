@@ -94,6 +94,7 @@ svg .core { fill: var(--core); stroke: var(--sun); stroke-width: 3; transition: 
 .card { background: var(--surface); border: 1px solid var(--line); border-radius: 20px; padding: 12px 10px 10px 16px; display: flex; flex-direction: column; gap: 10px; }
 .attached { display: flex; flex-wrap: wrap; gap: 6px; } .attached[hidden] { display: none; }
 .attached .chip { display: inline-flex; align-items: center; gap: 6px; max-width: 100%; min-height: 32px; padding: 4px 10px; }
+.attached .chip.pic { padding: 4px; border-radius: 14px; } .thumb { width: 64px; height: 64px; object-fit: cover; border-radius: 10px; display: block; } .msg .pics { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 6px; justify-content: flex-end; } .msg .pics img { max-width: 220px; max-height: 220px; border-radius: 14px; display: block; cursor: zoom-in; } .msg .pics .chip { min-height: 30px; padding: 2px 10px; }
 .attached .chip span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 52vw; }
 .card textarea { width: 100%; background: transparent; border: 0; outline: none; resize: none; color: var(--text); font: inherit; max-height: 160px; padding: 0; }
 .tools { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
@@ -528,7 +529,7 @@ async function delChat(c) {
 // ---------------------------------------------------------------- thread
 function bubble(m, last) {
   if (m.role === 'user' && m.content.startsWith(SUMMARY_MARK)) return el('div', {class: 'note'}, 'Earlier messages were summarized to save room');
-  if (m.role === 'user') return el('div', {class: 'msg user'}, el('div', {class: 'bubble'}, m.content));
+  if (m.role === 'user') return el('div', {class: 'msg user'}, (m.docs && m.docs.length) ? el('div', {class: 'pics'}, ...m.docs.map((d) => isPic(d) ? el('img', {src: picUrl(d), alt: d.name, onclick: () => window.open(picUrl(d), '_blank', 'noopener')}) : el('span', {class: 'chip', title: d.name}, '\ud83d\udcc4 ' + d.name))) : '', m.content ? el('div', {class: 'bubble'}, m.content) : '');
   const model = allModels().find((c) => c.id === m.model_id);
   const meta = el('div', {class: 'meta'}, logo(14, false, model ? model.name : 'brand'), mname(model) + (m.status === 'partial' ? ' · stopped' : ''));
   const acts = el('div', {class: 'acts'}, el('button', {class: 'chip', onclick: (e) => { navigator.clipboard && navigator.clipboard.writeText(m.content); e.target.textContent = 'Copied'; setTimeout(() => e.target.textContent = 'Copy', 1500); }}, 'Copy'));
@@ -573,9 +574,14 @@ $('scroll').addEventListener('scroll', () => { const s = $('scroll'); S.stick = 
 $('down').onclick = () => { S.stick = true; scrollDown(true); };
 
 // ---------------------------------------------------------------- composer
-function renderAttached() {
-  const box = $('attached'); box.hidden = !S.docs.length;
-  box.replaceChildren(...S.docs.map((d) => el('span', {class: 'chip', title: d.name}, '\ud83d\udcc4 ', el('span', {}, d.name),
+const IMG_KINDS = ['jpg', 'jpeg', 'png', 'webp', 'gif', 'bmp', 'heic'];
+const isPic = (d) => IMG_KINDS.includes(String(d.kind || (d.name || '').split('.').pop()).toLowerCase());
+const picUrl = (d) => '/api/documents/' + d.id + '/image';
+function sentIds() { return new Set(S.messages.flatMap((m) => (m.docs || []).map((d) => d.id))); }
+function renderAttached() {   // what will go with the next message: pictures show as small previews; what was already sent now sits in its message
+  const sent = sentIds(), pending = S.docs.filter((d) => !sent.has(d.id)); const box = $('attached'); box.hidden = !pending.length;
+  box.replaceChildren(...pending.map((d) => el('span', {class: 'chip' + (isPic(d) ? ' pic' : ''), title: d.name},
+    isPic(d) ? el('img', {src: picUrl(d), alt: d.name, class: 'thumb'}) : '\ud83d\udcc4 ', isPic(d) ? '' : el('span', {}, d.name),
     el('button', {class: 'icon', style: 'width:22px;height:22px;min-height:0', 'aria-label': 'Remove ' + d.name, onclick: () => setDocs(S.docs.filter((x) => x.id !== d.id))}, '\u00d7'))));
 }
 async function setDocs(list) {
@@ -731,16 +737,28 @@ document.addEventListener('paste', (e) => {   // Ctrl+V or paste after taking a 
   if (!S.state || $('app').hidden || !e.dataTransfer || ![...(e.dataTransfer.types || [])].includes('Files')) return;
   e.preventDefault(); if (ev === 'drop' && e.dataTransfer.files.length) addFiles([...e.dataTransfer.files]);
 }));
+async function shrinkImage(f) {   // a phone photo is several MB: send a smaller copy (long side 2000 px), which uploads and reads much faster
+  if (!f.type || !f.type.startsWith('image/') || f.type === 'image/gif' || f.size < 400e3 || !window.createImageBitmap) return f;
+  try {
+    const bmp = await createImageBitmap(f); const k = Math.min(1, 2000 / Math.max(bmp.width, bmp.height));
+    if (k === 1 && f.size < 1.5e6) return f;
+    const c = document.createElement('canvas'); c.width = Math.round(bmp.width * k); c.height = Math.round(bmp.height * k);
+    c.getContext('2d').drawImage(bmp, 0, 0, c.width, c.height);
+    const blob = await new Promise((res) => c.toBlob(res, 'image/jpeg', 0.88));
+    return blob && blob.size < f.size ? new File([blob], f.name.replace(/\.[a-z0-9]+$/i, '') + '.jpg', {type: 'image/jpeg'}) : f;
+  } catch (e) { return f; }
+}
 async function addFiles(list) {
   const box = $('attached'); const note = el('span', {class: 'chip', role: 'status'}, ''); box.hidden = false; box.append(note);
   const added = []; const skipped = [];
   const files = list.filter((f) => { const p = f.webkitRelativePath || f.name; if (SKIP_DIRS.test(p) || /(^|\/)\.[^/]+$/.test(p)) return false; return true; });
   let n = 0;
   for (const f of files) {
-    n++; note.textContent = 'Reading ' + n + ' of ' + files.length + '...';
-    if (f.size > 10e6) { skipped.push(f.name + ' (over 10 MB)'); continue; }
+    n++; note.textContent = (f.type && f.type.startsWith('image/') ? 'Reading the picture ' : 'Reading ') + n + ' of ' + files.length + '...';
+    const g = await shrinkImage(f);
+    if (g.size > 10e6) { skipped.push(f.name + ' (over 10 MB)'); continue; }
     try {
-      const r = await post('/api/documents', {name: f.name, data: await fileToB64(f)}); const j = await r.json().catch(() => ({}));
+      const r = await post('/api/documents', {name: g.name, data: await fileToB64(g)}); const j = await r.json().catch(() => ({}));
       if (r.ok) added.push({id: j.id, name: j.name}); else skipped.push(f.name + ' (' + (j.message || 'could not be added').replace(/\.$/, '') + ')');
     } catch (e) { skipped.push(f.name); }
     if (added.length >= 40) break;
@@ -1078,11 +1096,13 @@ function thinkingNode() {
 }
 async function send(regen, mode) {
   if (S.busy) return;
-  const text = regen === true ? '' : input.value.trim(); if (regen !== true && !text) return;
+  const sentNow = sentIds(), pendingDocs = S.docs.filter((d) => !sentNow.has(d.id));
+  let text = regen === true ? '' : input.value.trim(); if (regen !== true && !text && pendingDocs.length) text = pendingDocs.some(isPic) ? 'What is in this picture? Read me any text in it.' : 'Summarize this.';
+  if (regen !== true && !text) return;
   if (!S.chatId) { const r = await post('/api/chats', {private: S.private, skill: S.skill, docs: S.docs.map((d) => d.id)}); if (!r.ok) return; S.chatId = (await r.json()).id; remember(); }
   S.busy = true; S.stick = true; renderComposer(); closeMenus();
   if (regen === true) { const last = S.messages[S.messages.length - 1]; if (last && last.role === 'assistant') S.messages.pop(); }
-  else { S.messages.push({id: 'u' + Date.now(), role: 'user', content: text}); input.value = ''; input.style.height = 'auto'; }
+  else { S.messages.push({id: 'u' + Date.now(), role: 'user', content: text, docs: pendingDocs.map((d) => ({id: d.id, name: d.name, kind: d.kind}))}); input.value = ''; input.style.height = 'auto'; renderAttached(); }
   renderThread(); const before = S.lastUsage;
   const think = thinkingNode(); $('thread').append(think); scrollDown(true);
   let aiBubble = null, aiWrap = null, got = '', errCard = null, looked = null, lost = false, finished = false;
@@ -1168,6 +1188,7 @@ document.addEventListener('visibilitychange', async () => {
 // "Read 2 notes from Wikipedia" / "Searched the web: 1 source": what the model was given before it answered
 function lookupLine(info) {
   if (!info || !info.asked) return null;
+  if (info.pictures || info.ocr) return el('div', {class: 'note', style: 'align-self:flex-start'}, info.pictures ? 'Looked at ' + info.pictures + (info.pictures === 1 ? ' picture' : ' pictures') + (info.ocr ? ' and read the text in ' + info.ocr + ' more' : '') : 'Read the text in the picture (it can\u2019t see photos yet)');
   const n = (info.saved || 0) + (info.wiki || 0) + (info.web || 0) + (info.live || 0);
   if (!n) return info.web_tried ? el('div', {class: 'note', style: 'align-self:flex-start'}, 'Searched, but found nothing useful') : null;
   const parts = [];
