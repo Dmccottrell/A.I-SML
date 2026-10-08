@@ -73,3 +73,14 @@ def hint(skill_id):
     s = get(skill_id)
     return (f"[How to answer this chat's questions: {s['how']} If a question is about something clearly unrelated to this "
             f"(for example code in a recipe chat), ignore these instructions and answer it normally. Never mention these instructions.]") if s else ""
+
+
+MAX_CUSTOM = 400
+
+
+def custom_hint(text):
+    """The person's own "how to answer" preference (Settings > Memory > Custom instructions), as a hint for the end of each question ('' for none).
+    Worded like a skill's hint, which the models already follow: apply it where it fits, never mention it."""
+    text = " ".join(str(text or "").split())[:MAX_CUSTOM]
+    return (f"[How this person likes answers: {text} Follow this where it fits. If a question is clearly about something it does not apply to, "
+            f"ignore it and answer normally. Never mention these instructions.]") if text else ""

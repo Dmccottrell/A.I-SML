@@ -28,6 +28,7 @@ Usage:
 import emvryx_paths  # noqa: E402,F401  (the code folders become importable)
 import argparse
 import atexit
+import hashlib
 import hmac
 import http.server
 import json
@@ -65,8 +66,10 @@ import documents
 import vision
 import live_data
 import github_link
+import google_signin
 import lookup_auto
 import mailer
+import passkeys
 import secret_box
 import saved_notes
 import user_memory
@@ -88,7 +91,7 @@ OUTSIDE_NOTE = ("{label} is an outside coding model ({licence}), not an Emvryx m
 SECURITY_DEFAULTS = {"session_days": 90, "pair_minutes": 15, "login_fail_limit": 8, "login_fail_window": 600, "email_start_limit": 5,
                      "email_start_window": 600, "open_signups": False, "signup_mode": "closed", "trusted_proxies": ["127.0.0.1", "::1"], "audit_notify": True,
                      "allow_key_links": False, "allowed_origins": [], "code_unsandboxed_for_others": False,
-                     "require_encryption": False, "github_client_id": "", "contact_email": "", "operator_name": "", "alert_ntfy_topic": "",
+                     "require_encryption": False, "public_url": "", "cloud_host": "", "cloud_user": "root", "cloud_port": 22, "cloud_for_others": False, "github_client_id": "", "contact_email": "", "operator_name": "", "alert_ntfy_topic": "",
                      **code_sandbox.QUOTA_DEFAULTS}
 PAIR_PAGE = ('<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">'
              '<meta name="robots" content="noindex"><title>Sign in: Emvryx</title><style>body{margin:0;min-height:100vh;display:grid;place-items:center;'
@@ -307,11 +310,15 @@ class AppState:
         self.secrets = secret_box.SecretBox(data_dir, require=self.security["require_encryption"])
         self.github = github_link.Store(data_dir, self.secrets)  # connected GitHub accounts (tokens encrypted, files mode 600)
         self.links = app_links.Hub(app_links.Store(data_dir, self.secrets))   # the other connected apps (a token, link or app password; read-only)
+        self.apply_cloud()
         self.metrics = {"errors": 0, "started": time.time()}
         self._alerted = {}
         self.mail_async = True                                  # send the sign-in email in the background so the answer takes the same time for every address
         self.github_device = {}                                 # person -> the sign-in in progress (its device code never leaves the server)
         self.github_http = None                                 # tests: http(method, url, headers, body) -> (status, json)
+        self.google_http = google_signin.default_http           # tests: http(method, url, data) -> (status, json)
+        self.pk_pending = {}                                    # passkeys: challenge hash -> {kind, user, expires}
+        self.oauth_pending = {}                                 # "Continue with Google": state -> {verifier, invite, expires}
         self.github_local = False                               # tests only: allow a local folder as the remote
         self.code_generate = None                              # tests: code_generate(model) -> generate(messages)
 
@@ -503,7 +510,9 @@ class AppState:
     def create_email_account(self, email):
         """A free account for an address that proved it owns it (only when open signups are on)."""
         email = auth.clean_email(email)
-        base = re.sub(r"[^A-Za-z0-9_-]", "", email.split("@")[0])[:24] or "user"
+        base = re.sub(r"[^A-Za-z0-9_-]", "", email.split("@")[0])[:24]
+        if not accounts.clean_name(base):                       # too short, or a name nobody should be able to pick (admin, support...)
+            base = (base + "user")[:24]
         name, n = base, 1
         while self.user_record(name):
             n += 1
@@ -642,6 +651,75 @@ class AppState:
             self.mfa_tickets.pop(auth.digest(ticket), None)
         return None
 
+    # ---- passkeys (WebAuthn): kept in the person's users.json entry as "passkeys": [{id, alg, pem, counter, name, created}]
+    def passkey_list(self, name):
+        return [{"id": p["id"], "name": p.get("name", "Passkey"), "created": p.get("created")} for p in (self.user_record(name) or {}).get("passkeys", [])]
+
+    def passkey_challenge(self, kind, user=""):
+        now = time.time()
+        for k in [k for k, v in self.pk_pending.items() if v["expires"] < now]:
+            self.pk_pending.pop(k, None)
+        while len(self.pk_pending) > 300:
+            self.pk_pending.pop(next(iter(self.pk_pending)))
+        challenge = passkeys.b64u(secrets.token_bytes(32))
+        self.pk_pending[auth.digest(challenge)] = {"kind": kind, "user": user, "expires": now + 300}
+        return challenge
+
+    def passkey_take(self, challenge, kind, user=None):
+        """Use up a challenge (each works once): True when it was issued by us, for this purpose (and this person)."""
+        p = self.pk_pending.pop(auth.digest(challenge or ""), None)
+        return bool(p and p["kind"] == kind and p["expires"] >= time.time() and (user is None or p["user"] == user))
+
+    def passkey_add(self, name, pk, label):
+        rec = self.user_record(name) or {}
+        keep = [p for p in rec.get("passkeys", []) if p["id"] != pk["id"]][:9]
+        self._set_fields(name, passkeys=keep + [dict(pk, name=str(label)[:40] or "Passkey", created=int(time.time()))])
+        self.auth.event("passkey_added", name, "", str(label)[:40])
+
+    def passkey_remove(self, name, cred_id):
+        rec = self.user_record(name) or {}
+        left = [p for p in rec.get("passkeys", []) if p["id"] != cred_id]
+        if len(left) == len(rec.get("passkeys", [])):
+            return False
+        self._set_fields(name, passkeys=left)
+        self.auth.event("passkey_removed", name, "", "")
+        return True
+
+    def passkey_find(self, cred_id):
+        for u in self.users.values():
+            for p in u.get("passkeys", []):
+                if p["id"] == cred_id:
+                    return u, p
+        return None, None
+
+    # ---- the cloud machine for VryxCode (SSH)
+    def cloud_paths(self):
+        d = self.data_dir or os.path.join(HERE, ".emvryx")
+        return os.path.join(d, "cloud_key"), os.path.join(d, "cloud_known_hosts")
+
+    def apply_cloud(self):
+        key, known = self.cloud_paths()
+        host = str(os.environ.get("EMVRYX_CLOUD_HOST") or self.security.get("cloud_host") or "").strip()
+        self.code.cloud = ({"host": host, "port": int(os.environ.get("EMVRYX_CLOUD_PORT") or self.security.get("cloud_port") or 22),
+                            "user": str(os.environ.get("EMVRYX_CLOUD_USER") or self.security.get("cloud_user") or "root"), "key": os.environ.get("EMVRYX_CLOUD_KEY") or key,
+                            "known_hosts": known, "for_others": bool(self.security.get("cloud_for_others"))} if host else None)
+
+    def cloud_status(self):
+        key, known = self.cloud_paths()
+        pub = ""
+        try:
+            with open(key + ".pub", encoding="utf-8") as f:
+                pub = f.read().strip()
+        except OSError:
+            pass
+        c = self.code.cloud or {}
+        return {"host": c.get("host", ""), "port": c.get("port", 22), "user": c.get("user", "root"), "for_others": bool(c.get("for_others")), "key_made": os.path.exists(key),
+                "public_key": pub, "ssh_found": bool(shutil.which("ssh")), "keygen_found": bool(shutil.which("ssh-keygen")), "ready": self.code.cloud_ready(True)[0],
+                "why_not": "" if self.code.cloud_ready(True)[0] else self.code.cloud_ready(True)[1], "from_env": bool(os.environ.get("EMVRYX_CLOUD_HOST"))}
+
+    def google_on(self):
+        return bool(os.environ.get("GOOGLE_CLIENT_ID") and os.environ.get("GOOGLE_CLIENT_SECRET"))
+
     def signup_mode(self):
         return self.security.get("signup_mode") if self.security.get("signup_mode") in ("closed", "invite", "open") else "closed"
 
@@ -774,6 +852,8 @@ class AppState:
             s["memory"] = new["memory"]
         if isinstance(new.get("live_data"), bool):
             s["live_data"] = new["live_data"]
+        if isinstance(new.get("custom_instructions"), str):
+            s["custom_instructions"] = " ".join(new["custom_instructions"].split())[:app_skills.MAX_CUSTOM]
         if isinstance(new.get("connected_apps"), bool):
             s["connected_apps"] = new["connected_apps"]
         if new.get("web_search") in lookup_auto.MODES:
@@ -1113,7 +1193,8 @@ def start_turn(state, who, chat_id, text, model_id, effort, regenerate=False, re
             store.remove_message(chat_id, msgs[-1]["id"])
         text = None
 
-    skill_hint = app_skills.hint(store.skill(chat_id))        # the chat's skill (Study helper ...): extra instructions for the model only
+    skill_hint = "\n\n".join(h for h in (app_skills.custom_hint(state.get_settings(who["user"]).get("custom_instructions")),
+                                         app_skills.hint(store.skill(chat_id))) if h)   # the person's own preference, then the chat's skill (Study helper ...): extra instructions for the model only
     library = state.docs_for(who["user"])
     attached = [d for d in (library.info(i) for i in store.docs(chat_id)) if d]     # documents attached to this chat: their passages go in as notes
     if attached:
@@ -1552,7 +1633,11 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 return self._send(410, "This pairing link was already used or has expired. Ask for a new one.\n", "text/plain; charset=utf-8")
             if path == "/api/auth-options":
                 return self._send(200, {"email": bool(self.state.mailer), "signups": bool(self.state.mailer and self.state.security["open_signups"]),
-                                        "password": True, "signup": self.state.signup_mode()})
+                                        "password": True, "signup": self.state.signup_mode(), "google": self.state.google_on(), "passkeys": passkeys.AVAILABLE})
+            if path == "/auth/google/start":
+                return self.google_start(qs)
+            if path == "/auth/google/callback":
+                return self.google_callback(qs)
             if path in ("/privacy", "/terms"):
                 return self._file(path[1:] + ".html", "text/html; charset=utf-8")
             if path == "/manifest.webmanifest":
@@ -1612,6 +1697,8 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 return self.api_account_get(who)
             if path == "/api/account/activity":
                 return self._send(200, {"events": self.state.auth.events(30, None, who["user"])})
+            if path == "/api/admin/cloud" and who["owner"]:
+                return self._send(200, self.state.cloud_status())
             if path == "/api/admin/overview" and who["owner"]:
                 return self._send(200, self.state.admin_overview(who))
             if path == "/api/sessions":
@@ -1668,6 +1755,8 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 return self.api_password_login(body)
             if path == "/api/login/mfa":
                 return self.api_mfa_login(body)
+            if path in ("/api/login/passkey/begin", "/api/login/passkey/finish"):
+                return self.api_passkey_login(path.rsplit("/", 1)[1], body)
             if path == "/api/signup":
                 return self.api_signup(body)
             if path == "/api/login/email/start":
@@ -1953,7 +2042,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 allowed, why = st.code_allowed(who)
                 return self._send(200, {"allowed": allowed, "why_not": why, "sandbox": st.code.sandbox.get("mode", "none"),
                                         "usage": self._code_usage(who, None), "models": st.code_models(who), "projects": st.code.projects(user),
-                                        "running": run.id if run else None, "project": run.project if run else None, "environments": st.code.environments()})
+                                        "running": run.id if run else None, "project": run.project if run else None, "environments": st.code.environments(who["owner"])})
             if path == "/api/code/sessions":
                 return self._send(200, {"sessions": st.code.list_sessions(user)})
             if path == "/api/code/git":
@@ -2048,7 +2137,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
                         tools = {"github": st.github_tool(user, project)}
                 s, note = st.code.start(user, project, body.get("task"), model["id"], generate, bool(body.get("auto_edits")),
                                         int(model.get("context_tested") or 8192), meter, outside=bool(model.get("outside")), tools=tools, identity=identity,
-                                        env=str(body.get("env") or "local"), plan=bool(body.get("plan")))
+                                        env=str(body.get("env") or "local"), plan=bool(body.get("plan")), owner=who["owner"])
                 return self._send(200, {"id": s.id, "note": note})
             if path == "/api/code/preview":
                 allowed, why = st.code_allowed(who)
@@ -2215,7 +2304,8 @@ class Handler(http.server.BaseHTTPRequestHandler):
         rec = st.user_record(who["user"]) or {}
         out = {"user": who["user"], "email": rec.get("email"), "email_verified": bool(rec.get("email") and rec.get("email_verified") is not False),
                "has_password": bool(rec.get("pw")), "mfa": st.mfa_info(who["user"]), "plan": who["tier"], "owner": who["owner"],
-               "created": rec.get("created"), "mail": bool(st.mailer), "encrypted": st.secrets.available}
+               "created": rec.get("created"), "mail": bool(st.mailer), "encrypted": st.secrets.available,
+               "passkeys": st.passkey_list(who["user"]), "passkeys_ok": passkeys.AVAILABLE}
         if who["owner"]:
             out["signup_mode"] = st.signup_mode()
         return self._send(200, out)
@@ -2278,6 +2368,13 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 return bad("That code isn't right, or it has run out.", "bad_code")
             st.mark_email_verified(name)
             return self._send(200, {"ok": True})
+        if path in ("/api/account/passkey/begin", "/api/account/passkey/finish"):
+            return self.api_passkey_account(who, path.rsplit("/", 1)[1], body)
+        if path == "/api/account/passkey/delete":
+            err = self._reauth(who, body)
+            if err:
+                return bad(err, "reauth")
+            return self._send(200, {"ok": st.passkey_remove(name, str(body.get("id", ""))), "passkeys": st.passkey_list(name)})
         if path == "/api/account/mfa/start":
             if st.mfa_on(name):
                 return bad("Two-step sign-in is already on.")
@@ -2381,10 +2478,213 @@ class Handler(http.server.BaseHTTPRequestHandler):
             st.auth.revoke_user(name)
             st.auth.event("mfa_reset_by_owner", name, self._ip(), "")
             return self._send(200, {"ok": True})
+        if path == "/api/admin/cloud":
+            host, user = str(body.get("host", "")).strip(), str(body.get("user", "root")).strip() or "root"
+            try:
+                port = int(body.get("port") or 22)
+            except (TypeError, ValueError):
+                port = 0
+            if host and not re.fullmatch(r"[A-Za-z0-9]([A-Za-z0-9.-]{0,251}[A-Za-z0-9])?", host):
+                return self._send(400, {"code": "bad_request", "message": "That host doesn't look right.", "action": "Use the address from your provider, like ssh5.vast.ai or 203.0.113.7."})
+            if not re.fullmatch(r"[a-z_][a-z0-9_-]{0,31}", user) or not 1 <= port <= 65535:
+                return self._send(400, {"code": "bad_request", "message": "The user or port doesn't look right.", "action": "Usually the user is root and the port is the one your provider shows."})
+            st.save_security(cloud_host=host, cloud_user=user, cloud_port=port, cloud_for_others=bool(body.get("for_others")))
+            st.apply_cloud()
+            st.auth.event("cloud_changed", "owner", self._ip(), host)
+            return self._send(200, st.cloud_status())
+        if path == "/api/admin/cloud/keygen":
+            key, _ = st.cloud_paths()
+            if os.path.exists(key) and not body.get("replace"):
+                return self._send(200, st.cloud_status())
+            if not shutil.which("ssh-keygen"):
+                return self._send(400, {"code": "no_keygen", "message": "This computer has no ssh-keygen program.", "action": "On Windows, turn on 'OpenSSH Client' in Optional features."})
+            for f in (key, key + ".pub"):
+                try:
+                    os.remove(f)
+                except OSError:
+                    pass
+            os.makedirs(os.path.dirname(key), exist_ok=True)
+            r = subprocess.run(["ssh-keygen", "-q", "-t", "ed25519", "-N", "", "-C", "emvryx-cloud", "-f", key], capture_output=True, text=True, timeout=30)
+            if r.returncode != 0:
+                return self._send(400, {"code": "keygen", "message": "Making the key failed: " + (r.stderr or r.stdout).strip()[-160:]})
+            try:
+                os.chmod(key, 0o600)
+            except OSError:
+                pass
+            st.auth.event("cloud_key_made", "owner", self._ip(), "")
+            return self._send(200, st.cloud_status())
+        if path == "/api/admin/cloud/test":
+            ok, why = st.code.cloud_ready(True)
+            if not ok:
+                return self._send(400, {"code": "cloud", "message": why})
+            import cloud_run
+            c = st.code.cloud
+            r = None
+            try:
+                r = subprocess.run(cloud_run.ssh_base(c["host"], c["port"], c["user"], c["key"], c["known_hosts"]) + ["echo emvryx-ok; uname -sm; (python3 --version 2>&1 || echo 'python3: missing'); (timeout --version >/dev/null 2>&1 && echo timeout-ok || echo 'timeout: missing')"],
+                                   capture_output=True, text=True, timeout=45)
+            except (OSError, subprocess.SubprocessError) as e:
+                return self._send(400, {"code": "cloud", "message": "Could not run ssh: " + str(e)[:120]})
+            if r.returncode != 0 or "emvryx-ok" not in r.stdout:
+                return self._send(400, {"code": "cloud", "message": "Could not connect: " + (r.stderr.strip()[-220:] or f"ssh exit {r.returncode}"),
+                                        "action": "Check the host, port and user, and that the public key is added to the machine."})
+            return self._send(200, {"ok": True, "text": r.stdout.strip()})
+        if path == "/api/admin/mail-test":
+            rec = st.user_record("owner") or {}
+            if not st.mailer:
+                return self._send(400, {"code": "email_off", "message": "Email isn't set up on this server yet.", "action": "Add EMVRYX_SMTP_HOST, EMVRYX_SMTP_USER and EMVRYX_SMTP_PASS to .emvryx\\keys.env and restart (see docs/DEPLOY.md)."})
+            if not rec.get("email"):
+                return self._send(400, {"code": "no_email", "message": "Your owner account has no email address yet.", "action": "Add it in Settings > Account first."})
+            try:
+                st.mailer.send(rec["email"], "Emvryx test email", "This is a test from your Emvryx server. If you can read it, email sign-in codes will work.")
+            except Exception as e:
+                return self._send(400, {"code": "mail_failed", "message": "The mail server said: " + str(e)[:160], "action": "Check the host, port, login and app password."})
+            st.auth.event("mail_test", "owner", self._ip(), "")
+            return self._send(200, {"ok": True, "to": rec["email"]})
         if path == "/api/admin/pause":
             st.cfg["paused"] = bool(body.get("paused"))
             return self._send(200, {"paused": st.cfg["paused"]})
         self._send(404, {"code": "not_found", "message": "Not found."})
+
+    # ---- passkeys: the two steps of making one, and of signing in with one
+    def _rp(self):
+        base = self._public_base()
+        p = urllib.parse.urlparse(base)
+        return p.hostname or "localhost", f"{p.scheme}://{p.netloc}"
+
+    def api_passkey_login(self, step, body):
+        st = self.state
+        if not passkeys.AVAILABLE:
+            return self._send(501, {"code": "no_passkeys", "message": "Passkeys need the cryptography package on this server."})
+        if self._locked():
+            return
+        rp_id, origin = self._rp()
+        if step == "begin":
+            return self._send(200, {"challenge": st.passkey_challenge("get"), "rpId": rp_id, "timeout": 120000, "userVerification": "required", "allowCredentials": []})
+        cred = body.get("credential") if isinstance(body.get("credential"), dict) else {}
+        try:
+            rec, pk = st.passkey_find(str(cred.get("id", "")))
+            try:
+                challenge = json.loads(passkeys.unb64u(cred.get("clientDataJSON", ""))).get("challenge", "")
+            except (ValueError, passkeys.PasskeyError):
+                challenge = ""
+            if not rec or not st.passkey_take(challenge, "get"):
+                raise passkeys.PasskeyError("That passkey isn't known here, or the request ran out.")
+            counter = passkeys.verify_assertion(cred, pk, challenge, origin, rp_id)
+            if rec.get("banned"):
+                return self._send(403, {"code": "banned", "message": "This account has been turned off.", "action": "Ask the owner if you think that is a mistake."})
+        except passkeys.PasskeyError as e:
+            self._fail("bad passkey")
+            return self._send(401, {"code": "bad_passkey", "message": str(e), "action": "Try again, or sign in another way."})
+        pk["counter"] = counter
+        st._save_users()
+        self._start_session(rec["user"], "passkey")                  # a passkey needs your fingerprint, face or screen lock: it is two factors already
+        return self._send(200, {"ok": True})
+
+    def api_passkey_account(self, who, step, body):
+        st, name = self.state, who["user"]
+        if not passkeys.AVAILABLE:
+            return self._send(501, {"code": "no_passkeys", "message": "Passkeys need the cryptography package on this server.", "action": "Ask the owner to run: pip install cryptography"})
+        rp_id, origin = self._rp()
+        if step == "begin":
+            err = self._reauth(who, body)
+            if err:
+                return self._send(400, {"code": "reauth", "message": err})
+            have = st.user_record(name).get("passkeys", [])
+            return self._send(200, {"challenge": st.passkey_challenge("create", name), "rp": {"id": rp_id, "name": "Emvryx"},
+                                    "user": {"id": passkeys.b64u(hashlib.sha256(("emvryx:" + name).encode()).digest()), "name": name, "displayName": name},
+                                    "pubKeyCredParams": [{"type": "public-key", "alg": passkeys.ES256}, {"type": "public-key", "alg": passkeys.RS256}],
+                                    "authenticatorSelection": {"residentKey": "preferred", "userVerification": "required"}, "attestation": "none", "timeout": 120000,
+                                    "excludeCredentials": [{"type": "public-key", "id": p["id"]} for p in have]})
+        cred = body.get("credential") if isinstance(body.get("credential"), dict) else {}
+        try:
+            challenge = json.loads(passkeys.unb64u(cred.get("clientDataJSON", ""))).get("challenge", "")
+        except (ValueError, passkeys.PasskeyError):
+            challenge = ""
+        if not st.passkey_take(challenge, "create", name):
+            return self._send(400, {"code": "bad_passkey", "message": "That passkey request ran out. Start again."})
+        try:
+            pk = passkeys.verify_registration(cred, challenge, origin, rp_id)
+        except passkeys.PasskeyError as e:
+            return self._send(400, {"code": "bad_passkey", "message": str(e)})
+        label = str(body.get("name") or auth.device_label(self.headers.get("User-Agent", "")))
+        st.passkey_add(name, pk, label)
+        return self._send(200, {"ok": True, "passkeys": st.passkey_list(name)})
+
+    # ---- "Continue with Google"
+    def _public_base(self):
+        base = str(self.state.security.get("public_url") or os.environ.get("EMVRYX_PUBLIC_URL") or "").rstrip("/")
+        if base:
+            return base
+        host = self.headers.get("Host", "localhost")
+        return ("https://" if self._https() else "http://") + host
+
+    def _redirect(self, where, cookies=()):
+        for c in cookies:
+            self._cookies.append(c)
+        return self._send(302, b"", "text/plain", {"Location": where})
+
+    def google_start(self, qs):
+        st = self.state
+        if not st.google_on():
+            return self._redirect("/?gerr=off")
+        if self._locked():
+            return
+        now = time.time()
+        for k in [k for k, v in st.oauth_pending.items() if v["expires"] < now]:
+            st.oauth_pending.pop(k, None)
+        while len(st.oauth_pending) > 200:
+            st.oauth_pending.pop(next(iter(st.oauth_pending)))
+        state = secrets.token_urlsafe(24)
+        verifier, challenge = google_signin.pkce()
+        st.oauth_pending[auth.digest(state)] = {"verifier": verifier, "invite": str((qs.get("invite") or [""])[0])[:60], "expires": now + 600}
+        redirect_uri = self._public_base() + "/auth/google/callback"
+        cookie = f"emvryx_oauth={state}; Path=/auth/google; HttpOnly; SameSite=Lax; Max-Age=600" + ("; Secure" if self._https() else "")
+        return self._redirect(google_signin.auth_url(os.environ["GOOGLE_CLIENT_ID"], redirect_uri, state, challenge), [cookie])
+
+    def google_callback(self, qs):
+        st = self.state
+        clear = f"emvryx_oauth=; Path=/auth/google; HttpOnly; SameSite=Lax; Max-Age=0" + ("; Secure" if self._https() else "")
+        fail = lambda code: self._redirect("/?gerr=" + code, [clear])
+        if not st.google_on():
+            return fail("off")
+        if self._locked():
+            return
+        state = str((qs.get("state") or [""])[0])
+        pending = st.oauth_pending.pop(auth.digest(state), None) if state else None
+        if not pending or pending["expires"] < time.time() or not hmac.compare_digest(self._cookie_dict().get("emvryx_oauth", ""), state):
+            self._fail("google: bad state")
+            return fail("state")
+        if (qs.get("error") or [""])[0] or not (qs.get("code") or [""])[0]:
+            return fail("denied")
+        status, tok = st.google_http("POST", google_signin.TOKEN_URL, google_signin.token_form(
+            os.environ["GOOGLE_CLIENT_ID"], os.environ["GOOGLE_CLIENT_SECRET"], self._public_base() + "/auth/google/callback", qs["code"][0], pending["verifier"]))
+        email = google_signin.email_from_id_token(tok.get("id_token", ""), os.environ["GOOGLE_CLIENT_ID"]) if status == 200 else None
+        if not email:
+            self._fail("google: token")
+            return fail("token")
+        rec = st.user_by_email(email)
+        if not rec:
+            if any(u.get("email") == email for u in st.users.values()):         # typed at sign-up but never verified: not taken over
+                return fail("unverified")
+            mode = st.signup_mode()
+            if mode == "closed" or (mode == "invite" and not st.auth.peek_invite(pending["invite"])):
+                return fail("closed" if mode == "closed" else "invite")
+            user = st.create_email_account(email)
+            if mode == "invite":
+                tier = st.auth.use_invite(pending["invite"])
+                if tier:
+                    st.set_plan(user, tier)
+            st.auth.event("signup", user, self._ip(), "google")
+        else:
+            if rec.get("banned"):
+                return fail("banned")
+            user = rec["user"]
+            st.mark_email_verified(user)
+        if st.mfa_on(user):
+            return self._redirect("/?mfa=" + st.mfa_ticket(user, "google"), [clear])
+        self._start_session(user, "google")
+        return self._redirect("/", [clear])
 
     # ---- email sign-in
     def api_email_start(self, body):
@@ -2526,7 +2826,8 @@ class Server(socketserver.ThreadingMixIn, http.server.HTTPServer):
     allow_reuse_address = True
 
 
-KEY_NAMES = ("TAVILY_API_KEY", "BRAVE_API_KEY", "GEMINI_API_KEY", "RAWG_API_KEY", "TMDB_API_KEY", "USDA_API_KEY", "FRED_API_KEY", "WOLFRAM_APPID")
+KEY_NAMES = ("TAVILY_API_KEY", "BRAVE_API_KEY", "GEMINI_API_KEY", "RAWG_API_KEY", "TMDB_API_KEY", "USDA_API_KEY", "FRED_API_KEY", "WOLFRAM_APPID",
+             "EMVRYX_SMTP_HOST", "EMVRYX_SMTP_PORT", "EMVRYX_SMTP_USER", "EMVRYX_SMTP_PASS", "EMVRYX_MAIL_FROM", "GOOGLE_CLIENT_ID", "GOOGLE_CLIENT_SECRET")
 
 
 def load_keys_file(path, environ=None):

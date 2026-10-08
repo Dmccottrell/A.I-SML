@@ -1333,7 +1333,9 @@ function sxSections(id) {
       {title: 'Which sources are on', desc: 'See what works right now and which keys are missing.', ctl: sxBtn('See sources', openSources), keys: 'api keys tavily brave rawg tmdb'}]},
       {title: 'Chat length', rows: [
       {title: 'How long a chat can be', desc: 'Right now: ' + fmt(w.window) + ' tokens, ' + w.reason + '. Long chats use more memory and are slower to read.', ctl: sxSeg([['everyday', 'Everyday (about 8K)'], ['long', 'Long (if allowed)']], s.window_mode, (v) => sxSet({window_mode: v})), keys: 'context window tokens', stack: true}]}],
-    memory: [{title: 'Memory', rows: [
+    memory: [{title: 'Custom instructions', rows: [
+      {title: 'How you like answers', desc: 'For example: \u201cKeep answers short. I am a nurse.\u201d It goes with every question where it fits (up to 400 letters). The small models follow short, simple instructions best.', node: 'custom', keys: 'style tone personalization system prompt'}]},
+      {title: 'Memory', rows: [
       {title: 'Remember things about me', desc: 'Facts you tell it (your name, what you do, what you like) are kept on the server and given to whichever model you talk to. Private chats never save or read them. Passwords and card numbers are never kept.', ctl: sxSwitch(s.memory !== false, (v) => sxSet({memory: v}), 'Remember things about me'), keys: 'personalization remember'},
       {title: 'What it remembers', desc: 'See, add or delete any fact.', ctl: sxBtn('Open memory', () => { closeSettings(); openMemory(); })}]},
       {title: 'Saved notes', rows: [
@@ -1353,6 +1355,7 @@ function sxSections(id) {
     security: [{title: 'Signing in', rows: [
       {title: 'Password', desc: a.has_password ? 'Set. Changing it signs your other devices out.' : 'Not set. Add one to sign in with your name and password.', ctl: el('div', {style: 'display:flex;gap:8px;align-items:center'}, sxPill(a.has_password ? 'Set' : 'Not set', a.has_password ? 'ok' : 'warn'), sxBtn(a.has_password ? 'Change' : 'Set a password', () => passwordDialog(), a.has_password ? '' : 'primary')), keys: 'change reset'},
       {title: 'Two-step sign-in', desc: a.mfa.on ? 'On. Signing in also needs a 6-digit code from your authenticator app.' : 'Off. Adds a 6-digit code from an authenticator app (Google Authenticator, Microsoft Authenticator, Authy, 1Password) every time you sign in.', ctl: el('div', {style: 'display:flex;gap:8px;align-items:center'}, sxPill(a.mfa.on ? 'On' : 'Off', a.mfa.on ? 'ok' : 'warn'), a.mfa.on ? sxBtn('Turn off', () => mfaOffDialog(), 'bad') : sxBtn('Set up', () => mfaSetupDialog(), 'primary')), keys: 'mfa 2fa authenticator totp'},
+      ...(a.passkeys_ok && passkeyOk() ? [{title: 'Passkeys', desc: 'Sign in with your fingerprint, face or screen lock: nothing to type, and nothing a thief can phish. Counts as two factors.', node: 'passkeys'}] : []),
       ...(a.mfa.on ? [{title: 'Recovery codes', desc: a.mfa.recovery_left + ' of 8 left. Each works once if you lose your phone.', ctl: sxBtn('Make new codes', () => recoveryDialog()), keys: 'backup codes lost phone'}] : [])]},
       {title: 'Where you are signed in', rows: [{node: 'devices'}]},
       {title: 'Recent security activity', rows: [{node: 'activity'}]}],
@@ -1372,9 +1375,9 @@ function sxSections(id) {
   return A[id] || [];
 }
 const SX_NAV = [['general', 'General', 'gear'], ['chat', 'Chat and lookups', 'spark'], ['memory', 'Memory', 'brain'], ['data', 'Data controls', 'folder'], ['apps', 'Connected apps', 'code'], ['security', 'Security', 'lock'], ['account', 'Account', 'eye'], ['about', 'About', 'doc']];
-const SX_OWNER = [['a-overview', 'Overview', 'chart'], ['a-people', 'People', 'eye'], ['a-signups', 'Sign-ups and invites', 'pencil'], ['a-log', 'Security log', 'lock']];
+const SX_OWNER = [['a-overview', 'Overview', 'chart'], ['a-people', 'People', 'eye'], ['a-signups', 'Sign-ups and invites', 'pencil'], ['a-cloud', 'Cloud machine', 'cloud'], ['a-log', 'Security log', 'lock']];
 const SX_LEAD = {general: 'How Emvryx looks and feels on this device.', chat: 'How it finds facts and how much of a chat it keeps in mind.', memory: 'What it knows about you, shared by every model.', data: 'Your files, your downloads and what gets deleted.', apps: 'Other services Emvryx can work with.', security: 'Protect your account: password, two-step sign-in and your devices.', account: 'Who you are and your plan.', about: 'About this Emvryx.',
-  'a-overview': 'How safe this server is to share, and how it is doing.', 'a-people': 'Everyone with an account.', 'a-signups': 'Who may create an account, and invite codes.', 'a-log': 'Sign-ins, failures and changes, newest first.'};
+  'a-overview': 'How safe this server is to share, and how it is doing.', 'a-people': 'Everyone with an account.', 'a-signups': 'Who may create an account, and invite codes.', 'a-cloud': 'A computer elsewhere (like a rented GPU box) where VryxCode can run your code.', 'a-log': 'Sign-ins, failures and changes, newest first.'};
 
 function closeSettings() { document.querySelectorAll('.sx').forEach((n) => n.remove()); }
 async function openSettings(page) {
@@ -1442,6 +1445,15 @@ async function sxFill(kind, box) {
       box.replaceChildren(...j.sessions.map((d) => el('div', {class: 'srow inline', style: 'border:0;padding:6px 0'}, el('div', {class: 'stxt'}, el('b', {}, d.device + (d.current ? '  ·  this device' : '')), el('small', {}, 'Last used ' + sxWhen(d.last_seen) + (d.where ? ' · ' + d.where : ''))),
         el('div', {class: 'sctl'}, sxBtn('Sign out', async () => { if (d.current) { await post('/api/logout'); location.reload(); } else { await post('/api/sessions/revoke', {id: d.id}); sxFill(kind, box); } })))),
         ...(j.sessions.length > 1 ? [el('div', {}, sxBtn('Sign out every other device', async () => { await post('/api/sessions/revoke-others'); sxFill(kind, box); }))] : []));
+    } else if (kind === 'passkeys') {
+      const a = SX.acct;
+      box.replaceChildren(el('b', {}, 'Passkeys'), el('small', {style: 'color:var(--muted);font-size:14px'}, 'Sign in with your fingerprint, face or screen lock: nothing to type, and nothing a thief can phish. It counts as two factors, so it skips the 6-digit code.'),
+        ...a.passkeys.map((p) => el('div', {class: 'srow inline', style: 'border:0;padding:6px 0'}, el('div', {class: 'stxt'}, el('b', {}, p.name), el('small', {}, 'Added ' + (p.created ? sxWhen(p.created) : ''))), el('div', {class: 'sctl'}, sxBtn('Remove', () => removePasskeyDialog(p), 'bad')))),
+        el('div', {}, sxBtn(a.passkeys.length ? 'Add another passkey' : 'Add a passkey', () => addPasskeyDialog(), 'primary')));
+    } else if (kind === 'custom') {
+      const ta = el('textarea', {class: 'f', maxlength: '400', placeholder: 'Keep answers short and simple.', 'aria-label': 'Custom instructions', style: 'width:100%;background:var(--bg);border:1px solid var(--line);border-radius:12px;color:var(--text);padding:12px;font:inherit;min-height:90px'}, (S.state.settings.custom_instructions || ''));
+      const note = el('small', {style: 'color:var(--muted)'});
+      box.replaceChildren(ta, el('div', {style: 'display:flex;gap:8px;align-items:center;flex-wrap:wrap'}, sxBtn('Save', async () => { await sxSet({custom_instructions: ta.value}); note.textContent = 'Saved.'; }, 'primary'), sxBtn('Clear', async () => { ta.value = ''; await sxSet({custom_instructions: ''}); note.textContent = 'Cleared.'; }), note));
     } else if (kind === 'activity') {
       const j = await (await api('/api/account/activity')).json();
       box.classList.remove('stack'); box.style.padding = '0';
@@ -1481,6 +1493,25 @@ function verifyEmailDialog() {
   const info = el('div', {class: 'authnote'}, 'Sending a code to ' + SX.acct.email + '...');
   const m = dialog([el('h2', {}, 'Verify your email'), info, authField('Code from the email', code), err, el('button', {class: 'btn', type: 'button', onclick: async () => { err.textContent = ''; const j = await sxPost('/api/account/email/verify', {code: code.value}, err); if (!j) return; m.remove(); sxReload(); }}, 'Verify')], 'Cancel');
   sxPost('/api/account/email/send', {}, err).then((j) => { info.textContent = j ? 'We sent a 6-digit code to ' + SX.acct.email + '. It works for 10 minutes.' : 'Could not send a code.'; });
+}
+function addPasskeyDialog() {
+  const [rk, rb] = reauthFields(), err = sxErr(), name = sxInput('text', 'Name it, e.g. My phone', {'aria-label': 'Passkey name'});
+  const go = async (e) => {
+    err.textContent = ''; e.target.disabled = true;
+    try {
+      const r = await post('/api/account/passkey/begin', rb()); const o = await r.json(); if (!r.ok) { err.textContent = o.message || 'Something went wrong.'; return; }
+      const cred = await navigator.credentials.create({publicKey: {challenge: b64uToBuf(o.challenge), rp: o.rp, user: {id: b64uToBuf(o.user.id), name: o.user.name, displayName: o.user.displayName}, pubKeyCredParams: o.pubKeyCredParams,
+        authenticatorSelection: o.authenticatorSelection, attestation: o.attestation, timeout: o.timeout, excludeCredentials: o.excludeCredentials.map((c) => ({type: c.type, id: b64uToBuf(c.id)}))}});
+      const j = await sxPost('/api/account/passkey/finish', {credential: {id: cred.id, clientDataJSON: bufToB64u(cred.response.clientDataJSON), attestationObject: bufToB64u(cred.response.attestationObject)}, name: name.value}, err);
+      if (j) { m.remove(); toast('Passkey added.'); sxReload(); }
+    } catch (x) { err.textContent = passkeyError(x).message || 'That did not work.'; } finally { e.target.disabled = false; }
+  };
+  const m = dialog([el('h2', {}, 'Add a passkey'), el('p', {style: 'margin:0;color:var(--muted)'}, 'Your device will ask for your fingerprint, face or screen lock.'), authField('Name', name), ...rk, err, el('button', {class: 'btn', type: 'button', onclick: go}, 'Continue')], 'Cancel');
+}
+function removePasskeyDialog(p) {
+  const [rk, rb] = reauthFields(), err = sxErr();
+  const m = dialog([el('h2', {}, 'Remove \u201c' + p.name + '\u201d?'), el('p', {style: 'margin:0;color:var(--muted)'}, 'It stops working here at once. Delete it from your phone or password manager too.'), ...rk, err,
+    el('button', {class: 'btn danger', type: 'button', onclick: async () => { const j = await sxPost('/api/account/passkey/delete', Object.assign({id: p.id}, rb()), err); if (j) { m.remove(); sxReload(); } }}, 'Remove')], 'Keep it');
 }
 function recoveryCodesView(codes, onDone) {
   const text = 'Emvryx recovery codes (each works once)\n\n' + codes.join('\n') + '\n';
@@ -1553,6 +1584,7 @@ async function adminPage(id) {
         el('div', {class: 'sx-sec'}, 'People'), el('div', {class: 'stats'}, ...[[o.people, 'people'], [o.banned, 'turned off'], ...Object.entries(o.plans).map(([k, v]) => [v, k + ' plan'])].map(([n, l]) => el('div', {class: 'stat'}, el('b', {}, n), el('span', {}, l)))),
         el('div', {class: 'sx-sec'}, 'Last hour'), el('div', {class: 'stats'}, ...[[h.last_hour.sign_ins, 'sign-ins'], [h.last_hour.failed_tries, 'wrong tries'], [h.last_hour.lockouts, 'lockouts'], [h.devices_signed_in, 'devices signed in'], [h.server_errors, 'server errors'], [h.uptime_minutes + 'm', 'uptime']].map(([n, l]) => el('div', {class: 'stat'}, el('b', {}, n), el('span', {}, l)))),
         el('div', {class: 'sx-sec'}, 'Controls'), sxCard([{title: 'Pause everyone', desc: 'Stops chats for everyone except you. Restart the server to clear it, or press Resume.', ctl: el('div', {style: 'display:flex;gap:8px'}, sxBtn('Pause', async () => { await post('/api/admin/pause', {paused: true}); toast('Paused for everyone but you.'); }, 'bad'), sxBtn('Resume', async () => { await post('/api/admin/pause', {paused: false}); toast('Resumed.'); }))},
+          {title: 'Send a test email', desc: 'Sends a message to your owner email, so you know sign-in codes will arrive. Needs EMVRYX_SMTP_* in .emvryx\\keys.env.', ctl: sxBtn('Send test', async () => { const r = await post('/api/admin/mail-test'); const j = await r.json(); toast(r.ok ? 'Sent to ' + j.to : (j.message + ' ' + (j.action || ''))); })},
           {title: 'Live sources and keys', desc: 'Which lookups work and which keys are missing.', ctl: sxBtn('See sources', openSources)}]));
     } else if (id === 'a-people') {
       const j = await (await api('/api/admin/users')).json(), out = el('div', {style: 'word-break:break-all;color:var(--muted);font-size:14px'});
@@ -1580,6 +1612,43 @@ async function adminPage(id) {
             made.replaceChildren(el('div', {class: 'authnote'}, 'Shown once. Valid 14 days. Send it privately.'), el('div', {class: 'setupkey'}, k.code), el('div', {style: 'display:flex;gap:8px;flex-wrap:wrap'}, sxBtn('Copy code', async (e) => { try { await navigator.clipboard.writeText(k.code); e.target.textContent = 'Copied'; } catch (x) {} }), sxBtn('Copy invite link', async (e) => { try { await navigator.clipboard.writeText(location.origin + '/?invite=' + k.code); e.target.textContent = 'Copied'; } catch (x) {} })), el('small', {style: 'color:var(--muted)'}, 'The link opens Create account with the code already filled in. People can also type the code on the Emvryx website home page.')); }, 'primary'), made))),
         el('div', {class: 'sx-sec'}, 'Active codes (' + o.invites.length + ')'),
         el('div', {class: 'sx-card'}, ...(o.invites.length ? o.invites.map((i) => el('div', {class: 'srow inline'}, el('div', {class: 'stxt'}, el('b', {}, '…-' + i.ends_with + '  ·  ' + i.tier), el('small', {}, i.uses_left + ' use(s) left · ends ' + sxWhen(i.expires))), el('div', {class: 'sctl'}, sxBtn('Cancel', async () => { await post('/api/admin/invites/revoke', {id: i.id}); adminPage(id); }, 'bad')))) : [el('div', {class: 'srow'}, 'No active codes.')])));
+    } else if (id === 'a-cloud') {
+      const c = await (await api('/api/admin/cloud')).json();
+      const hostIn = sxInput('text', 'ssh5.vast.ai or 203.0.113.7', {'aria-label': 'Host', value: c.host || '', inputmode: 'url'});
+      const portIn = sxInput('text', '22', {'aria-label': 'Port', inputmode: 'numeric', value: String(c.port || 22)});
+      const userIn = sxInput('text', 'root', {'aria-label': 'User', value: c.user || 'root'});
+      const out = el('div', {role: 'status', style: 'color:var(--muted);font-size:14px;word-break:break-word;white-space:pre-wrap'});
+      const say = (ok, text) => { out.style.color = ok ? 'var(--muted)' : 'var(--danger)'; out.textContent = text; };
+      const save = async (forOthers) => {
+        const r = await post('/api/admin/cloud', {host: hostIn.value.trim(), port: portIn.value.trim(), user: userIn.value.trim(), for_others: forOthers});
+        const j = await r.json();
+        say(r.ok, r.ok ? 'Saved.' : j.message + ' ' + (j.action || ''));
+        return r.ok;
+      };
+      const keyRows = c.public_key ? [el('div', {class: 'setupkey', style: 'font-size:13px;letter-spacing:0;text-align:left'}, c.public_key),
+        el('div', {}, sxBtn('Copy public key', async (e) => { try { await navigator.clipboard.writeText(c.public_key); e.target.textContent = 'Copied'; } catch (x) {} }))] : [];
+      host.replaceChildren(
+        el('div', {class: 'sx-card'}, el('div', {class: 'srow stack'},
+          el('div', {class: 'stxt'}, el('b', {}, c.ready ? 'Ready' : 'Not ready yet'), el('small', {}, c.ready ? 'VryxCode can run code on ' + c.host + '.' : (c.why_not || 'Fill in the steps below.'))),
+          !c.ssh_found ? el('small', {style: 'color:var(--danger)'}, 'This computer has no ssh program. On Windows, turn on OpenSSH Client in Settings > Optional features.') : null)),
+        el('div', {class: 'sx-sec'}, '1. The machine'),
+        el('div', {class: 'sx-card'}, el('div', {class: 'srow stack'},
+          el('small', {style: 'color:var(--muted)'}, 'Rent one (for example a Vast.ai instance), then copy its address, port and user from its Connect button. It needs python3 and git for most projects.'),
+          authField('Host', hostIn), authField('Port', portIn), authField('User', userIn),
+          el('div', {style: 'display:flex;align-items:center;gap:12px'}, sxSwitch(c.for_others, async (v) => { await save(v); adminPage(id); }, 'Let other people use it'), el('span', {}, 'Let other people use it')),
+          el('small', {style: 'color:var(--muted)'}, 'Off means only you. What people run there is their code on your rented machine, so turn it on only for people you trust.'),
+          el('div', {}, sxBtn('Save', async () => { if (await save(c.for_others)) adminPage(id); }, 'primary')))),
+        el('div', {class: 'sx-sec'}, '2. A key for Emvryx'),
+        el('div', {class: 'sx-card'}, el('div', {class: 'srow stack'},
+          el('small', {style: 'color:var(--muted)'}, 'Emvryx makes a key and keeps the private half on this computer. Add the public half below to the machine (on Vast.ai: Account > SSH Keys), then press Test.'),
+          ...keyRows,
+          el('div', {}, sxBtn(c.key_made ? 'Make a new key' : 'Make a key', async () => { if (c.key_made && !confirm('A new key replaces the old one. Add the new public key to the machine afterwards.')) return;
+            const r = await post('/api/admin/cloud/keygen', {replace: c.key_made}); const j = await r.json(); if (r.ok) adminPage(id); else say(false, j.message + ' ' + (j.action || '')); }, c.key_made ? '' : 'primary')))),
+        el('div', {class: 'sx-sec'}, '3. Check it'),
+        el('div', {class: 'sx-card'}, el('div', {class: 'srow stack'},
+          el('div', {}, sxBtn('Test the connection', async (e) => { e.target.disabled = true; say(true, 'Connecting...'); const r = await post('/api/admin/cloud/test'); const j = await r.json(); e.target.disabled = false;
+            say(r.ok, r.ok ? 'Connected.\n' + j.text : j.message + ' ' + (j.action || '')); })), out)),
+        el('small', {style: 'color:var(--muted)'}, 'Then in VryxCode choose Cloud machine as the environment. Each command copies your project over, runs it there, and copies new and changed files back. The .git folder never leaves this computer.'));
     } else if (id === 'a-log') {
       const a = await (await api('/api/admin/audit?limit=100')).json();
       host.replaceChildren(el('div', {class: 'sx-card'}, ...a.events.map((e) => el('div', {class: 'logline'}, el('time', {}, sxWhen(e.at)), el('b', {}, (EVENT_NAMES[e.kind] || e.kind) + (e.user ? ' · ' + e.user : '')), el('span', {}, [e.ip, e.detail].filter(Boolean).join(' · '))))));
@@ -2171,12 +2240,29 @@ function pwBox(attrs, withMeter) {
   }
   return {input, node: el('div', {style: 'display:flex;flex-direction:column;gap:6px'}, ...kids)};
 }
+const b64uToBuf = (s) => { s = s.replace(/-/g, '+').replace(/_/g, '/'); const bin = atob(s + '='.repeat((4 - s.length % 4) % 4)); return Uint8Array.from(bin, (c) => c.charCodeAt(0)).buffer; };
+const bufToB64u = (b) => { let s = ''; new Uint8Array(b).forEach((x) => { s += String.fromCharCode(x); }); return btoa(s).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, ''); };
+const passkeyOk = () => !!(window.PublicKeyCredential && navigator.credentials);
+const passkeyError = (e) => (e && (e.name === 'NotAllowedError' || e.name === 'AbortError')) ? new Error('The passkey was cancelled or timed out. Try again.') : e;
+async function passkeyLogin() {
+  try {
+    const o = await authCall('/api/login/passkey/begin', {});
+    const cred = await navigator.credentials.get({publicKey: {challenge: b64uToBuf(o.challenge), rpId: o.rpId, timeout: o.timeout, userVerification: o.userVerification, allowCredentials: []}});
+    const r = cred.response;
+    await authCall('/api/login/passkey/finish', {credential: {id: cred.id, clientDataJSON: bufToB64u(r.clientDataJSON), authenticatorData: bufToB64u(r.authenticatorData), signature: bufToB64u(r.signature), userHandle: r.userHandle ? bufToB64u(r.userHandle) : ''}});
+    authDone({});
+  } catch (e) { throw passkeyError(e); }
+}
+const googleBtn = (getInvite) => AUTH.opts.google ? el('button', {class: 'btn ghost', type: 'button', onclick: () => { const inv = getInvite ? getInvite() : ''; location.href = '/auth/google/start' + (inv ? '?invite=' + encodeURIComponent(inv) : ''); }}, 'Continue with Google') : null;
 const authField = (label, input, hint) => el('label', {class: 'field'}, label, input, hint ? el('small', {class: 'hint'}, hint) : null);
 function authDone(j) { if (j.mfa) return authView('mfa', {ticket: j.ticket}); AUTH.view = 'signin'; return load(); }
 const HERO = [['lock', 'Private by design', 'Your chats stay on the server you sign in to. Private chats are never saved.'], ['spark', 'Five models, one account', 'Pick the one that fits the question, from quick Ember to deep Apogee.'], ['code', 'More than chat', 'It looks things up, reads your files and pictures, and builds projects with VryxCode.']];
 async function showLogin(note) {
   S.state = null; applyTheme(); $('app').hidden = true; $('auth').hidden = false;
   try { AUTH.opts = await (await fetch('/api/auth-options')).json(); } catch (e) { AUTH.opts = {}; }
+  const qs = new URLSearchParams(location.search), GERR = {off: 'Google sign-in isn\u2019t set up on this server.', state: 'That Google sign-in expired or didn\u2019t start here. Try again.', denied: 'Google sign-in was cancelled.', token: 'Google didn\u2019t confirm that sign-in. Try again.', unverified: 'An account with that email exists but its email was never verified. Sign in with its password.', closed: 'Sign-ups are closed, and no account uses that Google email.', invite: 'Creating an account needs an invite code. Type it first, then use Google.', banned: 'This account has been turned off.'};
+  if (qs.get('gerr')) { note = GERR[qs.get('gerr')] || 'Google sign-in did not work.'; history.replaceState(null, '', '/'); }
+  if (qs.get('mfa')) { const ticket = qs.get('mfa'); history.replaceState(null, '', '/'); return authView('mfa', {ticket}); }
   if (location.search.includes('notice=keylink')) { note = 'Key links are turned off (a key in an address is easy to leak). Sign in below, or ask the owner for a one-time sign-in link.'; history.replaceState(null, '', '/'); }
   if (INVITE) { if (['open', 'invite'].includes(AUTH.opts.signup)) AUTH.view = 'signup'; else note = 'Sign-ups are turned off right now, so that invite code can\u2019t be used yet. Ask the owner.'; }
   authView(AUTH.view === 'signup' && ['open', 'invite'].includes(AUTH.opts.signup) ? 'signup' : 'signin', {note});
@@ -2200,7 +2286,7 @@ function authView(view, ctx) {
         authDone(await authCall('/api/login/password', {id: id.value, password: pw.input.value}));
       }),
       el('div', {class: 'or'}, 'or'),
-      el('div', {class: 'alt'}, ...(o.email ? [el('button', {class: 'btn ghost', type: 'button', onclick: () => authView('email')}, 'Email me a sign-in code')] : []),
+      el('div', {class: 'alt'}, o.passkeys && passkeyOk() ? el('button', {class: 'btn ghost', type: 'button', onclick: async () => { err.textContent = ''; try { await passkeyLogin(); } catch (x) { err.textContent = x.message; } }}, 'Sign in with a passkey') : null, googleBtn(), ...(o.email ? [el('button', {class: 'btn ghost', type: 'button', onclick: () => authView('email')}, 'Email me a sign-in code')] : []),
         el('button', {class: 'btn ghost', type: 'button', onclick: () => authView('key')}, 'Use an access key or link')),
       el('div', {class: 'hint'}, o.email ? 'Forgot your password? Email yourself a code, then choose a new password in Settings > Security.' : 'Forgot your password? Ask the owner for a one-time sign-in link, then choose a new one in Settings > Security.'),
       !signups ? el('div', {class: 'authnote'}, 'New here? Accounts are by invitation right now. Ask the owner for a sign-in link.') : null, legal];
@@ -2212,7 +2298,7 @@ function authView(view, ctx) {
     body = [tabs(), el('h2', {}, 'Create your account'), el('p', {class: 'sub'}, o.signup === 'invite' ? 'You need an invite code from the owner.' : 'Free to start. Pick a name and a password.'),
       form(btn, [o.signup === 'invite' ? authField('Invite code', invite) : null, authField('Name', name, 'Letters, numbers, - and _ (3 to 32). This is how you sign in.'), authField('Email', email, 'Used to sign in with a code and to recover your account.'), authField('Password', pw.node)], async () => {
         const j = await authCall('/api/signup', {name: name.value, email: email.value, password: pw.input.value, invite: invite.value}); INVITE = ''; authDone(j);
-      }), legal];
+      }), googleBtn(() => invite.value.trim()), legal];
     setTimeout(() => (o.signup === 'invite' && !invite.value ? invite : name).focus(), 50);
   } else if (view === 'mfa') {
     let rec = false;

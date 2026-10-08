@@ -84,12 +84,12 @@ class Environments(Base):
         envs = {e["id"]: e for e in self.owner.call("GET", "/api/code")[1]["environments"]}
         self.assertTrue(envs["local"]["available"])
         self.assertFalse(envs["cloud"]["available"])
-        self.assertIn("Not connected", envs["cloud"]["note"])
+        self.assertIn("Not set up", envs["cloud"]["note"])
 
     def test_cloud_is_refused_plainly(self):
         st, j = self.owner.call("POST", "/api/code/start", {"project": "demo", "task": "x", "model": "solstice-2", "env": "cloud"})
         self.assertEqual(st, 400)
-        self.assertIn("Cloud machines aren't connected", j["message"])
+        self.assertIn("cloud machine isn't available", j["message"])
 
     def test_sandbox_without_docker_is_refused_not_quietly_run_on_the_host(self):
         self.state.code._docker = (False, "Docker is not installed on this server.")

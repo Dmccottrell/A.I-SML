@@ -16,6 +16,8 @@ import base64
 import io
 import os
 import re
+import shutil
+import sys
 import threading
 import time
 import zipfile
@@ -89,8 +91,9 @@ class Session:
     """One task being worked on. `events` only ever grows; the page asks for the ones after the last it saw."""
 
     def __init__(self, sid, user, project, task, model_id, workspace, auto_edits=False, meter=None, tools=None, identity=None, prefix=None, quotas=None, base=None,
-                 env="local", log=None, snapshot=None, plan=False, expand=None):
+                 env="local", log=None, snapshot=None, plan=False, expand=None, remote=False):
         self.meter, self.tools, self.identity = meter, tools, identity
+        self.remote = bool(remote)                                       # the cloud machine: the prefix runs commands on another computer over SSH
         self.plan_first, self.expand = plan, expand or (lambda t: t)       # the first turn only looks and plans; @file mentions are expanded for the model
         self.env, self.log, self.snapshot_fn = env, log, snapshot       # where it runs (local | sandbox), the history on disk, and a function that zips the project
         self.checkpoints, self.updated, self._saved_at = [], time.time(), 0.0
@@ -322,7 +325,7 @@ class Session:
         try:
             result = vryxcode.run_task(self.expand(text), self.wrap(self.generate), self.workspace, self.ask, self.max_turns, self.context_tokens, self.extra_programs,
                                        out=lambda *_: None, tools=self.tools, git_identity=self.identity,
-                                       command_prefix=self.prefix, container=bool(self.prefix), history=self.history, chat_mode=True, plan=plan, todo=True)
+                                       command_prefix=self.prefix, container=bool(self.prefix) and not self.remote, history=self.history, chat_mode=True, plan=plan, todo=True, remote=self.remote)
             self.history = result["messages"]
             self.emit("end", finished=result["finished"], said=bool(result.get("said")), summary=clip(result["summary"], 4000), turns=result["turns"],
                       next=self.next_steps if result["finished"] else [], plan=bool(plan) and bool(result["finished"] or result.get("said")))
@@ -361,6 +364,7 @@ class CodeManager:
     def __init__(self, root, max_turns=12, quotas=None):
         self.root, self.max_turns = root, max_turns          # root=None keeps projects in a temporary folder (tests)
         self.quotas = quotas or code_sandbox.Quotas()
+        self.cloud = None                                    # the cloud machine: {"host", "port", "user", "key", "known_hosts", "for_others"} set by the server (None = not set up)
         self.sandbox = {"mode": "none"}                      # set from the command line: {"mode": "docker", "image", "runtime", "cpus", "memory", "pids"}
         self._avail = (0, None)
         self.sessions, self.by_user = {}, {}
@@ -553,7 +557,7 @@ class CodeManager:
         return code_sandbox.docker_prefix(sb.get("image", code_sandbox.DEFAULT_IMAGE), workspace, cpus=sb.get("cpus", "1"), memory=sb.get("memory", "768m"),
                                           pids=sb.get("pids", 128), runtime=sb.get("runtime"))
 
-    def start(self, user, project, task, model_id, generate, auto_edits=False, context_tokens=None, meter=None, outside=False, tools=None, identity=None, env="local", plan=False):
+    def start(self, user, project, task, model_id, generate, auto_edits=False, context_tokens=None, meter=None, outside=False, tools=None, identity=None, env="local", plan=False, owner=False):
         task = str(task or "").strip()
         if not task:
             raise CodeError("Describe what to build or fix.")
@@ -571,7 +575,7 @@ class CodeManager:
             ok, why = self.sandbox_ready()
             if not ok:
                 raise CodeError("The code sandbox isn't available, so nothing was run. " + why, "The owner needs to start Docker or build the sandbox image.")
-            env = self.resolve_env(env)
+            env = self.resolve_env(env, owner)
             workspace = self.project_path(user, project)
             try:
                 self.quotas.new_project(self.base(user), project)
@@ -582,8 +586,8 @@ class CodeManager:
                 raise CodeError(e.message, e.action)
             self._n += 1
             s = Session(f"s{self._n}-{int(time.time())}", user, project, task, model_id, workspace, auto_edits, meter, tools, identity,
-                        prefix=self.prefix_for(workspace, force=(env == "sandbox")), quotas=self.quotas, base=self.base(user),
-                        env=env, log=code_log.SessionLog(self.base(user)), snapshot=lambda u=user, p=project: self._snapshot(u, p), plan=bool(plan),
+                        prefix=(self.cloud_prefix(user, project) if env == "cloud" else self.prefix_for(workspace, force=(env == "sandbox"))), quotas=self.quotas, base=self.base(user),
+                        env=env, remote=(env == "cloud"), log=code_log.SessionLog(self.base(user)), snapshot=lambda u=user, p=project: self._snapshot(u, p), plan=bool(plan),
                         expand=lambda t, u=user, p=project: self.expand_mentions(u, p, t))
             self.sessions[s.id], self.by_user[user] = s, s.id
         threading.Thread(target=s.run, args=(generate, self.max_turns, context_tokens), daemon=True).start()
@@ -631,7 +635,27 @@ class CodeManager:
             self._docker = code_sandbox.available(self.sandbox.get("image", code_sandbox.DEFAULT_IMAGE))
         return self._docker
 
-    def environments(self):
+    # ---- the cloud machine: another computer (for example a rented GPU box) reached over SSH; see cloud_run.py
+    def cloud_ready(self, owner=False):
+        """(ok, why not)."""
+        c = self.cloud
+        if not c or not c.get("host"):
+            return False, "Not set up. The owner adds it in Settings > Owner > Cloud machine."
+        if not shutil.which("ssh"):
+            return False, "This computer has no SSH program (ssh)."
+        if not os.path.exists(c.get("key", "")):
+            return False, "No SSH key yet. The owner makes one in Settings > Owner > Cloud machine."
+        if not owner and not c.get("for_others"):
+            return False, "Only the owner can use the cloud machine."
+        return True, "ready"
+
+    def cloud_prefix(self, user, project):
+        c = self.cloud
+        work = "emvryx-work/" + re.sub(r"[^A-Za-z0-9_-]", "_", f"{user}-{project}")[:80]
+        return [sys.executable, os.path.join(os.path.dirname(os.path.abspath(__file__)), "cloud_run.py"), "--host", c["host"], "--port", str(c.get("port", 22)), "--user", c.get("user", "root"),
+                "--key", c["key"], "--known-hosts", c["known_hosts"], "--workdir", work, "--timeout", str(c.get("timeout", 90)), "--"]
+
+    def environments(self, owner=False):
         """The places a session can run, for the page: [{"id", "name", "available", "note"}]."""
         forced = self.sandbox.get("mode") == "docker"
         d_ok, d_why = (True, "ready") if forced else self._docker_ok()
@@ -640,16 +664,19 @@ class CodeManager:
              "note": "The owner runs every session in the sandbox." if forced else "Works in the project folder on the computer that runs Emvryx. Only a short list of programs may run."},
             {"id": "sandbox", "name": "Isolated sandbox", "available": bool(d_ok),
              "note": "Runs inside a locked container: no internet, limited memory and time." if d_ok else d_why},
-            {"id": "cloud", "name": "Cloud machine", "available": False,
-             "note": "Not connected yet. It needs a remote machine for Emvryx to run code on."}]
+            {"id": "cloud", "name": "Cloud machine", "available": self.cloud_ready(owner)[0],
+             "note": (f"Runs on {self.cloud['host']}: your project is copied there for each command and the changes are copied back." if self.cloud_ready(owner)[0] else self.cloud_ready(owner)[1])}]
 
-    def resolve_env(self, env):
+    def resolve_env(self, env, owner=False):
         """The environment a session will really use, or a CodeError the person can act on."""
         env = str(env or "local")
         if self.sandbox.get("mode") == "docker":
             return "sandbox"                                   # the owner forces the container for everyone
         if env == "cloud":
-            raise CodeError("Cloud machines aren't connected yet.", "Choose This computer or the isolated sandbox.")
+            ok, why = self.cloud_ready(owner)
+            if not ok:
+                raise CodeError("The cloud machine isn't available. " + why, "Choose This computer or the isolated sandbox.")
+            return "cloud"
         if env == "sandbox":
             ok, why = self._docker_ok()
             if not ok:

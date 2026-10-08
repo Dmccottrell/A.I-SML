@@ -60,8 +60,29 @@ The home page (emvryx.app) has a **Try Emvryx** box: a person types their invite
 
 Settings are kept per person in `.emvryx/settings.json`, so they survive a restart. The search box at the top finds a setting by its name or what it does.
 
+## Passkeys
+
+Settings > Security > **Add a passkey**: your phone or computer asks for your fingerprint, face or screen lock, and from then on **Sign in with a passkey** on the sign-in screen needs nothing else. A passkey counts as two factors, so it skips the 6-digit code. Up to 10 per person; remove one any time (it asks for your password and code again). Works on a phone with Chrome or Safari, and with Windows Hello, a Mac, or a security key. It needs the `cryptography` package (already used for encryption) and the address in the browser to be the one the owner set (`public_url` in `.emvryx/security.json`, for example `https://chat.emvryx.app`; on your own computer `http://localhost:8000` works too). Tested against a software authenticator and a real Chromium virtual authenticator, not yet on a real phone.
+
+## Continue with Google
+
+Off until the owner sets it up (once, about five minutes): at console.cloud.google.com make a project > APIs and Services > Credentials > **Create OAuth client ID** > *Web application*, add `https://<your address>/auth/google/callback` as the authorised redirect URI, then put these two lines in `.emvryx\keys.env` and restart:
+
+```
+GOOGLE_CLIENT_ID=...
+GOOGLE_CLIENT_SECRET=...
+```
+
+Also set `"public_url": "https://chat.emvryx.app"` in `.emvryx/security.json` so the redirect address matches. The button then shows on the sign-in and sign-up screens. Google proves the **email**, so it signs in the account that already has that email verified; it creates a new account only when sign-ups are open (or with a good invite code, typed before pressing the button). An account whose email was typed at sign-up but never verified is never taken over. Two-step sign-in still applies. Not yet run against Google itself: the first real sign-in will show.
+
+## Custom instructions
+
+Settings > Memory > **How you like answers** (up to 400 letters, for example "Keep answers short. I am a nurse."). It goes to the model at the end of each question, worded like a skill's hint ("follow this where it fits; ignore it for anything it does not apply to; never mention it"), and is never saved into the chat. It works through the same path as Skills, which the models already follow, but **it has not been tried with the real models**: if a model starts mentioning it or applying it to unrelated questions, tell me and I will reword it.
+
+## Email
+
+Put your mail settings in `.emvryx\keys.env` (names `EMVRYX_SMTP_HOST`, `EMVRYX_SMTP_PORT`, `EMVRYX_SMTP_USER`, `EMVRYX_SMTP_PASS`, `EMVRYX_MAIL_FROM`; for Gmail use host `smtp.gmail.com`, port `587`, your address and an **app password**), restart, then Settings > Owner > Overview > **Send a test email**. Email codes and email verification work once that test arrives.
+
 ## Not built yet
 
-- Custom instructions ("always answer in short sentences"): the models were taught to answer from notes, so this needs a test before it goes in.
-- Passkeys, and sign-in with Google.
-- Email verification and email codes need mail set up on the server (see [DEPLOY.md](DEPLOY.md)).
+- Passkeys on real phones and the Google button against Google itself have not been run for real (see above).
