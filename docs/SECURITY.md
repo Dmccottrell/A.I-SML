@@ -11,6 +11,17 @@ This file is the single place for how Emvryx keeps people and their data safe. I
 - **Email codes** (off until a mail server is set): 6 digits, 10 minutes, 5 tries, one live code per address, stored hashed. Set `EMVRYX_SMTP_HOST`, `EMVRYX_SMTP_USER`, `EMVRYX_SMTP_PASS` (and optionally `EMVRYX_SMTP_PORT`, `EMVRYX_MAIL_FROM`) before starting; the password is never written to a file. The same answer is given whether or not an address has an account, so nobody can probe who does. Owner: set a person's email when you add them. **Open signups** (anyone with a working email gets a free account) are off; to allow them, put `{"open_signups": true}` in `.emvryx/security.json`.
 - Not built: sign-in with Google. It needs a Google client id and secret, which only you can create; the session code above is what it would plug into.
 
+### 1b. Passwords, two-step sign-in, sign-up and the owner account (built: `app/accounts.py`)
+
+Plain-language guide: [ACCOUNTS.md](ACCOUNTS.md). In short:
+- **Passwords** are stored as salted scrypt hashes (never the password). 10 or more characters, not a common one, not containing your name or email. A missing account takes as long to check as a wrong password, so timing does not show who has one. 20 wrong tries on one name in an hour lock that name's password sign-in (email code and the other ways in still work); 8 wrong tries from one address lock that address.
+- **Two-step sign-in** is the standard 6-digit authenticator code (RFC 6238). The secret is kept encrypted (Fernet, same as GitHub tokens) when the `cryptography` package is installed. A code works once. A sign-in that passed the first step gets a 5-minute ticket that allows 5 wrong codes; 10 wrong codes on one account in 10 minutes stops further tries for 10 minutes. Turning it on signs the other devices out.
+- **Recovery codes**: 8 one-time codes, stored hashed, shown once. `python app_server.py --reset-mfa NAME` (run on the server computer) is the way back in with no phone and no codes; so is a pairing link made on the server (`--pair`), which skips the code on purpose because it needs access to the server computer.
+- A key and an email code also ask for the authenticator code when it is on; a pairing link made by the owner or the command line does not. `Authorization: Bearer <key>` (programs, not people) is not asked for a code.
+- **Sensitive changes ask again** (new password, new email, turn two-step on or off, new recovery codes, delete account): your password and, when on, a code.
+- **Sign-up** has three rules the owner picks in Settings > Owner > Sign-ups: *Closed* (default), *Invite only* (one-use or few-use codes, 14 days, stored hashed, they decide the starting plan) or *Open*. 5 sign-ups per address per hour. A new account's email stays *unverified* until its code is entered (when the server can send mail); an unverified email cannot be used to sign in with a code.
+- **The owner** is the one account with no limits and the Owner pages (Overview checklist, People, Sign-ups and invites, Security log). Settings > Owner > Overview lists what makes the server safe to share (owner password, owner two-step, owner email, encryption, phone alerts, mail) and nudges until the owner account has a password and two-step.
+
 ## 2. Guessing, lockouts, bans, the audit log (built)
 
 - **Rate limits:** 8 wrong tries (key, pairing link or code) from one address in 10 minutes locks that address out of every key-based sign-in for the rest of the window (HTTP 429 with Retry-After), even for the right key. Asking for email codes is limited to 5 per 10 minutes per address and 3 per address of email. The address is the real caller's: behind the Cloudflare tunnel it is read from `CF-Connecting-IP`, but only when the request came from this computer (a trusted proxy), never from an outside caller.
@@ -77,7 +88,7 @@ This file is the single place for how Emvryx keeps people and their data safe. I
 
 ## Settings you can change (`.emvryx/security.json`, all optional)
 
-`session_days` (90), `pair_minutes` (15), `login_fail_limit` (8), `login_fail_window` (600 seconds), `email_start_limit` (5), `email_start_window` (600), `open_signups` (false), `allow_key_links` (false), `allowed_origins` (`[]`), `code_unsandboxed_for_others` (false), `require_encryption` (false), `github_client_id`, `contact_email`, `operator_name`, `alert_ntfy_topic` and the quota names above, `trusted_proxies` (`["127.0.0.1", "::1"]`; set `[]` if the app is reached directly and not through a proxy).
+`session_days` (90), `pair_minutes` (15), `login_fail_limit` (8), `login_fail_window` (600 seconds), `email_start_limit` (5), `email_start_window` (600), `open_signups` (false), `signup_mode` (`closed`, `invite` or `open`; Settings changes this for you), `allow_key_links` (false), `allowed_origins` (`[]`), `code_unsandboxed_for_others` (false), `require_encryption` (false), `github_client_id`, `contact_email`, `operator_name`, `alert_ntfy_topic` and the quota names above, `trusted_proxies` (`["127.0.0.1", "::1"]`; set `[]` if the app is reached directly and not through a proxy).
 
 ## Still to do
 

@@ -305,6 +305,114 @@ svg .core { fill: var(--core); stroke: var(--sun); stroke-width: 3; transition: 
   #codeEnv .lab { display: none; } #codeEnv { padding: 6px 10px; } #codeAuto { padding: 6px 8px; font-size: 13px; }
   #codeModelBtn { padding: 6px 8px; max-width: 46vw; overflow: hidden; text-overflow: ellipsis; }
 }
+/* ---- sign in / sign up */
+.auth { position: fixed; inset: 0; z-index: 60; background: var(--bg); display: grid; grid-template-columns: minmax(0, 1.05fr) minmax(0, 1fr); overflow-y: auto; }
+.auth[hidden] { display: none; }
+.auth .hero { position: relative; padding: 56px 64px; display: flex; flex-direction: column; justify-content: center; gap: 22px; background: radial-gradient(900px 500px at 15% 10%, var(--glow), transparent 60%), var(--side); border-right: 1px solid var(--line); overflow: hidden; }
+.auth .hero .mark { display: flex; align-items: center; gap: 12px; font: 700 26px 'Sora', sans-serif; letter-spacing: .02em; }
+.auth .hero h1 { margin: 0; font: 600 40px/1.12 'Sora', sans-serif; max-width: 460px; }
+.auth .hero h1 em { font-style: normal; color: var(--accenttext); }
+.auth .hero p { margin: 0; color: var(--muted); font-size: 18px; max-width: 440px; }
+.auth .hero ul { list-style: none; margin: 8px 0 0; padding: 0; display: flex; flex-direction: column; gap: 14px; max-width: 460px; }
+.auth .hero li { display: flex; gap: 12px; align-items: flex-start; color: var(--text); }
+.auth .hero li i { flex: 0 0 34px; height: 34px; border-radius: 10px; background: var(--surface2); border: 1px solid var(--line); display: grid; place-items: center; color: var(--accenttext); }
+.auth .hero li span { color: var(--muted); font-size: 15px; display: block; }
+.auth .hero li b { display: block; font-weight: 600; }
+.auth .panel { display: grid; place-items: center; padding: 32px 20px; }
+.auth .card { width: min(420px, 100%); display: flex; flex-direction: column; gap: 16px; }
+.auth .card .mark { display: none; align-items: center; gap: 10px; font: 700 22px 'Sora', sans-serif; }
+.auth .card h2 { margin: 0; font: 600 26px 'Sora', sans-serif; }
+.auth .card .sub { margin: -8px 0 0; color: var(--muted); }
+.auth .tabs2 { display: flex; background: var(--surface); border: 1px solid var(--line); border-radius: 999px; padding: 4px; gap: 4px; }
+.auth .tabs2 button { flex: 1; min-height: 40px; border: 0; background: transparent; border-radius: 999px; color: var(--muted); font-weight: 600; }
+.auth .tabs2 button.on { background: var(--accent); color: var(--onaccent); }
+.auth form { display: flex; flex-direction: column; gap: 14px; }
+.field { display: flex; flex-direction: column; gap: 6px; font-weight: 600; font-size: 14px; }
+.field input { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; color: var(--text); padding: 12px 14px; font: inherit; font-weight: 400; font-size: 16px; width: 100%; min-height: 48px; }
+.field input:focus { outline: 2px solid var(--accent); outline-offset: 1px; border-color: transparent; }
+.field .hint, .auth .hint { color: var(--muted); font-weight: 400; font-size: 13px; }
+.pwwrap { position: relative; }
+.pwwrap input { padding-right: 70px; }
+.pwwrap .eye { position: absolute; right: 6px; top: 6px; min-height: 36px; padding: 0 12px; border: 0; background: transparent; color: var(--accenttext); font-weight: 600; font-size: 14px; border-radius: 8px; }
+.meter { display: flex; gap: 4px; margin-top: 2px; }
+.meter i { flex: 1; height: 5px; border-radius: 3px; background: var(--line); transition: background .2s; }
+.meter[data-s="1"] i:nth-child(-n+1) { background: #E5534B; } .meter[data-s="2"] i:nth-child(-n+2) { background: #E0A030; } .meter[data-s="3"] i:nth-child(-n+3) { background: #7BC86C; } .meter[data-s="4"] i { background: #3FB950; }
+.meterlabel { color: var(--muted); font-size: 13px; font-weight: 400; min-height: 18px; }
+.autherr { color: var(--danger); min-height: 0; font-size: 14px; }
+.autherr:empty { display: none; }
+.authnote { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 10px 14px; color: var(--muted); font-size: 14px; }
+.or { display: flex; align-items: center; gap: 12px; color: var(--muted); font-size: 13px; }
+.or::before, .or::after { content: ''; flex: 1; height: 1px; background: var(--line); }
+.auth .alt { display: flex; flex-direction: column; gap: 8px; }
+.auth .linkbtn { background: transparent; border: 0; color: var(--accenttext); font: inherit; font-weight: 600; padding: 6px 0; text-align: left; min-height: 36px; }
+.auth .legal { color: var(--muted); font-size: 13px; }
+.auth .legal a { color: var(--accenttext); }
+.codein { text-align: center; font-size: 28px !important; letter-spacing: .35em; font-variant-numeric: tabular-nums; }
+.codein.rec { letter-spacing: .08em; font-size: 20px !important; }
+@media (max-width: 860px) { .auth { grid-template-columns: 1fr; } .auth .hero { display: none; } .auth .card .mark { display: flex; } .auth .panel { place-items: start center; padding-top: max(28px, 8vh); } }
+/* ---- settings */
+.sx { position: fixed; inset: 0; z-index: 45; background: var(--bg); display: flex; }
+.sx-nav { width: 290px; flex-shrink: 0; background: var(--side); border-right: 1px solid var(--line); display: flex; flex-direction: column; min-height: 0; }
+.sx-head { display: flex; align-items: center; gap: 8px; padding: 14px 14px 8px; }
+.sx-head h2 { margin: 0; font: 600 22px 'Sora', sans-serif; flex: 1; }
+.sx-search { margin: 4px 14px 8px; position: relative; }
+.sx-search input { width: 100%; background: var(--surface); border: 1px solid var(--line); border-radius: 12px; color: var(--text); padding: 10px 12px 10px 36px; font: inherit; min-height: 44px; }
+.sx-search svg { position: absolute; left: 11px; top: 12px; color: var(--muted); }
+.sx-list { overflow-y: auto; padding: 4px 10px 20px; display: flex; flex-direction: column; gap: 2px; flex: 1; }
+.sx-list .label { padding: 14px 8px 4px; }
+.sx-item { display: flex; align-items: center; gap: 12px; width: 100%; min-height: 46px; padding: 0 12px; background: transparent; border: 0; border-radius: 12px; color: var(--text); text-align: left; font: inherit; }
+.sx-item svg { color: var(--muted); flex-shrink: 0; }
+.sx-item:hover { background: var(--surface2); }
+.sx-item.on { background: var(--surface2); box-shadow: inset 3px 0 0 var(--accent); }
+.sx-item .dot { margin-left: auto; width: 8px; height: 8px; border-radius: 50%; background: var(--accent); }
+.sx-item .chev { margin-left: auto; color: var(--muted); display: none; }
+.sx-body { flex: 1; min-width: 0; overflow-y: auto; padding: 24px max(16px, calc((100% - 720px) / 2)) 80px; }
+.sx-body h1 { margin: 0 0 4px; font: 600 26px 'Sora', sans-serif; display: flex; align-items: center; gap: 10px; }
+.sx-body .lead { color: var(--muted); margin: 0 0 18px; }
+.sx-back { display: none; }
+.sx-sec { margin: 22px 0 8px; font-size: 12px; font-weight: 600; letter-spacing: .1em; color: var(--muted); text-transform: uppercase; }
+.sx-card { background: var(--surface); border: 1px solid var(--line); border-radius: 16px; overflow: hidden; }
+.srow { display: flex; align-items: center; gap: 16px; padding: 14px 16px; border-top: 1px solid var(--line); }
+.srow:first-child { border-top: 0; }
+.srow .stxt { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.srow .stxt small { color: var(--muted); font-size: 14px; line-height: 1.4; }
+.srow .sctl { flex-shrink: 0; display: flex; gap: 8px; align-items: center; flex-wrap: wrap; justify-content: flex-end; max-width: 60%; }
+.srow.stack { flex-direction: column; align-items: stretch; gap: 10px; }
+.srow.stack .sctl { max-width: none; justify-content: flex-start; }
+.srow.danger .stxt b { color: var(--danger); }
+.sbtn { background: var(--surface2); border: 1px solid var(--line); border-radius: 999px; color: var(--text); padding: 0 16px; min-height: 40px; font: inherit; font-weight: 600; font-size: 14px; text-decoration: none; display: inline-flex; align-items: center; }
+.sbtn:hover { border-color: var(--accent); }
+.sbtn.primary { background: var(--accent); color: var(--onaccent); border-color: var(--accent); }
+.sbtn.bad { color: var(--danger); }
+.pill { display: inline-flex; align-items: center; gap: 6px; border-radius: 999px; padding: 3px 10px; font-size: 12px; font-weight: 600; background: var(--surface2); border: 1px solid var(--line); color: var(--muted); }
+.pill.ok { color: #3FB950; border-color: rgba(63,185,80,.4); } .pill.warn { color: #E0A030; border-color: rgba(224,160,48,.4); }
+.switch { width: 48px; height: 30px; border-radius: 999px; border: 1px solid var(--line); background: var(--surface2); position: relative; padding: 0; flex-shrink: 0; transition: background .15s; }
+.switch::after { content: ''; position: absolute; top: 3px; left: 3px; width: 22px; height: 22px; border-radius: 50%; background: var(--muted); transition: left .15s, background .15s; }
+.switch[aria-checked="true"] { background: var(--accent); border-color: var(--accent); } .switch[aria-checked="true"]::after { left: 21px; background: var(--onaccent); }
+.sx .seg button { min-height: 38px; padding: 6px 14px; font-size: 14px; }
+.check { display: flex; gap: 12px; align-items: flex-start; padding: 12px 16px; border-top: 1px solid var(--line); }
+.check:first-child { border-top: 0; }
+.check .mk { flex: 0 0 22px; height: 22px; border-radius: 50%; display: grid; place-items: center; font-size: 13px; font-weight: 700; margin-top: 1px; }
+.check .mk.ok { background: rgba(63,185,80,.18); color: #3FB950; } .check .mk.no { background: rgba(224,160,48,.18); color: #E0A030; }
+.check small { display: block; color: var(--muted); font-size: 14px; }
+.stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 10px; }
+.stat { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 12px 14px; }
+.stat b { display: block; font: 600 24px 'Sora', sans-serif; } .stat span { color: var(--muted); font-size: 13px; }
+.logline { padding: 8px 16px; border-top: 1px solid var(--line); font-size: 13px; color: var(--muted); display: flex; gap: 10px; flex-wrap: wrap; }
+.logline:first-child { border-top: 0; } .logline b { color: var(--text); font-weight: 600; min-width: 150px; } .logline time { min-width: 120px; }
+.setupkey { font: 600 17px ui-monospace, Menlo, Consolas, monospace; letter-spacing: .06em; background: var(--bg); border: 1px dashed var(--line); border-radius: 12px; padding: 12px; word-break: break-all; text-align: center; user-select: all; }
+.codes { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.codes code { background: var(--bg); border: 1px solid var(--line); border-radius: 10px; padding: 10px; text-align: center; font: 600 15px ui-monospace, Menlo, Consolas, monospace; user-select: all; }
+.steps { display: flex; flex-direction: column; gap: 4px; } .steps .n { display: inline-grid; place-items: center; width: 24px; height: 24px; border-radius: 50%; background: var(--accent); color: var(--onaccent); font-size: 13px; font-weight: 700; margin-right: 8px; }
+.nudge { background: var(--surface); border-bottom: 1px solid var(--line); padding: 8px 14px; display: flex; gap: 12px; align-items: center; justify-content: center; flex-wrap: wrap; font-size: 14px; }
+.nudge button.x { background: transparent; border: 0; color: var(--muted); min-height: 32px; }
+@media (max-width: 760px) {
+  .sx-nav { width: 100%; border-right: 0; } .sx-body { padding: 16px 16px 80px; }
+  .sx:not(.on-page) .sx-body { display: none; } .sx.on-page .sx-nav { display: none; }
+  .sx-item .chev { display: block; } .sx-item .dot + .chev { margin-left: 8px; } .sx-item.on { box-shadow: none; background: transparent; }
+  .sx-back { display: inline-flex; } .srow { flex-wrap: wrap; } .srow .sctl { max-width: none; width: 100%; justify-content: flex-start; }
+  .srow.inline .sctl { width: auto; margin-left: auto; } .srow.inline { flex-wrap: nowrap; }
+}
 @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; } }
 </style>
 </head>
@@ -414,18 +522,7 @@ svg .core { fill: var(--core); stroke: var(--sun); stroke-width: 3; transition: 
   <input type="file" id="codeZipIn" accept=".zip,application/zip" hidden><input type="file" id="codeDirIn" webkitdirectory multiple hidden>
 </div>
 
-<div class="modal" id="login" hidden>
-  <form class="dialog" id="loginForm">
-    <div class="brand" style="padding:0" id="loginBrand"></div>
-    <h2>Enter your key</h2>
-    <p style="margin:0;color:var(--muted)">Open the link the server printed, or paste your key here.</p>
-    <label class="sr" for="keyInput">Key</label>
-    <input type="password" id="keyInput" autocomplete="off" placeholder="Your key">
-    <div id="loginErr" style="color:var(--danger)"></div>
-    <div style="color:var(--muted);font-size:13px">By signing in you agree to the <a href="/terms" target="_blank" rel="noopener" style="color:var(--accenttext)">Terms</a>; see how your data is handled in the <a href="/privacy" target="_blank" rel="noopener" style="color:var(--accenttext)">Privacy</a> page.</div>
-    <button class="btn" type="submit">Continue</button>
-  </form>
-</div>
+<div class="auth" id="auth" hidden></div>
 <div id="dialogs"></div>
 
 <script>
@@ -524,7 +621,7 @@ async function load() {
   const r = await api('/api/state?' + q);
   S.state = await r.json();
   if (!S.model || !allModels().some((m) => m.id === S.model && m.state === 'ready')) S.model = S.state.model;
-  $('login').hidden = true; $('app').hidden = false;
+  $('auth').hidden = true; $('app').hidden = false;
   if (!S.skills.length) { try { S.skills = (await (await api('/api/skills')).json()).skills; } catch (e) {} }
   applyTheme(); renderAll();
   await restoreChat();
@@ -536,7 +633,7 @@ function renderAll() {
   $('avatar').textContent = (st.user[0] || 'Y').toUpperCase();
   $('plan').textContent = (st.owner ? 'Owner, no limits' : st.plan[0].toUpperCase() + st.plan.slice(1) + ' plan');
   if (st.demo) { $('banner').hidden = false; $('banner').replaceChildren(el('b', {}, 'Demo mode. '), 'No model is attached, so replies are a stand-in. Start the server with --llama to use a real model.'); } else $('banner').hidden = true;
-  renderChats(); renderLinks(); renderComposer(); renderUsage(st.usage, true); renderThread(); warmModel();
+  renderChats(); renderLinks(); renderComposer(); renderUsage(st.usage, true); renderThread(); warmModel(); maybeNudge();
 }
 function renderChats() {
   const box = $('chatList'); box.replaceChildren();
@@ -558,6 +655,7 @@ const ICONS = {eye: 'M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12zM12 15a3 3 0 1 
                doc: 'M7 3h7l4 4v14H7zM14 3v4h4M9.5 12h5M9.5 16h5',
                pencil: 'M4 20l1-4L16 5l3 3L8 19zM14 7l3 3',
                spark: 'M12 3l2.2 5.8L20 11l-5.8 2.2L12 19l-2.2-5.8L4 11l5.8-2.2z',
+               x: 'M6 6l12 12M18 6L6 18', search: 'M11 4a7 7 0 1 0 0 14 7 7 0 0 0 0-14zM21 21l-4.3-4.3', back: 'M15 6l-6 6 6 6',
                gear: 'M12 9a3 3 0 1 0 0 6 3 3 0 0 0 0-6zM12 3v3M12 18v3M3 12h3M18 12h3M5.6 5.6l2.1 2.1M16.3 16.3l2.1 2.1M5.6 18.4l2.1-2.1M16.3 7.7l2.1-2.1'};
 function icon(name) {
   const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
@@ -1096,7 +1194,7 @@ async function openMemory() {
 // ---------------------------------------------------------------- settings
 async function openSources() {
   const j = await (await api('/api/live/sources')).json();
-  const row = (x) => el('div', {style: 'display:flex;gap:8px;align-items:baseline;padding:2px 0'}, el('span', {style: 'color:' + (x.active ? '#3fb950' : 'var(--muted)')}, x.active ? '\u25cf' : '\u25cb'), el('span', {}, x.name), x.needs_key && !x.active ? el('small', {style: 'color:var(--muted)'}, 'needs ' + x.keys.join(' or ')) : x.note ? el('small', {style: 'color:var(--muted)'}, x.note) : '');
+  const row = (x) => el('div', {style: 'display:flex;gap:8px;align-items:baseline;padding:2px 0'}, el('span', {style: 'color:' + (x.active ? '#3fb950' : 'var(--muted)')}, x.active ? '●' : '○'), el('span', {}, x.name), x.needs_key && !x.active ? el('small', {style: 'color:var(--muted)'}, 'needs ' + x.keys.join(' or ')) : x.note ? el('small', {style: 'color:var(--muted)'}, x.note) : '');
   const grp = (title, list) => list.length ? [el('b', {style: 'margin-top:8px'}, title + ' (' + list.length + ')'), ...list.map(row)] : [];
   const web = j.web === 'wikipedia' ? 'Wikipedia only (no web search key is set)' : j.web[0].toUpperCase() + j.web.slice(1);
   dialog([el('h2', {}, 'Live sources'), el('div', {style: 'color:var(--muted);font-size:14px'}, 'Green means it works now. Keys are set on the computer that runs Emvryx (see docs/LIVE_DATA.md).'),
@@ -1105,71 +1203,281 @@ async function openSources() {
     ...grp('Free online services, no key', j.sources.filter((x) => x.where === 'online' && !x.keys.length)),
     ...grp('Online services that use a key', j.sources.filter((x) => x.keys.length))], 'Close');
 }
-async function openSettings() {
-  const st = S.state, s = st.settings, w = st.window;
-  const seg = (opts, cur, fn) => el('div', {class: 'seg'}, ...opts.map(([v, t]) => el('button', {class: cur === v ? 'on' : '', onclick: (e) => { fn(v); [...e.target.parentNode.children].forEach((b) => b.classList.remove('on')); e.target.classList.add('on'); }}, t)));
-  const kids = [el('h2', {}, 'Settings'),
-    el('b', {}, 'Look'), seg([['auto', 'Automatic'], ['dark', 'Dark'], ['light', 'Light']], S.theme, (v) => { S.theme = v; try { localStorage.setItem('emvryx_theme', v); } catch (e) {} applyTheme(); }),
-    el('b', {}, 'Text and button size'), seg([['0.85', 'Small'], ['1', 'Normal'], ['1.15', 'Large'], ['1.3', 'Extra large']], (() => { try { return String(parseFloat(localStorage.getItem('emvryx_size')) || 1); } catch (e) { return '1'; } })(), (v) => { try { localStorage.setItem('emvryx_size', v); } catch (e) {} applySize(); }),
-    el('b', {}, 'Pause before the answer'), seg([['off', 'None'], ['short', 'Short'], ['natural', 'Natural']], s.thinking_pause || 'short', async (v) => { await post('/api/settings', {thinking_pause: v}); await load(); }),
-    el('b', {}, 'Remember things about me'), seg([['on', 'On'], ['off', 'Off']], s.memory === false ? 'off' : 'on', async (v) => { await post('/api/settings', {memory: v === 'on'}); await load(); }),
-    el('b', {}, 'How long a chat can be'), seg([['everyday', 'Everyday (about 8K)'], ['long', 'Long (if allowed)']], s.window_mode, async (v) => { await post('/api/settings', {window_mode: v}); await load(); }),
-    el('div', {style: 'color:var(--muted);font-size:14px'}, 'Right now: ' + fmt(w.window) + ' tokens, ' + w.reason + '. Long chats use more memory and are slower to read.'),
-    el('b', {}, 'Live facts (sums, dates, prices, rates, scores, news)'), seg([['on', 'On'], ['off', 'Off']], s.live_data === false ? 'off' : 'on', async (v) => { await post('/api/settings', {live_data: v === 'on'}); await load(); }),
-    el('div', {style: 'color:var(--muted);font-size:14px'}, 'Exact answers come from code and free public services, not from the model\u2019s memory. Sums, dates and the time work offline. Prices, rates, scores, news and the rest send only the needed words (a place, a currency, a team) and never the chat. Off in private chats and in \u201cModel only\u201d.'),
-    el('button', {class: 'btn ghost', onclick: openSources}, 'See which sources are on'),
-    el('b', {}, 'Looking things up'), seg([['auto', 'Auto'], ['off', 'Wikipedia only'], ['always', 'Always search the web'], ['none', 'Model only (no lookup)']], s.web_search || 'auto', async (v) => { await post('/api/settings', {web_search: v}); await load(); }),
-    el('div', {style: 'color:var(--muted);font-size:14px'}, 'Questions are first looked up in Wikipedia on the server. Auto also searches the web, when it is online, for recent things (news, scores, prices) or when Wikipedia does not have the answer; your question is sent to a search service then, and each answer says so. Private chats never search the web.'),
-    el('button', {class: 'btn ghost', onclick: openSaved}, 'Saved notes'),
-    el('div', {style: 'color:var(--muted);font-size:14px'}, 'Notes you gave a thumbs up are kept here so the same question works offline. You can delete any of them.'),
-    el('b', {}, 'Your data'),
-    el('div', {style: 'color:var(--muted);font-size:14px'}, 'Chats are saved on the server you opened this page from. Private chats are never saved. Nothing leaves it unless you attach an online model.'),
-    el('button', {class: 'btn danger', onclick: async () => { if (confirm('Delete every chat? This cannot be undone.')) { await post('/api/delete-everything'); S.chatId = null; S.messages = []; remember(); await load(); } }}, 'Delete all my chats'),
-    el('b', {}, 'Your data'),
-    el('div', {style: 'display:flex;gap:8px;flex-wrap:wrap'}, el('a', {class: 'btn ghost', href: '/api/export', style: 'display:inline-flex;align-items:center;text-decoration:none', download: ''}, 'Download my data'),
-      ...(st.owner ? [] : [el('button', {class: 'btn danger', onclick: async () => {
-        const typed = prompt('Delete your account and everything in it (chats, notes, projects, GitHub link, devices)? This cannot be undone. Type your name (' + st.user + ') to confirm:');
-        if (typed === null) return; const r = await post('/api/delete-account', {confirm: typed.trim()}); const j = await r.json();
-        if (!r.ok) { alert(j.message + ' ' + (j.action || '')); return; } location.reload();
-      }}, 'Delete my account')])),
-    el('div', {style: 'color:var(--muted);font-size:14px'}, el('a', {href: '/privacy', target: '_blank', rel: 'noopener', style: 'color:var(--accenttext)'}, 'Privacy'), '  \u00b7  ', el('a', {href: '/terms', target: '_blank', rel: 'noopener', style: 'color:var(--accenttext)'}, 'Terms'),
-      ...(st.contact ? ['  \u00b7  ', el('a', {href: 'mailto:' + st.contact, style: 'color:var(--accenttext)'}, 'Report a problem')] : [])),
-    el('b', {}, 'Where you are signed in'), el('div', {id: 'deviceList', style: 'display:flex;flex-direction:column;gap:8px'}, el('div', {style: 'color:var(--muted);font-size:14px'}, 'Loading...'))];
-  if (st.owner) {
-    const name = el('input', {type: 'text', placeholder: 'Name, e.g. sam', 'aria-label': 'Tester name'}), mail = el('input', {type: 'text', placeholder: 'Email (optional, for email sign-in)', 'aria-label': 'Tester email', inputmode: 'email'});
-    const out = el('div', {style: 'word-break:break-all;color:var(--muted);font-size:14px'});
-    let plan = 'free';
-    const link = (j) => out.textContent = 'Send this link privately. It works once, on one device, for ' + j.pair_minutes + ' minutes: ' + location.origin + '/pair/' + j.pair + (j.key ? '\nTheir key (shown once, not stored): ' + j.key : '');
-    kids.push(el('b', {}, 'Owner: people and plans'), name, mail, seg([['free', 'Free'], ['pro', 'Pro'], ['mega', 'Mega']], 'free', (v) => { plan = v; }),
-      el('button', {class: 'btn', onclick: async () => { const r = await post('/api/admin/users', {user: name.value.trim(), tier: plan, email: mail.value.trim() || undefined}); const j = await r.json();
-        if (r.ok) link(j); else out.textContent = j.message; }}, 'Add or change person and make a sign-in link'), out,
-      el('button', {class: 'btn ghost', onclick: openPeople}, 'People, bans and the security log'),
-      el('button', {class: 'btn ghost', onclick: async () => { const r = await post('/api/admin/pause', {paused: true}); out.textContent = 'Paused: everyone except the owner is stopped. Reload to resume after restarting the server.'; }}, 'Pause everyone'),
-      el('button', {class: 'btn ghost', onclick: async () => { await post('/api/admin/pause', {paused: false}); out.textContent = 'Resumed.'; }}, 'Resume'));
+
+const SX = {page: 'general', acct: null, q: '', st: null};
+const sxWhen = (t) => new Date(t * 1000).toLocaleString([], {month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit'});
+const sxBtn = (label, fn, cls) => el('button', {class: 'sbtn' + (cls ? ' ' + cls : ''), type: 'button', onclick: fn}, label);
+const sxPill = (text, kind) => el('span', {class: 'pill' + (kind ? ' ' + kind : '')}, text);
+function sxSeg(opts, cur, fn) { return el('div', {class: 'seg'}, ...opts.map(([v, t]) => el('button', {class: cur === v ? 'on' : '', type: 'button', onclick: (e) => { fn(v); [...e.target.parentNode.children].forEach((b) => b.classList.remove('on')); e.target.classList.add('on'); }}, t))); }
+function sxSwitch(on, fn, label) { const b = el('button', {class: 'switch', type: 'button', role: 'switch', 'aria-checked': String(!!on), 'aria-label': label, onclick: () => { const v = b.getAttribute('aria-checked') !== 'true'; b.setAttribute('aria-checked', String(v)); fn(v); }}); return b; }
+const sxSet = async (patch) => { await post('/api/settings', patch); await load().catch(() => {}); };
+const sxLocal = (k, d) => { try { return localStorage.getItem(k) || d; } catch (e) { return d; } };
+async function sxAcct() { try { SX.acct = await (await api('/api/account')).json(); } catch (e) { if (e.message === 'login') closeSettings(); } return SX.acct; }
+
+// A page is a list of sections; a section is {title, rows}; a row is {title, desc, ctl | node, keys, danger}. Search looks through every row.
+function sxSections(id) {
+  const st = S.state, s = st.settings, w = st.window, a = SX.acct || {mfa: {}}, owner = st.owner;
+  const A = {
+    general: [{title: 'Appearance', rows: [
+      {title: 'Theme', desc: 'Automatic follows your phone or computer.', ctl: sxSeg([['auto', 'Automatic'], ['dark', 'Dark'], ['light', 'Light']], S.theme, (v) => { S.theme = v; try { localStorage.setItem('emvryx_theme', v); } catch (e) {} applyTheme(); }), keys: 'dark light mode colour color'},
+      {title: 'Text and button size', ctl: sxSeg([['0.85', 'Small'], ['1', 'Normal'], ['1.15', 'Large'], ['1.3', 'Extra large']], String(parseFloat(sxLocal('emvryx_size', '1')) || 1), (v) => { try { localStorage.setItem('emvryx_size', v); } catch (e) {} applySize(); }), keys: 'font zoom bigger'}]},
+      {title: 'Answers', rows: [
+      {title: 'Pause before the answer', desc: 'A short beat before words appear, so replies feel less abrupt.', ctl: sxSeg([['off', 'None'], ['short', 'Short'], ['natural', 'Natural']], s.thinking_pause || 'short', (v) => sxSet({thinking_pause: v})), keys: 'delay typing speed'}]}],
+    chat: [{title: 'Looking things up', rows: [
+      {title: 'Where answers come from', desc: 'Questions are first looked up in Wikipedia on the server. Auto also searches the web, when it is online, for recent things (news, scores, prices) or when Wikipedia does not have the answer; your question is sent to a search service then, and each answer says so. Private chats never search the web.', ctl: sxSeg([['auto', 'Auto'], ['off', 'Wikipedia only'], ['always', 'Always search the web'], ['none', 'Model only']], s.web_search || 'auto', (v) => sxSet({web_search: v})), keys: 'web search wikipedia tavily internet', stack: true},
+      {title: 'Live facts', desc: 'Sums, dates, prices, rates, scores and news come from code and free public services, not from the model’s memory. Only the needed words (a place, a currency, a team) are sent, never the chat. Off in private chats and in “Model only”.', ctl: sxSwitch(s.live_data !== false, (v) => sxSet({live_data: v}), 'Live facts'), keys: 'weather stocks sports currency'},
+      {title: 'Which sources are on', desc: 'See what works right now and which keys are missing.', ctl: sxBtn('See sources', openSources), keys: 'api keys tavily brave rawg tmdb'}]},
+      {title: 'Chat length', rows: [
+      {title: 'How long a chat can be', desc: 'Right now: ' + fmt(w.window) + ' tokens, ' + w.reason + '. Long chats use more memory and are slower to read.', ctl: sxSeg([['everyday', 'Everyday (about 8K)'], ['long', 'Long (if allowed)']], s.window_mode, (v) => sxSet({window_mode: v})), keys: 'context window tokens', stack: true}]}],
+    memory: [{title: 'Memory', rows: [
+      {title: 'Remember things about me', desc: 'Facts you tell it (your name, what you do, what you like) are kept on the server and given to whichever model you talk to. Private chats never save or read them. Passwords and card numbers are never kept.', ctl: sxSwitch(s.memory !== false, (v) => sxSet({memory: v}), 'Remember things about me'), keys: 'personalization remember'},
+      {title: 'What it remembers', desc: 'See, add or delete any fact.', ctl: sxBtn('Open memory', () => { closeSettings(); openMemory(); })}]},
+      {title: 'Saved notes', rows: [
+      {title: 'Saved notes', desc: 'Notes you gave a thumbs up are kept so the same question works offline. You can delete any of them.', ctl: sxBtn('Open saved notes', openSaved), keys: 'thumbs up offline'}]}],
+    data: [{title: 'Your data', rows: [
+      {title: 'Documents', desc: 'Files and pictures you added to chats.', ctl: sxBtn('Open documents', () => { closeSettings(); openDocs(); })},
+      {title: 'Download my data', desc: 'Everything saved about you in one zip: chats, notes, memory, projects.', ctl: el('a', {class: 'sbtn', href: '/api/export', download: ''}, 'Download'), keys: 'export backup'},
+      {title: 'Private chats', desc: 'Chats started as Private are never saved, never searched on the web and never use memory.'}]},
+      {title: 'Delete', rows: [
+      {title: 'Delete all my chats', desc: 'Removes every chat. This cannot be undone.', danger: true, ctl: sxBtn('Delete chats', async () => { if (confirm('Delete every chat? This cannot be undone.')) { await post('/api/delete-everything'); S.chatId = null; S.messages = []; remember(); await load(); } }, 'bad')}]},
+      {title: 'Legal', rows: [
+      {title: 'Privacy and terms', ctl: el('div', {style: 'display:flex;gap:8px'}, el('a', {class: 'sbtn', href: '/privacy', target: '_blank', rel: 'noopener'}, 'Privacy'), el('a', {class: 'sbtn', href: '/terms', target: '_blank', rel: 'noopener'}, 'Terms'))}]}],
+    apps: [{title: 'Connected apps', rows: [
+      {title: 'GitHub', desc: 'Lets VryxCode create repositories and pull and push. Your token is stored encrypted and the model never sees it. Pulling, pushing and creating always ask first.', ctl: sxBtn('Manage', () => { closeSettings(); openApps(); }), keys: 'git repository vryxcode'}]}],
+    security: [{title: 'Signing in', rows: [
+      {title: 'Password', desc: a.has_password ? 'Set. Changing it signs your other devices out.' : 'Not set. Add one to sign in with your name and password.', ctl: el('div', {style: 'display:flex;gap:8px;align-items:center'}, sxPill(a.has_password ? 'Set' : 'Not set', a.has_password ? 'ok' : 'warn'), sxBtn(a.has_password ? 'Change' : 'Set a password', () => passwordDialog(), a.has_password ? '' : 'primary')), keys: 'change reset'},
+      {title: 'Two-step sign-in', desc: a.mfa.on ? 'On. Signing in also needs a 6-digit code from your authenticator app.' : 'Off. Adds a 6-digit code from an authenticator app (Google Authenticator, Microsoft Authenticator, Authy, 1Password) every time you sign in.', ctl: el('div', {style: 'display:flex;gap:8px;align-items:center'}, sxPill(a.mfa.on ? 'On' : 'Off', a.mfa.on ? 'ok' : 'warn'), a.mfa.on ? sxBtn('Turn off', () => mfaOffDialog(), 'bad') : sxBtn('Set up', () => mfaSetupDialog(), 'primary')), keys: 'mfa 2fa authenticator totp'},
+      ...(a.mfa.on ? [{title: 'Recovery codes', desc: a.mfa.recovery_left + ' of 8 left. Each works once if you lose your phone.', ctl: sxBtn('Make new codes', () => recoveryDialog()), keys: 'backup codes lost phone'}] : [])]},
+      {title: 'Where you are signed in', rows: [{node: 'devices'}]},
+      {title: 'Recent security activity', rows: [{node: 'activity'}]}],
+    account: [{title: 'You', rows: [
+      {title: 'Name', desc: 'This is how you sign in.', ctl: el('b', {}, a.user || st.user)},
+      {title: 'Email', desc: a.email ? (a.email_verified ? 'Verified. You can sign in with an email code.' : 'Not verified yet' + (a.mail ? '. Verify it to sign in with an email code.' : ' (this server cannot send email, so it stays unverified).')) : 'None. Add one so you can recover your account.',
+        ctl: el('div', {style: 'display:flex;gap:8px;align-items:center;flex-wrap:wrap'}, a.email ? el('span', {style: 'word-break:break-all'}, a.email) : null, a.email && !a.email_verified && a.mail ? sxBtn('Verify', () => verifyEmailDialog(), 'primary') : null, sxBtn(a.email ? 'Change' : 'Add email', () => emailDialog())), keys: 'address mail'},
+      {title: 'Plan', desc: owner ? 'Owner: no limits.' : 'What your plan includes is on the usage page.', ctl: el('div', {style: 'display:flex;gap:8px;align-items:center'}, sxPill(owner ? 'Owner' : st.plan[0].toUpperCase() + st.plan.slice(1)), sxBtn('Usage', () => { closeSettings(); openUsage(); })), keys: 'free pro mega limits'}]},
+      {title: 'Session', rows: [
+      {title: 'Sign out', desc: 'On this device.', ctl: sxBtn('Sign out', async () => { await post('/api/logout'); location.reload(); })}]},
+      ...(owner ? [{title: 'Owner account', rows: [{title: 'This is the admin account', desc: 'It has no usage limits and the Owner pages in this menu. Keep it safe: use a password and two-step sign-in. It cannot be deleted or turned off from the app.'}]}] : [{title: 'Delete account', rows: [
+      {title: 'Delete my account', desc: 'Removes your chats, notes, memory, projects, GitHub link and devices. This cannot be undone.', danger: true, ctl: sxBtn('Delete account', () => deleteDialog(), 'bad')}]}])],
+    about: [{title: 'Emvryx', rows: [
+      {title: 'One family of five models', desc: 'Ember 2, Flare 2, Flare 2.5, Equinox 2, Solstice 2 and Apogee 2 are Emvryx models; VryxCode builds projects with them.'},
+      {title: 'Your server', desc: st.demo ? 'Demo mode: no model is attached.' : 'Connected.', ctl: st.contact ? el('a', {class: 'sbtn', href: 'mailto:' + st.contact}, 'Report a problem') : null}]}]
+  };
+  return A[id] || [];
+}
+const SX_NAV = [['general', 'General', 'gear'], ['chat', 'Chat and lookups', 'spark'], ['memory', 'Memory', 'brain'], ['data', 'Data controls', 'folder'], ['apps', 'Connected apps', 'code'], ['security', 'Security', 'lock'], ['account', 'Account', 'eye'], ['about', 'About', 'doc']];
+const SX_OWNER = [['a-overview', 'Overview', 'chart'], ['a-people', 'People', 'eye'], ['a-signups', 'Sign-ups and invites', 'pencil'], ['a-log', 'Security log', 'lock']];
+const SX_LEAD = {general: 'How Emvryx looks and feels on this device.', chat: 'How it finds facts and how much of a chat it keeps in mind.', memory: 'What it knows about you, shared by every model.', data: 'Your files, your downloads and what gets deleted.', apps: 'Other services Emvryx can work with.', security: 'Protect your account: password, two-step sign-in and your devices.', account: 'Who you are and your plan.', about: 'About this Emvryx.',
+  'a-overview': 'How safe this server is to share, and how it is doing.', 'a-people': 'Everyone with an account.', 'a-signups': 'Who may create an account, and invite codes.', 'a-log': 'Sign-ins, failures and changes, newest first.'};
+
+function closeSettings() { document.querySelectorAll('.sx').forEach((n) => n.remove()); }
+async function openSettings(page) {
+  closeSettings(); SX.page = page || SX.page || 'general'; SX.q = ''; SX.st = S.state;
+  await sxAcct();
+  const root = el('div', {class: 'sx', role: 'dialog', 'aria-modal': 'true', 'aria-label': 'Settings'});
+  $('dialogs').append(root); SX.root = root; sxRender(!!page);
+}
+function chevron() { const c = document.createElementNS('http://www.w3.org/2000/svg', 'svg'); c.setAttribute('class', 'chev'); c.setAttribute('width', '18'); c.setAttribute('height', '18'); c.setAttribute('viewBox', '0 0 24 24'); c.setAttribute('fill', 'none'); c.setAttribute('aria-hidden', 'true');
+  const p = document.createElementNS('http://www.w3.org/2000/svg', 'path'); p.setAttribute('d', 'M9 6l6 6-6 6'); p.setAttribute('stroke', 'currentColor'); p.setAttribute('stroke-width', '2'); p.setAttribute('stroke-linecap', 'round'); c.append(p); return c; }
+function sxNavItem(id, name, ico) {
+  const a = SX.acct || {mfa: {}}, flag = id === 'security' && (!a.has_password || !a.mfa.on) && S.state.owner;
+  return el('button', {class: 'sx-item' + (SX.page === id && !SX.q ? ' on' : ''), type: 'button', onclick: () => { SX.page = id; SX.q = ''; sxRender(true); }}, icon(ico), el('span', {}, name), flag ? el('span', {class: 'dot', title: 'Needs attention'}) : null,
+    chevron());
+}
+function sxRender(onPage) {
+  const root = SX.root; if (!root || !root.isConnected) return;
+  const keepScroll = root.querySelector('.sx-body') ? root.querySelector('.sx-body').scrollTop : 0, owner = S.state.owner;
+  if (onPage !== undefined) root.classList.toggle('on-page', !!onPage || !!SX.q);
+  const search = el('input', {type: 'text', placeholder: 'Search settings', 'aria-label': 'Search settings', value: SX.q, oninput: (e) => { SX.q = e.target.value.trim(); root.classList.toggle('on-page', !!SX.q); sxBody(); sxNav.querySelectorAll('.sx-item').forEach((n) => n.classList.remove('on')); if (!SX.q) sxRender(); }});
+  const sxNav = el('div', {class: 'sx-nav'},
+    el('div', {class: 'sx-head'}, el('h2', {}, 'Settings'), el('button', {class: 'icon', type: 'button', 'aria-label': 'Close settings', onclick: closeSettings}, icon('x'))),
+    el('div', {class: 'sx-search'}, icon('search'), search),
+    el('div', {class: 'sx-list'}, ...SX_NAV.map(([id, n, i]) => sxNavItem(id, n, i)), ...(owner ? [el('div', {class: 'label'}, 'OWNER'), ...SX_OWNER.map(([id, n, i]) => sxNavItem(id, n, i))] : [])));
+  const body = el('div', {class: 'sx-body', id: 'sxBody'});
+  root.replaceChildren(sxNav, body);
+  sxBody(); body.scrollTop = keepScroll;
+  if (SX.q) { search.focus(); search.setSelectionRange(search.value.length, search.value.length); }
+}
+function sxRowNode(r) {
+  if (r.node) { const box = el('div', {class: 'srow stack', 'data-node': r.node}, el('div', {style: 'color:var(--muted)'}, 'Loading...')); setTimeout(() => sxFill(r.node, box), 0); return box; }
+  const auto = r.ctl && r.ctl.classList && (r.ctl.classList.contains('switch') || r.ctl.classList.contains('sbtn'));
+  return el('div', {class: 'srow' + (r.stack ? ' stack' : '') + (r.danger ? ' danger' : '') + (auto || r.inline ? ' inline' : '')}, el('div', {class: 'stxt'}, el('b', {}, r.title), r.desc ? el('small', {}, r.desc) : null), r.ctl ? el('div', {class: 'sctl'}, r.ctl) : null);
+}
+function sxCard(rows) { return el('div', {class: 'sx-card'}, ...rows.map(sxRowNode)); }
+function sxBody() {
+  const body = $('sxBody'); if (!body) return;
+  const all = [...SX_NAV, ...SX_OWNER];
+  if (SX.q) {
+    const q = SX.q.toLowerCase(), kids = [el('h1', {}, 'Search')]; let n = 0;
+    for (const [id, name] of SX_NAV) for (const sec of sxSections(id)) {
+      const rows = sec.rows.filter((r) => !r.node && ((r.title || '') + ' ' + (r.desc || '') + ' ' + (r.keys || '') + ' ' + sec.title + ' ' + name).toLowerCase().includes(q));
+      if (rows.length) { n += rows.length; kids.push(el('div', {class: 'sx-sec'}, name + ' › ' + sec.title), sxCard(rows)); }
+    }
+    for (const [id, name] of SX_OWNER) if (S.state.owner && name.toLowerCase().includes(q)) { n++; kids.push(el('div', {class: 'sx-sec'}, 'Owner'), el('div', {class: 'sx-card'}, el('button', {class: 'sx-item', type: 'button', onclick: () => { SX.q = ''; SX.page = id; sxRender(true); }}, name))); }
+    if (!n) kids.push(el('p', {class: 'lead'}, 'Nothing matches “' + SX.q + '”.'));
+    return body.replaceChildren(...kids);
   }
-  setTimeout(loadDevices, 0);
-  dialog(kids, 'Done');
+  const [id, name] = all.find((x) => x[0] === SX.page) || all[0];
+  const head = el('h1', {}, el('button', {class: 'icon sx-back', type: 'button', 'aria-label': 'Back to settings', onclick: () => { SX.root.classList.remove('on-page'); }}, icon('back')), name);
+  if (id.startsWith('a-')) { body.replaceChildren(head, el('p', {class: 'lead'}, SX_LEAD[id]), el('div', {id: 'sxAdmin'}, el('div', {style: 'color:var(--muted)'}, 'Loading...'))); return adminPage(id); }
+  const kids = [head, el('p', {class: 'lead'}, SX_LEAD[id])];
+  for (const sec of sxSections(id)) kids.push(el('div', {class: 'sx-sec'}, sec.title), sxCard(sec.rows));
+  body.replaceChildren(...kids);
+}
+async function sxReload() { await sxAcct(); sxRender(); }
+const EVENT_NAMES = {login_ok: 'Signed in', login_fail: 'Wrong sign-in try', logout: 'Signed out', lockout: 'Address locked out', signup: 'New account', password_set: 'Password changed', mfa_on: 'Two-step turned on', mfa_off: 'Two-step turned off',
+  mfa_recovery_used: 'Recovery code used', mfa_recovery_new: 'New recovery codes', mfa_reset_by_owner: 'Two-step reset by owner', reauth_fail: 'Wrong password or code', email_changed: 'Email changed', session_revoked: 'Device signed out', key_rotated: 'Key replaced',
+  pair_created: 'Sign-in link made', pair_used: 'Sign-in link used', user_added: 'Person added', ban: 'Account turned off', unban: 'Account turned on', signups_changed: 'Sign-up rule changed', invite_made: 'Invite made', bad_origin: 'Cross-site request refused', email_code: 'Email code sent'};
+
+async function sxFill(kind, box) {
+  try {
+    if (kind === 'devices') {
+      const j = await (await api('/api/sessions')).json();
+      box.replaceChildren(...j.sessions.map((d) => el('div', {class: 'srow inline', style: 'border:0;padding:6px 0'}, el('div', {class: 'stxt'}, el('b', {}, d.device + (d.current ? '  ·  this device' : '')), el('small', {}, 'Last used ' + sxWhen(d.last_seen) + (d.where ? ' · ' + d.where : ''))),
+        el('div', {class: 'sctl'}, sxBtn('Sign out', async () => { if (d.current) { await post('/api/logout'); location.reload(); } else { await post('/api/sessions/revoke', {id: d.id}); sxFill(kind, box); } })))),
+        ...(j.sessions.length > 1 ? [el('div', {}, sxBtn('Sign out every other device', async () => { await post('/api/sessions/revoke-others'); sxFill(kind, box); }))] : []));
+    } else if (kind === 'activity') {
+      const j = await (await api('/api/account/activity')).json();
+      box.classList.remove('stack'); box.style.padding = '0';
+      box.replaceChildren(...(j.events.length ? j.events.map((e) => el('div', {class: 'logline'}, el('time', {}, sxWhen(e.at)), el('b', {}, EVENT_NAMES[e.kind] || e.kind), el('span', {}, [e.ip, e.detail].filter(Boolean).join(' · ')))) : [el('div', {class: 'logline'}, 'Nothing yet.')]));
+    }
+  } catch (e) { if (e.message !== 'login') box.textContent = 'Could not load this.'; }
 }
 
-async function loadDevices() {
-  const box = document.getElementById('deviceList'); if (!box) return;
-  const j = await (await api('/api/sessions')).json(); const when = (t) => new Date(t * 1000).toLocaleString([], {month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit'});
-  box.replaceChildren(...j.sessions.map((d) => el('div', {class: 'opt', style: 'cursor:default'}, el('span', {class: 'grow'}, el('b', {}, d.device + (d.current ? '  ·  this device' : '')), el('small', {}, 'Last used ' + when(d.last_seen) + (d.where ? ' · ' + d.where : ''))),
-      d.current ? el('button', {class: 'chip', onclick: async () => { await post('/api/logout'); location.reload(); }}, 'Sign out')
-                : el('button', {class: 'chip', onclick: async () => { await post('/api/sessions/revoke', {id: d.id}); loadDevices(); }}, 'Sign out'))),
-    ...(j.sessions.length > 1 ? [el('button', {class: 'btn ghost', onclick: async () => { await post('/api/sessions/revoke-others'); loadDevices(); }}, 'Sign out every other device')] : []));
+// ---- dialogs for the account
+const sxErr = () => el('div', {role: 'alert', style: 'color:var(--danger);font-size:14px'});
+function sxInput(type, ph, attrs) { return el('input', Object.assign({type, placeholder: ph, autocapitalize: 'none', autocorrect: 'off', spellcheck: 'false'}, attrs || {})); }
+// "Enter your password / code" fields for sensitive changes: returns [nodes, () => body]
+function reauthFields() {
+  const a = SX.acct, kids = [], got = {};
+  if (a.has_password) { const pw = pwBox({autocomplete: 'current-password', placeholder: 'Your password', 'aria-label': 'Your password'}); kids.push(authField('Your password', pw.node)); got.password = () => pw.input.value; }
+  if (a.mfa.on) { const c = sxInput('text', '6-digit code or recovery code', {inputmode: 'text', autocomplete: 'one-time-code', 'aria-label': 'Two-step code'}); kids.push(authField('Two-step code', c, 'From your authenticator app, or a recovery code.')); got.code = () => c.value; }
+  return [kids, () => Object.fromEntries(Object.entries(got).map(([k, f]) => [k, f()]))];
 }
-async function openPeople() {
-  const j = await (await api('/api/admin/users')).json(); const a = await (await api('/api/admin/audit?limit=40')).json();
-  const out = el('div', {style: 'word-break:break-all;color:var(--muted);font-size:14px'});
-  const when = (t) => new Date(t * 1000).toLocaleString([], {month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit'});
-  const kids = [el('h2', {}, 'People')];
-  for (const u of j.users) kids.push(el('div', {class: 'opt', style: 'cursor:default'}, el('span', {class: 'grow'}, el('b', {}, u.user + (u.owner ? ' (owner)' : '') + (u.banned ? '  ·  turned off' : '')), el('small', {}, u.tier + (u.email ? ' · ' + u.email : ''))),
-    el('button', {class: 'chip', onclick: async () => { const r = await post('/api/admin/pairing', {user: u.user}); const k = await r.json(); out.textContent = 'One-time link for ' + u.user + ' (' + k.pair_minutes + ' minutes): ' + location.origin + '/pair/' + k.pair; }}, 'Sign-in link'),
-    ...(u.owner ? [] : [el('button', {class: 'chip', onclick: async () => { await post('/api/admin/ban', {user: u.user, banned: !u.banned}); document.querySelectorAll('.modal').forEach((m) => m.remove()); openPeople(); }}, u.banned ? 'Turn on' : 'Turn off')])));
-  kids.push(out, el('b', {}, 'Security log (latest 40)'), ...a.events.map((e) => el('div', {style: 'color:var(--muted);font-size:13px'}, when(e.at) + '  ' + e.kind + (e.user ? ' · ' + e.user : '') + (e.ip ? ' · ' + e.ip : '') + (e.detail ? ' · ' + e.detail : ''))));
-  dialog(kids, 'Close');
+async function sxPost(url, body, err) { const r = await post(url, body); const j = await r.json().catch(() => ({})); if (!r.ok) { err.textContent = j.message || 'Something went wrong.'; return null; } return j; }
+function passwordDialog() {
+  const a = SX.acct, [rk, rb] = reauthFields(), err = sxErr(), pw = pwBox({autocomplete: 'new-password', placeholder: 'New password', 'aria-label': 'New password'}, true), again = pwBox({autocomplete: 'new-password', placeholder: 'Type it again', 'aria-label': 'New password again'});
+  const cur = a.has_password ? rk.slice(0, 1) : [], rest = a.has_password ? rk.slice(1) : rk;
+  const go = el('button', {class: 'btn', type: 'button', onclick: async () => {
+    err.textContent = ''; if (pw.input.value !== again.input.value) { err.textContent = 'The two passwords do not match.'; return; }
+    const b = rb(); const j = await sxPost('/api/account/password', {current: b.password, code: b.code, new: pw.input.value}, err); if (!j) return;
+    m.remove(); toast('Password saved.' + (j.signed_out_others ? ' ' + j.signed_out_others + ' other device(s) were signed out.' : '')); sxReload();
+  }}, a.has_password ? 'Change password' : 'Save password');
+  const m = dialog([el('h2', {}, a.has_password ? 'Change password' : 'Set a password'), ...cur, authField('New password', pw.node), authField('New password again', again.node), ...rest, err, go], 'Cancel');
 }
+function emailDialog() {
+  const a = SX.acct, [rk, rb] = reauthFields(), err = sxErr(), email = sxInput('text', 'you@example.com', {inputmode: 'email', autocomplete: 'email', value: a.email || ''});
+  const go = el('button', {class: 'btn', type: 'button', onclick: async () => { err.textContent = ''; const b = rb(); const j = await sxPost('/api/account/email', Object.assign({email: email.value}, b), err); if (!j) return; m.remove(); sxReload(); }}, 'Save email');
+  const m = dialog([el('h2', {}, a.email ? 'Change email' : 'Add an email'), authField('Email', email, 'Changing it means you verify it again.'), ...rk, err, go], 'Cancel');
+}
+function verifyEmailDialog() {
+  const err = sxErr(), code = sxInput('text', '6-digit code', {inputmode: 'numeric', autocomplete: 'one-time-code', maxlength: '6', class: 'codein'});
+  const info = el('div', {class: 'authnote'}, 'Sending a code to ' + SX.acct.email + '...');
+  const m = dialog([el('h2', {}, 'Verify your email'), info, authField('Code from the email', code), err, el('button', {class: 'btn', type: 'button', onclick: async () => { err.textContent = ''; const j = await sxPost('/api/account/email/verify', {code: code.value}, err); if (!j) return; m.remove(); sxReload(); }}, 'Verify')], 'Cancel');
+  sxPost('/api/account/email/send', {}, err).then((j) => { info.textContent = j ? 'We sent a 6-digit code to ' + SX.acct.email + '. It works for 10 minutes.' : 'Could not send a code.'; });
+}
+function recoveryCodesView(codes, onDone) {
+  const text = 'Emvryx recovery codes (each works once)\n\n' + codes.join('\n') + '\n';
+  const done = el('button', {class: 'btn', type: 'button', disabled: 'disabled', onclick: onDone}, 'Done');
+  const saved = el('input', {type: 'checkbox', id: 'recSaved', onchange: () => { done.disabled = !saved.checked; }});
+  return [el('div', {class: 'authnote'}, 'Save these now. They are shown once. Each one signs you in once if you lose your phone.'), el('div', {class: 'codes'}, ...codes.map((c) => el('code', {}, c))),
+    el('div', {style: 'display:flex;gap:8px;flex-wrap:wrap'}, sxBtn('Copy', async (e) => { try { await navigator.clipboard.writeText(text); e.target.textContent = 'Copied'; } catch (x) { e.target.textContent = 'Press and hold to copy'; } }),
+      el('a', {class: 'sbtn', href: 'data:text/plain;charset=utf-8,' + encodeURIComponent(text), download: 'emvryx-recovery-codes.txt'}, 'Download')),
+    el('label', {style: 'display:flex;gap:10px;align-items:center'}, saved, 'I saved these somewhere safe'), done];
+}
+async function mfaSetupDialog() {
+  const a = SX.acct, [rk, rb] = reauthFields(), err = sxErr(), box = el('div', {style: 'display:flex;flex-direction:column;gap:14px'});
+  const m = dialog([el('h2', {}, 'Set up two-step sign-in'), box], 'Cancel');
+  const start = async () => {
+    const j = await sxPost('/api/account/mfa/start', rb(), err); if (!j) return;
+    const code = sxInput('text', '000000', {inputmode: 'numeric', autocomplete: 'one-time-code', maxlength: '6', class: 'codein', 'aria-label': 'Code from the app'}), err2 = sxErr();
+    const verify = el('button', {class: 'btn', type: 'button', onclick: async () => { err2.textContent = ''; const r = await sxPost('/api/account/mfa/enable', {code: code.value}, err2); if (!r) return;
+      box.replaceChildren(el('b', {}, 'Two-step sign-in is on.'), ...recoveryCodesView(r.recovery, () => { m.remove(); sxReload(); })); m.lastElementChild.hidden = true; }}, 'Turn on');
+    box.replaceChildren(
+      el('div', {class: 'steps'}, el('div', {}, el('span', {class: 'n'}, '1'), 'Add Emvryx to an authenticator app'), el('small', {style: 'color:var(--muted)'}, 'Any one works: Google Authenticator, Microsoft Authenticator, Authy, 1Password, Bitwarden.')),
+      el('a', {class: 'btn', href: j.uri, style: 'text-decoration:none;text-align:center;display:flex;align-items:center;justify-content:center;min-height:48px'}, 'Open my authenticator app'),
+      el('small', {style: 'color:var(--muted)'}, 'On a phone, that button adds it for you. Otherwise, choose “enter a setup key” in your app and type this:'),
+      el('div', {class: 'setupkey'}, j.secret), el('small', {style: 'color:var(--muted)'}, 'Name it Emvryx. Time based, 6 digits.'),
+      el('div', {class: 'steps'}, el('div', {}, el('span', {class: 'n'}, '2'), 'Type the 6-digit code it shows')), code, err2, verify);
+    code.addEventListener('input', () => { if (/^\d{6}$/.test(code.value)) verify.click(); });
+  };
+  if (rk.length) box.replaceChildren(el('p', {style: 'margin:0;color:var(--muted)'}, 'First, confirm it is you.'), ...rk, err, el('button', {class: 'btn', type: 'button', onclick: start}, 'Continue'));
+  else start();
+}
+function mfaOffDialog() {
+  const [rk, rb] = reauthFields(), err = sxErr();
+  const m = dialog([el('h2', {}, 'Turn off two-step sign-in?'), el('p', {style: 'margin:0;color:var(--muted)'}, 'Your account will only need your password again. Confirm it is you:'), ...rk, err,
+    el('button', {class: 'btn danger', type: 'button', onclick: async () => { const j = await sxPost('/api/account/mfa/disable', rb(), err); if (!j) return; m.remove(); sxReload(); }}, 'Turn off')], 'Keep it on');
+}
+function recoveryDialog() {
+  const [rk, rb] = reauthFields(), err = sxErr(), box = el('div', {style: 'display:flex;flex-direction:column;gap:14px'});
+  const m = dialog([el('h2', {}, 'New recovery codes'), box], 'Close');
+  box.replaceChildren(el('p', {style: 'margin:0;color:var(--muted)'}, 'This replaces your old codes, which stop working.'), ...rk, err,
+    el('button', {class: 'btn', type: 'button', onclick: async () => { const j = await sxPost('/api/account/mfa/recovery', rb(), err); if (!j) return; box.replaceChildren(...recoveryCodesView(j.recovery, () => { m.remove(); sxReload(); })); m.lastElementChild.hidden = true; }}, 'Make new codes'));
+}
+function deleteDialog() {
+  const a = SX.acct, [rk, rb] = reauthFields(), err = sxErr(), typed = sxInput('text', a.user);
+  const m = dialog([el('h2', {}, 'Delete your account?'), el('p', {style: 'margin:0;color:var(--muted)'}, 'This removes your chats, notes, memory, projects, GitHub link and devices, and cannot be undone. Type your name (' + a.user + ') to confirm.'), authField('Your name', typed), ...rk, err,
+    el('button', {class: 'btn danger', type: 'button', onclick: async () => { const j = await sxPost('/api/delete-account', Object.assign({confirm: typed.value.trim()}, rb()), err); if (j) location.reload(); }}, 'Delete everything')], 'Keep my account');
+}
+async function maybeNudge() {   // the owner's account is the one that matters most: ask once per visit until it has a password and two-step sign-in
+  document.querySelectorAll('#nudge').forEach((n) => n.remove());
+  if (!S.state || !S.state.owner) return;
+  try { if (sessionStorage.getItem('emvryx_nudge')) return; } catch (e) {}
+  let a; try { a = await (await api('/api/account')).json(); } catch (e) { return; }
+  if (a.has_password && a.mfa.on) return;
+  const bar = el('div', {class: 'nudge', id: 'nudge'}, el('span', {}, el('b', {style: 'color:var(--accenttext)'}, 'Protect the owner account: '), !a.has_password ? 'set a password' : 'turn on two-step sign-in', '.'),
+    sxBtn('Do it now', () => { bar.remove(); openSettings('security'); }, 'primary'), el('button', {class: 'x', type: 'button', 'aria-label': 'Not now', onclick: () => { bar.remove(); try { sessionStorage.setItem('emvryx_nudge', '1'); } catch (e) {} }}, 'Not now'));
+  $('banner').after(bar);
+}
+function toast(text) { const t = el('div', {class: 'sx-toast', role: 'status', style: 'position:fixed;left:50%;bottom:24px;transform:translateX(-50%);background:var(--surface2);border:1px solid var(--line);border-radius:999px;padding:10px 18px;z-index:80;box-shadow:0 8px 24px rgba(0,0,0,.4)'}, text); document.body.append(t); setTimeout(() => t.remove(), 3500); }
+
+// ---- the owner's pages
+async function adminPage(id) {
+  const host = $('sxAdmin'); if (!host) return;
+  try {
+    if (id === 'a-overview') {
+      const o = await (await api('/api/admin/overview')).json(), h = o.health, ok = o.checklist.filter((c) => c.ok).length;
+      host.replaceChildren(
+        el('div', {class: 'sx-sec', style: 'margin-top:0'}, 'Safe to share? ' + ok + ' of ' + o.checklist.length),
+        el('div', {class: 'sx-card'}, ...o.checklist.map((c) => el('div', {class: 'check'}, el('span', {class: 'mk ' + (c.ok ? 'ok' : 'no')}, c.ok ? '✓' : '!'), el('div', {}, el('b', {}, c.title), c.ok ? null : el('small', {}, c.how), !c.ok && ['password', 'mfa', 'email'].includes(c.id) ? sxBtn('Fix this', () => { SX.page = c.id === 'email' ? 'account' : 'security'; sxRender(true); }) : null)))),
+        el('div', {class: 'sx-sec'}, 'People'), el('div', {class: 'stats'}, ...[[o.people, 'people'], [o.banned, 'turned off'], ...Object.entries(o.plans).map(([k, v]) => [v, k + ' plan'])].map(([n, l]) => el('div', {class: 'stat'}, el('b', {}, n), el('span', {}, l)))),
+        el('div', {class: 'sx-sec'}, 'Last hour'), el('div', {class: 'stats'}, ...[[h.last_hour.sign_ins, 'sign-ins'], [h.last_hour.failed_tries, 'wrong tries'], [h.last_hour.lockouts, 'lockouts'], [h.devices_signed_in, 'devices signed in'], [h.server_errors, 'server errors'], [h.uptime_minutes + 'm', 'uptime']].map(([n, l]) => el('div', {class: 'stat'}, el('b', {}, n), el('span', {}, l)))),
+        el('div', {class: 'sx-sec'}, 'Controls'), sxCard([{title: 'Pause everyone', desc: 'Stops chats for everyone except you. Restart the server to clear it, or press Resume.', ctl: el('div', {style: 'display:flex;gap:8px'}, sxBtn('Pause', async () => { await post('/api/admin/pause', {paused: true}); toast('Paused for everyone but you.'); }, 'bad'), sxBtn('Resume', async () => { await post('/api/admin/pause', {paused: false}); toast('Resumed.'); }))},
+          {title: 'Live sources and keys', desc: 'Which lookups work and which keys are missing.', ctl: sxBtn('See sources', openSources)}]));
+    } else if (id === 'a-people') {
+      const j = await (await api('/api/admin/users')).json(), out = el('div', {style: 'word-break:break-all;color:var(--muted);font-size:14px'});
+      const name = sxInput('text', 'Name, e.g. sam', {'aria-label': 'Name'}), mail = sxInput('text', 'Email (optional)', {inputmode: 'email', 'aria-label': 'Email'}); let plan = 'free';
+      const link = async (u) => { const r = await post('/api/admin/pairing', {user: u}); const k = await r.json(); out.textContent = 'One-time link for ' + u + ' (' + k.pair_minutes + ' minutes, works once): ' + location.origin + '/pair/' + k.pair; };
+      host.replaceChildren(
+        el('div', {class: 'sx-card'}, ...j.users.map((u) => el('div', {class: 'srow stack'}, el('div', {class: 'stxt'}, el('b', {}, u.user, ' ', u.owner ? sxPill('Owner') : null, ' ', u.banned ? sxPill('Turned off', 'warn') : null), el('small', {}, u.tier + (u.email ? ' · ' + u.email : '') + (u.has_password ? ' · password' : '') + (u.mfa ? ' · two-step on' : ''))),
+          el('div', {class: 'sctl'}, sxBtn('Sign-in link', () => link(u.user)), u.mfa ? sxBtn('Reset two-step', async () => { if (confirm('Turn off two-step for ' + u.user + ' and sign them out everywhere?')) { await post('/api/admin/mfa-reset', {user: u.user}); toast('Two-step reset for ' + u.user + '.'); adminPage(id); } }) : null,
+            u.owner ? null : sxBtn(u.banned ? 'Turn on' : 'Turn off', async () => { await post('/api/admin/ban', {user: u.user, banned: !u.banned}); adminPage(id); }, u.banned ? '' : 'bad'))))),
+        out, el('div', {class: 'sx-sec'}, 'Add a person'),
+        el('div', {class: 'sx-card'}, el('div', {class: 'srow stack'}, authField('Name', name), authField('Email', mail), sxSeg([['free', 'Free'], ['pro', 'Pro'], ['mega', 'Mega']], 'free', (v) => { plan = v; }),
+          el('div', {}, sxBtn('Add and make a sign-in link', async () => { const r = await post('/api/admin/users', {user: name.value.trim(), tier: plan, email: mail.value.trim() || undefined}); const k = await r.json(); if (r.ok) { out.textContent = 'Send this link privately (works once, ' + k.pair_minutes + ' minutes): ' + location.origin + '/pair/' + k.pair + (k.key ? '\nTheir access key (shown once, not stored): ' + k.key : ''); adminPage(id); } else out.textContent = k.message; }, 'primary')))));
+    } else if (id === 'a-signups') {
+      const o = await (await api('/api/admin/overview')).json(), out = el('div', {class: 'srow', style: 'display:none'});
+      let tier = 'free', uses = 1;
+      const desc = {closed: 'Nobody can make an account. You add people yourself.', invite: 'People need a code from you. Good for a private beta.', open: 'Anyone who finds the page can make a free account. Only do this when you are ready for strangers and the GPU cost.'};
+      const modeNote = el('small', {style: 'color:var(--muted)'}, desc[o.signup_mode]);
+      const made = el('div', {});
+      host.replaceChildren(
+        el('div', {class: 'sx-card'}, el('div', {class: 'srow stack'}, el('div', {class: 'stxt'}, el('b', {}, 'Who can sign up'), modeNote), sxSeg([['closed', 'Closed'], ['invite', 'Invite only'], ['open', 'Open']], o.signup_mode, async (v) => { await post('/api/admin/signups', {mode: v}); modeNote.textContent = desc[v]; }))),
+        el('div', {class: 'sx-sec'}, 'Make an invite code'),
+        el('div', {class: 'sx-card'}, el('div', {class: 'srow stack'}, el('div', {class: 'stxt'}, el('b', {}, 'Plan it gives'), el('small', {}, 'People who use it start on this plan.')), sxSeg([['free', 'Free'], ['pro', 'Pro'], ['mega', 'Mega']], 'free', (v) => { tier = v; }),
+          el('div', {class: 'stxt'}, el('b', {}, 'Uses')), sxSeg([[1, 'One person'], [5, 'Five people'], [25, 'Twenty-five']], 1, (v) => { uses = Number(v); }),
+          el('div', {}, sxBtn('Make a code', async () => { const r = await post('/api/admin/invites', {tier, uses, days: 14}); const k = await r.json(); if (!r.ok) return toast(k.message);
+            made.replaceChildren(el('div', {class: 'authnote'}, 'Shown once. Valid 14 days. Send it privately.'), el('div', {class: 'setupkey'}, k.code), sxBtn('Copy', async (e) => { try { await navigator.clipboard.writeText(k.code); e.target.textContent = 'Copied'; } catch (x) {} })); }, 'primary'), made))),
+        el('div', {class: 'sx-sec'}, 'Active codes (' + o.invites.length + ')'),
+        el('div', {class: 'sx-card'}, ...(o.invites.length ? o.invites.map((i) => el('div', {class: 'srow inline'}, el('div', {class: 'stxt'}, el('b', {}, '…-' + i.ends_with + '  ·  ' + i.tier), el('small', {}, i.uses_left + ' use(s) left · ends ' + sxWhen(i.expires))), el('div', {class: 'sctl'}, sxBtn('Cancel', async () => { await post('/api/admin/invites/revoke', {id: i.id}); adminPage(id); }, 'bad')))) : [el('div', {class: 'srow'}, 'No active codes.')])));
+    } else if (id === 'a-log') {
+      const a = await (await api('/api/admin/audit?limit=100')).json();
+      host.replaceChildren(el('div', {class: 'sx-card'}, ...a.events.map((e) => el('div', {class: 'logline'}, el('time', {}, sxWhen(e.at)), el('b', {}, (EVENT_NAMES[e.kind] || e.kind) + (e.user ? ' · ' + e.user : '')), el('span', {}, [e.ip, e.detail].filter(Boolean).join(' · '))))));
+    }
+  } catch (e) { if (e.message !== 'login') host.textContent = 'Could not load this page.'; }
+}
+document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && document.querySelector('.sx') && !document.querySelector('.modal')) closeSettings(); });
 
 // ---------------------------------------------------------------- sending
 function thinkingNode() {
@@ -1731,30 +2039,100 @@ $('codeDirIn').onchange = async (e) => {
   await sendImport({files});
 };
 
-// ---------------------------------------------------------------- login
-function showLogin() { if (location.search.includes('notice=keylink')) { $('loginErr').textContent = 'Key links are turned off (a key in an address is easy to leak). Paste your key below, or ask the owner for a one-time sign-in link.'; history.replaceState(null, '', '/'); } offerEmailSignIn(); S.state = null; applyTheme(); $('login').hidden = false; $('app').hidden = true; $('loginBrand').replaceChildren(logo(32, false, 'brand'), 'Emvryx'); }
-async function offerEmailSignIn() {
-  document.querySelectorAll('#emailOpt').forEach((n) => n.remove());
-  try { const o = await (await fetch('/api/auth-options')).json(); if (!o.email) return; } catch (e) { return; }
-  $('loginForm').append(el('button', {class: 'btn ghost', type: 'button', id: 'emailOpt', onclick: emailSignIn}, 'Sign in with an email code instead'));
+// ---------------------------------------------------------------- sign in and sign up
+const AUTH = {opts: {}, view: 'signin'};
+async function authCall(url, body) {
+  let r; try { r = await fetch(url, {method: 'POST', credentials: 'same-origin', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(body)}); } catch (e) { throw new Error('Could not reach the server. Check your connection and try again.'); }
+  const j = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error((j.message || 'Something went wrong.') + (j.action ? ' ' + j.action : ''));
+  return j;
 }
-function emailSignIn() {
-  const email = el('input', {type: 'text', placeholder: 'you@example.com', autocomplete: 'email', 'aria-label': 'Email address', inputmode: 'email'}), code = el('input', {type: 'text', placeholder: '6-digit code', inputmode: 'numeric', 'aria-label': 'Code', hidden: true, autocomplete: 'one-time-code'});
-  const out = el('div', {style: 'color:var(--muted);font-size:14px'}); let step = 1;
-  const go = el('button', {class: 'btn', onclick: async () => {
-    out.style.color = 'var(--muted)';
-    const r = await fetch(step === 1 ? '/api/login/email/start' : '/api/login/email/verify', {method: 'POST', headers: {'Content-Type': 'application/json'}, credentials: 'same-origin', body: JSON.stringify({email: email.value, code: code.value})});
-    const j = await r.json();
-    if (!r.ok) { out.style.color = 'var(--danger)'; out.textContent = j.message + ' ' + (j.action || ''); return; }
-    if (step === 1) { step = 2; code.hidden = false; code.focus(); out.textContent = j.message; go.textContent = 'Sign in'; }
-    else { document.querySelectorAll('.modal').forEach((m) => { if (m.id !== 'login') m.remove(); }); load(); }
-  }}, 'Send me a code');
-  dialog([el('h2', {}, 'Sign in with email'), el('div', {style: 'color:var(--muted)'}, 'We email a 6-digit code to the address you were invited with. It works once, for 10 minutes.'), email, code, out, go], 'Cancel');
+function pwScore(pw) { if (!pw) return 0; let s = 0; if (pw.length >= 10) s++; if (pw.length >= 14) s++; if (/[a-z]/.test(pw) && /[A-Z0-9\W_]/.test(pw)) s++; if (new Set(pw).size >= 8) s++; return pw.length < 10 ? Math.min(s, 1) : Math.max(s, 1); }
+function pwBox(attrs, withMeter) {
+  const input = el('input', Object.assign({type: 'password', autocapitalize: 'none', autocorrect: 'off', spellcheck: 'false'}, attrs));
+  const eye = el('button', {type: 'button', class: 'eye', 'aria-label': 'Show password', onclick: () => { const show = input.type === 'password'; input.type = show ? 'text' : 'password'; eye.textContent = show ? 'Hide' : 'Show'; eye.setAttribute('aria-label', show ? 'Hide password' : 'Show password'); }}, 'Show');
+  const kids = [el('div', {class: 'pwwrap'}, input, eye)];
+  if (withMeter) {
+    const bars = el('div', {class: 'meter', 'data-s': '0', 'aria-hidden': 'true'}, el('i'), el('i'), el('i'), el('i')), word = el('div', {class: 'meterlabel'}, '10 or more characters. A few words in a row works well.');
+    input.addEventListener('input', () => { const s = pwScore(input.value); bars.dataset.s = input.value ? s : 0; word.textContent = !input.value ? '10 or more characters. A few words in a row works well.' : input.value.length < 10 ? 'Keep going: ' + (10 - input.value.length) + ' more characters.' : ['', 'Weak', 'Okay', 'Good', 'Strong'][s]; });
+    kids.push(bars, word);
+  }
+  return {input, node: el('div', {style: 'display:flex;flex-direction:column;gap:6px'}, ...kids)};
 }
-$('loginForm').onsubmit = async (e) => {
-  e.preventDefault(); const r = await fetch('/api/login', {method: 'POST', headers: {'Content-Type': 'application/json'}, credentials: 'same-origin', body: JSON.stringify({key: $('keyInput').value})});
-  if (r.ok) { $('keyInput').value = ''; load(); } else { const j = await r.json(); $('loginErr').textContent = j.message + ' ' + (j.action || ''); }
-};
+const authField = (label, input, hint) => el('label', {class: 'field'}, label, input, hint ? el('small', {class: 'hint'}, hint) : null);
+function authDone(j) { if (j.mfa) return authView('mfa', {ticket: j.ticket}); AUTH.view = 'signin'; return load(); }
+const HERO = [['lock', 'Private by design', 'Your chats stay on the server you sign in to. Private chats are never saved.'], ['spark', 'Five models, one account', 'Pick the one that fits the question, from quick Ember to deep Apogee.'], ['code', 'More than chat', 'It looks things up, reads your files and pictures, and builds projects with VryxCode.']];
+async function showLogin(note) {
+  S.state = null; applyTheme(); $('app').hidden = true; $('auth').hidden = false;
+  try { AUTH.opts = await (await fetch('/api/auth-options')).json(); } catch (e) { AUTH.opts = {}; }
+  if (location.search.includes('notice=keylink')) { note = 'Key links are turned off (a key in an address is easy to leak). Sign in below, or ask the owner for a one-time sign-in link.'; history.replaceState(null, '', '/'); }
+  authView(AUTH.view === 'signup' && ['open', 'invite'].includes(AUTH.opts.signup) ? 'signup' : 'signin', {note});
+}
+function authView(view, ctx) {
+  AUTH.view = view; ctx = ctx || {};
+  const o = AUTH.opts, signups = ['open', 'invite'].includes(o.signup);
+  const err = el('div', {class: 'autherr', role: 'alert'}, ctx.note || '');
+  const go = (label) => el('button', {class: 'btn', type: 'submit', style: 'min-height:50px'}, label);
+  const form = (btn, kids, fn) => el('form', {novalidate: 'novalidate', onsubmit: async (e) => { e.preventDefault(); if (btn.disabled) return; err.textContent = ''; btn.disabled = true; const t = btn.textContent; btn.textContent = 'One moment...'; try { await fn(); } catch (x) { err.textContent = x.message || 'Something went wrong.'; } btn.disabled = false; btn.textContent = t; }}, ...kids, err, btn);
+  const back = (label, v) => el('button', {class: 'linkbtn', type: 'button', onclick: () => authView(v || 'signin')}, label || 'Back to sign in');
+  const tabs = () => el('div', {class: 'tabs2', role: 'tablist'}, el('button', {type: 'button', class: view === 'signin' ? 'on' : '', role: 'tab', onclick: () => authView('signin')}, 'Sign in'), el('button', {type: 'button', class: view === 'signup' ? 'on' : '', role: 'tab', onclick: () => authView('signup')}, 'Create account'));
+  const legal = el('div', {class: 'legal'}, 'By continuing you agree to the ', el('a', {href: '/terms', target: '_blank', rel: 'noopener'}, 'Terms'), ' and have read the ', el('a', {href: '/privacy', target: '_blank', rel: 'noopener'}, 'Privacy'), ' page.');
+  let body;
+  if (view === 'signin') {
+    const id = el('input', {type: 'text', autocomplete: 'username', autocapitalize: 'none', autocorrect: 'off', spellcheck: 'false', placeholder: 'Name or email', 'aria-label': 'Name or email'}), pw = pwBox({autocomplete: 'current-password', placeholder: 'Your password', 'aria-label': 'Password'});
+    const btn = go('Sign in');
+    body = [signups ? tabs() : null, el('h2', {}, 'Welcome back'), el('p', {class: 'sub'}, 'Sign in to keep going where you left off.'),
+      form(btn, [authField('Name or email', id), authField('Password', pw.node)], async () => {
+        if (!id.value.trim() || !pw.input.value) throw new Error('Enter your name (or email) and your password.');
+        authDone(await authCall('/api/login/password', {id: id.value, password: pw.input.value}));
+      }),
+      el('div', {class: 'or'}, 'or'),
+      el('div', {class: 'alt'}, ...(o.email ? [el('button', {class: 'btn ghost', type: 'button', onclick: () => authView('email')}, 'Email me a sign-in code')] : []),
+        el('button', {class: 'btn ghost', type: 'button', onclick: () => authView('key')}, 'Use an access key or link')),
+      el('div', {class: 'hint'}, o.email ? 'Forgot your password? Email yourself a code, then choose a new password in Settings > Security.' : 'Forgot your password? Ask the owner for a one-time sign-in link, then choose a new one in Settings > Security.'),
+      !signups ? el('div', {class: 'authnote'}, 'New here? Accounts are by invitation right now. Ask the owner for a sign-in link.') : null, legal];
+    setTimeout(() => id.focus(), 50);
+  } else if (view === 'signup') {
+    const name = el('input', {type: 'text', autocomplete: 'username', autocapitalize: 'none', autocorrect: 'off', spellcheck: 'false', placeholder: 'e.g. sam_k', maxlength: '32', 'aria-label': 'Name'}), email = el('input', {type: 'text', inputmode: 'email', autocomplete: 'email', autocapitalize: 'none', placeholder: 'you@example.com', 'aria-label': 'Email'}),
+      pw = pwBox({autocomplete: 'new-password', placeholder: 'Choose a password', 'aria-label': 'Password'}, true), invite = el('input', {type: 'text', autocapitalize: 'none', autocorrect: 'off', spellcheck: 'false', placeholder: 'xxxx-xxxx-xxxx', 'aria-label': 'Invite code'});
+    const btn = go('Create account');
+    body = [tabs(), el('h2', {}, 'Create your account'), el('p', {class: 'sub'}, o.signup === 'invite' ? 'You need an invite code from the owner.' : 'Free to start. Pick a name and a password.'),
+      form(btn, [o.signup === 'invite' ? authField('Invite code', invite) : null, authField('Name', name, 'Letters, numbers, - and _ (3 to 32). This is how you sign in.'), authField('Email', email, 'Used to sign in with a code and to recover your account.'), authField('Password', pw.node)], async () => {
+        authDone(await authCall('/api/signup', {name: name.value, email: email.value, password: pw.input.value, invite: invite.value}));
+      }), legal];
+    setTimeout(() => (o.signup === 'invite' ? invite : name).focus(), 50);
+  } else if (view === 'mfa') {
+    let rec = false;
+    const code = el('input', {type: 'text', class: 'codein', inputmode: 'numeric', autocomplete: 'one-time-code', maxlength: '6', placeholder: '000000', 'aria-label': 'Code from your authenticator app'}), btn = go('Verify and sign in');
+    const swap = el('button', {class: 'linkbtn', type: 'button', onclick: () => { rec = !rec; code.value = ''; code.classList.toggle('rec', rec); code.maxLength = rec ? 12 : 6; code.inputMode = rec ? 'text' : 'numeric'; code.placeholder = rec ? 'xxxx-xxxx' : '000000'; swap.textContent = rec ? 'Use my authenticator app instead' : 'I lost my phone: use a recovery code'; code.focus(); }}, 'I lost my phone: use a recovery code');
+    body = [el('h2', {}, 'Two-step check'), el('p', {class: 'sub'}, 'Open your authenticator app and type the 6-digit code for Emvryx.'),
+      form(btn, [authField('Code', code)], async () => { if (!code.value.trim()) throw new Error('Type the code first.'); authDone(await authCall('/api/login/mfa', {ticket: ctx.ticket, code: code.value})); }), swap, back('Start again')];
+    code.addEventListener('input', () => { if (!rec && /^\d{6}$/.test(code.value)) btn.click(); });
+    setTimeout(() => code.focus(), 50);
+  } else if (view === 'email') {
+    let step = 1;
+    const email = el('input', {type: 'text', inputmode: 'email', autocomplete: 'email', autocapitalize: 'none', placeholder: 'you@example.com', 'aria-label': 'Email'}), code = el('input', {type: 'text', class: 'codein', inputmode: 'numeric', autocomplete: 'one-time-code', maxlength: '6', placeholder: '000000', 'aria-label': 'Code from the email'}), btn = go('Email me a code');
+    const cf = authField('Code from the email', code, 'It works once, for 10 minutes.'); cf.hidden = true;
+    const info = el('div', {class: 'authnote'}); info.hidden = true;
+    body = [el('h2', {}, 'Sign in with email'), el('p', {class: 'sub'}, 'We email a 6-digit code to the address on your account.'),
+      form(btn, [authField('Email', email), info, cf], async () => {
+        if (step === 1) { const j = await authCall('/api/login/email/start', {email: email.value}); step = 2; cf.hidden = false; info.hidden = false; info.textContent = j.message; btn.textContent = 'Sign in'; code.focus(); return; }
+        authDone(await authCall('/api/login/email/verify', {email: email.value, code: code.value}));
+      }), back()];
+    setTimeout(() => email.focus(), 50);
+  } else {   // key
+    const key = pwBox({autocomplete: 'off', placeholder: 'Your access key', 'aria-label': 'Access key'}), btn = go('Continue');
+    body = [el('h2', {}, 'Use an access key'), el('p', {class: 'sub'}, 'Paste the key the owner gave you. If you have a password, sign in with that instead.'),
+      form(btn, [authField('Access key', key.node)], async () => authDone(await authCall('/api/login', {key: key.input.value.trim()}))), back()];
+    setTimeout(() => key.input.focus(), 50);
+  }
+  const mark = () => el('div', {class: 'mark'}, logo(view === 'signin' ? 36 : 32, false, 'brand'), 'Emvryx');
+  $('auth').replaceChildren(
+    el('div', {class: 'hero'}, mark(), el('h1', {}, 'One family of models. ', el('em', {}, 'Yours to run.')), el('p', {}, 'Emvryx is an AI assistant that runs on its own models: fast for everyday questions, deep for the hard ones.'),
+      el('ul', {}, ...HERO.map(([ico, t, d]) => el('li', {}, el('i', {}, icon(ico)), el('div', {}, el('b', {}, t), el('span', {}, d)))))),
+    el('div', {class: 'panel'}, el('div', {class: 'card'}, mark(), ...body)));
+}
+
 matchMedia('(prefers-color-scheme: light)').addEventListener('change', () => { if (S.theme === 'auto') applyTheme(); });
 if ('serviceWorker' in navigator) navigator.serviceWorker.register('/sw.js').catch(() => {});
 load().catch(() => {});

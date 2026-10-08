@@ -88,6 +88,7 @@ class AuthDB:
                                                      expires REAL, device TEXT, ip TEXT, revoked INTEGER DEFAULT 0);
                 CREATE TABLE IF NOT EXISTS pairs (token_hash TEXT PRIMARY KEY, user TEXT, expires REAL, used INTEGER DEFAULT 0, made_by TEXT);
                 CREATE TABLE IF NOT EXISTS codes (email TEXT PRIMARY KEY, code_hash TEXT, expires REAL, tries INTEGER DEFAULT 0);
+                CREATE TABLE IF NOT EXISTS invites (id TEXT PRIMARY KEY, code_hash TEXT UNIQUE, tier TEXT, uses_left INTEGER, expires REAL, note TEXT, made REAL, hint TEXT);
                 CREATE TABLE IF NOT EXISTS events (id INTEGER PRIMARY KEY AUTOINCREMENT, at REAL, kind TEXT, user TEXT, ip TEXT, detail TEXT);
             """)
             self.db.commit()
@@ -150,6 +151,7 @@ class AuthDB:
             self.db.execute("DELETE FROM sessions WHERE revoked = 1 OR expires < ?", (now - 7 * 86400,))
             self.db.execute("DELETE FROM pairs WHERE used = 1 OR expires < ?", (now - 86400,))
             self.db.execute("DELETE FROM codes WHERE expires < ?", (now,))
+            self.db.execute("DELETE FROM invites WHERE expires < ? OR uses_left <= 0", (now - 86400,))
             self.db.commit()
 
     # ---- one-time pairing links
@@ -204,6 +206,45 @@ class AuthDB:
             self.db.execute("UPDATE codes SET tries = tries + 1 WHERE email = ?", (email,))
             self.db.commit()
             return False
+
+    # ---- invite codes (for a closed sign-up: the owner makes a code, someone uses it once or a few times)
+    def new_invite(self, tier="free", uses=1, days=14, note="", now=None):
+        now = time.time() if now is None else now
+        code = "-".join(secrets.token_hex(2) for _ in range(3))
+        with self.lock:
+            self.db.execute("INSERT INTO invites VALUES (?, ?, ?, ?, ?, ?, ?, ?)", (secrets.token_hex(4), digest(code), tier, max(1, int(uses)),
+                                                                                   now + days * 86400, str(note)[:60], now, code[-4:]))
+            self.db.commit()
+        return code
+
+    def peek_invite(self, code, now=None):
+        """The plan an invite code gives, WITHOUT using it, or None."""
+        now = time.time() if now is None else now
+        with self.lock:
+            row = self.db.execute("SELECT tier FROM invites WHERE code_hash = ? AND uses_left > 0 AND expires >= ?", (digest(str(code).strip().lower()), now)).fetchone()
+        return row[0] if row else None
+
+    def use_invite(self, code, now=None):
+        now = time.time() if now is None else now
+        with self.lock:
+            cur = self.db.execute("UPDATE invites SET uses_left = uses_left - 1 WHERE code_hash = ? AND uses_left > 0 AND expires >= ?",
+                                  (digest(str(code).strip().lower()), now))
+            self.db.commit()
+            if not cur.rowcount:
+                return None
+            return self.db.execute("SELECT tier FROM invites WHERE code_hash = ?", (digest(str(code).strip().lower()),)).fetchone()[0]
+
+    def invites(self, now=None):
+        now = time.time() if now is None else now
+        with self.lock:
+            rows = self.db.execute("SELECT id, tier, uses_left, expires, note, hint FROM invites WHERE uses_left > 0 AND expires >= ? ORDER BY made DESC", (now,)).fetchall()
+        return [{"id": r[0], "tier": r[1], "uses_left": r[2], "expires": r[3], "note": r[4], "ends_with": r[5]} for r in rows]
+
+    def revoke_invite(self, invite_id):
+        with self.lock:
+            cur = self.db.execute("DELETE FROM invites WHERE id = ?", (str(invite_id),))
+            self.db.commit()
+            return cur.rowcount > 0
 
     # ---- the audit log
     def event(self, kind, user="", ip="", detail="", now=None):

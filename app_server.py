@@ -47,6 +47,7 @@ import urllib.parse
 import urllib.request
 
 import app_engine as E
+import accounts
 import auth
 import chat
 import data_tools
@@ -84,7 +85,7 @@ MAX_BODY = 1_000_000
 OUTSIDE_NOTE = ("{label} is an outside coding model ({licence}), not an Emvryx model: it is strong at code but does not carry Emvryx's lessons. "
                 "Anything it writes is its work, and it is counted like Solstice.")
 SECURITY_DEFAULTS = {"session_days": 90, "pair_minutes": 15, "login_fail_limit": 8, "login_fail_window": 600, "email_start_limit": 5,
-                     "email_start_window": 600, "open_signups": False, "trusted_proxies": ["127.0.0.1", "::1"], "audit_notify": True,
+                     "email_start_window": 600, "open_signups": False, "signup_mode": "closed", "trusted_proxies": ["127.0.0.1", "::1"], "audit_notify": True,
                      "allow_key_links": False, "allowed_origins": [], "code_unsandboxed_for_others": False,
                      "require_encryption": False, "github_client_id": "", "contact_email": "", "operator_name": "", "alert_ntfy_topic": "",
                      **code_sandbox.QUOTA_DEFAULTS}
@@ -290,12 +291,14 @@ class AppState:
         self.usage = U.UsageStore(os.path.join(data_dir, "usage.db") if data_dir else ":memory:")
         self.limiter = U.Limiter(self.usage, self.cfg, self.manifest)
         self.stores, self.stops, self.settings = {}, {}, {}
+        self._load_settings()
         self.lock = threading.Lock()
         self.auth = auth.AuthDB(os.path.join(data_dir, "auth.db") if data_dir else ":memory:")
         self.rl = auth.RateLimiter()                           # per-address sliding windows (sign-in failures, email codes)
         self.security = self._load_security()
         self.auth.prune()
         self.mailer = mailer.from_env()                        # None until EMVRYX_SMTP_* is set: email sign-in is then off
+        self._mfa_pending, self.mfa_tickets = {}, {}              # person -> the authenticator secret being set up; ticket hash -> a sign-in waiting for its code
         self._fresh = {}                                       # key hash -> the key, ONLY for keys made in this run (so they can be shown once)
         self._users_mtime = 0
         self.users = self._load_users()
@@ -451,7 +454,7 @@ class AppState:
     def _who_of(self, entry):
         row = self.usage.get_user(entry["user"])
         return {"user": entry["user"], "owner": row["owner"], "tier": row["tier"], "banned": bool(entry.get("banned")),
-                "email": entry.get("email")}
+                "email": entry.get("email"), "has_password": bool(entry.get("pw")), "mfa": bool((entry.get("mfa") or {}).get("on"))}
 
     def who(self, key):
         """The person a key belongs to, or None."""
@@ -480,7 +483,7 @@ class AppState:
 
     def user_by_email(self, email):
         email = auth.clean_email(email)
-        return next((u for u in self.users.values() if email and u.get("email") == email), None)
+        return next((u for u in self.users.values() if email and u.get("email") == email and u.get("email_verified") is not False), None)
 
     def set_ban(self, name, banned):
         rec = self.user_record(name)
@@ -514,6 +517,172 @@ class AppState:
         for k in self._entries(name):
             self.users[k]["email_verified"] = True
         self._save_users()
+
+    # ---- passwords, MFA, sign-up
+    # Kept in the person's users.json entry: "pw" (a scrypt hash) and "mfa" {"secret" (encrypted), "on", "last" (last time step used), "recovery" [hashes]}.
+    def _set_fields(self, name, **fields):
+        for k in self._entries(name):
+            self.users[k].update(fields)
+        self._save_users()
+
+    def find_login(self, ident):
+        """The account a sign-in name or email points to (a name, or a verified email), or None."""
+        ident = str(ident or "").strip()
+        if "@" in ident:
+            return self.user_by_email(ident)
+        return next((u for u in self.users.values() if u["user"].lower() == ident.lower()), None)
+
+    def check_password(self, ident, password):
+        """The account when the password is right, else None (a missing account costs the same time as a wrong password)."""
+        rec = self.find_login(ident)
+        if not rec or not rec.get("pw"):
+            accounts.burn_time(password)
+            return None
+        return rec if accounts.verify_password(password, rec["pw"]) else None
+
+    def set_password(self, name, password):
+        problem = accounts.password_problem(password, name, (self.user_record(name) or {}).get("email", ""))
+        if problem:
+            raise ValueError(problem)
+        self._set_fields(name, pw=accounts.hash_password(password))
+        self.auth.event("password_set", name, "", "")
+
+    def mfa_on(self, name):
+        rec = self.user_record(name)
+        return bool(rec and (rec.get("mfa") or {}).get("on"))
+
+    def mfa_info(self, name):
+        m = (self.user_record(name) or {}).get("mfa") or {}
+        return {"on": bool(m.get("on")), "recovery_left": len(m.get("recovery") or [])}
+
+    def mfa_begin(self, name):
+        """A fresh secret for the person to add to their authenticator app. It is not active until a code from the app proves it works."""
+        secret = accounts.new_secret()
+        self._mfa_pending[name] = {"secret": secret, "expires": time.time() + 900}
+        rec = self.user_record(name) or {}
+        account = rec.get("email") or name
+        return {"secret": accounts.group_secret(secret), "uri": accounts.otpauth_uri(account, secret)}
+
+    def mfa_enable(self, name, code):
+        """The 8 recovery codes (shown once) when `code` from the app matches the pending secret, else None."""
+        pend = self._mfa_pending.get(name)
+        if not pend or pend["expires"] < time.time():
+            return None
+        counter = accounts.check_totp(pend["secret"], code)
+        if counter is None:
+            return None
+        codes = accounts.make_recovery_codes()
+        self._set_fields(name, mfa={"secret": self.secrets.encrypt(pend["secret"]), "on": True, "last": counter,
+                                    "recovery": [accounts.hash_recovery(c) for c in codes]})
+        self._mfa_pending.pop(name, None)
+        self.auth.event("mfa_on", name, "", "")
+        return codes
+
+    def mfa_disable(self, name):
+        self._set_fields(name, mfa={})
+        self.auth.event("mfa_off", name, "", "")
+
+    def mfa_new_recovery(self, name):
+        rec = self.user_record(name)
+        m = dict((rec or {}).get("mfa") or {})
+        if not m.get("on"):
+            raise ValueError("Turn on two-step sign-in first.")
+        codes = accounts.make_recovery_codes()
+        m["recovery"] = [accounts.hash_recovery(c) for c in codes]
+        self._set_fields(name, mfa=m)
+        self.auth.event("mfa_recovery_new", name, "", "")
+        return codes
+
+    def mfa_check(self, name, code):
+        """True when `code` is a right authenticator code (not used before) or an unused recovery code."""
+        if self.rl.blocked("mfa:" + name, 10, 600):
+            return False
+        rec = self.user_record(name)
+        m = dict((rec or {}).get("mfa") or {})
+        if not m.get("on"):
+            return False
+        secret = self.secrets.decrypt(m.get("secret"))
+        counter = accounts.check_totp(secret, code, m.get("last", 0)) if secret else None
+        if counter is not None:
+            m["last"] = counter
+            self._set_fields(name, mfa=m)
+            return True
+        used, left = accounts.use_recovery(m.get("recovery") or [], code)
+        if used:
+            m["recovery"] = left
+            self._set_fields(name, mfa=m)
+            self.auth.event("mfa_recovery_used", name, "", f"{len(left)} left")
+            return True
+        self.rl.hit("mfa:" + name)
+        return False
+
+    def mfa_ticket(self, name, how):
+        """A short-lived ticket that says 'the first step of signing in is done': the second step (a code) trades it for a session."""
+        now = time.time()
+        for k in [k for k, v in self.mfa_tickets.items() if v["expires"] < now]:
+            self.mfa_tickets.pop(k, None)
+        while len(self.mfa_tickets) > 500:
+            self.mfa_tickets.pop(next(iter(self.mfa_tickets)))
+        ticket = secrets.token_urlsafe(24)
+        self.mfa_tickets[auth.digest(ticket)] = {"user": name, "how": how, "expires": now + 300, "tries": 0}
+        return ticket
+
+    def mfa_finish(self, ticket, code):
+        """(name, how) when the ticket is live and the code is right; otherwise None. A ticket allows 5 wrong codes."""
+        t = self.mfa_tickets.get(auth.digest(ticket or ""))
+        if not t or t["expires"] < time.time():
+            return None
+        if self.mfa_check(t["user"], code):
+            self.mfa_tickets.pop(auth.digest(ticket), None)
+            return t["user"], t["how"]
+        t["tries"] += 1
+        if t["tries"] >= 5:
+            self.mfa_tickets.pop(auth.digest(ticket), None)
+        return None
+
+    def signup_mode(self):
+        return self.security.get("signup_mode") if self.security.get("signup_mode") in ("closed", "invite", "open") else "closed"
+
+    def save_security(self, **changes):
+        """Change a setting in security.json (and keep it for the next start)."""
+        clean = {k: v for k, v in changes.items() if k in SECURITY_DEFAULTS}
+        self.security.update(clean)
+        if self.data_dir:
+            path = os.path.join(self.data_dir, "security.json")
+            try:
+                with open(path, encoding="utf-8") as f:
+                    saved = json.load(f)
+            except (OSError, ValueError):
+                saved = {}
+            saved.update(clean)
+            fd = os.open(path + ".tmp", os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+            with os.fdopen(fd, "w", encoding="utf-8") as f:
+                json.dump(saved, f, indent=2)
+            os.replace(path + ".tmp", path)
+
+    def create_account(self, name, email, password, tier="free"):
+        """A person who signed up with a name, an email and a password. Raises ValueError with a sentence the person can read."""
+        name = accounts.clean_name(name)
+        if not name:
+            raise ValueError("A name is 3 to 32 letters, numbers, - or _ (and not a reserved word like admin).")
+        email = auth.clean_email(email)
+        if not email:
+            raise ValueError("That does not look like an email address.")
+        problem = accounts.password_problem(password, name, email)
+        if problem:
+            raise ValueError(problem)
+        if self.user_record(name) or any(u["user"].lower() == name.lower() for u in self.users.values()):
+            raise ValueError("That name is taken. Try another.")
+        if any(u.get("email") == email for u in self.users.values()):
+            raise ValueError("There is already an account with that email. Sign in instead.")
+        entry = {"user": name, "tier": tier, "owner": False, "tz_minutes": 0, "email": email, "email_verified": False,
+                 "pw": accounts.hash_password(password), "created": int(time.time())}
+        self.users["e:" + name] = entry
+        self._save_users()
+        self._ensure_usage_user(entry)
+        self.set_plan(name, tier)
+        self.auth.event("signup", name, "", "password")
+        return name
 
     def set_plan(self, name, tier):
         if tier not in self.cfg["tiers"]:
@@ -563,6 +732,29 @@ class AppState:
             while len(self.lookups) > 200:
                 self.lookups.pop(next(iter(self.lookups)))
 
+    def _load_settings(self):
+        """Each person's settings are kept in settings.json, so a restart does not put them back to the defaults."""
+        if not self.data_dir:
+            return
+        try:
+            with open(os.path.join(self.data_dir, "settings.json"), encoding="utf-8") as f:
+                data = json.load(f)
+            if isinstance(data, dict):
+                self.settings = {k: v for k, v in data.items() if isinstance(v, dict)}
+        except (OSError, ValueError):
+            pass
+
+    def _save_settings(self):
+        if not self.data_dir:
+            return
+        path = os.path.join(self.data_dir, "settings.json")
+        try:
+            with open(path + ".tmp", "w", encoding="utf-8") as f:
+                json.dump(self.settings, f)
+            os.replace(path + ".tmp", path)
+        except OSError:
+            pass
+
     def get_settings(self, user):
         s = {"window_mode": "everyday", "show_tokens": False, "web_search": "auto", "memory": True, "thinking_pause": "short", "live_data": True}
         s.update(self.settings.get(user, {}))
@@ -583,6 +775,7 @@ class AppState:
         if new.get("web_search") in lookup_auto.MODES:
             s["web_search"] = new["web_search"]
         self.settings[user] = s
+        self._save_settings()
         return s
 
     # ---- models
@@ -673,6 +866,23 @@ class AppState:
                 "coding_running": sum(1 for x in self.code.sessions.values() if x.state in ("starting", "working", "asking")),
                 "encryption": self.secrets.available, "email_sign_in": bool(self.mailer), "code_sandbox": self.code.sandbox.get("mode", "none"),
                 "alerts_on": bool(self.security.get("alert_ntfy_topic"))}
+
+    def admin_overview(self, who):
+        """What the owner sees first in the Admin area: sign-up mode, invites, and a checklist of what makes this server safe to share."""
+        rec = self.user_record(who["user"]) or {}
+        mfa = bool((rec.get("mfa") or {}).get("on"))
+        check = lambda id_, ok, title, how: {"id": id_, "ok": bool(ok), "title": title, "how": how}
+        people = list({u["user"]: u for u in self.users.values()}.values())
+        return {"signup_mode": self.signup_mode(), "invites": self.auth.invites(), "people": len(people), "banned": sum(1 for u in people if u.get("banned")),
+                "plans": {t: sum(1 for u in people if self.usage.get_user(u["user"])["tier"] == t) for t in self.cfg["tiers"]},
+                "checklist": [
+                    check("password", rec.get("pw"), "Your owner account has a password", "Settings > Security > Set a password."),
+                    check("mfa", mfa, "Your owner account uses two-step sign-in", "Settings > Security > Two-step sign-in."),
+                    check("email", rec.get("email") and rec.get("email_verified") is not False, "Your owner account has an email address", "Settings > Account."),
+                    check("encryption", self.secrets.available, "Saved tokens and two-step secrets are encrypted", "pip install cryptography, then restart."),
+                    check("alerts", self.security.get("alert_ntfy_topic"), "Security alerts reach your phone", "Set alert_ntfy_topic in security.json (see docs/SECURITY.md)."),
+                    check("mail", self.mailer, "Email sign-in codes work", "Set EMVRYX_SMTP_* (see docs/DEPLOY.md). Optional.")],
+                "health": self.health()}
 
     # ---- GitHub (a connected app)
     def github_client_id(self):
@@ -1328,7 +1538,8 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 self._fail("bad pairing link")
                 return self._send(410, "This pairing link was already used or has expired. Ask for a new one.\n", "text/plain; charset=utf-8")
             if path == "/api/auth-options":
-                return self._send(200, {"email": bool(self.state.mailer), "signups": bool(self.state.mailer and self.state.security["open_signups"])})
+                return self._send(200, {"email": bool(self.state.mailer), "signups": bool(self.state.mailer and self.state.security["open_signups"]),
+                                        "password": True, "signup": self.state.signup_mode()})
             if path in ("/privacy", "/terms"):
                 return self._file(path[1:] + ".html", "text/html; charset=utf-8")
             if path == "/manifest.webmanifest":
@@ -1382,6 +1593,12 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 data = data_tools.export_zip(self.state, who["user"])
                 self.state.auth.event("data_export", who["user"], self._ip(), "")
                 return self._send(200, data, "application/zip", {"Content-Disposition": f'attachment; filename="emvryx-{who["user"]}-data.zip"'})
+            if path == "/api/account":
+                return self.api_account_get(who)
+            if path == "/api/account/activity":
+                return self._send(200, {"events": self.state.auth.events(30, None, who["user"])})
+            if path == "/api/admin/overview" and who["owner"]:
+                return self._send(200, self.state.admin_overview(who))
             if path == "/api/sessions":
                 return self._send(200, {"sessions": [dict(x, current=(x["id"] == who.get("session"))) for x in self.state.auth.sessions_for(who["user"])]})
             if path == "/api/admin/health" and who["owner"]:
@@ -1390,7 +1607,8 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 return self._send(200, {"events": self.state.auth.events(int((qs.get("limit") or ["100"])[0]), (qs.get("kind") or [None])[0])})
             if path == "/api/admin/users" and who["owner"]:
                 return self._send(200, {"users": [{"user": u["user"], "tier": self.state.usage.get_user(u["user"])["tier"], "email": u.get("email"),
-                                                   "banned": bool(u.get("banned")), "owner": bool(u.get("owner"))}
+                                                   "banned": bool(u.get("banned")), "owner": bool(u.get("owner")), "mfa": bool((u.get("mfa") or {}).get("on")),
+                                                   "has_password": bool(u.get("pw")), "created": u.get("created")}
                                                   for u in self.state.users.values()], "paused": bool(self.state.cfg.get("paused"))})
             return self._send(404, {"code": "not_found", "message": "Not found."})
         except (BrokenPipeError, ConnectionResetError):
@@ -1430,8 +1648,13 @@ class Handler(http.server.BaseHTTPRequestHandler):
                     return self._send(401, {"code": "bad_key", "message": "That key isn't right.", "action": "Check it and try again."})
                 if who["banned"]:
                     return self._send(403, {"code": "banned", "message": "This account has been turned off.", "action": "Ask the owner if you think that is a mistake."})
-                self._start_session(who["user"], "key")
-                return self._send(200, {"ok": True})
+                return self._finish_login(who["user"], "key")
+            if path == "/api/login/password":
+                return self.api_password_login(body)
+            if path == "/api/login/mfa":
+                return self.api_mfa_login(body)
+            if path == "/api/signup":
+                return self.api_signup(body)
             if path == "/api/login/email/start":
                 return self.api_email_start(body)
             if path == "/api/login/email/verify":
@@ -1439,7 +1662,13 @@ class Handler(http.server.BaseHTTPRequestHandler):
             who = self._who()
             if not who:
                 return
+            if path.startswith("/api/account/"):
+                return self.api_account(who, path, body)
             if path == "/api/delete-account":
+                if who.get("has_password") or who.get("mfa"):
+                    err = self._reauth(who, body)
+                    if err:
+                        return self._send(400, {"code": "reauth", "message": err, "action": "Nothing was deleted."})
                 if str(body.get("confirm", "")) != who["user"]:
                     return self._send(400, {"code": "confirm", "message": "Type your name to confirm.", "action": "Nothing was deleted."})
                 try:
@@ -1888,6 +2117,180 @@ class Handler(http.server.BaseHTTPRequestHandler):
                          "generating": (who["user"], cid) in self.state.stops,
                          "docs": [d for d in (self.state.docs_for(who["user"]).info(i) for i in store.docs(cid)) if d]})
 
+    def _finish_login(self, user, how):
+        """The first step (a key, a password, an email code) is right: start the session, or ask for the authenticator code when the person turned that on."""
+        st = self.state
+        if st.mfa_on(user):
+            return self._send(200, {"mfa": True, "ticket": st.mfa_ticket(user, how)})
+        self._start_session(user, how)
+        return self._send(200, {"ok": True})
+
+    def api_password_login(self, body):
+        st = self.state
+        if self._locked():
+            return
+        ident, password = str(body.get("id", "")).strip()[:254], str(body.get("password", ""))[:400]
+        key = "pw:" + ident.lower()
+        wait = st.rl.blocked(key, 20, 3600)
+        if wait:
+            return self._send(429, {"code": "too_many", "message": "Too many wrong tries for that account.", "action": f"Wait about {max(1, wait // 60)} minute(s), or use an email code.",
+                                    "retry_after": wait}, headers={"Retry-After": str(wait)})
+        rec = st.check_password(ident, password)
+        if not rec:
+            st.rl.hit(key)
+            if len(st.rl.hits) > 5000:
+                st.rl.trim(3600)
+            self._fail("bad password")
+            return self._send(401, {"code": "bad_login", "message": "That name or password isn't right.", "action": "Check them and try again."})
+        st.rl.clear(key)
+        if rec.get("banned"):
+            return self._send(403, {"code": "banned", "message": "This account has been turned off.", "action": "Ask the owner if you think that is a mistake."})
+        return self._finish_login(rec["user"], "password")
+
+    def api_mfa_login(self, body):
+        st = self.state
+        if self._locked():
+            return
+        res = st.mfa_finish(str(body.get("ticket", "")), str(body.get("code", "")))
+        if not res:
+            self._fail("bad two-step code")
+            return self._send(401, {"code": "bad_code", "message": "That code isn't right, or it has run out.",
+                                    "action": "Use the newest 6-digit code from your authenticator app, or one of your recovery codes."})
+        user, how = res
+        rec = st.user_record(user)
+        if not rec or rec.get("banned"):
+            return self._send(403, {"code": "banned", "message": "This account has been turned off.", "action": "Ask the owner if you think that is a mistake."})
+        self._start_session(user, how + " + two-step")
+        return self._send(200, {"ok": True})
+
+    def api_signup(self, body):
+        st = self.state
+        mode = st.signup_mode()
+        if mode == "closed":
+            return self._send(403, {"code": "signups_closed", "message": "Sign-ups are closed right now.", "action": "Ask the owner for an invite code or a sign-in link."})
+        ip = self._ip()
+        wait = st.rl.blocked("signup:" + ip, 5, 3600)
+        if wait:
+            return self._send(429, {"code": "too_many", "message": "Too many accounts were made from this address.", "action": f"Try again in about {max(1, wait // 60)} minute(s).",
+                                    "retry_after": wait}, headers={"Retry-After": str(wait)})
+        if self._locked():
+            return
+        invite, tier = str(body.get("invite", "")).strip(), "free"
+        if mode == "invite":
+            tier = st.auth.peek_invite(invite) if invite else None
+            if not tier:
+                self._fail("bad invite code")
+                return self._send(403, {"code": "bad_invite", "message": "That invite code isn't right, or it has run out.", "action": "Ask the owner for a new one."})
+        try:
+            name = st.create_account(body.get("name"), body.get("email"), str(body.get("password", "")), tier)
+        except ValueError as e:
+            return self._send(400, {"code": "bad_request", "message": str(e)})
+        if mode == "invite":
+            st.auth.use_invite(invite)
+        st.rl.hit("signup:" + ip)
+        self._start_session(name, "sign-up")
+        return self._send(200, {"ok": True})
+
+    # ---- the signed-in person's own account (Settings > Account and Security)
+    def api_account_get(self, who):
+        st = self.state
+        rec = st.user_record(who["user"]) or {}
+        out = {"user": who["user"], "email": rec.get("email"), "email_verified": bool(rec.get("email") and rec.get("email_verified") is not False),
+               "has_password": bool(rec.get("pw")), "mfa": st.mfa_info(who["user"]), "plan": who["tier"], "owner": who["owner"],
+               "created": rec.get("created"), "mail": bool(st.mailer), "encrypted": st.secrets.available}
+        if who["owner"]:
+            out["signup_mode"] = st.signup_mode()
+        return self._send(200, out)
+
+    def _reauth(self, who, body):
+        """Sensitive changes ask again: the password (when there is one) and, when two-step is on, a code. Returns an error message or None."""
+        st = self.state
+        key = "reauth:" + who["user"]
+        if st.rl.blocked(key, 10, 600):
+            return "Too many wrong tries. Wait a few minutes."
+        rec = st.user_record(who["user"]) or {}
+        bad = None
+        if rec.get("pw") and not accounts.verify_password(str(body.get("password", ""))[:400], rec["pw"]):
+            bad = "That password isn't right."
+        elif st.mfa_on(who["user"]) and not st.mfa_check(who["user"], str(body.get("code", ""))):
+            bad = "That two-step code isn't right."
+        if bad:
+            st.rl.hit(key)
+            st.auth.event("reauth_fail", who["user"], self._ip(), "")
+        return bad
+
+    def api_account(self, who, path, body):
+        st, name = self.state, who["user"]
+        bad = lambda msg, code="bad_request": self._send(400, {"code": code, "message": msg})
+        if path == "/api/account/password":
+            err = self._reauth(who, {"password": body.get("current"), "code": body.get("code")})
+            if err:
+                return bad(err, "reauth")
+            try:
+                st.set_password(name, str(body.get("new", "")))
+            except ValueError as e:
+                return bad(str(e))
+            n = st.auth.revoke_user(name, who.get("session"))
+            return self._send(200, {"ok": True, "signed_out_others": n})
+        if path == "/api/account/email":
+            err = self._reauth(who, body)
+            if err:
+                return bad(err, "reauth")
+            try:
+                st.set_email(name, body.get("email"))
+            except ValueError as e:
+                return bad(str(e))
+            st._set_fields(name, email_verified=False)
+            st.auth.event("email_changed", name, self._ip(), "")
+            return self._send(200, {"ok": True})
+        if path == "/api/account/email/send":
+            rec = st.user_record(name) or {}
+            if not st.mailer:
+                return self._send(501, {"code": "email_off", "message": "Email isn't set up on this server, so addresses can't be checked.", "action": "Ask the owner."})
+            if not rec.get("email") or st.rl.blocked("verify:" + name, 3, 600):
+                return bad("Add an email address first, and wait a few minutes between codes.")
+            st.rl.hit("verify:" + name)
+            code = auth.make_code()
+            st.auth.put_code(rec["email"], code)
+            threading.Thread(target=lambda: st.mailer.send(rec["email"], *mailer.code_email(code)), daemon=True).start()
+            return self._send(200, {"ok": True})
+        if path == "/api/account/email/verify":
+            rec = st.user_record(name) or {}
+            if not rec.get("email") or not st.auth.check_code(rec["email"], str(body.get("code", ""))):
+                return bad("That code isn't right, or it has run out.", "bad_code")
+            st.mark_email_verified(name)
+            return self._send(200, {"ok": True})
+        if path == "/api/account/mfa/start":
+            if st.mfa_on(name):
+                return bad("Two-step sign-in is already on.")
+            err = self._reauth(who, body)
+            if err:
+                return bad(err, "reauth")
+            return self._send(200, st.mfa_begin(name))
+        if path == "/api/account/mfa/enable":
+            codes = st.mfa_enable(name, str(body.get("code", "")))
+            if not codes:
+                return bad("That code isn't right. Wait for the next one in your app and try again.", "bad_code")
+            n = st.auth.revoke_user(name, who.get("session"))
+            return self._send(200, {"ok": True, "recovery": codes, "signed_out_others": n})
+        if path == "/api/account/mfa/disable":
+            if not st.mfa_on(name):
+                return self._send(200, {"ok": True})
+            err = self._reauth(who, body)
+            if err:
+                return bad(err, "reauth")
+            st.mfa_disable(name)
+            return self._send(200, {"ok": True})
+        if path == "/api/account/mfa/recovery":
+            err = self._reauth(who, body)
+            if err:
+                return bad(err, "reauth")
+            try:
+                return self._send(200, {"recovery": st.mfa_new_recovery(name)})
+            except ValueError as e:
+                return bad(str(e))
+        return self._send(404, {"code": "not_found", "message": "Not found."})
+
     def api_admin(self, path, body):
         st = self.state
         if path == "/api/admin/users":
@@ -1912,6 +2315,30 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 st.set_ban(str(body.get("user", "")), bool(body.get("banned", True)))
             except ValueError as e:
                 return self._send(400, {"code": "bad_request", "message": str(e)})
+            return self._send(200, {"ok": True})
+        if path == "/api/admin/signups":
+            mode = str(body.get("mode", ""))
+            if mode not in ("closed", "invite", "open"):
+                return self._send(400, {"code": "bad_request", "message": "Choose closed, invite or open."})
+            st.save_security(signup_mode=mode, open_signups=(mode == "open"))
+            st.auth.event("signups_changed", "owner", self._ip(), mode)
+            return self._send(200, {"mode": mode})
+        if path == "/api/admin/invites":
+            tier = str(body.get("tier", "free"))
+            if tier not in st.cfg["tiers"]:
+                return self._send(400, {"code": "bad_request", "message": "Unknown plan."})
+            code = st.auth.new_invite(tier, int(body.get("uses") or 1), max(1, min(int(body.get("days") or 14), 90)), str(body.get("note", "")))
+            st.auth.event("invite_made", "owner", self._ip(), tier)
+            return self._send(200, {"code": code, "tier": tier})
+        if path == "/api/admin/invites/revoke":
+            return self._send(200, {"ok": st.auth.revoke_invite(str(body.get("id", "")))})
+        if path == "/api/admin/mfa-reset":
+            name = str(body.get("user", ""))
+            if not st.user_record(name):
+                return self._send(404, {"code": "not_found", "message": "No one is called that."})
+            st.mfa_disable(name)
+            st.auth.revoke_user(name)
+            st.auth.event("mfa_reset_by_owner", name, self._ip(), "")
             return self._send(200, {"ok": True})
         if path == "/api/admin/pause":
             st.cfg["paused"] = bool(body.get("paused"))
@@ -1971,8 +2398,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
         else:
             self._fail("email code for unknown address")
             return self._send(401, {"code": "bad_code", "message": "That code isn't right, or it has run out.", "action": "Ask for a new one."})
-        self._start_session(user, "email code")
-        return self._send(200, {"ok": True})
+        return self._finish_login(user, "email code")
 
     def api_send(self, who, cid, body):
         st = self.state
@@ -2120,6 +2546,8 @@ def main():
                     help="the place weather questions use when they do not name one, for example \"Austin, Texas\"")
     ap.add_argument("--preload", metavar="MODEL_ID", default=None, help="load this model when the app starts, so the first message does not wait for it (for example flare-2.5)")
     ap.add_argument("--pair", metavar="NAME", default=None, help="print a one-time link (valid 15 minutes) that signs NAME in on one device, then exit")
+    ap.add_argument("--set-password", metavar="NAME", help="set (or change) a person's password, typed at a hidden prompt; their devices are signed out. Restart the app afterwards")
+    ap.add_argument("--reset-mfa", metavar="NAME", help="turn off a person's two-step sign-in (a lost phone and no recovery codes); their devices are signed out. Restart the app afterwards")
     ap.add_argument("--rotate-key", metavar="NAME", help="give someone a new key (owner, or a name from --add-user); the old key stops working. Restart the app afterwards")
     ap.add_argument("--add-user", nargs=2, metavar=("NAME", "PLAN"), help="add a tester (free, pro or mega) and print their key")
     args = ap.parse_args()
@@ -2151,6 +2579,27 @@ def main():
         state.vision = vision.VisionHelper(args.llama_bin or find_llama_server(), v_model, v_proj, extra_args=args.llama_args.split())
     state.code.sandbox = {"mode": args.code_sandbox, "image": args.code_image, "runtime": args.code_runtime, "cpus": args.code_cpus, "memory": args.code_memory}
     base = f"http://localhost:{args.port}"
+    if args.set_password:
+        import getpass
+        if not state.user_record(args.set_password):
+            sys.exit(f"no one is called {args.set_password!r}")
+        first = getpass.getpass(f"New password for {args.set_password}: ")
+        if first != getpass.getpass("Type it again: "):
+            sys.exit("The two did not match. Nothing was changed.")
+        try:
+            state.set_password(args.set_password, first)
+        except ValueError as e:
+            sys.exit(str(e))
+        state.auth.revoke_user(args.set_password)
+        print(f"Password set for {args.set_password}. Every device that was signed in as them has been signed out. Restart the app so it reads the change.")
+        return
+    if args.reset_mfa:
+        if not state.user_record(args.reset_mfa):
+            sys.exit(f"no one is called {args.reset_mfa!r}")
+        state.mfa_disable(args.reset_mfa)
+        state.auth.revoke_user(args.reset_mfa)
+        print(f"Two-step sign-in is off for {args.reset_mfa}. They can turn it on again in Settings > Security. Restart the app so it reads the change.")
+        return
     if args.rotate_key:
         try:
             key = state.rotate_key(args.rotate_key)
