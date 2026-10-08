@@ -5,6 +5,7 @@ What changed, newest first. Measured numbers live in [BENCHMARKS.md](BENCHMARKS.
 ## October 2026 (late)
 
 ### Latest
+- **Accounts, sign-in and Settings rebuilt.** A new sign-in / create-account screen (name or email + password, email code, access key); passwords; **two-step sign-in** with any authenticator app plus recovery codes; sign-up rules (closed / invite only / open) with invite codes; and a full **Settings** page with search: General, Chat and lookups, Memory, Data controls, Connected apps, Security (password, two-step, devices, recent activity), Account, About. The **owner** gets extra pages: Overview (safe-to-share checklist, last-hour numbers, pause), People (reset someone's two-step), Sign-ups and invites, Security log. Settings now survive a restart. See [ACCOUNTS.md](ACCOUNTS.md).
 - API keys can live in `.emvryx\keys.env` (read at start, never committed). A "time-sensitive" answer that only used Wikipedia now says so under the reply, and answers like "there is no specific information about..." later in the text now trigger the second try.
 - No more "Loading model (first message only)" message: the picked model is loaded in the background when you choose it, open the app or start a new chat, and the normal thinking words carry on if it is still starting. Settings can list which live sources are on.
 - **VryxCode workflow:** modes (Ask / Auto-edit / Plan first, with Build it), a to-do list the model keeps, `/` commands, `@file` mentions, `VRYX.md` project instructions (`/init`), and a Files / Changes / Rewind panel.
