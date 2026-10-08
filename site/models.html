@@ -31,30 +31,14 @@ a:hover{color:var(--accenttext)}
 html,body{margin:0;background:var(--bg)}
 .theme-toggle{position:fixed;right:16px;bottom:16px;z-index:50;width:44px;height:44px;border-radius:999px;border:1px solid var(--line);background:var(--surface);color:var(--text);cursor:pointer;font-size:18px}
 .theme-toggle:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
-</style>
+.nav{max-width:1200px;margin:0 auto;padding:18px 24px;display:flex;flex-wrap:wrap;align-items:center;gap:14px 20px;position:relative}.nav .brand{display:flex;align-items:center;gap:10px;margin-right:auto}.nav .brand span{font-family:'Sora',sans-serif;font-weight:600;font-size:24px;letter-spacing:-0.02em}.nav .links{display:flex;align-items:center;gap:6px;font-size:16px;font-weight:500}.nav .links>a,.nav summary{padding:8px 12px;border-radius:999px;cursor:pointer;list-style:none;color:var(--text)}.nav .links>a:hover,.nav summary:hover{background:var(--surface)}.nav summary::-webkit-details-marker{display:none}.nav summary::after{content:' \25be';color:var(--muted)}.nav .links a.on{color:var(--accenttext);background:var(--surface)}.nav .more{position:relative}.nav .pop{position:absolute;right:0;top:calc(100% + 6px);min-width:190px;background:var(--surface);border:1px solid var(--line);border-radius:16px;padding:6px;display:flex;flex-direction:column;z-index:30;box-shadow:0 12px 32px rgba(0,0,0,.28)}.nav .pop a{padding:10px 12px;border-radius:10px;font-size:16px}.nav .pop a:hover{background:var(--bg)}.nav .pop a.on{color:var(--accenttext)}.nav .cta{background:var(--accent);color:var(--onaccent)!important;border-radius:999px;padding:11px 22px;font-weight:600;white-space:nowrap}.nav .burger{display:none;width:44px;height:44px;border-radius:999px;border:1px solid var(--line);background:var(--surface);color:var(--text);font-size:20px;line-height:1;cursor:pointer}@media(max-width:860px){.nav{padding:14px 16px;gap:10px}.nav .burger{display:inline-grid;place-items:center}.nav .cta{padding:9px 16px;font-size:15px}.nav .brand span{font-size:21px}.nav .links{display:none;flex-basis:100%;order:5;flex-direction:column;align-items:stretch;gap:0;background:var(--surface);border:1px solid var(--line);border-radius:18px;padding:6px}.nav.open .links{display:flex}.nav .links>a,.nav .more .pop a{padding:13px 14px;border-radius:12px;font-size:17px}.nav .more summary{display:none}.nav .pop{position:static;display:flex;border:0;box-shadow:none;background:none;padding:0;min-width:0;border-top:1px solid var(--line);border-radius:0;margin-top:4px;padding-top:4px}}</style>
 </head>
 <body>
 
 <div style=" min-height: 100vh; background: var(--bg); background-image: radial-gradient(1200px 600px at 50% -5%, var(--glow), transparent 70%); color: var(--text); font-family: 'DM Sans', sans-serif; font-size: 17px; line-height: 1.55">
 
-<div style="max-width: 1200px; margin: 0 auto; padding: 24px; display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 16px">
-<a href="index.html" style="display: flex; align-items: center; gap: 10px">
-<svg width="38" height="38" viewBox="0 0 64 64" fill="none" aria-label="Emvryx">
-<circle cx="46" cy="32" r="12" style="fill: var(--sun)" fill-opacity="0.16"/><path d="M17 16 H41 M17 48 H41 M17 16 V48" style="stroke: var(--text)" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/><path d="M17 32 H37" style="stroke: var(--sun)" stroke-width="6" stroke-linecap="round"/><circle cx="46" cy="32" r="5.5" style="stroke: var(--sun)" stroke-width="3"></circle><circle cx="46" cy="32" r="1.8" style="fill: var(--sun)"/><path d="M54.5 32.0 L57.0 32.0" style="stroke: var(--text)" stroke-width="2" stroke-linecap="round"/><path d="M46.0 40.5 L46.0 43.0" style="stroke: var(--text)" stroke-width="2" stroke-linecap="round"/><path d="M37.5 32.0 L35.0 32.0" style="stroke: var(--text)" stroke-width="2" stroke-linecap="round"/><path d="M46.0 23.5 L46.0 21.0" style="stroke: var(--text)" stroke-width="2" stroke-linecap="round"/>
-</svg>
-<span style="font-family: 'Sora', sans-serif; font-weight: 600; font-size: 24px; letter-spacing: -0.02em">Emvryx</span>
-</a>
-<div style="display: flex; flex-wrap: wrap; align-items: center; gap: 28px; font-size: 16px; font-weight: 500">
-<a href="models.html" style="color: var(--accenttext); border-bottom: 2px solid var(--accent); padding-bottom: 2px">Models</a>
-<a href="plans.html">Plans</a>
-<a href="usage.html">How usage works</a>
-<a href="about.html">About</a>
-<a href="whatsnew.html">What&rsquo;s new</a>
-<a href="scorecard.html">Scorecard</a>
-<a href="next.html">What&rsquo;s next</a>
-<a href="index.html#try" style="background: var(--accent); color: var(--onaccent); border-radius: 999px; padding: 12px 22px; font-weight: 600">Open Emvryx</a>
-</div>
-</div>
+<!-- nav -->
+<div class="nav"><a class="brand" href="index.html"><svg width="38" height="38" viewBox="0 0 64 64" fill="none" aria-label="Emvryx"><circle cx="46" cy="32" r="12" style="fill: var(--sun)" fill-opacity="0.16"/><path d="M17 16 H41 M17 48 H41 M17 16 V48" style="stroke: var(--text)" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/><path d="M17 32 H37" style="stroke: var(--sun)" stroke-width="6" stroke-linecap="round"/><circle cx="46" cy="32" r="5.5" style="stroke: var(--sun)" stroke-width="3"></circle><circle cx="46" cy="32" r="1.8" style="fill: var(--sun)"/></svg><span>Emvryx</span></a><nav class="links" id="navLinks" aria-label="Main"><a href="models.html" class="on" aria-current="page">Models</a><a href="plans.html">Plans</a><a href="usage.html">How usage works</a><a href="about.html">About</a><details class="more"><summary>More</summary><div class="pop"><a href="whatsnew.html">What&rsquo;s new</a><a href="scorecard.html">Scorecard</a><a href="next.html">What&rsquo;s next</a></div></details></nav><a class="cta" href="open.html">Open Emvryx</a><button class="burger" type="button" aria-expanded="false" aria-controls="navLinks" aria-label="Menu">☰</button></div>
 
 <div style="max-width: 1200px; margin: 0 auto; padding: 56px 24px 24px; display: flex; flex-direction: column; gap: 16px; max-width: 1200px">
 <div style="font-size: 14px; font-weight: 600; letter-spacing: 0.14em; color: var(--accenttext)">THE MODELS</div>
@@ -185,6 +169,17 @@ html,body{margin:0;background:var(--bg)}
     done = true;
     els.forEach(function (e) { e.textContent = '○ Emvryx is off right now.'; });
   });
+})();
+</script>
+<script>
+(function () {
+  var nav = document.querySelector('.nav'); if (!nav) return;
+  var btn = nav.querySelector('.burger'), more = nav.querySelector('.more'), small = window.matchMedia ? window.matchMedia('(max-width:860px)') : null;
+  function sync() { if (more && small) more.open = small.matches ? true : more.open && !small.matches ? false : more.open; }
+  if (btn) btn.addEventListener('click', function () { var o = nav.classList.toggle('open'); btn.setAttribute('aria-expanded', String(o)); btn.textContent = o ? '\u2715' : '\u2630'; });
+  document.addEventListener('click', function (e) { if (more && small && !small.matches && !more.contains(e.target)) more.open = false; });
+  document.addEventListener('keydown', function (e) { if (e.key === 'Escape') { if (more && small && !small.matches) more.open = false; nav.classList.remove('open'); if (btn) { btn.setAttribute('aria-expanded', 'false'); btn.textContent = '\u2630'; } } });
+  if (small) { sync(); (small.addEventListener ? small.addEventListener('change', sync) : small.addListener(sync)); }
 })();
 </script>
 </body>

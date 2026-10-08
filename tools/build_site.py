@@ -75,7 +75,45 @@ STATUS_JS = """<script>
 })();
 </script>"""
 
-NAV_EXTRA = '<a href="whatsnew.html">What&rsquo;s new</a>\n<a href="scorecard.html">Scorecard</a>\n<a href="next.html">What&rsquo;s next</a>\n'
+
+NAV_MAIN = [("models.html", "Models"), ("plans.html", "Plans"), ("usage.html", "How usage works"), ("about.html", "About")]
+NAV_MORE = [("whatsnew.html", "What&rsquo;s new"), ("scorecard.html", "Scorecard"), ("next.html", "What&rsquo;s next")]
+NAV_CSS = (".nav{max-width:1200px;margin:0 auto;padding:18px 24px;display:flex;flex-wrap:wrap;align-items:center;gap:14px 20px;position:relative}"
+           ".nav .brand{display:flex;align-items:center;gap:10px;margin-right:auto}.nav .brand span{font-family:'Sora',sans-serif;font-weight:600;font-size:24px;letter-spacing:-0.02em}"
+           ".nav .links{display:flex;align-items:center;gap:6px;font-size:16px;font-weight:500}.nav .links>a,.nav summary{padding:8px 12px;border-radius:999px;cursor:pointer;list-style:none;color:var(--text)}"
+           ".nav .links>a:hover,.nav summary:hover{background:var(--surface)}.nav summary::-webkit-details-marker{display:none}.nav summary::after{content:' \\25be';color:var(--muted)}"
+           ".nav .links a.on{color:var(--accenttext);background:var(--surface)}.nav .more{position:relative}"
+           ".nav .pop{position:absolute;right:0;top:calc(100% + 6px);min-width:190px;background:var(--surface);border:1px solid var(--line);border-radius:16px;padding:6px;display:flex;flex-direction:column;z-index:30;box-shadow:0 12px 32px rgba(0,0,0,.28)}"
+           ".nav .pop a{padding:10px 12px;border-radius:10px;font-size:16px}.nav .pop a:hover{background:var(--bg)}.nav .pop a.on{color:var(--accenttext)}"
+           ".nav .cta{background:var(--accent);color:var(--onaccent)!important;border-radius:999px;padding:11px 22px;font-weight:600;white-space:nowrap}"
+           ".nav .burger{display:none;width:44px;height:44px;border-radius:999px;border:1px solid var(--line);background:var(--surface);color:var(--text);font-size:20px;line-height:1;cursor:pointer}"
+           "@media(max-width:860px){.nav{padding:14px 16px;gap:10px}.nav .burger{display:inline-grid;place-items:center}.nav .cta{padding:9px 16px;font-size:15px}.nav .brand span{font-size:21px}"
+           ".nav .links{display:none;flex-basis:100%;order:5;flex-direction:column;align-items:stretch;gap:0;background:var(--surface);border:1px solid var(--line);border-radius:18px;padding:6px}"
+           ".nav.open .links{display:flex}.nav .links>a,.nav .more .pop a{padding:13px 14px;border-radius:12px;font-size:17px}.nav .more summary{display:none}"
+           ".nav .pop{position:static;display:flex;border:0;box-shadow:none;background:none;padding:0;min-width:0;border-top:1px solid var(--line);border-radius:0;margin-top:4px;padding-top:4px}}")
+NAV_JS = """<script>
+(function () {
+  var nav = document.querySelector('.nav'); if (!nav) return;
+  var btn = nav.querySelector('.burger'), more = nav.querySelector('.more'), small = window.matchMedia ? window.matchMedia('(max-width:860px)') : null;
+  function sync() { if (more && small) more.open = small.matches ? true : more.open && !small.matches ? false : more.open; }
+  if (btn) btn.addEventListener('click', function () { var o = nav.classList.toggle('open'); btn.setAttribute('aria-expanded', String(o)); btn.textContent = o ? '\\u2715' : '\\u2630'; });
+  document.addEventListener('click', function (e) { if (more && small && !small.matches && !more.contains(e.target)) more.open = false; });
+  document.addEventListener('keydown', function (e) { if (e.key === 'Escape') { if (more && small && !small.matches) more.open = false; nav.classList.remove('open'); if (btn) { btn.setAttribute('aria-expanded', 'false'); btn.textContent = '\\u2630'; } } });
+  if (small) { sync(); (small.addEventListener ? small.addEventListener('change', sync) : small.addListener(sync)); }
+})();
+</script>"""
+
+
+def nav_html(active=""):
+    """The one menu every page shares: logo, main links, a More menu, and the Open Emvryx button; on phones a single row with a menu button."""
+    def a(href, label):
+        return f'<a href="{href}"' + (' class="on" aria-current="page"' if href == active else "") + f">{label}</a>"
+    return (f'<div class="nav"><a class="brand" href="index.html">{LOGO}<span>Emvryx</span></a>'
+            f'<nav class="links" id="navLinks" aria-label="Main">{"".join(a(h, l) for h, l in NAV_MAIN)}'
+            f'<details class="more"><summary>More</summary><div class="pop">{"".join(a(h, l) for h, l in NAV_MORE)}</div></details></nav>'
+            f'<a class="cta" href="open.html">Open Emvryx</a>'
+            f'<button class="burger" type="button" aria-expanded="false" aria-controls="navLinks" aria-label="Menu">\u2630</button></div>')
+
 SITE = "https://emvryx.app"
 DESCRIPTION = "Emvryx is a family of five AI models that think on your own device or its own computer, show where an answer came from, and say so when they don't know."
 HEAD_META = ('<meta name="description" content="{desc}">\n<meta name="theme-color" content="#07080D">\n<meta property="og:type" content="website">\n'
@@ -97,7 +135,7 @@ def plan_values():
     return out
 
 
-def convert(source):
+def convert(source, active=""):
     title = re.search(r"<title>(.*?)</title>", source, re.S).group(1)
     helmet = re.search(r"<helmet>(.*?)</helmet>", source, re.S).group(1)
     body = re.search(r"</helmet>(.*?)</x-dc>", source, re.S).group(1)
@@ -109,14 +147,15 @@ def convert(source):
     for key, value in plan_values().items():
         body = body.replace(f"[[{key}]]", value)
     assert "[[" not in body, "a page has a placeholder that limits.json does not fill"
-    body = re.sub(r'(<a href="about\.html"[^>]*>About</a>\n)', lambda m: m.group(1) + NAV_EXTRA, body, count=1)             # the new pages join the menu
+    body, n = re.subn(r"(?:<!-- nav -->\s*)?<div style=\"[^\"]*\">\s*<a href=\"index\.html\".*?Open Emvryx</a>\s*</div>\s*</div>", lambda m: "<!-- nav -->\n" + nav_html(active), body, count=1, flags=re.S)       # one shared menu on every page
+    assert n == 1, "a page has no menu to replace"
     body = body.replace('href="https://chat.emvryx.app"', 'href="open.html"')                                         # the open buttons check that Emvryx is on first
     assert "{{" not in body and "<sc-" not in body, "a page uses dynamic parts that a static page cannot keep"
     helmet = helmet.replace("body{margin:0}", "") + HEAD_META.format(desc=DESCRIPTION, title=title.replace("&", "&amp;"), site=SITE)
     return (f'<!doctype html>\n<html lang="en" data-theme="dark">\n<head>\n<meta charset="utf-8">\n'
             f'<meta name="viewport" content="width=device-width, initial-scale=1">\n<title>{title}</title>\n'
-            f'<link rel="icon" href="/icon.svg" type="image/svg+xml">\n{helmet}\n<style>\n{THEME_CSS}</style>\n</head>\n<body>\n'
-            f'{body}\n{THEME_JS}\n{STATUS_JS}\n</body>\n</html>\n')
+            f'<link rel="icon" href="/icon.svg" type="image/svg+xml">\n{helmet}\n<style>\n{THEME_CSS}{NAV_CSS}</style>\n</head>\n<body>\n'
+            f'{body}\n{THEME_JS}\n{STATUS_JS}\n{NAV_JS}\n</body>\n</html>\n')
 
 
 # ---------------------------------------------------------------- pages made from plain documents: What's new, the scorecard, and the Open page
@@ -170,7 +209,6 @@ PAGE_CSS = (".doc{max-width:860px;margin:0 auto;padding:40px 24px 80px}.doc h1{f
             ".doc b{color:var(--text)}.doc ul,.doc ol{padding-left:22px;display:flex;flex-direction:column;gap:6px}.doc a{color:var(--accenttext)}.doc code{background:var(--surface);border:1px solid var(--line);border-radius:6px;padding:1px 6px;font-size:.9em}"
             ".tw{overflow-x:auto;margin:16px 0;border:1px solid var(--line);border-radius:16px}table{border-collapse:collapse;width:100%;min-width:640px;font-size:15px}"
             "th,td{text-align:left;padding:12px 14px;border-top:1px solid var(--line);vertical-align:top}th{border-top:0;color:var(--muted);font-size:13px;letter-spacing:.06em;text-transform:uppercase}td:first-child{white-space:nowrap}"
-            ".nav{max-width:1200px;margin:0 auto;padding:24px;display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:16px}.nav .links{display:flex;flex-wrap:wrap;align-items:center;gap:22px;font-size:16px;font-weight:500}"
             ".cta{background:var(--accent);color:var(--onaccent)!important;border-radius:999px;padding:12px 22px;font-weight:600}.foot{border-top:1px solid var(--line)}"
             ".foot div{max-width:1200px;margin:0 auto;padding:32px 24px 48px;display:flex;flex-wrap:wrap;justify-content:space-between;gap:16px;color:var(--muted);font-size:15px}"
             "@media(max-width:700px){.tw{border:0;overflow:visible}table,thead,tbody,tr,td{display:block;min-width:0;width:100%}thead{display:none}tr{box-sizing:border-box;background:var(--surface);border:1px solid var(--line);border-radius:16px;padding:6px 14px;margin:0 0 14px}"
@@ -184,16 +222,14 @@ LOGO = ('<svg width="38" height="38" viewBox="0 0 64 64" fill="none" aria-label=
 def extra_page(title, body, active="", description=DESCRIPTION, extra_head="", extra_js=""):
     def link(href, label):
         return f'<a href="{href}"' + (' style="color: var(--accenttext); border-bottom: 2px solid var(--accent); padding-bottom: 2px"' if href == active else "") + f">{label}</a>"
-    nav = (f'<div class="nav"><a href="index.html" style="display:flex;align-items:center;gap:10px">{LOGO}<span style="font-family:\'Sora\',sans-serif;font-weight:600;font-size:24px;letter-spacing:-0.02em">Emvryx</span></a>'
-           f'<div class="links">{link("models.html", "Models")}{link("plans.html", "Plans")}{link("usage.html", "How usage works")}{link("about.html", "About")}{link("whatsnew.html", "What&rsquo;s new")}{link("scorecard.html", "Scorecard")}{link("next.html", "What&rsquo;s next")}'
-           f'<a href="open.html" class="cta">Open Emvryx</a></div></div>')
+    nav = nav_html(active)
     foot = (f'<div class="foot"><div><span>&copy; Emvryx.AI {YEAR}. Private by design.</span><span><a href="models.html">Models</a> &middot; <a href="plans.html">Plans</a> &middot; <a href="usage.html">How usage works</a> '
             f'&middot; <a href="about.html">About</a> &middot; <a href="whatsnew.html">What&rsquo;s new</a> &middot; <a href="scorecard.html">Scorecard</a> &middot; <a href="next.html">What&rsquo;s next</a></span></div></div>')
     return (f'<!doctype html>\n<html lang="en" data-theme="dark">\n<head>\n<meta charset="utf-8">\n<meta name="viewport" content="width=device-width, initial-scale=1">\n<title>{title} - Emvryx</title>\n'
             f'<link rel="icon" href="/icon.svg" type="image/svg+xml">\n<link rel="preconnect" href="https://fonts.googleapis.com">\n'
             f'<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Sora:wght@500;600;700&family=DM+Sans:wght@400;500;600&display=swap">\n'
-            f'{HEAD_META.format(desc=description, title=title, site=SITE)}{extra_head}<style>\n{THEME_CSS}body{{font-family:\'DM Sans\',sans-serif;color:var(--text);line-height:1.55;font-size:17px}}{PAGE_CSS}</style>\n</head>\n<body>\n'
-            f'<div style="background-image:radial-gradient(1200px 600px at 50% -5%, var(--glow), transparent 70%)">{nav}{body}{foot}</div>\n{THEME_JS}\n{STATUS_JS}\n{extra_js}\n</body>\n</html>\n')
+            f'{HEAD_META.format(desc=description, title=title, site=SITE)}{extra_head}<style>\n{THEME_CSS}body{{font-family:\'DM Sans\',sans-serif;color:var(--text);line-height:1.55;font-size:17px}}{NAV_CSS}{PAGE_CSS}</style>\n</head>\n<body>\n'
+            f'<div style="background-image:radial-gradient(1200px 600px at 50% -5%, var(--glow), transparent 70%)">{nav}{body}{foot}</div>\n{THEME_JS}\n{STATUS_JS}\n{NAV_JS}\n{extra_js}\n</body>\n</html>\n')
 
 
 OPEN_BODY = """<div class="center"><div style="max-width:520px;display:flex;flex-direction:column;gap:16px;align-items:center">
@@ -243,7 +279,7 @@ def build(out=None):
     written = []
     for src, dst in PAGES.items():
         with open(os.path.join(HERE, "design", "canvas", f"{src}.dc.html"), encoding="utf-8") as f:
-            html = convert(f.read())
+            html = convert(f.read(), dst)
         with open(os.path.join(out, dst), "w", encoding="utf-8") as f:
             f.write(html)
         written.append(dst)
