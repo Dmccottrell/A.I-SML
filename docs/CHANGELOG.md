@@ -5,6 +5,7 @@ What changed, newest first. Measured numbers live in [BENCHMARKS.md](BENCHMARKS.
 ## October 2026 (late)
 
 ### Latest
+- API keys can live in `.emvryx\keys.env` (read at start, never committed). A "time-sensitive" answer that only used Wikipedia now says so under the reply, and answers like "there is no specific information about..." later in the text now trigger the second try.
 - No more "Loading model (first message only)" message: the picked model is loaded in the background when you choose it, open the app or start a new chat, and the normal thinking words carry on if it is still starting. Settings can list which live sources are on.
 - **VryxCode workflow:** modes (Ask / Auto-edit / Plan first, with Build it), a to-do list the model keeps, `/` commands, `@file` mentions, `VRYX.md` project instructions (`/init`), and a Files / Changes / Rewind panel.
 - **VryxCode home:** a Sessions list with cards (title, project, where it ran, time, spinner, summary), saved on disk; per-session **environments** (this computer, isolated sandbox, cloud placeholder); **Rewind** to before any of the last 8 messages; the preview opens beside the chat on wide screens. See [VRYXCODE.md](VRYXCODE.md).

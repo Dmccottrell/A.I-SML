@@ -981,7 +981,8 @@ def start_turn(state, who, chat_id, text, model_id, effort, regenerate=False, re
                                                   max_notes=5 if window >= 6000 else 3,
                                                   saved=state.saved_for(who["user"]), now=state.clock(), policy=model.get("lookup", "always"))
                 if found["asked"]:
-                    q.put(("notes", {k: v for k, v in found.items() if k != "used"}))
+                    import web_search
+                    q.put(("notes", {k: v for k, v in found.items() if k != "used"} | ({"web_source": web_search.pick_source("auto")} if found.get("recent") else {})))
             if doc_notes:
                 notes = doc_notes + list(notes or [])
             if live_notes:
@@ -2058,6 +2059,31 @@ class Server(socketserver.ThreadingMixIn, http.server.HTTPServer):
     allow_reuse_address = True
 
 
+KEY_NAMES = ("TAVILY_API_KEY", "BRAVE_API_KEY", "GEMINI_API_KEY", "RAWG_API_KEY", "TMDB_API_KEY", "USDA_API_KEY", "FRED_API_KEY", "WOLFRAM_APPID")
+
+
+def load_keys_file(path, environ=None):
+    """Read API keys from a small text file (one NAME=value per line, in the app's data folder, which is never committed) into the environment, without overriding
+    a key that is already set. This works the same however the app was started (a scheduled task does not always see a key set with setx). Returns the names loaded."""
+    environ = os.environ if environ is None else environ
+    loaded = []
+    try:
+        with open(path, encoding="utf-8") as f:
+            lines = f.read().splitlines()
+    except OSError:
+        return loaded
+    for line in lines:
+        line = line.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        name, _, value = line.partition("=")
+        name, value = name.strip(), value.strip().strip('"').strip("'")
+        if name in KEY_NAMES and value and not environ.get(name):
+            environ[name] = value
+            loaded.append(name)
+    return loaded
+
+
 def make_server(state, host="127.0.0.1", port=8000, quiet=False):
     handler = type("BoundHandler", (Handler,), {"state": state})
     srv = Server((host, port), handler)
@@ -2113,6 +2139,9 @@ def main():
     runner = None
     if files and not args.llama:
         runner = ModelRunner(args.llama_bin or find_llama_server(), files, extra_args=args.llama_args.split())
+    got = load_keys_file(os.path.join(args.data, "keys.env"))
+    if got:
+        print("Keys loaded from " + os.path.join(args.data, "keys.env") + ": " + ", ".join(got), flush=True)      # the names only, never the keys
     state = AppState(args.data, args.llama, args.llama_key, tok, manifest=manifest, ram_gb=args.ram, runner=runner)
     state.verbose = args.timings
     v_model, v_proj = vision.discover(HERE)
