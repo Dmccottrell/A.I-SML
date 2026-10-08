@@ -7,7 +7,7 @@ WHAT THIS FILE DOES
 
     The owner turns it on once: make an OAuth client at console.cloud.google.com (APIs and Services > Credentials > OAuth client ID > Web
     application), add `https://<your address>/auth/google/callback` as an authorised redirect URI, and put GOOGLE_CLIENT_ID and
-    GOOGLE_CLIENT_SECRET in `.emvryx\keys.env`. Without them the button does not appear.
+    GOOGLE_CLIENT_SECRET in `.emvryx/keys.env`. Without them the button does not appear.
 
     Safety: the `state` is checked against a cookie in the same browser (stops a forged callback); the code is exchanged together with the
     PKCE verifier; the ID token comes straight from Google over https in that exchange, and its issuer, audience (our client id), expiry and
