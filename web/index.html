@@ -1052,23 +1052,54 @@ async function openSkills() {
 
 // ---------------------------------------------------------------- connected apps
 async function openApps() {
-  const r = await api('/api/apps'); const c = await r.json(); const conn = c.connections || {};
-  const kids = [el('h2', {}, 'Connected apps'), el('div', {style: 'color:var(--muted)'}, 'Let Emvryx work with the apps you use. GitHub is available now; the rest are planned.')];
+  const r = await api('/api/apps'); const c = await r.json(); const conn = c.connections || {}; APPS_ENCRYPTED = c.encrypted !== false;
+  const kids = [el('h2', {}, 'Connected apps'), el('div', {style: 'color:var(--muted)'}, 'Connect the apps you use and just ask: \u201cwhat is on my calendar tomorrow?\u201d, \u201csearch my Notion for the trip plan\u201d. Everything is read-only, and a private chat never uses them.')];
+  const close = () => document.querySelectorAll('.modal').forEach((m) => m.remove());
   for (const cat of c.categories) {
     const list = c.apps.filter((a) => a.category === cat); if (!list.length) continue;
     kids.push(el('div', {class: 'label', style: 'padding:6px 0 0'}, cat.toUpperCase()));
     for (const a of list) {
-      const on = conn[a.id] && conn[a.id].connected;
-      const right = a.status === 'available'
-        ? el('button', {class: 'chip', onclick: () => { document.querySelectorAll('.modal').forEach((m) => m.remove()); openGithubConnect(); }}, on ? 'Manage' : 'Connect')
-        : el('small', {style: 'text-align:right'}, 'Coming soon');
+      const x = conn[a.id] || {}, on = x.connected;
+      const open = a.id === 'github' ? () => { close(); openGithubConnect(); } : () => { close(); openAppConnect(a, x); };
+      const right = a.status === 'available' ? el('button', {class: 'chip', onclick: open}, on ? 'Manage' : 'Connect') : el('small', {style: 'text-align:right'}, 'Coming soon');
       kids.push(el('div', {class: 'opt', style: 'cursor:default;opacity:.95'},
-        el('span', {class: 'grow'}, el('b', {}, a.name + (on ? '  ·  connected as @' + conn[a.id].login : '')), el('small', {}, a.does), el('small', {style: 'font-size:13px'}, 'Permission: ' + a.permission)), right));
+        el('span', {class: 'grow'}, el('b', {}, a.name + (on ? '  \u00b7  connected' + (x.label ? ' as ' + x.label : '') : '')), el('small', {}, a.does), el('small', {style: 'font-size:13px'}, 'Permission: ' + a.permission)), right));
     }
   }
-  kids.push(el('b', {}, 'How connections work'), ...c.rules.map((t) => el('div', {style: 'color:var(--muted);font-size:14px'}, '• ' + t)));
+  kids.push(el('b', {}, 'How connections work'), ...c.rules.map((t) => el('div', {style: 'color:var(--muted);font-size:14px'}, '\u2022 ' + t)));
   dialog(kids, 'Close');
 }
+
+// Any app that connects with a pasted token, link or app password
+async function openAppConnect(a, x) {
+  const close = () => document.querySelectorAll('.modal').forEach((m) => m.remove());
+  const kids = [el('h2', {}, a.name), el('div', {style: 'color:var(--muted)'}, a.does)];
+  const out = el('div', {role: 'alert', style: 'color:var(--muted);font-size:14px;word-break:break-word'});
+  const fail = (j) => { out.style.color = 'var(--danger)'; out.textContent = (j.message || 'Something went wrong.') + ' ' + (j.action || ''); };
+  if (x && x.connected) {
+    const q = el('input', {type: 'text', placeholder: 'Try it: type what to look for, or leave empty for the latest', 'aria-label': 'Try it'}), res = el('div', {style: 'display:flex;flex-direction:column;gap:8px'});
+    const go = async () => { out.textContent = ''; res.replaceChildren(el('div', {style: 'color:var(--muted)'}, 'Looking...')); const rr = await post('/api/apps/' + a.id + '/ask', {query: q.value}); const j = await rr.json();
+      if (!rr.ok) { res.replaceChildren(); return fail(j); }
+      res.replaceChildren(...(j.items.length ? j.items.map((i) => el('div', {class: 'opt', style: 'cursor:default'}, el('span', {class: 'grow'}, el('b', {}, i.title), el('small', {}, i.text || ''), i.url ? el('a', {href: i.url, target: '_blank', rel: 'noopener', style: 'color:var(--accenttext);font-size:13px'}, 'Open') : null))) : [el('div', {style: 'color:var(--muted)'}, 'Nothing found.')])); };
+    q.addEventListener('keydown', (e) => { if (e.key === 'Enter') go(); });
+    kids.push(el('div', {}, 'Connected as ', el('b', {}, x.label || a.name), '. Ask about it in a chat, or try it here.'), q, el('button', {class: 'btn', type: 'button', onclick: go}, 'Try it'), res, out,
+      el('b', {}, 'What was read'), ...((x.log || []).length ? x.log.map((l) => el('div', {style: 'color:var(--muted);font-size:14px'}, new Date(l.at * 1000).toLocaleString([], {month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit'}) + '  ' + l.what)) : [el('div', {style: 'color:var(--muted);font-size:14px'}, 'Nothing yet.')]),
+      el('button', {class: 'btn danger', type: 'button', onclick: async () => { if (!confirm('Disconnect ' + a.name + '? The saved secret is deleted now.')) return; await post('/api/apps/' + a.id + '/disconnect'); close(); openApps(); }}, 'Disconnect and delete the secret'));
+  } else {
+    const inputs = {};
+    kids.push(el('div', {style: 'color:var(--muted);font-size:14px'}, el('b', {style: 'color:var(--text)'}, 'How to get it: '), a.steps));
+    for (const f of a.fields) {
+      const inp = f.choices ? el('select', {'aria-label': f.label}, ...f.choices.map((c) => el('option', {value: c}, c[0].toUpperCase() + c.slice(1)))) : f.multiline ? el('textarea', {class: 'f', placeholder: f.placeholder || '', 'aria-label': f.label}) : el('input', {type: f.secret ? 'password' : 'text', placeholder: f.placeholder || '', autocomplete: 'off', autocapitalize: 'none', spellcheck: 'false', 'aria-label': f.label});
+      inputs[f.id] = inp; kids.push(el('label', {class: 'f'}, f.label, inp));
+    }
+    kids.push(el('div', {style: 'color:var(--muted);font-size:14px'}, 'It is checked once, kept on this server' + (c_encrypted() ? ' encrypted' : ' (NOT encrypted: ask the owner to install the cryptography package)') + ', never shown again, never given to the model, and deleted the moment you disconnect. Read-only.'), out,
+      el('button', {class: 'btn', type: 'button', onclick: async (e) => { e.target.disabled = true; out.style.color = 'var(--muted)'; out.textContent = 'Checking...';
+        const rr = await post('/api/apps/' + a.id + '/connect', {fields: Object.fromEntries(Object.entries(inputs).map(([k, v]) => [k, v.value]))}); const j = await rr.json(); e.target.disabled = false;
+        if (!rr.ok) return fail(j); close(); openAppConnect(a, j.connection); }}, 'Connect'));
+  }
+  const m = dialog(kids, 'Back'); m.querySelector('.dialog').lastElementChild.onclick = () => { m.remove(); openApps(); };
+}
+let APPS_ENCRYPTED = true; const c_encrypted = () => APPS_ENCRYPTED;
 
 // GitHub: connect with a token you make and can delete any time
 async function openGithubConnect(after) {
@@ -1316,6 +1347,8 @@ function sxSections(id) {
       {title: 'Legal', rows: [
       {title: 'Privacy and terms', ctl: el('div', {style: 'display:flex;gap:8px'}, el('a', {class: 'sbtn', href: '/privacy', target: '_blank', rel: 'noopener'}, 'Privacy'), el('a', {class: 'sbtn', href: '/terms', target: '_blank', rel: 'noopener'}, 'Terms'))}]}],
     apps: [{title: 'Connected apps', rows: [
+      {title: 'Use my connected apps in chats', desc: 'When a question is clearly about one (\u201cwhat is on my calendar\u201d), the few matching items are read and given to the model as notes. Read-only. Private chats never use them.', ctl: sxSwitch(s.connected_apps !== false, (v) => sxSet({connected_apps: v}), 'Use my connected apps in chats'), keys: 'calendar notion slack email'},
+      {title: 'All apps', desc: 'Calendar, email, Notion, Slack, Todoist, Linear, Trello, Jira, Dropbox, GitLab, Vercel and more: each one needs only a token, link or app password you paste.', ctl: sxBtn('See all apps', () => { closeSettings(); openApps(); }), keys: 'google gmail outlook todoist trello jira'},
       {title: 'GitHub', desc: 'Lets VryxCode create repositories and pull and push. Your token is stored encrypted and the model never sees it. Pulling, pushing and creating always ask first.', ctl: sxBtn('Manage', () => { closeSettings(); openApps(); }), keys: 'git repository vryxcode'}]}],
     security: [{title: 'Signing in', rows: [
       {title: 'Password', desc: a.has_password ? 'Set. Changing it signs your other devices out.' : 'Not set. Add one to sign in with your name and password.', ctl: el('div', {style: 'display:flex;gap:8px;align-items:center'}, sxPill(a.has_password ? 'Set' : 'Not set', a.has_password ? 'ok' : 'warn'), sxBtn(a.has_password ? 'Change' : 'Set a password', () => passwordDialog(), a.has_password ? '' : 'primary')), keys: 'change reset'},
@@ -1657,10 +1690,11 @@ document.addEventListener('visibilitychange', async () => {
 function lookupLine(info) {
   if (!info || !info.asked) return null;
   if (info.pictures || info.ocr) return el('div', {class: 'note', style: 'align-self:flex-start'}, info.pictures ? 'Looked at ' + info.pictures + (info.pictures === 1 ? ' picture' : ' pictures') + (info.ocr ? ' and read the text in ' + info.ocr + ' more' : '') : 'Read the text in the picture (it can\u2019t see photos yet)');
-  const n = (info.saved || 0) + (info.wiki || 0) + (info.web || 0) + (info.live || 0);
+  const n = (info.saved || 0) + (info.wiki || 0) + (info.web || 0) + (info.live || 0) + ((info.apps || []).length);
   const noKey = info.web_source === 'wikipedia' ? ' Only Wikipedia was searched: no web search key is active (Settings > Live facts > See which sources are on).' : '';
   if (!n) return info.web_tried ? el('div', {class: 'note', style: 'align-self:flex-start'}, 'Searched, but found nothing useful.' + noKey) : null;
   const parts = [];
+  if ((info.apps || []).length) parts.push('Looked in your ' + info.apps.join(' and ') + '.');
   if (info.live) parts.push('Used live data: ' + (info.names || []).join(', '));
   if (info.saved) parts.push('Read ' + info.saved + (info.saved === 1 ? ' saved note' : ' saved notes') + (info.wiki ? ' and ' + info.wiki + ' from Wikipedia' : ''));
   else if (info.wiki) parts.push('Read ' + info.wiki + (info.wiki === 1 ? ' note' : ' notes') + ' from Wikipedia');

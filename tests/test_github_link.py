@@ -190,7 +190,7 @@ class ServerTests(Base):
         self.assertIn("disconnected", j["log"][0]["what"])
 
     def test_other_apps_are_still_coming_soon(self):
-        self.assertEqual(self.owner.call("POST", "/api/apps/gmail/connect", {})[0], 501)
+        self.assertEqual(self.owner.call("POST", "/api/apps/drive/connect", {})[0], 501)
 
     def test_actions_need_a_connection(self):
         st, j = self.owner.call("POST", "/api/code/git", {"project": "p", "action": "push"})
