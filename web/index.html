@@ -714,6 +714,23 @@ function pickMany({accept, folder}) {   // files, photos or a whole folder: each
   inp.onchange = () => { const list = [...inp.files]; inp.remove(); if (list.length) addFiles(list); };
   document.body.append(inp); inp.click(); setTimeout(() => inp.remove(), 60000);
 }
+function imageFilesFrom(data) {   // screenshots and photos from a paste or a drop, given a name and the right ending so they can be read
+  const out = [];
+  for (const f of [...((data && data.files) || [])]) {
+    if (!f.type || !f.type.startsWith('image/')) continue;
+    const ext = (f.type.split('/')[1] || 'png').replace('jpeg', 'jpg').replace(/[^a-z0-9].*$/, '');
+    out.push(f.name && /\.[a-z0-9]+$/i.test(f.name) && f.name !== 'image.png' ? f : new File([f], 'screenshot-' + Date.now() + '-' + out.length + '.' + ext, {type: f.type}));
+  }
+  return out;
+}
+document.addEventListener('paste', (e) => {   // Ctrl+V or paste after taking a screenshot, like other chat apps
+  if (!S.state || $('app').hidden) return; const files = imageFilesFrom(e.clipboardData); if (!files.length) return;
+  e.preventDefault(); addFiles(files);
+});
+['dragover', 'drop'].forEach((ev) => document.addEventListener(ev, (e) => {
+  if (!S.state || $('app').hidden || !e.dataTransfer || ![...(e.dataTransfer.types || [])].includes('Files')) return;
+  e.preventDefault(); if (ev === 'drop' && e.dataTransfer.files.length) addFiles([...e.dataTransfer.files]);
+}));
 async function addFiles(list) {
   const box = $('attached'); const note = el('span', {class: 'chip', role: 'status'}, ''); box.hidden = false; box.append(note);
   const added = []; const skipped = [];
