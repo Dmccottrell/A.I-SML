@@ -1763,7 +1763,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
                         tools = {"github": st.github_tool(user, project)}
                 s, note = st.code.start(user, project, body.get("task"), model["id"], generate, bool(body.get("auto_edits")),
                                         int(model.get("context_tested") or 8192), meter, outside=bool(model.get("outside")), tools=tools, identity=identity,
-                                        env=str(body.get("env") or "local"))
+                                        env=str(body.get("env") or "local"), plan=bool(body.get("plan")))
                 return self._send(200, {"id": s.id, "note": note})
             if path == "/api/code/preview":
                 allowed, why = st.code_allowed(who)
@@ -1780,7 +1780,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 allowed, why = st.code_allowed(who)
                 if not allowed:
                     raise code_sessions.CodeError(why, "Ask the owner about VryxCode access.")
-                st.code.get(user, m.group(1)).send(body.get("text"))
+                st.code.get(user, m.group(1)).send(body.get("text"), plan=bool(body.get("plan")))
                 return self._send(200, {"ok": True})
             m = re.fullmatch(r"/api/code/sessions/([\w-]+)/answer", path)
             if m:
@@ -1790,6 +1790,9 @@ class Handler(http.server.BaseHTTPRequestHandler):
             if m:
                 st.code.get(user, m.group(1)).request_stop()
                 return self._send(200, {"ok": True})
+            if path == "/api/code/init":
+                project = st.code.check_name(body.get("project"))
+                return self._send(200, st.code.init_instructions(user, project))
             m = re.fullmatch(r"/api/code/sessions/([\w-]+)/rewind", path)
             if m:
                 return self._send(200, st.code.rewind(user, m.group(1), int(body.get("turn", -1))))

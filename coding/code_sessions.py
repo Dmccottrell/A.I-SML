@@ -89,8 +89,9 @@ class Session:
     """One task being worked on. `events` only ever grows; the page asks for the ones after the last it saw."""
 
     def __init__(self, sid, user, project, task, model_id, workspace, auto_edits=False, meter=None, tools=None, identity=None, prefix=None, quotas=None, base=None,
-                 env="local", log=None, snapshot=None):
+                 env="local", log=None, snapshot=None, plan=False, expand=None):
         self.meter, self.tools, self.identity = meter, tools, identity
+        self.plan_first, self.expand = plan, expand or (lambda t: t)       # the first turn only looks and plans; @file mentions are expanded for the model
         self.env, self.log, self.snapshot_fn = env, log, snapshot       # where it runs (local | sandbox), the history on disk, and a function that zips the project
         self.checkpoints, self.updated, self._saved_at = [], time.time(), 0.0
         self.prefix, self.quotas, self.base = prefix, quotas, base         # the container prefix (or None), the quota checker and the person's projects folder
@@ -288,9 +289,9 @@ class Session:
     def run(self, generate, max_turns, context_tokens, extra_programs=()):
         """The first turn of the conversation (the task the person typed)."""
         self.generate, self.max_turns, self.context_tokens, self.extra_programs = generate, max_turns, context_tokens, tuple(extra_programs)
-        self._turn(self.task, first=True)
+        self._turn(self.task, first=True, plan=self.plan_first)
 
-    def send(self, text):
+    def send(self, text, plan=False):
         """The person's next message: another turn of the same conversation (the model sees everything said and done so far)."""
         text = str(text or "").strip()
         if not text:
@@ -304,9 +305,9 @@ class Session:
                 raise CodeError("This session cannot continue.", "Start a new one.")
             self.state = "working"
             self.stop.clear()
-        threading.Thread(target=self._turn, args=(text, False), daemon=True).start()
+        threading.Thread(target=self._turn, args=(text, False, bool(plan)), daemon=True).start()
 
-    def _turn(self, text, first):
+    def _turn(self, text, first, plan=False):
         self.state = "working"
         self.next_steps = []
         self.turns_run += 1
@@ -314,17 +315,17 @@ class Session:
             self.deadline = self.quotas.session_deadline()          # each message gets its own time allowance
         self._checkpoint(text)
         if first:
-            self.emit("start", task=text, model=self.model_id, project=self.project)
+            self.emit("start", task=text, model=self.model_id, project=self.project, plan=plan)
         else:
-            self.emit("user", text=text)
+            self.emit("user", text=text, plan=plan)
         self.live_messages = None
         try:
-            result = vryxcode.run_task(text, self.wrap(self.generate), self.workspace, self.ask, self.max_turns, self.context_tokens, self.extra_programs,
+            result = vryxcode.run_task(self.expand(text), self.wrap(self.generate), self.workspace, self.ask, self.max_turns, self.context_tokens, self.extra_programs,
                                        out=lambda *_: None, tools=self.tools, git_identity=self.identity,
-                                       command_prefix=self.prefix, container=bool(self.prefix), history=self.history, chat_mode=True)
+                                       command_prefix=self.prefix, container=bool(self.prefix), history=self.history, chat_mode=True, plan=plan, todo=True)
             self.history = result["messages"]
             self.emit("end", finished=result["finished"], said=bool(result.get("said")), summary=clip(result["summary"], 4000), turns=result["turns"],
-                      next=self.next_steps if result["finished"] else [])
+                      next=self.next_steps if result["finished"] else [], plan=bool(plan) and bool(result["finished"] or result.get("said")))
             self.state = "done" if (result["finished"] or result.get("said")) else "stopped"
         except U.LimitError as e:
             self._keep_history()
@@ -549,7 +550,7 @@ class CodeManager:
         return code_sandbox.docker_prefix(sb.get("image", code_sandbox.DEFAULT_IMAGE), workspace, cpus=sb.get("cpus", "1"), memory=sb.get("memory", "768m"),
                                           pids=sb.get("pids", 128), runtime=sb.get("runtime"))
 
-    def start(self, user, project, task, model_id, generate, auto_edits=False, context_tokens=None, meter=None, outside=False, tools=None, identity=None, env="local"):
+    def start(self, user, project, task, model_id, generate, auto_edits=False, context_tokens=None, meter=None, outside=False, tools=None, identity=None, env="local", plan=False):
         task = str(task or "").strip()
         if not task:
             raise CodeError("Describe what to build or fix.")
@@ -579,10 +580,45 @@ class CodeManager:
             self._n += 1
             s = Session(f"s{self._n}-{int(time.time())}", user, project, task, model_id, workspace, auto_edits, meter, tools, identity,
                         prefix=self.prefix_for(workspace, force=(env == "sandbox")), quotas=self.quotas, base=self.base(user),
-                        env=env, log=code_log.SessionLog(self.base(user)), snapshot=lambda u=user, p=project: self._snapshot(u, p))
+                        env=env, log=code_log.SessionLog(self.base(user)), snapshot=lambda u=user, p=project: self._snapshot(u, p), plan=bool(plan),
+                        expand=lambda t, u=user, p=project: self.expand_mentions(u, p, t))
             self.sessions[s.id], self.by_user[user] = s, s.id
         threading.Thread(target=s.run, args=(generate, self.max_turns, context_tokens), daemon=True).start()
         return s, note
+
+    # ---- @file mentions and the project instructions file
+    MENTION = re.compile(r"(?<![\w@])@([\w][\w./-]{0,119})")
+
+    def expand_mentions(self, user, project, text):
+        """The message for the model: each @path that is a file in the project gets its contents added (up to 5 files, 6 KB each), so the person can point at a file."""
+        out, seen = str(text), []
+        for m in self.MENTION.finditer(str(text)):
+            rel = m.group(1).rstrip(".,;:)")
+            if rel in seen or len(seen) >= 5:
+                continue
+            try:
+                f = self.read(user, project, rel)
+            except CodeError:
+                continue
+            seen.append(rel)
+            body = f["text"][:6000] + ("\n... (shortened)" if f["truncated"] or len(f["text"]) > 6000 else "")
+            out += f"\n\nContents of {rel}:\n```\n{body}\n```"
+        return out
+
+    INSTRUCTIONS_TEMPLATE = ("# Project instructions for VryxCode\n\nVryxCode reads this file at the start of every session in this project.\n\n"
+                             "## What this project is\n(one or two sentences)\n\n## How to run it and test it\n(for example: python -m unittest)\n\n"
+                             "## Style rules\n- (for example: keep functions short, add a test for every change)\n\n## Do not\n- (things VryxCode should leave alone)\n")
+
+    def init_instructions(self, user, project):
+        """Create VRYX.md with a starter template (never overwrites): {"created", "path"}."""
+        root = self.project_path(user, project)
+        os.makedirs(root, exist_ok=True)
+        path = os.path.join(root, "VRYX.md")
+        if os.path.exists(path):
+            return {"created": False, "path": "VRYX.md"}
+        with open(path, "w", encoding="utf-8") as f:
+            f.write(self.INSTRUCTIONS_TEMPLATE)
+        return {"created": True, "path": "VRYX.md"}
 
     # ---- where a session runs
     def _docker_ok(self):

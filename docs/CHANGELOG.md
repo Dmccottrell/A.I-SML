@@ -5,6 +5,7 @@ What changed, newest first. Measured numbers live in [BENCHMARKS.md](BENCHMARKS.
 ## October 2026 (late)
 
 ### Latest
+- **VryxCode workflow:** modes (Ask / Auto-edit / Plan first, with Build it), a to-do list the model keeps, `/` commands, `@file` mentions, `VRYX.md` project instructions (`/init`), and a Files / Changes / Rewind panel.
 - **VryxCode home:** a Sessions list with cards (title, project, where it ran, time, spinner, summary), saved on disk; per-session **environments** (this computer, isolated sandbox, cloud placeholder); **Rewind** to before any of the last 8 messages; the preview opens beside the chat on wide screens. See [VRYXCODE.md](VRYXCODE.md).
 - Phone fit fixes for VryxCode's menus and top bar; pictures: preview, sent with the message, optional vision helper ([VISION.md](VISION.md)).
 - **Wording and names:** the website and docs now present Emvryx as one family of five models and no longer name the open foundation models (credits stay in `NOTICE`, as the licence requires). The lesson files were renamed to match: `data_prep/make_chat_data_open.py`, `data_prep/open_lessons.py`, `scripts/wrap_open.sh`, `docs/OPEN_LESSONS.md`, `data/open/`. The outside coding model's id is now `coder-14b`.

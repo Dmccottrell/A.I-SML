@@ -75,7 +75,7 @@ GIT_SUBCOMMANDS = {"status", "diff", "log", "show", "init", "add", "commit", "br
 GIT_READ_ONLY = {"status", "diff", "log", "show", "init"}
 GIT_BLOCKED_FLAGS = ("--git-dir", "--work-tree", "--exec-path", "--upload-pack", "--receive-pack",
                      "--namespace", "--super-prefix", "--config-env", "--output", "--ext-diff", "--textconv")
-PROJECT_FILES = ("EMVRYX.md", "AGENTS.md")
+PROJECT_FILES = ("VRYX.md", "EMVRYX.md", "AGENTS.md")
 HOOKS_FILE = os.path.join(".emvryx", "hooks.json")
 
 # Shown to the model at the start of a coding session (and in every coding lesson), so it knows the tools
@@ -530,8 +530,8 @@ class Hooks:
         return problems
 
 
-def load_project_notes(sandbox, limit=1200):
-    """The text of EMVRYX.md / AGENTS.md in the workspace (the first found), or ""."""
+def load_project_notes(sandbox, limit=3000):
+    """The text of VRYX.md / EMVRYX.md / AGENTS.md in the workspace (the first found), or ""."""
     for name in PROJECT_FILES:
         try:
             with open(os.path.join(sandbox.root, name), encoding="utf-8", errors="replace") as f:
