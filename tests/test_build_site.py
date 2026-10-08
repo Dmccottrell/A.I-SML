@@ -68,5 +68,14 @@ class Site(unittest.TestCase):
                 self.assertEqual(f.read(), self.read(name), f"site/{name} is stale: run python tools/build_site.py")
 
 
+    def test_home_page_has_the_invite_box_and_a_vryxcode_section(self):
+        html = self.read("index.html")
+        self.assertIn('<form action="https://chat.emvryx.app/" method="get"', html)
+        self.assertIn('name="invite"', html)
+        self.assertIn('id="vryxcode"', html)
+        self.assertIn("Describe it. Watch it get built.", html)
+        self.assertNotIn("You need a key to sign in", html)
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -19,7 +19,7 @@ When two-step sign-in is on, the password / key / email code is only the first s
 1. Sign in the way you do now.
 2. A bar at the top says *Protect the owner account*. Tap **Do it now** (or Settings > Security).
 3. **Set a password.** Not your name or email; a few words in a row is good ("correct horse battery" style).
-4. **Set up two-step sign-in.** Tap *Open my authenticator app* on your phone (Google Authenticator, Microsoft Authenticator, Authy, 1Password...). If it does not open, choose *enter a setup key* in the app and type the key shown. Type the 6-digit code it shows. **Save the 8 recovery codes** (Copy or Download) before pressing Done.
+4. **Set up two-step sign-in.** Scan the QR code from another device, or tap *Open my authenticator app* on your phone (Google Authenticator, Microsoft Authenticator, Authy, 1Password...). If it does not open, choose *enter a setup key* in the app and type the key shown. Type the 6-digit code it shows. **Save the 8 recovery codes** (Copy or Download) before pressing Done.
 5. Settings > Account > **add your email**. If mail is set up on the server, verify it too.
 6. Settings > Owner > **Overview** shows what is still missing on the "safe to share" checklist.
 
@@ -36,6 +36,10 @@ then restart the app. (`python app_server.py --set-password owner` sets a new pa
 - **Closed** (the default): nobody can make an account; you add people.
 - **Invite only**: make a code (pick the plan it gives and how many people may use it); it works for 14 days. Send it privately. The sign-up screen then asks for it.
 - **Open**: anyone can make a free account. Only choose this when you want strangers using your GPU.
+
+## Invite codes and the website
+
+The home page (emvryx.app) has a **Try Emvryx** box: a person types their invite code, taps *Create my account*, and lands on Create account in the app with the code already filled in (the code is taken out of the address bar straight away). You can also copy a ready-made **invite link** from Settings > Owner > Sign-ups and invites right after you make a code, and send that instead. It needs the sign-up rule set to **Invite only** (Closed turns every code off).
 
 ## Where each setting is
 
@@ -58,7 +62,6 @@ Settings are kept per person in `.emvryx/settings.json`, so they survive a resta
 
 ## Not built yet
 
-- Scanning a QR code for two-step (you tap the button on a phone, or type the key). 
 - Custom instructions ("always answer in short sentences"): the models were taught to answer from notes, so this needs a test before it goes in.
 - Passkeys, and sign-in with Google.
 - Email verification and email codes need mail set up on the server (see [DEPLOY.md](DEPLOY.md)).
