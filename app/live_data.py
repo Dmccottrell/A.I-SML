@@ -929,6 +929,46 @@ def gather(question, now=None, online=True, net=None, offline_ok=True, default_p
 KEYED = {"releases": (("RAWG_API_KEY", "TMDB_API_KEY"), True), "fred": (("FRED_API_KEY",), True), "wolfram": (("WOLFRAM_APPID",), True), "nutrition": (("USDA_API_KEY",), False)}
 
 
+CHECKS = [("currency", "Exchange rates", "convert 10 USD to EUR"), ("crypto", "Crypto prices", "what is the price of bitcoin"),
+          ("stocks", "Stock prices", "AAPL stock price"), ("sports", "Sports", "when does Liverpool play next"),
+          ("dictionary", "Dictionary", "define serendipity"), ("countries", "Country facts", "what is the capital of France"),
+          ("news", "News", "latest news headlines")]
+
+
+def check_sources(env=None, net=None, web_check=None, workers=6):
+    """Really ask the main sources one tiny question each: [{"id", "name", "ok", "detail", "ms"}].
+    `web_check(name)` is given each web-search source in use and returns (ok, detail); a source with no key is reported as off, not as broken."""
+    import concurrent.futures
+    import time as _t
+    env = os.environ if env is None else env
+    net = net or Net()
+
+    def one(item):
+        sid, label, question = item
+        t0 = _t.time()
+        try:
+            notes, info = gather(question, online=True, net=net)
+            ok = label in info["names"]
+            detail = "answered the test question" if ok else "no reply to the test question (the service may be down or blocking this computer)"
+        except Exception as e:
+            ok, detail = False, "failed: " + str(e)[:120]
+        return {"id": sid, "name": label, "ok": ok, "detail": detail, "ms": int((_t.time() - t0) * 1000)}
+
+    rows = []
+    if web_check:
+        import web_search
+        for name, var in (("tavily", "TAVILY_API_KEY"), ("brave", "BRAVE_API_KEY"), ("gemini", "GEMINI_API_KEY"), ("wikipedia", "")):
+            if var and not env.get(var):
+                rows.append({"id": "web-" + name, "name": "Web search: " + name.capitalize(), "ok": None, "detail": "off (no " + var + " set on this computer)", "ms": 0})
+                continue
+            t0 = _t.time()
+            ok, detail = web_check(name)
+            rows.append({"id": "web-" + name, "name": "Web search: " + name.capitalize(), "ok": ok, "detail": detail, "ms": int((_t.time() - t0) * 1000)})
+    with concurrent.futures.ThreadPoolExecutor(max_workers=workers) as pool:
+        rows += list(pool.map(one, CHECKS))
+    return rows
+
+
 def sources_status(env=None):
     """Every live source and whether it is on right now: [{"id", "name", "where": offline|online, "keys": [...], "needs_key", "active", "note"}]."""
     env = os.environ if env is None else env

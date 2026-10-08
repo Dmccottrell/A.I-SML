@@ -116,6 +116,32 @@ class Ops(Base):
         self.assertEqual((s, j["up"], h.get("Access-Control-Allow-Origin")), (200, True, "*"))
         self.assertEqual(set(j), {"up", "paused", "demo", "models_ready", "signup"})            # nothing about people or data
 
+    def test_the_owner_can_really_test_the_sources_and_nobody_else(self):
+        import live_data
+        import web_search
+
+        class Down:                                   # every service is unreachable
+            def json(self, url): raise OSError("no route")
+            def text(self, url): raise OSError("no route")
+        rows = live_data.check_sources(env={}, net=Down(), web_check=lambda n: (False, "failed: no route"))
+        by = {r["id"]: r for r in rows}
+        self.assertIsNone(by["web-tavily"]["ok"])                                      # no key: reported as off, not broken
+        self.assertIn("TAVILY_API_KEY", by["web-tavily"]["detail"])
+        self.assertIs(by["web-wikipedia"]["ok"], False)
+        self.assertTrue(all(by[i]["ok"] is False for i in ("currency", "crypto", "news")))
+        rows = live_data.check_sources(env={"TAVILY_API_KEY": "x"}, net=Down(), web_check=lambda n: (n == "tavily", "ok"))
+        self.assertIs({r["id"]: r for r in rows}["web-tavily"]["ok"], True)
+
+        old_net, old = live_data.Net, dict(web_search.SOURCES)
+        live_data.Net = Down
+        web_search.SOURCES["wikipedia"] = lambda q, k=3, fetch=None: [{"title": "t", "url": "https://x.org", "text": "y"}]
+        self.addCleanup(lambda: (setattr(live_data, "Net", old_net), web_search.SOURCES.update(old)))
+        self.assertEqual(self.sam.call("POST", "/api/admin/sources/test", {})[0], 403)
+        s, j = self.owner.call("POST", "/api/admin/sources/test", {})
+        self.assertEqual(s, 200, j)
+        self.assertIn("web-wikipedia", {r["id"] for r in j["rows"]})
+        self.assertTrue(next(r for r in j["rows"] if r["id"] == "web-wikipedia")["ok"])
+
     def test_backups_can_be_made_listed_and_downloaded_by_the_owner_only(self):
         self.assertEqual(self.sam.call("GET", "/api/admin/backups")[0], 404)
         self.assertEqual(self.sam.call("POST", "/api/admin/backups/now", {})[0], 403)
