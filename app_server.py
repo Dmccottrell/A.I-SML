@@ -284,6 +284,7 @@ class AppState:
         self.live_net = None                                   # live_data.Net (tests pass a fake)
         self.default_place = ""                                # the weather place (--weather-place), also used for air quality
         self.web_fn = None                                     # web(question, k) -> notes; None = this server never searches the web
+        self._warm_target, self._warm_thread, self._warm_lock = None, None, threading.Lock()
         self.vision = None                                     # vision.VisionHelper: describes pictures for the models (None = only the words in a picture are read)
         self._demo_tok = None
         self.usage = U.UsageStore(os.path.join(data_dir, "usage.db") if data_dir else ":memory:")
@@ -751,6 +752,37 @@ class AppState:
             return f"{model_id} is loaded and ready"
         except Exception as e:                                   # noqa: BLE001 - a failed head start must not stop the app
             return f"{model_id} could not be preloaded: {getattr(e, 'message', e)}"
+
+    def warm(self, who, model_id):
+        """Load this model in the background (the person just picked it or opened a chat), so their next message does not wait for it. Skipped while a reply
+        or a coding session is running (it would take that model away). Several quick picks only load the last one. True if a load was started or is under way."""
+        if not self.runner:
+            return False
+        try:
+            model = self.pick_model(who, model_id)
+        except KeyError:
+            return False
+        if model["state"] != "ready" or not self.runner.available(model_id):
+            return False
+        if self.stops or self.code.any_running():
+            return False
+        self._warm_target = (model_id, self.window_for(who, model)["window"])
+        with self._warm_lock:
+            if self._warm_thread and self._warm_thread.is_alive():
+                return True
+            self._warm_thread = threading.Thread(target=self._warm_loop, daemon=True)
+            self._warm_thread.start()
+        return True
+
+    def _warm_loop(self):
+        while True:
+            target, self._warm_target = self._warm_target, None
+            if not target:
+                return
+            try:
+                self.runner.ensure(*target)
+            except Exception:                                    # noqa: BLE001 - a failed head start costs nothing but the head start
+                pass
 
     def pick_model(self, who, model_id):
         cat = self.catalog(who)
@@ -1329,6 +1361,9 @@ class Handler(http.server.BaseHTTPRequestHandler):
                                         "kinds": documents.KINDS})
             if path == "/api/skills":
                 return self._send(200, app_skills.catalog())
+            if path == "/api/live/sources":
+                import web_search
+                return self._send(200, {"sources": live_data.sources_status(), "web": web_search.pick_source("auto")})
             if path == "/api/teacher/tools":
                 return self._send(200, teacher_mode.catalog())
             if path == "/api/apps":
@@ -1489,6 +1524,8 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 return self.api_code_post(who, path, body)
             if path == "/api/settings":
                 return self._send(200, self.state.put_settings(who["user"], body))
+            if path == "/api/models/warm":
+                return self._send(200, {"ok": self.state.warm(who, str(body.get("model", "")))})
             if path == "/api/apps/github/device/start":
                 try:
                     flow = github_link.DeviceFlow(self.state.github_client_id(), self.state.github_http)

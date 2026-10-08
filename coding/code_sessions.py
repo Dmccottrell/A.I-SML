@@ -534,6 +534,9 @@ class CodeManager:
         s = self.sessions.get(self.by_user.get(user))
         return s if s and s.state in ("starting", "working", "asking") else None
 
+    def any_running(self):
+        return any(x.state in ("starting", "working", "asking") for x in list(self.sessions.values()))
+
     def sandbox_ready(self):
         """(ok, message). In container mode Docker must answer (checked at most every 30 s); there is no quiet fallback to the host."""
         if self.sandbox.get("mode") != "docker":
