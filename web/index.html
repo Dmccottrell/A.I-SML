@@ -41,6 +41,13 @@ svg .core { fill: var(--core); stroke: var(--sun); stroke-width: 3; transition: 
 .row button.open { flex: 1; min-width: 0; text-align: left; background: transparent; border: 0; padding: 8px 12px; min-height: 40px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .row button.del { background: transparent; border: 0; color: var(--muted); width: 40px; height: 44px; opacity: 0; }
 .row:hover button.del, .row:focus-within button.del { opacity: 1; }
+.row button.more { background: transparent; border: 0; color: var(--muted); width: 36px; height: 44px; opacity: 0; font-size: 18px; }
+.row:hover button.more, .row:focus-within button.more { opacity: 1; }
+@media (hover: none) { .row button.more { opacity: .7; } .row button.del { display: none; } }
+.chatsearch { padding: 0 14px 6px; position: relative; } .chatsearch input { width: 100%; background: var(--surface); border: 1px solid var(--line); border-radius: 12px; color: var(--text); padding: 8px 12px 8px 34px; font: inherit; font-size: 15px; min-height: 40px; }
+.chatsearch svg { position: absolute; left: 24px; top: 10px; color: var(--muted); }
+.hit { display: block; width: 100%; text-align: left; background: transparent; border: 0; border-radius: 10px; padding: 8px 12px; } .hit:hover { background: var(--surface2); } .hit small { display: block; color: var(--muted); font-size: 13px; white-space: normal; }
+.kinds { display: flex; flex-wrap: wrap; gap: 8px; } .kinds button.on { border-color: var(--accent); color: var(--accenttext); }
 .links { border-top: 1px solid var(--line); padding: 8px 14px; }
 .link { display: flex; width: 100%; align-items: center; gap: 12px; background: transparent; border: 0; border-radius: 12px; padding: 0 12px; min-height: 40px; text-align: left; font-weight: 500; }
 .link:hover:not([disabled]) { background: var(--surface2); }
@@ -421,6 +428,7 @@ svg .core { fill: var(--core); stroke: var(--sun); stroke-width: 3; transition: 
   <aside class="side" id="side" aria-label="Chats and settings">
     <div class="brand" id="brand"></div>
     <button class="newchat" id="newChat">+ New chat</button>
+    <div class="chatsearch" id="chatSearchBox"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M11 4a7 7 0 1 0 0 14 7 7 0 0 0 0-14zM21 21l-4.3-4.3" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg><input type="search" id="chatSearch" placeholder="Search chats" aria-label="Search chats" autocomplete="off"></div>
     <div class="chats" id="chatList"></div>
     <div class="links" id="links"></div>
     <div class="acctmenu" id="acctMenu" hidden></div>
@@ -637,18 +645,42 @@ function renderAll() {
 }
 function renderChats() {
   const box = $('chatList'); box.replaceChildren();
+  if (S.q) {   // searching: matching chats, with the words around the match
+    for (const r of S.hits || []) box.append(el('button', {class: 'hit', onclick: () => { S.q = ''; $('chatSearch').value = ''; openChat(r.id); }}, el('b', {}, r.title), r.snippet ? el('small', {}, r.snippet) : ''));
+    if (!(S.hits || []).length) box.append(el('div', {class: 'label'}, S.hits ? 'NOTHING FOUND' : 'SEARCHING...'));
+    return;
+  }
   const day = new Date(); day.setHours(0, 0, 0, 0);
-  const plain = S.state.chats.filter((c) => !c.skill);
+  const all = S.state.chats, plain = all.filter((c) => !c.skill && !c.pinned && !c.folder);
   const today = plain.filter((c) => c.updated * 1000 >= day.getTime()), earlier = plain.filter((c) => c.updated * 1000 < day.getTime());
   const group = (name, list) => { if (!list.length) return; box.append(el('div', {class: 'label'}, name));
     for (const c of list) box.append(el('div', {class: 'row' + (c.id === S.chatId ? ' cur' : '')},
-      el('button', {class: 'open', onclick: () => openChat(c.id)}, c.title),
-      el('button', {class: 'del', 'aria-label': 'Delete chat ' + c.title, onclick: () => delChat(c)}, '×'))); };
+      el('button', {class: 'open', onclick: () => openChat(c.id)}, (c.pinned ? '\ud83d\udccc ' : '') + c.title),
+      el('button', {class: 'more', 'aria-label': 'Options for ' + c.title, 'aria-haspopup': 'true', onclick: (e) => chatMenu(c, e.currentTarget)}, '\u22ef'),
+      el('button', {class: 'del', 'aria-label': 'Delete chat ' + c.title, onclick: () => delChat(c)}, '\u00d7'))); };
+  group('PINNED', all.filter((c) => c.pinned));
+  for (const f of [...new Set(all.filter((c) => c.folder && !c.pinned).map((c) => c.folder))]) group(f.toUpperCase(), all.filter((c) => c.folder === f && !c.pinned));
   group('TODAY', today); group('EARLIER', earlier);
   const names = {teacher: 'TEACHER MODE', study: 'STUDY HELPER'};   // chats started from a skill or Teacher mode keep their own list, so they never mix with ordinary chats
-  const seen = [...new Set(S.state.chats.filter((c) => c.skill).map((c) => c.skill))];
-  for (const id of seen) group(names[id] || (((S.skills.find((k) => k.id === id) || {}).name) || id).toUpperCase(), S.state.chats.filter((c) => c.skill === id));
-  if (!S.state.chats.length) box.append(el('div', {class: 'label'}, 'NO CHATS YET'));
+  const seen = [...new Set(all.filter((c) => c.skill && !c.pinned && !c.folder).map((c) => c.skill))];
+  for (const id of seen) group(names[id] || (((S.skills.find((k) => k.id === id) || {}).name) || id).toUpperCase(), all.filter((c) => c.skill === id && !c.pinned && !c.folder));
+  if (!all.length) box.append(el('div', {class: 'label'}, 'NO CHATS YET'));
+}
+let searchTimer = null;
+$('chatSearch').addEventListener('input', (e) => {
+  S.q = e.target.value.trim(); S.hits = null; renderChats(); clearTimeout(searchTimer);
+  if (!S.q) return;
+  searchTimer = setTimeout(async () => { const q = S.q; try { const r = await api('/api/chats/search?q=' + encodeURIComponent(q)); const j = await r.json(); if (S.q === q) { S.hits = j.results; renderChats(); } } catch (x) {} }, 250);
+});
+function chatMenu(c, btn) {   // a small menu next to the chat: pin, folder, delete
+  document.querySelectorAll('.chatmenu').forEach((m) => m.remove());
+  const item = (label, fn) => el('button', {class: 'link', style: 'min-height:40px', onclick: async () => { menu.remove(); await fn(); }}, label);
+  const menu = el('div', {class: 'acctmenu chatmenu', style: 'position:fixed;left:' + Math.max(8, btn.getBoundingClientRect().left - 150) + 'px;top:' + (btn.getBoundingClientRect().bottom + 4) + 'px;right:auto;bottom:auto;width:200px;z-index:60'},
+    item(c.pinned ? 'Unpin' : '\ud83d\udccc Pin to the top', async () => { await post('/api/chats/' + c.id + '/pin', {pinned: !c.pinned}); await load(); }),
+    item('Move to a folder\u2026', async () => { const f = prompt('Folder name (leave empty to take it out of its folder):', c.folder || ''); if (f === null) return; await post('/api/chats/' + c.id + '/folder', {folder: f}); await load(); }),
+    item('Delete', () => delChat(c)));
+  document.body.append(menu);
+  setTimeout(() => document.addEventListener('click', function off() { menu.remove(); document.removeEventListener('click', off); }, {once: false}), 0);
 }
 const ICONS = {eye: 'M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12zM12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6z', folder: 'M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z', laptop: 'M5 6h14v9H5zM3 18h18', box: 'M12 3l8 4.5v9L12 21l-8-4.5v-9zM12 12l8-4.5M12 12L4 7.5M12 12v9', cloud: 'M7 18a4 4 0 0 1-.6-7.96A5.5 5.5 0 0 1 17.4 9 4.5 4.5 0 0 1 17 18z', undo: 'M9 7L4 12l5 5M4 12h11a5 5 0 0 1 0 10h-3', code: 'M8 8l-4 4 4 4M16 8l4 4-4 4M13.5 6l-3 12', lock: 'M7 11V8a5 5 0 0 1 10 0v3M6 11h12v9H6z', chart: 'M5 20V10M12 20V4M19 20v-7',
                brain: 'M12 4a3 3 0 0 0-3 3 3 3 0 0 0-3 3 3 3 0 0 0 1 5 3 3 0 0 0 5 2zM12 4a3 3 0 0 1 3 3 3 3 0 0 1 3 3 3 3 0 0 1-1 5 3 3 0 0 1-5 2z',
@@ -696,15 +728,44 @@ async function delChat(c) {
 // ---------------------------------------------------------------- thread
 function bubble(m, last) {
   if (m.role === 'user' && m.content.startsWith(SUMMARY_MARK)) return el('div', {class: 'note'}, 'Earlier messages were summarized to save room');
-  if (m.role === 'user') return el('div', {class: 'msg user'}, (m.docs && m.docs.length) ? el('div', {class: 'pics'}, ...m.docs.map((d) => isPic(d) ? el('img', {src: picUrl(d), alt: d.name, onclick: () => window.open(picUrl(d), '_blank', 'noopener')}) : el('span', {class: 'chip', title: d.name}, '\ud83d\udcc4 ' + d.name))) : '', m.content ? el('div', {class: 'bubble'}, m.content) : '');
+  if (m.role === 'user') return el('div', {class: 'msg user'}, (m.docs && m.docs.length) ? el('div', {class: 'pics'}, ...m.docs.map((d) => isPic(d) ? el('img', {src: picUrl(d), alt: d.name, onclick: () => window.open(picUrl(d), '_blank', 'noopener')}) : el('span', {class: 'chip', title: d.name}, '\ud83d\udcc4 ' + d.name))) : '', m.content ? el('div', {class: 'bubble'}, m.content) : '', (S.chatId != null && !S.busy && typeof m.id === 'number' && m.content) ? el('div', {class: 'acts'}, el('button', {class: 'chip', title: 'Change this message and ask again', onclick: (e) => editMessage(m, e.currentTarget.closest('.msg'))}, 'Edit')) : '');
   const model = allModels().find((c) => c.id === m.model_id);
   const meta = el('div', {class: 'meta'}, logo(14, false, model ? model.name : 'brand'), mname(model) + (m.status === 'partial' ? ' · stopped' : ''));
   const acts = el('div', {class: 'acts'}, el('button', {class: 'chip', onclick: (e) => { navigator.clipboard && navigator.clipboard.writeText(m.content); e.target.textContent = 'Copied'; setTimeout(() => e.target.textContent = 'Copy', 1500); }}, 'Copy'));
   if (S.chatId != null && S.chatId >= 0 && m.status === 'done') acts.append(el('button', {class: 'chip', title: 'Right answer: keep the notes it used, so it can answer this again offline', onclick: async (e) => {
     const b = e.currentTarget; b.disabled = true; try { const r = await post('/api/chats/' + S.chatId + '/messages/' + m.id + '/like'); const j = await r.json(); b.textContent = j.saved ? 'Saved' : 'Thanks'; } catch (x) { b.disabled = false; } }}, '\ud83d\udc4d Right'));
   if (m.status === 'done' && (S.skill || m.content.length > 300)) acts.append(el('button', {class: 'chip', onclick: () => saveAs(m.content)}, 'Save as\u2026'));
+  if (last && !S.busy && m.cut && S.chatId != null) acts.append(el('button', {class: 'chip on', title: 'The answer stopped at its length limit: carry on from there', onclick: () => { S.cont = true; $('input').value = 'Continue'; send(); }}, 'Continue \u2192'));
+  if (S.chatId != null && typeof m.id === 'number' && m.status === 'done' && !S.busy) acts.append(el('button', {class: 'chip', title: 'Start a new chat from here, and keep this one as it is', onclick: () => branchChat(m)}, 'Branch'));
+  if (S.chatId != null && S.chatId >= 0 && m.status === 'done') acts.append(el('button', {class: 'chip', title: 'Tell the owner what was wrong with this answer', onclick: (e) => reportAnswer(m, e.currentTarget)}, m.fb ? 'Reported' : 'Report'));
   if (last && !S.busy) acts.append(el('button', {class: 'chip', 'aria-haspopup': 'true', onclick: (e) => regenMenu(e.currentTarget)}, 'Regenerate \u25be'));
   return el('div', {class: 'msg ai', 'data-id': m.id}, meta, el('div', {class: 'bubble'}, m.content), acts);
+}
+function editMessage(m, node) {   // change what you asked, forget the answers after it, and ask again
+  const ta = el('textarea', {class: 'f', style: 'width:100%;min-height:80px;background:var(--bg);border:1px solid var(--line);border-radius:12px;color:var(--text);padding:10px;font:inherit', 'aria-label': 'Edit your message'}, m.content);
+  const later = S.messages.length - 1 - S.messages.findIndex((x) => x.id === m.id);
+  const go = el('button', {class: 'btn small', onclick: async () => {
+    if (!ta.value.trim()) return;
+    if (later > 0 && !confirm('This replaces the ' + (later === 1 ? 'answer' : 'answers') + ' after it with a new one. Continue?')) return;
+    const r = await post('/api/chats/' + S.chatId + '/messages/' + m.id + '/edit', {text: ta.value}); const j = await r.json().catch(() => ({}));
+    if (!r.ok) { alert(j.message || 'That did not work.'); return; }
+    const c = await (await api('/api/chats/' + S.chatId)).json(); S.messages = c.messages; renderThread(); send(true);
+  }}, 'Save and ask again');
+  node.replaceChildren(ta, el('div', {class: 'acts'}, go, el('button', {class: 'chip', onclick: () => renderThread()}, 'Cancel'))); ta.focus();
+}
+async function branchChat(m) {
+  const r = await post('/api/chats/' + S.chatId + '/branch', {message_id: m.id}); const j = await r.json().catch(() => ({}));
+  if (!r.ok) { alert(j.message || 'That did not work.'); return; }
+  await load(); openChat(j.id);
+}
+function reportAnswer(m, btn) {
+  const KINDS = [['wrong_fact', 'Wrong fact'], ['ignored', 'Ignored my question'], ['too_long', 'Too long'], ['too_short', 'Too short or vague'], ['cut_off', 'Cut off'], ['unsafe', 'Not appropriate'], ['other', 'Something else']];
+  let kind = m.cut ? 'cut_off' : 'wrong_fact'; const note = el('textarea', {class: 'f', maxlength: '500', placeholder: 'Optional: what should it have said?', 'aria-label': 'What was wrong', style: 'width:100%;min-height:70px;background:var(--bg);border:1px solid var(--line);border-radius:12px;color:var(--text);padding:10px;font:inherit'});
+  const out = el('div', {role: 'status', style: 'color:var(--muted);font-size:14px'});
+  const kinds = el('div', {class: 'kinds'}, ...KINDS.map(([id, label]) => el('button', {class: 'chip' + (id === kind ? ' on' : ''), type: 'button', onclick: (e) => { kind = id; [...kinds.children].forEach((b) => b.classList.remove('on')); e.currentTarget.classList.add('on'); }}, label)));
+  const d = dialog([el('h2', {}, 'What went wrong?'), el('div', {style: 'color:var(--muted);font-size:14px'}, 'This sends the question and the answer to the owner of this Emvryx, to help fix it. Nothing else from your chat is sent, and private chats can\u2019t be reported.'), kinds, note, out,
+    el('button', {class: 'btn', type: 'button', onclick: async () => { const r = await post('/api/chats/' + S.chatId + '/messages/' + m.id + '/feedback', {kind, note: note.value}); const j = await r.json().catch(() => ({}));
+      if (!r.ok) { out.style.color = 'var(--danger)'; out.textContent = j.message || 'That did not work.'; return; } m.fb = kind; btn.textContent = 'Reported'; d.remove(); toast('Thanks. The owner will see it.'); }}, 'Send report')], 'Cancel');
 }
 function isTeacherChat() { return S.skill === 'teacher' || S.skill === 'study'; }
 function teacherHome(sk) {   // the start of a Teacher mode chat: type anything, or tap a tool
@@ -1310,6 +1371,7 @@ async function openSources() {
 
 const SX = {page: 'general', acct: null, q: '', st: null};
 const sxWhen = (t) => new Date(t * 1000).toLocaleString([], {month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit'});
+const clip = (s, n) => { s = String(s || '').replace(/\s+/g, ' ').trim(); return s.length > n ? s.slice(0, n - 1) + '\u2026' : s; };
 const sxBtn = (label, fn, cls) => el('button', {class: 'sbtn' + (cls ? ' ' + cls : ''), type: 'button', onclick: fn}, label);
 const sxPill = (text, kind) => el('span', {class: 'pill' + (kind ? ' ' + kind : '')}, text);
 function sxSeg(opts, cur, fn) { return el('div', {class: 'seg'}, ...opts.map(([v, t]) => el('button', {class: cur === v ? 'on' : '', type: 'button', onclick: (e) => { fn(v); [...e.target.parentNode.children].forEach((b) => b.classList.remove('on')); e.target.classList.add('on'); }}, t))); }
@@ -1375,9 +1437,9 @@ function sxSections(id) {
   return A[id] || [];
 }
 const SX_NAV = [['general', 'General', 'gear'], ['chat', 'Chat and lookups', 'spark'], ['memory', 'Memory', 'brain'], ['data', 'Data controls', 'folder'], ['apps', 'Connected apps', 'code'], ['security', 'Security', 'lock'], ['account', 'Account', 'eye'], ['about', 'About', 'doc']];
-const SX_OWNER = [['a-overview', 'Overview', 'chart'], ['a-people', 'People', 'eye'], ['a-signups', 'Sign-ups and invites', 'pencil'], ['a-cloud', 'Cloud machine', 'cloud'], ['a-log', 'Security log', 'lock']];
+const SX_OWNER = [['a-overview', 'Overview', 'chart'], ['a-people', 'People', 'eye'], ['a-signups', 'Sign-ups and invites', 'pencil'], ['a-feedback', 'Answer reports', 'pencil'], ['a-cloud', 'Cloud machine', 'cloud'], ['a-log', 'Security log', 'lock']];
 const SX_LEAD = {general: 'How Emvryx looks and feels on this device.', chat: 'How it finds facts and how much of a chat it keeps in mind.', memory: 'What it knows about you, shared by every model.', data: 'Your files, your downloads and what gets deleted.', apps: 'Other services Emvryx can work with.', security: 'Protect your account: password, two-step sign-in and your devices.', account: 'Who you are and your plan.', about: 'About this Emvryx.',
-  'a-overview': 'How safe this server is to share, and how it is doing.', 'a-people': 'Everyone with an account.', 'a-signups': 'Who may create an account, and invite codes.', 'a-cloud': 'A computer elsewhere (like a rented GPU box) where VryxCode can run your code.', 'a-log': 'Sign-ins, failures and changes, newest first.'};
+  'a-overview': 'How safe this server is to share, and how it is doing.', 'a-people': 'Everyone with an account.', 'a-signups': 'Who may create an account, and invite codes.', 'a-feedback': 'What people said went wrong with an answer, newest first.', 'a-cloud': 'A computer elsewhere (like a rented GPU box) where VryxCode can run your code.', 'a-log': 'Sign-ins, failures and changes, newest first.'};
 
 function closeSettings() { document.querySelectorAll('.sx').forEach((n) => n.remove()); }
 async function openSettings(page) {
@@ -1612,6 +1674,20 @@ async function adminPage(id) {
             made.replaceChildren(el('div', {class: 'authnote'}, 'Shown once. Valid 14 days. Send it privately.'), el('div', {class: 'setupkey'}, k.code), el('div', {style: 'display:flex;gap:8px;flex-wrap:wrap'}, sxBtn('Copy code', async (e) => { try { await navigator.clipboard.writeText(k.code); e.target.textContent = 'Copied'; } catch (x) {} }), sxBtn('Copy invite link', async (e) => { try { await navigator.clipboard.writeText(location.origin + '/?invite=' + k.code); e.target.textContent = 'Copied'; } catch (x) {} })), el('small', {style: 'color:var(--muted)'}, 'The link opens Create account with the code already filled in. People can also type the code on the Emvryx website home page.')); }, 'primary'), made))),
         el('div', {class: 'sx-sec'}, 'Active codes (' + o.invites.length + ')'),
         el('div', {class: 'sx-card'}, ...(o.invites.length ? o.invites.map((i) => el('div', {class: 'srow inline'}, el('div', {class: 'stxt'}, el('b', {}, '…-' + i.ends_with + '  ·  ' + i.tier), el('small', {}, i.uses_left + ' use(s) left · ends ' + sxWhen(i.expires))), el('div', {class: 'sctl'}, sxBtn('Cancel', async () => { await post('/api/admin/invites/revoke', {id: i.id}); adminPage(id); }, 'bad')))) : [el('div', {class: 'srow'}, 'No active codes.')])));
+    } else if (id === 'a-feedback') {
+      const f = await (await api('/api/admin/feedback?limit=60')).json();
+      const kindName = (k) => (f.kinds[k] || k);
+      const pills = (obj, name) => Object.keys(obj).length ? Object.entries(obj).map(([k, n]) => sxPill(name(k) + ' · ' + n)) : [el('small', {style: 'color:var(--muted)'}, 'None yet.')];
+      host.replaceChildren(
+        el('div', {class: 'sx-card'}, el('div', {class: 'srow stack'}, el('div', {class: 'stxt'}, el('b', {}, f.counts.new + ' new report' + (f.counts.new === 1 ? '' : 's')), el('small', {}, f.counts.total + ' in total. People send these with the Report button under an answer; private chats can’t be reported.')),
+          el('div', {style: 'display:flex;flex-wrap:wrap;gap:6px'}, ...pills(f.counts.by_kind, kindName)), el('div', {style: 'display:flex;flex-wrap:wrap;gap:6px'}, ...pills(f.counts.by_model, (m) => m || 'unknown model')),
+          el('div', {style: 'display:flex;gap:8px;flex-wrap:wrap'}, el('a', {class: 'sbtn', href: '/api/admin/feedback/export', download: ''}, 'Download as a lessons file'),
+            el('small', {style: 'color:var(--muted);align-self:center'}, 'One line per report (question, the weak answer, what was wrong). You still write the corrected answers.')))),
+        el('div', {class: 'sx-sec'}, 'Newest first'),
+        el('div', {class: 'sx-card'}, ...(f.items.length ? f.items.map((i) => el('div', {class: 'srow stack'}, el('div', {class: 'stxt'}, el('b', {}, kindName(i.kind) + '  ·  ' + (i.model || '?') + '  ·  ' + i.user), el('small', {}, sxWhen(i.at))),
+          el('div', {style: 'font-size:14px'}, el('b', {}, 'Asked: '), clip(i.question, 300)), el('div', {style: 'font-size:14px;color:var(--muted)'}, el('b', {style: 'color:var(--text)'}, 'Answered: '), clip(i.answer, 400)),
+          i.note ? el('div', {style: 'font-size:14px'}, el('b', {}, 'They said: '), i.note) : null,
+          el('div', {}, sxBtn('Mark handled', async () => { await post('/api/admin/feedback/handle', {id: i.id}); adminPage(id); })))) : [el('div', {class: 'srow'}, 'Nothing new. Nice.')])));
     } else if (id === 'a-cloud') {
       const c = await (await api('/api/admin/cloud')).json();
       const hostIn = sxInput('text', 'ssh5.vast.ai or 203.0.113.7', {'aria-label': 'Host', value: c.host || '', inputmode: 'url'});
@@ -1671,7 +1747,7 @@ async function send(regen, mode) {
   let text = regen === true ? '' : input.value.trim(); if (regen !== true && !text && pendingDocs.length) text = pendingDocs.some(isPic) ? 'What is in this picture? Read me any text in it.' : 'Summarize this.';
   if (regen !== true && !text) return;
   if (!S.chatId) { const r = await post('/api/chats', {private: S.private, skill: S.skill, docs: S.docs.map((d) => d.id)}); if (!r.ok) return; S.chatId = (await r.json()).id; remember(); }
-  S.busy = true; S.stick = true; renderComposer(); closeMenus();
+  S.busy = true; S.stick = true; S.contNow = S.cont === true; S.cont = false; renderComposer(); closeMenus();
   if (regen === true) { const last = S.messages[S.messages.length - 1]; if (last && last.role === 'assistant') S.messages.pop(); }
   else { S.messages.push({id: 'u' + Date.now(), role: 'user', content: text, docs: pendingDocs.map((d) => ({id: d.id, name: d.name, kind: d.kind}))}); input.value = ''; input.style.height = 'auto'; renderAttached(); }
   renderThread(); const before = S.lastUsage;
@@ -1680,7 +1756,7 @@ async function send(regen, mode) {
   S.abort = new AbortController();
   try {
     const r = await fetch('/api/chats/' + S.chatId + '/send', {method: 'POST', credentials: 'same-origin', signal: S.abort.signal, headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({text, model: S.model, effort: S.effort, regenerate: regen === true, regen_mode: mode || null})});
+      body: JSON.stringify({text, model: S.model, effort: S.effort, regenerate: regen === true, regen_mode: mode || null, continue: S.contNow === true})});
     if (r.status === 401) { showLogin(); throw new Error('login'); }
     if (!r.ok) { const j = await r.json().catch(() => ({})); throw Object.assign(new Error(j.message || 'Something went wrong.'), {info: j, status: r.status, retry: r.headers.get('Retry-After')}); }
     const reader = r.body.getReader(), dec = new TextDecoder(); let buf = '';

@@ -26,6 +26,9 @@ h2{font-size:21px;margin:34px 0 6px} p,li{color:var(--text)} .muted{color:var(--
 <li><b>Memory:</b> short facts about you that you share in a chat (such as your name or city) or add yourself, so every model can use them in new chats. Passwords, card numbers, email addresses and phone numbers are never kept, and private chats neither save nor read them. See, change or delete them on the Memory screen, or turn memory off in Settings.</li>
 <li><b>Devices:</b> each signed-in device gets a random session. We keep only a fingerprint of it, a label like "Chrome on Android", the last time it was used and the first two parts of its internet address (for example 203.0.x.x), so you can see and sign out your devices.</li>
 <li><b>Security log:</b> the latest 5,000 sign-ins, failed tries, pairing links, bans and similar events, each with a name, a time and the same shortened address. It is for spotting abuse and is visible only to the owner.</li>
+<li><b>Answer reports:</b> only if you tap <b>Report</b> under an answer. We keep the question, that answer, the kind of problem you chose and your optional note, with your name, and the owner can read them and may use them to correct the models. Nothing else from your chat is sent, and private chats cannot be reported. Delete your account and your reports go too.</li>
+<li><b>Connected apps:</b> only if you connect one. The token, link or app password you paste is stored encrypted, is read-only (Emvryx cannot send, post, edit or delete in your apps), and is never shown to the model. When a question is clearly about an app, the few matching items are read from it and given to the model as notes for that answer; private chats never do this. Disconnecting deletes the secret at once.</li>
+<li><b>Passkeys and two-step sign-in:</b> a passkey is stored as a public key only (the private half never leaves your device); a two-step secret is stored encrypted, and recovery codes only as one-way fingerprints.</li>
 <li><b>VryxCode projects:</b> the files in your coding projects and their GitHub link, stored on the server. If you connect GitHub, the access token is stored encrypted and is never shown to the model. Commands VryxCode runs happen on the server (inside a locked-down container when it is turned on).</li>
 </ul>
 
@@ -36,7 +39,7 @@ h2{font-size:21px;margin:34px 0 6px} p,li{color:var(--text)} .muted{color:var(--
 <li><b>GitHub:</b> only if you connect it, and only when you pull, push or create a repository. We send GitHub what git needs for that action and nothing else.</li>
 <li><b>Email:</b> if email sign-in is on, the email provider the owner chose delivers your sign-in code.</li>
 <li>We do not sell your data, share it for advertising, or use analytics or tracking scripts. The page loads only its own files and a font from Google Fonts.</li>
-<li><b>Training:</b> your chats are not used to train or improve any model. If that ever changes it will be opt-in and announced here first.</li>
+<li><b>Training:</b> your chats are not used to train or improve any model, except answers you choose to report (see "Answer reports" above). If that ever changes it will be opt-in and announced here first.</li>
 </ul>
 
 <h2>Your choices</h2>

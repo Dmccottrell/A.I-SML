@@ -192,11 +192,15 @@ class ChatStore:
                 self.db.commit()
             except sqlite3.OperationalError:
                 pass
-        try:
-            self.db.execute("ALTER TABLE messages ADD COLUMN docs TEXT")       # the pictures and files that were sent with a message
-            self.db.commit()
-        except sqlite3.OperationalError:
-            pass
+        for table, column in (("messages", "docs TEXT"),                       # the pictures and files that were sent with a message
+                              ("messages", "flags TEXT"),                      # small marks on a message: {"cut": true, "fb": "wrong_fact"}
+                              ("chats", "pinned INTEGER"), ("chats", "folder TEXT")):
+            try:
+                self.db.execute(f"ALTER TABLE {table} ADD COLUMN {column}")
+                self.db.commit()
+            except sqlite3.OperationalError:
+                pass
+        self.private_meta = {}                # private chats: {chat_id: {"pinned", "folder"}}
         self.private_docs = {}
         self.private = {}                    # private chats live here only: {chat_id: [messages]}
         self.private_skill = {}
@@ -242,7 +246,7 @@ class ChatStore:
         docs = [int(i) for i in (docs or [])][:10]
         if chat_id < 0:
             self.private[chat_id].append({"id": len(self.private[chat_id]), "role": role, "content": content,
-                                          "model_id": model_id, "status": status, "docs": docs})
+                                          "model_id": model_id, "status": status, "docs": docs, "flags": {}})
             return len(self.private[chat_id]) - 1
         cur = self.db.execute("INSERT INTO messages (chat_id, role, content, model_id, status, created, docs) "
                               "VALUES (?, ?, ?, ?, ?, ?, ?)", (chat_id, role, content, model_id, status, time.time(), json.dumps(docs) if docs else None))
@@ -259,17 +263,121 @@ class ChatStore:
     def messages(self, chat_id):
         if chat_id < 0:
             return [dict(m) for m in self.private[chat_id]]
-        rows = self.db.execute("SELECT id, role, content, model_id, status, docs FROM messages WHERE chat_id = ? ORDER BY id",
+        rows = self.db.execute("SELECT id, role, content, model_id, status, docs, flags FROM messages WHERE chat_id = ? ORDER BY id",
                                (chat_id,)).fetchall()
         out = []
         for r in rows:
-            m = dict(zip(("id", "role", "content", "model_id", "status", "docs"), r))
+            m = dict(zip(("id", "role", "content", "model_id", "status", "docs", "flags"), r))
             try:
                 m["docs"] = [int(x) for x in json.loads(m["docs"])] if m["docs"] else []
             except (ValueError, TypeError):
                 m["docs"] = []
+            try:
+                m["flags"] = json.loads(m["flags"]) if m["flags"] else {}
+            except (ValueError, TypeError):
+                m["flags"] = {}
             out.append(m)
         return out
+
+    def set_flag(self, chat_id, message_id, key, value):
+        """A small mark on one message (the page reads it back with the message): {"cut": True} after a reply that hit its length limit, {"fb": "wrong_fact"} after feedback."""
+        if chat_id < 0:
+            if 0 <= message_id < len(self.private.get(chat_id, [])):
+                self.private[chat_id][message_id].setdefault("flags", {})[key] = value
+            return
+        r = self.db.execute("SELECT flags FROM messages WHERE id = ? AND chat_id = ?", (message_id, chat_id)).fetchone()
+        if not r:
+            return
+        try:
+            flags = json.loads(r[0]) if r[0] else {}
+        except ValueError:
+            flags = {}
+        flags[key] = value
+        self.db.execute("UPDATE messages SET flags = ? WHERE id = ?", (json.dumps(flags), message_id))
+        self.db.commit()
+
+    # ---- pin, folders, search, edit and branch
+    def meta(self, chat_id):
+        if chat_id < 0:
+            return dict({"pinned": 0, "folder": ""}, **self.private_meta.get(chat_id, {}))
+        r = self.db.execute("SELECT pinned, folder FROM chats WHERE id = ?", (chat_id,)).fetchone()
+        return {"pinned": int(r[0] or 0), "folder": r[1] or ""} if r else {"pinned": 0, "folder": ""}
+
+    def set_pinned(self, chat_id, pinned):
+        if chat_id < 0:
+            self.private_meta.setdefault(chat_id, {})["pinned"] = int(bool(pinned))
+            return
+        self.db.execute("UPDATE chats SET pinned = ? WHERE id = ?", (int(bool(pinned)), chat_id))
+        self.db.commit()
+
+    def set_folder(self, chat_id, folder):
+        folder = " ".join(str(folder or "").split())[:30]
+        if chat_id < 0:
+            self.private_meta.setdefault(chat_id, {})["folder"] = folder
+            return
+        self.db.execute("UPDATE chats SET folder = ? WHERE id = ?", (folder or None, chat_id))
+        self.db.commit()
+
+    def search(self, query, limit=20):
+        """Chats whose title or messages contain every word of `query` (any case), newest first: [{"id", "title", "snippet", "message_id", "updated"}]. Private chats are never searched."""
+        words = [w for w in re.findall(r"[^\s]+", str(query or "").lower())][:6]
+        if not words:
+            return []
+        like = lambda w: "%" + w.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_") + "%"
+        out, seen = [], set()
+        rows = self.db.execute("SELECT c.id, c.title, m.id, m.content, m.created FROM messages m JOIN chats c ON c.id = m.chat_id WHERE m.status != 'compacted' AND m.content != '' "
+                               + "".join(" AND lower(m.content || ' ' || c.title) LIKE ? ESCAPE '\\'" for _ in words) + " ORDER BY m.id DESC LIMIT 400", [like(w) for w in words]).fetchall()
+        for cid, title, mid, content, created in rows:
+            if cid in seen:
+                continue
+            seen.add(cid)
+            low = content.lower()
+            at = min((low.find(w) for w in words if low.find(w) >= 0), default=0)
+            start = max(0, at - 50)
+            out.append({"id": cid, "title": title, "snippet": ("\u2026" if start else "") + " ".join(content[start:start + 160].split()), "message_id": mid, "updated": created})
+            if len(out) >= limit:
+                break
+        for r in self.db.execute("SELECT id, title, created FROM chats WHERE " + " AND ".join("lower(title) LIKE ? ESCAPE '\\'" for _ in words), [like(w) for w in words]).fetchall():
+            if r[0] not in seen and len(out) < limit:
+                out.append({"id": r[0], "title": r[1], "snippet": "", "message_id": None, "updated": r[2]})
+        return out
+
+    def edit_message(self, chat_id, message_id, text):
+        """Change what a user message says and forget everything after it (the page then asks for a new answer). False if it is not a user message."""
+        text = str(text or "").strip()
+        if not text:
+            return False
+        if chat_id < 0:
+            msgs = self.private.get(chat_id, [])
+            if not (0 <= message_id < len(msgs)) or msgs[message_id]["role"] != "user":
+                return False
+            msgs[message_id]["content"] = text
+            del msgs[message_id + 1:]
+            return True
+        r = self.db.execute("SELECT role FROM messages WHERE id = ? AND chat_id = ?", (message_id, chat_id)).fetchone()
+        if not r or r[0] != "user":
+            return False
+        self.db.execute("UPDATE messages SET content = ? WHERE id = ?", (text, message_id))
+        self.db.execute("DELETE FROM messages WHERE chat_id = ? AND id > ?", (chat_id, message_id))
+        self.db.commit()
+        return True
+
+    def branch(self, chat_id, upto_message_id, private=False):
+        """A new chat that starts as a copy of this one up to and including a message: try another direction without losing the first. Returns the new chat id (None if the message is not here)."""
+        msgs = [m for m in self.messages(chat_id) if m["status"] != "compacted"]
+        keep = []
+        for m in msgs:
+            keep.append(m)
+            if m["id"] == upto_message_id:
+                break
+        else:
+            return None
+        title = (self.title(chat_id) or "Chat")[:40] + " (branch)"
+        new = self.new_chat(title, private=private or chat_id < 0, skill=self.skill(chat_id) or None)
+        for m in keep:
+            self.add(new, m["role"], m["content"], m["model_id"], m["status"] if m["status"] in ("done", "summary") else "done", docs=m.get("docs"))
+        self.set_docs(new, self.docs(chat_id))
+        return new
 
     def sent_docs(self, chat_id):
         """Ids of the files and pictures already sent with an earlier message of this chat."""
@@ -277,9 +385,9 @@ class ChatStore:
 
     def list_chats(self):
         """Saved chats, newest first: [{"id", "title", "updated", "skill"}]. Private chats are never listed."""
-        rows = self.db.execute("SELECT c.id, c.title, COALESCE(MAX(m.created), c.created) AS t, c.skill FROM chats c "
+        rows = self.db.execute("SELECT c.id, c.title, COALESCE(MAX(m.created), c.created) AS t, c.skill, c.pinned, c.folder FROM chats c "
                                "LEFT JOIN messages m ON m.chat_id = c.id GROUP BY c.id ORDER BY t DESC, c.id DESC").fetchall()
-        return [{"id": r[0], "title": r[1], "updated": r[2], "skill": r[3] or ""} for r in rows]
+        return [{"id": r[0], "title": r[1], "updated": r[2], "skill": r[3] or "", "pinned": bool(r[4]), "folder": r[5] or ""} for r in rows]
 
     def exists(self, chat_id):
         if chat_id < 0:
@@ -401,8 +509,14 @@ def run_turn(tok, store, chat_id, backend, model, window, max_new, user_text=Non
         raise ReplyInterrupted() from e
     store.update(chat_id, row, guard.text, "done")
     _settle(limiter, res, backend, tok, ids, guard.text, effort, clock)
+    cut = guard.reason == "length"                             # the reply hit its length limit: the page offers "Continue"
+    if not cut and guard.text and guard.reason == "done":
+        out_tokens = (getattr(backend, "usage", None) or {}).get("out") or len(tok.encode(guard.text, allow_special=False))
+        cut = out_tokens >= max_new - 2
+    if cut:
+        store.set_flag(chat_id, row, "cut", True)
     return {"text": guard.text, "reason": guard.reason, "forgotten_messages": report["forgotten_messages"],
-            "message_id": row, "compacted_messages": folded}
+            "message_id": row, "compacted_messages": folded, "cut": cut}
 
 
 def _settle(limiter, res, backend, tok, ids, text, effort, clock, failed=False):
