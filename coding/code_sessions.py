@@ -20,6 +20,7 @@ import threading
 import time
 import zipfile
 
+import code_log
 import code_sandbox
 import harness
 import usage_limits as U
@@ -87,8 +88,11 @@ class Meter:
 class Session:
     """One task being worked on. `events` only ever grows; the page asks for the ones after the last it saw."""
 
-    def __init__(self, sid, user, project, task, model_id, workspace, auto_edits=False, meter=None, tools=None, identity=None, prefix=None, quotas=None, base=None):
+    def __init__(self, sid, user, project, task, model_id, workspace, auto_edits=False, meter=None, tools=None, identity=None, prefix=None, quotas=None, base=None,
+                 env="local", log=None, snapshot=None):
         self.meter, self.tools, self.identity = meter, tools, identity
+        self.env, self.log, self.snapshot_fn = env, log, snapshot       # where it runs (local | sandbox), the history on disk, and a function that zips the project
+        self.checkpoints, self.updated, self._saved_at = [], time.time(), 0.0
         self.prefix, self.quotas, self.base = prefix, quotas, base         # the container prefix (or None), the quota checker and the person's projects folder
         self.deadline = quotas.session_deadline() if quotas else None
         self.id, self.user, self.project, self.task, self.model_id, self.workspace = sid, user, project, task, model_id, workspace
@@ -108,7 +112,50 @@ class Session:
     def emit(self, kind, **data):
         with self.cv:
             self.events.append({"n": len(self.events), "kind": kind, "t": round(time.time() - self.started, 1), **data})
+            self.updated = time.time()
             self.cv.notify_all()
+        self.persist(force=kind in ("start", "user", "end", "rewind"))
+
+    # ---- the history on disk (the Sessions list)
+    def meta(self):
+        steps, files, snippet = 0, set(), ""
+        for e in self.events:
+            if e["kind"] == "step" and e.get("tool") and e.get("tool") != "finish":
+                steps += 1
+                m = re.match(r"(?:write|edit) (\S+)", str(e.get("preview", "")))
+                if m:
+                    files.add(m.group(1))
+            if e["kind"] == "end" and e.get("summary"):
+                snippet = e["summary"]
+        title = " ".join(str(self.task).split())[:70]
+        return {"id": self.id, "title": title, "project": self.project, "model": self.model_id, "env": self.env, "state": self.state, "started": self.started,
+                "updated": self.updated, "snippet": clip(snippet, 220), "steps": steps, "files": len(files), "checkpoints": list(self.checkpoints)}
+
+    def persist(self, force=False):
+        if not self.log:
+            return
+        now = time.time()
+        if not force and now - self._saved_at < 2.0:
+            return
+        self._saved_at = now
+        try:
+            with self.cv:
+                events = list(self.events)
+            self.log.save(self.meta(), events)
+        except (OSError, ValueError):
+            pass                                          # the history is a convenience: never stop the work for it
+
+    def _checkpoint(self, label):
+        """The project as it is before this message, so Rewind can bring it back."""
+        if not (self.log and self.snapshot_fn):
+            return
+        try:
+            data = self.snapshot_fn()
+            if data and self.log.save_checkpoint(self.id, self.turns_run, data):
+                self.checkpoints.append({"turn": self.turns_run, "t": round(time.time(), 1), "label": " ".join(str(label).split())[:60]})
+                self.checkpoints = self.checkpoints[-code_log.MAX_CHECKPOINTS:]
+        except (CodeError, OSError):
+            pass
 
     def _on_delta(self, info):
         live = self.live
@@ -265,6 +312,7 @@ class Session:
         self.turns_run += 1
         if self.quotas:
             self.deadline = self.quotas.session_deadline()          # each message gets its own time allowance
+        self._checkpoint(text)
         if first:
             self.emit("start", task=text, model=self.model_id, project=self.project)
         else:
@@ -298,6 +346,7 @@ class Session:
             self.state = "failed"
         finally:
             self.live = None
+            self.persist(force=True)
 
     def _keep_history(self):
         """A stopped or failed turn still happened: the next message continues from where it got to."""
@@ -336,7 +385,7 @@ class CodeManager:
 
     def projects(self, user):
         base = self.base(user)
-        return sorted(d for d in os.listdir(base) if os.path.isdir(os.path.join(base, d)))
+        return sorted(d for d in os.listdir(base) if os.path.isdir(os.path.join(base, d)) and NAME_OK.fullmatch(d))
 
     def project_path(self, user, project):
         return os.path.join(self.base(user), self.check_name(project))
@@ -493,14 +542,14 @@ class CodeManager:
             self._avail = (now, code_sandbox.available(self.sandbox.get("image", code_sandbox.DEFAULT_IMAGE)))
         return self._avail[1]
 
-    def prefix_for(self, workspace):
-        if self.sandbox.get("mode") != "docker":
+    def prefix_for(self, workspace, force=False):
+        if self.sandbox.get("mode") != "docker" and not force:
             return None
         sb = self.sandbox
         return code_sandbox.docker_prefix(sb.get("image", code_sandbox.DEFAULT_IMAGE), workspace, cpus=sb.get("cpus", "1"), memory=sb.get("memory", "768m"),
                                           pids=sb.get("pids", 128), runtime=sb.get("runtime"))
 
-    def start(self, user, project, task, model_id, generate, auto_edits=False, context_tokens=None, meter=None, outside=False, tools=None, identity=None):
+    def start(self, user, project, task, model_id, generate, auto_edits=False, context_tokens=None, meter=None, outside=False, tools=None, identity=None, env="local"):
         task = str(task or "").strip()
         if not task:
             raise CodeError("Describe what to build or fix.")
@@ -518,6 +567,7 @@ class CodeManager:
             ok, why = self.sandbox_ready()
             if not ok:
                 raise CodeError("The code sandbox isn't available, so nothing was run. " + why, "The owner needs to start Docker or build the sandbox image.")
+            env = self.resolve_env(env)
             workspace = self.project_path(user, project)
             try:
                 self.quotas.new_project(self.base(user), project)
@@ -528,10 +578,133 @@ class CodeManager:
                 raise CodeError(e.message, e.action)
             self._n += 1
             s = Session(f"s{self._n}-{int(time.time())}", user, project, task, model_id, workspace, auto_edits, meter, tools, identity,
-                        prefix=self.prefix_for(workspace), quotas=self.quotas, base=self.base(user))
+                        prefix=self.prefix_for(workspace, force=(env == "sandbox")), quotas=self.quotas, base=self.base(user),
+                        env=env, log=code_log.SessionLog(self.base(user)), snapshot=lambda u=user, p=project: self._snapshot(u, p))
             self.sessions[s.id], self.by_user[user] = s, s.id
         threading.Thread(target=s.run, args=(generate, self.max_turns, context_tokens), daemon=True).start()
         return s, note
+
+    # ---- where a session runs
+    def _docker_ok(self):
+        now = time.time()
+        if now - getattr(self, "_docker_at", 0) > 30 or getattr(self, "_docker", None) is None:
+            self._docker_at = now
+            self._docker = code_sandbox.available(self.sandbox.get("image", code_sandbox.DEFAULT_IMAGE))
+        return self._docker
+
+    def environments(self):
+        """The places a session can run, for the page: [{"id", "name", "available", "note"}]."""
+        forced = self.sandbox.get("mode") == "docker"
+        d_ok, d_why = (True, "ready") if forced else self._docker_ok()
+        return [
+            {"id": "local", "name": "This computer", "available": not forced,
+             "note": "The owner runs every session in the sandbox." if forced else "Works in the project folder on the computer that runs Emvryx. Only a short list of programs may run."},
+            {"id": "sandbox", "name": "Isolated sandbox", "available": bool(d_ok),
+             "note": "Runs inside a locked container: no internet, limited memory and time." if d_ok else d_why},
+            {"id": "cloud", "name": "Cloud machine", "available": False,
+             "note": "Not connected yet. It needs a remote machine for Emvryx to run code on."}]
+
+    def resolve_env(self, env):
+        """The environment a session will really use, or a CodeError the person can act on."""
+        env = str(env or "local")
+        if self.sandbox.get("mode") == "docker":
+            return "sandbox"                                   # the owner forces the container for everyone
+        if env == "cloud":
+            raise CodeError("Cloud machines aren't connected yet.", "Choose This computer or the isolated sandbox.")
+        if env == "sandbox":
+            ok, why = self._docker_ok()
+            if not ok:
+                raise CodeError("The isolated sandbox isn't available. " + why, "Choose This computer, or ask the owner to set up Docker.")
+            return "sandbox"
+        if env != "local":
+            raise CodeError("That environment isn't known.")
+        return "local"
+
+    # ---- the history (the Sessions list) and Rewind
+    def log(self, user):
+        return code_log.SessionLog(self.base(user))
+
+    def _snapshot(self, user, project):
+        try:
+            return self.export_zip(user, project)
+        except CodeError:
+            return None
+
+    def list_sessions(self, user):
+        """Newest first: the running ones from memory, the rest from the history on disk."""
+        now, out = time.time(), {}
+        for m in self.log(user).metas():
+            if m.get("state") in ("starting", "working", "asking") and m["id"] not in self.sessions:
+                m["state"] = "interrupted"                     # the server was restarted while it was working
+            out[m["id"]] = m
+        for sid, s in self.sessions.items():
+            if s.user == user:
+                out[sid] = s.meta()
+        rows = sorted(out.values(), key=lambda m: m.get("updated", 0), reverse=True)[:code_log.MAX_SESSIONS]
+        for m in rows:
+            m["age"] = code_log.age_words(now, m.get("updated", now))
+        return rows
+
+    def saved(self, user, sid):
+        """A session from the history: {"meta", "events"} (read-only), or a CodeError."""
+        d = self.log(user).load(sid)
+        if not d:
+            raise CodeError("That session isn't here.")
+        if d["meta"].get("state") in ("starting", "working", "asking"):
+            d["meta"]["state"] = "interrupted"
+        return d
+
+    def delete_session(self, user, sid):
+        live = self.sessions.get(sid)
+        if live and live.user == user and live.state in ("starting", "working", "asking"):
+            raise CodeError("That session is running.", "Stop it first.")
+        self.sessions.pop(sid, None)
+        self.log(user).delete(sid)
+
+    def rewind(self, user, sid, turn):
+        """Put the project back as it was before message `turn` of this session (files made since are removed; .git is left alone)."""
+        if self.running(user):
+            raise CodeError("A session is running.", "Stop it first.")
+        log = self.log(user)
+        d = self.saved(user, sid) if sid not in self.sessions else {"meta": self.sessions[sid].meta()}
+        data = log.load_checkpoint(sid, turn)
+        if not data:
+            raise CodeError("That point is no longer kept.", "Only the last few messages of a session can be rewound to.")
+        workspace = self.project_path(user, d["meta"]["project"])
+        try:
+            z = zipfile.ZipFile(io.BytesIO(data))
+        except zipfile.BadZipFile:
+            raise CodeError("That saved point is damaged.")
+        root = os.path.realpath(workspace)
+        with z:
+            names = [i for i in z.infolist() if not i.is_dir()]
+            for dirpath, dirs, files in os.walk(root):
+                dirs[:] = [x for x in dirs if x not in SKIP_DIRS]
+                for n in files:
+                    full = os.path.join(dirpath, n)
+                    if not os.path.islink(full):
+                        os.remove(full)
+            for info in names:
+                rel = self._safe_rel(info.filename)
+                if rel is None:
+                    continue
+                full = os.path.realpath(os.path.join(root, rel))
+                if not full.startswith(root + os.sep):
+                    continue
+                os.makedirs(os.path.dirname(full), exist_ok=True)
+                with open(full, "wb") as f:
+                    f.write(z.read(info))
+        live = self.sessions.get(sid)
+        label = next((c["label"] for c in d["meta"].get("checkpoints", []) if c["turn"] == int(turn)), "")
+        if live:
+            live.history = None                                # what the model remembers no longer matches the files
+            live.emit("rewind", turn=int(turn), label=label)
+        else:
+            d = self.saved(user, sid)
+            d["events"].append({"n": len(d["events"]) + d.get("offset", 0), "kind": "rewind", "t": 0, "turn": int(turn), "label": label})
+            d["meta"]["updated"] = time.time()
+            log.save(d["meta"], d["events"])
+        return {"project": d["meta"]["project"], "label": label}
 
     def get(self, user, sid):
         s = self.sessions.get(sid)

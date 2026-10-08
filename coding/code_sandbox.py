@@ -100,7 +100,7 @@ class Quotas:
     def new_project(self, base, name):
         if os.path.isdir(os.path.join(base, name)):
             return
-        count = sum(1 for d in os.listdir(base) if os.path.isdir(os.path.join(base, d))) if os.path.isdir(base) else 0
+        count = sum(1 for d in os.listdir(base) if os.path.isdir(os.path.join(base, d)) and not d.startswith(".")) if os.path.isdir(base) else 0
         if count >= self.q["code_max_projects"]:
             raise QuotaError(f"You already have {count} projects, the most allowed.", "Delete one you no longer need.")
 
@@ -117,7 +117,7 @@ class Quotas:
         if os.path.isdir(base):
             for d in os.listdir(base):
                 p = os.path.join(base, d)
-                if os.path.isdir(p):
+                if os.path.isdir(p) and not d.startswith("."):                  # .sessions (the history and Rewind snapshots) has its own limits
                     total += tree_size(p, limit_all)[0]
                     if total + extra_bytes > limit_all:
                         raise QuotaError(f"All your projects together are over {self.q['code_total_mb']} MB.", "Delete a project you no longer need.")
