@@ -71,13 +71,42 @@ Effort is a guess: **S** is days, **M** is a couple of weeks, **L** is a big pro
 | 21 | **"Done" means tests pass** | VryxCode keeps going until the checks you named pass, and builds a map of a big project first. | M | No |
 | 22 | **Code review mode** | Read a change (a GitHub pull request, read-only) and list the problems worst first. | M | No |
 | 23 | **Family accounts and learning loop** | A parent view with budgets, a kid-safe mode with reading level, and flashcards and quizzes made from your own documents. | L | No |
-| 24 | **Emvryx API** | An OpenAI-style address so your own programs can use your models with your keys and limits. | M | No |
+| 24 | **Emvryx API** | A simple address so your own apps (household finance, charting practice) can ask your models questions, with their own key, plan limits and instructions. Also lets an app check first whether Emvryx is on. | M | No |
 | 25 | **Shareable skill packs** | Export a specialist mode (Study helper, Lawyer's checklist) as a file and import one someone sent you. | S | No |
 
 **Also worth doing, smaller:** screen-reader and large-text checks across the app, a dyslexia-friendly font option, a "where it fails" note on each model's scorecard entry, and keeping the website's numbers in step with `limits.json`.
 
 **What we will not do:** train on people's chats without a clear opt-in, or let an answer claim a source it did not read.
 <!-- next:end -->
+
+## Emvryx API and connecting my own apps (to discuss Sunday, Oct 11, 2026)
+
+The owner's request: use Emvryx inside the other apps already built (household finance, charting practice). Nothing here is built yet. The repos seen on the GitHub account: `household-finance` and `Personal-Finance-app`; the charting practice app is not identified yet.
+
+**What to decide on Sunday**
+1. Which app goes first, what it is built with, and where it is hosted (Vercel, only on the PC, or a phone app).
+2. Which jobs it should do first (see the list below).
+3. Whether the key sits in a small server-side piece (a Vercel function) or the app only runs on the owner's own devices.
+
+**What gets built in Emvryx (idea 24)**
+- `POST /api/v1/ask`: one question in, one answer out (plus an optional streaming form). Needs a key; counts against that key's plan; each app can send its own instructions ("you are a budgeting helper").
+- A key per app (made with `--add-user`-style names such as `app-finance`), so one app can be switched off or rotated without touching the others.
+- A way for an app to ask "is Emvryx on?" first (the public `/api/status` already exists) and show "assistant offline" kindly when the PC is off.
+- Safe by default: read-only, no tools that change anything, rate limits, and the key never goes in browser code.
+- A tiny example client and a page in `docs/` (`API.md`) written for a non-expert.
+
+**The rule for money and numbers:** the app's own code adds up the totals and the model only explains them in plain words. A model never does the arithmetic. This is idea 4 ("Never guesses a number").
+
+**Possible first jobs**
+- Household finance: sort transactions into categories, a plain-English monthly summary, answers to "can we afford this?" from the app's own totals, odd charges explained. Data stays on the owner's PC.
+- Charting practice: explain a pattern and quiz on it, review practice notes and point out mistakes, a short coaching note after a session. No predictions and no trading advice.
+
+**Limits to say out loud:** the PC must be on; the answers can be wrong, so anything important is checked; nothing here is financial advice.
+
+**Steps**
+1. Read the app (its code, its data shape) and write a one-page plan the owner approves.
+2. Build the endpoint and per-app keys in Emvryx, with tests.
+3. Add one small feature to one app behind a switch, try it, then decide on the next.
 
 ## At a glance
 
