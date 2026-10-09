@@ -640,7 +640,7 @@ function renderAll() {
   $('brand').replaceChildren(logo(32, false, 'brand'), 'Emvryx');
   $('who').textContent = st.user === 'owner' ? 'Owner' : st.user;
   $('avatar').textContent = (st.user[0] || 'Y').toUpperCase();
-  $('plan').textContent = (st.owner ? 'Owner, no limits' : st.plan[0].toUpperCase() + st.plan.slice(1) + ' plan');
+  $('plan').textContent = (st.owner ? (st.founder ? 'Owner, no limits' : 'Admin, no limits') : st.plan[0].toUpperCase() + st.plan.slice(1) + ' plan' + (st.admin ? ' \u00b7 Admin' : ''));
   if (st.demo) { $('banner').hidden = false; $('banner').replaceChildren(el('b', {}, 'Demo mode. '), 'No model is attached, so replies are a stand-in. Start the server with --llama to use a real model.'); } else $('banner').hidden = true;
   renderChats(); renderLinks(); renderComposer(); renderUsage(st.usage, true); renderThread(); warmModel(); maybeNudge();
 }
@@ -1412,6 +1412,20 @@ function qrSvg(text, px) {   // an <svg> element, black on white with a 4-module
 }
 
 // ---------------------------------------------------------------- settings
+function accessDialog(u, done) {   // the first owner chooses a plan, no limits, and admin rights for one person
+  let plan = u.tier, unlimited = !!u.unlimited, admin = !!u.admin;
+  const note = el('div', {style: 'color:var(--muted);font-size:14px'}, 'No limits means no usage cap at all, like the owner. A plan sets the normal cap. Admin rights open the Owner pages in Settings (people, invite codes, backups, reports).');
+  const seg = sxSeg([['free', 'Free'], ['pro', 'Pro'], ['mega', 'Mega']], plan, (v) => { plan = v; });
+  const row = (title, desc, ctl) => el('div', {class: 'srow inline'}, el('div', {class: 'stxt'}, el('b', {}, title), el('small', {}, desc)), el('div', {class: 'sctl'}, ctl));
+  dialog([el('h2', {}, 'Plan and rights for ' + u.user), note, el('b', {}, 'Plan'), seg,
+    row('No usage limits', 'Skips every cap, whatever the plan says.', sxSwitch(unlimited, (v) => { unlimited = v; }, 'No usage limits')),
+    row('Admin rights', 'Can use the Owner pages in Settings. Cannot give out admin rights.', sxSwitch(admin, (v) => { admin = v; }, 'Admin rights')),
+    el('div', {class: 'btnrow'}, el('button', {class: 'btn', type: 'button', onclick: async (e) => {
+      const r = await post('/api/admin/access', {user: u.user, plan, unlimited, admin}), j = await r.json().catch(() => ({}));
+      if (!r.ok) return toast(j.message || 'That did not work.');
+      e.target.closest('.dialog').parentNode.remove(); toast('Saved for ' + u.user + '.'); done();
+    }}, 'Save'))], 'Cancel');
+}
 async function openSources() {
   const j = await (await api('/api/live/sources')).json();
   const row = (x) => el('div', {style: 'display:flex;gap:8px;align-items:baseline;padding:2px 0'}, el('span', {style: 'color:' + (x.active ? '#3fb950' : 'var(--muted)')}, x.active ? '●' : '○'), el('span', {}, x.name), x.needs_key && !x.active ? el('small', {style: 'color:var(--muted)'}, 'needs ' + x.keys.join(' or ')) : x.note ? el('small', {style: 'color:var(--muted)'}, x.note) : '');
@@ -1431,7 +1445,7 @@ async function openSources() {
   const web = j.web === 'wikipedia' ? 'Wikipedia only (no web search key is set)' : j.web[0].toUpperCase() + j.web.slice(1);
   dialog([el('h2', {}, 'Live sources'), el('div', {style: 'color:var(--muted);font-size:14px'}, 'Green means it works now. Keys are set on the computer that runs Emvryx (see docs/LIVE_DATA.md).'),
     el('b', {}, 'Web search: ' + web),
-    ...(S.state && S.state.owner ? [el('div', {}, testBtn, testOut)] : []),
+    ...(S.state && S.state.admin ? [el('div', {}, testBtn, testOut)] : []),
     ...grp('Always on, no internet needed', j.sources.filter((x) => x.where === 'offline')),
     ...grp('Free online services, no key', j.sources.filter((x) => x.where === 'online' && !x.keys.length)),
     ...grp('Online services that use a key', j.sources.filter((x) => x.keys.length))], 'Close');
@@ -1450,7 +1464,7 @@ async function sxAcct() { try { SX.acct = await (await api('/api/account')).json
 
 // A page is a list of sections; a section is {title, rows}; a row is {title, desc, ctl | node, keys, danger}. Search looks through every row.
 function sxSections(id) {
-  const st = S.state, s = st.settings, w = st.window, a = SX.acct || {mfa: {}}, owner = st.owner;
+  const st = S.state, s = st.settings, w = st.window, a = SX.acct || {mfa: {}}, owner = st.admin;
   const A = {
     general: [{title: 'Appearance', rows: [
       {title: 'Theme', desc: 'Automatic follows your phone or computer.', ctl: sxSeg([['auto', 'Automatic'], ['dark', 'Dark'], ['light', 'Light']], S.theme, (v) => { S.theme = v; try { localStorage.setItem('emvryx_theme', v); } catch (e) {} applyTheme(); }), keys: 'dark light mode colour color'},
@@ -1519,13 +1533,13 @@ async function openSettings(page) {
 function chevron() { const c = document.createElementNS('http://www.w3.org/2000/svg', 'svg'); c.setAttribute('class', 'chev'); c.setAttribute('width', '18'); c.setAttribute('height', '18'); c.setAttribute('viewBox', '0 0 24 24'); c.setAttribute('fill', 'none'); c.setAttribute('aria-hidden', 'true');
   const p = document.createElementNS('http://www.w3.org/2000/svg', 'path'); p.setAttribute('d', 'M9 6l6 6-6 6'); p.setAttribute('stroke', 'currentColor'); p.setAttribute('stroke-width', '2'); p.setAttribute('stroke-linecap', 'round'); c.append(p); return c; }
 function sxNavItem(id, name, ico) {
-  const a = SX.acct || {mfa: {}}, flag = id === 'security' && (!a.has_password || !a.mfa.on) && S.state.owner;
+  const a = SX.acct || {mfa: {}}, flag = id === 'security' && (!a.has_password || !a.mfa.on) && S.state.admin;
   return el('button', {class: 'sx-item' + (SX.page === id && !SX.q ? ' on' : ''), type: 'button', onclick: () => { SX.page = id; SX.q = ''; sxRender(true); }}, icon(ico), el('span', {}, name), flag ? el('span', {class: 'dot', title: 'Needs attention'}) : null,
     chevron());
 }
 function sxRender(onPage) {
   const root = SX.root; if (!root || !root.isConnected) return;
-  const keepScroll = root.querySelector('.sx-body') ? root.querySelector('.sx-body').scrollTop : 0, owner = S.state.owner;
+  const keepScroll = root.querySelector('.sx-body') ? root.querySelector('.sx-body').scrollTop : 0, owner = S.state.admin;
   if (onPage !== undefined) root.classList.toggle('on-page', !!onPage || !!SX.q);
   const search = el('input', {type: 'text', placeholder: 'Search settings', 'aria-label': 'Search settings', value: SX.q, oninput: (e) => { SX.q = e.target.value.trim(); root.classList.toggle('on-page', !!SX.q); sxBody(); sxNav.querySelectorAll('.sx-item').forEach((n) => n.classList.remove('on')); if (!SX.q) sxRender(); }});
   const sxNav = el('div', {class: 'sx-nav'},
@@ -1552,7 +1566,7 @@ function sxBody() {
       const rows = sec.rows.filter((r) => !r.node && ((r.title || '') + ' ' + (r.desc || '') + ' ' + (r.keys || '') + ' ' + sec.title + ' ' + name).toLowerCase().includes(q));
       if (rows.length) { n += rows.length; kids.push(el('div', {class: 'sx-sec'}, name + ' › ' + sec.title), sxCard(rows)); }
     }
-    for (const [id, name] of SX_OWNER) if (S.state.owner && name.toLowerCase().includes(q)) { n++; kids.push(el('div', {class: 'sx-sec'}, 'Owner'), el('div', {class: 'sx-card'}, el('button', {class: 'sx-item', type: 'button', onclick: () => { SX.q = ''; SX.page = id; sxRender(true); }}, name))); }
+    for (const [id, name] of SX_OWNER) if (S.state.admin && name.toLowerCase().includes(q)) { n++; kids.push(el('div', {class: 'sx-sec'}, 'Owner'), el('div', {class: 'sx-card'}, el('button', {class: 'sx-item', type: 'button', onclick: () => { SX.q = ''; SX.page = id; sxRender(true); }}, name))); }
     if (!n) kids.push(el('p', {class: 'lead'}, 'Nothing matches “' + SX.q + '”.'));
     return body.replaceChildren(...kids);
   }
@@ -1692,7 +1706,7 @@ function deleteDialog() {
 }
 async function maybeNudge() {   // the owner's account is the one that matters most: ask once per visit until it has a password and two-step sign-in
   document.querySelectorAll('#nudge').forEach((n) => n.remove());
-  if (!S.state || !S.state.owner) return;
+  if (!S.state || !S.state.admin) return;
   try { if (sessionStorage.getItem('emvryx_nudge')) return; } catch (e) {}
   let a; try { a = await (await api('/api/account')).json(); } catch (e) { return; }
   if (a.has_password && a.mfa.on) return;
@@ -1725,9 +1739,10 @@ async function adminPage(id) {
       const name = sxInput('text', 'Name, e.g. sam', {'aria-label': 'Name'}), mail = sxInput('text', 'Email (optional)', {inputmode: 'email', 'aria-label': 'Email'}); let plan = 'free';
       const link = async (u) => { const r = await post('/api/admin/pairing', {user: u}); const k = await r.json(); out.textContent = 'One-time link for ' + u + ' (' + k.pair_minutes + ' minutes, works once): ' + location.origin + '/pair/' + k.pair; };
       host.replaceChildren(
-        el('div', {class: 'sx-card'}, ...j.users.map((u) => el('div', {class: 'srow stack'}, el('div', {class: 'stxt'}, el('b', {}, u.user, ' ', u.owner ? sxPill('Owner') : null, ' ', u.banned ? sxPill('Turned off', 'warn') : null), el('small', {}, u.tier + (u.email ? ' · ' + u.email : '') + (u.has_password ? ' · password' : '') + (u.mfa ? ' · two-step on' : ''))),
+        el('div', {class: 'sx-card'}, ...j.users.map((u) => el('div', {class: 'srow stack'}, el('div', {class: 'stxt'}, el('b', {}, u.user, ' ', u.owner ? sxPill('Owner') : null, ' ', u.admin ? sxPill('Admin') : null, ' ', u.unlimited ? sxPill('No limits') : null, ' ', u.banned ? sxPill('Turned off', 'warn') : null), el('small', {}, u.tier + (u.email ? ' · ' + u.email : '') + (u.has_password ? ' · password' : '') + (u.mfa ? ' · two-step on' : ''))),
           el('div', {class: 'sctl'}, sxBtn('Sign-in link', () => link(u.user)), u.mfa ? sxBtn('Reset two-step', async () => { if (confirm('Turn off two-step for ' + u.user + ' and sign them out everywhere?')) { await post('/api/admin/mfa-reset', {user: u.user}); toast('Two-step reset for ' + u.user + '.'); adminPage(id); } }) : null,
-            u.owner ? null : sxBtn(u.banned ? 'Turn on' : 'Turn off', async () => { await post('/api/admin/ban', {user: u.user, banned: !u.banned}); adminPage(id); }, u.banned ? '' : 'bad'))))),
+            S.state.founder && !u.owner ? sxBtn('Plan and rights\u2026', () => accessDialog(u, () => adminPage(id))) : null,
+            u.owner || u.admin || u.unlimited ? null : sxBtn(u.banned ? 'Turn on' : 'Turn off', async () => { await post('/api/admin/ban', {user: u.user, banned: !u.banned}); adminPage(id); }, u.banned ? '' : 'bad'))))),
         out, el('div', {class: 'sx-sec'}, 'Add a person'),
         el('div', {class: 'sx-card'}, el('div', {class: 'srow stack'}, authField('Name', name), authField('Email', mail), sxSeg([['free', 'Free'], ['pro', 'Pro'], ['mega', 'Mega']], 'free', (v) => { plan = v; }),
           el('div', {}, sxBtn('Add and make a sign-in link', async () => { const r = await post('/api/admin/users', {user: name.value.trim(), tier: plan, email: mail.value.trim() || undefined}); const k = await r.json(); if (r.ok) { out.textContent = 'Send this link privately (works once, ' + k.pair_minutes + ' minutes): ' + location.origin + '/pair/' + k.pair + (k.key ? '\nTheir access key (shown once, not stored): ' + k.key : ''); adminPage(id); } else out.textContent = k.message; }, 'primary')))));

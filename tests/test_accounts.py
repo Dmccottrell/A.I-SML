@@ -139,6 +139,58 @@ class Flows(Base):
         for ident in ("Darryl McCottrell", "darryl_mccottrell", "Darryl_McCottrell"):    # and the name signs in however it is typed
             self.assertEqual(self.logged(ident)[1], 200, ident)
 
+    # ---- a second owner / admin, chosen by the first owner
+    def make_person(self):
+        self.owner_mode("open")
+        c, st, h = self.sign_up(name="Darryl McCottrell", email="darryl@example.com")
+        self.assertEqual(st, 200)
+        c2, st, h = self.logged("Darryl McCottrell")
+        c2.cookie = cookie_of(h)
+        return c2
+
+    def test_the_first_owner_can_make_an_admin_with_a_plan_or_with_no_limits(self):
+        me = self.make_person()
+        state = me.call("GET", "/api/state")[1]
+        self.assertEqual((state["admin"], state["owner"], state["plan"]), (False, False, "free"))
+        self.assertEqual(me.call("GET", "/api/admin/users")[0], 404)                       # not an admin yet
+        # admin rights with a normal Pro plan
+        s, j = self.owner.call("POST", "/api/admin/access", {"user": "Darryl_McCottrell", "plan": "pro", "admin": True})
+        self.assertEqual((s, j["plan"], j["admin"], j["unlimited"]), (200, "pro", True, False))
+        state = me.call("GET", "/api/state")[1]
+        self.assertEqual((state["admin"], state["owner"], state["plan"], state["founder"]), (True, False, "pro", False))
+        self.assertEqual(me.call("GET", "/api/admin/users")[0], 200)
+        self.assertEqual(me.call("POST", "/api/admin/signups", {"mode": "open"})[0], 200)
+        # then no limits as well
+        s, j = self.owner.call("POST", "/api/admin/access", {"user": "Darryl_McCottrell", "unlimited": True})
+        self.assertEqual((s, j["plan"], j["admin"], j["unlimited"]), (200, "pro", True, True))
+        state = me.call("GET", "/api/state")[1]
+        self.assertEqual((state["owner"], state["admin"]), (True, True))
+        self.assertTrue(self.state.usage.get_user("Darryl_McCottrell")["owner"])           # the usage code treats "no limits" like the owner
+        # and back to a plan with no admin rights
+        s, j = self.owner.call("POST", "/api/admin/access", {"user": "Darryl_McCottrell", "plan": "free", "unlimited": False, "admin": False})
+        self.assertEqual((s, j["admin"], j["unlimited"]), (200, False, False))
+        self.assertEqual(me.call("GET", "/api/admin/users")[0], 404)
+        self.assertFalse(self.state.usage.get_user("Darryl_McCottrell")["owner"])
+
+    def test_only_the_first_owner_can_hand_out_rights_and_it_cannot_be_changed_itself(self):
+        me = self.make_person()
+        self.owner.call("POST", "/api/admin/access", {"user": "Darryl_McCottrell", "admin": True})
+        s, j = me.call("POST", "/api/admin/access", {"user": "sam", "admin": True, "unlimited": True})
+        self.assertEqual(s, 403)                                                            # an admin cannot make more admins
+        self.assertEqual(self.sam.call("POST", "/api/admin/access", {"user": "sam", "admin": True})[0], 403)
+        self.assertEqual(self.owner.call("POST", "/api/admin/access", {"user": "owner", "plan": "free"})[0], 400)
+        self.assertEqual(self.owner.call("POST", "/api/admin/access", {"user": "nobody1", "plan": "pro"})[0], 400)
+        self.assertEqual(self.owner.call("POST", "/api/admin/access", {"user": "sam", "plan": "platinum"})[0], 400)
+        self.assertEqual(self.owner.call("POST", "/api/admin/ban", {"user": "Darryl_McCottrell", "banned": True})[0], 400)    # an admin cannot be turned off from the People page
+
+    def test_make_admin_on_the_command_line_finds_the_account_by_email(self):
+        self.make_person()
+        self.assertIsNone(self.state.find_login("darryl@example.com"))                       # sign-in by email needs it verified...
+        rec = self.state.find_account("darryl@example.com")                                  # ...the owner's own tool does not
+        self.assertEqual(rec["user"], "Darryl_McCottrell")
+        out = self.state.set_access(rec["user"], "mega", True, True)
+        self.assertEqual((out["plan"], out["unlimited"], out["admin"]), ("mega", True, True))
+
     def test_unverified_email_cannot_be_used_for_email_code_sign_in(self):
         self.owner_mode("open")
         self.sign_up()
