@@ -183,6 +183,36 @@ class Flows(Base):
         self.assertEqual(self.owner.call("POST", "/api/admin/access", {"user": "sam", "plan": "platinum"})[0], 400)
         self.assertEqual(self.owner.call("POST", "/api/admin/ban", {"user": "Darryl_McCottrell", "banned": True})[0], 400)    # an admin cannot be turned off from the People page
 
+    def test_the_owners_own_email_account_can_grant_once_the_pc_owner_made_it_an_admin(self):
+        self.owner_mode("open")
+        c, st, _ = self.sign_up(name="darryl_mail", email="Darrylmccottrell16@gmail.com")
+        self.assertEqual(st, 200)
+        c, st, h = self.logged("darryl_mail")
+        c.cookie = cookie_of(h)
+        # signing up with that email gives no power at all
+        self.assertEqual(c.call("GET", "/api/state")[1]["granter"], False)
+        self.assertEqual(c.call("POST", "/api/admin/access", {"user": "sam", "plan": "pro"})[0], 403)
+        # the PC owner makes it an admin: now it can grant too
+        self.assertEqual(self.owner.call("POST", "/api/admin/access", {"user": "darryl_mail", "admin": True, "unlimited": True})[0], 200)
+        state = c.call("GET", "/api/state")[1]
+        self.assertEqual((state["admin"], state["granter"], state["founder"]), (True, True, False))
+        s, j = c.call("POST", "/api/admin/access", {"user": "sam", "plan": "pro", "admin": True})
+        self.assertEqual((s, j["plan"], j["admin"]), (200, "pro", True))
+        # a second admin with a different email still cannot
+        other = self.sam
+        self.assertEqual(other.call("POST", "/api/admin/access", {"user": "sam", "plan": "mega"})[0], 403)
+        # and the first owner account is still not editable by anyone
+        self.assertEqual(c.call("POST", "/api/admin/access", {"user": "owner", "plan": "free"})[0], 400)
+
+    def test_an_admin_with_another_email_cannot_grant(self):
+        self.owner_mode("open")
+        self.sign_up(name="helper1", email="helper@example.com")
+        c, st, h = self.logged("helper1")
+        c.cookie = cookie_of(h)
+        self.assertEqual(self.owner.call("POST", "/api/admin/access", {"user": "helper1", "admin": True})[0], 200)
+        self.assertEqual(c.call("GET", "/api/state")[1]["granter"], False)
+        self.assertEqual(c.call("POST", "/api/admin/access", {"user": "sam", "plan": "pro"})[0], 403)
+
     def test_make_admin_on_the_command_line_finds_the_account_by_email(self):
         self.make_person()
         self.assertIsNone(self.state.find_login("darryl@example.com"))                       # sign-in by email needs it verified...

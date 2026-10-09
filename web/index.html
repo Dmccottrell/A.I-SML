@@ -1419,7 +1419,7 @@ function accessDialog(u, done) {   // the first owner chooses a plan, no limits,
   const row = (title, desc, ctl) => el('div', {class: 'srow inline'}, el('div', {class: 'stxt'}, el('b', {}, title), el('small', {}, desc)), el('div', {class: 'sctl'}, ctl));
   dialog([el('h2', {}, 'Plan and rights for ' + u.user), note, el('b', {}, 'Plan'), seg,
     row('No usage limits', 'Skips every cap, whatever the plan says.', sxSwitch(unlimited, (v) => { unlimited = v; }, 'No usage limits')),
-    row('Admin rights', 'Can use the Owner pages in Settings. Cannot give out admin rights.', sxSwitch(admin, (v) => { admin = v; }, 'Admin rights')),
+    row('Admin rights', 'Can use the Owner pages in Settings. Cannot give out plans or admin rights.', sxSwitch(admin, (v) => { admin = v; }, 'Admin rights')),
     el('div', {class: 'btnrow'}, el('button', {class: 'btn', type: 'button', onclick: async (e) => {
       const r = await post('/api/admin/access', {user: u.user, plan, unlimited, admin}), j = await r.json().catch(() => ({}));
       if (!r.ok) return toast(j.message || 'That did not work.');
@@ -1741,7 +1741,7 @@ async function adminPage(id) {
       host.replaceChildren(
         el('div', {class: 'sx-card'}, ...j.users.map((u) => el('div', {class: 'srow stack'}, el('div', {class: 'stxt'}, el('b', {}, u.user, ' ', u.owner ? sxPill('Owner') : null, ' ', u.admin ? sxPill('Admin') : null, ' ', u.unlimited ? sxPill('No limits') : null, ' ', u.banned ? sxPill('Turned off', 'warn') : null), el('small', {}, u.tier + (u.email ? ' · ' + u.email : '') + (u.has_password ? ' · password' : '') + (u.mfa ? ' · two-step on' : ''))),
           el('div', {class: 'sctl'}, sxBtn('Sign-in link', () => link(u.user)), u.mfa ? sxBtn('Reset two-step', async () => { if (confirm('Turn off two-step for ' + u.user + ' and sign them out everywhere?')) { await post('/api/admin/mfa-reset', {user: u.user}); toast('Two-step reset for ' + u.user + '.'); adminPage(id); } }) : null,
-            S.state.founder && !u.owner ? sxBtn('Plan and rights\u2026', () => accessDialog(u, () => adminPage(id))) : null,
+            S.state.granter && !u.owner ? sxBtn('Plan and rights\u2026', () => accessDialog(u, () => adminPage(id))) : null,
             u.owner || u.admin || u.unlimited ? null : sxBtn(u.banned ? 'Turn on' : 'Turn off', async () => { await post('/api/admin/ban', {user: u.user, banned: !u.banned}); adminPage(id); }, u.banned ? '' : 'bad'))))),
         out, el('div', {class: 'sx-sec'}, 'Add a person'),
         el('div', {class: 'sx-card'}, el('div', {class: 'srow stack'}, authField('Name', name), authField('Email', mail), sxSeg([['free', 'Free'], ['pro', 'Pro'], ['mega', 'Mega']], 'free', (v) => { plan = v; }),
