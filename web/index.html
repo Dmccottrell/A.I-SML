@@ -1268,8 +1268,16 @@ async function openRepoPicker() {
   if (!g.connected) { openGithubConnect(() => openRepoPicker()); return; }
   const list = el('div', {style: 'display:flex;flex-direction:column;gap:8px;max-height:52vh;overflow:auto'}, el('div', {style: 'color:var(--muted)'}, 'Loading your repositories...'));
   const find = el('input', {type: 'text', placeholder: 'Search your repositories', 'aria-label': 'Search your repositories', style: 'width:100%'});
-  const out = el('div', {style: 'color:var(--muted);font-size:14px;word-break:break-word'});
+  const out = el('div', {style: 'color:var(--muted);font-size:14px;word-break:break-word'}), note = el('div', {});
   const close = () => document.querySelectorAll('.modal').forEach((m) => m.remove());
+  const typed = el('input', {type: 'text', placeholder: 'owner/name, for one that is not listed', 'aria-label': 'Repository to import by name', style: 'width:100%', autocapitalize: 'none', spellcheck: 'false'});
+  const importByName = async (name, btn) => {
+    if (btn) btn.disabled = true; out.style.color = 'var(--muted)'; out.textContent = 'Copying ' + name + '... this can take a minute for a big repository.';
+    const rr = await post('/api/code/git', {project: C.project, action: 'import', repo: name}); const j = await rr.json().catch(() => ({}));
+    if (!rr.ok) { if (btn) btn.disabled = false; out.style.color = 'var(--danger)'; out.textContent = (j.message || 'That did not work.') + ' ' + (j.action || ''); return; }
+    if (!C.info.projects.includes(j.project)) C.info.projects.push(j.project);
+    C.project = j.project; C.file = null; close(); renderCodeBar(); refreshFiles(); toast(j.message);
+  };
   let repos = [];
   const draw = () => {
     const q = find.value.trim().toLowerCase(), shown = repos.filter((x) => !q || (x.full_name + ' ' + x.description).toLowerCase().includes(q));
@@ -1277,20 +1285,21 @@ async function openRepoPicker() {
       el('div', {}, el('b', {style: 'word-break:break-all'}, x.full_name), ' ', x.private ? el('small', {style: 'color:var(--muted)'}, '\u00b7 private') : null),
       x.description ? el('small', {style: 'color:var(--muted)'}, x.description) : null,
       el('div', {style: 'display:flex;gap:8px;flex-wrap:wrap;align-items:center'},
-        el('button', {class: 'btn small', onclick: async (e) => {
-          const b = e.currentTarget; b.disabled = true; out.style.color = 'var(--muted)'; out.textContent = 'Copying ' + x.full_name + '... this can take a minute for a big repository.';
-          const rr = await post('/api/code/git', {project: C.project, action: 'import', repo: x.full_name}); const j = await rr.json().catch(() => ({}));
-          if (!rr.ok) { b.disabled = false; out.style.color = 'var(--danger)'; out.textContent = (j.message || 'That did not work.') + ' ' + (j.action || ''); return; }
-          if (!C.info.projects.includes(j.project)) C.info.projects.push(j.project);
-          C.project = j.project; C.file = null; close(); renderCodeBar(); refreshFiles(); toast(j.message);
-        }}, 'Import as a new project'), x.updated ? el('small', {style: 'color:var(--muted)'}, 'updated ' + x.updated) : null))) : [el('div', {style: 'color:var(--muted)'}, repos.length ? 'No repository matches that.' : 'No repositories found for this GitHub account.')]));
+        el('button', {class: 'btn small', onclick: (e) => importByName(x.full_name, e.currentTarget)}, 'Import as a new project'), x.updated ? el('small', {style: 'color:var(--muted)'}, 'updated ' + x.updated) : null))) : [el('div', {style: 'color:var(--muted)'}, repos.length ? 'No repository matches that.' : 'No repositories found for this GitHub account.')]));
   };
   find.oninput = draw;
-  dialog([el('h2', {}, 'Import from GitHub'), el('div', {style: 'color:var(--muted);font-size:14px'}, 'Connected as @' + g.login + '. Pick a repository: it is copied into a new VryxCode project of its own, and stays linked to GitHub so you can pull and push.'), find, list, out], 'Close');
+  dialog([el('h2', {}, 'Import from GitHub'), el('div', {style: 'color:var(--muted);font-size:14px'}, 'Connected as @' + g.login + '. Pick a repository: it is copied into a new VryxCode project of its own, and stays linked to GitHub so you can pull and push.'), find, note, list, el('b', {style: 'margin-top:6px'}, 'Or type its name'), typed, el('button', {class: 'btn ghost', type: 'button', onclick: (e) => importByName(typed.value.trim(), e.currentTarget)}, 'Import it'), out], 'Close');
   try {
     const rr = await api('/api/code/github/repos'); const j = await rr.json();
     if (!rr.ok) throw new Error((j.message || 'Could not load your repositories.') + ' ' + (j.action || ''));
     repos = j.repos; draw();
+    const total = repos.length, privateSeen = j.private_seen || 0;
+    const hint = !total ? 'No repositories came back. This connection may not be allowed to see any.' :
+      (!privateSeen ? 'Only public repositories are showing (' + total + '). This connection cannot see your private ones.' : total + ' repositories shown (' + privateSeen + ' private).');
+    const fix = (!privateSeen || j.token_kind === 'fine-grained') ? el('div', {style: 'color:var(--muted);font-size:13px;margin-top:4px'},
+      j.token_kind === 'fine-grained' ? 'This is a fine-grained token: it only sees the repositories you ticked when you made it. ' : '',
+      'To see private ones: Disconnect GitHub in Menu > Connected apps, then connect again with a classic token that has the "repo" permission (GitHub > Settings > Developer settings > Personal access tokens > Tokens (classic)), or a fine-grained token set to "All repositories" with Contents: Read and write.') : null;
+    note.replaceChildren(el('div', {style: 'color:var(--muted);font-size:14px'}, hint), fix);
   } catch (e) { list.replaceChildren(el('div', {style: 'color:var(--danger)'}, e.message)); }
 }
 

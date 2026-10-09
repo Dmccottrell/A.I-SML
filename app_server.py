@@ -2331,7 +2331,10 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 return self._send(200, {"sessions": st.code.list_sessions(user)})
             if path == "/api/code/github/repos":
                 try:
-                    return self._send(200, {"repos": st.github_api(user).my_repos()})
+                    repos = st.github_api(user).my_repos()
+                    token = st.github.get(user).get("token") or ""
+                    kind = "fine-grained" if token.startswith("github_pat_") else "classic" if token.startswith("ghp_") else "sign-in" if token.startswith("gho_") else "other"
+                    return self._send(200, {"repos": repos, "private_seen": sum(1 for r in repos if r["private"]), "token_kind": kind})
                 except github_link.GitHubError as e:
                     raise code_sessions.CodeError(e.message, e.action)
             if path == "/api/code/git":

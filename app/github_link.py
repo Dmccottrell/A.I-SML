@@ -46,6 +46,29 @@ GIT_TIMEOUT = 180
 MAX_OUTPUT = 4000
 
 
+NET_ENV = ("SYSTEMROOT", "SystemRoot", "WINDIR", "TEMP", "TMP", "COMSPEC", "PATHEXT", "HTTPS_PROXY", "HTTP_PROXY", "NO_PROXY", "ALL_PROXY", "https_proxy", "http_proxy",
+           "no_proxy", "all_proxy", "SSL_CERT_FILE", "SSL_CERT_DIR", "CURL_CA_BUNDLE", "GIT_SSL_CAINFO")
+IS_WINDOWS = os.name == "nt"
+
+
+def friendly_git_error(out):
+    """(message, action) for what git printed when it failed: the reason in plain words, and the end of git's own text so nothing is hidden."""
+    text = str(out or "").strip()
+    low = text.lower()
+    tail = text[-400:] or "it failed."
+    if "certificate" in low or "ssl" in low:
+        return ("git could not trust GitHub's security certificate.",
+                "Antivirus or a VPN on the Emvryx PC is probably changing it: pause its HTTPS scanning or the VPN and try again. What git said: " + tail)
+    if "authentication failed" in low or "invalid username or password" in low or "403" in low:
+        return ("GitHub did not accept the token for that repository.", "Check the token can see it (a private repository needs the repo permission). What git said: " + tail)
+    if "not found" in low or ("repository" in low and "does not exist" in low):
+        return ("GitHub could not find that repository.", "Check the name, and that the connected token can see it. What git said: " + tail)
+    if "could not resolve host" in low or "failed to connect" in low or "timed out" in low or "network is unreachable" in low or "unable to access" in low:
+        return ("git could not reach github.com from the Emvryx PC.",
+                "Check that the PC is online (and not behind a VPN or firewall that blocks github.com), then try again. What git said: " + tail)
+    return ("git said: " + tail, "")
+
+
 class GitHubError(Exception):
     def __init__(self, message, action=""):
         super().__init__(message)
@@ -283,10 +306,11 @@ class Git:
         self._checked = False
 
     def _env(self, home):
-        env = {"PATH": os.environ.get("PATH", ""), "HOME": home, "GIT_CONFIG_GLOBAL": os.devnull, "GIT_CONFIG_SYSTEM": os.devnull,
+        env = {k: os.environ[k] for k in NET_ENV if os.environ.get(k)}              # what git needs to reach the internet (Windows needs SystemRoot; proxies and certificate paths)
+        env.update({"PATH": os.environ.get("PATH", ""), "HOME": home, "GIT_CONFIG_GLOBAL": os.devnull, "GIT_CONFIG_SYSTEM": os.devnull,
                "GIT_CONFIG_NOSYSTEM": "1", "GIT_TERMINAL_PROMPT": "0", "GIT_EDITOR": "true", "GIT_PAGER": "cat", "LC_ALL": "C",
                "GIT_AUTHOR_NAME": self.identity[0], "GIT_AUTHOR_EMAIL": self.identity[1],
-               "GIT_COMMITTER_NAME": self.identity[0], "GIT_COMMITTER_EMAIL": self.identity[1]}
+               "GIT_COMMITTER_NAME": self.identity[0], "GIT_COMMITTER_EMAIL": self.identity[1]})
         if self.token:       # per-URL: git only sends it to github.com, never to another host; kept out of the command line
             basic = base64.b64encode(("x-access-token:" + self.token).encode()).decode()
             env.update(GIT_CONFIG_COUNT="1", GIT_CONFIG_KEY_0="http.https://github.com/.extraheader",
@@ -323,15 +347,20 @@ class Git:
         if self.allow_local:
             safe += ["-c", "protocol.file.allow=always"]
         with tempfile.TemporaryDirectory(prefix="gitlink_") as home:
-            try:
-                p = subprocess.run(safe + list(args), cwd=cwd or self.ws, env=self._env(home), capture_output=True, text=True, timeout=timeout)
-            except FileNotFoundError:
-                raise GitHubError("git is not installed on this server.")
-            except subprocess.TimeoutExpired:
-                raise GitHubError("GitHub did not answer in time.", "Try again.")
+            def attempt(prefix):
+                try:
+                    return subprocess.run(prefix + list(args), cwd=cwd or self.ws, env=self._env(home), capture_output=True, text=True, timeout=timeout)
+                except FileNotFoundError:
+                    raise GitHubError("git is not installed on this server.")
+                except subprocess.TimeoutExpired:
+                    raise GitHubError("GitHub did not answer in time.", "Try again.")
+            p = attempt(safe)
+            if p.returncode != 0 and IS_WINDOWS and re.search(r"unable to access|ssl|certificate", (p.stderr or "") + (p.stdout or ""), re.I):
+                p = attempt(safe[:1] + ["-c", "http.sslBackend=schannel"] + safe[1:])       # use the Windows certificate store, which antivirus and company networks add their certificates to
         out = self.scrub((p.stdout or "") + (p.stderr or "")).strip()
         if check and p.returncode != 0:
-            raise GitHubError("git said: " + (out[-600:] or "it failed."))
+            message, action = friendly_git_error(out)
+            raise GitHubError(message, action)
         return out[-MAX_OUTPUT:]
 
     # ---- reading
