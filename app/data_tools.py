@@ -80,8 +80,8 @@ def export_zip(state, user):
     return buf.getvalue()
 
 
-def delete_account(state, user):
-    """Remove a person for good. Raises ValueError for the owner or an unknown name."""
+def delete_account(state, user, by=""):
+    """Remove a person for good (`by` is the admin who did it, empty when the person did it themselves). Raises ValueError for the owner or an unknown name."""
     rec = state.user_record(user)
     if not rec:
         raise ValueError("no one is called that")
@@ -120,7 +120,7 @@ def delete_account(state, user):
             except OSError:
                 pass
     shutil.rmtree(state.code.base(user), ignore_errors=True)
-    state.auth.event("account_deleted", "(deleted)", "", "by the person")
+    state.auth.event("account_deleted", "(deleted)", "", f"by {by}" if by else "by the person")
 
 
 def backup_dir(state):

@@ -213,6 +213,50 @@ class Flows(Base):
         self.assertEqual(c.call("GET", "/api/state")[1]["granter"], False)
         self.assertEqual(c.call("POST", "/api/admin/access", {"user": "sam", "plan": "pro"})[0], 403)
 
+    # ---- admins deleting accounts
+    def two_people(self):
+        self.owner_mode("open")
+        out = {}
+        for name in ("helper1", "victim1"):
+            self.sign_up(name=name, email=f"{name}@example.com")
+            c, st, h = self.logged(name)
+            c.cookie = cookie_of(h)
+            out[name] = c
+        return out
+
+    def test_an_admin_can_delete_an_ordinary_account_and_everything_in_it(self):
+        people = self.two_people()
+        self.assertEqual(self.owner.call("POST", "/api/admin/access", {"user": "helper1", "admin": True})[0], 200)
+        victim = people["victim1"]
+        cid = victim.call("POST", "/api/chats", {})[1]["id"]
+        self.assertEqual(victim.call("POST", "/api/admin/delete-user", {"user": "victim1"})[0], 403)           # an ordinary account cannot
+        admin = people["helper1"]
+        s, j = admin.call("POST", "/api/admin/delete-user", {"user": "victim1", "confirm": "wrong", "password": PW})
+        self.assertEqual((s, j["code"]), (400, "confirm"))                                                       # the name has to be typed
+        s, j = admin.call("POST", "/api/admin/delete-user", {"user": "victim1", "confirm": "victim1"})
+        self.assertEqual((s, j["code"]), (400, "reauth"))                                                        # an admin with a password confirms it
+        s, j = admin.call("POST", "/api/admin/delete-user", {"user": "victim1", "confirm": "victim1", "password": PW})
+        self.assertEqual((s, j), (200, {"ok": True}))
+        self.assertIsNone(self.state.user_record("victim1"))
+        self.assertEqual(victim.call("GET", "/api/state")[0], 401)                                               # signed out everywhere
+        self.assertEqual(self.logged("victim1")[1], 401)
+        self.assertNotIn("victim1", [u["user"] for u in admin.call("GET", "/api/admin/users")[1]["users"]])
+        self.assertIn("by helper1", " ".join(e["detail"] for e in self.owner.call("GET", "/api/admin/audit")[1]["events"] if e["kind"] == "account_deleted"))
+
+    def test_nobody_can_delete_the_owner_themselves_or_a_protected_account_without_the_right(self):
+        people = self.two_people()
+        self.owner.call("POST", "/api/admin/access", {"user": "helper1", "admin": True})
+        self.owner.call("POST", "/api/admin/access", {"user": "victim1", "admin": True, "unlimited": True})
+        admin = people["helper1"]
+        body = lambda u, **kw: dict({"user": u, "confirm": u, "password": PW}, **kw)
+        self.assertEqual(admin.call("POST", "/api/admin/delete-user", body("owner"))[0], 400)                    # the first owner account never
+        self.assertEqual(admin.call("POST", "/api/admin/delete-user", body("helper1"))[0], 400)                  # not your own: there is a button for that
+        self.assertEqual(admin.call("POST", "/api/admin/delete-user", body("victim1"))[0], 403)                  # an admin / no-limits account: only the PC owner
+        self.assertEqual(admin.call("POST", "/api/admin/delete-user", body("nobody1"))[0], 400)
+        self.assertEqual(self.owner.call("POST", "/api/admin/delete-user", {"user": "victim1", "confirm": "victim1"})[0], 200)   # the PC owner can
+        self.assertIsNone(self.state.user_record("victim1"))
+        self.assertIsNotNone(self.state.user_record("owner"))
+
     def test_make_admin_on_the_command_line_finds_the_account_by_email(self):
         self.make_person()
         self.assertIsNone(self.state.find_login("darryl@example.com"))                       # sign-in by email needs it verified...

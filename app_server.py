@@ -2196,6 +2196,28 @@ class Handler(http.server.BaseHTTPRequestHandler):
             if path.startswith("/api/admin/"):
                 if not who["admin"]:
                     return self._send(403, {"code": "owner_only", "message": "Only the owner or an admin can change this."})
+                if path == "/api/admin/delete-user":                             # an admin removes an account and everything it owned
+                    target = str(body.get("user", ""))
+                    rec = self.state.user_record(target)
+                    if not rec:
+                        return self._send(400, {"code": "bad_request", "message": "No one is called that.", "action": "Nothing was deleted."})
+                    if rec.get("owner"):
+                        return self._send(400, {"code": "bad_request", "message": "The first owner account can't be deleted.", "action": "Nothing was deleted."})
+                    if target == who["user"]:
+                        return self._send(400, {"code": "bad_request", "message": "That is your own account.", "action": "Use Settings > Account > Delete my account. Nothing was deleted."})
+                    if (rec.get("admin") or rec.get("unlimited")) and not who["granter"]:
+                        return self._send(403, {"code": "owner_only", "message": "Only the PC owner and the owner's email account can delete an admin or no-limits account.", "action": "Nothing was deleted."})
+                    if who.get("has_password") or who.get("mfa"):
+                        err = self._reauth(who, body)
+                        if err:
+                            return self._send(400, {"code": "reauth", "message": err, "action": "Nothing was deleted."})
+                    if str(body.get("confirm", "")) != target:
+                        return self._send(400, {"code": "confirm", "message": "Type the person's name to confirm.", "action": "Nothing was deleted."})
+                    try:
+                        data_tools.delete_account(self.state, target, by=who["user"])
+                    except ValueError as e:
+                        return self._send(400, {"code": "bad_request", "message": str(e), "action": "Nothing was deleted."})
+                    return self._send(200, {"ok": True})
                 if path == "/api/admin/access":                                  # who gets a plan, no limits or admin rights: only the first owner decides
                     if not who["granter"]:
                         return self._send(403, {"code": "owner_only", "message": "Only the PC owner and the owner's own email account can give out plans, admin rights or no-limits."})
