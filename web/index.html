@@ -1445,6 +1445,13 @@ function qrSvg(text, px) {   // an <svg> element, black on white with a 4-module
 }
 
 // ---------------------------------------------------------------- settings
+function removeAccountDialog(u, done) {   // an admin deletes someone else's account: confirm it is you, then type their name
+  const [rk, rb] = reauthFields(), err = sxErr(), typed = sxInput('text', u.user);
+  const m = dialog([el('h2', {}, 'Delete ' + u.user + '?'),
+    el('p', {style: 'margin:0;color:var(--muted)'}, 'This removes the account and everything it owns: chats, saved notes, memory, coding projects, devices and connected apps. It cannot be undone. To keep the account but stop it being used, use Turn off instead.'),
+    ...rk, el('p', {style: 'margin:0'}, 'Type ', el('b', {}, u.user), ' to confirm:'), typed, err,
+    el('button', {class: 'btn danger', type: 'button', onclick: async () => { const j = await sxPost('/api/admin/delete-user', Object.assign({user: u.user, confirm: typed.value.trim()}, rb()), err); if (!j) return; m.remove(); toast(u.user + ' was deleted.'); done(); }}, 'Delete everything')], 'Keep the account');
+}
 function accessDialog(u, done) {   // the first owner chooses a plan, no limits, and admin rights for one person
   let plan = u.tier, unlimited = !!u.unlimited, admin = !!u.admin;
   const note = el('div', {style: 'color:var(--muted);font-size:14px'}, 'No limits means no usage cap at all, like the owner. A plan sets the normal cap. Admin rights open the Owner pages in Settings (people, invite codes, backups, reports).');
@@ -1776,6 +1783,7 @@ async function adminPage(id) {
         el('div', {class: 'sx-card'}, ...j.users.map((u) => el('div', {class: 'srow stack'}, el('div', {class: 'stxt'}, el('b', {}, u.user, ' ', u.owner ? sxPill('Owner') : null, ' ', u.admin ? sxPill('Admin') : null, ' ', u.unlimited ? sxPill('No limits') : null, ' ', u.banned ? sxPill('Turned off', 'warn') : null), el('small', {}, u.tier + (u.email ? ' · ' + u.email : '') + (u.has_password ? ' · password' : '') + (u.mfa ? ' · two-step on' : ''))),
           el('div', {class: 'sctl'}, sxBtn('Sign-in link', () => link(u.user)), u.mfa ? sxBtn('Reset two-step', async () => { if (confirm('Turn off two-step for ' + u.user + ' and sign them out everywhere?')) { await post('/api/admin/mfa-reset', {user: u.user}); toast('Two-step reset for ' + u.user + '.'); adminPage(id); } }) : null,
             S.state.granter && !u.owner ? sxBtn('Plan and rights\u2026', () => accessDialog(u, () => adminPage(id))) : null,
+            u.owner || u.user === S.state.user || ((u.admin || u.unlimited) && !S.state.granter) ? null : sxBtn('Delete\u2026', () => removeAccountDialog(u, () => adminPage(id)), 'bad'),
             u.owner || u.admin || u.unlimited ? null : sxBtn(u.banned ? 'Turn on' : 'Turn off', async () => { await post('/api/admin/ban', {user: u.user, banned: !u.banned}); adminPage(id); }, u.banned ? '' : 'bad'))))),
         out, el('div', {class: 'sx-sec'}, 'Add a person'),
         el('div', {class: 'sx-card'}, el('div', {class: 'srow stack'}, authField('Name', name), authField('Email', mail), sxSeg([['free', 'Free'], ['pro', 'Pro'], ['mega', 'Mega']], 'free', (v) => { plan = v; }),
