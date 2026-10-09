@@ -149,8 +149,51 @@ class Answers(Base):
         cid = self.new_chat(self.sam)
         self.ask(self.sam, cid, "Give me a multiplication practice question please", skill="study")
         self.ask(self.sam, cid, "30", skill="study")
-        prompt = self.state.tok_for({"id": "flare-2"}).decode(Answers.backend.prompts[-1])
+        prompt = self.state.tok_for({"id": "flare-2"}).decode(Answers.backend.prompts[0])      # the first try at "30" (the fake model then repeats itself, which the repeat guard handles)
         self.assertIn('ANSWER to your last question: "What is 6 x 5?"', prompt)
         saved = self.sam.call("GET", f"/api/chats/{cid}")[1]["messages"]
         self.assertEqual(saved[2]["content"], "30")
 
+
+class Copycat(Base):
+    """A model that answers its own last message again gets one more, firmer try, and the copy is not kept."""
+    streams = 0
+    scripts = []
+    FIRST = "I am here to help you practise multiplication. Let us start with some easy ones. What is 3 x 4? Quick check: What is 6 x 5?"
+    LIST = ("Here are 15 numbered questions: 1. 2 x 3 2. 4 x 5 3. 7 x 8 4. 9 x 6 5. 3 x 3 6. 8 x 8 7. 5 x 5 8. 6 x 7 9. 9 x 9 10. 4 x 4 "
+            "11. 3 x 6 12. 2 x 8 13. 7 x 7 14. 5 x 9 15. 6 x 6")
+
+    class Backend(E.FakeBackend):
+        def stream(self, ids, max_new):
+            self.script = Copycat.scripts[min(Copycat.streams, len(Copycat.scripts) - 1)]
+            Copycat.streams += 1
+            return super().stream(ids, max_new)
+
+    def factory(model, question):                                   # noqa: N805
+        Copycat.backend = Copycat.Backend()
+        return Copycat.backend
+
+    factory = staticmethod(factory)
+
+    def setUp(self):
+        Copycat.streams = 0
+        super().setUp()
+
+    def test_the_copy_is_replaced_by_a_real_answer(self):
+        Copycat.scripts = [Copycat.FIRST, Copycat.FIRST, Copycat.LIST]          # the second answer is a copy of the first; the third is real
+        cid = self.new_chat(self.sam)
+        self.ask(self.sam, cid, "Give me a multiplication practice question please")
+        self.ask(self.sam, cid, "give me 15 questions to solve")
+        msgs = self.sam.call("GET", f"/api/chats/{cid}")[1]["messages"]
+        self.assertEqual([m["role"] for m in msgs], ["user", "assistant", "user", "assistant"])
+        self.assertIn("15 numbered questions", msgs[-1]["content"])
+        prompt = self.state.tok_for({"id": "flare-2"}).decode(Copycat.backend.prompts[-1])
+        self.assertIn("Do not repeat it", prompt)
+        self.assertIn("give me 15 questions to solve", prompt)
+
+    def test_a_normal_second_answer_is_left_alone(self):
+        Copycat.scripts = [Copycat.FIRST, Copycat.LIST]
+        cid = self.new_chat(self.sam)
+        self.ask(self.sam, cid, "Tell me about frogs please")
+        self.ask(self.sam, cid, "Tell me about toads please")
+        self.assertEqual(Copycat.streams, 2)                         # no extra try

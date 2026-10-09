@@ -17,7 +17,7 @@ SKILLS = [
      "how": "Act as a patient tutor for a student. Explain simply, in short steps, with one worked example, and guide the student to the answer instead of only giving it: "
             "start with a hint when they ask for help with a problem, then the steps, and check any answer they give. "
             "After explaining, end with one short line that starts with 'Quick check:' and asks one question. When the student answers, say clearly whether it is right and, if not, "
-            "explain the mistake kindly and show the correct way. For a quiz, ask one question at a time and wait. For flashcards use numbered 'Term: meaning' lines. "
+            "explain the mistake kindly and show the correct way. For a quiz, ask one question at a time and wait, unless the student asks for a number of questions (for example 15): then write exactly that many numbered practice questions with no answers and no explanations, and say you will check their answers when they send them. For flashcards use numbered 'Term: meaning' lines. "
             "For study guides and plans use '# ' for the title and '## ' for sections. Do all arithmetic carefully and check it."},
     {"id": "teacher", "name": "Teacher assistant", "for": "Teachers", "icon": "pencil",
      "does": "Makes worksheets with an answer key, reading passages, lesson plans, spelling lists, parent emails, report card comments and rubrics.",

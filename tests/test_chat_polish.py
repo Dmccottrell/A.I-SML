@@ -222,5 +222,28 @@ class Answers(unittest.TestCase):
         self.assertEqual(P.answer_hint("Please explain how multiplication works in more detail for me today", self.REPLY), "")
 
 
+class Repeats(unittest.TestCase):
+    A = "I'm here to help you practice your multiplication skills. Let's start with some simple ones. What is 3 x 4? Quick check: What is 6 x 5?"
+
+    def test_a_copy_of_the_last_reply_is_spotted(self):
+        self.assertTrue(P.is_repeat(self.A, self.A))
+        self.assertTrue(P.is_repeat(self.A + " If you have any other questions or need further help, feel free to ask!", self.A))
+        self.assertTrue(P.is_repeat(self.A.replace("simple ones", "simple one"), self.A))
+
+    def test_a_new_reply_or_a_short_one_is_not_a_repeat(self):
+        self.assertFalse(P.is_repeat("Here are 15 questions: 1. 2 x 3 2. 4 x 5 3. 7 x 8 4. 9 x 6 5. 3 x 3 6. 8 x 8 7. 5 x 5", self.A))
+        self.assertFalse(P.is_repeat("Yes.", "Yes."))
+        self.assertFalse(P.is_repeat("anything at all that is long enough to count here", ""))
+
+    def test_the_repeat_note_quotes_what_was_asked(self):
+        self.assertIn("give me 15 questions to solve", P.repeat_hint("give me 15 questions to solve"))
+
+    def test_a_request_is_not_taken_for_an_answer(self):
+        reply = "Let us practise.\nQuick check: What is 6 x 5?"
+        for request in ("give me 15 questions to solve", "Can you give me the question without telling me the answer?", "I want 15 questions", "more please"):
+            self.assertEqual(P.answer_hint(request, reply), "", request)
+        self.assertNotEqual(P.answer_hint("30", reply), "")
+
+
 if __name__ == "__main__":
     unittest.main()

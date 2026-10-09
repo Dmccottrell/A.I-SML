@@ -48,6 +48,21 @@ FOLLOW_HINT = ("[This message follows on from your last reply in this chat. Do w
                "Do not go back to earlier topics and do not start something new.]")
 
 
+def is_repeat(new_reply, old_reply, threshold=0.9):
+    """True when the new reply is (nearly) a copy of the one before it: a small model answering its own last message again."""
+    a, b = " ".join(str(new_reply or "").lower().split()), " ".join(str(old_reply or "").lower().split())
+    if len(a) < 40 or len(b) < 40:
+        return False
+    if a == b or a in b or b in a:
+        return True
+    import difflib
+    return difflib.SequenceMatcher(None, a[:1500], b[:1500]).ratio() >= threshold
+
+
+def repeat_hint(text):
+    return (f'[Your last reply was a copy of the one before it. Do not repeat it. Answer only this new message from the person, with new content: "{" ".join(str(text or "").split())[:300]}"]')
+
+
 def last_question(reply):
     """The last question the assistant asked at the end of its reply ("Quick check: What is 6 x 5?"), or ''."""
     for line in reversed(str(reply or "")[-700:].splitlines()):
@@ -58,11 +73,15 @@ def last_question(reply):
     return ""
 
 
+REQUEST = re.compile(r"^(please|can|could|would|will|give|make|write|create|generate|list|show|tell|explain|teach|help|let|now|next|more|another|again|repeat|start|stop|quiz|"
+                     r"what|who|when|where|why|how|which|do|does|is|are|i (want|need|would like)|i'?d like|try|use|change|add|remove|translate|convert|continue|go on)\b", re.I)
+
+
 def answer_hint(text, last_reply, max_words=8):
     """A note for the model when a short message ("30", "yes", "B", "x = 4") is the answer to the question it just asked. On its own such a message names no
     subject, and a small model can answer its own last reply again instead of checking the answer. Shown to the model only, never saved."""
     t = " ".join(str(text or "").split())
-    if not t or len(t.split()) > max_words or t.endswith("?"):
+    if not t or len(t.split()) > max_words or t.endswith("?") or REQUEST.match(t):          # "give me 15 questions" is a request, not an answer
         return ""
     q = last_question(last_reply)
     if not q:
