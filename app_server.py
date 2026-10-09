@@ -1389,7 +1389,8 @@ def start_turn(state, who, chat_id, text, model_id, effort, regenerate=False, re
                            user_docs=[d["id"] for d in attached if d["id"] not in sent_before] if text else None,
                            limiter=state.limiter, user=who["user"], effort=effort, clock=state.clock, pacer=pacer,
                            style_hint="\n\n".join(h for h in (skill_hint, regen_modes.get(mode)["hint"] if regenerate else "",
-                                                    "" if regenerate else chat_polish.follow_up_hint(text, any(m["role"] == "assistant" for m in store.messages(chat_id)))) if h))
+                                                    "" if regenerate else (chat_polish.answer_hint(text, next((m["content"] for m in reversed(store.messages(chat_id)) if m["role"] == "assistant"), ""))
+                                                                                 or chat_polish.follow_up_hint(text, any(m["role"] == "assistant" for m in store.messages(chat_id))))) if h))
             web_mode_now = state.get_settings(who["user"])["web_search"]
             knowledge_first = (model.get("lookup") == "when_needed" and found is not None and not found["asked"] and bool(text) and not regenerate
                                and web_mode_now != "none" and lookup_auto.wants_lookup(text))

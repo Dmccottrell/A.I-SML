@@ -206,5 +206,21 @@ class FollowUps(unittest.TestCase):
         self.assertEqual(P.follow_up_hint("Write a long story about a dragon who learns to bake bread for the whole village", True), "")
 
 
+class Answers(unittest.TestCase):
+    REPLY = "What is 3 x 4?\nThe table says 3 x 4 = 12.\n\nQuick check: What is 6 x 5?\n\nFeel free to ask more!"
+
+    def test_a_bare_answer_gets_the_note_with_the_question_in_it(self):
+        for answer in ("30", "yes", "B", "x = 4", "thirty"):
+            hint = P.answer_hint(answer, self.REPLY)
+            self.assertIn('"What is 6 x 5?"', hint, answer)
+            self.assertIn("Do not repeat your last reply", hint)
+
+    def test_new_questions_and_replies_without_a_question_do_not(self):
+        self.assertEqual(P.answer_hint("What is 7 x 8?", self.REPLY), "")
+        self.assertEqual(P.answer_hint("30", "Hello there, nice to meet you."), "")
+        self.assertEqual(P.answer_hint("", self.REPLY), "")
+        self.assertEqual(P.answer_hint("Please explain how multiplication works in more detail for me today", self.REPLY), "")
+
+
 if __name__ == "__main__":
     unittest.main()
