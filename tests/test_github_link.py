@@ -172,6 +172,57 @@ class SandboxGuard(unittest.TestCase):
                 sb.call("write_file", {"path": "sub/.git/hooks/x", "content": "y"})
 
 
+class GitTroubles(unittest.TestCase):
+    """What git prints when GitHub cannot be reached, in plain words, and the settings that let git reach it from a locked-down start."""
+
+    def test_each_failure_gets_a_plain_message_and_keeps_git_s_own_words(self):
+        cases = (
+            ("fatal: unable to access 'https://github.com/a/b.git/': SSL certificate problem: unable to get local issuer certificate", "trust GitHub's security certificate", "issuer certificate"),
+            ("fatal: unable to access 'https://github.com/a/b.git/': Could not resolve host: github.com", "could not reach github.com", "resolve host"),
+            ("fatal: Authentication failed for 'https://github.com/a/b.git/'", "did not accept the token", "Authentication failed"),
+            ("remote: Repository not found.\nfatal: repository 'https://github.com/a/b.git/' not found", "could not find that repository", "not found"),
+            ("something odd happened", "git said: something odd happened", ""),
+        )
+        for text, message, word in cases:
+            m, a = G.friendly_git_error(text)
+            self.assertIn(message, m, text)
+            self.assertIn(word, m + a, text)
+
+    def test_git_keeps_what_it_needs_to_reach_the_internet_but_not_the_account_settings(self):
+        old = dict(os.environ)
+        self.addCleanup(lambda: (os.environ.clear(), os.environ.update(old)))
+        os.environ.update({"SYSTEMROOT": r"C:\Windows", "HTTPS_PROXY": "http://proxy:3128", "SSL_CERT_FILE": "/certs/ca.pem", "SECRET_THING": "x", "AWS_SECRET_ACCESS_KEY": "y"})
+        env = G.Git(tempfile.mkdtemp(), TOKEN)._env("/tmp/home")
+        self.assertEqual((env["SYSTEMROOT"], env["HTTPS_PROXY"], env["SSL_CERT_FILE"]), (r"C:\Windows", "http://proxy:3128", "/certs/ca.pem"))
+        self.assertNotIn("SECRET_THING", env)
+        self.assertNotIn("AWS_SECRET_ACCESS_KEY", env)
+        self.assertEqual((env["HOME"], env["GIT_CONFIG_GLOBAL"], env["GIT_CONFIG_NOSYSTEM"]), ("/tmp/home", os.devnull, "1"))     # still no global or system settings
+
+    def test_on_windows_a_certificate_failure_is_retried_with_the_windows_certificate_store(self):
+        calls = []
+
+        class P:
+            def __init__(self, code, err):
+                self.returncode, self.stdout, self.stderr = code, "", err
+
+        def fake_run(cmd, **kw):
+            calls.append(cmd)
+            return P(128, "fatal: unable to access: SSL certificate problem") if "http.sslBackend=schannel" not in cmd else P(0, "ok")
+        old_run, old_win = G.subprocess.run, G.IS_WINDOWS
+        G.subprocess.run, G.IS_WINDOWS = fake_run, True
+        self.addCleanup(lambda: (setattr(G.subprocess, "run", old_run), setattr(G, "IS_WINDOWS", old_win)))
+        out = G.Git(tempfile.mkdtemp(), TOKEN)._raw(["ls-remote", "https://github.com/a/b.git"])
+        self.assertEqual(len(calls), 2)
+        self.assertIn("http.sslBackend=schannel", calls[1])
+        self.assertEqual(out, "ok")
+        calls.clear()
+        G.IS_WINDOWS = False                                                                   # elsewhere there is no second try
+        with self.assertRaises(G.GitHubError) as e:
+            G.Git(tempfile.mkdtemp(), TOKEN)._raw(["ls-remote", "https://github.com/a/b.git"])
+        self.assertEqual(len(calls), 1)
+        self.assertIn("certificate", e.exception.message)
+
+
 class ServerTests(Base):
     def setUp(self):
         super().setUp()
@@ -217,6 +268,7 @@ class ServerTests(Base):
         self.assertEqual(st, 200, j)
         self.assertEqual([r["full_name"] for r in j["repos"]], ["sam/app-0", "sam/app-1", "sam/app-2"])
         self.assertEqual((j["repos"][0]["private"], j["repos"][1]["private"], j["repos"][0]["updated"]), (True, False, "2026-10-01"))
+        self.assertEqual((j["private_seen"], j["token_kind"]), (2, "classic"))          # the page uses these to say when private repositories are missing
         self.assertNotIn(TOKEN, json.dumps(j))
 
     def test_importing_a_repository_makes_a_new_project_and_a_failed_copy_leaves_nothing(self):
