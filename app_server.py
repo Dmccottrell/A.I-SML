@@ -2248,12 +2248,27 @@ class Handler(http.server.BaseHTTPRequestHandler):
         st, user = self.state, who["user"]
         project = st.code.check_name(body.get("project"))
         action = str(body.get("action", ""))
-        if action not in ("create_repo", "link", "clone", "pull", "push"):
-            raise code_sessions.CodeError("Choose create_repo, link, clone, pull or push.")
+        if action not in ("create_repo", "link", "clone", "pull", "push", "import"):
+            raise code_sessions.CodeError("Choose create_repo, link, clone, pull, push or import.")
         if st.code.running(user):
             raise code_sessions.CodeError("A coding session is running.", "Stop it first, then use GitHub.")
         try:
             api = st.github_api(user)
+            if action == "import":                                   # a repository you already have, copied into a NEW project of its own
+                owner, repo = github_link.parse_repo(body.get("repo"))
+                base = (re.sub(r"[^A-Za-z0-9_-]", "-", repo).strip("-") or "project")[:36]
+                name, n = base, 1
+                while name in st.code.projects(user):
+                    n += 1
+                    name = f"{base}-{n}"
+                os.makedirs(st.code.project_path(user, name), exist_ok=True)
+                try:
+                    st.git_for(user, name).clone(owner, repo)
+                except Exception:
+                    shutil.rmtree(st.code.project_path(user, name), ignore_errors=True)         # a failed copy leaves no half-empty project behind
+                    raise
+                st.github.log(user, f"imported {owner}/{repo} as {name}")
+                return {"ok": True, "message": f"Imported {owner}/{repo} as the project {name}.", "project": name}
             os.makedirs(st.code.project_path(user, project), exist_ok=True)
             g = st.git_for(user, project)
             if action == "create_repo":
@@ -2292,6 +2307,11 @@ class Handler(http.server.BaseHTTPRequestHandler):
                                         "running": run.id if run else None, "project": run.project if run else None, "environments": st.code.environments(who["owner"])})
             if path == "/api/code/sessions":
                 return self._send(200, {"sessions": st.code.list_sessions(user)})
+            if path == "/api/code/github/repos":
+                try:
+                    return self._send(200, {"repos": st.github_api(user).my_repos()})
+                except github_link.GitHubError as e:
+                    raise code_sessions.CodeError(e.message, e.action)
             if path == "/api/code/git":
                 project = st.code.check_name(arg("project"))
                 g = st.git_for(user, project)

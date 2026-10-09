@@ -290,6 +290,53 @@ class Email(unittest.TestCase):
         self.assertIn("app password", e.exception.action)
 
 
+class EmailTroubles(unittest.TestCase):
+    """Common reasons Gmail says no, each explained in its own words; an app password pasted with its spaces still works."""
+
+    def hub_with(self, login):
+        import imaplib
+
+        class Imap(FakeImap):
+            def login(self, user, pw):
+                login(user, pw, imaplib)
+
+        return L.Hub(L.Store(None, secret_box.SecretBox()), http=Fake({}), imap=Imap)
+
+    def connect(self, login, password="abcd efgh ijkl mnop"):
+        return self.hub_with(login).connect("sam", "email", {"provider": "gmail", "email": " sam@gmail.com ", "password": password})
+
+    def test_spaces_in_a_pasted_app_password_are_ignored(self):
+        seen = []
+
+        def ok(user, pw, imaplib):
+            seen.append((user, pw))
+        self.connect(ok)
+        self.assertEqual(seen[0], ("sam@gmail.com", "abcdefghijklmnop"))
+
+    def test_each_refusal_gets_its_own_explanation(self):
+        def refuse(text):
+            def login(user, pw, imaplib):
+                raise imaplib.IMAP4.error(text)
+            return login
+        cases = (
+            (b"[ALERT] Application-specific password required: https://support.google.com/accounts/answer/185833 (Failure)", "app password"),
+            (b"[ALERT] Your account is not enabled for IMAP use. (Failure)", "IMAP is switched off"),
+            (b"[ALERT] Please log in via your web browser (Failure)", "browser"),
+            (b"[AUTHENTICATIONFAILED] Invalid credentials (Failure)", "refused that email"),
+        )
+        for text, word in cases:
+            with self.assertRaises(L.LinkError) as e:
+                self.connect(refuse(text))
+            self.assertIn(word, e.exception.message + " " + e.exception.action, text)
+
+    def test_no_route_to_the_mail_server_is_not_called_a_wrong_password(self):
+        def down(user, pw, imaplib):
+            raise OSError("network is unreachable")
+        with self.assertRaises(L.LinkError) as e:
+            self.connect(down)
+        self.assertIn("Could not reach", e.exception.message)
+
+
 class Gather(unittest.TestCase):
     def test_gather_makes_notes_labelled_with_the_app_and_never_raises(self):
         h = hub({"cal.example": reply(ICS.encode())})

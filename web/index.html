@@ -376,7 +376,7 @@ svg .core { fill: var(--core); stroke: var(--sun); stroke-width: 3; transition: 
 .sx-body { flex: 1; min-width: 0; overflow-y: auto; padding: 24px max(16px, calc((100% - 720px) / 2)) 80px; }
 .sx-body h1 { margin: 0 0 4px; font: 600 26px 'Sora', sans-serif; display: flex; align-items: center; gap: 10px; }
 .sx-body .lead { color: var(--muted); margin: 0 0 18px; }
-.sx-back { display: none; }
+.sx-back { display: none; } .sx-close { display: none; margin-left: auto; }
 .sx-sec { margin: 22px 0 8px; font-size: 12px; font-weight: 600; letter-spacing: .1em; color: var(--muted); text-transform: uppercase; }
 .sx-card { background: var(--surface); border: 1px solid var(--line); border-radius: 16px; overflow: hidden; }
 .srow { display: flex; align-items: center; gap: 16px; padding: 14px 16px; border-top: 1px solid var(--line); }
@@ -417,7 +417,7 @@ svg .core { fill: var(--core); stroke: var(--sun); stroke-width: 3; transition: 
   .sx-nav { width: 100%; border-right: 0; } .sx-body { padding: 16px 16px 80px; }
   .sx:not(.on-page) .sx-body { display: none; } .sx.on-page .sx-nav { display: none; }
   .sx-item .chev { display: block; } .sx-item .dot + .chev { margin-left: 8px; } .sx-item.on { box-shadow: none; background: transparent; }
-  .sx-back { display: inline-flex; } .srow { flex-wrap: wrap; } .srow .sctl { max-width: none; width: 100%; justify-content: flex-start; }
+  .sx-back { display: inline-flex; } .sx-close { display: inline-flex; } .srow { flex-wrap: wrap; } .srow .sctl { max-width: none; width: 100%; justify-content: flex-start; }
   .srow.inline .sctl { width: auto; margin-left: auto; } .srow.inline { flex-wrap: nowrap; }
 }
 @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; } }
@@ -592,7 +592,8 @@ try { S.model = localStorage.getItem('emvryx_model'); S.effort = localStorage.ge
 if (!['auto', 'quick', 'balanced', 'deep'].includes(S.effort)) S.effort = 'balanced';
 
 function remember() {   // the open chat, so the home-screen app reopens where you were (a private chat is never saved, so it is not remembered)
-  try { if (S.chatId != null && S.chatId >= 0 && !S.private) localStorage.setItem('emvryx_chat', String(S.chatId)); else localStorage.removeItem('emvryx_chat'); } catch (e) {}
+  if (!S.restored) return;   // while the page is still starting up nothing may erase what was remembered
+  try { if (S.chatId != null && S.chatId >= 0 && !S.private) localStorage.setItem('emvryx_chat', String(S.chatId)); else if (S.private) localStorage.removeItem('emvryx_chat'); } catch (e) {}   // an empty new chat keeps the last real one
 }
 async function restoreChat() {   // once per page load, after the chat list is known
   if (S.restored) return; S.restored = true;
@@ -1261,6 +1262,38 @@ async function openGithubConnect(after) {
   dialog(kids, 'Close');
 }
 
+// Pick one of your own GitHub repositories and copy it into a new project (VryxCode > project menu > Import from GitHub)
+async function openRepoPicker() {
+  const r = await api('/api/code/git?project=' + encodeURIComponent(C.project)); const g = await r.json();
+  if (!g.connected) { openGithubConnect(() => openRepoPicker()); return; }
+  const list = el('div', {style: 'display:flex;flex-direction:column;gap:8px;max-height:52vh;overflow:auto'}, el('div', {style: 'color:var(--muted)'}, 'Loading your repositories...'));
+  const find = el('input', {type: 'text', placeholder: 'Search your repositories', 'aria-label': 'Search your repositories', style: 'width:100%'});
+  const out = el('div', {style: 'color:var(--muted);font-size:14px;word-break:break-word'});
+  const close = () => document.querySelectorAll('.modal').forEach((m) => m.remove());
+  let repos = [];
+  const draw = () => {
+    const q = find.value.trim().toLowerCase(), shown = repos.filter((x) => !q || (x.full_name + ' ' + x.description).toLowerCase().includes(q));
+    list.replaceChildren(...(shown.length ? shown.map((x) => el('div', {class: 'srow stack', style: 'border:1px solid var(--line);border-radius:12px;padding:10px 12px;display:flex;flex-direction:column;gap:6px'},
+      el('div', {}, el('b', {style: 'word-break:break-all'}, x.full_name), ' ', x.private ? el('small', {style: 'color:var(--muted)'}, '\u00b7 private') : null),
+      x.description ? el('small', {style: 'color:var(--muted)'}, x.description) : null,
+      el('div', {style: 'display:flex;gap:8px;flex-wrap:wrap;align-items:center'},
+        el('button', {class: 'btn small', onclick: async (e) => {
+          const b = e.currentTarget; b.disabled = true; out.style.color = 'var(--muted)'; out.textContent = 'Copying ' + x.full_name + '... this can take a minute for a big repository.';
+          const rr = await post('/api/code/git', {project: C.project, action: 'import', repo: x.full_name}); const j = await rr.json().catch(() => ({}));
+          if (!rr.ok) { b.disabled = false; out.style.color = 'var(--danger)'; out.textContent = (j.message || 'That did not work.') + ' ' + (j.action || ''); return; }
+          if (!C.info.projects.includes(j.project)) C.info.projects.push(j.project);
+          C.project = j.project; C.file = null; close(); renderCodeBar(); refreshFiles(); toast(j.message);
+        }}, 'Import as a new project'), x.updated ? el('small', {style: 'color:var(--muted)'}, 'updated ' + x.updated) : null))) : [el('div', {style: 'color:var(--muted)'}, repos.length ? 'No repository matches that.' : 'No repositories found for this GitHub account.')]));
+  };
+  find.oninput = draw;
+  dialog([el('h2', {}, 'Import from GitHub'), el('div', {style: 'color:var(--muted);font-size:14px'}, 'Connected as @' + g.login + '. Pick a repository: it is copied into a new VryxCode project of its own, and stays linked to GitHub so you can pull and push.'), find, list, out], 'Close');
+  try {
+    const rr = await api('/api/code/github/repos'); const j = await rr.json();
+    if (!rr.ok) throw new Error((j.message || 'Could not load your repositories.') + ' ' + (j.action || ''));
+    repos = j.repos; draw();
+  } catch (e) { list.replaceChildren(el('div', {style: 'color:var(--danger)'}, e.message)); }
+}
+
 // GitHub for one VryxCode project: create / link / clone, pull, push
 async function openProjectGithub() {
   const r = await api('/api/code/git?project=' + encodeURIComponent(C.project)); const g = await r.json();
@@ -1282,7 +1315,7 @@ async function openProjectGithub() {
     kids.push(el('div', {style: 'color:var(--muted)'}, 'Connected as @' + g.login + '. This project is not linked to a repository yet.'),
       el('b', {}, 'Create a new repository'), name, el('label', {style: 'display:flex;gap:8px;align-items:center;color:var(--muted)'}, priv, 'Private'),
       el('button', {class: 'btn', onclick: () => { if (confirm('Create the repository "' + name.value + '" on your GitHub account?')) act({action: 'create_repo', name: name.value, private: priv.checked}, () => { close(); openProjectGithub(); }); }}, 'Create and link'),
-      el('b', {}, 'Or use one you already have'), repo,
+      el('b', {}, 'Or use one you already have'), el('button', {class: 'btn ghost', onclick: () => { close(); openRepoPicker(); }}, 'Browse my repositories...'), repo,
       el('div', {class: 'row', style: 'display:flex;gap:8px;flex-wrap:wrap'},
         el('button', {class: 'btn ghost', onclick: () => act({action: 'link', repo: repo.value}, () => { close(); openProjectGithub(); })}, 'Link this project to it'),
         el('button', {class: 'btn ghost', onclick: () => { if (confirm('Copy that repository into this project? (The project must be empty.)')) act({action: 'clone', repo: repo.value}, () => { close(); openProjectGithub(); }); }}, 'Clone it into this project')));
@@ -1561,7 +1594,7 @@ function sxBody() {
   const body = $('sxBody'); if (!body) return;
   const all = [...SX_NAV, ...SX_OWNER];
   if (SX.q) {
-    const q = SX.q.toLowerCase(), kids = [el('h1', {}, 'Search')]; let n = 0;
+    const q = SX.q.toLowerCase(), kids = [el('h1', {style: 'display:flex;align-items:center;gap:8px'}, 'Search', el('button', {class: 'icon sx-close', type: 'button', 'aria-label': 'Close settings', onclick: closeSettings}, icon('x')))]; let n = 0;
     for (const [id, name] of SX_NAV) for (const sec of sxSections(id)) {
       const rows = sec.rows.filter((r) => !r.node && ((r.title || '') + ' ' + (r.desc || '') + ' ' + (r.keys || '') + ' ' + sec.title + ' ' + name).toLowerCase().includes(q));
       if (rows.length) { n += rows.length; kids.push(el('div', {class: 'sx-sec'}, name + ' › ' + sec.title), sxCard(rows)); }
@@ -1571,7 +1604,8 @@ function sxBody() {
     return body.replaceChildren(...kids);
   }
   const [id, name] = all.find((x) => x[0] === SX.page) || all[0];
-  const head = el('h1', {}, el('button', {class: 'icon sx-back', type: 'button', 'aria-label': 'Back to settings', onclick: () => { SX.root.classList.remove('on-page'); }}, icon('back')), name);
+  const head = el('h1', {style: 'display:flex;align-items:center;gap:8px'}, el('button', {class: 'icon sx-back', type: 'button', 'aria-label': 'Back to settings', onclick: () => { SX.root.classList.remove('on-page'); }}, icon('back')), name,
+    el('button', {class: 'icon sx-close', type: 'button', 'aria-label': 'Close settings', onclick: closeSettings}, icon('x')));
   if (id.startsWith('a-')) { body.replaceChildren(head, el('p', {class: 'lead'}, SX_LEAD[id]), el('div', {id: 'sxAdmin'}, el('div', {style: 'color:var(--muted)'}, 'Loading...'))); return adminPage(id); }
   const kids = [head, el('p', {class: 'lead'}, SX_LEAD[id])];
   for (const sec of sxSections(id)) kids.push(el('div', {class: 'sx-sec'}, sec.title), sxCard(sec.rows));
@@ -1707,11 +1741,11 @@ function deleteDialog() {
 async function maybeNudge() {   // the owner's account is the one that matters most: ask once per visit until it has a password and two-step sign-in
   document.querySelectorAll('#nudge').forEach((n) => n.remove());
   if (!S.state || !S.state.admin) return;
-  try { if (sessionStorage.getItem('emvryx_nudge')) return; } catch (e) {}
+  try { const at = parseInt(localStorage.getItem('emvryx_nudge') || '0', 10); if (at && Date.now() - at < 14 * 86400000) return; } catch (e) {}
   let a; try { a = await (await api('/api/account')).json(); } catch (e) { return; }
   if (a.has_password && a.mfa.on) return;
   const bar = el('div', {class: 'nudge', id: 'nudge'}, el('span', {}, el('b', {style: 'color:var(--accenttext)'}, 'Protect the owner account: '), !a.has_password ? 'set a password' : 'turn on two-step sign-in', '.'),
-    sxBtn('Do it now', () => { bar.remove(); openSettings('security'); }, 'primary'), el('button', {class: 'x', type: 'button', 'aria-label': 'Not now', onclick: () => { bar.remove(); try { sessionStorage.setItem('emvryx_nudge', '1'); } catch (e) {} }}, 'Not now'));
+    sxBtn('Do it now', () => { bar.remove(); openSettings('security'); }, 'primary'), el('button', {class: 'x', type: 'button', 'aria-label': 'Not now', onclick: () => { bar.remove(); try { localStorage.setItem('emvryx_nudge', String(Date.now())); } catch (e) {} }}, 'Not now'));
   $('banner').after(bar);
 }
 function toast(text) { const t = el('div', {class: 'sx-toast', role: 'status', style: 'pointer-events:none;position:fixed;left:50%;bottom:24px;transform:translateX(-50%);background:var(--surface2);border:1px solid var(--line);border-radius:999px;padding:10px 18px;z-index:80;box-shadow:0 8px 24px rgba(0,0,0,.4)'}, text); document.body.append(t); setTimeout(() => t.remove(), 3500); }
@@ -2064,7 +2098,7 @@ $('codeProj').onclick = (e) => {
   const item = (label, fn, cls) => el('button', {class: 'opt' + (cls ? ' ' + cls : ''), onclick: () => { closeCodeMenus(); fn(); }}, el('span', {class: 'grow'}, label));
   const names = Array.from(new Set(C.info.projects.concat([C.project])));
   m.replaceChildren(el('div', {class: 'head'}, 'PROJECT'), ...names.map((n) => item(n, () => { C.project = n; C.file = null; renderCodeBar(); refreshFiles(); }, n === C.project ? 'sel' : '')),
-    item('+ New project', newProject), el('div', {class: 'head'}, 'THIS PROJECT'),
+    item('+ New project', newProject), item('Import from GitHub...', openRepoPicker), el('div', {class: 'head'}, 'THIS PROJECT'),
     item('GitHub...', openProjectGithub), item('Download as zip', () => { window.location = '/api/code/zip?project=' + encodeURIComponent(C.project); }), item('Import a zip or folder...', openImport),
     item('Delete project', deleteProject));
   m.hidden = false;
