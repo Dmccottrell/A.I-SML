@@ -30,6 +30,13 @@ def digest(secret):
     return hashlib.sha256(str(secret).encode()).hexdigest()
 
 
+def norm_invite(code):
+    """An invite code however it was typed or pasted (capitals, spaces, with or without dashes) in the form it is stored: xxxx-xxxx-xxxx."""
+    raw = str(code or "").strip().lower()
+    flat = re.sub(r"[^0-9a-z]", "", raw)
+    return "-".join(flat[i:i + 4] for i in range(0, 12, 4)) if len(flat) == 12 else raw
+
+
 def same(a, b):
     return hmac.compare_digest(str(a).encode(), str(b).encode())
 
@@ -221,18 +228,18 @@ class AuthDB:
         """The plan an invite code gives, WITHOUT using it, or None."""
         now = time.time() if now is None else now
         with self.lock:
-            row = self.db.execute("SELECT tier FROM invites WHERE code_hash = ? AND uses_left > 0 AND expires >= ?", (digest(str(code).strip().lower()), now)).fetchone()
+            row = self.db.execute("SELECT tier FROM invites WHERE code_hash = ? AND uses_left > 0 AND expires >= ?", (digest(norm_invite(code)), now)).fetchone()
         return row[0] if row else None
 
     def use_invite(self, code, now=None):
         now = time.time() if now is None else now
         with self.lock:
             cur = self.db.execute("UPDATE invites SET uses_left = uses_left - 1 WHERE code_hash = ? AND uses_left > 0 AND expires >= ?",
-                                  (digest(str(code).strip().lower()), now))
+                                  (digest(norm_invite(code)), now))
             self.db.commit()
             if not cur.rowcount:
                 return None
-            return self.db.execute("SELECT tier FROM invites WHERE code_hash = ?", (digest(str(code).strip().lower()),)).fetchone()[0]
+            return self.db.execute("SELECT tier FROM invites WHERE code_hash = ?", (digest(norm_invite(code)),)).fetchone()[0]
 
     def invites(self, now=None):
         now = time.time() if now is None else now

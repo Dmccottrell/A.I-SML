@@ -80,8 +80,8 @@ def password_problem(password, name="", email=""):
 
 
 def clean_name(text):
-    """A user name (letters, numbers, - and _, 3 to 32), or None."""
-    text = str(text or "").strip()
+    """A user name (letters, numbers, - and _, 3 to 32; spaces become _), or None."""
+    text = re.sub(r"\s+", "_", str(text or "").strip())                     # "Darryl McCottrell" -> "Darryl_McCottrell"
     return text if NAME_RE.fullmatch(text) and text.lower() not in RESERVED_NAMES else None
 
 
