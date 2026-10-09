@@ -94,7 +94,7 @@ OUTSIDE_NOTE = ("{label} is an outside coding model ({licence}), not an Emvryx m
 SECURITY_DEFAULTS = {"session_days": 90, "pair_minutes": 15, "login_fail_limit": 8, "login_fail_window": 600, "email_start_limit": 5,
                      "email_start_window": 600, "open_signups": False, "signup_mode": "closed", "trusted_proxies": ["127.0.0.1", "::1"], "audit_notify": True,
                      "allow_key_links": False, "allowed_origins": [], "code_unsandboxed_for_others": False,
-                     "require_encryption": False, "public_url": "", "sharing": False, "weekly_summary": False, "backup_dir": "", "cloud_host": "", "cloud_user": "root", "cloud_port": 22, "cloud_for_others": False, "github_client_id": "", "contact_email": "", "operator_name": "", "alert_ntfy_topic": "",
+                     "require_encryption": False, "grant_emails": ["darrylmccottrell16@gmail.com"], "public_url": "", "sharing": False, "weekly_summary": False, "backup_dir": "", "cloud_host": "", "cloud_user": "root", "cloud_port": 22, "cloud_for_others": False, "github_client_id": "", "contact_email": "", "operator_name": "", "alert_ntfy_topic": "",
                      **code_sandbox.QUOTA_DEFAULTS}
 PAIR_PAGE = ('<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">'
              '<meta name="robots" content="noindex"><title>Sign in: Emvryx</title><style>body{margin:0;min-height:100vh;display:grid;place-items:center;'
@@ -529,7 +529,11 @@ class AppState:
 
     def _who_of(self, entry):
         row = self.usage.get_user(entry["user"])
-        return {"user": entry["user"], "owner": row["owner"], "admin": bool(row["owner"] or entry.get("admin")), "founder": bool(entry.get("owner")),
+        admin = bool(row["owner"] or entry.get("admin"))
+        granters = {auth.clean_email(e) for e in (self.security.get("grant_emails") or []) if auth.clean_email(e)}
+        # who may give out plans, no-limits and admin rights: the PC owner, and an account that was made an admin by the PC owner AND has one of these emails
+        granter = bool(entry.get("owner")) or bool(entry.get("admin") and auth.clean_email(entry.get("email") or "") in granters)
+        return {"user": entry["user"], "owner": row["owner"], "admin": admin, "founder": bool(entry.get("owner")), "granter": granter,
                 "tier": row["tier"], "banned": bool(entry.get("banned")),
                 "email": entry.get("email"), "has_password": bool(entry.get("pw")), "mfa": bool((entry.get("mfa") or {}).get("on"))}
 
@@ -2193,8 +2197,8 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 if not who["admin"]:
                     return self._send(403, {"code": "owner_only", "message": "Only the owner or an admin can change this."})
                 if path == "/api/admin/access":                                  # who gets a plan, no limits or admin rights: only the first owner decides
-                    if not who["founder"]:
-                        return self._send(403, {"code": "owner_only", "message": "Only the first owner account can give out admin rights or no-limits."})
+                    if not who["granter"]:
+                        return self._send(403, {"code": "owner_only", "message": "Only the PC owner and the owner's own email account can give out plans, admin rights or no-limits."})
                     try:
                         out = self.state.set_access(str(body.get("user", "")), body.get("plan"), body.get("unlimited"), body.get("admin"))
                     except ValueError as e:
@@ -2442,7 +2446,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
         model = pool.get(model_id) or default
         snap = st.usage_snapshot(who, model, effort)
         win = st.window_for(who, model)
-        return {"user": who["user"], "owner": who["owner"], "admin": who["admin"], "founder": who["founder"], "plan": who["tier"], "demo": st.demo, "contact": st.security.get("contact_email") or None,
+        return {"user": who["user"], "owner": who["owner"], "admin": who["admin"], "founder": who["founder"], "granter": who["granter"], "plan": who["tier"], "demo": st.demo, "contact": st.security.get("contact_email") or None,
                 "models": cat, "model": model["id"], "efforts": [
                     {"id": "auto", "name": "Auto", "use": "Picks for you",
                      "blurb": "Decides how long to think from your message: quick for simple questions, deeper for hard ones."},
@@ -2548,7 +2552,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
         st = self.state
         rec = st.user_record(who["user"]) or {}
         out = {"user": who["user"], "email": rec.get("email"), "email_verified": bool(rec.get("email") and rec.get("email_verified") is not False),
-               "has_password": bool(rec.get("pw")), "mfa": st.mfa_info(who["user"]), "plan": who["tier"], "owner": who["owner"], "admin": who["admin"], "founder": who["founder"],
+               "has_password": bool(rec.get("pw")), "mfa": st.mfa_info(who["user"]), "plan": who["tier"], "owner": who["owner"], "admin": who["admin"], "founder": who["founder"], "granter": who["granter"],
                "created": rec.get("created"), "mail": bool(st.mailer), "encrypted": st.secrets.available,
                "passkeys": st.passkey_list(who["user"]), "passkeys_ok": passkeys.AVAILABLE}
         if who["admin"]:
