@@ -134,3 +134,23 @@ class Pretend(Base):
         self.ask(self.sam, cid, "Who is the mayor of Springfield?")
         self.ask(self.sam, cid, "Hmm, are you sure about that")
         self.assertEqual(self.web.calls, [])
+
+
+class Answers(Base):
+    """Study helper: a bare answer ("30") is shown to the model together with the question it answers, and only "30" is saved."""
+
+    def factory(model, question):                                   # noqa: N805
+        Answers.backend = E.FakeBackend("Let us practise.\nQuick check: What is 6 x 5?")
+        return Answers.backend
+
+    factory = staticmethod(factory)
+
+    def test_the_model_is_told_what_the_answer_answers(self):
+        cid = self.new_chat(self.sam)
+        self.ask(self.sam, cid, "Give me a multiplication practice question please", skill="study")
+        self.ask(self.sam, cid, "30", skill="study")
+        prompt = self.state.tok_for({"id": "flare-2"}).decode(Answers.backend.prompts[-1])
+        self.assertIn('ANSWER to your last question: "What is 6 x 5?"', prompt)
+        saved = self.sam.call("GET", f"/api/chats/{cid}")[1]["messages"]
+        self.assertEqual(saved[2]["content"], "30")
+

@@ -48,6 +48,29 @@ FOLLOW_HINT = ("[This message follows on from your last reply in this chat. Do w
                "Do not go back to earlier topics and do not start something new.]")
 
 
+def last_question(reply):
+    """The last question the assistant asked at the end of its reply ("Quick check: What is 6 x 5?"), or ''."""
+    for line in reversed(str(reply or "")[-700:].splitlines()):
+        line = line.strip()
+        if "?" in line:
+            q = line[line.rfind("Quick check:") + len("Quick check:"):].strip() if "Quick check:" in line else line
+            return q[:200]
+    return ""
+
+
+def answer_hint(text, last_reply, max_words=8):
+    """A note for the model when a short message ("30", "yes", "B", "x = 4") is the answer to the question it just asked. On its own such a message names no
+    subject, and a small model can answer its own last reply again instead of checking the answer. Shown to the model only, never saved."""
+    t = " ".join(str(text or "").split())
+    if not t or len(t.split()) > max_words or t.endswith("?"):
+        return ""
+    q = last_question(last_reply)
+    if not q:
+        return ""
+    return (f'[This message is the person\'s ANSWER to your last question: "{q}". Say clearly whether the answer is right or wrong, and if it is wrong explain the mistake kindly. '
+            "Then go on to the next step or ask one new question. Do not repeat your last reply.]")
+
+
 def follow_up_hint(text, has_reply, max_words=10):
     """A short note for the model when a message is a short follow-up ("write it in java", "make it shorter", "now in Spanish"): on its own it names no
     subject, and a model tuned on one-question chats may answer an older message instead of the one just before. Shown to the model only, never saved."""
