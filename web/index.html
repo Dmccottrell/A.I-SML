@@ -2389,7 +2389,8 @@ $('codeDirIn').onchange = async (e) => {
 // ---------------------------------------------------------------- sign in and sign up
 const AUTH = {opts: {}, view: 'signin'};
 // An invite link from the website (/?invite=CODE): remember the code, take it out of the address bar, and open Create account with it filled in.
-let INVITE = ''; try { INVITE = (new URLSearchParams(location.search).get('invite') || '').trim().slice(0, 60); if (INVITE) history.replaceState(null, '', '/'); } catch (e) {}
+const dashCode = (v) => { const f = String(v).toLowerCase().replace(/[^0-9a-z]/g, '').slice(0, 12); return f.replace(/(.{4})(?=.)/g, '$1-'); };   // xxxx-xxxx-xxxx, dashes added as you type
+let INVITE = ''; try { INVITE = dashCode((new URLSearchParams(location.search).get('invite') || '').trim().slice(0, 60)); if (INVITE) history.replaceState(null, '', '/'); } catch (e) {}
 async function authCall(url, body) {
   let r; try { r = await fetch(url, {method: 'POST', credentials: 'same-origin', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(body)}); } catch (e) { throw new Error('Could not reach the server. Check your connection and try again.'); }
   const j = await r.json().catch(() => ({}));
@@ -2461,10 +2462,10 @@ function authView(view, ctx) {
     setTimeout(() => id.focus(), 50);
   } else if (view === 'signup') {
     const name = el('input', {type: 'text', autocomplete: 'username', autocapitalize: 'none', autocorrect: 'off', spellcheck: 'false', placeholder: 'e.g. sam_k', maxlength: '32', 'aria-label': 'Name'}), email = el('input', {type: 'text', inputmode: 'email', autocomplete: 'email', autocapitalize: 'none', placeholder: 'you@example.com', 'aria-label': 'Email'}),
-      pw = pwBox({autocomplete: 'new-password', placeholder: 'Choose a password', 'aria-label': 'Password'}, true), invite = el('input', {type: 'text', autocapitalize: 'none', autocorrect: 'off', spellcheck: 'false', placeholder: 'xxxx-xxxx-xxxx', 'aria-label': 'Invite code', value: INVITE});
+      pw = pwBox({autocomplete: 'new-password', placeholder: 'Choose a password', 'aria-label': 'Password'}, true), invite = el('input', {type: 'text', autocapitalize: 'none', autocorrect: 'off', spellcheck: 'false', placeholder: 'xxxx-xxxx-xxxx', 'aria-label': 'Invite code', value: INVITE, oninput: (e) => { e.target.value = dashCode(e.target.value); }});
     const btn = go('Create account');
     body = [tabs(), el('h2', {}, 'Create your account'), el('p', {class: 'sub'}, o.signup === 'invite' ? 'You need an invite code from the owner.' : 'Free to start. Pick a name and a password.'),
-      form(btn, [o.signup === 'invite' ? authField('Invite code', invite) : null, authField('Name', name, 'Letters, numbers, - and _ (3 to 32). This is how you sign in.'), authField('Email', email, 'Used to sign in with a code and to recover your account.'), authField('Password', pw.node)], async () => {
+      form(btn, [o.signup === 'invite' ? authField('Invite code', invite) : null, authField('Name', name, 'Letters, numbers, - and _ (3 to 32); a space becomes _. This is how you sign in.'), authField('Email', email, 'Used to sign in with a code and to recover your account.'), authField('Password', pw.node)], async () => {
         const j = await authCall('/api/signup', {name: name.value, email: email.value, password: pw.input.value, invite: invite.value}); INVITE = ''; authDone(j);
       }), googleBtn(() => invite.value.trim()), legal];
     setTimeout(() => (o.signup === 'invite' && !invite.value ? invite : name).focus(), 50);

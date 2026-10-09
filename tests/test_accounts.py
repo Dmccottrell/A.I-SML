@@ -27,7 +27,8 @@ class Pieces(unittest.TestCase):
 
     def test_names(self):
         self.assertEqual(accounts.clean_name(" sam_1 "), "sam_1")
-        for bad in ("ab", "admin", "Owner", "has space", "x" * 40):
+        self.assertEqual(accounts.clean_name("Darryl McCottrell"), "Darryl_McCottrell")       # a space becomes _
+        for bad in ("ab", "admin", "Owner", "x" * 40, "bad!name", "admin "):
             self.assertIsNone(accounts.clean_name(bad))
 
     def test_totp_matches_the_rfc_example_and_refuses_reuse(self):
@@ -50,6 +51,16 @@ class Pieces(unittest.TestCase):
         self.assertTrue(ok)
         self.assertEqual(len(left), 7)
         self.assertFalse(accounts.use_recovery(left, codes[0])[0])
+
+    def test_invite_codes_work_however_they_are_typed(self):
+        db = auth.AuthDB(":memory:")
+        code = db.new_invite("pro", uses=5, days=1, now=1000)
+        flat = code.replace("-", "")
+        for typed in (code, code.upper(), flat, flat.upper(), " " + code + " ", code.replace("-", " "), code[:4] + code[4:].replace("-", "")):
+            self.assertEqual(db.peek_invite(typed, 1001), "pro", typed)
+        self.assertIsNone(db.peek_invite(flat[:-1], 1001))
+        self.assertIsNone(db.peek_invite("not-a-code", 1001))
+        self.assertEqual(db.use_invite(flat.upper(), 1002), "pro")
 
     def test_invites(self):
         db = auth.AuthDB()
@@ -117,6 +128,16 @@ class Flows(Base):
         self.assertEqual(st, 200)
         self.assertEqual(self.state.usage.get_user("newbie")["tier"], "pro")
         self.assertEqual(self.sign_up(name="again1", email="again1@example.com", invite=j["code"])[1], 403)     # used up
+
+    def test_a_full_name_with_a_space_and_a_code_typed_without_dashes_both_work(self):
+        self.owner_mode("invite")
+        st, j = self.owner.call("POST", "/api/admin/invites", {"tier": "pro", "uses": 1})
+        typed = j["code"].replace("-", "").upper()                                  # no dashes, capitals
+        c, st, body = self.sign_up(name="Darryl McCottrell", email="darryl@example.com", invite=typed)
+        self.assertEqual(st, 200, body)
+        self.assertEqual(self.state.usage.get_user("Darryl_McCottrell")["tier"], "pro")
+        for ident in ("Darryl McCottrell", "darryl_mccottrell", "Darryl_McCottrell"):    # and the name signs in however it is typed
+            self.assertEqual(self.logged(ident)[1], 200, ident)
 
     def test_unverified_email_cannot_be_used_for_email_code_sign_in(self):
         self.owner_mode("open")

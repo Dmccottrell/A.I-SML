@@ -608,6 +608,7 @@ class AppState:
         ident = str(ident or "").strip()
         if "@" in ident:
             return self.user_by_email(ident)
+        ident = re.sub(r"\s+", "_", ident)                                       # a name typed with a space is the name with an underscore
         return next((u for u in self.users.values() if u["user"].lower() == ident.lower()), None)
 
     def check_password(self, ident, password):
@@ -811,7 +812,7 @@ class AppState:
         """A person who signed up with a name, an email and a password. Raises ValueError with a sentence the person can read."""
         name = accounts.clean_name(name)
         if not name:
-            raise ValueError("A name is 3 to 32 letters, numbers, - or _ (and not a reserved word like admin).")
+            raise ValueError("A name is 3 to 32 letters, numbers, - or _ (spaces become _), and not a reserved word like admin.")
         email = auth.clean_email(email)
         if not email:
             raise ValueError("That does not look like an email address.")
