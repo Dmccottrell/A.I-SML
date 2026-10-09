@@ -46,6 +46,49 @@ def write_fake(folder, body=None, name="llama-server"):
 
 
 @unittest.skipIf(os.name == "nt", "the fake llama-server is a shebang script")
+class Priming(unittest.TestCase):
+    """A model is only "loaded" once a first tiny request has gone through, and a restart can load the last model ahead of time."""
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        marker = os.path.join(self.tmp.name, "primed.txt")
+        body = FAKE.replace("        n = int(self.headers", "        open(" + repr(marker) + ", 'a').write('x')\n        n = int(self.headers", 1)
+        self.marker = marker
+        self.bin = write_fake(self.tmp.name, body.format(py=sys.executable), "llama-server")
+        self.gguf = os.path.join(self.tmp.name, "ember-2.gguf")
+        open(self.gguf, "wb").write(b"x")
+        self.runner = A.ModelRunner(self.bin, {"ember-2": self.gguf}, start_timeout=20)
+        self.runner.memo = os.path.join(self.tmp.name, "last_model.json")
+        self.addCleanup(self.runner.stop)
+
+    def test_ensure_sends_one_tiny_request_before_it_says_ready(self):
+        self.runner.ensure("ember-2", 2048)
+        self.assertTrue(os.path.exists(self.marker))
+        self.assertEqual(json.load(open(self.runner.memo)), {"model": "ember-2", "ctx": 2048})
+
+    def test_a_restart_loads_the_last_model_in_the_background(self):
+        self.assertFalse(self.runner.warm_last())                           # nothing remembered yet
+        self.runner.ensure("ember-2", 2048)
+        self.runner.stop()
+        fresh = A.ModelRunner(self.bin, {"ember-2": self.gguf}, start_timeout=20)
+        fresh.memo = self.runner.memo
+        self.addCleanup(fresh.stop)
+        self.assertTrue(fresh.warm_last())
+        import time
+        end = time.time() + 15
+        while time.time() < end and not fresh.ready("ember-2", 2048):
+            time.sleep(0.1)
+        self.assertTrue(fresh.ready("ember-2", 2048))
+
+    def test_a_missing_or_stale_memory_does_nothing(self):
+        open(self.runner.memo, "w").write("not json")
+        self.assertFalse(self.runner.warm_last())
+        json.dump({"model": "gone-model", "ctx": 1024}, open(self.runner.memo, "w"))
+        self.assertFalse(self.runner.warm_last())
+
+
+@unittest.skipIf(os.name == "nt", "the fake llama-server is a shebang script")
 class Runner(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()

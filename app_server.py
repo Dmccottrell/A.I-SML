@@ -188,6 +188,7 @@ class ModelRunner:
     def __init__(self, llama_bin, files, start_timeout=180, extra_args=(), host="127.0.0.1"):
         self.bin, self.files, self.timeout, self.extra, self.host = llama_bin, dict(files), start_timeout, list(extra_args), host
         self.proc = self.model_id = self.url = self.ctx = None
+        self.memo = None                                        # a file that remembers the last model, so a restart can load it ahead of the first message
         self.lock = threading.Lock()
         atexit.register(self.stop)
 
@@ -211,6 +212,43 @@ class ModelRunner:
                 proc.wait(10)
             except subprocess.TimeoutExpired:
                 proc.kill()
+
+    def _prime(self, deadline):
+        """One tiny request so the model is truly loaded (weights read from disk, graphics card warmed) before anyone waits on it. Best effort."""
+        try:
+            req = urllib.request.Request(self.url + "/completion", data=json.dumps({"prompt": "Hi", "n_predict": 1, "temperature": 0}).encode(),
+                                         headers={"Content-Type": "application/json"})
+            with urllib.request.urlopen(req, timeout=max(5, deadline - time.monotonic())) as r:
+                r.read()
+        except (urllib.error.URLError, OSError, ValueError):
+            pass
+
+    def remember(self, model_id, ctx):
+        if self.memo:
+            try:
+                with open(self.memo, "w", encoding="utf-8") as f:
+                    json.dump({"model": model_id, "ctx": ctx}, f)
+            except OSError:
+                pass
+
+    def warm_last(self):
+        """Load, in the background, the model that was in use before the last stop, so the first message after a restart is quick."""
+        try:
+            with open(self.memo, encoding="utf-8") as f:
+                last = json.load(f)
+            mid, ctx = str(last["model"]), int(last["ctx"])
+        except (OSError, ValueError, KeyError, TypeError):
+            return False
+        if not self.available(mid):
+            return False
+        threading.Thread(target=lambda: self._quiet_ensure(mid, ctx), daemon=True).start()
+        return True
+
+    def _quiet_ensure(self, mid, ctx):
+        try:
+            self.ensure(mid, ctx)
+        except Exception:                                        # noqa: BLE001 - a failed head start costs nothing but the head start
+            pass
 
     def ensure(self, model_id, ctx, cancel=None):
         """The URL of a llama-server running this model with at least `ctx` tokens of memory. Starts it if needed.
@@ -242,9 +280,11 @@ class ModelRunner:
                 try:
                     with urllib.request.urlopen(self.url + "/health", timeout=2) as r:
                         if json.loads(r.read() or b"{}").get("status", "ok") == "ok":
+                            self._prime(deadline)                 # health says "ready" before the weights are really in memory: the first word would then wait for them
                             took = time.monotonic() - began
                             if took > 15:                      # a slow load is worth a line in the log: it is what makes the first answer late
                                 print(f"(loading {model_id} took {took:.0f} s; switching models reloads it each time)", flush=True)
+                            self.remember(model_id, ctx)
                             return self.url
                 except (urllib.error.URLError, OSError, ValueError):
                     pass                                         # still loading (llama-server answers 503 until ready)
@@ -1316,10 +1356,12 @@ def start_turn(state, who, chat_id, text, model_id, effort, regenerate=False, re
                 if app_notes:
                     q.put(("notes", {"asked": True, "saved": 0, "wiki": 0, "web": 0, "web_tried": False, "recent": False, "live": 0, "names": [], "sources": [], "apps": app_found["apps"],
                                      "app_errors": app_found["errors"]}))
+            earlier = [m["content"] for m in store.messages(chat_id) if m["role"] == "user"]      # what was asked before: a follow-up ("how many has he scored?") needs it to be searched
             if text and not attached and not live_notes and not app_notes:         # Auto lookup (lookup_auto.py)
                 web_mode = state.get_settings(who["user"])["web_search"]
-                notes, found = lookup_auto.gather(text, state.wiki, state.web_fn, web_mode, private=chat_id < 0,
-                                                  max_notes=5 if window >= 6000 else 3,
+                ordered = lookup_auto.asks_for_web(text)                           # "look online", "check again": an order, so the web is searched whatever the rules say
+                notes, found = lookup_auto.gather(lookup_auto.search_query(text, earlier), state.wiki, state.web_fn, web_mode, private=chat_id < 0,
+                                                  max_notes=5 if window >= 6000 else 3, force_web=ordered, force_notes=ordered,
                                                   saved=state.saved_for(who["user"]), now=state.clock(), policy=model.get("lookup", "always"))
                 if found["asked"]:
                     import web_search
@@ -1353,10 +1395,12 @@ def start_turn(state, who, chat_id, text, model_id, effort, regenerate=False, re
                                and web_mode_now != "none" and lookup_auto.wants_lookup(text))
             old_way = (found and found["asked"] and not regenerate and not found["web_tried"] and state.web_fn is not None and
                        web_mode_now not in ("off", "none") and chat_id >= 0)
-            if (old_way or knowledge_first) and lookup_auto.gave_up(r["text"]):
+            pretended = bool(text and not regenerate and chat_id >= 0 and state.web_fn is not None and web_mode_now not in ("off", "none")
+                             and not (found and found.get("web")) and lookup_auto.pretends_to_search(r["text"]))      # it wrote "checking online" but no search ran: do the real one
+            if ((old_way or knowledge_first) and lookup_auto.gave_up(r["text"])) or pretended:
                 # The model said it doesn't know. Old way: the web has not been tried, so search it. Knowledge-first models (Qwen) had no notes yet:
                 # look it up now. Then answer again (the second chance).
-                notes2, found2 = lookup_auto.gather(text, state.wiki, state.web_fn, "always" if old_way else web_mode_now, private=(chat_id < 0 and knowledge_first),
+                notes2, found2 = lookup_auto.gather(lookup_auto.search_query(text, earlier, force=pretended), state.wiki, state.web_fn, "always" if (old_way or pretended) else web_mode_now, private=(chat_id < 0 and knowledge_first),
                                                     max_notes=5 if window >= 6000 else 3, saved=state.saved_for(who["user"]),
                                                     now=state.clock(), force_web=True, force_notes=True)
                 if found2["web"] or (knowledge_first and (found2["wiki"] or found2["saved"])):
@@ -3098,6 +3142,7 @@ def main():
     runner = None
     if files and not args.llama:
         runner = ModelRunner(args.llama_bin or find_llama_server(), files, extra_args=args.llama_args.split())
+        runner.memo = os.path.join(args.data, "last_model.json")
         note = gpu_note(args.llama_bin or find_llama_server(), args.llama_args.split())
         if note:
             print("Speed: " + note, flush=True)
@@ -3199,6 +3244,8 @@ def main():
         print("Reachable from your network. Anyone with a key can use it; keep keys private.")
     try:
         summary.start(state)                                # the owner's weekly summary, when switched on
+        if runner and runner.warm_last():
+            print("Loading the model you used last in the background, so your first message is quick.", flush=True)
         srv.serve_forever()
     except KeyboardInterrupt:
         print("\nStopped.")

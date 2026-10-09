@@ -114,3 +114,25 @@ class Gathering(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class FollowUps(unittest.TestCase):
+    def test_orders_to_search_are_recognised(self):
+        for text in ("Check online", "look it up", "Check again since August how many goals has he had", "search the web for that", "google it"):
+            self.assertTrue(L.asks_for_web(text), text)
+            self.assertTrue(L.wants_lookup(text), text)
+        for text in ("Write me a poem about the web", "thanks, that's great", "hello"):
+            self.assertFalse(L.asks_for_web(text), text)
+
+    def test_a_follow_up_borrows_the_questions_before_it(self):
+        q = L.search_query("how many goals has he had", ["How is Lamine Yamal doing?", "you are wrong"])
+        self.assertIn("Lamine Yamal", q)
+        self.assertEqual(L.search_query("What is the capital of France?", ["something else"]), "What is the capital of France?")
+        self.assertEqual(L.search_query("thanks that's great", ["How is Lamine Yamal doing?"]), "thanks that's great")
+        self.assertEqual(L.search_query("how many goals has he had", []), "how many goals has he had")
+
+    def test_a_pretend_search_is_spotted(self):
+        for reply in ("I will check online.\n\n*Checking online*\n\nIt says 4.", "Upon checking online, I see you are right.", "I searched the web and found it."):
+            self.assertTrue(L.pretends_to_search(reply), reply)
+        for reply in ("According to the notes, Springfield is the capital.", "I don't know."):
+            self.assertFalse(L.pretends_to_search(reply), reply)

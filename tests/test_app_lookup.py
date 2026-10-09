@@ -59,6 +59,29 @@ class Server(Base):
         self.ask(self.sam, cid, "What is the latest score for the Tigers?")
         self.assertEqual(self.web.calls, [])
 
+    def test_a_follow_up_is_searched_together_with_the_question_before_it(self):
+        cid = self.new_chat(self.sam)
+        self.ask(self.sam, cid, "Who is the mayor of Springfield?")
+        self.web.calls.clear()
+        _, _, ev = self.ask(self.sam, cid, "Check again since August how many terms has he had")
+        self.assertIn("mayor of Springfield", self.web.calls[-1])               # "he" now has a name in the search
+        self.assertEqual(self.events(ev)["notes"]["web_tried"], True)
+        saved = self.sam.call("GET", f"/api/chats/{cid}")[1]["messages"]
+        self.assertEqual(saved[2]["content"], "Check again since August how many terms has he had")     # the chat keeps only what was typed
+
+    def test_look_online_always_searches_the_web_even_for_a_plain_message(self):
+        cid = self.new_chat(self.sam)
+        self.ask(self.sam, cid, "Tell me about bananas please")
+        before = len(self.web.calls)
+        _, _, ev = self.ask(self.sam, cid, "Look online")
+        self.assertGreater(len(self.web.calls), before)
+        self.assertEqual(self.events(ev)["notes"]["web_tried"], True)
+
+    def test_look_online_in_a_private_chat_still_never_searches(self):
+        cid = self.new_chat(self.sam, private=True)
+        self.ask(self.sam, cid, "Look online")
+        self.assertEqual(self.web.calls, [])
+
     def test_a_server_without_sources_still_answers(self):
         self.state.wiki = None
         self.state.web_fn = None
@@ -72,3 +95,42 @@ class Server(Base):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class Pretend(Base):
+    """A model that writes "*Checking online*" when no search ran gets the real search, and answers again."""
+    streams = 0
+
+    class Backend(E.FakeBackend):
+        def stream(self, ids, max_new):
+            Pretend.streams += 1                                     # 1: a normal answer, 2: pretends, 3: the answer after the real search
+            self.script = "I will check online. *Checking online* It says 4." if Pretend.streams == 2 else "According to the web note, the mayor is Ann."
+            return super().stream(ids, max_new)
+
+    def factory(model, question):                                   # noqa: N805
+        return Pretend.Backend()
+
+    factory = staticmethod(factory)
+
+    def setUp(self):
+        Pretend.streams = 0
+        super().setUp()
+        self.state.wiki = None
+        self.state.web_fn = self.web = FakeWeb([{"title": "Springfield mayor", "text": "The mayor of Springfield is Ann."}])
+
+    def test_it_searches_for_real_and_the_pretend_answer_is_replaced(self):
+        cid = self.new_chat(self.sam)
+        self.ask(self.sam, cid, "Who is the mayor of Springfield?")
+        self.web.calls.clear()
+        self.state.web_fn = self.web                                 # the follow-up below has no question mark and no search words of its own
+        _, _, ev = self.ask(self.sam, cid, "Hmm, are you sure about that")
+        msgs = self.sam.call("GET", f"/api/chats/{cid}")[1]["messages"]
+        self.assertEqual([m["role"] for m in msgs], ["user", "assistant", "user", "assistant"])
+        self.assertNotIn("Checking online", msgs[-1]["content"])
+        self.assertIn("mayor of Springfield", self.web.calls[-1])
+
+    def test_a_private_chat_is_never_searched_even_when_the_model_pretends(self):
+        cid = self.new_chat(self.sam, private=True)
+        self.ask(self.sam, cid, "Who is the mayor of Springfield?")
+        self.ask(self.sam, cid, "Hmm, are you sure about that")
+        self.assertEqual(self.web.calls, [])
