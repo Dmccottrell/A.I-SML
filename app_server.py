@@ -1112,9 +1112,9 @@ class AppState:
         return github
 
     def code_allowed(self, who):
-        """(ok, why not). The owner always may. Others need VryxCode in their plan, and a container sandbox (or the owner explicitly accepting
-        the folder sandbox for them): a person must never get to run programs on the host with only the folder sandbox between us."""
-        if who["owner"]:
+        """(ok, why not). The owner and the admins the owner appointed always may. Others need VryxCode in their plan, and a container sandbox (or the owner
+        explicitly accepting the folder sandbox for them): a person must never get to run programs on the host with only the folder sandbox between us."""
+        if who["owner"] or who["admin"]:
             return True, ""
         if not self.cfg["tiers"][who["tier"]].get("vryxcode", False):
             return False, "VryxCode isn't included in your plan."
@@ -2326,7 +2326,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 allowed, why = st.code_allowed(who)
                 return self._send(200, {"allowed": allowed, "why_not": why, "sandbox": st.code.sandbox.get("mode", "none"),
                                         "usage": self._code_usage(who, None), "models": st.code_models(who), "projects": st.code.projects(user),
-                                        "running": run.id if run else None, "project": run.project if run else None, "environments": st.code.environments(who["owner"])})
+                                        "running": run.id if run else None, "project": run.project if run else None, "environments": st.code.environments(who["admin"])})
             if path == "/api/code/sessions":
                 return self._send(200, {"sessions": st.code.list_sessions(user)})
             if path == "/api/code/github/repos":
@@ -2429,7 +2429,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
                         tools = {"github": st.github_tool(user, project)}
                 s, note = st.code.start(user, project, body.get("task"), model["id"], generate, bool(body.get("auto_edits")),
                                         int(model.get("context_tested") or 8192), meter, outside=bool(model.get("outside")), tools=tools, identity=identity,
-                                        env=str(body.get("env") or "local"), plan=bool(body.get("plan")), owner=who["owner"])
+                                        env=str(body.get("env") or "local"), plan=bool(body.get("plan")), owner=who["admin"])
                 return self._send(200, {"id": s.id, "note": note})
             if path == "/api/code/preview":
                 allowed, why = st.code_allowed(who)
