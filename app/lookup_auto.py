@@ -51,10 +51,50 @@ STOP = set("the a an of to in on at for and or is are was were be been do does d
            "can could will would should it its this that these those with as by from about me my you your i tell give name".split())
 
 
+# "look online", "check again", "search for it": an order to search, so the search happens whatever the rules say
+WEB_ASK = re.compile(r"\b((look|check|search|find|google|verify|confirm|double[- ]check|re-?check)\b[^.?!]{0,40}\b(online|on the (web|internet)|the (web|internet)|again|it up|up online|for it)|"
+                     r"(search|google) (for|the web|online)|google (it|that|this|him|her|them)|look (it|that|this|him|her|them) up|(check|look) online|(on|from) the (web|internet)|online search)\b", re.I)
+# a follow-up that leans on the earlier question: a pronoun or "again", plus something that asks or orders
+PRONOUN = re.compile(r"\b(he|she|they|it|his|her|hers|their|its|him|them|that|this|those|these|there|again|then|same)\b", re.I)
+ASKING = re.compile(r"^(check|search|look|find|tell|show|give|list|compare|verify|confirm|update|recheck|re-check|and|also|what|who|when|where|which|why|how|is|are|was|were|do|does|did|can|could|has|have|had)\b|\?|"
+                    r"\b(how many|how much|since|so far|stats|score|goals)\b", re.I)
+# the model describing a search it did not do ("*Checking online*", "Upon checking online, I see...")
+PRETENDS = re.compile(r"(\*(checking|searching|looking)[^*]{0,30}\*|\b(i will|i'?ll|let me|i am going to|i'?m going to) (now )?(check|search|look)( it| that)?( up)?( online| on the (web|internet))?\b|"
+                      r"\b(upon|after|having) (checking|searching|looking)( online| the web| it up)?|\b(i )?(checked|searched|looked) (online|the web|the internet|it up)\b)", re.I)
+
+
+def asks_for_web(text):
+    return bool(WEB_ASK.search(text or ""))
+
+
+def is_follow_up(text):
+    t = " ".join((text or "").split())
+    return bool(t) and len(t.split()) <= 24 and bool(PRONOUN.search(t)) and bool(ASKING.search(t))
+
+
+def search_query(text, earlier, force=False):
+    """What to search for. A follow-up ("check again, how many goals has he had") is searched together with the questions before it, so "he" has a name.
+    `earlier` is the person's earlier messages in this chat, oldest first."""
+    t = " ".join((text or "").split())
+    if not earlier or not (force or is_follow_up(t) or asks_for_web(t)):
+        return t
+    before = [" ".join(m.split())[:160] for m in earlier[-2:] if m and m.strip()]
+    if not force and asks_for_web(t) and not is_follow_up(t) and len(t.split()) >= 6:
+        return t                                   # a full question that also says "online": nothing to borrow
+    return " ".join(dict.fromkeys(before + [t]))[:320]
+
+
+def pretends_to_search(reply):
+    """True when the answer says it is checking or has checked online. The model cannot search: the app does, before it answers."""
+    return bool(PRETENDS.search((reply or "")[:800]))
+
+
 def wants_lookup(text):
     """True for a message that a fact could answer."""
     t = " ".join((text or "").split())
     words = t.split()
+    if asks_for_web(t):
+        return True
     if len(words) < 3 and not t.endswith("?"):
         return False
     if TASK_START.match(t) and not t.endswith("?"):
