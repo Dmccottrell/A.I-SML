@@ -460,7 +460,7 @@ class AppState:
         try:
             self.usage.get_user(u["user"])
         except KeyError:
-            self.usage.add_user(u["user"], u["tier"], u.get("tz_minutes", 0), owner=u.get("owner", False))
+            self.usage.add_user(u["user"], u["tier"], u.get("tz_minutes", 0), owner=bool(u.get("owner") or u.get("unlimited")))
 
     def _entries(self, name):
         return [k for k, u in self.users.items() if u["user"] == name]
@@ -529,7 +529,8 @@ class AppState:
 
     def _who_of(self, entry):
         row = self.usage.get_user(entry["user"])
-        return {"user": entry["user"], "owner": row["owner"], "tier": row["tier"], "banned": bool(entry.get("banned")),
+        return {"user": entry["user"], "owner": row["owner"], "admin": bool(row["owner"] or entry.get("admin")), "founder": bool(entry.get("owner")),
+                "tier": row["tier"], "banned": bool(entry.get("banned")),
                 "email": entry.get("email"), "has_password": bool(entry.get("pw")), "mfa": bool((entry.get("mfa") or {}).get("on"))}
 
     def who(self, key):
@@ -561,12 +562,35 @@ class AppState:
         email = auth.clean_email(email)
         return next((u for u in self.users.values() if email and u.get("email") == email and u.get("email_verified") is not False), None)
 
+    def set_access(self, name, plan=None, unlimited=None, admin=None):
+        """Change one person's plan, whether they have no limits, and whether they have admin rights. The first owner account is never changed here."""
+        rec = self.user_record(name)
+        if not rec:
+            raise ValueError("no one is called that")
+        if rec.get("owner"):
+            raise ValueError("the first owner account always has full rights; change another account")
+        fields = {}
+        if plan is not None:
+            if plan not in self.cfg["tiers"]:
+                raise ValueError("choose " + ", ".join(self.cfg["tiers"]))
+            fields["tier"] = plan
+        if unlimited is not None:
+            fields["unlimited"] = bool(unlimited)
+        if admin is not None:
+            fields["admin"] = bool(admin)
+        self._set_fields(name, **fields)
+        row = self.usage.get_user(name)
+        now = self.user_record(name)
+        self.usage.add_user(name, now["tier"], row["tz_minutes"], bool(now.get("unlimited")), row["overrides"])
+        self.auth.event("access_changed", name, "", f"plan={now['tier']} unlimited={bool(now.get('unlimited'))} admin={bool(now.get('admin'))}")
+        return {"user": name, "plan": now["tier"], "unlimited": bool(now.get("unlimited")), "admin": bool(now.get("admin"))}
+
     def set_ban(self, name, banned):
         rec = self.user_record(name)
         if not rec:
             raise ValueError("no one is called that")
-        if rec.get("owner") and banned:
-            raise ValueError("the owner cannot be banned")
+        if (rec.get("owner") or rec.get("admin") or rec.get("unlimited")) and banned:
+            raise ValueError("an owner or admin account cannot be turned off here")
         for k in self._entries(name):
             self.users[k]["banned"] = bool(banned)
         self._save_users()
@@ -610,6 +634,14 @@ class AppState:
             return self.user_by_email(ident)
         ident = re.sub(r"\s+", "_", ident)                                       # a name typed with a space is the name with an underscore
         return next((u for u in self.users.values() if u["user"].lower() == ident.lower()), None)
+
+    def find_account(self, ident):
+        """Like find_login, but an email also matches when it was never verified (for the owner's own tools, never for signing in)."""
+        ident = str(ident or "").strip()
+        if "@" in ident:
+            em = auth.clean_email(ident)
+            return next((u for u in self.users.values() if em and u.get("email") == em), None)
+        return self.find_login(ident)
 
     def check_password(self, ident, password):
         """The account when the password is right, else None (a missing account costs the same time as a wrong password)."""
@@ -1817,13 +1849,13 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 return self.api_account_get(who)
             if path == "/api/account/activity":
                 return self._send(200, {"events": self.state.auth.events(30, None, who["user"])})
-            if path == "/api/admin/backups" and who["owner"]:
+            if path == "/api/admin/backups" and who["admin"]:
                 d = data_tools.backup_dir(self.state)
                 files = sorted((f for f in (os.listdir(d) if os.path.isdir(d) else []) if BACKUP_NAME.fullmatch(f)), reverse=True)
                 return self._send(200, {"dir": d, "items": [{"name": f, "size": os.path.getsize(os.path.join(d, f)), "at": os.path.getmtime(os.path.join(d, f))} for f in files],
                                         "keep": 14, "data": self.state.data_dir or ""})
             mb = re.fullmatch(r"/api/admin/backups/(emvryx-[0-9-]+\.zip)", path)
-            if mb and who["owner"]:
+            if mb and who["admin"]:
                 full = os.path.join(data_tools.backup_dir(self.state), mb.group(1))
                 if not BACKUP_NAME.fullmatch(mb.group(1)) or not os.path.isfile(full):
                     return self._send(404, {"code": "not_found", "message": "No such backup."})
@@ -1831,26 +1863,26 @@ class Handler(http.server.BaseHTTPRequestHandler):
                     data = f.read()
                 self.state.auth.event("backup_downloaded", "owner", self._ip(), mb.group(1))
                 return self._send(200, data, "application/zip", {"Content-Disposition": f'attachment; filename="{mb.group(1)}"'})
-            if path == "/api/admin/feedback" and who["owner"]:
+            if path == "/api/admin/feedback" and who["admin"]:
                 fb = self.state.feedback
                 return self._send(200, {"counts": fb.counts(), "kinds": feedback.KINDS, "items": fb.list(int((qs.get("limit") or ["50"])[0]), (qs.get("status") or ["new"])[0] or None,
                                                                                                             (qs.get("kind") or [None])[0], (qs.get("model") or [None])[0])})
-            if path == "/api/admin/feedback/export" and who["owner"]:
+            if path == "/api/admin/feedback/export" and who["admin"]:
                 lines = "\n".join(self.state.feedback.export_lines((qs.get("status") or ["new"])[0])) + "\n"
                 return self._send(200, lines.encode("utf-8"), "application/x-ndjson", {"Content-Disposition": 'attachment; filename="feedback_export.jsonl"'})
-            if path == "/api/admin/cloud" and who["owner"]:
+            if path == "/api/admin/cloud" and who["admin"]:
                 return self._send(200, self.state.cloud_status())
-            if path == "/api/admin/overview" and who["owner"]:
+            if path == "/api/admin/overview" and who["admin"]:
                 return self._send(200, self.state.admin_overview(who))
             if path == "/api/sessions":
                 return self._send(200, {"sessions": [dict(x, current=(x["id"] == who.get("session"))) for x in self.state.auth.sessions_for(who["user"])]})
-            if path == "/api/admin/health" and who["owner"]:
+            if path == "/api/admin/health" and who["admin"]:
                 return self._send(200, self.state.health())
-            if path == "/api/admin/audit" and who["owner"]:
+            if path == "/api/admin/audit" and who["admin"]:
                 return self._send(200, {"events": self.state.auth.events(int((qs.get("limit") or ["100"])[0]), (qs.get("kind") or [None])[0])})
-            if path == "/api/admin/users" and who["owner"]:
+            if path == "/api/admin/users" and who["admin"]:
                 return self._send(200, {"users": [{"user": u["user"], "tier": self.state.usage.get_user(u["user"])["tier"], "email": u.get("email"),
-                                                   "banned": bool(u.get("banned")), "owner": bool(u.get("owner")), "mfa": bool((u.get("mfa") or {}).get("on")),
+                                                   "banned": bool(u.get("banned")), "owner": bool(u.get("owner")), "admin": bool(u.get("admin")), "unlimited": bool(u.get("unlimited")), "mfa": bool((u.get("mfa") or {}).get("on")),
                                                    "has_password": bool(u.get("pw")), "created": u.get("created")}
                                                   for u in self.state.users.values()], "paused": bool(self.state.cfg.get("paused"))})
             return self._send(404, {"code": "not_found", "message": "Not found."})
@@ -2158,8 +2190,16 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 self.state.saved_for(who["user"]).clear()
                 return self._send(200, {"ok": True})
             if path.startswith("/api/admin/"):
-                if not who["owner"]:
-                    return self._send(403, {"code": "owner_only", "message": "Only the owner can change plans."})
+                if not who["admin"]:
+                    return self._send(403, {"code": "owner_only", "message": "Only the owner or an admin can change this."})
+                if path == "/api/admin/access":                                  # who gets a plan, no limits or admin rights: only the first owner decides
+                    if not who["founder"]:
+                        return self._send(403, {"code": "owner_only", "message": "Only the first owner account can give out admin rights or no-limits."})
+                    try:
+                        out = self.state.set_access(str(body.get("user", "")), body.get("plan"), body.get("unlimited"), body.get("admin"))
+                    except ValueError as e:
+                        return self._send(400, {"code": "bad_request", "message": str(e)})
+                    return self._send(200, out)
                 return self.api_admin(path, body)
             return self._send(404, {"code": "not_found", "message": "Not found."})
         except (BrokenPipeError, ConnectionResetError):
@@ -2402,7 +2442,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
         model = pool.get(model_id) or default
         snap = st.usage_snapshot(who, model, effort)
         win = st.window_for(who, model)
-        return {"user": who["user"], "owner": who["owner"], "plan": who["tier"], "demo": st.demo, "contact": st.security.get("contact_email") or None,
+        return {"user": who["user"], "owner": who["owner"], "admin": who["admin"], "founder": who["founder"], "plan": who["tier"], "demo": st.demo, "contact": st.security.get("contact_email") or None,
                 "models": cat, "model": model["id"], "efforts": [
                     {"id": "auto", "name": "Auto", "use": "Picks for you",
                      "blurb": "Decides how long to think from your message: quick for simple questions, deeper for hard ones."},
@@ -2508,10 +2548,10 @@ class Handler(http.server.BaseHTTPRequestHandler):
         st = self.state
         rec = st.user_record(who["user"]) or {}
         out = {"user": who["user"], "email": rec.get("email"), "email_verified": bool(rec.get("email") and rec.get("email_verified") is not False),
-               "has_password": bool(rec.get("pw")), "mfa": st.mfa_info(who["user"]), "plan": who["tier"], "owner": who["owner"],
+               "has_password": bool(rec.get("pw")), "mfa": st.mfa_info(who["user"]), "plan": who["tier"], "owner": who["owner"], "admin": who["admin"], "founder": who["founder"],
                "created": rec.get("created"), "mail": bool(st.mailer), "encrypted": st.secrets.available,
                "passkeys": st.passkey_list(who["user"]), "passkeys_ok": passkeys.AVAILABLE}
-        if who["owner"]:
+        if who["admin"]:
             out["signup_mode"] = st.signup_mode()
         return self._send(200, out)
 
@@ -3139,6 +3179,9 @@ def main():
     ap.add_argument("--reset-mfa", metavar="NAME", help="turn off a person's two-step sign-in (a lost phone and no recovery codes); their devices are signed out. Restart the app afterwards")
     ap.add_argument("--rotate-key", metavar="NAME", help="give someone a new key (owner, or a name from --add-user); the old key stops working. Restart the app afterwards")
     ap.add_argument("--add-user", nargs=2, metavar=("NAME", "PLAN"), help="add a tester (free, pro or mega) and print their key")
+    ap.add_argument("--make-admin", metavar="NAME_OR_EMAIL", help="give an existing account admin rights (add --plan free|pro|mega, and --unlimited for no limits). Restart the app afterwards")
+    ap.add_argument("--plan", default=None, help="with --make-admin: the plan to set")
+    ap.add_argument("--unlimited", action="store_true", help="with --make-admin: no usage limits")
     args = ap.parse_args()
     if args.data == ".emvryx" and not os.path.exists(".emvryx") and os.path.isdir(".yuvra"):   # the app was called Yuvra before
         os.rename(".yuvra", ".emvryx")
@@ -3202,6 +3245,16 @@ def main():
         print(f"New key for {args.rotate_key} (shown once, it is not stored): {key}")
         print(f"Or sign in on one device with this one-time link (valid {state.security['pair_minutes']} minutes): {base}/pair/{pair}")
         print("The old key no longer works, and every device that was signed in as them has been signed out. Restart the app so it reads the change.")
+        return
+    if args.make_admin:
+        rec = state.find_account(args.make_admin)
+        if not rec:
+            sys.exit(f"no account matches {args.make_admin!r}. Sign up first (or use --add-user), then run this again.")
+        try:
+            out = state.set_access(rec["user"], args.plan, True if args.unlimited else None, True)
+        except ValueError as e:
+            sys.exit(str(e))
+        print(f"{out['user']}: admin rights on, plan {out['plan']}, {'no usage limits' if out['unlimited'] else 'normal usage limits'}. Restart the app so it reads the change.")
         return
     if args.pair:
         if not state.user_record(args.pair):

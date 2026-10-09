@@ -55,6 +55,8 @@ The home page (emvryx.app) has a **Try Emvryx** box: a person types their invite
 | About | what Emvryx is, contact |
 | Owner: Overview | safe-to-share checklist, people and plans, last-hour numbers, pause everyone, live sources |
 | Owner: People | everyone, sign-in links, reset two-step, turn off / on, add a person |
+
+**A second owner or admin.** The first owner account (the one made when Emvryx first started) can give anyone else a plan, no usage limits, admin rights, or any mix: Settings > Owner > People > **Plan and rights...**. *No usage limits* behaves like the owner (no caps at all). *Admin rights* open the Owner pages in Settings. An admin on the Pro plan, say, still has Pro's caps. Only the first owner account can hand these out, and admin accounts can't be turned off from the People page. To do the same from the PowerShell window: `python app_server.py --make-admin you@example.com --plan mega --unlimited` (the account must already exist; restart the app afterwards).
 | Owner: Sign-ups and invites | the sign-up rule, make and cancel invite codes |
 | Owner: Security log | the latest 100 sign-ins, failures and changes |
 
