@@ -763,12 +763,24 @@ def imap_open(c):
     host = IMAP_HOSTS.get(c.creds.get("provider", "gmail"))
     if not host:
         raise LinkError("Pick Gmail, Outlook, iCloud or Yahoo.")
+    email = c.creds.get("email", "").strip()
+    password = re.sub(r"\s+", "", c.creds.get("password", ""))              # Google shows an app password as four groups of four: the spaces are not part of it
     try:
         M = (c.imap_factory or imaplib.IMAP4_SSL)(host)
-        M.login(c.creds.get("email", ""), c.creds.get("password", ""))
+        M.login(email, password)
         return M
-    except imaplib.IMAP4.error:
-        raise LinkError("The mail server refused that email and app password.", "Use an app password (not your normal password); see the steps.")
+    except imaplib.IMAP4.error as e:
+        said = " ".join(str(a.decode("utf-8", "replace") if isinstance(a, bytes) else a) for a in (e.args or ())).lower()
+        if "application-specific password" in said or "app password" in said or "app-specific" in said:
+            raise LinkError("This account needs an app password, not its normal password.", "In your Google account turn on 2-Step Verification, then make an App password and paste that.")
+        if "imap" in said and ("disabled" in said or "not enabled" in said):
+            raise LinkError("IMAP is switched off for this mail account.", "In Gmail: Settings > See all settings > Forwarding and POP/IMAP > turn on IMAP, then connect again.")
+        if "web login" in said or "web browser" in said or "webalert" in said or "too many" in said:
+            raise LinkError("The mail provider asked for a check in a browser first.", "Open the provider's security page or your inbox, approve the sign-in, then connect again.")
+        raise LinkError("The mail server refused that email and app password.",
+                        "Check the address is the full one, that the app password was made for this account (2-Step Verification must be on), and that it has no extra characters.")
+    except OSError:
+        raise LinkError("Could not reach the mail server.", "Check the internet on the computer that runs Emvryx, then try again.")
     except OSError:
         raise LinkError("Could not reach the mail server.", "Check your internet connection and try again.")
 

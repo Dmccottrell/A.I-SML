@@ -202,6 +202,22 @@ class Api:
         d = self._call("GET", "/user")
         return str(d.get("login", "")), int(d.get("id", 0))
 
+    def my_repos(self, limit=200):
+        """The repositories this token can see, most recently updated first: [{"full_name", "private", "description", "updated"}]."""
+        out, page = [], 1
+        while len(out) < limit and page <= 4:
+            data = self._call("GET", f"/user/repos?per_page=100&page={page}&sort=updated&affiliation=owner,collaborator,organization_member")
+            if not isinstance(data, list) or not data:
+                break
+            for r in data:
+                if isinstance(r, dict) and r.get("full_name"):
+                    out.append({"full_name": str(r["full_name"]), "private": bool(r.get("private")), "description": str(r.get("description") or "")[:140],
+                                "updated": str(r.get("pushed_at") or r.get("updated_at") or "")[:10]})
+            if len(data) < 100:
+                break
+            page += 1
+        return out[:limit]
+
     def create_repo(self, name, private=True, description=""):
         if not REPO_RE.fullmatch(name or "") or name in (".", "..") or name.endswith(".git"):
             raise GitHubError("That isn't a valid repository name.", "Use letters, numbers, dots, dashes and underscores.")

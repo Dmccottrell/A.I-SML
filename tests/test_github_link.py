@@ -28,6 +28,9 @@ def fake_http(calls, user="sam", fail=None):
             return fail, {"message": "x"}
         if url.endswith("/user") and method == "GET":
             return 200, {"login": user, "id": 4242}
+        if "/user/repos?" in url and method == "GET":
+            return 200, ([{"full_name": f"{user}/app-{i}", "private": i % 2 == 0, "description": f"d{i}", "pushed_at": f"2026-10-0{i % 9 + 1}T10:00:00Z"} for i in range(3)]
+                         if "page=1" in url else [])
         if url.endswith("/user/repos"):
             name = json.loads(body)["name"]
             return 201, {"full_name": f"{user}/{name}"}
@@ -206,6 +209,41 @@ class ServerTests(Base):
         st, j = self.owner.call("GET", "/api/code/git?project=demo")
         self.assertEqual((j["connected"], j["linked"], j["owner"], j["name"]), (True, True, "sam", "demo"))
         self.assertNotIn(TOKEN, json.dumps(j))
+
+    def test_the_owner_can_list_their_repositories_to_pick_from(self):
+        self.assertEqual(self.owner.call("GET", "/api/code/github/repos")[0], 400)            # not connected yet
+        self.owner.call("POST", "/api/apps/github/connect", {"token": TOKEN})
+        st, j = self.owner.call("GET", "/api/code/github/repos")
+        self.assertEqual(st, 200, j)
+        self.assertEqual([r["full_name"] for r in j["repos"]], ["sam/app-0", "sam/app-1", "sam/app-2"])
+        self.assertEqual((j["repos"][0]["private"], j["repos"][1]["private"], j["repos"][0]["updated"]), (True, False, "2026-10-01"))
+        self.assertNotIn(TOKEN, json.dumps(j))
+
+    def test_importing_a_repository_makes_a_new_project_and_a_failed_copy_leaves_nothing(self):
+        self.owner.call("POST", "/api/apps/github/connect", {"token": TOKEN})
+        bare = os.path.join(tempfile.mkdtemp(), "app-0.git")
+        work = tempfile.mkdtemp()
+        sh("init", "-q", "--bare", bare)
+        sh("clone", "-q", bare, work + "/w")
+        open(work + "/w/README.md", "w").write("hello")
+        sh("-C", work + "/w", "add", ".")
+        sh("-C", work + "/w", "-c", "user.email=a@b.c", "-c", "user.name=a", "commit", "-q", "-m", "first")
+        sh("-C", work + "/w", "push", "-q", "origin", "HEAD")
+        import github_link
+        original = github_link.clean_url
+        github_link.clean_url = lambda owner, repo: bare                                  # point the "GitHub address" at the local bare repository
+        self.addCleanup(lambda: setattr(github_link, "clean_url", original))
+        st, j = self.owner.call("POST", "/api/code/git", {"project": "other", "action": "import", "repo": "sam/app-0"})
+        self.assertEqual(st, 200, j)
+        self.assertEqual(j["project"], "app-0")
+        files = self.owner.call("GET", "/api/code/files?project=app-0")[1]["files"]
+        self.assertIn("README.md", [f["path"] if isinstance(f, dict) else f for f in files])
+        st, j = self.owner.call("POST", "/api/code/git", {"project": "other", "action": "import", "repo": "sam/app-0"})       # again: the next free name
+        self.assertEqual((st, j["project"]), (200, "app-0-2"))
+        github_link.clean_url = lambda owner, repo: os.path.join(tempfile.gettempdir(), "does-not-exist.git")
+        st, j = self.owner.call("POST", "/api/code/git", {"project": "other", "action": "import", "repo": "sam/broken"})
+        self.assertEqual(st, 400)
+        self.assertNotIn("broken", self.owner.call("GET", "/api/code")[1]["projects"])        # no empty leftover project
 
     def test_git_actions_are_refused_while_a_session_runs(self):
         self.owner.call("POST", "/api/apps/github/connect", {"token": TOKEN})
