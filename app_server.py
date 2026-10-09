@@ -1385,12 +1385,24 @@ def start_turn(state, who, chat_id, text, model_id, effort, regenerate=False, re
             if regenerate and hasattr(backend, "sampling"):
                 t = regen_modes.sampling_for(backend.sampling.get("temperature", 0.8), mode)
                 backend.sampling = dict(backend.sampling, temperature=round(min(bounds[1], max(bounds[0], t)), 2))   # never outside the model's safe range
+            prior_reply = next((m["content"] for m in reversed(store.messages(chat_id)) if m["role"] == "assistant"), "")      # to notice a reply that is only a copy of this one
             r = E.run_turn(tok, store, chat_id, backend, counted_model, window, max_new, user_text=text, stop=stop, notes=notes or None,
                            user_docs=[d["id"] for d in attached if d["id"] not in sent_before] if text else None,
                            limiter=state.limiter, user=who["user"], effort=effort, clock=state.clock, pacer=pacer,
                            style_hint="\n\n".join(h for h in (skill_hint, regen_modes.get(mode)["hint"] if regenerate else "",
                                                     "" if regenerate else (chat_polish.answer_hint(text, next((m["content"] for m in reversed(store.messages(chat_id)) if m["role"] == "assistant"), ""))
                                                                                  or chat_polish.follow_up_hint(text, any(m["role"] == "assistant" for m in store.messages(chat_id))))) if h))
+            if text and not regenerate and r.get("reason") in ("done", None) and chat_polish.is_repeat(r["text"], prior_reply):
+                # A small model answered its own last message again. Take that reply back and ask once more, firmly, a little less predictably.
+                msgs = [m for m in store.messages(chat_id) if m["status"] != "compacted"]
+                if msgs and msgs[-1]["role"] == "assistant":
+                    store.remove_message(chat_id, msgs[-1]["id"])
+                if hasattr(backend, "sampling"):
+                    backend.sampling = dict(backend.sampling, temperature=round(min(1.0, backend.sampling.get("temperature", 0.8) + 0.2), 2),
+                                            repeat_penalty=max(1.3, backend.sampling.get("repeat_penalty", 1.15)))
+                r = E.run_turn(tok, store, chat_id, backend, counted_model, window, max_new, user_text=None, stop=stop, notes=notes or None,
+                               limiter=state.limiter, user=who["user"], effort=effort, clock=state.clock, pacer=pacer,
+                               style_hint="\n\n".join(h for h in (skill_hint, chat_polish.repeat_hint(text)) if h))
             web_mode_now = state.get_settings(who["user"])["web_search"]
             knowledge_first = (model.get("lookup") == "when_needed" and found is not None and not found["asked"] and bool(text) and not regenerate
                                and web_mode_now != "none" and lookup_auto.wants_lookup(text))
