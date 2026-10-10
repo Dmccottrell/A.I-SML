@@ -73,7 +73,7 @@ computer; the tunnel gives it a public link.
 **Start by itself at boot (Windows).** The tunnel is already a Windows service. To make the app start on its own too, restart if it stops, and keep the PC awake while plugged in, run this once in PowerShell **as Administrator** (use your own paths; the `-Llama` one should be the llama-server with GPU support):
 ```powershell
 cd C:\Users\Darry\Projects\a.i-sml
-powershell -ExecutionPolicy Bypass -File windows\install_autostart.ps1 -Llama "C:\path\to\llama-server.exe"
+powershell -ExecutionPolicy Bypass -File windows\install_autostart.ps1 -Llama "C:\path\to\llama-server.exe"   # replace the path with your real llama-server.exe; add -Port 8001 -CodeSandbox if that is how you run it
 Start-ScheduledTask -TaskName "Emvryx App"
 ```
 It writes `.emvryx\start_emvryx.cmd` (log: `.emvryx\server.log`), registers the task "Emvryx App", turns off sleep/hibernate on mains power and sets the tunnel service to start and restart automatically. Undo with `-Remove`. Limits: the app starts when you **sign in**, so after a restart the PC waits at the sign-in screen (turning on automatic sign-in fixes that but lets anyone who restarts the PC use it: only do it if the PC is somewhere safe and use BitLocker/a screen lock). Stop the old copy before starting a new one (one app per port). Not tested on a real Windows PC yet: if a step fails, send me the message.
