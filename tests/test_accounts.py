@@ -257,6 +257,17 @@ class Flows(Base):
         self.assertIsNone(self.state.user_record("victim1"))
         self.assertIsNotNone(self.state.user_record("owner"))
 
+    def test_vryxcode_is_open_to_admins_but_other_people_still_need_the_container_sandbox(self):
+        info = lambda: self.sam.call("GET", "/api/code")[1]
+        self.assertIn("isn't included", info()["why_not"])                                                      # a free account
+        self.owner.call("POST", "/api/admin/access", {"user": "sam", "plan": "pro"})
+        self.assertEqual((info()["allowed"], "container sandbox" in info()["why_not"]), (False, True))        # Pro, but no sandbox: not for ordinary people
+        self.owner.call("POST", "/api/admin/access", {"user": "sam", "admin": True})
+        self.assertEqual(info()["allowed"], True)                                                              # an admin the owner appointed may
+        self.assertEqual(self.owner.call("GET", "/api/code")[1]["allowed"], True)
+        self.owner.call("POST", "/api/admin/access", {"user": "sam", "plan": "free", "admin": True})
+        self.assertEqual(info()["allowed"], True)                                                              # whatever the plan: the owner trusts them
+
     def test_make_admin_on_the_command_line_finds_the_account_by_email(self):
         self.make_person()
         self.assertIsNone(self.state.find_login("darryl@example.com"))                       # sign-in by email needs it verified...
