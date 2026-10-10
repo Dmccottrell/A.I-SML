@@ -43,7 +43,11 @@ $python = if ($Python) { $Python } else { (Get-Command python -ErrorAction Silen
 if (-not $python -or -not (Test-Path $python)) { throw "Python was not found. Use -Python with the full path of the python.exe you normally run the app with." }
 & $python -c "import tokenizers, numpy, regex" 2>$null
 if ($LASTEXITCODE -ne 0) { Write-Warning "This Python ($python) is missing packages the app needs. Use the python.exe you normally run the app with (-Python), or run: & `"$python`" -m pip install -r requirements.txt" }
+if ($Llama -and -not (Test-Path $Llama)) { throw "The llama-server.exe path you gave does not exist: $Llama`nUse the real path (for example C:\Users\YOU\Downloads\llama-...-cuda-...\llama-server.exe). Nothing was changed." }
+if ($Llama -and $Llama -match "path.to") { throw "That is the example path from the instructions, not a real one. Nothing was changed." }
 $data = Join-Path $Repo ".emvryx"
+$existing = Join-Path $data "start_emvryx.cmd"
+if (Test-Path $existing) { Copy-Item $existing "$existing.bak" -Force; Write-Host "Kept your previous start file as $existing.bak" }
 New-Item -ItemType Directory -Force -Path $data | Out-Null
 
 # 1. the start file
