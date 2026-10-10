@@ -3346,8 +3346,11 @@ def main():
         if runner and not runner.bin:
             print("llama-server was not found. Install llama.cpp and pass --llama-bin <path to llama-server.exe>.")
     if args.code_sandbox == "docker":
-        ok, why = code_sandbox.available(args.code_image)
-        print(("VryxCode runs in Docker containers (no network, hard limits)." if ok else f"VryxCode sandbox NOT ready, so VryxCode will refuse to run: {why}"))
+        def say_docker():                                   # in the background: Docker Desktop can take a minute to wake, and the app must answer meanwhile
+            ok, why = code_sandbox.available(args.code_image)
+            print(("VryxCode runs in Docker containers (no network, hard limits)." if ok else f"VryxCode sandbox NOT ready, so VryxCode will refuse to run: {why}"), flush=True)
+        print("Checking Docker for VryxCode in the background...", flush=True)
+        threading.Thread(target=say_docker, daemon=True).start()
     else:
         print("VryxCode runs with the folder sandbox only: it is open to the owner only. For other people use --code-sandbox docker (docs/SECURITY.md).")
     fresh = state.owner_key()
