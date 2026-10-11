@@ -4,7 +4,10 @@ The foundation underneath is an open model. What makes it Emvryx is everything w
 Nous Research's Hermes models are tuned from Llama and Mistral; DeepSeek released reasoning models on open models; Perplexity has described building search models on Llama).
 The edge is rarely the base: it is the lessons, the tests that decide what ships, and the product.
 
-## What Emvryx says about itself (keep it true)
+## What Emvryx says about itself (decided Oct 11, 2026)
+The app answers identity questions itself, the same for every model (`app/identity_answer.py`): **"I am Emvryx, created by Darryl McCottrell."**, plus "I'm built on an open foundation model." when the question is about what it is built on. This overrides whatever a model learned in training, so the retrain lessons below no longer decide the wording the person sees. Keep `NOTICE` with the weights.
+
+## What the trained-in lessons say (keep it true)
 Edit the answers in `data_prep/identity_lessons.py` (`qa()`); they are trained in. Today, in short: "I'm Emvryx <name>, an AI assistant, built on an open foundation model
 and tuned by Emvryx with its own lessons. I'm still small, so I can make mistakes." It says plainly that Ember 2 and Flare 2 were the models trained from scratch.
 - Never "trained from scratch" for an open-base model, and keep `NOTICE` (the foundation's licence) with the weights.
