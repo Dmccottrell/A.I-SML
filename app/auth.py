@@ -132,6 +132,12 @@ class AuthDB:
             self.db.commit()
             return {"id": row[0], "user": row[1]}
 
+    def last_seen_map(self):
+        """{user: the last time any of their devices used the app}, for the owner's People list."""
+        with self.lock:
+            rows = self.db.execute("SELECT user, MAX(last_seen) FROM sessions GROUP BY user").fetchall()
+        return {r[0]: r[1] for r in rows}
+
     def sessions_for(self, user, now=None):
         now = time.time() if now is None else now
         with self.lock:

@@ -8,6 +8,7 @@ WHAT THIS FILE DOES
     * The choices are kept in flags.json in the data folder. Nothing here needs a restart.
 """
 import json
+import re
 import os
 import threading
 import time
@@ -20,17 +21,21 @@ FLAGS = [
     {"id": "welcome_tour", "title": "Welcome tour", "desc": "The animated introduction and walk-through people see the first time they sign in (and can replay in Settings).", "default": "admins"},
 ]
 BY_ID = {f["id"]: f for f in FLAGS}
+VERSION_RE = re.compile(r"\d{1,3}\.\d{1,3}\.\d{1,3}")
+KINDS = ("major", "minor", "patch")
 
 
 class Flags:
     def __init__(self, path=None, clock=time.time):
         self.path, self.lock, self.clock = path, threading.Lock(), clock
-        self.data = {"audiences": {}, "changed": {}, "scheduled": {}}
+        self.data = {"audiences": {}, "changed": {}, "scheduled": {}, "version": "1.0.0", "releases": []}
         if path and os.path.exists(path):
             try:
                 with open(path, encoding="utf-8") as f:
                     got = json.load(f)
-                self.data.update({k: got[k] for k in ("audiences", "changed", "scheduled") if isinstance(got.get(k), (dict, list))})
+                self.data.update({k: got[k] for k in ("audiences", "changed", "scheduled", "releases") if isinstance(got.get(k), (dict, list))})
+                if isinstance(got.get("version"), str) and VERSION_RE.fullmatch(got["version"]):
+                    self.data["version"] = got["version"]
             except (OSError, ValueError):
                 pass
 
@@ -73,10 +78,54 @@ class Flags:
         if audience not in AUDIENCES:
             raise ValueError("choose " + ", ".join(AUDIENCES))
         with self.lock:
-            self.data["audiences"][fid] = audience
-            self.data["changed"][fid] = {"by": by, "at": self.clock()}
             self.data["scheduled"].pop(fid, None)                 # a change by hand replaces a pending schedule
+            self._apply(fid, audience, by, self.clock())
             self._save()
+
+    def _apply(self, fid, audience, by, at, kind="minor"):
+        """Set one feature's audience (caller holds the lock). Going live for everyone is a release: the version goes up and the release history gets a line."""
+        was = self.audience_raw(fid)
+        self.data["audiences"][fid] = audience
+        self.data["changed"][fid] = {"by": by, "at": at}
+        if audience == "everyone" and was != "everyone":
+            self._release([fid], by, at, kind)
+
+    def audience_raw(self, fid):
+        a = self.data["audiences"].get(fid)
+        return a if a in AUDIENCES else BY_ID[fid]["default"]
+
+    def _release(self, fids, by, at, kind="minor", notes=""):
+        major, minor, patch = (int(x) for x in self.data["version"].split("."))
+        major, minor, patch = (major + 1, 0, 0) if kind == "major" else (major, minor + 1, 0) if kind == "minor" else (major, minor, patch + 1)
+        self.data["version"] = f"{major}.{minor}.{patch}"
+        items = [{"id": f, "title": BY_ID[f]["title"], "desc": BY_ID[f]["desc"]} for f in fids]
+        self.data["releases"].append({"version": self.data["version"], "kind": kind, "at": at, "by": by, "notes": notes, "items": items})
+        del self.data["releases"][:-200]
+
+    def version(self):
+        return self.data["version"]
+
+    def releases(self):
+        return list(reversed(self.data["releases"]))
+
+    def preview_ids(self):
+        return [f["id"] for f in FLAGS if self.audience(f["id"]) != "everyone"]
+
+    def publish_all(self, by="", kind="minor", notes=""):
+        """Everything still in preview goes live for everyone as ONE release. Returns the ids that went live."""
+        if kind not in KINDS:
+            raise ValueError("choose " + ", ".join(KINDS))
+        ids = [f for f in self.preview_ids() if self.audience(f) != "off"]       # a feature switched Off is on hold, not ready
+        if not ids:
+            raise ValueError("nothing is waiting to be published")
+        with self.lock:
+            for f in ids:
+                self.data["scheduled"].pop(f, None)
+                self.data["audiences"][f] = "everyone"
+                self.data["changed"][f] = {"by": by, "at": self.clock()}
+            self._release(ids, by, self.clock(), kind, str(notes)[:500])
+            self._save()
+        return ids
 
     # Scheduled publishing: at a chosen time a feature moves to a wider audience (normally Everyone) by itself. Nothing needs to run in the
     # background: the time is checked whenever the feature is asked about, so it goes live on the first look after the time has passed.
@@ -84,16 +133,24 @@ class Flags:
         due = self.data["scheduled"].get(fid)
         if due and self.clock() >= due["at"]:
             with self.lock:
-                self.data["audiences"][fid] = due["audience"]
-                self.data["changed"][fid] = {"by": "schedule (set by %s)" % due.get("by", "?"), "at": due["at"]}
                 del self.data["scheduled"][fid]
+                self._apply(fid, due["audience"], "schedule (set by %s)" % due.get("by", "?"), due["at"])
                 self._save()
             return due
         return None
 
-    def publish_now(self, fid, by=""):
-        self.cancel_schedule(fid)
-        self.set_audience(fid, "everyone", by)
+    def publish_now(self, fid, by="", kind="minor", notes=""):
+        if fid not in BY_ID:
+            raise ValueError("no such feature")
+        if kind not in KINDS:
+            raise ValueError("choose " + ", ".join(KINDS))
+        with self.lock:
+            self.data["scheduled"].pop(fid, None)
+            if self.audience_raw(fid) != "everyone":
+                self.data["audiences"][fid] = "everyone"
+                self.data["changed"][fid] = {"by": by, "at": self.clock()}
+                self._release([fid], by, self.clock(), kind, str(notes)[:500])
+            self._save()
 
     def schedule(self, fid, at, audience="everyone", by=""):
         if fid not in BY_ID:

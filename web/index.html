@@ -428,10 +428,34 @@ html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
 .top { box-sizing: border-box; height: calc(60px + var(--sat)); padding-top: var(--sat); padding-left: calc(12px + var(--sal)); padding-right: calc(12px + var(--sar)); }
 .side { padding-top: var(--sat); }
 .account { padding-bottom: calc(12px + var(--sab)); }
-.code, .auth, .sx { box-sizing: border-box; padding-top: var(--sat); padding-bottom: var(--sab); }
+.code, .auth, .sx, .adm { box-sizing: border-box; padding-top: var(--sat); padding-bottom: var(--sab); }
 .modal { padding-top: calc(16px + var(--sat)); padding-bottom: calc(16px + var(--sab)); }
 .sx-toast { bottom: calc(24px + var(--sab)) !important; }
 .composer { padding-bottom: calc(max(var(--sab) - 22px, 0px) + 8px); }   /* the home indicator is a thin line at the very bottom: sit close to it instead of leaving the whole safe area empty */
+
+/* Admin screen (owner and admins): Previews, People, Sign-ups, Activity */
+.adm { position: fixed; inset: 0; z-index: 46; background: var(--bg); display: flex; flex-direction: column; box-sizing: border-box; padding-top: var(--sat); padding-bottom: var(--sab); }
+.adm-top { display: flex; align-items: center; gap: 10px; padding: 12px max(16px, calc((100% - 760px) / 2)) 4px; }
+.adm-top h2 { margin: 0; font: 600 22px 'Sora', sans-serif; flex: 1; }
+.adm-tabs { display: flex; gap: 6px; overflow-x: auto; padding: 8px max(16px, calc((100% - 760px) / 2)) 10px; border-bottom: 1px solid var(--line); scrollbar-width: none; }
+.adm-tabs button { flex-shrink: 0; background: transparent; border: 0; border-radius: 999px; padding: 0 18px; min-height: 42px; font-weight: 600; color: var(--muted); }
+.adm-tabs button.on { background: var(--accent); color: var(--onaccent); }
+.adm-body { flex: 1; overflow-y: auto; padding: 18px max(16px, calc((100% - 760px) / 2)) 80px; display: flex; flex-direction: column; gap: 16px; }
+.adm-card { background: var(--surface); border: 1px solid var(--line); border-radius: 20px; padding: 18px; display: flex; flex-direction: column; gap: 12px; }
+.adm-card h3 { margin: 0; font: 600 20px 'Sora', sans-serif; }
+.adm-card p { margin: 0; color: var(--muted); }
+.adm-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.adm-sub { background: var(--bg); border: 1px solid var(--line); border-radius: 16px; padding: 14px; display: flex; flex-direction: column; gap: 10px; }
+.adm-sub b { font-size: 17px; } .adm-sub small { color: var(--muted); font-size: 14px; line-height: 1.4; }
+.adm-acts { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+.adm-tag { display: inline-block; border: 1px solid var(--line); border-radius: 999px; padding: 1px 10px; font-size: 12px; font-weight: 600; color: var(--muted); }
+.adm-tag.on { border-color: var(--accent); color: var(--accenttext); }
+.adm-person { display: grid; grid-template-columns: 44px 1fr; gap: 6px 14px; padding: 16px 0; border-top: 1px solid var(--line); }
+.adm-person:first-of-type { border-top: 0; }
+.adm-av { width: 44px; height: 44px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 14px; background: var(--surface2); color: var(--accenttext); }
+.adm-person .adm-acts { grid-column: 1 / -1; }
+.adm-person small { color: var(--muted); font-size: 14px; word-break: break-word; }
+.adm-search { width: 100%; box-sizing: border-box; background: var(--surface2); border: 1px solid var(--line); border-radius: 14px; color: var(--text); padding: 12px 14px; font: inherit; min-height: 46px; }
 .usage { padding-top: 6px; gap: 4px; }
 /* Safari / iPhone only: in the installed app the "dynamic viewport" height can come out shorter than the screen, which leaves an empty band under the message box. Fill the real screen instead. */
 @supports (-webkit-touch-callout: none) {
@@ -844,7 +868,7 @@ function closeAcct() { $('acctMenu').hidden = true; $('account').setAttribute('a
 function renderLinks() {   // two tools in the list; Usage, Memory and Settings live in the account menu (Skills, Documents and Connected apps are hidden until they work)
   const mk = (ico, name, note, fn) => el('button', {class: 'link', onclick: () => { document.body.classList.remove('menu-open'); closeAcct(); fn(); }}, icon(ico), el('span', {}, name), note ? el('small', {}, note) : '');
   $('links').replaceChildren(mk('code', 'VryxCode', '', openCode), mk('spark', 'Skills', '', openSkills), mk('pencil', 'Teacher mode', '', () => newChat(false, 'teacher')), mk('doc', 'Documents', '', openDocs), mk('lock', 'Private chat', 'Never saved', () => newChat(true)));
-  $('acctMenu').replaceChildren(mk('chart', 'Usage', '', openUsage), mk('brain', 'Memory', '', openMemory), mk('gear', 'Settings', '', openSettings), ...(featureOn('welcome_tour') ? [mk('spark', 'Welcome tour', '', () => openTour(true))] : []), mk('signout', 'Sign out', '', signOut));
+  $('acctMenu').replaceChildren(mk('chart', 'Usage', '', openUsage), mk('brain', 'Memory', '', openMemory), mk('gear', 'Settings', '', openSettings), ...(S.state.admin ? [mk('lock', 'Admin', '', () => openAdmin())] : []), ...(featureOn('welcome_tour') ? [mk('spark', 'Welcome tour', '', () => openTour(true))] : []), mk('signout', 'Sign out', '', signOut));
 }
 $('account').onclick = (e) => { e.stopPropagation(); const m = $('acctMenu'); m.hidden = !m.hidden; $('account').setAttribute('aria-expanded', String(!m.hidden)); };
 document.addEventListener('click', (e) => { if (!$('acctMenu').hidden && !$('acctMenu').contains(e.target)) closeAcct(); });
@@ -1711,7 +1735,7 @@ function sxSections(id) {
   return A[id] || [];
 }
 const SX_NAV = [['general', 'General', 'gear'], ['chat', 'Chat and lookups', 'spark'], ['memory', 'Memory', 'brain'], ['data', 'Data controls', 'folder'], ['apps', 'Connected apps', 'code'], ['security', 'Security', 'lock'], ['account', 'Account', 'eye'], ['about', 'About', 'doc']];
-const SX_OWNER = [['a-overview', 'Overview', 'chart'], ['a-flags', 'Features and testing', 'spark'], ['a-people', 'People', 'eye'], ['a-signups', 'Sign-ups and invites', 'pencil'], ['a-feedback', 'Answer reports', 'pencil'], ['a-backups', 'Backups', 'folder'], ['a-cloud', 'Cloud machine', 'cloud'], ['a-log', 'Security log', 'lock']];
+const SX_OWNER = [['a-overview', 'Overview', 'chart'], ['a-flags', 'Previews (Admin screen)', 'spark'], ['a-people', 'People (Admin screen)', 'eye'], ['a-signups', 'Sign-ups and invites', 'pencil'], ['a-feedback', 'Answer reports', 'pencil'], ['a-backups', 'Backups', 'folder'], ['a-cloud', 'Cloud machine', 'cloud'], ['a-log', 'Security log', 'lock']];
 const SX_LEAD = {general: 'How Emvryx looks and feels on this device.', chat: 'How it finds facts and how much of a chat it keeps in mind.', memory: 'What it knows about you, shared by every model.', data: 'Your files, your downloads and what gets deleted.', apps: 'Other services Emvryx can work with.', security: 'Protect your account: password, two-step sign-in and your devices.', account: 'Who you are and your plan.', about: 'About this Emvryx.',
   'a-overview': 'How safe this server is to share, and how it is doing.', 'a-flags': 'Try new things yourself first, then widen who sees them. Changes apply at once.', 'a-people': 'Everyone with an account.', 'a-signups': 'Who may create an account, and invite codes.', 'a-feedback': 'What people said went wrong with an answer, newest first.', 'a-backups': 'Copies of everything this server keeps, so a broken disk is not the end.', 'a-cloud': 'A computer elsewhere (like a rented GPU box) where VryxCode can run your code.', 'a-log': 'Sign-ins, failures and changes, newest first.'};
 
@@ -1772,7 +1796,7 @@ function sxBody() {
 }
 async function sxReload() { await sxAcct(); sxRender(); }
 const EVENT_NAMES = {login_ok: 'Signed in', login_fail: 'Wrong sign-in try', logout: 'Signed out', lockout: 'Address locked out', signup: 'New account', password_set: 'Password changed', mfa_on: 'Two-step turned on', mfa_off: 'Two-step turned off',
-  mfa_recovery_used: 'Recovery code used', mfa_recovery_new: 'New recovery codes', mfa_reset_by_owner: 'Two-step reset by owner', reauth_fail: 'Wrong password or code', email_changed: 'Email changed', session_revoked: 'Device signed out', key_rotated: 'Key replaced',
+  mfa_recovery_used: 'Recovery code used', mfa_recovery_new: 'New recovery codes', mfa_reset_by_owner: 'Two-step reset by owner', password_reset_by_admin: 'Password reset by admin', reauth_fail: 'Wrong password or code', email_changed: 'Email changed', session_revoked: 'Device signed out', key_rotated: 'Key replaced',
   pair_created: 'Sign-in link made', pair_used: 'Sign-in link used', user_added: 'Person added', ban: 'Account turned off', unban: 'Account turned on', signups_changed: 'Sign-up rule changed', invite_made: 'Invite made', bad_origin: 'Cross-site request refused', email_code: 'Email code sent'};
 
 async function sxFill(kind, box) {
@@ -1910,7 +1934,109 @@ async function maybeNudge() {   // the owner's account is the one that matters m
 function toast(text) { const t = el('div', {class: 'sx-toast', role: 'status', style: 'pointer-events:none;position:fixed;left:50%;bottom:24px;transform:translateX(-50%);background:var(--surface2);border:1px solid var(--line);border-radius:999px;padding:10px 18px;z-index:80;box-shadow:0 8px 24px rgba(0,0,0,.4)'}, text); document.body.append(t); setTimeout(() => t.remove(), 3500); }
 
 // ---- the owner's pages
+
+// ---------------------------------------------------------------- Admin screen (owner and admins)
+const ADM = {tab: 'previews', root: null, q: ''};
+function closeAdmin() { document.querySelectorAll('.adm').forEach((n) => n.remove()); ADM.root = null; }
+function openAdmin(tab) {
+  closeAdmin(); closeSettings(); ADM.tab = tab || ADM.tab || 'previews'; ADM.q = '';
+  ADM.root = el('div', {class: 'adm', role: 'dialog', 'aria-modal': 'true', 'aria-label': 'Admin'}); $('dialogs').append(ADM.root); admRender();
+}
+function admRender() {
+  const root = ADM.root; if (!root || !root.isConnected) return;
+  const tabs = [['previews', 'Previews'], ['people', 'People'], ['signups', 'Sign-ups'], ['activity', 'Activity']];
+  const body = el('div', {class: 'adm-body', id: 'admBody'});
+  root.replaceChildren(
+    el('div', {class: 'adm-top'}, el('h2', {}, 'Admin'), el('button', {class: 'icon', type: 'button', 'aria-label': 'Close admin', onclick: closeAdmin}, icon('x'))),
+    el('div', {class: 'adm-tabs', role: 'tablist'}, ...tabs.map(([id, n]) => el('button', {type: 'button', role: 'tab', class: ADM.tab === id ? 'on' : '', 'aria-selected': String(ADM.tab === id), onclick: () => { ADM.tab = id; ADM.q = ''; admRender(); }}, n))),
+    body);
+  const fill = {previews: admPreviews, people: admPeople, signups: () => admOld(body, 'a-signups'), activity: () => admOld(body, 'a-log')}[ADM.tab];
+  body.append(el('div', {style: 'color:var(--muted)'}, 'Loading...'));
+  Promise.resolve(fill(body)).catch(() => body.replaceChildren(el('p', {class: 'lead'}, 'That did not load. Check your connection and try again.')));
+}
+async function admOld(body, id) { body.replaceChildren(el('div', {id: 'sxAdmin'})); await adminPage(id); }
+const admInitials = (n) => (String(n).replace(/[^A-Za-z0-9 _.-]/g, '').split(/[ _.-]+/).filter(Boolean).slice(0, 2).map((w) => w[0]).join('') || '?').toUpperCase();
+const admAgo = (t) => { if (!t) return 'never'; const d = Date.now() / 1000 - t; return d < 90 ? 'just now' : d < 5400 ? Math.round(d / 60) + ' min ago' : d < 129600 ? Math.round(d / 3600) + ' hours ago' : Math.round(d / 86400) + ' days ago'; };
+const admDate = (t) => t ? new Date(t * 1000).toLocaleDateString([], {month: 'short', day: 'numeric', year: 'numeric'}) : 'an unknown date';
+async function admCopy(text, btn) { try { await navigator.clipboard.writeText(text); btn.textContent = 'Copied'; } catch (e) { btn.textContent = 'Press and hold to copy'; } setTimeout(() => { btn.textContent = 'Copy'; }, 1800); }
+
+async function admPreviews(body) {
+  let j = await (await api('/api/admin/flags')).json(); let view = ADM.view || 'preview';
+  const save = async (b) => { const r = await post('/api/admin/flags', b); const k = await r.json().catch(() => ({})); if (!r.ok) return toast(k.message || 'That did not work.'); Object.assign(j, k); draw(); toast('Saved. It applies at once.'); };
+  const ready = j.flags.filter((f) => f.audience !== 'everyone' && f.audience !== 'off'), prev = j.flags.filter((f) => f.audience !== 'everyone'), pub = j.flags.filter((f) => f.audience === 'everyone');
+  const who = {off: 'Nobody (on hold)', owner: 'Only the PC owner', admins: 'The owner and admins'};
+  const previewCard = (f) => {
+    const when = sxInput('datetime-local', '', {'aria-label': 'Publish date and time for ' + f.title}); when.min = new Date(Date.now() + 60000 - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 16);
+    return el('div', {class: 'adm-sub'}, el('b', {}, f.title), el('small', {}, f.desc),
+      el('small', {}, 'Visible to: ', el('span', {style: 'color:var(--accenttext)'}, who[f.audience] || f.audience)),
+      sxSeg(j.audiences.filter((a) => a[0] !== 'everyone'), f.audience, (v) => save({id: f.id, audience: v})),
+      f.scheduled ? el('small', {style: 'color:var(--accenttext)'}, 'Goes live for everyone on ' + sxWhen(f.scheduled.at) + ' (set by ' + f.scheduled.by + ').') : null,
+      el('div', {class: 'adm-acts'}, when,
+        sxBtn('Schedule', () => { const t = new Date(when.value).getTime(); if (!when.value || !(t > Date.now())) return toast('Choose a date and time in the future.'); save({id: f.id, schedule_at: t / 1000}); }),
+        f.scheduled ? sxBtn('Cancel schedule', () => save({id: f.id, cancel_schedule: true})) : null,
+        sxBtn('Publish', () => { if (confirm('Publish "' + f.title + '" to everyone now?')) save({id: f.id, publish: 'now'}); }, 'primary')));
+  };
+  const pubCard = (f) => el('div', {class: 'adm-sub'}, el('b', {}, f.title, ' ', el('span', {class: 'adm-tag on'}, 'Live')), el('small', {}, f.desc),
+    el('small', {}, f.changed ? 'Live since ' + admDate(f.changed.at) + ' (' + f.changed.by + ').' : 'Live for everyone.'),
+    el('div', {class: 'adm-acts'}, sxBtn('Pull back to admins', () => { if (confirm('Take "' + f.title + '" away from everyone and keep it for admins?')) save({id: f.id, audience: 'admins'}); }, 'bad')));
+  const draw = () => {
+    const ready2 = j.flags.filter((f) => f.audience !== 'everyone' && f.audience !== 'off');
+    body.replaceChildren(
+      el('div', {class: 'adm-card'}, el('h3', {}, '\u{1F9EA} Feature previews'),
+        el('p', {}, 'New features can ship to the live app visible only to you and the admins first. Publish here once you are happy with one, so everyone starts seeing it too.'),
+        el('div', {class: 'adm-row'}, el('span', {style: 'color:var(--muted)'}, 'Current version: v' + j.version),
+          sxBtn('Publish all', () => { if (confirm('Publish ' + ready2.length + ' feature' + (ready2.length === 1 ? '' : 's') + ' to everyone now?')) save({publish: 'all'}); }, ready2.length ? 'primary' : '')),
+        sxSeg([['preview', 'In preview (' + prev.length + ')'], ['published', 'Published (' + pub.length + ')']], view, (v) => { view = ADM.view = v; draw(); }),
+        ...(view === 'preview' ? (prev.length ? prev.map(previewCard) : [el('p', {}, 'Nothing is in preview. New features appear here until you publish them.')])
+                              : (pub.length ? pub.map(pubCard) : [el('p', {}, 'Nothing has been published yet.')]))),
+      el('div', {class: 'adm-card'}, el('h3', {}, '\u{1F4CB} Release history'), el('p', {}, 'Every version published so far, with what went live in each one.'),
+        ...(j.releases.length ? j.releases.map((r) => el('div', {class: 'adm-sub'}, el('div', {class: 'adm-row'}, el('span', {}, el('b', {}, 'v' + r.version), ' ', el('span', {class: 'adm-tag'}, r.kind[0].toUpperCase() + r.kind.slice(1))), el('small', {}, admDate(r.at))),
+          ...r.items.map((i) => el('small', {}, '• ' + i.title + ': ' + i.desc)), r.notes ? el('small', {}, r.notes) : null, el('small', {}, 'Published by ' + r.by))) : [el('p', {}, 'No releases yet.')])));
+  };
+  draw();
+}
+
+async function admPeople(body) {
+  const j = await (await api('/api/admin/users')).json(); const users = j.users, me = S.state.user, granter = S.state.granter;
+  const out = el('div', {style: 'word-break:break-all;color:var(--muted);font-size:14px'});
+  const link = async (u) => { const r = await post('/api/admin/pairing', {user: u}); const k = await r.json(); out.textContent = 'One-time link for ' + u + ' (' + k.pair_minutes + ' minutes, works once): ' + location.origin + '/pair/' + k.pair; };
+  const resetPw = (u) => {
+    const run = async () => { const r = await post('/api/admin/reset-password', {user: u.user}); const k = await r.json().catch(() => ({})); if (!r.ok) return toast(k.message || 'That did not work.');
+      const cp = el('button', {class: 'btn ghost', onclick: (e) => admCopy(k.link, e.target)}, 'Copy');
+      dialog([el('h2', {}, 'Password reset for ' + u.user), el('p', {}, k.emailed ? 'Emailed to ' + u.email + '. ' : 'No email was sent (' + (u.email ? 'email is not set up on this server' : 'this person has no email') + '). '), el('p', {}, 'Send this link privately. It works once, for ' + k.minutes + ' minutes, and lets them sign in and choose a new password. Their old password no longer works and they were signed out everywhere.'),
+        el('div', {style: 'word-break:break-all;color:var(--muted);font-size:14px;margin-bottom:8px'}, k.link), cp], 'Done'); admRender(); };
+    if (confirm('Reset the password for ' + u.user + '? Their old password stops working and they are signed out everywhere.')) run();
+  };
+  const list = el('div', {});
+  const draw = () => {
+    const q = ADM.q.toLowerCase(), shown = users.filter((u) => !q || (u.user + ' ' + (u.email || '')).toLowerCase().includes(q));
+    list.replaceChildren(...(shown.length ? shown.map((u) => {
+      const locked = u.owner || u.user === me || ((u.admin || u.unlimited) && !granter);
+      return el('div', {class: 'adm-person'}, el('div', {class: 'adm-av'}, admInitials(u.user)),
+        el('div', {}, el('b', {}, u.user, ' ', u.owner ? sxPill('Owner') : null, ' ', u.admin ? sxPill('Admin') : null, ' ', u.unlimited ? sxPill('No limits') : null, ' ', u.banned ? sxPill('Turned off', 'warn') : null),
+          el('div', {}, el('small', {}, u.email || 'no email yet', ' '), u.email ? el('button', {class: 'link', type: 'button', style: 'background:none;border:0;color:var(--accenttext);font-weight:600;padding:0', onclick: (e) => admCopy(u.email, e.target)}, 'Copy') : null),
+          el('div', {}, el('small', {}, 'Joined ' + admDate(u.created) + ' · last active ' + admAgo(u.last_seen) + ' · ' + u.tier + ' plan' + (u.has_password ? '' : ' · no password') + (u.mfa ? ' · two-step on' : '')))),
+        el('div', {class: 'adm-acts'},
+          u.owner || u.user === me ? null : sxBtn('Reset password', () => resetPw(u)),
+          sxBtn('Sign-in link', () => link(u.user)),
+          u.mfa && !locked ? sxBtn('Reset two-step', async () => { if (confirm('Turn off two-step for ' + u.user + ' and sign them out everywhere?')) { await post('/api/admin/mfa-reset', {user: u.user}); toast('Two-step reset for ' + u.user + '.'); admRender(); } }) : null,
+          granter && !u.owner ? sxBtn(u.admin ? 'Remove admin' : 'Make admin', async () => { if (confirm((u.admin ? 'Remove admin rights from ' : 'Make admin: ') + u.user + '?')) { const r = await post('/api/admin/access', {user: u.user, admin: !u.admin}); const k = await r.json().catch(() => ({})); if (!r.ok) return toast(k.message || 'That did not work.'); admRender(); } }) : null,
+          granter && !u.owner ? sxBtn('Plan and rights…', () => accessDialog(u, admRender)) : null,
+          locked ? null : sxBtn('Delete…', () => removeAccountDialog(u, admRender), 'bad'),
+          u.owner || u.admin || u.unlimited ? null : sxBtn(u.banned ? 'Turn on' : 'Turn off', async () => { await post('/api/admin/ban', {user: u.user, banned: !u.banned}); admRender(); }, u.banned ? '' : 'bad')));
+    }) : [el('p', {}, 'No one matches that.')]));
+  };
+  const search = el('input', {type: 'text', class: 'adm-search', placeholder: 'Search by name or email...', 'aria-label': 'Search people', value: ADM.q, oninput: (e) => { ADM.q = e.target.value.trim(); draw(); }});
+  const name = sxInput('text', 'Name, e.g. sam', {'aria-label': 'Name'}), mail = sxInput('text', 'Email (optional)', {inputmode: 'email', 'aria-label': 'Email'}); let plan = 'free';
+  draw();
+  body.replaceChildren(
+    el('div', {class: 'adm-card'}, el('h3', {}, 'People (' + users.length + ')'), el('p', {}, 'Everyone with an account: their email, when they joined and were last here. Reset a password, send a sign-in link, change plan or rights, or delete an account. Password resets email the person when email is set up on this server; otherwise you get a link to send yourself.'), search, list, out),
+    el('div', {class: 'adm-card'}, el('h3', {}, 'Add a person'), authField('Name', name), authField('Email', mail), sxSeg([['free', 'Free'], ['pro', 'Pro'], ['mega', 'Mega']], 'free', (v) => { plan = v; }),
+      el('div', {}, sxBtn('Add and make a sign-in link', async () => { const r = await post('/api/admin/users', {user: name.value.trim(), tier: plan, email: mail.value.trim() || undefined}); const k = await r.json(); if (r.ok) { out.textContent = 'Send this link privately (works once, ' + k.pair_minutes + ' minutes): ' + location.origin + '/pair/' + k.pair + (k.key ? '\nTheir access key (shown once, not stored): ' + k.key : ''); admRender(); } else toast(k.message || 'That did not work.'); }, 'primary'))));
+}
+
 async function adminPage(id) {
+  if (id === 'a-flags' || id === 'a-people') { openAdmin(id === 'a-flags' ? 'previews' : 'people'); return; }   // these moved to the Admin screen
   const host = $('sxAdmin'); if (!host) return;
   try {
     if (id === 'a-overview') {
@@ -1927,42 +2053,6 @@ async function adminPage(id) {
             sxBtn('Send now', async () => { const r = await post('/api/admin/summary', {send: true}); const j = await r.json(); toast(j.emailed ? 'Emailed to you.' : j.alerted ? 'Sent as a phone alert.' : 'Nothing was sent: set up mail or alerts first.'); }))},
           {title: 'Send a test email', desc: 'Sends a message to your owner email, so you know sign-in codes will arrive. Needs EMVRYX_SMTP_* in .emvryx\\keys.env.', ctl: sxBtn('Send test', async () => { const r = await post('/api/admin/mail-test'); const j = await r.json(); toast(r.ok ? 'Sent to ' + j.to : (j.message + ' ' + (j.action || ''))); })},
           {title: 'Live sources and keys', desc: 'Which lookups work and which keys are missing.', ctl: sxBtn('See sources', openSources)}]));
-    } else if (id === 'a-flags') {
-      const load2 = async () => (await api('/api/admin/flags')).json();
-      let j = await load2();
-      const who = {off: 'Nobody sees it', owner: 'Only the PC owner sees it', admins: 'The owner and admins see it', everyone: 'Everyone sees it'};
-      const draw = () => {
-        const save = async (body) => { const r = await post('/api/admin/flags', body); const k = await r.json().catch(() => ({})); if (!r.ok) return toast(k.message || 'That did not work.'); j.flags = k.flags; draw(); toast('Saved. It applies at once.'); };
-        host.replaceChildren(
-          ...j.flags.map((f) => el('div', {class: 'sx-card'}, el('div', {class: 'srow stack'},
-            el('div', {class: 'stxt'}, el('b', {}, f.title, ' ', sxPill(j.audiences.find((a) => a[0] === f.audience)[1], f.audience === 'everyone' ? 'ok' : f.audience === 'off' ? 'warn' : '')), el('small', {}, f.desc), el('small', {style: 'color:var(--accenttext)'}, who[f.audience]),
-              f.changed ? el('small', {}, 'Last changed by ' + f.changed.by + ' on ' + sxWhen(f.changed.at)) : null),
-            sxSeg(j.audiences, f.audience, (v) => save({id: f.id, audience: v})),
-            el('div', {class: 'stxt'}, el('b', {}, 'Publish to everyone'), f.audience === 'everyone' ? el('small', {}, 'Already live for everyone.') : null,
-              f.scheduled ? el('small', {style: 'color:var(--accenttext)'}, 'Goes live for everyone on ' + sxWhen(f.scheduled.at) + ' (set by ' + f.scheduled.by + ').') : null,
-              f.audience === 'everyone' ? null : (() => { const when = sxInput('datetime-local', '', {'aria-label': 'Publish date and time for ' + f.title});
-                const min = new Date(Date.now() + 60000 - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 16); when.min = min;
-                return el('div', {style: 'display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:6px'}, when,
-                  sxBtn('Schedule', () => { const t = new Date(when.value).getTime(); if (!when.value || !(t > Date.now())) return toast('Choose a date and time in the future.'); save({id: f.id, schedule_at: t / 1000}); }),
-                  f.scheduled ? sxBtn('Cancel schedule', () => save({id: f.id, cancel_schedule: true})) : null,
-                  sxBtn('Publish now', () => { if (confirm('Publish "' + f.title + '" to everyone now?')) save({id: f.id, publish: 'now'}); }, 'primary')); })())
-          )))
-        );
-      };
-      draw();
-    } else if (id === 'a-people') {
-      const j = await (await api('/api/admin/users')).json(), out = el('div', {style: 'word-break:break-all;color:var(--muted);font-size:14px'});
-      const name = sxInput('text', 'Name, e.g. sam', {'aria-label': 'Name'}), mail = sxInput('text', 'Email (optional)', {inputmode: 'email', 'aria-label': 'Email'}); let plan = 'free';
-      const link = async (u) => { const r = await post('/api/admin/pairing', {user: u}); const k = await r.json(); out.textContent = 'One-time link for ' + u + ' (' + k.pair_minutes + ' minutes, works once): ' + location.origin + '/pair/' + k.pair; };
-      host.replaceChildren(
-        el('div', {class: 'sx-card'}, ...j.users.map((u) => el('div', {class: 'srow stack'}, el('div', {class: 'stxt'}, el('b', {}, u.user, ' ', u.owner ? sxPill('Owner') : null, ' ', u.admin ? sxPill('Admin') : null, ' ', u.unlimited ? sxPill('No limits') : null, ' ', u.banned ? sxPill('Turned off', 'warn') : null), el('small', {}, u.tier + (u.email ? ' · ' + u.email : '') + (u.has_password ? ' · password' : '') + (u.mfa ? ' · two-step on' : ''))),
-          el('div', {class: 'sctl'}, sxBtn('Sign-in link', () => link(u.user)), u.mfa ? sxBtn('Reset two-step', async () => { if (confirm('Turn off two-step for ' + u.user + ' and sign them out everywhere?')) { await post('/api/admin/mfa-reset', {user: u.user}); toast('Two-step reset for ' + u.user + '.'); adminPage(id); } }) : null,
-            S.state.granter && !u.owner ? sxBtn('Plan and rights\u2026', () => accessDialog(u, () => adminPage(id))) : null,
-            u.owner || u.user === S.state.user || ((u.admin || u.unlimited) && !S.state.granter) ? null : sxBtn('Delete\u2026', () => removeAccountDialog(u, () => adminPage(id)), 'bad'),
-            u.owner || u.admin || u.unlimited ? null : sxBtn(u.banned ? 'Turn on' : 'Turn off', async () => { await post('/api/admin/ban', {user: u.user, banned: !u.banned}); adminPage(id); }, u.banned ? '' : 'bad'))))),
-        out, el('div', {class: 'sx-sec'}, 'Add a person'),
-        el('div', {class: 'sx-card'}, el('div', {class: 'srow stack'}, authField('Name', name), authField('Email', mail), sxSeg([['free', 'Free'], ['pro', 'Pro'], ['mega', 'Mega']], 'free', (v) => { plan = v; }),
-          el('div', {}, sxBtn('Add and make a sign-in link', async () => { const r = await post('/api/admin/users', {user: name.value.trim(), tier: plan, email: mail.value.trim() || undefined}); const k = await r.json(); if (r.ok) { out.textContent = 'Send this link privately (works once, ' + k.pair_minutes + ' minutes): ' + location.origin + '/pair/' + k.pair + (k.key ? '\nTheir access key (shown once, not stored): ' + k.key : ''); adminPage(id); } else out.textContent = k.message; }, 'primary')))));
     } else if (id === 'a-signups') {
       const o = await (await api('/api/admin/overview')).json(), out = el('div', {class: 'srow', style: 'display:none'});
       let tier = 'free', uses = 1;
