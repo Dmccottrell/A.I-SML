@@ -67,6 +67,7 @@ import feedback
 import vision
 import live_data
 import github_link
+import identity_answer
 import google_signin
 import lookup_auto
 import mailer
@@ -1336,6 +1337,8 @@ def start_turn(state, who, chat_id, text, model_id, effort, regenerate=False, re
                 q.put(("loading", model["name"]))
             notes, found = None, None
             mem_note = None
+            asked_id = text or next((m["content"] for m in reversed(store.messages(chat_id)) if m["role"] == "user"), "")
+            canned = identity_answer.answer(asked_id) if not attached else None      # "who are you?": the app answers in the owner's words, no model, no web search
             if chat_id >= 0 and state.get_settings(who["user"])["memory"]:         # what the app knows about this person: the same for every model
                 memory = state.memory_for(who["user"])
                 if text:
@@ -1379,14 +1382,14 @@ def start_turn(state, who, chat_id, text, model_id, effort, regenerate=False, re
                                      "pictures": pictures["looked"], "ocr": pictures["read"] - pictures["looked"], "unreadable": unreadable}))
             live_notes = []
             live_mode = state.get_settings(who["user"])["web_search"]
-            if not attached and live_mode != "none" and state.get_settings(who["user"]).get("live_data", True):
+            if not attached and not canned and live_mode != "none" and state.get_settings(who["user"]).get("live_data", True):
                 asked_live = text or next((m["content"] for m in reversed(store.messages(chat_id)) if m["role"] == "user"), "")
                 live_notes, live_found = live_data.gather(asked_live, state.clock(), online=(live_mode in ("auto", "always") and chat_id >= 0), net=state.live_net,
                                                           default_place=state.default_place)
                 if live_notes:                                                     # exact facts (a sum, a date, a price): no Wikipedia or web notes needed
                     q.put(("notes", dict(live_found, saved=0, wiki=0, web=0, web_tried=False, recent=False)))
             app_notes = []
-            if (chat_id >= 0 and not attached and live_mode != "none" and state.get_settings(who["user"]).get("connected_apps", True)
+            if (chat_id >= 0 and not attached and not canned and live_mode != "none" and state.get_settings(who["user"]).get("connected_apps", True)
                     and state.links.store.connected(who["user"])):                  # the person's own connected apps (calendar, notes, tasks...): only when the question is about them
                 asked_app = text or next((m["content"] for m in reversed(store.messages(chat_id)) if m["role"] == "user"), "")
                 app_notes, app_found = state.links.gather(who["user"], asked_app, state.usage.get_user(who["user"]).get("tz_minutes", 0))
@@ -1394,7 +1397,7 @@ def start_turn(state, who, chat_id, text, model_id, effort, regenerate=False, re
                     q.put(("notes", {"asked": True, "saved": 0, "wiki": 0, "web": 0, "web_tried": False, "recent": False, "live": 0, "names": [], "sources": [], "apps": app_found["apps"],
                                      "app_errors": app_found["errors"]}))
             earlier = [m["content"] for m in store.messages(chat_id) if m["role"] == "user"]      # what was asked before: a follow-up ("how many has he scored?") needs it to be searched
-            if text and not attached and not live_notes and not app_notes:         # Auto lookup (lookup_auto.py)
+            if text and not attached and not canned and not live_notes and not app_notes:         # Auto lookup (lookup_auto.py)
                 web_mode = state.get_settings(who["user"])["web_search"]
                 ordered = lookup_auto.asks_for_web(text)                           # "look online", "check again": an order, so the web is searched whatever the rules say
                 notes, found = lookup_auto.gather(lookup_auto.search_query(text, earlier), state.wiki, state.web_fn, web_mode, private=chat_id < 0,
@@ -1415,7 +1418,7 @@ def start_turn(state, who, chat_id, text, model_id, effort, regenerate=False, re
             if mem_note:
                 notes = [mem_note] + list(notes or [])
             t_load = time.monotonic()
-            backend = state.backend_for(model, text or "", window)     # may load the model the first time (can take a while)
+            backend = E.FakeBackend(canned) if canned else state.backend_for(model, text or "", window)     # may load the model the first time (can take a while)
             timing["load"] = time.monotonic() - t_load
             if decision["temperature"] is not None and hasattr(backend, "sampling"):
                 backend.sampling = dict(backend.sampling, temperature=decision["temperature"])
@@ -1429,7 +1432,7 @@ def start_turn(state, who, chat_id, text, model_id, effort, regenerate=False, re
                            style_hint="\n\n".join(h for h in (skill_hint, regen_modes.get(mode)["hint"] if regenerate else "",
                                                     "" if regenerate else (chat_polish.answer_hint(text, next((m["content"] for m in reversed(store.messages(chat_id)) if m["role"] == "assistant"), ""))
                                                                                  or chat_polish.follow_up_hint(text, any(m["role"] == "assistant" for m in store.messages(chat_id))))) if h))
-            if text and not regenerate and r.get("reason") in ("done", None) and chat_polish.is_repeat(r["text"], prior_reply):
+            if text and not canned and not regenerate and r.get("reason") in ("done", None) and chat_polish.is_repeat(r["text"], prior_reply):
                 # A small model answered its own last message again. Take that reply back and ask once more, firmly, a little less predictably.
                 msgs = [m for m in store.messages(chat_id) if m["status"] != "compacted"]
                 if msgs and msgs[-1]["role"] == "assistant":
