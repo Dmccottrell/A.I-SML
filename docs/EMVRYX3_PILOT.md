@@ -1,5 +1,7 @@
 # Emvryx 3 pilot: Flare 3, Equinox 3, Solstice 3 (plan, Oct 11, 2026)
 
+> The commands are now scripts: see [EMVRYX3_RUNBOOK.md](EMVRYX3_RUNBOOK.md) (`scripts/emvryx3_preflight.py`, `scripts/emvryx3_pilot.py`, `scripts/chain_home.py`). The text below explains what is being tested and why.
+
 Nothing here has been run. Nothing is rented or bought until the owner says yes. The rule for the whole of Emvryx 3: **every model must run on the owner's RTX 4070 (12 GB) by itself.** Apogee is not part of this pilot except as an optional challenger (see the end).
 
 ## What is being tested

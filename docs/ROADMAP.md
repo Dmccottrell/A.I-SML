@@ -67,6 +67,8 @@ The owner's idea: an update to a model can raise its version (Flare 2.5 to 2.6 o
 
 Left out because they do not fit the rule: Qwen3.6-35B-A3B, Gemma 4 26B-A4B, the 27B-class models, DeepSeek V4 (hundreds of billions of parameters).
 
+**Preparation code is written and tested (Oct 11, 2026), to be run at the end of the month:** the presets, the thinking format (`think="empty"`), a pre-flight check, the pilot runner and report, the lesson style check and balanced subset builder, optional verified thinking lessons, a thinking regression check, and a resumable home training chain. Step by step: [EMVRYX3_RUNBOOK.md](EMVRYX3_RUNBOOK.md). The voice the lessons should follow is in [EMVRYX_STYLE.md](EMVRYX_STYLE.md) (the owner still decides the open choices there).
+
 **Open points before choosing**
 - Gemma uses its own chat format, not the ChatML our lessons and `core/open_tokenizer.py` assume: it needs a conversion and a check of the trainer.
 - Quantization-aware (QAT) 4-bit files are for running as released; we fine-tune from full-precision weights and compress ourselves, so that advantage may not carry over.

@@ -221,6 +221,8 @@ The app still picks the smallest of: that number, what fits in your free memory 
 The 128K YaRN windows are not switched on in the app (they need extra llama-server options, `open_models.llama_args`, and about 18 GB of memory). Ember 2 (1,024) and Flare 2 (2,048) cannot be raised: their position range was trained that short, and stretching it needs the long-context ladder.
 **Flare 2.5 stays at 8,192** (the owner's choice) until a long-input test shows more is safe. **Training length is separate from the window:** the fine-tunes train on short chats (`--max_len 4096`, most lessons are well under 1,000 tokens), while the window is only a setting for chatting. The base the open base model's 32K ability is not removed by the fine-tune; teaching the model to *use* long inputs well is a later "+" step with long-document lessons.
 
+> **Update (Oct 11, 2026):** the 3.x preparation code is written and the plan is home-only on the RTX 4070: see [EMVRYX3_RUNBOOK.md](EMVRYX3_RUNBOOK.md) and [ROADMAP.md](ROADMAP.md) ("Emvryx 3"). Apogee stays on the 14B base as 2.5.
+
 ## Later generations: 3.x on a newer open generation, 4.x on newer open bases or the newest (planned, Oct 2026)
 A web search on 2026-10-06 found newer open bases than the ones the 2.x series uses (check again before each build; releases move fast):
 - a newer open generation (Feb to Mar 2026): small sizes **0.8B, 2B, 4B, 9B**; medium **27B, 35B-A3B, 122B-A10B, 397B-A17B** (A = how many parameters are active per word, a mixture of experts). Apache 2.0 like the newer open bases family.

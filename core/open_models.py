@@ -22,11 +22,11 @@ PRESETS = {
 # conversation takes is NOT layers x heads x size as kv_kb_per_token() assumes. `--pilot` prints the real figures; fix the numbers here after it runs.
 PRESETS.update({
     "flare-3": dict(display="Flare 3", hf="Qwen/Qwen3.5-2B", params_b=2.0, layers=24, kv_heads=2, head_dim=128, licence="Apache 2.0 (check)",
-                    quant4=True, rank=32, batch_tokens=4096, grad_accum=16, measured=False, context=32768, untried=True),
+                    quant4=True, rank=32, batch_tokens=4096, grad_accum=16, measured=False, context=32768, untried=True, think="empty"),
     "equinox-3": dict(display="Equinox 3", hf="Qwen/Qwen3.5-4B", params_b=4.0, layers=32, kv_heads=2, head_dim=128, licence="Apache 2.0 (check)",
-                      quant4=True, rank=32, batch_tokens=2048, grad_accum=32, measured=False, context=32768, untried=True),
+                      quant4=True, rank=32, batch_tokens=2048, grad_accum=32, measured=False, context=32768, untried=True, think="empty"),
     "solstice-3": dict(display="Solstice 3", hf="Qwen/Qwen3.5-9B", params_b=9.0, layers=32, kv_heads=2, head_dim=128, licence="Apache 2.0 (check)",
-                       quant4=True, rank=16, batch_tokens=1024, grad_accum=64, measured=False, context=32768, untried=True),
+                       quant4=True, rank=16, batch_tokens=1024, grad_accum=64, measured=False, context=32768, untried=True, think="empty"),
 })
 CONTEXT = 32768                     # all of these read 32,768 tokens natively
 YARN_FACTOR = 4.0                   # the Qwen3 models stretch to 4 x 32,768 = 131,072 tokens with YaRN (their model cards say so);

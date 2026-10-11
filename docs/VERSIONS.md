@@ -36,6 +36,19 @@ and skills are being built, so no GPU time is wasted. It's the jump from "a mode
 v5 goes back to a bigger brain (3B), and it's the first version that needs the cloud.
 v6 (5B) and v6.5 (7B) keep growing toward medium size, mainly for the PC and online mode.
 
+## Emvryx 3 (planned: build at the end of October 2026, everything on the owner's RTX 4070)
+
+The first build on a newer open-model generation. **Flare 3, Equinox 3 and Solstice 3** are made at home; **Apogee stays on the 14B base and gets a 2.5 release** (each model has its own number). Details: [ROADMAP.md](ROADMAP.md) ("Emvryx 3"), the plan [EMVRYX3_PILOT.md](EMVRYX3_PILOT.md) and the step-by-step [EMVRYX3_RUNBOOK.md](EMVRYX3_RUNBOOK.md).
+
+| Model | Base (to confirm on the model card) | Size at 4-bit | Replaces | Status |
+|---|---|---|---|---|
+| Flare 3 | Qwen3.5 2B | about 1.5 to 2 GB | Flare 2.5 (Qwen2.5 1.5B) | preparation code ready, not run |
+| Equinox 3 | Qwen3.5 4B | about 3 GB | Equinox 2 (Qwen3 4B) | preparation code ready, not run |
+| Solstice 3 | Qwen3.5 9B | about 6 GB | Solstice 2 (Qwen3 8B) | preparation code ready, not run; may not fit for training |
+| Apogee 2.5 | Qwen3 14B (unchanged) | about 9 GB | Apogee 2 | planned after the 3 builds |
+
+What changes in the way they work: the new bases can think step by step before answering (hidden from the answer), see pictures natively (reported), and use a newer memory design. Quick and Balanced answer straight away (an empty thinking block in the prompt, `think="empty"`); Deep lets the model think. The 2.x versions move to Other models when a 3 is published (Admin > Models keeps the newest 6 older versions).
+
 ## Flare 2.5 as built now (the 1.5B open base base, Oct 2026; the version slot was v3.5)
 
 The tables below show this version in the Flare 2.5 column (the old v3.5 slot). The from-scratch plan it replaced (1.12B, 8K context, 75,000 steps, about $183) is recorded in [V3_5.md](V3_5.md).

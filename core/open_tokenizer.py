@@ -22,7 +22,13 @@ from tokenizers import Tokenizer
 class OpenTokenizer:
     chatml = True
 
-    def __init__(self, tok):
+    # think="empty": for the 3.x models (Qwen3.5), which can write hidden step-by-step "thinking" before an answer. Every prompt then ends with an
+    # empty thinking block, "<think>\n\n</think>\n\n", so the model answers straight away (Quick and Balanced). Training lessons are encoded the same
+    # way, so what the model learns is what it sees in the app. think=None (every 2.x model) changes nothing.
+    EMPTY_THINK = "<think>\n\n</think>\n\n"
+
+    def __init__(self, tok, think=None):
+        self.think = think
         self.tok = tok
         self.special = {}
         for name in ("<|im_start|>", "<|im_end|>", "<|endoftext|>"):
@@ -42,8 +48,8 @@ class OpenTokenizer:
         self._pieces = {}
 
     @classmethod
-    def load(cls, path):
-        return cls(Tokenizer.from_file(path))
+    def load(cls, path, think=None):
+        return cls(Tokenizer.from_file(path), think=think)
 
     @property
     def vocab_size(self):
@@ -74,10 +80,13 @@ class OpenTokenizer:
         return self.tok.decode(list(ids), skip_special_tokens=False)
 
     # ---- ChatML pieces used by chat.py -------------------------------------------------------------------------
-    def role_open(self, role):
-        key = "open_" + role
+    def role_open(self, role, plain=False):
+        """The opening of a turn. plain=True leaves out the empty thinking block (a question the model should think about before it answers)."""
+        key = "open_" + role + ("_plain" if plain else "")
         if key not in self._pieces:
             self._pieces[key] = [self.special["<|im_start|>"]] + self._plain(role + "\n")
+            if role == "assistant" and self.think == "empty" and not plain:
+                self._pieces[key] += self._plain(self.EMPTY_THINK)
         return self._pieces[key]
 
     def turn_end(self):

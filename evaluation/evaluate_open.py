@@ -84,7 +84,7 @@ def main(argv=None):
         from peft import PeftModel
         model = to_device(PeftModel.from_pretrained(model, adapter), device)
     model.eval()
-    tok = OpenTokenizer(hf_tok.backend_tokenizer)
+    tok = OpenTokenizer(hf_tok.backend_tokenizer, think=cfg.get("think"))
 
     label = f"{model_id}" + (f" + adapter {adapter}" if adapter else " (plain base)")
     results, tally = run_sheet(model, tok, hf_tok, tests, a.tokens, a.temperature, device)

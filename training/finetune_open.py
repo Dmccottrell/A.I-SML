@@ -220,7 +220,7 @@ def main(argv=None):
     hf_tok = AutoTokenizer.from_pretrained(a.model)
     tok_dir = os.path.join(a.out, "tokenizer")
     hf_tok.save_pretrained(tok_dir)
-    tok = OpenTokenizer.load(os.path.join(tok_dir, "tokenizer.json"))
+    tok = OpenTokenizer.load(os.path.join(tok_dir, "tokenizer.json"), think=cfg.get("think"))
     pad_id = hf_tok.pad_token_id if hf_tok.pad_token_id is not None else tok.special["<|endoftext|>"]
 
     identity = None if a.keep_old_identity else {"name": cfg.get("display", ""), "n": 0 if a.patch else 1000}

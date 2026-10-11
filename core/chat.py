@@ -155,7 +155,9 @@ def _encode_message_chatml(tok, message):
         notes = message.get("notes")
         if notes:
             text = tok.encode("Notes:\n" + format_notes(notes) + "\n\nQuestion: " + message["content"], allow_special=False)
-        return tok.role_open("user") + text + tok.turn_end() + tok.role_open("assistant"), 0
+        # "thinking": True on a question means the model should think first (Deep): no empty thinking block after it (see open_tokenizer.py)
+        opening = tok.role_open("assistant", plain=True) if message.get("thinking") else tok.role_open("assistant")
+        return tok.role_open("user") + text + tok.turn_end() + opening, 0
     return text + tok.turn_end(), 0 if message.get("train") is False else 1
 
 

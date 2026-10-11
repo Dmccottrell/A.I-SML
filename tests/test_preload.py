@@ -78,7 +78,7 @@ class TokenizerFallbackTests(unittest.TestCase):
         st.root = root
         seen = []
         orig = A.OpenTokenizer.load
-        A.OpenTokenizer.load = staticmethod(lambda path: seen.append(path) or object())
+        A.OpenTokenizer.load = staticmethod(lambda path, **kw: seen.append(path) or object())
         try:
             st.tok_for({"id": "equinox-2", "open": True, "tokenizer": "checkpoints/dev/open/equinox-2/tokenizer/tokenizer.json"})
         finally:

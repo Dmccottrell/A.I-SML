@@ -1241,7 +1241,7 @@ class AppState:
             if os.path.exists(alt):
                 path = alt
         if path and os.path.exists(path):
-            tok = OpenTokenizer.load(path) if model.get("open") else BPETokenizer.load(path)    # "open": a fine-tuned open model (ChatML)
+            tok = OpenTokenizer.load(path, think=model.get("think")) if model.get("open") else BPETokenizer.load(path)    # "open": a fine-tuned open model (ChatML)
         elif self.default_tok is not None:
             tok = self.default_tok
         elif self.demo or self.backend_factory:
