@@ -1984,12 +1984,10 @@ async function admPreviews(body) {
   let j = await (await api('/api/admin/flags')).json(); let view = ADM.view || 'preview';
   const save = async (b) => { const r = await post('/api/admin/flags', b); const k = await r.json().catch(() => ({})); if (!r.ok) return toast(k.message || 'That did not work.'); Object.assign(j, k); draw(); toast('Saved. It applies at once.'); };
   const ready = j.flags.filter((f) => f.audience !== 'everyone' && f.audience !== 'off'), prev = j.flags.filter((f) => f.audience !== 'everyone'), pub = j.flags.filter((f) => f.audience === 'everyone');
-  const who = {off: 'Nobody (on hold)', owner: 'Only the PC owner', admins: 'The owner and admins'};
   const previewCard = (f) => {
     const when = sxInput('datetime-local', '', {'aria-label': 'Publish date and time for ' + f.title}); when.min = new Date(Date.now() + 60000 - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 16);
     return el('div', {class: 'adm-sub'}, el('b', {}, f.title), el('small', {}, f.desc),
-      el('small', {}, 'Visible to: ', el('span', {style: 'color:var(--accenttext)'}, who[f.audience] || f.audience)),
-      sxSeg(j.audiences.filter((a) => a[0] !== 'everyone'), f.audience, (v) => save({id: f.id, audience: v})),
+      el('small', {style: 'color:var(--accenttext)'}, 'Only you see this until you publish it.'),
       f.scheduled ? el('small', {style: 'color:var(--accenttext)'}, 'Goes live for everyone on ' + sxWhen(f.scheduled.at) + ' (set by ' + f.scheduled.by + ').') : null,
       el('div', {class: 'adm-acts'}, when,
         sxBtn('Schedule', () => { const t = new Date(when.value).getTime(); if (!when.value || !(t > Date.now())) return toast('Choose a date and time in the future.'); save({id: f.id, schedule_at: t / 1000}); }),
@@ -2003,7 +2001,7 @@ async function admPreviews(body) {
     const ready2 = j.flags.filter((f) => f.audience !== 'everyone' && f.audience !== 'off');
     body.replaceChildren(
       el('div', {class: 'adm-card'}, el('h3', {}, '\u{1F9EA} Feature previews'),
-        el('p', {}, 'New features can ship to the live app visible only to you and the admins first. Publish here once you are happy with one, so everyone starts seeing it too.'),
+        el('p', {}, 'New features can ship to the live app visible only to you first. Publish here once you are happy with one, so everyone starts seeing it too.'),
         el('div', {class: 'adm-row'}, el('span', {style: 'color:var(--muted)'}, 'Current version: v' + j.version),
           sxBtn('Publish all', () => { if (confirm('Publish ' + ready2.length + ' feature' + (ready2.length === 1 ? '' : 's') + ' to everyone now?')) save({publish: 'all'}); }, ready2.length ? 'primary' : '')),
         sxSeg([['preview', 'In preview (' + prev.length + ')'], ['published', 'Published (' + pub.length + ')']], view, (v) => { view = ADM.view = v; draw(); }),
