@@ -173,3 +173,74 @@ class ScheduleServer(Base):
         s, j = self.owner.call("POST", "/api/admin/flags", {"id": "welcome_tour", "publish": "now"})
         self.assertEqual(j["flags"][0]["audience"], "everyone")
         self.assertTrue(self.sam.call("GET", "/api/state")[1]["features"]["welcome_tour"])
+
+
+class Releases(unittest.TestCase):
+    def test_publishing_makes_a_release_and_raises_the_version(self):
+        f = F.Flags(None)
+        self.assertEqual((f.version(), f.releases(), f.preview_ids()), ("1.0.0", [], ["welcome_tour"]))
+        f.publish_now("welcome_tour", by="owner")
+        self.assertEqual(f.version(), "1.1.0")
+        r = f.releases()[0]
+        self.assertEqual((r["version"], r["kind"], r["by"], [i["id"] for i in r["items"]]), ("1.1.0", "minor", "owner", ["welcome_tour"]))
+        f.publish_now("welcome_tour", by="owner")                      # already live: no second release
+        self.assertEqual(len(f.releases()), 1)
+        self.assertEqual(f.preview_ids(), [])
+        with self.assertRaises(ValueError):
+            f.publish_all("owner")                                     # nothing waiting
+
+    def test_publish_all_skips_what_is_switched_off_and_is_one_release(self):
+        f = F.Flags(None)
+        f.set_audience("welcome_tour", "off")
+        with self.assertRaises(ValueError):
+            f.publish_all("owner")
+        f.set_audience("welcome_tour", "owner")
+        self.assertEqual(f.publish_all("owner", kind="patch", notes="hello"), ["welcome_tour"])
+        self.assertEqual((f.version(), f.releases()[0]["notes"], f.releases()[0]["kind"]), ("1.0.1", "hello", "patch"))
+        with self.assertRaises(ValueError):
+            f.publish_now("welcome_tour", kind="huge")
+
+    def test_choosing_everyone_by_hand_is_a_release_too_and_a_schedule_is(self):
+        f = F.Flags(None, clock=lambda: 5000.0)
+        f.set_audience("welcome_tour", "everyone", "sam")
+        self.assertEqual(len(f.releases()), 1)
+        g = F.Flags(None, clock=lambda: 1000.0)
+        g.schedule("welcome_tour", 2000, by="sam")
+        g.clock = lambda: 3000.0
+        self.assertEqual(g.audience("welcome_tour"), "everyone")
+        self.assertIn("schedule", g.releases()[0]["by"])
+
+    def test_the_version_and_history_survive_a_restart(self):
+        with tempfile.TemporaryDirectory() as d:
+            path = os.path.join(d, "flags.json")
+            F.Flags(path).publish_now("welcome_tour", by="owner")
+            again = F.Flags(path)
+            self.assertEqual((again.version(), len(again.releases())), ("1.1.0", 1))
+
+
+class PeopleServer(Base):
+    data_dir = True
+
+    def test_people_list_has_email_and_last_seen_and_reset_password_works(self):
+        s, j = self.owner.call("GET", "/api/admin/users")
+        sam = next(u for u in j["users"] if u["user"] == "sam")
+        self.assertIn("last_seen", sam)
+        self.owner.call("POST", "/api/admin/users", {"user": "kim", "tier": "free", "email": "kim@example.com"})
+        s, j = self.owner.call("POST", "/api/admin/reset-password", {"user": "kim"})
+        self.assertEqual(s, 200, j)
+        self.assertIn("/pair/", j["link"])
+        self.assertFalse(self.state.user_record("kim").get("pw"))
+        self.assertEqual(self.owner.call("POST", "/api/admin/reset-password", {"user": "nobody"})[0], 404)
+        self.assertEqual(self.sam.call("POST", "/api/admin/reset-password", {"user": "kim"})[0], 403)      # only admins
+        self.assertEqual(self.owner.call("POST", "/api/admin/reset-password", {"user": "owner"})[0], 400)     # your own: use Settings
+        events = [e["kind"] for e in self.state.auth.events(50)]
+        self.assertIn("password_reset_by_admin", events)
+
+    def test_the_flags_endpoint_lists_the_version_and_history(self):
+        s, j = self.owner.call("POST", "/api/admin/flags", {"publish": "all"})
+        self.assertEqual(s, 200, j)
+        self.assertEqual((j["version"], len(j["releases"])), ("1.1.0", 1))
+        s, j = self.owner.call("POST", "/api/admin/flags", {"publish": "all"})
+        self.assertEqual(s, 400)
+        s, j = self.owner.call("GET", "/api/admin/flags")
+        self.assertEqual(j["version"], "1.1.0")

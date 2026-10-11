@@ -37,3 +37,12 @@ Each feature on the Features page has a **Publish to everyone** area:
 - Changing the audience by hand (Off, Owner, Admins or Everyone) replaces any schedule.
 - Nothing runs in the background: the time is checked whenever the app asks about the feature, so it goes live on the first look after the time has passed (in practice within seconds, since every page load asks). The change and who scheduled it appear in the security log.
 - To pull a feature back after publishing, choose Off, Owner or Admins.
+
+## The Admin screen (owner and admins)
+
+Open it from the account menu (bottom of the side panel) > **Admin**. It has four tabs:
+
+- **Previews:** the current version, **Publish all**, and two lists: *In preview* (each feature with who can see it: Off, Owner or Admins, plus Schedule and Publish) and *Published* (live for everyone, with a "Pull back to admins" button). Below is the **Release history**: every time features go live (now, scheduled, or Publish all) the version goes up (a feature or Publish all is a minor step, for example 1.0.0 to 1.1.0) and the release records what went live and who did it.
+- **People:** everyone with an account, with search by name or email. Each person shows their email (with a Copy button), when they joined, when they were last active, plan and rights. Buttons: **Reset password** (the old password stops working, they are signed out everywhere, and a one-time link lets them choose a new one; it is emailed when mail is set up, otherwise shown for you to send), Sign-in link, Reset two-step, Make admin / Remove admin and Plan and rights (owner and the owner's email account only), Delete and Turn off. Admins can reset or delete ordinary accounts; admin and no-limits accounts need the owner.
+- **Sign-ups:** who may create an account, and invite codes.
+- **Activity:** the security log.

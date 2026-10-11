@@ -1896,11 +1896,13 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 return self._send(200, {"events": self.state.auth.events(int((qs.get("limit") or ["100"])[0]), (qs.get("kind") or [None])[0])})
             if path == "/api/admin/flags" and who["admin"]:
                 return self._send(200, {"flags": self.state.flags.listing(), "audiences": [[a, flags.AUDIENCE_NAMES[a]] for a in flags.AUDIENCES],
+                                        "version": self.state.flags.version(), "releases": self.state.flags.releases(),
                                         "people": sorted(u["user"] for u in self.state.users.values())})
             if path == "/api/admin/users" and who["admin"]:
+                seen = self.state.auth.last_seen_map()
                 return self._send(200, {"users": [{"user": u["user"], "tier": self.state.usage.get_user(u["user"])["tier"], "email": u.get("email"),
                                                    "banned": bool(u.get("banned")), "owner": bool(u.get("owner")), "admin": bool(u.get("admin")), "unlimited": bool(u.get("unlimited")), "mfa": bool((u.get("mfa") or {}).get("on")),
-                                                   "has_password": bool(u.get("pw")), "created": u.get("created")}
+                                                   "has_password": bool(u.get("pw")), "created": u.get("created"), "last_seen": seen.get(u["user"])}
                                                   for u in self.state.users.values()], "paused": bool(self.state.cfg.get("paused"))})
             return self._send(404, {"code": "not_found", "message": "Not found."})
         except (BrokenPipeError, ConnectionResetError):
@@ -2211,8 +2213,11 @@ class Handler(http.server.BaseHTTPRequestHandler):
                     return self._send(403, {"code": "owner_only", "message": "Only the owner or an admin can change this."})
                 if path == "/api/admin/flags":                                   # any admin may widen or narrow who sees a new feature
                     try:
-                        if body.get("id") and body.get("publish") == "now":                  # publish to everyone straight away
-                            self.state.flags.publish_now(str(body["id"]), by=who["user"])
+                        if body.get("publish") == "all":                                      # everything in preview, as one release
+                            ids = self.state.flags.publish_all(by=who["user"], kind=str(body.get("kind") or "minor"), notes=str(body.get("notes") or ""))
+                            self.state.auth.event("flag_changed", who["user"], self._ip(), "published all: " + ", ".join(ids))
+                        elif body.get("id") and body.get("publish") == "now":                # publish to everyone straight away
+                            self.state.flags.publish_now(str(body["id"]), by=who["user"], kind=str(body.get("kind") or "minor"), notes=str(body.get("notes") or ""))
                             self.state.auth.event("flag_changed", who["user"], self._ip(), f"{body['id']} -> everyone (published)")
                         elif body.get("id") and body.get("cancel_schedule"):
                             self.state.flags.cancel_schedule(str(body["id"]))
@@ -2225,7 +2230,29 @@ class Handler(http.server.BaseHTTPRequestHandler):
                             self.state.auth.event("flag_changed", who["user"], self._ip(), f"{body['id']} -> {body.get('audience')}")
                     except ValueError as e:
                         return self._send(400, {"code": "bad_request", "message": str(e)})
-                    return self._send(200, {"flags": self.state.flags.listing()})
+                    return self._send(200, {"flags": self.state.flags.listing(), "version": self.state.flags.version(), "releases": self.state.flags.releases()})
+                if path == "/api/admin/reset-password":                          # a password reset: the old password stops working and a one-time link lets them choose a new one
+                    target = str(body.get("user", ""))
+                    rec = self.state.user_record(target)
+                    if not rec:
+                        return self._send(404, {"code": "not_found", "message": "No one is called that."})
+                    if rec.get("owner") or target == who["user"]:
+                        return self._send(400, {"code": "bad_request", "message": "Change your own password in Settings > Security.", "action": "Nothing was changed."})
+                    if (rec.get("admin") or rec.get("unlimited")) and not who["granter"]:
+                        return self._send(403, {"code": "owner_only", "message": "Only the PC owner and the owner's email account can reset an admin or no-limits account.", "action": "Nothing was changed."})
+                    st = self.state
+                    st._set_fields(target, pw="")
+                    st.auth.revoke_user(target)
+                    pair = st.auth.new_pair(target, st.security["pair_minutes"], made_by=who["user"])
+                    link = self._public_base() + "/pair/" + pair
+                    emailed = False
+                    if st.mailer and rec.get("email"):
+                        text = (f"An Emvryx admin reset your password. Open this link to sign in and choose a new one (it works once, for {st.security['pair_minutes']} minutes):\n\n{link}\n\n"
+                                "If you did not expect this, ignore it: the link does nothing until it is opened.")
+                        threading.Thread(target=lambda: st.mailer.send(rec["email"], "Your Emvryx password was reset", text), daemon=True).start()
+                        emailed = True
+                    st.auth.event("password_reset_by_admin", target, self._ip(), "by " + who["user"] + (", emailed" if emailed else ""))
+                    return self._send(200, {"ok": True, "link": link, "emailed": emailed, "minutes": st.security["pair_minutes"]})
                 if path == "/api/admin/delete-user":                             # an admin removes an account and everything it owned
                     target = str(body.get("user", ""))
                     rec = self.state.user_record(target)
