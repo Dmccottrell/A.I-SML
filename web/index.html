@@ -435,9 +435,9 @@ html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
 .usage { padding-top: 6px; gap: 4px; }
 /* Safari / iPhone only: in the installed app the "dynamic viewport" height can come out shorter than the screen, which leaves an empty band under the message box. Fill the real screen instead. */
 @supports (-webkit-touch-callout: none) {
-  html, body { height: 100%; }
-  body { position: fixed; inset: 0; width: 100%; overflow: hidden; }
-  .app { height: calc(100% / var(--z, 1)); }
+  html, body { height: var(--appH, 100%); }
+  body { position: fixed; inset: 0; width: 100%; height: var(--appH, 100%); overflow: hidden; }
+  .app { height: calc(var(--appH, 100%) / var(--z, 1)); }
 }
 @media (pointer: coarse) { input, textarea, select { font-size: 16px !important; } }   /* under 16px iOS zooms the page in when a box is tapped, and does not zoom back out */
 
@@ -594,6 +594,20 @@ html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
 <div id="dialogs"></div>
 
 <script>
+// iPhone installed app: the page can be given a height shorter than the screen (an empty band under the message box). The device's own screen size is
+// reliable there, so the app is sized to it (never smaller than what the browser reports), and again after a turn of the phone.
+function fitScreen() {
+  try {
+    const de = document.documentElement;
+    const ios = /iPhone|iPad|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+    const standalone = navigator.standalone === true || (window.matchMedia && matchMedia('(display-mode: standalone)').matches);
+    if (!ios || !standalone) { de.style.removeProperty('--appH'); return; }
+    const portrait = window.innerHeight >= window.innerWidth;
+    const full = portrait ? Math.max(screen.width, screen.height) : Math.min(screen.width, screen.height);
+    if (full > window.innerHeight && full < window.innerHeight + 300) de.style.setProperty('--appH', full + 'px'); else de.style.removeProperty('--appH');
+  } catch (e) {}
+}
+fitScreen(); addEventListener('resize', fitScreen); addEventListener('orientationchange', () => setTimeout(fitScreen, 300)); addEventListener('pageshow', fitScreen);
 'use strict';
 // ---------------------------------------------------------------- palettes (design/brand-tokens.json)
 const MODEL = {
