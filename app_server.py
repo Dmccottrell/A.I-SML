@@ -66,6 +66,7 @@ import documents
 import feedback
 import vision
 import live_data
+import flags
 import github_link
 import identity_answer
 import google_signin
@@ -375,6 +376,7 @@ class AppState:
         self.code = code_sessions.CodeManager(data_dir, quotas=code_sandbox.Quotas(self.security))       # VryxCode sessions (projects live under <data>/code/)
         self.secrets = secret_box.SecretBox(data_dir, require=self.security["require_encryption"])
         self.github = github_link.Store(data_dir, self.secrets)  # connected GitHub accounts (tokens encrypted, files mode 600)
+        self.flags = flags.Flags(os.path.join(data_dir, "flags.json") if data_dir else None)    # which new features each kind of person can see (Settings > Owner > Features and testing)
         self.shares = shares.Shares(os.path.join(data_dir, "shares.db") if data_dir else ":memory:")   # read-only links to a copy of a chat (the owner switches sharing on)
         self.feedback = feedback.Feedback(os.path.join(data_dir, "feedback.db") if data_dir else ":memory:")   # "That didn't work" reports, for the owner
         self.links = app_links.Hub(app_links.Store(data_dir, self.secrets))   # the other connected apps (a token, link or app password; read-only)
@@ -941,7 +943,7 @@ class AppState:
             pass
 
     def get_settings(self, user):
-        s = {"window_mode": "everyday", "show_tokens": False, "web_search": "auto", "memory": True, "thinking_pause": "short", "live_data": True, "connected_apps": True}
+        s = {"window_mode": "everyday", "show_tokens": False, "web_search": "auto", "memory": True, "thinking_pause": "short", "live_data": True, "connected_apps": True, "tour_seen": 0, "tour_devices": {}}
         s.update(self.settings.get(user, {}))
         return s
 
@@ -963,6 +965,11 @@ class AppState:
             s["connected_apps"] = new["connected_apps"]
         if new.get("web_search") in lookup_auto.MODES:
             s["web_search"] = new["web_search"]
+        if isinstance(new.get("tour_seen"), int) and not isinstance(new.get("tour_seen"), bool):
+            n = max(0, min(1000, new["tour_seen"]))
+            s["tour_seen"] = n
+            if new.get("device") in ("desktop", "pwa", "mobile"):          # the tour shows once on each kind of device: a computer, the installed app, a phone's browser
+                s["tour_devices"] = dict(s.get("tour_devices") or {}, **{new["device"]: n})
         self.settings[user] = s
         self._save_settings()
         return s
@@ -1887,6 +1894,9 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 return self._send(200, self.state.health())
             if path == "/api/admin/audit" and who["admin"]:
                 return self._send(200, {"events": self.state.auth.events(int((qs.get("limit") or ["100"])[0]), (qs.get("kind") or [None])[0])})
+            if path == "/api/admin/flags" and who["admin"]:
+                return self._send(200, {"flags": self.state.flags.listing(), "testers": self.state.flags.testers(), "audiences": [[a, flags.AUDIENCE_NAMES[a]] for a in flags.AUDIENCES],
+                                        "people": sorted(u["user"] for u in self.state.users.values())})
             if path == "/api/admin/users" and who["admin"]:
                 return self._send(200, {"users": [{"user": u["user"], "tier": self.state.usage.get_user(u["user"])["tier"], "email": u.get("email"),
                                                    "banned": bool(u.get("banned")), "owner": bool(u.get("owner")), "admin": bool(u.get("admin")), "unlimited": bool(u.get("unlimited")), "mfa": bool((u.get("mfa") or {}).get("on")),
@@ -2199,6 +2209,17 @@ class Handler(http.server.BaseHTTPRequestHandler):
             if path.startswith("/api/admin/"):
                 if not who["admin"]:
                     return self._send(403, {"code": "owner_only", "message": "Only the owner or an admin can change this."})
+                if path == "/api/admin/flags":                                   # any admin may widen or narrow who sees a new feature
+                    try:
+                        if "testers" in body:
+                            self.state.flags.set_testers(body.get("testers") if isinstance(body.get("testers"), list) else [])
+                            self.state.auth.event("flag_changed", who["user"], self._ip(), "testers: " + ", ".join(self.state.flags.testers()))
+                        if body.get("id"):
+                            self.state.flags.set_audience(str(body["id"]), str(body.get("audience", "")), by=who["user"])
+                            self.state.auth.event("flag_changed", who["user"], self._ip(), f"{body['id']} -> {body.get('audience')}")
+                    except ValueError as e:
+                        return self._send(400, {"code": "bad_request", "message": str(e)})
+                    return self._send(200, {"flags": self.state.flags.listing(), "testers": self.state.flags.testers()})
                 if path == "/api/admin/delete-user":                             # an admin removes an account and everything it owned
                     target = str(body.get("user", ""))
                     rec = self.state.user_record(target)
@@ -2506,7 +2527,8 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 "chats": st.store(who["user"]).list_chats(), "settings": st.get_settings(who["user"]),
                 "briefing": bool(st.get_settings(who["user"]).get("connected_apps", True) and st.links.store.connected(who["user"]) & set(app_links.BRIEF_APPS)),
                 "thinking_words": list(chat_polish.THINKING_WORDS), "think_switch_s": chat_polish.THINKING_SWITCH_S,
-                "pause_by_effort": chat_polish.PAUSE_BASE, "regen_options": regen_modes.menu()}
+                "pause_by_effort": chat_polish.PAUSE_BASE, "regen_options": regen_modes.menu(),
+                "features": st.flags.mapping(who)}
 
     def api_get_chat(self, who, cid):
         store = self.state.store(who["user"])
