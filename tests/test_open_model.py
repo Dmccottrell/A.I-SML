@@ -463,3 +463,39 @@ class ThreePresets(unittest.TestCase):
             self.assertEqual(om.resolve(key)[0], key)
             self.assertEqual(p["batch_tokens"] * p["grad_accum"], 65536)                 # the same learning step size as the 2.x models
         self.assertEqual(om.max_context(om.PRESETS["equinox-2"]), 131072)               # the 2.x models are unchanged
+
+
+class ThinkFormat(unittest.TestCase):
+    """The 3.x models (Qwen3.5) can think before answering; Quick and Balanced answer straight away, so every prompt ends with an empty thinking block."""
+
+    def tok(self, think=None):
+        from tokenizers import Tokenizer, models, pre_tokenizers
+        from open_tokenizer import OpenTokenizer
+        vocab = {"<unk>": 0, "<|im_start|>": 1, "<|im_end|>": 2, "<|endoftext|>": 3, "<think>": 4, "</think>": 5, "\n": 6, "assistant": 7, "user": 8, "hi": 9}
+        t = Tokenizer(models.WordLevel(vocab, unk_token="<unk>"))
+        t.pre_tokenizer = pre_tokenizers.Split("\n", "isolated")
+        t.add_special_tokens(["<think>", "</think>"])
+        return OpenTokenizer(t, think=think)
+
+    def test_default_is_unchanged_and_empty_adds_the_block(self):
+        plain, think = self.tok(), self.tok("empty")
+        self.assertEqual(plain.role_open("assistant"), [1, 7, 6])
+        self.assertEqual(think.role_open("assistant"), [1, 7, 6, 4, 6, 6, 5, 6, 6])        # <think> \n\n </think> \n\n as real tokens
+        self.assertEqual(think.role_open("user"), plain.role_open("user"))                 # only the assistant's opening changes
+
+    def test_training_and_the_app_build_the_same_prompt(self):
+        import chat
+        t = self.tok("empty")
+        msgs = [{"role": "user", "content": "hi"}]
+        built = chat.build_prompt(t, msgs, 100)
+        trained, mask = chat.encode_conversation(t, msgs + [{"role": "assistant", "content": "hi"}], 100)
+        self.assertEqual(trained[:len(built)], built)                                      # the answer starts right after the empty block
+        self.assertTrue(built[-9:] == t.role_open("assistant"))
+
+    def test_a_question_marked_thinking_has_no_empty_block(self):
+        import chat
+        t = self.tok("empty")
+        asked = chat.build_prompt(t, [{"role": "user", "content": "hi", "thinking": True}], 100)
+        self.assertEqual(asked[-3:], t.role_open("assistant", plain=True))
+        self.assertNotIn(4, asked)                                                         # no <think> token: the model writes it itself
+        self.assertEqual(chat.build_prompt(t, [{"role": "user", "content": "hi"}], 100)[-9:], t.role_open("assistant"))
