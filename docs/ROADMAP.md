@@ -46,6 +46,35 @@ The owner's idea: an update to a model can raise its version (Flare 2.5 to 2.6 o
 
 **The owner's answers:** (1) yes, a new version when the training lessons change, otherwise an update that keeps the version; (2) yes, the app's version and the model versions stay separate; (3) keep 5 to 6 older versions in Other models (set to 6, `keep_older_versions` in `models.json`). Built: Admin > **Models** tab, `app/model_publish.py`, see [FEATURE_FLAGS.md](FEATURE_FLAGS.md). Not built yet: the automatic regression check before a publish (idea 15).
 
+## Emvryx 3: the plan so far (Oct 11, 2026)
+
+**The owner's rule: every model must run on the owner's RTX 4070 (12 GB), by itself, with nothing split into system RAM.** That rules out the 27B, the 26B and 35B mixture models and anything else that needs more than the card holds, and it keeps gaming possible alongside a small model. Training can still be done on a rented GPU (with the owner's approval first); only running has to fit at home.
+
+**What 3 means:** the first build on a newer open-model generation, instead of retraining the 2.x models as 2.5. The 2.5 improvements (new lessons from reported mistakes, DPO, tool calling, thinking dial, long-document lessons) go into the 3.0 builds so training money is spent once. Flare 2.5 can still get its free refresh at home.
+
+**Candidates (all from web searches on Oct 11, 2026: secondhand, to be checked on the official model cards)**
+
+| Slot | Size on the 4070 | Leading candidate | Also test | Notes |
+|---|---|---|---|---|
+| Flare 3 | about 1.5 to 2 GB | Qwen3.5 2B (or 0.8B) | | Apache 2.0, natively multimodal (reported) |
+| Equinox 3 | about 3 GB | Qwen3.5 4B | Gemma 4 E4B | |
+| Solstice 3 | about 6 GB | Qwen3.5 9B | DeepSeek-R1-0528-Qwen3-8B (a thinking comparison) | |
+| Apogee 3 | about 7.8 GB (reported) | **Gemma 4 12B** (QAT 4-bit file reported) | Qwen 14B-class fallback, DeepSeek-R1-Distill-Qwen-14B (ready now, reasoning only) | A 12B is reported by several sources but not yet confirmed on Google's own page |
+
+Left out because they do not fit the rule: Qwen3.6-35B-A3B, Gemma 4 26B-A4B, the 27B-class models, DeepSeek V4 (hundreds of billions of parameters).
+
+**Open points before choosing**
+- Gemma uses its own chat format, not the ChatML our lessons and `core/open_tokenizer.py` assume: it needs a conversion and a check of the trainer.
+- Quantization-aware (QAT) 4-bit files are for running as released; we fine-tune from full-precision weights and compress ourselves, so that advantage may not carry over.
+- Every base says who made it: each needs our identity lessons (see IDENTITY.md).
+- New open models can write long "thinking" by default: decide keep, hide, or tie to Deep.
+- Memory for conversations: a 12B at about 7.8 GB leaves about 4 GB on the card, so keep windows at 16K to 32K.
+
+**Next steps (nothing is spent without the owner's approval):**
+1. Short pilots on a rented GPU (cents each): does the trainer load it, does the chat template work, does it fit and how fast does it run on the 4070 (`training/finetune_open.py --pilot`).
+2. Head-to-head on our own tests (`evaluation/exam_open.py`, the quality check, the language benchmark) against the 2.x model in the same slot, before anything is trained for real.
+3. Build the app-side protection for gaming: unload an idle model and a Gaming mode switch (planned).
+
 ## What's next: the 2.5 plan and 25 ideas
 
 This is a **direction, not a promise**. Nothing below is built unless it says so, and the order can change once the quality check and language benchmark show what the models actually get wrong. Costs are estimates from the figures elsewhere in this roadmap.
