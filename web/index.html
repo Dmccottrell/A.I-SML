@@ -452,6 +452,7 @@ html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
 .tour .slide.on { opacity: 1; transform: none; pointer-events: auto; } .tour .slide.past { transform: translateX(-46px); }
 .tour h2 { margin: 6px 0 0; font: 700 34px/1.08 'Sora', sans-serif; letter-spacing: -0.02em; background: linear-gradient(180deg, #fff, #c9cfe6); -webkit-background-clip: text; background-clip: text; color: transparent; }
 .tour p { margin: 0; max-width: 430px; color: #aab2cc; font-size: 18px; line-height: 1.5; }
+.tour .kicker { font-size: 13px; font-weight: 700; letter-spacing: .16em; text-transform: uppercase; color: #ffb27a; margin-top: 4px; }
 .tour .art { position: relative; width: 100%; max-width: 380px; min-height: 200px; display: flex; align-items: center; justify-content: center; }
 .tour .slide.on .rise { animation: tourrise .7s cubic-bezier(.2,.8,.2,1) both; animation-delay: var(--d, 0s); }
 @keyframes tourrise { from { opacity: 0; transform: translateY(22px) scale(.96); } to { opacity: 1; transform: none; } }
@@ -769,7 +770,7 @@ function openTour(replay) {
   const spark = (n) => Array.from({length: n}, (_, i) => el('i', {class: 'spark', style: 'left:' + (8 + (i * 83) % 84) + '%;top:' + (40 + (i * 37) % 50) + '%;animation-delay:' + (i * 0.45) + 's'}));
   const slides = [
     {art: () => el('div', {class: 'art'}, el('div', {class: 'rings'}, el('i'), el('i'), el('i')), el('div', {class: 'rise', style: 'position:relative'}, logo(96, true)), ...spark(8)),
-     title: 'Welcome to Emvryx', text: 'An AI that is private by design, shows where its answers come from, and says “I don’t know” when it should. Made by Darryl McCottrell.'},
+     kicker: 'A small language model AI', title: 'Welcome to Emvryx', text: 'Designed by Darryl McCottrell, someone who loves technology. Emvryx learns, evolves, writes code and so much more.'},
     {art: () => el('div', {class: 'art'}, el('div', {class: 'mcards'}, ...names.map((n, i) => el('div', {class: 'mcard rise', style: '--d:' + (i * 0.12) + 's'}, el('b', {}, n), el('span', {}, TAGLINE[n]))))),
      title: 'Pick the right model', text: 'Smaller ones answer fast. Bigger ones think harder. Choose under the message box, or leave it on Auto and Emvryx picks for you.'},
     {art: () => el('div', {class: 'art'}, el('div', {class: 'chat'}, el('div', {class: 'bubble2 me rise', style: 'align-self:flex-end'}, 'Why is the sky blue?'),
@@ -785,7 +786,7 @@ function openTour(replay) {
   slides.push({art: () => el('div', {class: 'art'}, el('div', {class: 'rings'}, el('i'), el('i')), el('div', {class: 'rise', style: 'position:relative'}, logo(84, true)), ...spark(12)),
     title: 'You’re all set', text: 'Ask anything to start. You can replay this tour any time in Settings > About.'});
   let i = 0, startX = null;
-  const nodes = slides.map((s) => el('div', {class: 'slide'}, s.art(), el('h2', {}, s.title), el('p', {}, s.text)));
+  const nodes = slides.map((s) => el('div', {class: 'slide'}, s.art(), s.kicker ? el('div', {class: 'kicker'}, s.kicker) : null, el('h2', {}, s.title), el('p', {}, s.text)));
   const dots = el('div', {class: 'dots'}, ...slides.map(() => el('span')));
   const back = el('button', {type: 'button', hidden: true, onclick: () => go(i - 1)}, 'Back'), next = el('button', {type: 'button', class: 'go', onclick: () => (i === slides.length - 1 ? finish() : go(i + 1))}, 'Next');
   const root = el('div', {class: 'tour', role: 'dialog', 'aria-modal': 'true', 'aria-label': 'Welcome to Emvryx'}, el('div', {class: 'glow'}),
