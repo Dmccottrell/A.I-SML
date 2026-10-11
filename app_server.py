@@ -2211,7 +2211,16 @@ class Handler(http.server.BaseHTTPRequestHandler):
                     return self._send(403, {"code": "owner_only", "message": "Only the owner or an admin can change this."})
                 if path == "/api/admin/flags":                                   # any admin may widen or narrow who sees a new feature
                     try:
-                        if body.get("id"):
+                        if body.get("id") and body.get("publish") == "now":                  # publish to everyone straight away
+                            self.state.flags.publish_now(str(body["id"]), by=who["user"])
+                            self.state.auth.event("flag_changed", who["user"], self._ip(), f"{body['id']} -> everyone (published)")
+                        elif body.get("id") and body.get("cancel_schedule"):
+                            self.state.flags.cancel_schedule(str(body["id"]))
+                            self.state.auth.event("flag_changed", who["user"], self._ip(), f"{body['id']}: schedule cancelled")
+                        elif body.get("id") and "schedule_at" in body:                       # publish at a chosen time (seconds since 1970)
+                            self.state.flags.schedule(str(body["id"]), body.get("schedule_at"), str(body.get("audience") or "everyone"), by=who["user"])
+                            self.state.auth.event("flag_changed", who["user"], self._ip(), f"{body['id']}: scheduled for {time.strftime('%Y-%m-%d %H:%M', time.localtime(float(body['schedule_at'])))}")
+                        elif body.get("id"):
                             self.state.flags.set_audience(str(body["id"]), str(body.get("audience", "")), by=who["user"])
                             self.state.auth.event("flag_changed", who["user"], self._ip(), f"{body['id']} -> {body.get('audience')}")
                     except ValueError as e:

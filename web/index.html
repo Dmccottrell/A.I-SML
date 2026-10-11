@@ -1924,8 +1924,16 @@ async function adminPage(id) {
             el('div', {class: 'stxt'}, el('b', {}, f.title, ' ', sxPill(j.audiences.find((a) => a[0] === f.audience)[1], f.audience === 'everyone' ? 'ok' : f.audience === 'off' ? 'warn' : '')), el('small', {}, f.desc), el('small', {style: 'color:var(--accenttext)'}, who[f.audience]),
               f.changed ? el('small', {}, 'Last changed by ' + f.changed.by + ' on ' + sxWhen(f.changed.at)) : null),
             sxSeg(j.audiences, f.audience, (v) => save({id: f.id, audience: v})),
-            el('div', {class: 'srow inline', style: 'padding:0'}, el('div', {class: 'stxt'}, el('b', {}, 'On for everyone'), el('small', {}, f.audience === 'everyone' ? 'Everyone sees it. Switch off to go back to the owner and admins.' : 'Switch on when you are happy with it.')),
-              el('div', {class: 'sctl'}, sxSwitch(f.audience === 'everyone', (v) => { if (v && !confirm('Switch "' + f.title + '" on for everyone?')) { draw(); return; } save({id: f.id, audience: v ? 'everyone' : 'admins'}); }, 'On for everyone'))))) ));
+            el('div', {class: 'stxt'}, el('b', {}, 'Publish to everyone'), f.audience === 'everyone' ? el('small', {}, 'Already live for everyone.') : null,
+              f.scheduled ? el('small', {style: 'color:var(--accenttext)'}, 'Goes live for everyone on ' + sxWhen(f.scheduled.at) + ' (set by ' + f.scheduled.by + ').') : null,
+              f.audience === 'everyone' ? null : (() => { const when = sxInput('datetime-local', '', {'aria-label': 'Publish date and time for ' + f.title});
+                const min = new Date(Date.now() + 60000 - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 16); when.min = min;
+                return el('div', {style: 'display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:6px'}, when,
+                  sxBtn('Schedule', () => { const t = new Date(when.value).getTime(); if (!when.value || !(t > Date.now())) return toast('Choose a date and time in the future.'); save({id: f.id, schedule_at: t / 1000}); }),
+                  f.scheduled ? sxBtn('Cancel schedule', () => save({id: f.id, cancel_schedule: true})) : null,
+                  sxBtn('Publish now', () => { if (confirm('Publish "' + f.title + '" to everyone now?')) save({id: f.id, publish: 'now'}); }, 'primary')); })())
+          )))
+        );
       };
       draw();
     } else if (id === 'a-people') {

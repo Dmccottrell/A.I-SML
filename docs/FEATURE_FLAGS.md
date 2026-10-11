@@ -26,4 +26,14 @@ Changes apply at once (no restart) and are written to the security log. They are
 choose **Everyone**. People can replay it from Settings > About. To show it again to everyone after you change it, raise `TOUR_VERSION` in `web/index.html`.
 
 
-The tour is remembered per person and per kind of device (desktop browser, installed app, phone browser), so it shows once on each. Each flag has an **On for everyone** switch on the Features page; it asks to confirm and switching off returns the flag to admins.
+The tour is remembered per person and per kind of device (desktop browser, installed app, phone browser), so it shows once on each. 
+
+## Publishing to everyone, now or on a date
+
+Each feature on the Features page has a **Publish to everyone** area:
+
+- **Publish now** (asks to confirm) moves it to Everyone at once.
+- **Schedule:** pick a date and time (your local time, up to a year ahead) and press Schedule. The feature goes live for everyone by itself at that time; the page then shows who scheduled it. **Cancel schedule** removes it.
+- Changing the audience by hand (Off, Owner, Admins or Everyone) replaces any schedule.
+- Nothing runs in the background: the time is checked whenever the app asks about the feature, so it goes live on the first look after the time has passed (in practice within seconds, since every page load asks). The change and who scheduled it appear in the security log.
+- To pull a feature back after publishing, choose Off, Owner or Admins.
