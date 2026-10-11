@@ -440,6 +440,45 @@ html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
   .app { height: calc(100% / var(--z, 1)); }
 }
 @media (pointer: coarse) { input, textarea, select { font-size: 16px !important; } }   /* under 16px iOS zooms the page in when a box is tapped, and does not zoom back out */
+
+/* welcome tour */
+.tour { position: fixed; inset: 0; z-index: 80; background: #05060b; color: #eef0f6; display: flex; flex-direction: column; overflow: hidden; padding-top: var(--sat); padding-bottom: var(--sab); animation: tourin .5s ease both; }
+@keyframes tourin { from { opacity: 0; transform: scale(1.03); } to { opacity: 1; transform: none; } }
+.tour .glow { position: absolute; inset: -25%; background: radial-gradient(38% 32% at 24% 22%, rgba(255,92,35,.38), transparent 70%), radial-gradient(34% 30% at 82% 78%, rgba(245,165,36,.30), transparent 70%), radial-gradient(30% 30% at 74% 14%, rgba(120,90,255,.24), transparent 70%); animation: tourdrift 12s ease-in-out infinite alternate; }
+@keyframes tourdrift { to { transform: translate3d(5%, -4%, 0) scale(1.1) rotate(4deg); } }
+.tour .skip { position: absolute; top: calc(14px + var(--sat)); right: 16px; z-index: 3; background: rgba(255,255,255,.08); border: 1px solid rgba(255,255,255,.14); color: #cfd5ea; border-radius: 999px; padding: 8px 16px; font-weight: 600; min-height: 40px; }
+.tour .stage { position: relative; flex: 1; z-index: 2; }
+.tour .slide { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px; padding: 56px 26px 12px; text-align: center; opacity: 0; transform: translateX(46px); transition: opacity .5s ease, transform .5s cubic-bezier(.2,.8,.2,1); pointer-events: none; }
+.tour .slide.on { opacity: 1; transform: none; pointer-events: auto; } .tour .slide.past { transform: translateX(-46px); }
+.tour h2 { margin: 6px 0 0; font: 700 34px/1.08 'Sora', sans-serif; letter-spacing: -0.02em; background: linear-gradient(180deg, #fff, #c9cfe6); -webkit-background-clip: text; background-clip: text; color: transparent; }
+.tour p { margin: 0; max-width: 430px; color: #aab2cc; font-size: 18px; line-height: 1.5; }
+.tour .art { position: relative; width: 100%; max-width: 380px; min-height: 200px; display: flex; align-items: center; justify-content: center; }
+.tour .slide.on .rise { animation: tourrise .7s cubic-bezier(.2,.8,.2,1) both; animation-delay: var(--d, 0s); }
+@keyframes tourrise { from { opacity: 0; transform: translateY(22px) scale(.96); } to { opacity: 1; transform: none; } }
+.tour .rings i { position: absolute; width: 120px; height: 120px; border-radius: 50%; border: 2px solid rgba(255,140,60,.5); animation: tourring 3.2s ease-out infinite; }
+.tour .rings i:nth-child(2) { animation-delay: 1.05s; } .tour .rings i:nth-child(3) { animation-delay: 2.1s; }
+@keyframes tourring { from { transform: scale(.7); opacity: .8; } to { transform: scale(2.1); opacity: 0; } }
+.tour .mcards { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; width: 100%; }
+.tour .mcard { background: rgba(255,255,255,.07); border: 1px solid rgba(255,255,255,.13); border-radius: 18px; padding: 14px 14px; text-align: left; backdrop-filter: blur(6px); }
+.tour .mcard b { display: block; font: 600 20px 'Sora', sans-serif; } .tour .mcard span { color: #aab2cc; font-size: 14px; }
+.tour .bubble2 { background: rgba(255,255,255,.08); border: 1px solid rgba(255,255,255,.13); border-radius: 18px; padding: 12px 16px; text-align: left; font-size: 16px; max-width: 300px; }
+.tour .bubble2.me { background: rgba(255,92,35,.9); color: #1a0d05; border: 0; align-self: flex-end; font-weight: 600; }
+.tour .chat { display: flex; flex-direction: column; gap: 10px; width: 100%; align-items: flex-start; }
+.tour .src { display: inline-block; margin-top: 8px; font-size: 13px; color: #ffb27a; border: 1px solid rgba(255,178,122,.4); border-radius: 999px; padding: 2px 10px; }
+.tour .chips { display: flex; flex-wrap: wrap; gap: 10px; justify-content: center; }
+.tour .chips span { display: inline-flex; align-items: center; gap: 8px; background: rgba(255,255,255,.08); border: 1px solid rgba(255,255,255,.14); border-radius: 999px; padding: 10px 16px; font-weight: 600; }
+.tour .term { background: #0b0d16; border: 1px solid rgba(255,255,255,.12); border-radius: 16px; padding: 14px 16px; width: 100%; text-align: left; font: 14px/1.7 ui-monospace, Menlo, Consolas, monospace; color: #cfd5ea; }
+.tour .term .ok { color: #5fd38a; } .tour .term .dim { color: #7c849e; }
+.tour .foot { position: relative; z-index: 3; padding: 8px 24px 22px; display: flex; flex-direction: column; align-items: center; gap: 16px; }
+.tour .dots { display: flex; gap: 8px; } .tour .dots span { width: 8px; height: 8px; border-radius: 999px; background: #3a4056; transition: all .35s; } .tour .dots span.on { width: 28px; background: #ff5c23; }
+.tour .btns { display: flex; gap: 10px; width: 100%; max-width: 430px; }
+.tour .btns button { flex: 1; min-height: 52px; border-radius: 16px; font-weight: 700; font-size: 17px; border: 1px solid rgba(255,255,255,.16); background: rgba(255,255,255,.07); color: #eef0f6; }
+.tour .btns button.go { background: linear-gradient(135deg, #ff5c23, #f5a524); color: #1a0d05; border: 0; box-shadow: 0 10px 30px rgba(255,92,35,.35); }
+.tour .btns button[hidden] { display: none; }
+.tour .spark { position: absolute; width: 6px; height: 6px; border-radius: 50%; background: #ffd39b; animation: tourspark 3.4s ease-in-out infinite; opacity: 0; }
+@keyframes tourspark { 0% { transform: translateY(20px) scale(.4); opacity: 0; } 30% { opacity: 1; } 100% { transform: translateY(-120px) scale(1.2); opacity: 0; } }
+/* features and testing */
+.fchips { display: flex; flex-wrap: wrap; gap: 8px; } .fchips .pill button { background: transparent; border: 0; color: inherit; padding: 0 0 0 6px; font-size: 16px; cursor: pointer; }
 </style>
 </head>
 <body>
@@ -654,6 +693,7 @@ async function load() {
   if (!S.skills.length) { try { S.skills = (await (await api('/api/skills')).json()).skills; } catch (e) {} }
   applyTheme(); renderAll();
   await restoreChat();
+  maybeTour();
 }
 function renderAll() {
   const st = S.state;
@@ -717,6 +757,60 @@ function icon(name) {
   path.setAttribute('d', ICONS[name]); path.setAttribute('stroke', 'currentColor'); path.setAttribute('stroke-width', '1.8'); path.setAttribute('stroke-linecap', 'round'); path.setAttribute('stroke-linejoin', 'round');
   svg.append(path); return svg;
 }
+
+// ---------------------------------------------------------------- welcome tour (a feature flag: Settings > Owner > Features and testing)
+const TOUR_VERSION = 1;
+const featureOn = (id) => !!(S.state && S.state.features && S.state.features[id]);
+const TAGLINE = {Flare: 'Fast and light', Equinox: 'Everyday work', Solstice: 'Harder questions', Apogee: 'Toughest challenges'};
+function openTour(replay) {
+  if (document.querySelector('.tour')) return;
+  const st = S.state, admin = !!st.admin;
+  const names = [...new Set(allModels().filter((m) => m.state !== 'soon' && TAGLINE[m.name]).map((m) => m.name))];
+  const spark = (n) => Array.from({length: n}, (_, i) => el('i', {class: 'spark', style: 'left:' + (8 + (i * 83) % 84) + '%;top:' + (40 + (i * 37) % 50) + '%;animation-delay:' + (i * 0.45) + 's'}));
+  const slides = [
+    {art: () => el('div', {class: 'art'}, el('div', {class: 'rings'}, el('i'), el('i'), el('i')), el('div', {class: 'rise', style: 'position:relative'}, logo(96, true)), ...spark(8)),
+     title: 'Welcome to Emvryx', text: 'An AI that is private by design, shows where its answers come from, and says “I don’t know” when it should. Made by Darryl McCottrell.'},
+    {art: () => el('div', {class: 'art'}, el('div', {class: 'mcards'}, ...names.map((n, i) => el('div', {class: 'mcard rise', style: '--d:' + (i * 0.12) + 's'}, el('b', {}, n), el('span', {}, TAGLINE[n]))))),
+     title: 'Pick the right model', text: 'Smaller ones answer fast. Bigger ones think harder. Choose under the message box, or leave it on Auto and Emvryx picks for you.'},
+    {art: () => el('div', {class: 'art'}, el('div', {class: 'chat'}, el('div', {class: 'bubble2 me rise', style: 'align-self:flex-end'}, 'Why is the sky blue?'),
+       el('div', {class: 'bubble2 rise', style: '--d:.5s'}, 'Air scatters short blue light far more than red, so blue reaches your eyes from every direction.', el('br'), el('span', {class: 'src'}, 'Source: Wikipedia')))),
+     title: 'Answers with sources', text: 'When it looks something up, it says where it came from. When it can’t find out, it tells you instead of guessing.'},
+    {art: () => el('div', {class: 'art'}, el('div', {class: 'chips'}, ...[['lock', 'Private chats'], ['brain', 'Memory you control'], ['doc', 'Your documents'], ['spark', 'Skills'], ['chart', 'Live facts']].map(([ic, t], i) => el('span', {class: 'rise', style: '--d:' + (i * 0.1) + 's'}, icon(ic), t)))),
+     title: 'Make it yours', text: 'Private chats are never saved. Add your documents, connect your calendar or mail, and tell it how you like answers.'},
+    {art: () => el('div', {class: 'art'}, el('div', {class: 'term'}, el('div', {class: 'dim rise'}, '> Make a slug helper'), el('div', {class: 'rise', style: '--d:.4s'}, el('span', {class: 'ok'}, '✓'), ' Wrote slug.py'), el('div', {class: 'rise', style: '--d:.8s'}, el('span', {class: 'ok'}, '✓'), ' Added a test'), el('div', {class: 'rise', style: '--d:1.2s'}, el('span', {class: 'ok'}, '✓'), ' Ran the tests: all pass'))),
+     title: 'Build with VryxCode', text: 'Describe what you want. VryxCode plans it, writes the files, runs them, fixes what breaks and shows you the result live.'},
+  ];
+  if (admin) slides.push({art: () => el('div', {class: 'art'}, el('div', {class: 'chips'}, ...['People', 'Invite codes', 'Backups', 'Answer reports', 'Features and testing'].map((t, i) => el('span', {class: 'rise', style: '--d:' + (i * 0.1) + 's'}, t)))),
+    title: 'You’re an admin', text: 'Settings > Owner has the tools to run Emvryx: add people, make invite codes, take backups, read reports, and test new features before everyone gets them.'});
+  slides.push({art: () => el('div', {class: 'art'}, el('div', {class: 'rings'}, el('i'), el('i')), el('div', {class: 'rise', style: 'position:relative'}, logo(84, true)), ...spark(12)),
+    title: 'You’re all set', text: 'Ask anything to start. You can replay this tour any time in Settings > About.'});
+  let i = 0, startX = null;
+  const nodes = slides.map((s) => el('div', {class: 'slide'}, s.art(), el('h2', {}, s.title), el('p', {}, s.text)));
+  const dots = el('div', {class: 'dots'}, ...slides.map(() => el('span')));
+  const back = el('button', {type: 'button', hidden: true, onclick: () => go(i - 1)}, 'Back'), next = el('button', {type: 'button', class: 'go', onclick: () => (i === slides.length - 1 ? finish() : go(i + 1))}, 'Next');
+  const root = el('div', {class: 'tour', role: 'dialog', 'aria-modal': 'true', 'aria-label': 'Welcome to Emvryx'}, el('div', {class: 'glow'}),
+    el('button', {class: 'skip', type: 'button', onclick: () => finish(true)}, 'Skip'), el('div', {class: 'stage'}, ...nodes), el('div', {class: 'foot'}, dots, el('div', {class: 'btns'}, back, next)));
+  function go(n) {
+    i = Math.max(0, Math.min(slides.length - 1, n));
+    nodes.forEach((s, k) => { s.classList.toggle('on', k === i); s.classList.toggle('past', k < i); });
+    [...dots.children].forEach((d, k) => d.classList.toggle('on', k === i));
+    back.hidden = i === 0; next.textContent = i === slides.length - 1 ? 'Start chatting' : 'Next';
+  }
+  async function finish(skipped) {
+    document.removeEventListener('keydown', onKey); root.remove();
+    try { await post('/api/settings', {tour_seen: TOUR_VERSION}); if (S.state && S.state.settings) S.state.settings.tour_seen = TOUR_VERSION; } catch (e) { /* it will simply show once more */ }
+    if (!skipped && !replay) { try { $('input').focus(); } catch (e) {} }
+  }
+  const onKey = (e) => { if (e.key === 'ArrowRight') go(i + 1); else if (e.key === 'ArrowLeft') go(i - 1); else if (e.key === 'Escape') finish(true); };
+  document.addEventListener('keydown', onKey);
+  root.addEventListener('touchstart', (e) => { startX = e.touches[0].clientX; }, {passive: true});
+  root.addEventListener('touchend', (e) => { if (startX == null) return; const dx = e.changedTouches[0].clientX - startX; startX = null; if (Math.abs(dx) > 50) go(i + (dx < 0 ? 1 : -1)); }, {passive: true});
+  document.body.append(root); go(0);
+}
+function maybeTour() {   // the first time someone signs in (and only while the feature is switched on for them)
+  if (S.tourChecked || !S.state || !featureOn('welcome_tour')) return; S.tourChecked = true;
+  if (((S.state.settings || {}).tour_seen || 0) < TOUR_VERSION) setTimeout(() => openTour(false), 600);
+}
 async function signOut() {   // one tap from the menu or the top of the side panel
   if (!confirm('Sign out of Emvryx on this device?')) return;
   try { await post('/api/logout'); } catch (e) { /* already signed out */ }
@@ -727,7 +821,7 @@ function closeAcct() { $('acctMenu').hidden = true; $('account').setAttribute('a
 function renderLinks() {   // two tools in the list; Usage, Memory and Settings live in the account menu (Skills, Documents and Connected apps are hidden until they work)
   const mk = (ico, name, note, fn) => el('button', {class: 'link', onclick: () => { document.body.classList.remove('menu-open'); closeAcct(); fn(); }}, icon(ico), el('span', {}, name), note ? el('small', {}, note) : '');
   $('links').replaceChildren(mk('code', 'VryxCode', '', openCode), mk('spark', 'Skills', '', openSkills), mk('pencil', 'Teacher mode', '', () => newChat(false, 'teacher')), mk('doc', 'Documents', '', openDocs), mk('lock', 'Private chat', 'Never saved', () => newChat(true)));
-  $('acctMenu').replaceChildren(mk('chart', 'Usage', '', openUsage), mk('brain', 'Memory', '', openMemory), mk('gear', 'Settings', '', openSettings), mk('signout', 'Sign out', '', signOut));
+  $('acctMenu').replaceChildren(mk('chart', 'Usage', '', openUsage), mk('brain', 'Memory', '', openMemory), mk('gear', 'Settings', '', openSettings), ...(featureOn('welcome_tour') ? [mk('spark', 'Welcome tour', '', () => openTour(true))] : []), mk('signout', 'Sign out', '', signOut));
 }
 $('account').onclick = (e) => { e.stopPropagation(); const m = $('acctMenu'); m.hidden = !m.hidden; $('account').setAttribute('aria-expanded', String(!m.hidden)); };
 document.addEventListener('click', (e) => { if (!$('acctMenu').hidden && !$('acctMenu').contains(e.target)) closeAcct(); });
@@ -1588,14 +1682,15 @@ function sxSections(id) {
       {title: 'Delete my account', desc: 'Removes your chats, notes, memory, projects, GitHub link and devices. This cannot be undone.', danger: true, ctl: sxBtn('Delete account', () => deleteDialog(), 'bad')}]}])],
     about: [{title: 'Emvryx', rows: [
       {title: 'One family of five models', desc: 'Ember 2, Flare 2, Flare 2.5, Equinox 2, Solstice 2 and Apogee 2 are Emvryx models; VryxCode builds projects with them.'},
+      ...(featureOn('welcome_tour') ? [{title: 'Welcome tour', desc: 'The short animated introduction to Emvryx.', ctl: sxBtn('Replay', () => { closeSettings(); openTour(true); })}] : []),
       {title: 'Your server', desc: st.demo ? 'Demo mode: no model is attached.' : 'Connected.', ctl: st.contact ? el('a', {class: 'sbtn', href: 'mailto:' + st.contact}, 'Report a problem') : null}]}]
   };
   return A[id] || [];
 }
 const SX_NAV = [['general', 'General', 'gear'], ['chat', 'Chat and lookups', 'spark'], ['memory', 'Memory', 'brain'], ['data', 'Data controls', 'folder'], ['apps', 'Connected apps', 'code'], ['security', 'Security', 'lock'], ['account', 'Account', 'eye'], ['about', 'About', 'doc']];
-const SX_OWNER = [['a-overview', 'Overview', 'chart'], ['a-people', 'People', 'eye'], ['a-signups', 'Sign-ups and invites', 'pencil'], ['a-feedback', 'Answer reports', 'pencil'], ['a-backups', 'Backups', 'folder'], ['a-cloud', 'Cloud machine', 'cloud'], ['a-log', 'Security log', 'lock']];
+const SX_OWNER = [['a-overview', 'Overview', 'chart'], ['a-flags', 'Features and testing', 'spark'], ['a-people', 'People', 'eye'], ['a-signups', 'Sign-ups and invites', 'pencil'], ['a-feedback', 'Answer reports', 'pencil'], ['a-backups', 'Backups', 'folder'], ['a-cloud', 'Cloud machine', 'cloud'], ['a-log', 'Security log', 'lock']];
 const SX_LEAD = {general: 'How Emvryx looks and feels on this device.', chat: 'How it finds facts and how much of a chat it keeps in mind.', memory: 'What it knows about you, shared by every model.', data: 'Your files, your downloads and what gets deleted.', apps: 'Other services Emvryx can work with.', security: 'Protect your account: password, two-step sign-in and your devices.', account: 'Who you are and your plan.', about: 'About this Emvryx.',
-  'a-overview': 'How safe this server is to share, and how it is doing.', 'a-people': 'Everyone with an account.', 'a-signups': 'Who may create an account, and invite codes.', 'a-feedback': 'What people said went wrong with an answer, newest first.', 'a-backups': 'Copies of everything this server keeps, so a broken disk is not the end.', 'a-cloud': 'A computer elsewhere (like a rented GPU box) where VryxCode can run your code.', 'a-log': 'Sign-ins, failures and changes, newest first.'};
+  'a-overview': 'How safe this server is to share, and how it is doing.', 'a-flags': 'Try new things yourself first, then widen who sees them. Changes apply at once.', 'a-people': 'Everyone with an account.', 'a-signups': 'Who may create an account, and invite codes.', 'a-feedback': 'What people said went wrong with an answer, newest first.', 'a-backups': 'Copies of everything this server keeps, so a broken disk is not the end.', 'a-cloud': 'A computer elsewhere (like a rented GPU box) where VryxCode can run your code.', 'a-log': 'Sign-ins, failures and changes, newest first.'};
 
 function closeSettings() { document.querySelectorAll('.sx').forEach((n) => n.remove()); }
 async function openSettings(page) {
@@ -1809,6 +1904,26 @@ async function adminPage(id) {
             sxBtn('Send now', async () => { const r = await post('/api/admin/summary', {send: true}); const j = await r.json(); toast(j.emailed ? 'Emailed to you.' : j.alerted ? 'Sent as a phone alert.' : 'Nothing was sent: set up mail or alerts first.'); }))},
           {title: 'Send a test email', desc: 'Sends a message to your owner email, so you know sign-in codes will arrive. Needs EMVRYX_SMTP_* in .emvryx\\keys.env.', ctl: sxBtn('Send test', async () => { const r = await post('/api/admin/mail-test'); const j = await r.json(); toast(r.ok ? 'Sent to ' + j.to : (j.message + ' ' + (j.action || ''))); })},
           {title: 'Live sources and keys', desc: 'Which lookups work and which keys are missing.', ctl: sxBtn('See sources', openSources)}]));
+    } else if (id === 'a-flags') {
+      const load2 = async () => (await api('/api/admin/flags')).json();
+      let j = await load2();
+      const who = {off: 'Nobody sees it', owner: 'Only the PC owner sees it', admins: 'The owner and admins see it', testers: 'Admins and the named testers see it', everyone: 'Everyone sees it'};
+      const draw = () => {
+        const tester = sxInput('text', 'Add a tester by name', {'aria-label': 'Tester name', list: 'testerNames'});
+        const save = async (body) => { const r = await post('/api/admin/flags', body); const k = await r.json().catch(() => ({})); if (!r.ok) return toast(k.message || 'That did not work.'); j.flags = k.flags; j.testers = k.testers; draw(); toast('Saved. It applies at once.'); };
+        host.replaceChildren(
+          ...j.flags.map((f) => el('div', {class: 'sx-card'}, el('div', {class: 'srow stack'},
+            el('div', {class: 'stxt'}, el('b', {}, f.title, ' ', sxPill(j.audiences.find((a) => a[0] === f.audience)[1], f.audience === 'everyone' ? 'ok' : f.audience === 'off' ? 'warn' : '')), el('small', {}, f.desc), el('small', {style: 'color:var(--accenttext)'}, who[f.audience]),
+              f.changed ? el('small', {}, 'Last changed by ' + f.changed.by + ' on ' + sxWhen(f.changed.at)) : null),
+            sxSeg(j.audiences, f.audience, (v) => save({id: f.id, audience: v})),
+            f.audience !== 'everyone' ? el('div', {}, sxBtn('Let everyone have it', () => { if (confirm('Switch "' + f.title + '" on for everyone?')) save({id: f.id, audience: 'everyone'}); }, 'primary')) : el('div', {}, sxBtn('Back to owner and admins only', () => save({id: f.id, audience: 'admins'}))))) ),
+          el('div', {class: 'sx-sec'}, 'Testers'),
+          el('div', {class: 'sx-card'}, el('div', {class: 'srow stack'}, el('div', {class: 'stxt'}, el('b', {}, 'Named testers'), el('small', {}, 'People who see a feature set to Testers, besides the admins. Pick from the people who have an account.')),
+            el('div', {class: 'fchips'}, ...(j.testers.length ? j.testers.map((n) => el('span', {class: 'pill'}, n, el('button', {type: 'button', 'aria-label': 'Remove ' + n, onclick: () => save({testers: j.testers.filter((x) => x !== n)})}, '×'))) : [el('small', {style: 'color:var(--muted)'}, 'No one yet.')])),
+            authField('Add a tester', tester), el('datalist', {id: 'testerNames'}, ...j.people.map((n) => el('option', {value: n}))),
+            el('div', {}, sxBtn('Add tester', () => { const n = tester.value.trim(); if (n && !j.testers.includes(n)) save({testers: [...j.testers, n]}); })))));
+      };
+      draw();
     } else if (id === 'a-people') {
       const j = await (await api('/api/admin/users')).json(), out = el('div', {style: 'word-break:break-all;color:var(--muted);font-size:14px'});
       const name = sxInput('text', 'Name, e.g. sam', {'aria-label': 'Name'}), mail = sxInput('text', 'Email (optional)', {inputmode: 'email', 'aria-label': 'Email'}); let plan = 'free';
