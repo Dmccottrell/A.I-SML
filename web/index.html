@@ -882,7 +882,7 @@ function moreMenu(btn, items) {   // a small menu of the less-used answer action
   document.body.append(menu);
   setTimeout(() => document.addEventListener('click', function off() { menu.remove(); document.removeEventListener('click', off); }, {once: false}), 0);
 }
-const MODEL_RANK = ['Ember', 'Flare', 'Equinox', 'Solstice', 'Apogee'];   // small and quick to strong and slow
+const MODEL_RANK = ['Flare', 'Equinox', 'Solstice', 'Apogee'];   // small and quick to strong and slow
 function strongerModel(modelId) {   // the next stronger model that is ready for this person, or null
   const cur = allModels().find((x) => x.id === modelId); if (!cur) return null;
   const rank = (x) => MODEL_RANK.indexOf(x.name) + (x.version ? x.version / 100 : 0);
@@ -1690,7 +1690,7 @@ function sxSections(id) {
       ...(owner ? [{title: 'Owner account', rows: [{title: 'This is the admin account', desc: 'It has no usage limits and the Owner pages in this menu. Keep it safe: use a password and two-step sign-in. It cannot be deleted or turned off from the app.'}]}] : [{title: 'Delete account', rows: [
       {title: 'Delete my account', desc: 'Removes your chats, notes, memory, projects, GitHub link and devices. This cannot be undone.', danger: true, ctl: sxBtn('Delete account', () => deleteDialog(), 'bad')}]}])],
     about: [{title: 'Emvryx', rows: [
-      {title: 'One family of five models', desc: 'Ember 2, Flare 2, Flare 2.5, Equinox 2, Solstice 2 and Apogee 2 are Emvryx models; VryxCode builds projects with them.'},
+      {title: 'One family of four models', desc: 'Flare, Equinox, Solstice and Apogee are the Emvryx models; VryxCode builds projects with them.'},
       ...(featureOn('welcome_tour') ? [{title: 'Welcome tour', desc: 'The short animated introduction to Emvryx.', ctl: sxBtn('Replay', () => { closeSettings(); openTour(true); })}] : []),
       {title: 'Your server', desc: st.demo ? 'Demo mode: no model is attached.' : 'Connected.', ctl: st.contact ? el('a', {class: 'sbtn', href: 'mailto:' + st.contact}, 'Report a problem') : null}]}]
   };
@@ -1916,22 +1916,16 @@ async function adminPage(id) {
     } else if (id === 'a-flags') {
       const load2 = async () => (await api('/api/admin/flags')).json();
       let j = await load2();
-      const who = {off: 'Nobody sees it', owner: 'Only the PC owner sees it', admins: 'The owner and admins see it', testers: 'Admins and the named testers see it', everyone: 'Everyone sees it'};
+      const who = {off: 'Nobody sees it', owner: 'Only the PC owner sees it', admins: 'The owner and admins see it', everyone: 'Everyone sees it'};
       const draw = () => {
-        const tester = sxInput('text', 'Add a tester by name', {'aria-label': 'Tester name', list: 'testerNames'});
-        const save = async (body) => { const r = await post('/api/admin/flags', body); const k = await r.json().catch(() => ({})); if (!r.ok) return toast(k.message || 'That did not work.'); j.flags = k.flags; j.testers = k.testers; draw(); toast('Saved. It applies at once.'); };
+        const save = async (body) => { const r = await post('/api/admin/flags', body); const k = await r.json().catch(() => ({})); if (!r.ok) return toast(k.message || 'That did not work.'); j.flags = k.flags; draw(); toast('Saved. It applies at once.'); };
         host.replaceChildren(
           ...j.flags.map((f) => el('div', {class: 'sx-card'}, el('div', {class: 'srow stack'},
             el('div', {class: 'stxt'}, el('b', {}, f.title, ' ', sxPill(j.audiences.find((a) => a[0] === f.audience)[1], f.audience === 'everyone' ? 'ok' : f.audience === 'off' ? 'warn' : '')), el('small', {}, f.desc), el('small', {style: 'color:var(--accenttext)'}, who[f.audience]),
               f.changed ? el('small', {}, 'Last changed by ' + f.changed.by + ' on ' + sxWhen(f.changed.at)) : null),
             sxSeg(j.audiences, f.audience, (v) => save({id: f.id, audience: v})),
             el('div', {class: 'srow inline', style: 'padding:0'}, el('div', {class: 'stxt'}, el('b', {}, 'On for everyone'), el('small', {}, f.audience === 'everyone' ? 'Everyone sees it. Switch off to go back to the owner and admins.' : 'Switch on when you are happy with it.')),
-              el('div', {class: 'sctl'}, sxSwitch(f.audience === 'everyone', (v) => { if (v && !confirm('Switch "' + f.title + '" on for everyone?')) { draw(); return; } save({id: f.id, audience: v ? 'everyone' : 'admins'}); }, 'On for everyone'))))) ),
-          el('div', {class: 'sx-sec'}, 'Testers'),
-          el('div', {class: 'sx-card'}, el('div', {class: 'srow stack'}, el('div', {class: 'stxt'}, el('b', {}, 'Named testers'), el('small', {}, 'People who see a feature set to Testers, besides the admins. Pick from the people who have an account.')),
-            el('div', {class: 'fchips'}, ...(j.testers.length ? j.testers.map((n) => el('span', {class: 'pill'}, n, el('button', {type: 'button', 'aria-label': 'Remove ' + n, onclick: () => save({testers: j.testers.filter((x) => x !== n)})}, '×'))) : [el('small', {style: 'color:var(--muted)'}, 'No one yet.')])),
-            authField('Add a tester', tester), el('datalist', {id: 'testerNames'}, ...j.people.map((n) => el('option', {value: n}))),
-            el('div', {}, sxBtn('Add tester', () => { const n = tester.value.trim(); if (n && !j.testers.includes(n)) save({testers: [...j.testers, n]}); })))));
+              el('div', {class: 'sctl'}, sxSwitch(f.audience === 'everyone', (v) => { if (v && !confirm('Switch "' + f.title + '" on for everyone?')) { draw(); return; } save({id: f.id, audience: v ? 'everyone' : 'admins'}); }, 'On for everyone'))))) ));
       };
       draw();
     } else if (id === 'a-people') {
@@ -2649,7 +2643,7 @@ async function passkeyLogin() {
 const googleBtn = (getInvite) => AUTH.opts.google ? el('button', {class: 'btn ghost', type: 'button', onclick: () => { const inv = getInvite ? getInvite() : ''; location.href = '/auth/google/start' + (inv ? '?invite=' + encodeURIComponent(inv) : ''); }}, 'Continue with Google') : null;
 const authField = (label, input, hint) => el('label', {class: 'field'}, label, input, hint ? el('small', {class: 'hint'}, hint) : null);
 function authDone(j) { if (j.mfa) return authView('mfa', {ticket: j.ticket}); AUTH.view = 'signin'; return load(); }
-const HERO = [['lock', 'Private by design', 'Your chats stay on the server you sign in to. Private chats are never saved.'], ['spark', 'Five models, one account', 'Pick the one that fits the question, from quick Ember to deep Apogee.'], ['code', 'More than chat', 'It looks things up, reads your files and pictures, and builds projects with VryxCode.']];
+const HERO = [['lock', 'Private by design', 'Your chats stay on the server you sign in to. Private chats are never saved.'], ['spark', 'Four models, one account', 'Pick the one that fits the question, from quick Flare to deep Apogee.'], ['code', 'More than chat', 'It looks things up, reads your files and pictures, and builds projects with VryxCode.']];
 async function showLogin(note) {
   S.state = null; applyTheme(); $('app').hidden = true; $('auth').hidden = false;
   try { AUTH.opts = await (await fetch('/api/auth-options')).json(); } catch (e) { AUTH.opts = {}; }

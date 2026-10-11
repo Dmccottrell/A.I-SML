@@ -30,12 +30,18 @@ REQUIRED = ("id", "name", "version", "where", "file", "size_mb", "min_ram_gb", "
 MANIFEST_PATH = "models.json"
 
 
-def load_manifest(path=MANIFEST_PATH):
+def load_manifest(path=MANIFEST_PATH, include_archived=False):
+    """A model marked "archived" in models.json is retired from the lineup: its files are kept, but the app treats it as off (never listed, never chosen)
+    unless include_archived is set (used by the tests, which run the fake backends on the small old models)."""
     with open(path, encoding="utf-8") as f:
         manifest = json.load(f)
     problems = check(manifest)
     if problems:
         raise ValueError("models.json: " + "; ".join(problems))
+    if not include_archived:
+        for m in manifest["models"]:
+            if m.get("archived"):
+                m["status"] = "off"
     manifest.setdefault("keep_latest_per_name", 2)
     return manifest
 

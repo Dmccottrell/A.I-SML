@@ -22,6 +22,17 @@ version's test-sheet results decide what the next one focuses on.
 > **Order of work (decided Oct 2026):** build all the 2.0 models first (Flare 2.5, Equinox 2, Solstice 2, Apogee 2), then the improved **Equinox 2.5, Solstice 2.5 and Apogee 2.5** releases (new lessons, DPO, skill packs, tools, thinking dial). Details: [OPEN_MODEL.md](OPEN_MODEL.md#order-of-work-all-the-20-builds-first-then-the-improved-25-releases-decided-oct-2026).
 
 <!-- next:start -->
+## Decided on Oct 11, 2026: four models are the standard
+
+The owner's decisions:
+
+- **Four models:** Flare, Equinox, Solstice and Apogee. Ember is gone from the app.
+- **Ember and Flare 2 (the from-scratch models) are archived, not deleted.** Their entries stay in `models.json` marked `"archived"`, and their checkpoints, exports and training code stay in the repository. The app treats them as off: not in the picker, not in any plan, refused if asked for. Setting `"archived"` back off in `models.json` brings one back. The Flare card is Flare 2.5 (on the open Qwen base).
+- **Free plan:** Flare and Equinox. Pro and Mega: all four.
+- **Feature flags:** the audiences are Off, Owner, Admins and Everyone. There is no tester list; new features start with the owner and admins.
+- **Still to decide:** the first app to connect to the Emvryx API (household finance? what it is built with and where it is hosted). Planned for later: the API, a What's new panel with draft / testing / published status, and the 2.5 retrain.
+- **Website:** the pages still describe five models and still show Ember; they come next (SiteModels, SitePlans, SiteAbout, Main, Picker, Usage and Limits canvases).
+
 ## What's next: the 2.5 plan and 25 ideas
 
 This is a **direction, not a promise**. Nothing below is built unless it says so, and the order can change once the quality check and language benchmark show what the models actually get wrong. Costs are estimates from the figures elsewhere in this roadmap.

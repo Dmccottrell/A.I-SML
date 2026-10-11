@@ -2,6 +2,7 @@
   "models": [
     {
       "id": "ember-2",
+      "archived": "Retired from the lineup; the files are kept",
       "name": "Ember",
       "version": 2,
       "generation": 1,
@@ -48,6 +49,7 @@
     },
     {
       "id": "flare-2",
+      "archived": "Retired from the lineup; the files are kept",
       "name": "Flare",
       "version": 2,
       "generation": 1,

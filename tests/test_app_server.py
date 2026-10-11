@@ -77,7 +77,7 @@ class Base(unittest.TestCase):
 
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()
-        self.manifest = models.load_manifest()
+        self.manifest = models.load_manifest(include_archived=True)
         for m in self.manifest["models"]:                        # make Equinox and Solstice usable for the tests
             if m["id"] in ("equinox-2", "solstice-2"):
                 m["status"] = "stable"
@@ -239,7 +239,7 @@ class Chatting(Base):
         self.assertEqual(self.ask(self.sam, cid, model="apogee-2")[0], 403)            # not built yet
         self.assertEqual(self.ask(self.sam, cid, model="nonsense")[0], 400)
         self.assertEqual(self.ask(self.sam, cid, effort="deep")[2][-1][0], "done")     # Flare has Deep
-        status, _, body = self.ask(self.sam, cid, model="ember-2", effort="deep")      # Ember does not
+        status, _, body = self.ask(self.owner, self.new_chat(self.owner), model="ember-2", effort="deep")      # Ember (retired, tests only) does not
         self.assertEqual((status, body["code"]), (409, "effort_not_available"))
         self.assertEqual(self.ask(self.sam, cid, model="equinox-2", effort="deep")[2][-1][0], "done")
 

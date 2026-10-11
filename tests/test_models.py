@@ -118,3 +118,14 @@ class VryxCodeModels(unittest.TestCase):
         text = open("docs/VRYXCODE.md", encoding="utf-8").read()
         for name in ("Equinox 2", "Solstice 2", "Apogee 2", "Ember 2", "Flare 2.5"):
             self.assertIn(name, text)
+
+
+class Retired(unittest.TestCase):
+    def test_ember_and_flare_2_are_archived_not_deleted(self):
+        m = M.load_manifest(os.path.join(ROOT, "models.json"))
+        status = {x["id"]: x["status"] for x in m["models"]}
+        self.assertEqual((status["ember-2"], status["flare-2"]), ("off", "off"))        # hidden from every list and refused
+        cards = M.catalog(m, "owner")["cards"] if hasattr(M, "catalog") else []
+        self.assertNotIn("ember-2", [c["id"] for c in cards])
+        kept = M.load_manifest(os.path.join(ROOT, "models.json"), include_archived=True)
+        self.assertEqual({x["id"]: x["status"] for x in kept["models"]}["ember-2"], "beta")    # the entry and its files are still there
