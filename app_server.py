@@ -943,7 +943,7 @@ class AppState:
             pass
 
     def get_settings(self, user):
-        s = {"window_mode": "everyday", "show_tokens": False, "web_search": "auto", "memory": True, "thinking_pause": "short", "live_data": True, "connected_apps": True, "tour_seen": 0, "tour_devices": {}}
+        s = {"window_mode": "everyday", "show_tokens": False, "web_search": "auto", "memory": True, "thinking_pause": "short", "live_data": True, "connected_apps": True, "tour_seen": 0, "tour_devices": {}, "whats_new_seen": ""}
         s.update(self.settings.get(user, {}))
         return s
 
@@ -965,6 +965,8 @@ class AppState:
             s["connected_apps"] = new["connected_apps"]
         if new.get("web_search") in lookup_auto.MODES:
             s["web_search"] = new["web_search"]
+        if isinstance(new.get("whats_new_seen"), str) and flags.VERSION_RE.fullmatch(new["whats_new_seen"]):
+            s["whats_new_seen"] = new["whats_new_seen"]
         if isinstance(new.get("tour_seen"), int) and not isinstance(new.get("tour_seen"), bool):
             n = max(0, min(1000, new["tour_seen"]))
             s["tour_seen"] = n
@@ -1849,6 +1851,14 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 cat["apps"] = [a for a in cat["apps"] if who["owner"] or not a.get("owner_only")]
                 cat["encrypted"] = self.state.secrets.available
                 return self._send(200, cat)
+            if path == "/api/whats-new":                                         # what has been published, and what this person has not seen yet
+                fl, seen = self.state.flags, self.state.get_settings(who["user"]).get("whats_new_seen") or ""
+                if not seen:                                                      # someone who was here before releases existed, or a new account: start from now
+                    self.state.put_settings(who["user"], {"whats_new_seen": fl.version()})
+                    seen = fl.version()
+                key = lambda v: tuple(int(x) for x in v.split("."))
+                rel = [{k: r[k] for k in ("version", "kind", "at", "notes", "items")} for r in fl.releases()[:50]]
+                return self._send(200, {"version": fl.version(), "releases": rel, "unseen": [r for r in rel if key(r["version"]) > key(seen)]})
             if path == "/api/memory":
                 return self._send(200, {"facts": self.state.memory_for(who["user"]).list(), "on": self.state.get_settings(who["user"])["memory"]})
             if path == "/api/saved-notes":

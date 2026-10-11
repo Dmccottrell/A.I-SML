@@ -46,3 +46,7 @@ Open it from the account menu (bottom of the side panel) > **Admin**. It has fou
 - **People:** everyone with an account, with search by name or email. Each person shows their email (with a Copy button), when they joined, when they were last active, plan and rights. Buttons: **Reset password** (the old password stops working, they are signed out everywhere, and a one-time link lets them choose a new one; it is emailed when mail is set up, otherwise shown for you to send), Sign-in link, Reset two-step, Make admin / Remove admin and Plan and rights (owner and the owner's email account only), Delete and Turn off. Admins can reset or delete ordinary accounts; admin and no-limits accounts need the owner.
 - **Sign-ups:** who may create an account, and invite codes.
 - **Activity:** the security log.
+
+## What people see when something is published
+
+Every release (publish now, a schedule coming due, or Publish all) is shown to each person once, as a **What's new in Emvryx** sheet, the next time they open the app or return to it (checked at most once a minute). Everyone can reread the history under account menu > What's new. The sheet is skipped while the welcome tour is showing and appears right after it. Only the version, date, what went live and any notes are shown to ordinary people.
