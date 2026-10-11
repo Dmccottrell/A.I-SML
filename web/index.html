@@ -732,7 +732,7 @@ async function load() {
   if (!S.skills.length) { try { S.skills = (await (await api('/api/skills')).json()).skills; } catch (e) {} }
   applyTheme(); renderAll();
   await restoreChat();
-  maybeTour(); checkWhatsNew();
+  maybeTour(); checkWhatsNew(); restoreView();
 }
 function renderAll() {
   const st = S.state;
@@ -1760,7 +1760,17 @@ const SX_OWNER = [['a-overview', 'Overview', 'chart'], ['a-flags', 'Previews (Ad
 const SX_LEAD = {general: 'How Emvryx looks and feels on this device.', chat: 'How it finds facts and how much of a chat it keeps in mind.', memory: 'What it knows about you, shared by every model.', data: 'Your files, your downloads and what gets deleted.', apps: 'Other services Emvryx can work with.', security: 'Protect your account: password, two-step sign-in and your devices.', account: 'Who you are and your plan.', about: 'About this Emvryx.',
   'a-overview': 'How safe this server is to share, and how it is doing.', 'a-flags': 'Try new things yourself first, then widen who sees them. Changes apply at once.', 'a-people': 'Everyone with an account.', 'a-signups': 'Who may create an account, and invite codes.', 'a-feedback': 'What people said went wrong with an answer, newest first.', 'a-backups': 'Copies of everything this server keeps, so a broken disk is not the end.', 'a-cloud': 'A computer elsewhere (like a rented GPU box) where VryxCode can run your code.', 'a-log': 'Sign-ins, failures and changes, newest first.'};
 
-function closeSettings() { document.querySelectorAll('.sx').forEach((n) => n.remove()); }
+
+// Keep the open Settings or Admin screen in the address (#settings/security, #admin/people), so an accidental refresh brings the person back to it instead of the chat.
+function viewHash(h) { try { if (h) history.replaceState(null, '', '#' + h); else if (location.hash) history.replaceState(null, '', location.pathname + location.search); } catch (e) {} }
+function sxHash() { viewHash(SX.root && SX.root.isConnected ? 'settings' + (SX.root.classList.contains('on-page') && SX.page ? '/' + SX.page : '') : ''); }
+function restoreView() {
+  if (S.viewChecked) return; S.viewChecked = true;
+  const m = /^#(settings|admin)(?:\/([\w-]+))?$/.exec(location.hash || ''); if (!m) return;
+  if (m[1] === 'admin') { if (S.state && S.state.admin) openAdmin(m[2]); else viewHash(''); return; }
+  const ok = [...SX_NAV, ...SX_OWNER].some((x) => x[0] === m[2]); openSettings(ok ? m[2] : undefined);
+}
+function closeSettings() { document.querySelectorAll('.sx').forEach((n) => n.remove()); SX.root = null; sxHash(); }
 async function openSettings(page) {
   closeSettings(); SX.page = page || SX.page || 'general'; SX.q = ''; SX.st = S.state;
   await sxAcct();
@@ -1785,7 +1795,7 @@ function sxRender(onPage) {
     el('div', {class: 'sx-list'}, ...SX_NAV.map(([id, n, i]) => sxNavItem(id, n, i)), ...(owner ? [el('div', {class: 'label'}, 'OWNER'), ...SX_OWNER.map(([id, n, i]) => sxNavItem(id, n, i))] : [])));
   const body = el('div', {class: 'sx-body', id: 'sxBody'});
   root.replaceChildren(sxNav, body);
-  sxBody(); body.scrollTop = keepScroll;
+  sxBody(); body.scrollTop = keepScroll; sxHash();
   if (SX.q) { search.focus(); search.setSelectionRange(search.value.length, search.value.length); }
 }
 function sxRowNode(r) {
@@ -1808,7 +1818,7 @@ function sxBody() {
     return body.replaceChildren(...kids);
   }
   const [id, name] = all.find((x) => x[0] === SX.page) || all[0];
-  const head = el('h1', {style: 'display:flex;align-items:center;gap:8px'}, el('button', {class: 'icon sx-back', type: 'button', 'aria-label': 'Back to settings', onclick: () => { SX.root.classList.remove('on-page'); }}, icon('back')), name,
+  const head = el('h1', {style: 'display:flex;align-items:center;gap:8px'}, el('button', {class: 'icon sx-back', type: 'button', 'aria-label': 'Back to settings', onclick: () => { SX.root.classList.remove('on-page'); sxHash(); }}, icon('back')), name,
     el('button', {class: 'icon sx-close', type: 'button', 'aria-label': 'Close settings', onclick: closeSettings}, icon('x')));
   if (id.startsWith('a-')) { body.replaceChildren(head, el('p', {class: 'lead'}, SX_LEAD[id]), el('div', {id: 'sxAdmin'}, el('div', {style: 'color:var(--muted)'}, 'Loading...'))); return adminPage(id); }
   const kids = [head, el('p', {class: 'lead'}, SX_LEAD[id])];
@@ -1958,13 +1968,14 @@ function toast(text) { const t = el('div', {class: 'sx-toast', role: 'status', s
 
 // ---------------------------------------------------------------- Admin screen (owner and admins)
 const ADM = {tab: 'previews', root: null, q: ''};
-function closeAdmin() { document.querySelectorAll('.adm').forEach((n) => n.remove()); ADM.root = null; }
+function closeAdmin() { document.querySelectorAll('.adm').forEach((n) => n.remove()); ADM.root = null; viewHash(''); }
 function openAdmin(tab) {
   closeAdmin(); closeSettings(); ADM.tab = tab || ADM.tab || 'previews'; ADM.q = '';
   ADM.root = el('div', {class: 'adm', role: 'dialog', 'aria-modal': 'true', 'aria-label': 'Admin'}); $('dialogs').append(ADM.root); admRender();
 }
 function admRender() {
   const root = ADM.root; if (!root || !root.isConnected) return;
+  viewHash('admin/' + ADM.tab);
   const tabs = [['previews', 'Previews'], ['people', 'People'], ['signups', 'Sign-ups'], ['activity', 'Activity']];
   const body = el('div', {class: 'adm-body', id: 'admBody'});
   root.replaceChildren(
