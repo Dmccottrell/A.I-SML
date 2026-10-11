@@ -452,3 +452,14 @@ class PatchDefaults(unittest.TestCase):
         with contextlib.redirect_stdout(buf):
             finetune_open.main(common + ["--patch", "--max_steps", "2"])
         self.assertIn("patch run", buf.getvalue())
+
+
+class ThreePresets(unittest.TestCase):
+    def test_the_3x_candidates_are_set_up_for_the_4070_and_flagged_untried(self):
+        import open_models as om
+        for key, hf in (("flare-3", "Qwen/Qwen3.5-2B"), ("equinox-3", "Qwen/Qwen3.5-4B"), ("solstice-3", "Qwen/Qwen3.5-9B")):
+            p = om.PRESETS[key]
+            self.assertEqual((p["hf"], p["quant4"], p["untried"], om.max_context(p)), (hf, True, True, 32768))
+            self.assertEqual(om.resolve(key)[0], key)
+            self.assertEqual(p["batch_tokens"] * p["grad_accum"], 65536)                 # the same learning step size as the 2.x models
+        self.assertEqual(om.max_context(om.PRESETS["equinox-2"]), 131072)               # the 2.x models are unchanged
