@@ -9,7 +9,7 @@ import usage_limits as U
 from tests.test_context_meter import make_tok
 
 CFG = U.load_limits()
-MANIFEST = models.load_manifest()
+MANIFEST = models.load_manifest(include_archived=True)
 FLARE = {"id": "flare-3", "name": "Flare", "where": "device"}
 FLARE_ONLINE = dict(FLARE, where="online")
 SOLSTICE = {"id": "solstice-5", "name": "Solstice", "where": "online"}

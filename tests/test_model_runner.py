@@ -231,7 +231,7 @@ class Discovery(unittest.TestCase):
         root = tempfile.mkdtemp()
         os.makedirs(os.path.join(root, "export/dev/v2"))
         open(os.path.join(root, "export/dev/v2/my-ai-q8_0.gguf"), "wb").write(b"x")
-        found = A.discover_ggufs(models.load_manifest(), root)
+        found = A.discover_ggufs(models.load_manifest(include_archived=True), root)
         self.assertEqual(list(found), ["ember-2"])
         self.assertTrue(found["ember-2"].endswith("my-ai-q8_0.gguf"))
 
@@ -240,7 +240,7 @@ class Discovery(unittest.TestCase):
         os.makedirs(os.path.join(root, "export/dev/v2"))
         for n in ("my-ai-f16.gguf", "my-ai-q8_0.gguf"):
             open(os.path.join(root, "export/dev/v2", n), "wb").write(b"x")
-        self.assertTrue(A.discover_ggufs(models.load_manifest(), root)["ember-2"].endswith("q8_0.gguf"))
+        self.assertTrue(A.discover_ggufs(models.load_manifest(include_archived=True), root)["ember-2"].endswith("q8_0.gguf"))
 
 
 class Sampling(unittest.TestCase):
@@ -261,7 +261,7 @@ class Sampling(unittest.TestCase):
 
 class Names(unittest.TestCase):
     def test_ember_is_the_lowest_name_and_cheap(self):
-        m = models.load_manifest()
+        m = models.load_manifest(include_archived=True)
         self.assertEqual(models.NAMES[0], "Ember")
         ember = next(x for x in m["models"] if x["id"] == "ember-2")
         self.assertEqual((ember["name"], ember["version"], ember["from_version"]), ("Ember", 2, "v2"))

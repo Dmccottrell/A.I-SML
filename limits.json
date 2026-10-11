@@ -22,7 +22,6 @@
       "refill_per_hour": 5000,
       "week": 150000,
       "models": [
-        "ember",
         "flare",
         "equinox"
       ],

@@ -1,4 +1,4 @@
-"""Feature flags: who sees a new feature (owner, admins, named testers, everyone), who can change it, and the welcome tour setting."""
+"""Feature flags: who sees a new feature (owner, admins, everyone), who can change it, and the welcome tour setting."""
 import os, sys; sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), os.pardir)); import emvryx_paths  # noqa: E402,F401
 import tempfile
 import unittest
@@ -25,10 +25,10 @@ class Rules(unittest.TestCase):
         self.assertFalse(f.on("welcome_tour", who(founder=True, admin=True)))
         f.set_audience("welcome_tour", "owner")
         self.assertEqual((f.on("welcome_tour", who(founder=True, admin=True)), f.on("welcome_tour", who(admin=True))), (True, False))
-        f.set_audience("welcome_tour", "testers")
-        f.set_testers(["sam", "sam", " ", "kim"])
-        self.assertEqual(f.testers(), ["sam", "kim"])
-        self.assertEqual((f.on("welcome_tour", who(user="sam")), f.on("welcome_tour", who(user="bob")), f.on("welcome_tour", who(admin=True))), (True, False, True))
+        f.set_audience("welcome_tour", "admins")
+        self.assertEqual((f.on("welcome_tour", who(user="sam")), f.on("welcome_tour", who(admin=True))), (False, True))
+        with self.assertRaises(ValueError):
+            f.set_audience("welcome_tour", "testers")                                         # there is no tester list: owner and admins only
         f.set_audience("welcome_tour", "everyone")
         self.assertTrue(f.on("welcome_tour", who()))
 
@@ -44,11 +44,10 @@ class Rules(unittest.TestCase):
         with tempfile.TemporaryDirectory() as d:
             path = os.path.join(d, "flags.json")
             a = F.Flags(path)
-            a.set_audience("welcome_tour", "testers", by="owner")
-            a.set_testers(["sam"])
+            a.set_audience("welcome_tour", "everyone", by="owner")
             self.assertEqual(oct(os.stat(path).st_mode & 0o777), "0o600")
             b = F.Flags(path)
-            self.assertEqual((b.audience("welcome_tour"), b.testers()), ("testers", ["sam"]))
+            self.assertEqual(b.audience("welcome_tour"), "everyone")
             self.assertEqual(b.listing()[0]["changed"]["by"], "owner")
 
 
@@ -64,11 +63,8 @@ class Server(Base):
         self.assertTrue(self.features(self.sam))                                           # an admin sees it too
         self.owner.call("POST", "/api/admin/access", {"user": "sam", "admin": False})
         self.assertFalse(self.features(self.sam))
-        s, j = self.owner.call("POST", "/api/admin/flags", {"id": "welcome_tour", "audience": "testers"})
+        s, j = self.owner.call("POST", "/api/admin/flags", {"id": "welcome_tour", "audience": "owner"})
         self.assertEqual(s, 200, j)
-        self.owner.call("POST", "/api/admin/flags", {"testers": ["sam"]})
-        self.assertTrue(self.features(self.sam))
-        self.owner.call("POST", "/api/admin/flags", {"testers": []})
         self.assertFalse(self.features(self.sam))
         self.owner.call("POST", "/api/admin/flags", {"id": "welcome_tour", "audience": "everyone"})
         self.assertTrue(self.features(self.sam))

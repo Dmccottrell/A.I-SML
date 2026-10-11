@@ -1895,7 +1895,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
             if path == "/api/admin/audit" and who["admin"]:
                 return self._send(200, {"events": self.state.auth.events(int((qs.get("limit") or ["100"])[0]), (qs.get("kind") or [None])[0])})
             if path == "/api/admin/flags" and who["admin"]:
-                return self._send(200, {"flags": self.state.flags.listing(), "testers": self.state.flags.testers(), "audiences": [[a, flags.AUDIENCE_NAMES[a]] for a in flags.AUDIENCES],
+                return self._send(200, {"flags": self.state.flags.listing(), "audiences": [[a, flags.AUDIENCE_NAMES[a]] for a in flags.AUDIENCES],
                                         "people": sorted(u["user"] for u in self.state.users.values())})
             if path == "/api/admin/users" and who["admin"]:
                 return self._send(200, {"users": [{"user": u["user"], "tier": self.state.usage.get_user(u["user"])["tier"], "email": u.get("email"),
@@ -2211,15 +2211,12 @@ class Handler(http.server.BaseHTTPRequestHandler):
                     return self._send(403, {"code": "owner_only", "message": "Only the owner or an admin can change this."})
                 if path == "/api/admin/flags":                                   # any admin may widen or narrow who sees a new feature
                     try:
-                        if "testers" in body:
-                            self.state.flags.set_testers(body.get("testers") if isinstance(body.get("testers"), list) else [])
-                            self.state.auth.event("flag_changed", who["user"], self._ip(), "testers: " + ", ".join(self.state.flags.testers()))
                         if body.get("id"):
                             self.state.flags.set_audience(str(body["id"]), str(body.get("audience", "")), by=who["user"])
                             self.state.auth.event("flag_changed", who["user"], self._ip(), f"{body['id']} -> {body.get('audience')}")
                     except ValueError as e:
                         return self._send(400, {"code": "bad_request", "message": str(e)})
-                    return self._send(200, {"flags": self.state.flags.listing(), "testers": self.state.flags.testers()})
+                    return self._send(200, {"flags": self.state.flags.listing()})
                 if path == "/api/admin/delete-user":                             # an admin removes an account and everything it owned
                     target = str(body.get("user", ""))
                     rec = self.state.user_record(target)

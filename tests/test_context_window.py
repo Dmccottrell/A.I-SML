@@ -6,7 +6,7 @@ import context_window as C
 import models
 import usage_limits as U
 
-MANIFEST = models.load_manifest()
+MANIFEST = models.load_manifest(include_archived=True)
 LIM = U.load_limits()
 
 

@@ -7,7 +7,7 @@ import models
 import usage_limits as U
 
 CFG = U.load_limits()
-MANIFEST = models.load_manifest()
+MANIFEST = models.load_manifest(include_archived=True)
 
 
 def ts(y, mo, d, h=0, mi=0):
@@ -290,7 +290,7 @@ class Rules(unittest.TestCase):
     def test_by_model_lists_only_plan_models(self):
         _, L = make("free")
         keys = [m["model"] for m in L.snapshot("sam", "flare", "balanced", NOW)["by_model"]]
-        self.assertEqual(sorted(keys), ["ember", "equinox", "flare"])
+        self.assertEqual(sorted(keys), ["equinox", "flare"])
 
 
 if __name__ == "__main__":
