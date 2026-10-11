@@ -861,15 +861,17 @@ function maybeTour() {   // the first time someone signs in (and only while the 
 }
 
 // ---------------------------------------------------------------- what's new: published releases, shown once when someone opens the app after a release
+const REL_KIND = {major: 'Major', minor: 'Minor', patch: 'Patch', 'model-new': 'New model', 'model-update': 'Model update'};
+const relTitle = (r) => r.model ? r.model : 'v' + r.version;
 function whatsNewList(releases) {
-  return releases.length ? releases.map((r) => el('div', {class: 'adm-sub', style: 'margin:0 0 10px'}, el('div', {class: 'adm-row'}, el('span', {}, el('b', {}, 'v' + r.version), ' ', el('span', {class: 'adm-tag'}, r.kind[0].toUpperCase() + r.kind.slice(1))), el('small', {}, admDate(r.at))),
-    ...r.items.map((i) => el('div', {}, el('b', {style: 'font-size:15px'}, i.title), el('br'), el('small', {}, i.desc))), r.notes ? el('small', {}, r.notes) : null)) : [el('p', {style: 'color:var(--muted)'}, 'Nothing has been released yet.')];
+  return releases.length ? releases.map((r) => el('div', {class: 'adm-sub', style: 'margin:0 0 10px'}, el('div', {class: 'adm-row'}, el('span', {}, el('b', {}, relTitle(r)), ' ', el('span', {class: 'adm-tag'}, REL_KIND[r.kind] || r.kind)), el('small', {}, admDate(r.at))),
+    ...(r.model ? [] : r.items.map((i) => el('div', {}, el('b', {style: 'font-size:15px'}, i.title), el('br'), el('small', {}, i.desc)))), r.notes ? el('small', {}, r.notes) : null)) : [el('p', {style: 'color:var(--muted)'}, 'Nothing has been released yet.')];
 }
 async function openWhatsNew(all) {
   let j; try { j = await (await api('/api/whats-new')).json(); } catch (e) { return; }
   const list = all ? j.releases : j.unseen;
   const m = dialog([el('h2', {}, all ? 'What’s new' : '✨ What’s new in Emvryx'), el('p', {style: 'color:var(--muted);margin-top:0'}, all ? 'Everything released so far. Current version: v' + j.version + '.' : 'New since you were last here.'), ...whatsNewList(list)], all ? 'Close' : 'Got it');
-  if (!all) post('/api/settings', {whats_new_seen: j.version});      // shown once: it counts as seen as soon as it is on the screen
+  if (!all) post('/api/settings', {whats_new_seq: j.seq});      // shown once: it counts as seen as soon as it is on the screen
 }
 let wnChecked = 0;
 async function checkWhatsNew() {   // when the app opens, and again when the person comes back to it, at most once a minute
@@ -1976,13 +1978,13 @@ function openAdmin(tab) {
 function admRender() {
   const root = ADM.root; if (!root || !root.isConnected) return;
   viewHash('admin/' + ADM.tab);
-  const tabs = [['previews', 'Previews'], ['people', 'People'], ['signups', 'Sign-ups'], ['activity', 'Activity']];
+  const tabs = [['previews', 'Previews'], ['models', 'Models'], ['people', 'People'], ['signups', 'Sign-ups'], ['activity', 'Activity']];
   const body = el('div', {class: 'adm-body', id: 'admBody'});
   root.replaceChildren(
     el('div', {class: 'adm-top'}, el('h2', {}, 'Admin'), el('button', {class: 'icon', type: 'button', 'aria-label': 'Close admin', onclick: closeAdmin}, icon('x'))),
     el('div', {class: 'adm-tabs', role: 'tablist'}, ...tabs.map(([id, n]) => el('button', {type: 'button', role: 'tab', class: ADM.tab === id ? 'on' : '', 'aria-selected': String(ADM.tab === id), onclick: () => { ADM.tab = id; ADM.q = ''; admRender(); }}, n))),
     body);
-  const fill = {previews: admPreviews, people: admPeople, signups: () => admOld(body, 'a-signups'), activity: () => admOld(body, 'a-log')}[ADM.tab];
+  const fill = {previews: admPreviews, models: admModels, people: admPeople, signups: () => admOld(body, 'a-signups'), activity: () => admOld(body, 'a-log')}[ADM.tab];
   body.append(el('div', {style: 'color:var(--muted)'}, 'Loading...'));
   Promise.resolve(fill(body)).catch(() => body.replaceChildren(el('p', {class: 'lead'}, 'That did not load. Check your connection and try again.')));
 }
@@ -2020,8 +2022,40 @@ async function admPreviews(body) {
         ...(view === 'preview' ? (prev.length ? prev.map(previewCard) : [el('p', {}, 'Nothing is in preview. New features appear here until you publish them.')])
                               : (pub.length ? pub.map(pubCard) : [el('p', {}, 'Nothing has been published yet.')]))),
       el('div', {class: 'adm-card'}, el('h3', {}, '\u{1F4CB} Release history'), el('p', {}, 'Every version published so far, with what went live in each one.'),
-        ...(j.releases.length ? j.releases.map((r) => el('div', {class: 'adm-sub'}, el('div', {class: 'adm-row'}, el('span', {}, el('b', {}, 'v' + r.version), ' ', el('span', {class: 'adm-tag'}, r.kind[0].toUpperCase() + r.kind.slice(1))), el('small', {}, admDate(r.at))),
-          ...r.items.map((i) => el('small', {}, '• ' + i.title + ': ' + i.desc)), r.notes ? el('small', {}, r.notes) : null, el('small', {}, 'Published by ' + r.by))) : [el('p', {}, 'No releases yet.')])));
+        ...(j.releases.length ? j.releases.map((r) => el('div', {class: 'adm-sub'}, el('div', {class: 'adm-row'}, el('span', {}, el('b', {}, relTitle(r)), ' ', el('span', {class: 'adm-tag'}, REL_KIND[r.kind] || r.kind)), el('small', {}, admDate(r.at))),
+          ...(r.model ? [] : r.items.map((i) => el('small', {}, '\u2022 ' + i.title + ': ' + i.desc))), r.notes ? el('small', {}, r.notes) : null, el('small', {}, 'Published by ' + r.by))) : [el('p', {}, 'No releases yet.')])));
+  };
+  draw();
+}
+
+
+async function admModels(body) {
+  let j = await (await api('/api/admin/models')).json();
+  const save = async (b) => { const r = await post('/api/admin/models', b); const k = await r.json().catch(() => ({})); if (!r.ok) return toast(k.message || 'That did not work.'); j = k; draw(); toast('Saved.'); };
+  const previewCard = (m) => {
+    const when = sxInput('datetime-local', '', {'aria-label': 'Publish date and time for ' + m.label}); when.min = new Date(Date.now() + 60000 - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 16);
+    return el('div', {class: 'adm-sub'}, el('b', {}, m.label, ' ', el('span', {class: 'adm-tag on'}, 'Preview')), el('small', {}, m.tagline),
+      el('small', {style: 'color:var(--accenttext)'}, m.replaces ? 'Only you see this. Publishing makes it the new ' + m.name + ' card and moves ' + m.replaces + ' to Other models (still usable).' : 'Only you see this until you publish it.'),
+      m.available ? null : el('small', {style: 'color:var(--danger)'}, 'Its model file is not on this computer yet, so it cannot be published.'),
+      m.scheduled ? el('small', {style: 'color:var(--accenttext)'}, 'Goes live for everyone on ' + sxWhen(m.scheduled.at) + ' (set by ' + m.scheduled.by + ').') : null,
+      el('div', {class: 'adm-acts'}, when,
+        sxBtn('Schedule', () => { const t = new Date(when.value).getTime(); if (!when.value || !(t > Date.now())) return toast('Choose a date and time in the future.'); save({id: m.id, schedule_at: t / 1000}); }),
+        m.scheduled ? sxBtn('Cancel schedule', () => save({id: m.id, cancel_schedule: true})) : null,
+        sxBtn('Publish', () => { if (confirm('Publish ' + m.label + ' to everyone now?' + (m.replaces ? ' ' + m.replaces + ' moves to Other models.' : ''))) save({id: m.id, publish: 'now'}); }, m.available ? 'primary' : '')));
+  };
+  const draw = () => {
+    const prev = j.models.filter((m) => m.preview), live = j.models.filter((m) => !m.preview);
+    body.replaceChildren(
+      el('div', {class: 'adm-card'}, el('h3', {}, '\u{1F9E0} Model versions'),
+        el('p', {}, 'A new model version stays in preview (only you and admins see it, marked Preview in the model picker) until you publish it. Publishing makes it live for everyone and moves the older version of that name to Other models, where it stays usable. Other models keeps the newest ' + j.keep_older + ' older versions of each name.'),
+        el('p', {}, 'Rule of thumb: a new version when the training lessons change (Flare 2.5 to 2.6); otherwise it is an update and the version stays (record it below). The app’s own version does not change.'),
+        el('h3', {style: 'font-size:16px'}, 'In preview (' + prev.length + ')'),
+        ...(prev.length ? prev.map(previewCard) : [el('p', {}, 'No model is waiting. A new build appears here once it is added to the model list with the status “preview”.')])),
+      el('div', {class: 'adm-card'}, el('h3', {}, 'Live models'), el('p', {}, 'Made a small fix that keeps the same version? Record an update so it shows in the history and in What’s new.'),
+        ...live.map((m) => el('div', {class: 'adm-sub'}, el('div', {class: 'adm-row'}, el('b', {}, m.label, m.live ? ' ' : '', m.live ? el('span', {class: 'adm-tag on'}, 'Published ' + admDate(m.live.at)) : null),
+          sxBtn('Record an update', () => { const n = prompt('What changed in ' + m.label + '? (shown to everyone in What’s new)'); if (n && n.trim()) save({id: m.id, record_update: true, notes: n.trim()}); })), el('small', {}, m.tagline)))),
+      el('div', {class: 'adm-card'}, el('h3', {}, 'Model release history'),
+        ...(j.releases.length ? j.releases.map((r) => el('div', {class: 'adm-sub'}, el('div', {class: 'adm-row'}, el('span', {}, el('b', {}, relTitle(r)), ' ', el('span', {class: 'adm-tag'}, REL_KIND[r.kind] || r.kind)), el('small', {}, admDate(r.at))), r.notes ? el('small', {}, r.notes) : null, el('small', {}, 'By ' + r.by))) : [el('p', {}, 'No model releases yet.')])));
   };
   draw();
 }

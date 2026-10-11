@@ -33,7 +33,7 @@ The owner's decisions:
 - **Still to decide:** the first app to connect to the Emvryx API (household finance? what it is built with and where it is hosted). Planned for later: the API, a What's new panel with draft / testing / published status, and the 2.5 retrain.
 - **Website:** the home, models, plans, usage and about pages now show four models (done Oct 11, 2026).
 
-## Proposed (Oct 11, 2026): model versions and publishing a model update
+## Decided and built (Oct 11, 2026): model versions and publishing a model update
 
 The owner's idea: an update to a model can raise its version (Flare 2.5 to 2.6 or 2.7), the old version moves to "Other models" and stays usable, and a small fix does not change the version. Publishing works for models the way it does for features, but with its own switch.
 
@@ -44,7 +44,7 @@ The owner's idea: an update to a model can raise its version (Flare 2.5 to 2.6 o
 - **Checks before publishing:** the regression guard (idea 15) must pass, so a new version cannot replace a good one by accident. Plans follow the model name (Free gets Flare and Equinox, so Flare 2.6 is Free-eligible the moment it is published).
 - **Publish all** would cover features and models together (one release, one version number for the app) or each tab on its own; to decide.
 
-**Questions for the owner:** (1) Is "new version when the training lessons change, patch otherwise" the right rule? (2) Should the app version (1.1.0) and the model versions stay separate (Flare 2.6 does not change the app's number)? (3) How many older versions should stay in Other models (the manifest keeps 2 today)?
+**The owner's answers:** (1) yes, a new version when the training lessons change, otherwise an update that keeps the version; (2) yes, the app's version and the model versions stay separate; (3) keep 5 to 6 older versions in Other models (set to 6, `keep_older_versions` in `models.json`). Built: Admin > **Models** tab, `app/model_publish.py`, see [FEATURE_FLAGS.md](FEATURE_FLAGS.md). Not built yet: the automatic regression check before a publish (idea 15).
 
 ## What's next: the 2.5 plan and 25 ideas
 
