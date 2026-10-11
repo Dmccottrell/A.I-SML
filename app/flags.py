@@ -23,14 +23,14 @@ BY_ID = {f["id"]: f for f in FLAGS}
 
 
 class Flags:
-    def __init__(self, path=None):
-        self.path, self.lock = path, threading.Lock()
-        self.data = {"audiences": {}, "changed": {}}
+    def __init__(self, path=None, clock=time.time):
+        self.path, self.lock, self.clock = path, threading.Lock(), clock
+        self.data = {"audiences": {}, "changed": {}, "scheduled": {}}
         if path and os.path.exists(path):
             try:
                 with open(path, encoding="utf-8") as f:
                     got = json.load(f)
-                self.data.update({k: got[k] for k in ("audiences", "changed") if isinstance(got.get(k), (dict, list))})
+                self.data.update({k: got[k] for k in ("audiences", "changed", "scheduled") if isinstance(got.get(k), (dict, list))})
             except (OSError, ValueError):
                 pass
 
@@ -46,6 +46,7 @@ class Flags:
     def audience(self, fid):
         if fid not in BY_ID:
             return "off"
+        self._run_schedule(fid)
         a = self.data["audiences"].get(fid)
         return a if a in AUDIENCES else BY_ID[fid]["default"]
 
@@ -64,7 +65,7 @@ class Flags:
         return {f["id"]: self.on(f["id"], who) for f in FLAGS}
 
     def listing(self):
-        return [dict(f, audience=self.audience(f["id"]), changed=self.data["changed"].get(f["id"])) for f in FLAGS]
+        return [dict(f, audience=self.audience(f["id"]), changed=self.data["changed"].get(f["id"]), scheduled=self.data["scheduled"].get(f["id"])) for f in FLAGS]
 
     def set_audience(self, fid, audience, by=""):
         if fid not in BY_ID:
@@ -73,5 +74,46 @@ class Flags:
             raise ValueError("choose " + ", ".join(AUDIENCES))
         with self.lock:
             self.data["audiences"][fid] = audience
-            self.data["changed"][fid] = {"by": by, "at": time.time()}
+            self.data["changed"][fid] = {"by": by, "at": self.clock()}
+            self.data["scheduled"].pop(fid, None)                 # a change by hand replaces a pending schedule
             self._save()
+
+    # Scheduled publishing: at a chosen time a feature moves to a wider audience (normally Everyone) by itself. Nothing needs to run in the
+    # background: the time is checked whenever the feature is asked about, so it goes live on the first look after the time has passed.
+    def _run_schedule(self, fid):
+        due = self.data["scheduled"].get(fid)
+        if due and self.clock() >= due["at"]:
+            with self.lock:
+                self.data["audiences"][fid] = due["audience"]
+                self.data["changed"][fid] = {"by": "schedule (set by %s)" % due.get("by", "?"), "at": due["at"]}
+                del self.data["scheduled"][fid]
+                self._save()
+            return due
+        return None
+
+    def publish_now(self, fid, by=""):
+        self.cancel_schedule(fid)
+        self.set_audience(fid, "everyone", by)
+
+    def schedule(self, fid, at, audience="everyone", by=""):
+        if fid not in BY_ID:
+            raise ValueError("no such feature")
+        if audience not in AUDIENCES:
+            raise ValueError("choose " + ", ".join(AUDIENCES))
+        try:
+            at = float(at)
+        except (TypeError, ValueError):
+            raise ValueError("choose a date and time")
+        now = self.clock()
+        if at <= now:
+            raise ValueError("choose a time in the future")
+        if at > now + 366 * 86400:
+            raise ValueError("choose a time within the next year")
+        with self.lock:
+            self.data["scheduled"][fid] = {"at": at, "audience": audience, "by": by}
+            self._save()
+
+    def cancel_schedule(self, fid):
+        with self.lock:
+            if self.data["scheduled"].pop(fid, None) is not None:
+                self._save()

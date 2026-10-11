@@ -125,7 +125,7 @@ device are free and unlimited in every tier, which is the selling point of the f
 | Priority when the server is busy | Normal | Normal | First |
 | Who | Anyone, once the public version exists | Your private testers now; paying users later | Heavy users; you (the owner) are exempt from all limits |
 
-Free is limited to Ember, Flare and Equinox; Pro and Mega can use all five models, so the paid tiers differ in how much they can use, not in which models. Because model weights multiply the counted tokens (Ember 0.5, Flare 1, Equinox 2, Solstice 5, Apogee 10), the same weekly ceiling buys far fewer Apogee messages than Flare ones:
+Free is limited to Flare and Equinox; Pro and Mega can use all four models, so the paid tiers differ in how much they can use, not in which models. Because model weights multiply the counted tokens (Ember 0.5, Flare 1, Equinox 2, Solstice 5, Apogee 10), the same weekly ceiling buys far fewer Apogee messages than Flare ones:
 5,000,000 on Mega is about 500,000 Apogee tokens. The limits live in one config file (`limits.json`: a block per tier, plus per-person overrides), so tiers can be added or
 changed without touching code. Pricing is not decided; the tiers only decide access and amounts. The owner screen has a tab for each tier.
 

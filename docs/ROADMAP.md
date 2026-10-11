@@ -31,7 +31,7 @@ The owner's decisions:
 - **Free plan:** Flare and Equinox. Pro and Mega: all four.
 - **Feature flags:** the audiences are Off, Owner, Admins and Everyone. There is no tester list; new features start with the owner and admins.
 - **Still to decide:** the first app to connect to the Emvryx API (household finance? what it is built with and where it is hosted). Planned for later: the API, a What's new panel with draft / testing / published status, and the 2.5 retrain.
-- **Website:** the pages still describe five models and still show Ember; they come next (SiteModels, SitePlans, SiteAbout, Main, Picker, Usage and Limits canvases).
+- **Website:** the home, models, plans, usage and about pages now show four models (done Oct 11, 2026).
 
 ## What's next: the 2.5 plan and 25 ideas
 

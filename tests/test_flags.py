@@ -1,6 +1,7 @@
 """Feature flags: who sees a new feature (owner, admins, everyone), who can change it, and the welcome tour setting."""
 import os, sys; sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), os.pardir)); import emvryx_paths  # noqa: E402,F401
 import tempfile
+import time
 import unittest
 
 import flags as F
@@ -105,3 +106,70 @@ class Server(Base):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class Scheduling(unittest.TestCase):
+    def make(self, path=None):
+        self.now = 1000.0
+        return F.Flags(path, clock=lambda: self.now)
+
+    def test_a_scheduled_feature_goes_live_by_itself(self):
+        f = self.make()
+        f.schedule("welcome_tour", 2000, by="owner")
+        self.assertEqual(f.audience("welcome_tour"), "admins")
+        self.assertEqual(f.listing()[0]["scheduled"]["at"], 2000)
+        self.now = 1999
+        self.assertEqual(f.audience("welcome_tour"), "admins")
+        self.now = 2001
+        self.assertEqual(f.audience("welcome_tour"), "everyone")
+        self.assertIsNone(f.listing()[0]["scheduled"])
+        self.assertIn("schedule", f.listing()[0]["changed"]["by"])
+
+    def test_cancel_publish_now_and_changes_by_hand(self):
+        f = self.make()
+        f.schedule("welcome_tour", 2000)
+        f.cancel_schedule("welcome_tour")
+        self.now = 3000
+        self.assertEqual(f.audience("welcome_tour"), "admins")
+        self.now = 1000
+        f.schedule("welcome_tour", 2000)
+        f.set_audience("welcome_tour", "off")                       # a change by hand replaces the schedule
+        self.now = 3000
+        self.assertEqual(f.audience("welcome_tour"), "off")
+        f.publish_now("welcome_tour", by="owner")
+        self.assertEqual(f.audience("welcome_tour"), "everyone")
+
+    def test_bad_times_are_refused(self):
+        f = self.make()
+        for bad in (500, "soon", None, 1000 + 400 * 86400):
+            with self.assertRaises(ValueError):
+                f.schedule("welcome_tour", bad)
+        with self.assertRaises(ValueError):
+            f.schedule("nonsense", 2000)
+
+    def test_a_schedule_survives_a_restart(self):
+        with tempfile.TemporaryDirectory() as d:
+            path = os.path.join(d, "flags.json")
+            self.make(path).schedule("welcome_tour", 2000, by="owner")
+            again = self.make(path)
+            self.now = 2500
+            self.assertEqual(again.audience("welcome_tour"), "everyone")
+
+
+class ScheduleServer(Base):
+    data_dir = True
+
+    def test_the_owner_schedules_publishes_and_cancels_over_the_api(self):
+        soon = time.time() + 3600
+        s, j = self.owner.call("POST", "/api/admin/flags", {"id": "welcome_tour", "schedule_at": soon})
+        self.assertEqual(s, 200, j)
+        self.assertEqual(j["flags"][0]["scheduled"]["at"], soon)
+        s, j = self.sam.call("POST", "/api/admin/flags", {"id": "welcome_tour", "publish": "now"})
+        self.assertEqual(s, 403)                                              # only admins
+        s, j = self.owner.call("POST", "/api/admin/flags", {"id": "welcome_tour", "schedule_at": time.time() - 5})
+        self.assertEqual(s, 400)
+        s, j = self.owner.call("POST", "/api/admin/flags", {"id": "welcome_tour", "cancel_schedule": True})
+        self.assertIsNone(j["flags"][0]["scheduled"])
+        s, j = self.owner.call("POST", "/api/admin/flags", {"id": "welcome_tour", "publish": "now"})
+        self.assertEqual(j["flags"][0]["audience"], "everyone")
+        self.assertTrue(self.sam.call("GET", "/api/state")[1]["features"]["welcome_tour"])

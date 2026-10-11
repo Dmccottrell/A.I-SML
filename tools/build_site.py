@@ -115,7 +115,7 @@ def nav_html(active=""):
             f'<button class="burger" type="button" aria-expanded="false" aria-controls="navLinks" aria-label="Menu">\u2630</button></div>')
 
 SITE = "https://emvryx.app"
-DESCRIPTION = "Emvryx is a family of five AI models that think on your own device or its own computer, show where an answer came from, and say so when they don't know."
+DESCRIPTION = "Emvryx is a family of four AI models that think on your own device or its own computer, show where an answer came from, and say so when they don't know."
 HEAD_META = ('<meta name="description" content="{desc}">\n<meta name="theme-color" content="#07080D">\n<meta property="og:type" content="website">\n'
              '<meta property="og:site_name" content="Emvryx">\n<meta property="og:title" content="{title}">\n<meta property="og:description" content="{desc}">\n'
              '<meta property="og:image" content="{site}/og.png">\n<meta name="twitter:card" content="summary_large_image">\n<meta name="twitter:image" content="{site}/og.png">\n')
