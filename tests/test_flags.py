@@ -244,3 +244,20 @@ class PeopleServer(Base):
         self.assertEqual(s, 400)
         s, j = self.owner.call("GET", "/api/admin/flags")
         self.assertEqual(j["version"], "1.1.0")
+
+
+class WhatsNewServer(Base):
+    data_dir = True
+
+    def test_people_see_a_release_once_after_it_is_published(self):
+        s, j = self.sam.call("GET", "/api/whats-new")
+        self.assertEqual((s, j["unseen"], j["version"]), (200, [], "1.0.0"))              # starts from now: old history is not pushed at them
+        self.owner.call("POST", "/api/admin/flags", {"id": "welcome_tour", "publish": "now"})
+        s, j = self.sam.call("GET", "/api/whats-new")
+        self.assertEqual((j["version"], [r["version"] for r in j["unseen"]], [r["version"] for r in j["releases"]]), ("1.1.0", ["1.1.0"], ["1.1.0"]))
+        self.assertEqual(j["unseen"][0]["items"][0]["title"], "Welcome tour")
+        self.assertNotIn("by", j["releases"][0])                                          # who published it is for admins only
+        self.sam.call("POST", "/api/settings", {"whats_new_seen": "1.1.0"})
+        self.assertEqual(self.sam.call("GET", "/api/whats-new")[1]["unseen"], [])
+        self.sam.call("POST", "/api/settings", {"whats_new_seen": "banana"})              # nonsense is ignored
+        self.assertEqual(self.state.get_settings("sam")["whats_new_seen"], "1.1.0")

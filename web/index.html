@@ -732,7 +732,7 @@ async function load() {
   if (!S.skills.length) { try { S.skills = (await (await api('/api/skills')).json()).skills; } catch (e) {} }
   applyTheme(); renderAll();
   await restoreChat();
-  maybeTour();
+  maybeTour(); checkWhatsNew();
 }
 function renderAll() {
   const st = S.state;
@@ -844,6 +844,7 @@ function openTour(replay) {
     back.hidden = i === 0; next.textContent = i === slides.length - 1 ? 'Start chatting' : 'Next';
   }
   async function finish(skipped) {
+    S.tourSoon = false; setTimeout(checkWhatsNew, 900);
     document.removeEventListener('keydown', onKey); root.remove();
     try { await post('/api/settings', {tour_seen: TOUR_VERSION, device: tourDevice()}); if (S.state && S.state.settings) S.state.settings.tour_devices = Object.assign({}, S.state.settings.tour_devices, {[tourDevice()]: TOUR_VERSION}); } catch (e) { /* it will simply show once more */ }
     if (!skipped && !replay) { try { $('input').focus(); } catch (e) {} }
@@ -856,8 +857,26 @@ function openTour(replay) {
 }
 function maybeTour() {   // the first time someone signs in (and only while the feature is switched on for them)
   if (S.tourChecked || !S.state || !featureOn('welcome_tour')) return; S.tourChecked = true;
-  if ((((S.state.settings || {}).tour_devices || {})[tourDevice()] || 0) < TOUR_VERSION) setTimeout(() => openTour(false), 600);      // the first time on each kind of device
+  if ((((S.state.settings || {}).tour_devices || {})[tourDevice()] || 0) < TOUR_VERSION) { S.tourSoon = true; setTimeout(() => openTour(false), 600); }      // the first time on each kind of device
 }
+
+// ---------------------------------------------------------------- what's new: published releases, shown once when someone opens the app after a release
+function whatsNewList(releases) {
+  return releases.length ? releases.map((r) => el('div', {class: 'adm-sub', style: 'margin:0 0 10px'}, el('div', {class: 'adm-row'}, el('span', {}, el('b', {}, 'v' + r.version), ' ', el('span', {class: 'adm-tag'}, r.kind[0].toUpperCase() + r.kind.slice(1))), el('small', {}, admDate(r.at))),
+    ...r.items.map((i) => el('div', {}, el('b', {style: 'font-size:15px'}, i.title), el('br'), el('small', {}, i.desc))), r.notes ? el('small', {}, r.notes) : null)) : [el('p', {style: 'color:var(--muted)'}, 'Nothing has been released yet.')];
+}
+async function openWhatsNew(all) {
+  let j; try { j = await (await api('/api/whats-new')).json(); } catch (e) { return; }
+  const list = all ? j.releases : j.unseen;
+  const m = dialog([el('h2', {}, all ? 'What’s new' : '✨ What’s new in Emvryx'), el('p', {style: 'color:var(--muted);margin-top:0'}, all ? 'Everything released so far. Current version: v' + j.version + '.' : 'New since you were last here.'), ...whatsNewList(list)], all ? 'Close' : 'Got it');
+  if (!all) post('/api/settings', {whats_new_seen: j.version});      // shown once: it counts as seen as soon as it is on the screen
+}
+let wnChecked = 0;
+async function checkWhatsNew() {   // when the app opens, and again when the person comes back to it, at most once a minute
+  if (!S.state || Date.now() - wnChecked < 60000 || S.tourSoon || document.querySelector('.tour') || document.querySelector('.dialog')) return; wnChecked = Date.now();
+  try { const j = await (await api('/api/whats-new')).json(); if (j.unseen.length) openWhatsNew(false); } catch (e) {}
+}
+document.addEventListener('visibilitychange', () => { if (!document.hidden) setTimeout(checkWhatsNew, 800); });
 async function signOut() {   // one tap from the menu or the top of the side panel
   if (!confirm('Sign out of Emvryx on this device?')) return;
   try { await post('/api/logout'); } catch (e) { /* already signed out */ }
@@ -868,7 +887,7 @@ function closeAcct() { $('acctMenu').hidden = true; $('account').setAttribute('a
 function renderLinks() {   // two tools in the list; Usage, Memory and Settings live in the account menu (Skills, Documents and Connected apps are hidden until they work)
   const mk = (ico, name, note, fn) => el('button', {class: 'link', onclick: () => { document.body.classList.remove('menu-open'); closeAcct(); fn(); }}, icon(ico), el('span', {}, name), note ? el('small', {}, note) : '');
   $('links').replaceChildren(mk('code', 'VryxCode', '', openCode), mk('spark', 'Skills', '', openSkills), mk('pencil', 'Teacher mode', '', () => newChat(false, 'teacher')), mk('doc', 'Documents', '', openDocs), mk('lock', 'Private chat', 'Never saved', () => newChat(true)));
-  $('acctMenu').replaceChildren(mk('chart', 'Usage', '', openUsage), mk('brain', 'Memory', '', openMemory), mk('gear', 'Settings', '', openSettings), ...(S.state.admin ? [mk('lock', 'Admin', '', () => openAdmin())] : []), ...(featureOn('welcome_tour') ? [mk('spark', 'Welcome tour', '', () => openTour(true))] : []), mk('signout', 'Sign out', '', signOut));
+  $('acctMenu').replaceChildren(mk('chart', 'Usage', '', openUsage), mk('brain', 'Memory', '', openMemory), mk('gear', 'Settings', '', openSettings), ...(S.state.admin ? [mk('lock', 'Admin', '', () => openAdmin())] : []), mk('spark', 'What\u2019s new', '', () => openWhatsNew(true)), ...(featureOn('welcome_tour') ? [mk('spark', 'Welcome tour', '', () => openTour(true))] : []), mk('signout', 'Sign out', '', signOut));
 }
 $('account').onclick = (e) => { e.stopPropagation(); const m = $('acctMenu'); m.hidden = !m.hidden; $('account').setAttribute('aria-expanded', String(!m.hidden)); };
 document.addEventListener('click', (e) => { if (!$('acctMenu').hidden && !$('acctMenu').contains(e.target)) closeAcct(); });
@@ -1729,6 +1748,7 @@ function sxSections(id) {
       {title: 'Delete my account', desc: 'Removes your chats, notes, memory, projects, GitHub link and devices. This cannot be undone.', danger: true, ctl: sxBtn('Delete account', () => deleteDialog(), 'bad')}]}])],
     about: [{title: 'Emvryx', rows: [
       {title: 'One family of four models', desc: 'Flare, Equinox, Solstice and Apogee are the Emvryx models; VryxCode builds projects with them.'},
+      {title: 'What\u2019s new', desc: 'Every release so far, newest first.', ctl: sxBtn('See releases', () => { closeSettings(); openWhatsNew(true); })},
       ...(featureOn('welcome_tour') ? [{title: 'Welcome tour', desc: 'The short animated introduction to Emvryx.', ctl: sxBtn('Replay', () => { closeSettings(); openTour(true); })}] : []),
       {title: 'Your server', desc: st.demo ? 'Demo mode: no model is attached.' : 'Connected.', ctl: st.contact ? el('a', {class: 'sbtn', href: 'mailto:' + st.contact}, 'Report a problem') : null}]}]
   };
