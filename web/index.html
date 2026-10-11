@@ -1700,7 +1700,8 @@ async function sxAcct() { try { SX.acct = await (await api('/api/account')).json
 function sxSections(id) {
   const st = S.state, s = st.settings, w = st.window, a = SX.acct || {mfa: {}}, owner = st.admin;
   const A = {
-    general: [{title: 'Appearance', rows: [
+    general: [...(featureOn('welcome_tour') ? [{title: 'Welcome tour', rows: [{title: 'Welcome tour', desc: 'The short animated introduction to Emvryx: the models, answers with sources, making it yours and VryxCode.', ctl: sxBtn('Start the tour', () => { closeSettings(); openTour(true); }), keys: 'welcome tour introduction walk through intro'}]}] : []),
+      {title: 'Appearance', rows: [
       {title: 'Theme', desc: 'Automatic follows your phone or computer.', ctl: sxSeg([['auto', 'Automatic'], ['dark', 'Dark'], ['light', 'Light']], S.theme, (v) => { S.theme = v; try { localStorage.setItem('emvryx_theme', v); } catch (e) {} applyTheme(); }), keys: 'dark light mode colour color'},
       {title: 'Text and button size', ctl: sxSeg([['0.85', 'Small'], ['1', 'Normal'], ['1.15', 'Large'], ['1.3', 'Extra large']], String(parseFloat(sxLocal('emvryx_size', '1')) || 1), (v) => { try { localStorage.setItem('emvryx_size', v); } catch (e) {} applySize(); }), keys: 'font zoom bigger'}]},
       {title: 'Answers', rows: [
