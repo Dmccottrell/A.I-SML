@@ -761,6 +761,11 @@ function icon(name) {
 
 // ---------------------------------------------------------------- welcome tour (a feature flag: Settings > Owner > Features and testing)
 const TOUR_VERSION = 1;
+const tourDevice = () => {   // desktop browser, the installed app (home screen / dock), or a phone's browser
+  let installed = false; try { installed = (window.matchMedia && matchMedia('(display-mode: standalone)').matches) || navigator.standalone === true; } catch (e) {}
+  if (installed) return 'pwa';
+  return /Mobi|Android|iPhone|iPad|iPod/i.test(navigator.userAgent) || (window.matchMedia && matchMedia('(pointer: coarse)').matches && innerWidth < 800) ? 'mobile' : 'desktop';
+};
 const featureOn = (id) => !!(S.state && S.state.features && S.state.features[id]);
 const TAGLINE = {Flare: 'Fast and light', Equinox: 'Everyday work', Solstice: 'Harder questions', Apogee: 'Toughest challenges'};
 function openTour(replay) {
@@ -783,6 +788,9 @@ function openTour(replay) {
   ];
   if (admin) slides.push({art: () => el('div', {class: 'art'}, el('div', {class: 'chips'}, ...['People', 'Invite codes', 'Backups', 'Answer reports', 'Features and testing'].map((t, i) => el('span', {class: 'rise', style: '--d:' + (i * 0.1) + 's'}, t)))),
     title: 'You’re an admin', text: 'Settings > Owner has the tools to run Emvryx: add people, make invite codes, take backups, read reports, and test new features before everyone gets them.'});
+  const dev = tourDevice(), ios = /iPhone|iPad|iPod/i.test(navigator.userAgent);
+  if (dev !== 'pwa') slides.push({art: () => el('div', {class: 'art'}, el('div', {class: 'chips'}, ...(dev === 'desktop' ? ['Address bar', 'Install Emvryx', 'Opens in its own window'] : ios ? ['Tap Share', 'Add to Home Screen', 'Open it like an app'] : ['Tap the menu', 'Install app', 'Open it like an app']).map((t, i) => el('span', {class: 'rise', style: '--d:' + (i * 0.15) + 's'}, t)))),
+    title: 'Keep it one tap away', text: dev === 'desktop' ? 'In Chrome or Edge, click the install icon in the address bar (in Safari: File, then Add to Dock). Emvryx then opens in its own window.' : ios ? 'In Safari, tap the Share button, then Add to Home Screen. Emvryx opens full screen, like an app.' : 'Open your browser menu and choose Install app (or Add to Home screen). Emvryx opens full screen, like an app.'});
   slides.push({art: () => el('div', {class: 'art'}, el('div', {class: 'rings'}, el('i'), el('i')), el('div', {class: 'rise', style: 'position:relative'}, logo(84, true)), ...spark(12)),
     title: 'You’re all set', text: 'Ask anything to start. You can replay this tour any time in Settings > About.'});
   let i = 0, startX = null;
@@ -799,7 +807,7 @@ function openTour(replay) {
   }
   async function finish(skipped) {
     document.removeEventListener('keydown', onKey); root.remove();
-    try { await post('/api/settings', {tour_seen: TOUR_VERSION}); if (S.state && S.state.settings) S.state.settings.tour_seen = TOUR_VERSION; } catch (e) { /* it will simply show once more */ }
+    try { await post('/api/settings', {tour_seen: TOUR_VERSION, device: tourDevice()}); if (S.state && S.state.settings) S.state.settings.tour_devices = Object.assign({}, S.state.settings.tour_devices, {[tourDevice()]: TOUR_VERSION}); } catch (e) { /* it will simply show once more */ }
     if (!skipped && !replay) { try { $('input').focus(); } catch (e) {} }
   }
   const onKey = (e) => { if (e.key === 'ArrowRight') go(i + 1); else if (e.key === 'ArrowLeft') go(i - 1); else if (e.key === 'Escape') finish(true); };
@@ -810,7 +818,7 @@ function openTour(replay) {
 }
 function maybeTour() {   // the first time someone signs in (and only while the feature is switched on for them)
   if (S.tourChecked || !S.state || !featureOn('welcome_tour')) return; S.tourChecked = true;
-  if (((S.state.settings || {}).tour_seen || 0) < TOUR_VERSION) setTimeout(() => openTour(false), 600);
+  if ((((S.state.settings || {}).tour_devices || {})[tourDevice()] || 0) < TOUR_VERSION) setTimeout(() => openTour(false), 600);      // the first time on each kind of device
 }
 async function signOut() {   // one tap from the menu or the top of the side panel
   if (!confirm('Sign out of Emvryx on this device?')) return;
@@ -1917,7 +1925,8 @@ async function adminPage(id) {
             el('div', {class: 'stxt'}, el('b', {}, f.title, ' ', sxPill(j.audiences.find((a) => a[0] === f.audience)[1], f.audience === 'everyone' ? 'ok' : f.audience === 'off' ? 'warn' : '')), el('small', {}, f.desc), el('small', {style: 'color:var(--accenttext)'}, who[f.audience]),
               f.changed ? el('small', {}, 'Last changed by ' + f.changed.by + ' on ' + sxWhen(f.changed.at)) : null),
             sxSeg(j.audiences, f.audience, (v) => save({id: f.id, audience: v})),
-            f.audience !== 'everyone' ? el('div', {}, sxBtn('Let everyone have it', () => { if (confirm('Switch "' + f.title + '" on for everyone?')) save({id: f.id, audience: 'everyone'}); }, 'primary')) : el('div', {}, sxBtn('Back to owner and admins only', () => save({id: f.id, audience: 'admins'}))))) ),
+            el('div', {class: 'srow inline', style: 'padding:0'}, el('div', {class: 'stxt'}, el('b', {}, 'On for everyone'), el('small', {}, f.audience === 'everyone' ? 'Everyone sees it. Switch off to go back to the owner and admins.' : 'Switch on when you are happy with it.')),
+              el('div', {class: 'sctl'}, sxSwitch(f.audience === 'everyone', (v) => { if (v && !confirm('Switch "' + f.title + '" on for everyone?')) { draw(); return; } save({id: f.id, audience: v ? 'everyone' : 'admins'}); }, 'On for everyone'))))) ),
           el('div', {class: 'sx-sec'}, 'Testers'),
           el('div', {class: 'sx-card'}, el('div', {class: 'srow stack'}, el('div', {class: 'stxt'}, el('b', {}, 'Named testers'), el('small', {}, 'People who see a feature set to Testers, besides the admins. Pick from the people who have an account.')),
             el('div', {class: 'fchips'}, ...(j.testers.length ? j.testers.map((n) => el('span', {class: 'pill'}, n, el('button', {type: 'button', 'aria-label': 'Remove ' + n, onclick: () => save({testers: j.testers.filter((x) => x !== n)})}, '×'))) : [el('small', {style: 'color:var(--muted)'}, 'No one yet.')])),

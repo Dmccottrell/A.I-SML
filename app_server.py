@@ -943,7 +943,7 @@ class AppState:
             pass
 
     def get_settings(self, user):
-        s = {"window_mode": "everyday", "show_tokens": False, "web_search": "auto", "memory": True, "thinking_pause": "short", "live_data": True, "connected_apps": True, "tour_seen": 0}
+        s = {"window_mode": "everyday", "show_tokens": False, "web_search": "auto", "memory": True, "thinking_pause": "short", "live_data": True, "connected_apps": True, "tour_seen": 0, "tour_devices": {}}
         s.update(self.settings.get(user, {}))
         return s
 
@@ -966,7 +966,10 @@ class AppState:
         if new.get("web_search") in lookup_auto.MODES:
             s["web_search"] = new["web_search"]
         if isinstance(new.get("tour_seen"), int) and not isinstance(new.get("tour_seen"), bool):
-            s["tour_seen"] = max(0, min(1000, new["tour_seen"]))
+            n = max(0, min(1000, new["tour_seen"]))
+            s["tour_seen"] = n
+            if new.get("device") in ("desktop", "pwa", "mobile"):          # the tour shows once on each kind of device: a computer, the installed app, a phone's browser
+                s["tour_devices"] = dict(s.get("tour_devices") or {}, **{new["device"]: n})
         self.settings[user] = s
         self._save_settings()
         return s

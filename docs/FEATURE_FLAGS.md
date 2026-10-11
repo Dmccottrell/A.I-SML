@@ -25,3 +25,6 @@ Changes apply at once (no restart) and are written to the security log. They are
 ## The welcome tour
 `welcome_tour` is the first flag: the animated introduction shown the first time someone signs in. It is on for owner and admins now. When you are happy,
 choose **Everyone**. People can replay it from Settings > About. To show it again to everyone after you change it, raise `TOUR_VERSION` in `web/index.html`.
+
+
+The tour is remembered per person and per kind of device (desktop browser, installed app, phone browser), so it shows once on each. Each flag has an **On for everyone** switch on the Features page; it asks to confirm and switching off returns the flag to admins.

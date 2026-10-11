@@ -89,13 +89,22 @@ class Server(Base):
         log = " ".join(e["detail"] for e in self.owner.call("GET", "/api/admin/audit")[1]["events"] if e["kind"] == "flag_changed")
         self.assertIn("welcome_tour -> owner", log)
 
-    def test_the_tour_is_remembered_per_person_and_cannot_be_abused(self):
-        self.assertEqual(self.sam.call("GET", "/api/settings")[1]["tour_seen"], 0)
-        self.assertEqual(self.sam.call("POST", "/api/settings", {"tour_seen": 1})[1]["tour_seen"], 1)
-        self.assertEqual(self.sam.call("POST", "/api/settings", {"tour_seen": 5000})[1]["tour_seen"], 1000)
-        self.assertEqual(self.sam.call("POST", "/api/settings", {"tour_seen": -3})[1]["tour_seen"], 0)
-        self.assertEqual(self.sam.call("POST", "/api/settings", {"tour_seen": "yes"})[1]["tour_seen"], 0)
-        self.assertEqual(self.owner.call("GET", "/api/settings")[1]["tour_seen"], 0)         # someone else's is untouched
+    def test_the_tour_is_remembered_per_person_and_per_kind_of_device(self):
+        self.assertEqual(self.sam.call("GET", "/api/settings")[1]["tour_devices"], {})
+        s = self.sam.call("POST", "/api/settings", {"tour_seen": 1, "device": "desktop"})[1]
+        self.assertEqual(s["tour_devices"], {"desktop": 1})                                  # seen on the computer, not yet in the installed app
+        s = self.sam.call("POST", "/api/settings", {"tour_seen": 1, "device": "pwa"})[1]
+        self.assertEqual(s["tour_devices"], {"desktop": 1, "pwa": 1})
+        s = self.sam.call("POST", "/api/settings", {"tour_seen": 2, "device": "desktop"})[1]
+        self.assertEqual(s["tour_devices"], {"desktop": 2, "pwa": 1})                        # a new version of the tour shows again
+        self.assertEqual(self.owner.call("GET", "/api/settings")[1]["tour_devices"], {})      # someone else's is untouched
+
+    def test_the_tour_setting_cannot_be_abused(self):
+        self.assertEqual(self.sam.call("POST", "/api/settings", {"tour_seen": 5000, "device": "pwa"})[1]["tour_devices"], {"pwa": 1000})
+        for bad in ({"tour_seen": 1, "device": "toaster"}, {"tour_seen": "yes", "device": "desktop"}, {"tour_seen": True, "device": "desktop"}):
+            before = self.sam.call("GET", "/api/settings")[1]["tour_devices"]
+            self.assertEqual(self.sam.call("POST", "/api/settings", bad)[1]["tour_devices"], before, bad)
+        self.assertEqual(self.sam.call("POST", "/api/settings", {"tour_seen": -3, "device": "mobile"})[1]["tour_devices"]["mobile"], 0)
 
 
 if __name__ == "__main__":
