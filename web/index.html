@@ -422,6 +422,16 @@ svg .core { fill: var(--core); stroke: var(--sun); stroke-width: 3; transition: 
   .srow.inline .sctl { width: auto; margin-left: auto; } .srow.inline { flex-wrap: nowrap; }
 }
 @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; } }
+/* iPhone installed app (full screen, translucent status bar): keep everything clear of the notch and the home bar, and stop iOS zooming in on small text boxes */
+:root { --sat: env(safe-area-inset-top, 0px); --sab: env(safe-area-inset-bottom, 0px); --sal: env(safe-area-inset-left, 0px); --sar: env(safe-area-inset-right, 0px); }
+html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
+.top { box-sizing: border-box; height: calc(60px + var(--sat)); padding-top: var(--sat); padding-left: calc(12px + var(--sal)); padding-right: calc(12px + var(--sar)); }
+.side { padding-top: var(--sat); }
+.account { padding-bottom: calc(12px + var(--sab)); }
+.code, .auth, .sx { box-sizing: border-box; padding-top: var(--sat); padding-bottom: var(--sab); }
+.modal { padding-top: calc(16px + var(--sat)); padding-bottom: calc(16px + var(--sab)); }
+.sx-toast { bottom: calc(24px + var(--sab)) !important; }
+@media (pointer: coarse) { input, textarea, select { font-size: 16px !important; } }   /* under 16px iOS zooms the page in when a box is tapped, and does not zoom back out */
 </style>
 </head>
 <body>
