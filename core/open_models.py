@@ -16,6 +16,18 @@ PRESETS = {
     "apogee-2": dict(display="Apogee 2", hf="Qwen/Qwen3-14B", params_b=14.8, layers=40, kv_heads=8, head_dim=128, licence="Apache 2.0",
                      quant4=True, rank=32, batch_tokens=2048, grad_accum=32, measured=False),
 }
+# The 3.x candidates (Oct 2026), set up to train on the owner's RTX 4070 (12 GB) in 4 bits (QLoRA), small micro-batches, and to run on it afterwards.
+# NOT YET TRIED: the Hugging Face names come from web searches (check the model cards and licences), the layer counts are what third-party pages report
+# and the key/value-head numbers are placeholders: these models mix "linear attention" layers with a few full-attention layers, so the memory the
+# conversation takes is NOT layers x heads x size as kv_kb_per_token() assumes. `--pilot` prints the real figures; fix the numbers here after it runs.
+PRESETS.update({
+    "flare-3": dict(display="Flare 3", hf="Qwen/Qwen3.5-2B", params_b=2.0, layers=24, kv_heads=2, head_dim=128, licence="Apache 2.0 (check)",
+                    quant4=True, rank=32, batch_tokens=4096, grad_accum=16, measured=False, context=32768, untried=True),
+    "equinox-3": dict(display="Equinox 3", hf="Qwen/Qwen3.5-4B", params_b=4.0, layers=32, kv_heads=2, head_dim=128, licence="Apache 2.0 (check)",
+                      quant4=True, rank=32, batch_tokens=2048, grad_accum=32, measured=False, context=32768, untried=True),
+    "solstice-3": dict(display="Solstice 3", hf="Qwen/Qwen3.5-9B", params_b=9.0, layers=32, kv_heads=2, head_dim=128, licence="Apache 2.0 (check)",
+                       quant4=True, rank=16, batch_tokens=1024, grad_accum=64, measured=False, context=32768, untried=True),
+})
 CONTEXT = 32768                     # all of these read 32,768 tokens natively
 YARN_FACTOR = 4.0                   # the Qwen3 models stretch to 4 x 32,768 = 131,072 tokens with YaRN (their model cards say so);
                                     # Qwen2.5-1.5B has no such documented setting, so Flare 3.5 stays at 32K
@@ -24,7 +36,9 @@ BASE_STEP_SECONDS, BASE_PARAMS_B = 7.1, 1.54       # measured on one RTX 5090 (F
 
 def max_context(preset):
     """Longest context to run the model at: 131,072 for the Qwen3 models (YaRN), 32,768 for Flare 3.5."""
-    return int(CONTEXT * (YARN_FACTOR if preset["hf"].startswith("Qwen/Qwen3") else 1))
+    if preset.get("context"):                          # the 3.x presets set their own limit (what a 12 GB card can hold)
+        return int(preset["context"])
+    return int(CONTEXT * (YARN_FACTOR if preset["hf"].startswith("Qwen/Qwen3-") else 1))
 
 
 def kv_gb(preset, ctx=None, bytes_per_value=2):

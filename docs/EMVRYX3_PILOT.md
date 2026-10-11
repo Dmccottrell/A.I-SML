@@ -11,8 +11,21 @@ Nothing here has been run. Nothing is rented or bought until the owner says yes.
 
 The Hugging Face names above must be checked on the official model cards first (they were found by web search, not confirmed). Also check each licence page.
 
-## Step 1: does it load and train? (rented GPU, minutes, cents each)
-Needs the owner's approval first; a 5090 costs roughly $0.5 to $1 an hour, and a pilot is a few minutes per model, so expect a few dollars in total (an estimate, not a quote).
+## Step 1: does it load and train? (on the owner's RTX 4070, free)
+**Decided Oct 11, 2026: all of it, training included, is done at home on the 4070. Nothing is rented.** The presets `flare-3`, `equinox-3` and `solstice-3` in `core/open_models.py` are set up for it (4-bit loading, small micro-batches so a step is still the same size) and flagged *untried*.
+
+```
+git pull origin main
+python -c "import torch; print(torch.cuda.is_available(), torch.cuda.get_device_name(0))"      # must say True and the 4070
+pip install -U transformers peft bitsandbytes accelerate           # the new designs need recent versions
+python training/finetune_open.py --model flare-3 --pilot           # 3 steps: peak memory and seconds per step
+python training/finetune_open.py --model equinox-3 --pilot
+python training/finetune_open.py --model solstice-3 --pilot
+```
+If a pilot runs out of memory, halve `--batch_tokens` and double `--grad_accum`. The pilot prints the real layer counts: fix the numbers in the presets afterwards. The first run downloads the model (about 4 GB for the 2B, 9 GB for the 4B and 19 GB for the 9B at full precision: have about 40 GB free).
+**What the pilot decides:** how long a full run takes (seconds per step times about 1,000 steps), and whether the 9B fits at all. If it does not, Solstice 3 uses the 4B-class model with more lessons, or waits.
+
+**Training time at home (an estimate from the measured 5090 run, which the pilot replaces):** the 4070 is roughly 3 times slower, and 4-bit loading adds more. Expect about 6 to 8 hours for the 2B, 15 to 20 hours for the 4B and 40 to 50 hours for the 9B on the full lesson set, plus preference training afterwards. While training, the PC cannot run the app's models or games, and the tests must wait (no benchmarks during training). Options to cut it: train on a well-chosen part of the lessons (quality over amount), and run overnight.
 1. `git pull origin main`, then upgrade `transformers`, `peft` and `bitsandbytes` (newer designs often need newer versions).
 2. For each candidate: `python training/finetune_open.py --model <hf name> --pilot` (3 steps; prints memory and speed, saves nothing).
 3. Check that `core/open_tokenizer.py` accepts the tokenizer and that the chat template works with our lessons (ChatML for the Qwen models; Gemma needs a conversion).
