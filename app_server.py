@@ -67,6 +67,7 @@ import feedback
 import vision
 import live_data
 import flags
+import model_publish
 import github_link
 import identity_answer
 import google_signin
@@ -376,7 +377,9 @@ class AppState:
         self.code = code_sessions.CodeManager(data_dir, quotas=code_sandbox.Quotas(self.security))       # VryxCode sessions (projects live under <data>/code/)
         self.secrets = secret_box.SecretBox(data_dir, require=self.security["require_encryption"])
         self.github = github_link.Store(data_dir, self.secrets)  # connected GitHub accounts (tokens encrypted, files mode 600)
-        self.flags = flags.Flags(os.path.join(data_dir, "flags.json") if data_dir else None)    # which new features each kind of person can see (Settings > Owner > Features and testing)
+        self.models_pub = model_publish.ModelPublisher(os.path.join(data_dir, "models_state.json") if data_dir else None, None)
+        self.flags = flags.Flags(os.path.join(data_dir, "flags.json") if data_dir else None)
+        self.models_pub.flags = self.flags    # which new features each kind of person can see (Settings > Owner > Features and testing)
         self.shares = shares.Shares(os.path.join(data_dir, "shares.db") if data_dir else ":memory:")   # read-only links to a copy of a chat (the owner switches sharing on)
         self.feedback = feedback.Feedback(os.path.join(data_dir, "feedback.db") if data_dir else ":memory:")   # "That didn't work" reports, for the owner
         self.links = app_links.Hub(app_links.Store(data_dir, self.secrets))   # the other connected apps (a token, link or app password; read-only)
@@ -943,7 +946,7 @@ class AppState:
             pass
 
     def get_settings(self, user):
-        s = {"window_mode": "everyday", "show_tokens": False, "web_search": "auto", "memory": True, "thinking_pause": "short", "live_data": True, "connected_apps": True, "tour_seen": 0, "tour_devices": {}, "whats_new_seen": ""}
+        s = {"window_mode": "everyday", "show_tokens": False, "web_search": "auto", "memory": True, "thinking_pause": "short", "live_data": True, "connected_apps": True, "tour_seen": 0, "tour_devices": {}, "whats_new_seq": -1}
         s.update(self.settings.get(user, {}))
         return s
 
@@ -965,8 +968,8 @@ class AppState:
             s["connected_apps"] = new["connected_apps"]
         if new.get("web_search") in lookup_auto.MODES:
             s["web_search"] = new["web_search"]
-        if isinstance(new.get("whats_new_seen"), str) and flags.VERSION_RE.fullmatch(new["whats_new_seen"]):
-            s["whats_new_seen"] = new["whats_new_seen"]
+        if isinstance(new.get("whats_new_seq"), int) and not isinstance(new.get("whats_new_seq"), bool):
+            s["whats_new_seq"] = max(0, min(10 ** 6, new["whats_new_seq"]))
         if isinstance(new.get("tour_seen"), int) and not isinstance(new.get("tour_seen"), bool):
             n = max(0, min(1000, new["tour_seen"]))
             s["tour_seen"] = n
@@ -990,7 +993,7 @@ class AppState:
         elif self.runner and not self.runner.available(m["id"]):
             m["state"], m["badge"] = "missing", "Not on this computer" if self.runner.bin else "llama-server not found"
         else:
-            m["state"], m["badge"] = "ready", "Beta" if m["status"] == "beta" else "Ready"
+            m["state"], m["badge"] = "ready", "Preview" if m.get("preview") else "Beta" if m["status"] == "beta" else "Ready"
         m["older"] = False
         return m
 
@@ -998,19 +1001,35 @@ class AppState:
         """The picker: one card per name (Flare, Equinox, Solstice, Apogee) with its newest usable version, and
         "other" with the older versions that can still be chosen (Flare 2.5, ...)."""
         cards, other = [], []
+        self.models_pub.run_due(self.manifest)                                  # a scheduled model that is due goes live now
+        keep = int(self.manifest.get("keep_older_versions", 6))
         for name in M.NAMES:
-            versions = sorted((m for m in self.manifest["models"] if m["name"] == name and m["status"] != "off"),
-                              key=lambda m: -m["version"])
+            eff = [dict(m, status=self.models_pub.status_of(m), preview=(m["status"] == "preview" and not self.models_pub.live(m["id"]))) for m in self.manifest["models"] if m["name"] == name]
+            versions = sorted((m for m in eff if m["status"] != "off" and (not m["preview"] or who["admin"])), key=lambda m: -m["version"])
             if not versions:
                 continue
             usable = [m for m in versions if m["status"] != "planned"]
             top = (usable or versions)[0]
             cards.append(self._card(top, who))
-            for m in usable[1:]:
+            for m in usable[1:1 + keep]:
                 c = self._card(m, who)
                 c["older"] = True
                 other.append(c)
         return {"cards": cards, "other": other}
+
+    def models_admin(self):
+        """The Models tab: every model in the family, whether it is in preview or live, what a publish would replace, and the model releases so far."""
+        mp, out = self.models_pub, []
+        mp.run_due(self.manifest)
+        for name in M.NAMES:
+            for m in sorted((x for x in self.manifest["models"] if x["name"] == name and x["status"] not in ("off", "planned")), key=lambda x: -x["version"]):
+                preview = m["status"] == "preview" and not mp.live(m["id"])
+                olds = mp._older(self.manifest, m)
+                out.append({"id": m["id"], "name": m["name"], "version": m["version"], "label": f"{m['name']} {m['version']:g}", "tagline": m.get("tagline", ""), "preview": preview,
+                            "scheduled": mp.scheduled(m["id"]), "live": mp.data["live"].get(m["id"]), "replaces": f"{olds[0]['name']} {olds[0]['version']:g}" if (preview and olds) else None,
+                            "available": bool(self.runner.available(m["id"])) if self.runner else True})
+        return {"models": out, "keep_older": int(self.manifest.get("keep_older_versions", 6)),
+                "releases": [r for r in self.flags.releases() if str(r.get("kind", "")).startswith("model")]}
 
     def code_models(self, who):
         """The models VryxCode can use for this person: flagged "vryxcode", and ready to run here."""
@@ -1852,13 +1871,13 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 cat["encrypted"] = self.state.secrets.available
                 return self._send(200, cat)
             if path == "/api/whats-new":                                         # what has been published, and what this person has not seen yet
-                fl, seen = self.state.flags, self.state.get_settings(who["user"]).get("whats_new_seen") or ""
-                if not seen:                                                      # someone who was here before releases existed, or a new account: start from now
-                    self.state.put_settings(who["user"], {"whats_new_seen": fl.version()})
-                    seen = fl.version()
-                key = lambda v: tuple(int(x) for x in v.split("."))
-                rel = [{k: r[k] for k in ("version", "kind", "at", "notes", "items")} for r in fl.releases()[:50]]
-                return self._send(200, {"version": fl.version(), "releases": rel, "unseen": [r for r in rel if key(r["version"]) > key(seen)]})
+                fl = self.state.flags
+                seen = self.state.get_settings(who["user"]).get("whats_new_seq", -1)
+                if not isinstance(seen, int) or seen < 0:                         # a new account, or one from before releases were numbered: start from now
+                    seen = fl.last_seq()
+                    self.state.put_settings(who["user"], {"whats_new_seq": seen})
+                rel = [{k: r.get(k) for k in ("seq", "version", "kind", "model", "at", "notes", "items")} for r in fl.releases()[:50]]
+                return self._send(200, {"version": fl.version(), "seq": fl.last_seq(), "releases": rel, "unseen": [r for r in rel if r["seq"] > seen]})
             if path == "/api/memory":
                 return self._send(200, {"facts": self.state.memory_for(who["user"]).list(), "on": self.state.get_settings(who["user"])["memory"]})
             if path == "/api/saved-notes":
@@ -1908,6 +1927,8 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 return self._send(200, {"flags": self.state.flags.listing(), "audiences": [[a, flags.AUDIENCE_NAMES[a]] for a in flags.AUDIENCES],
                                         "version": self.state.flags.version(), "releases": self.state.flags.releases(),
                                         "people": sorted(u["user"] for u in self.state.users.values())})
+            if path == "/api/admin/models" and who["admin"]:
+                return self._send(200, self.state.models_admin())
             if path == "/api/admin/users" and who["admin"]:
                 seen = self.state.auth.last_seen_map()
                 return self._send(200, {"users": [{"user": u["user"], "tier": self.state.usage.get_user(u["user"])["tier"], "email": u.get("email"),
@@ -2241,6 +2262,27 @@ class Handler(http.server.BaseHTTPRequestHandler):
                     except ValueError as e:
                         return self._send(400, {"code": "bad_request", "message": str(e)})
                     return self._send(200, {"flags": self.state.flags.listing(), "version": self.state.flags.version(), "releases": self.state.flags.releases()})
+                if path == "/api/admin/models":                                   # publish a model that is in preview, schedule it, or record an update that keeps its version
+                    mp, man, mid, by = self.state.models_pub, self.state.manifest, str(body.get("id", "")), who["user"]
+                    try:
+                        if body.get("publish") == "now":
+                            if self.state.runner and not self.state.runner.available(mid):
+                                return self._send(400, {"code": "bad_request", "message": "That model's file is not on this computer yet, so it cannot be published."})
+                            label = mp.publish(man, mid, by=by, notes=str(body.get("notes") or ""))
+                            self.state.auth.event("model_published", by, self._ip(), label)
+                        elif body.get("cancel_schedule"):
+                            mp.cancel_schedule(mid)
+                        elif "schedule_at" in body:
+                            mp.schedule(man, mid, body.get("schedule_at"), by=by)
+                            self.state.auth.event("model_published", by, self._ip(), f"{mid} scheduled")
+                        elif body.get("record_update"):
+                            mp.record_update(man, mid, str(body.get("notes") or ""), by=by)
+                            self.state.auth.event("model_published", by, self._ip(), f"{mid} update recorded")
+                        else:
+                            return self._send(400, {"code": "bad_request", "message": "Nothing to do."})
+                    except ValueError as e:
+                        return self._send(400, {"code": "bad_request", "message": str(e)})
+                    return self._send(200, self.state.models_admin())
                 if path == "/api/admin/reset-password":                          # a password reset: the old password stops working and a one-time link lets them choose a new one
                     target = str(body.get("user", ""))
                     rec = self.state.user_record(target)

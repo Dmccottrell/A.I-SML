@@ -36,6 +36,8 @@ class Flags:
                 self.data.update({k: got[k] for k in ("audiences", "changed", "scheduled", "releases") if isinstance(got.get(k), (dict, list))})
                 if isinstance(got.get("version"), str) and VERSION_RE.fullmatch(got["version"]):
                     self.data["version"] = got["version"]
+                for i, r in enumerate(self.data["releases"], 1):         # releases saved before they were numbered
+                    r.setdefault("seq", i)
             except (OSError, ValueError):
                 pass
 
@@ -99,8 +101,24 @@ class Flags:
         major, minor, patch = (major + 1, 0, 0) if kind == "major" else (major, minor + 1, 0) if kind == "minor" else (major, minor, patch + 1)
         self.data["version"] = f"{major}.{minor}.{patch}"
         items = [{"id": f, "title": BY_ID[f]["title"], "desc": BY_ID[f]["desc"]} for f in fids]
-        self.data["releases"].append({"version": self.data["version"], "kind": kind, "at": at, "by": by, "notes": notes, "items": items})
+        self.data["releases"].append({"seq": self.next_seq(), "version": self.data["version"], "kind": kind, "at": at, "by": by, "notes": notes, "items": items})
         del self.data["releases"][:-200]
+
+    def next_seq(self):
+        return max((r.get("seq", 0) for r in self.data["releases"]), default=0) + 1
+
+    def last_seq(self):
+        return max((r.get("seq", 0) for r in self.data["releases"]), default=0)
+
+    def record_model_release(self, model_id, label, kind, by, notes="", desc=""):
+        """A model going live ("model-new") or getting an update that keeps its version ("model-update"). It is listed with the releases but does not change the app's own version."""
+        if kind not in ("model-new", "model-update"):
+            raise ValueError("choose model-new or model-update")
+        with self.lock:
+            self.data["releases"].append({"seq": self.next_seq(), "version": self.data["version"], "kind": kind, "model": label, "at": self.clock(), "by": by, "notes": str(notes)[:500],
+                                          "items": [{"id": model_id, "title": label, "desc": desc}]})
+            del self.data["releases"][:-200]
+            self._save()
 
     def version(self):
         return self.data["version"]

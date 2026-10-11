@@ -285,6 +285,7 @@
     }
   ],
   "keep_latest_per_name": 2,
+  "keep_older_versions": 6,
   "coders": [
     {
       "id": "coder-14b",

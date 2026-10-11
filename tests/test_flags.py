@@ -257,7 +257,7 @@ class WhatsNewServer(Base):
         self.assertEqual((j["version"], [r["version"] for r in j["unseen"]], [r["version"] for r in j["releases"]]), ("1.1.0", ["1.1.0"], ["1.1.0"]))
         self.assertEqual(j["unseen"][0]["items"][0]["title"], "Welcome tour")
         self.assertNotIn("by", j["releases"][0])                                          # who published it is for admins only
-        self.sam.call("POST", "/api/settings", {"whats_new_seen": "1.1.0"})
+        self.sam.call("POST", "/api/settings", {"whats_new_seq": j["seq"]})
         self.assertEqual(self.sam.call("GET", "/api/whats-new")[1]["unseen"], [])
-        self.sam.call("POST", "/api/settings", {"whats_new_seen": "banana"})              # nonsense is ignored
-        self.assertEqual(self.state.get_settings("sam")["whats_new_seen"], "1.1.0")
+        self.sam.call("POST", "/api/settings", {"whats_new_seq": "banana"})               # nonsense is ignored
+        self.assertEqual(self.state.get_settings("sam")["whats_new_seq"], j["seq"])

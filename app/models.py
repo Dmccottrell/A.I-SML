@@ -13,7 +13,7 @@ WHAT THIS FILE DOES
 
     A model that can't run on this device is still listed, greyed out, with the reason ("needs 4 GB of memory").
     Status: stable = everyone, beta = the beta list (same access list as the skill packs, skills.py), planned = not
-    built yet (never shown), off = hidden. The owner (you, on your own PC) sees everything that exists.
+    built yet (never shown), off = hidden, preview = built but only admins see it until it is published (model_publish.py). The owner (you, on your own PC) sees everything that exists.
 
 Usage:  python app/models.py                    (prints the picker for the owner on this PC)
         python app/models.py --ram 3 --user sam
@@ -25,7 +25,7 @@ import os
 
 NAMES = ("Ember", "Flare", "Equinox", "Solstice", "Apogee")
 WHERE = ("device", "online")
-STATUS = ("stable", "beta", "planned", "off")
+STATUS = ("stable", "beta", "planned", "off", "preview")
 REQUIRED = ("id", "name", "version", "where", "file", "size_mb", "min_ram_gb", "context", "status")
 MANIFEST_PATH = "models.json"
 

@@ -50,3 +50,13 @@ Open it from the account menu (bottom of the side panel) > **Admin**. It has fou
 ## What people see when something is published
 
 Every release (publish now, a schedule coming due, or Publish all) is shown to each person once, as a **What's new in Emvryx** sheet, the next time they open the app or return to it (checked at most once a minute). Everyone can reread the history under account menu > What's new. The sheet is skipped while the welcome tour is showing and appears right after it. Only the version, date, what went live and any notes are shown to ordinary people.
+
+## Publishing a model (Admin > Models)
+
+Models have their own switch, separate from the feature flags, and a model release does not change the app's version (1.1.0 and so on).
+
+- **Add a new build in preview:** add its entry to `models.json` with `"status": "preview"` (for example `flare-2.6`, version 2.6) and put its `.gguf` file in place. Only the owner and admins see it, as the Flare card marked **Preview** (the previous version moves under Other models for them too, so they can compare); everyone else keeps using Flare 2.5.
+- **Publish:** Admin > Models > Publish (or Schedule a date and time). It needs the model file to be on the PC. The model goes live for everyone, becomes the new card for its name, and the older versions of that name move to **Other models**, still usable. Plans follow the model's name (Free has Flare and Equinox, so a new Flare is on Free at once).
+- **Other models keeps the newest 6 older versions** of each name (`keep_older_versions` in `models.json`).
+- **A new version or an update?** A new version when the training lessons change (several things together, a retrain, a new base). Otherwise it is an update and the version stays: Admin > Models > Live models > **Record an update** writes what changed into the release history.
+- Both kinds appear in **What's new** for everyone ("Flare 2.6 is here...", "Flare 2.5 was updated...") and in the release history. The choices are kept in `models_state.json` in the data folder, so updating the code never overwrites them.
