@@ -889,7 +889,7 @@ function closeAcct() { $('acctMenu').hidden = true; $('account').setAttribute('a
 function renderLinks() {   // two tools in the list; Usage, Memory and Settings live in the account menu (Skills, Documents and Connected apps are hidden until they work)
   const mk = (ico, name, note, fn) => el('button', {class: 'link', onclick: () => { document.body.classList.remove('menu-open'); closeAcct(); fn(); }}, icon(ico), el('span', {}, name), note ? el('small', {}, note) : '');
   $('links').replaceChildren(mk('code', 'VryxCode', '', openCode), mk('spark', 'Skills', '', openSkills), mk('pencil', 'Teacher mode', '', () => newChat(false, 'teacher')), mk('doc', 'Documents', '', openDocs), mk('lock', 'Private chat', 'Never saved', () => newChat(true)));
-  $('acctMenu').replaceChildren(mk('chart', 'Usage', '', openUsage), mk('brain', 'Memory', '', openMemory), mk('gear', 'Settings', '', openSettings), ...(S.state.admin ? [mk('lock', 'Admin', '', () => openAdmin())] : []), mk('spark', 'What\u2019s new', '', () => openWhatsNew(true)), ...(featureOn('welcome_tour') ? [mk('spark', 'Welcome tour', '', () => openTour(true))] : []), mk('signout', 'Sign out', '', signOut));
+  $('acctMenu').replaceChildren(mk('chart', 'Usage', '', openUsage), mk('brain', 'Memory', '', openMemory), mk('gear', 'Settings', '', openSettings), ...(S.state.admin ? [mk('lock', 'Admin', '', () => openAdmin())] : []), mk('signout', 'Sign out', '', signOut));
 }
 $('account').onclick = (e) => { e.stopPropagation(); const m = $('acctMenu'); m.hidden = !m.hidden; $('account').setAttribute('aria-expanded', String(!m.hidden)); };
 document.addEventListener('click', (e) => { if (!$('acctMenu').hidden && !$('acctMenu').contains(e.target)) closeAcct(); });
@@ -1702,7 +1702,7 @@ async function sxAcct() { try { SX.acct = await (await api('/api/account')).json
 function sxSections(id) {
   const st = S.state, s = st.settings, w = st.window, a = SX.acct || {mfa: {}}, owner = st.admin;
   const A = {
-    general: [...(featureOn('welcome_tour') ? [{title: 'Welcome tour', rows: [{title: 'Welcome tour', desc: 'The short animated introduction to Emvryx: the models, answers with sources, making it yours and VryxCode.', ctl: sxBtn('Start the tour', () => { closeSettings(); openTour(true); }), keys: 'welcome tour introduction walk through intro'}]}] : []),
+    general: [{title: 'Welcome tour and what\u2019s new', rows: [{title: 'What\u2019s new', desc: 'Every release so far, newest first: new features and new model versions.', ctl: sxBtn('See releases', () => { closeSettings(); openWhatsNew(true); }), keys: 'whats new releases updates changes history version'}, ...(featureOn('welcome_tour') ? [{title: 'Welcome tour', desc: 'The short animated introduction to Emvryx: the models, answers with sources, making it yours and VryxCode.', ctl: sxBtn('Start the tour', () => { closeSettings(); openTour(true); }), keys: 'welcome tour introduction walk through intro'}] : [])]},
       {title: 'Appearance', rows: [
       {title: 'Theme', desc: 'Automatic follows your phone or computer.', ctl: sxSeg([['auto', 'Automatic'], ['dark', 'Dark'], ['light', 'Light']], S.theme, (v) => { S.theme = v; try { localStorage.setItem('emvryx_theme', v); } catch (e) {} applyTheme(); }), keys: 'dark light mode colour color'},
       {title: 'Text and button size', ctl: sxSeg([['0.85', 'Small'], ['1', 'Normal'], ['1.15', 'Large'], ['1.3', 'Extra large']], String(parseFloat(sxLocal('emvryx_size', '1')) || 1), (v) => { try { localStorage.setItem('emvryx_size', v); } catch (e) {} applySize(); }), keys: 'font zoom bigger'}]},
@@ -1751,8 +1751,6 @@ function sxSections(id) {
       {title: 'Delete my account', desc: 'Removes your chats, notes, memory, projects, GitHub link and devices. This cannot be undone.', danger: true, ctl: sxBtn('Delete account', () => deleteDialog(), 'bad')}]}])],
     about: [{title: 'Emvryx', rows: [
       {title: 'One family of four models', desc: 'Flare, Equinox, Solstice and Apogee are the Emvryx models; VryxCode builds projects with them.'},
-      {title: 'What\u2019s new', desc: 'Every release so far, newest first.', ctl: sxBtn('See releases', () => { closeSettings(); openWhatsNew(true); })},
-      ...(featureOn('welcome_tour') ? [{title: 'Welcome tour', desc: 'The short animated introduction to Emvryx.', ctl: sxBtn('Replay', () => { closeSettings(); openTour(true); })}] : []),
       {title: 'Your server', desc: st.demo ? 'Demo mode: no model is attached.' : 'Connected.', ctl: st.contact ? el('a', {class: 'sbtn', href: 'mailto:' + st.contact}, 'Report a problem') : null}]}]
   };
   return A[id] || [];
