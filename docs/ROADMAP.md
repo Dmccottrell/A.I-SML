@@ -52,6 +52,10 @@ The owner's idea: an update to a model can raise its version (Flare 2.5 to 2.6 o
 
 **What 3 means:** the first build on a newer open-model generation, instead of retraining the 2.x models as 2.5. The 2.5 improvements (new lessons from reported mistakes, DPO, tool calling, thinking dial, long-document lessons) go into the 3.0 builds so training money is spent once. Flare 2.5 can still get its free refresh at home.
 
+**Decision (Oct 11, 2026): Apogee stays on its current base (Qwen3-14B, runs on the 4070 at about 9 GB) and gets the improved 2.5 release. Flare, Equinox and Solstice move to the new generation as Flare 3, Equinox 3 and Solstice 3.** Each model has its own version number, so Apogee can be 2.5 while the others are 3. Apogee 3 waits for a newer model of about 12B to 14B that clearly beats Qwen3-14B on our own tests (Gemma 4 12B and the Qwen3.5 9B in thinking mode are the ones to try in the pilot); nothing is forced. Details of the pilot: [EMVRYX3_PILOT.md](EMVRYX3_PILOT.md).
+
+**Apogee 2.5 (same base):** new lessons built from mistakes people reported, preference training (DPO), tool calling in the base's own format, the thinking dial, long-document lessons; about $12 to train by the earlier estimate. On top of that, the app-side features that make the top model feel smarter without a bigger base: careful mode (draft, critique, fix), receipts and checked quotes, second opinion, and tools the model asks for itself.
+
 **Candidates (all from web searches on Oct 11, 2026: secondhand, to be checked on the official model cards)**
 
 | Slot | Size on the 4070 | Leading candidate | Also test | Notes |
@@ -59,7 +63,7 @@ The owner's idea: an update to a model can raise its version (Flare 2.5 to 2.6 o
 | Flare 3 | about 1.5 to 2 GB | Qwen3.5 2B (or 0.8B) | | Apache 2.0, natively multimodal (reported) |
 | Equinox 3 | about 3 GB | Qwen3.5 4B | Gemma 4 E4B | |
 | Solstice 3 | about 6 GB | Qwen3.5 9B | DeepSeek-R1-0528-Qwen3-8B (a thinking comparison) | |
-| Apogee 3 | about 7.8 GB (reported) | **Gemma 4 12B** (QAT 4-bit file reported) | Qwen 14B-class fallback, DeepSeek-R1-Distill-Qwen-14B (ready now, reasoning only) | A 12B is reported by several sources but not yet confirmed on Google's own page |
+| Apogee (stays 2.5 for now) | about 9 GB | Qwen3-14B (current) | Gemma 4 12B (about 7.8 GB reported), Qwen3.5 9B in thinking mode, DeepSeek-R1-Distill-Qwen-14B | Only replaced if one clearly wins the pilot; a 12B is reported by several sources but not yet confirmed on Google's own page |
 
 Left out because they do not fit the rule: Qwen3.6-35B-A3B, Gemma 4 26B-A4B, the 27B-class models, DeepSeek V4 (hundreds of billions of parameters).
 
