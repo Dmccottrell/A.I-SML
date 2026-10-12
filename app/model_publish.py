@@ -16,14 +16,14 @@ import time
 
 
 class ModelPublisher:
-    def __init__(self, path=None, flags=None, clock=time.time):
-        self.path, self.flags, self.clock, self.lock = path, flags, clock, threading.Lock()
-        self.data = {"live": {}, "scheduled": {}}
+    def __init__(self, path=None, flags=None, clock=time.time, guard=None):
+        self.path, self.flags, self.clock, self.lock, self.guard = path, flags, clock, threading.Lock(), guard      # guard(model_id) -> (ok, why): the safety checks
+        self.data = {"live": {}, "scheduled": {}, "failed": {}}
         if path and os.path.exists(path):
             try:
                 with open(path, encoding="utf-8") as f:
                     got = json.load(f)
-                for k in ("live", "scheduled"):
+                for k in ("live", "scheduled", "failed"):
                     if isinstance(got.get(k), dict):
                         self.data[k] = got[k]
             except (OSError, ValueError):
@@ -55,7 +55,7 @@ class ModelPublisher:
         olds = [m for m in manifest["models"] if m["name"] == model["name"] and m["id"] != model["id"] and m["version"] < model["version"] and self.status_of(m) not in ("off", "planned", "preview")]
         return sorted(olds, key=lambda m: -m["version"])
 
-    def publish(self, manifest, model_id, by="", notes="", at=None):
+    def publish(self, manifest, model_id, by="", notes="", at=None, skip_checks=False):
         model = next((m for m in manifest["models"] if m["id"] == model_id), None)
         if not model:
             raise ValueError("no such model")
@@ -63,11 +63,16 @@ class ModelPublisher:
             raise ValueError("only a model in preview can be published")
         if self.live(model_id):
             raise ValueError("already published")
+        if self.guard and not skip_checks:
+            ok, why = self.guard(model_id)
+            if not ok:
+                raise ValueError(why)
         older = self._older(manifest, model)
         move = f" {self._label(older[0])} moves to Other models and stays usable." if older else ""
         with self.lock:
-            self.data["live"][model_id] = {"at": at or self.clock(), "by": by}
+            self.data["live"][model_id] = {"at": at or self.clock(), "by": by, **({"checks_skipped": True} if (self.guard and skip_checks) else {})}
             self.data["scheduled"].pop(model_id, None)
+            self.data["failed"].pop(model_id, None)
             self._save()
         if self.flags:
             self.flags.record_model_release(model_id, self._label(model), "model-new", by, (notes or "").strip() or f"{self._label(model)} is here.{move}", model.get("tagline", ""))
@@ -102,9 +107,10 @@ class ModelPublisher:
             if now >= due["at"]:
                 try:
                     self.publish(manifest, mid, by="schedule (set by %s)" % due.get("by", "?"), at=due["at"])
-                except ValueError:
+                except ValueError as e:                                  # not ready after all (the safety checks): do not publish, and say why
                     with self.lock:
                         self.data["scheduled"].pop(mid, None)
+                        self.data["failed"][mid] = {"at": now, "why": str(e)}
                         self._save()
 
     def record_update(self, manifest, model_id, notes, by=""):

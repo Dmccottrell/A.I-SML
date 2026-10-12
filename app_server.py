@@ -68,6 +68,7 @@ import vision
 import live_data
 import flags
 import model_publish
+import model_guard
 import github_link
 import identity_answer
 import google_signin
@@ -404,9 +405,12 @@ class AppState:
         self.code = code_sessions.CodeManager(data_dir, quotas=code_sandbox.Quotas(self.security))       # VryxCode sessions (projects live under <data>/code/)
         self.secrets = secret_box.SecretBox(data_dir, require=self.security["require_encryption"])
         self.github = github_link.Store(data_dir, self.secrets)  # connected GitHub accounts (tokens encrypted, files mode 600)
-        self.models_pub = model_publish.ModelPublisher(os.path.join(data_dir, "models_state.json") if data_dir else None, None)
+        self.models_pub = model_publish.ModelPublisher(os.path.join(data_dir, "models_state.json") if data_dir else None, None, guard=self.guard_ok)
         self.flags = flags.Flags(os.path.join(data_dir, "flags.json") if data_dir else None)
-        self.models_pub.flags = self.flags    # which new features each kind of person can see (Settings > Owner > Features and testing)
+        self.models_pub.flags = self.flags
+        self.guard_sheet = os.path.join(HERE, "eval", "everyday.jsonl")            # the safety checks a new model must pass before it can be published
+        self.guards = model_guard.GuardStore(os.path.join(data_dir, "guard") if data_dir else None)
+        self.guard_run, self._guard_lock = None, threading.Lock()    # which new features each kind of person can see (Settings > Owner > Features and testing)
         self.shares = shares.Shares(os.path.join(data_dir, "shares.db") if data_dir else ":memory:")   # read-only links to a copy of a chat (the owner switches sharing on)
         self.feedback = feedback.Feedback(os.path.join(data_dir, "feedback.db") if data_dir else ":memory:")   # "That didn't work" reports, for the owner
         self.links = app_links.Hub(app_links.Store(data_dir, self.secrets))   # the other connected apps (a token, link or app password; read-only)
@@ -1100,7 +1104,7 @@ class AppState:
     def apps(self):
         out = []
         for u in self.users.values():
-            if not u.get("app"):
+            if not u.get("app") or u.get("internal"):
                 continue
             row = self.usage.get_user(u["user"])
             out.append({"name": u["user"], "slug": u["user"][len(APP_PREFIX):], "display": u.get("app_name") or u["user"], "plan": row["tier"], "enabled": u.get("app_enabled", True),
@@ -1192,6 +1196,107 @@ class AppState:
                 "idle_seconds": int(time.time() - r.last_used) if (r and loaded) else None, "idle_unload_minutes": int(self.security.get("idle_unload_minutes") or 0),
                 "busy": self.busy()}
 
+    # ---- the safety checks a new model must pass before it is published (model_guard.py)
+    GUARD_USER = "emvryx-guard"
+
+    def _model_fingerprint(self, model_id):
+        path = (self.runner.files.get(model_id) if self.runner else None) or ""
+        try:
+            st = os.stat(path)
+            return f"{st.st_size}-{int(st.st_mtime)}"
+        except OSError:
+            return ""
+
+    def guard_ok(self, model_id):
+        """(True, "") when this model's latest safety checks passed (and the model file has not changed since); otherwise (False, why)."""
+        rec = self.guards.load(model_id)
+        if not rec:
+            return False, "Run the safety checks first (Admin > Models > Run safety checks): a new model must pass them before it is published."
+        if rec.get("fingerprint") and rec["fingerprint"] != self._model_fingerprint(model_id):
+            return False, "The model file changed after the safety checks: run them again."
+        if not rec["passed"]:
+            return False, "The safety checks did not pass: " + "; ".join(rec["reasons"]) + "."
+        return True, ""
+
+    def _guard_who(self):
+        """An internal account with no limits that asks the check questions (it sees models in preview, keeps no memory and never searches the web)."""
+        if not self.user_record(self.GUARD_USER):
+            self.add_user(self.GUARD_USER, "mega", key_prefix=API_KEY_PREFIX)
+            self._set_fields(self.GUARD_USER, app=True, internal=True, app_enabled=True)
+            self.set_access(self.GUARD_USER, unlimited=True)
+            self.put_settings(self.GUARD_USER, {"memory": False, "live_data": False, "connected_apps": False, "web_search": "none", "custom_instructions": ""})
+        return self.who_name(self.GUARD_USER)
+
+    def ask_quietly(self, who, model_id, prompt, effort="balanced", timeout=420):
+        """(reply, error) for one question through the whole app, in a private chat that is thrown away."""
+        store = self.store(who["user"])
+        cid = store.new_chat(private=True)
+        try:
+            q, stop, model, win, decision = start_turn(self, who, cid, prompt, model_id, effort, pace=False)
+        except Exception as e:                                 # noqa: BLE001
+            store.delete_chat(cid)
+            return "", str(error_payload(e)[2].get("message", "error"))
+        try:
+            deadline = time.monotonic() + timeout
+            while True:
+                try:
+                    kind, val = q.get(timeout=1)
+                except queue.Empty:
+                    if time.monotonic() > deadline:
+                        stop.set()
+                        return "", "took too long"
+                    continue
+                if kind == "done":
+                    return (val.get("text") or "").strip(), None
+                if kind == "error":
+                    return "", str(error_payload(val)[2].get("message", "error"))
+        finally:
+            store.delete_chat(cid)
+
+    def start_guard(self, model_id, by=""):
+        """Run the safety checks on a model in the background (one at a time). Raises ValueError when they cannot start."""
+        model = next((m for m in self.manifest["models"] if m["id"] == model_id), None)
+        if not model or model["status"] in ("off", "planned"):
+            raise ValueError("no such model")
+        if self.cfg.get("gaming"):
+            raise ValueError("Gaming mode is on: turn it off first, the checks need the model loaded")
+        if self.runner and not self.runner.available(model_id):
+            raise ValueError("That model's file is not on this computer yet.")
+        with self._guard_lock:
+            if self.guard_run and self.guard_run["state"] == "running":
+                raise ValueError("The checks are already running for " + self.guard_run["model_id"])
+            tests = model_guard_tests(self.guard_sheet)
+            run = {"model_id": model_id, "state": "running", "i": 0, "n": len(tests), "started": time.time()}
+            self.guard_run = run
+        who = self._guard_who()
+        older_id = None
+        olds = self.models_pub._older(self.manifest, model)
+        if olds:
+            older_id = olds[0]["id"]
+
+        def work():
+            import quality_check
+            results = []
+            try:
+                for i, t in enumerate(tests):
+                    reply, error = self.ask_quietly(who, model_id, t["prompt"])
+                    results.append({"prompt": t["prompt"], "category": t["category"], "ok": bool(not error and quality_check.check(t, reply)), "reply": reply[:600], "error": error})
+                    run["i"] = i + 1
+                    if i == 2 and all(r["error"] for r in results):          # the first three could not even be asked: do not keep going
+                        break
+                older = self.guards.load(older_id) if older_id else None
+                older_label = next((f"{m['name']} {m['version']:g}" for m in self.manifest["models"] if m["id"] == older_id), "")
+                passed, reasons, summary = model_guard.judge(results, older["summary"] if older else None, older_label)
+                self.guards.save(model_id, {"model_id": model_id, "when": time.time(), "by": by, "passed": passed, "reasons": reasons, "summary": summary, "results": results,
+                                           "fingerprint": self._model_fingerprint(model_id)})
+                self.auth.event("model_checks", by or "owner", "", f"{model_id}: {'passed' if passed else 'failed'} {summary['percent']:g}%")
+            except Exception as e:                                           # noqa: BLE001
+                print(f"(safety checks for {model_id} stopped: {e})", flush=True)
+            finally:
+                run["state"] = "done"
+        threading.Thread(target=work, daemon=True).start()
+        return {"started": True, "n": len(tests)}
+
     def models_admin(self):
         """The Models tab: every model in the family, whether it is in preview or live, what a publish would replace, and the model releases so far."""
         mp, out = self.models_pub, []
@@ -1202,8 +1307,10 @@ class AppState:
                 olds = mp._older(self.manifest, m)
                 out.append({"id": m["id"], "name": m["name"], "version": m["version"], "label": f"{m['name']} {m['version']:g}", "tagline": m.get("tagline", ""), "preview": preview,
                             "scheduled": mp.scheduled(m["id"]), "live": mp.data["live"].get(m["id"]), "replaces": f"{olds[0]['name']} {olds[0]['version']:g}" if (preview and olds) else None,
-                            "available": bool(self.runner.available(m["id"])) if self.runner else True})
-        return {"models": out, "keep_older": int(self.manifest.get("keep_older_versions", 6)),
+                            "available": bool(self.runner.available(m["id"])) if self.runner else True,
+                            "guard": model_guard.public(self.guards.load(m["id"]), self.guard_run if (self.guard_run and self.guard_run["state"] == "running" and self.guard_run["model_id"] == m["id"]) else None),
+                            "schedule_failed": mp.data["failed"].get(m["id"])})
+        return {"models": out, "keep_older": int(self.manifest.get("keep_older_versions", 6)), "checks_running": bool(self.guard_run and self.guard_run["state"] == "running"),
                 "releases": [r for r in self.flags.releases() if str(r.get("kind", "")).startswith("model")]}
 
     def code_models(self, who):
@@ -1692,6 +1799,11 @@ def start_turn(state, who, chat_id, text, model_id, effort, regenerate=False, re
 
     threading.Thread(target=work, daemon=True).start()
     return q, stop, model, win, decision
+
+
+def model_guard_tests(path):
+    import quality_check
+    return quality_check.load_sheet(path)
 
 
 def error_payload(e):
@@ -2506,11 +2618,15 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 if path == "/api/admin/models":                                   # publish a model that is in preview, schedule it, or record an update that keeps its version
                     mp, man, mid, by = self.state.models_pub, self.state.manifest, str(body.get("id", "")), who["user"]
                     try:
-                        if body.get("publish") == "now":
+                        if body.get("run_checks"):
+                            st_ = self.state.start_guard(mid, by=by)
+                            self.state.auth.event("model_checks", by, self._ip(), f"{mid}: started")
+                        elif body.get("publish") == "now":
                             if self.state.runner and not self.state.runner.available(mid):
                                 return self._send(400, {"code": "bad_request", "message": "That model's file is not on this computer yet, so it cannot be published."})
-                            label = mp.publish(man, mid, by=by, notes=str(body.get("notes") or ""))
-                            self.state.auth.event("model_published", by, self._ip(), label)
+                            skip = bool(body.get("skip_checks"))
+                            label = mp.publish(man, mid, by=by, notes=str(body.get("notes") or ""), skip_checks=skip)
+                            self.state.auth.event("model_published", by, self._ip(), label + (" WITHOUT the safety checks" if skip else ""))
                         elif body.get("cancel_schedule"):
                             mp.cancel_schedule(mid)
                         elif "schedule_at" in body:
