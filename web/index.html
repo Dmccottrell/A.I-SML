@@ -2446,7 +2446,7 @@ async function openCode() {
 }
 // ---- the Sessions list: where VryxCode opens, like a to-do list of everything it has worked on
 const ENV_NAME = {local: 'This computer', sandbox: 'Isolated sandbox', cloud: 'Cloud machine'};
-const FILTERS = [['all', 'All'], ['running', 'Running'], ['needs', 'Needs you'], ['done', 'Finished']];
+const FILTERS = [['all', 'All'], ['running', 'Running'], ['queued', 'Queued'], ['needs', 'Needs you'], ['done', 'Finished']];
 async function showHome() {
   clearTimeout(C.timer); C.view = 'home'; $('code').classList.add('home'); closeCodeMenus(); $('codePv').hidden = true; showDrawer(false);
   $('codeTitle').textContent = 'Code'; $('codeBack').setAttribute('aria-label', 'Back to chats'); await renderHome();
@@ -2457,15 +2457,15 @@ async function renderHome() {
   const [r, ri] = await Promise.all([api('/api/code/sessions'), api('/api/code')]); C.sessions = (await r.json()).sessions || []; C.info = await ri.json();
   $('codeEnvs').replaceChildren(el('span', {class: 'lbl'}, 'Environments'), ...C.info.environments.map((e) => el('button', {class: 'chip', onclick: () => envInfo()}, el('span', {class: 'dot' + (e.available ? ' on' : '')}), e.name)));
   $('codeFilter').textContent = (FILTERS.find((f) => f[0] === C.filter) || FILTERS[0])[1] + ' \u25be';
-  const live = ['starting', 'working'], pick = (x) => C.filter === 'all' || (C.filter === 'running' && live.includes(x.state)) || (C.filter === 'needs' && x.state === 'asking') || (C.filter === 'done' && !live.includes(x.state) && x.state !== 'asking');
+  const live = ['starting', 'working'], pick = (x) => C.filter === 'all' || (C.filter === 'running' && live.includes(x.state)) || (C.filter === 'queued' && x.state === 'queued') || (C.filter === 'needs' && x.state === 'asking') || (C.filter === 'done' && !live.includes(x.state) && !['asking', 'queued'].includes(x.state));
   const rows = C.sessions.filter(pick);
   $('codeList').replaceChildren(...(rows.length ? rows.map(sessionCard) : [el('div', {class: 'empty-list'}, C.sessions.length ? 'Nothing here with this filter.' : 'No sessions yet. Tap New session to start one. Everything VryxCode does is listed here, so you can come back to it, see what it changed, or rewind it.')]));
 }
 function sessionCard(m) {
-  const live = ['starting', 'working'].includes(m.state), ask = m.state === 'asking', bad = ['failed', 'interrupted'].includes(m.state);
-  const ic = live ? el('span', {class: 'spin', 'aria-label': 'Working'}) : ask ? el('b', {style: 'color:#f5a524;font-size:20px'}, '!') : bad ? el('b', {style: 'color:var(--danger);font-size:18px'}, '\u2717') : m.state === 'stopped' ? el('b', {style: 'font-size:14px'}, '\u25a0') : icon('code');
+  const live = ['starting', 'working'].includes(m.state), ask = m.state === 'asking', queued = m.state === 'queued', bad = ['failed', 'interrupted'].includes(m.state);
+  const ic = live ? el('span', {class: 'spin', 'aria-label': 'Working'}) : queued ? el('b', {style: 'font-size:15px;color:var(--muted)'}, '\u22ef') : ask ? el('b', {style: 'color:#f5a524;font-size:20px'}, '!') : bad ? el('b', {style: 'color:var(--danger);font-size:18px'}, '\u2717') : m.state === 'stopped' ? el('b', {style: 'font-size:14px'}, '\u25a0') : icon('code');
   const env = {id: m.env || 'local', name: ENV_NAME[m.env || 'local']};
-  const badge = ask ? el('span', {class: 'badge ask'}, 'Needs you') : bad ? el('span', {class: 'badge bad'}, m.state === 'interrupted' ? 'Interrupted' : 'Failed') : m.state === 'stopped' ? el('span', {class: 'badge'}, 'Stopped') : '';
+  const badge = queued ? el('span', {class: 'badge'}, 'Queued' + (m.position ? ' \u00b7 #' + m.position : '')) : ask ? el('span', {class: 'badge ask'}, 'Needs you') : bad ? el('span', {class: 'badge bad'}, m.state === 'interrupted' ? 'Interrupted' : 'Failed') : m.state === 'stopped' ? el('span', {class: 'badge'}, 'Stopped') : '';
   const stats = [m.steps ? m.steps + (m.steps === 1 ? ' step' : ' steps') : '', m.files ? m.files + (m.files === 1 ? ' file' : ' files') + ' changed' : ''].filter(Boolean).join(' \u00b7 ');
   return el('div', {class: 'scard', role: 'button', tabindex: '0', onclick: () => openSession(m), onkeydown: (ev) => { if (ev.key === 'Enter') openSession(m); }},
     el('div', {class: 'top'}, el('span', {class: 'sicon'}, ic), el('div', {class: 'mid'}, el('div', {class: 't'}, m.title), el('div', {class: 'sub'}, icon(ENV_ICON(env.id)), el('span', {}, m.project + ' \u00b7 ' + env.name))), el('span', {class: 'age'}, m.age)),
@@ -2711,6 +2711,7 @@ function cEvent(e) {
     }
     return;
   }
+  if (e.kind === 'queued') { feed.append(el('div', {class: 'cc-say', style: 'color:var(--muted);font-size:14px'}, 'Waiting in the queue' + (e.position ? ' (#' + e.position + ')' : '') + '. It starts by itself when your current session finishes.')); return; }
   if (e.kind === 'language') { feed.append(el('div', {class: 'cc-say', style: 'color:var(--muted);font-size:14px'}, e.text)); return; }
   if (e.kind === 'rewind') { feed.append(el('div', {class: 'cc-end stop'}, el('span', {class: 'mark'}, '\u21b6'), el('span', {}, 'Rewound the files to before: ' + (e.label || 'message ' + e.turn)))); C.last = null; return; }
   if (e.kind === 'answer') { const q = document.getElementById('ask' + e.id); if (q) q.remove(); return; }
@@ -2807,7 +2808,7 @@ async function poll() {
   renderLive(j.live, j.state);
   if (j.events.length && atEnd) scrollCode();
   showUsage(j.usage);
-  const live = ['starting', 'working', 'asking'].includes(j.state);
+  const live = ['starting', 'working', 'asking', 'queued'].includes(j.state);
   $('codeGo').hidden = live; $('codeStop').hidden = !live; if (!live) { C.stopping = false; $('codeStop').disabled = false; }
   if (live) C.timer = setTimeout(poll, j.state === 'asking' ? 1500 : 350);
 }
@@ -2819,7 +2820,7 @@ $('codeGo').onclick = async () => {
     if (r.status !== 404 && r.status !== 400) { note('bad', 'Could not send', (j.message || '') + ' ' + (j.action || '')); return; }
     if (r.status === 400 && /still working/i.test(j.message || '')) { note('bad', 'Still working', 'Press Stop first, or wait for it to finish.'); return; }
   }
-  const r = await post('/api/code/start', {project: C.project, task, model: C.model, auto_edits: C.mode === 'auto', plan: C.mode === 'plan', env: C.env}); const j = await r.json();
+  const r = await post('/api/code/start', {project: C.project, task, model: C.model, auto_edits: C.mode === 'auto', plan: C.mode === 'plan', env: C.env, queue: true}); const j = await r.json();
   if (!r.ok) { note('bad', 'Could not start', j.message + ' ' + (j.action || '')); return; }
   C.sid = j.id; C.saved = false; C.checkpoints = []; C.pvAuto = false; C.chatKey = C.project + '|' + C.model; C.seen = 0; C.stopping = false; $('codeStop').disabled = false; $('codeTask').value = ''; $('codeIn').replaceChildren(); poll();
 };
