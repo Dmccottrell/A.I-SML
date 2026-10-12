@@ -204,6 +204,8 @@ def main(argv=None):
     if not a.from_logs:
         if not a.llama_bin:
             ap.error("--llama-bin is needed")
+        if not os.path.isfile(a.llama_bin):
+            ap.error(f"llama-server was not found at {a.llama_bin} (use the real path to llama-server.exe, in quotes)")
         from quality_check import load_sheet
         tests = load_sheet(a.sheet)
         with open(a.candidates, encoding="utf-8") as f:
