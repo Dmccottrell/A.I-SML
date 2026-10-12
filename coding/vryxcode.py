@@ -251,6 +251,11 @@ GITHUB_TOOL_NOTE = (" github(action) with action status, pull or push works with
                     "the user is asked before anything is pulled or pushed.")
 
 
+CHECK_PAGE_NOTE = (" check_page(path, width, height) opens a web page of this project in a hidden browser (phone size by default), clicks around, and tells you the errors and "
+                   "layout problems it finds (sideways scrolling, tiny buttons, broken pictures, no labels) with a screenshot for the person. Use it after you build or change a page, "
+                   "fix what it reports, and check again. It cannot reach the internet except a few common CDNs.")
+
+
 def make_todo():
     """The checklist tool: todo(items=[{"text", "done"}]). It only records the list (the page shows it); it changes nothing in the project."""
     def todo(items=None):
@@ -290,7 +295,7 @@ def run_task(task, generate, workspace, ask, max_turns=12, context_tokens=None, 
     with harness.Sandbox(workspace=workspace, allowed_programs=programs, **kw) as sandbox:
         for name, fn in (tools or {}).items():
             sandbox.register_tool(name, fn)
-        system = SYSTEM + (GITHUB_TOOL_NOTE if "github" in (tools or {}) else "") + (TODO_NOTE if todo else "") + (PLAN_NOTE if plan else "") + (lang_note or "")
+        system = SYSTEM + (GITHUB_TOOL_NOTE if "github" in (tools or {}) else "") + (CHECK_PAGE_NOTE if "check_page" in (tools or {}) else "") + (TODO_NOTE if todo else "") + (PLAN_NOTE if plan else "") + (lang_note or "")
         result = harness.run_agent(task, generate, sandbox, max_turns=max_turns, system=system, ask=ask, context_tokens=context_tokens,
                                    permissions=harness.Permissions(rules=rules, ask=ask), history=history, chat_mode=chat_mode, checks=checks)
     out(("Done: " if result["finished"] else "Stopped without finishing: ") + (result["summary"] or f"{result['turns']} steps used") )

@@ -82,6 +82,7 @@ import summary
 import saved_notes
 import user_memory
 import code_preview
+import browser_check
 import context_window as CW
 import effort_router
 import regen_modes
@@ -1422,6 +1423,20 @@ class AppState:
                 raise harness.ToolError(e.message + (" " + e.action if e.action else ""))
             raise harness.ToolError("action must be status, pull or push")
         return github
+
+    def browser_tool(self, user, project):
+        """The `check_page` tool the model may call: a hidden browser opens a page of the project, clicks around and audits it (coding/browser_check.py)."""
+        def check_page(path="", width=390, height=844):
+            folder = self.code.project_path(user, project)
+            try:
+                width, height = max(240, min(1600, int(width))), max(320, min(2400, int(height)))
+            except (TypeError, ValueError):
+                raise harness.ToolError("width and height must be numbers (for example 390 and 844 for a phone)")
+            entry = browser_check.safe_page_path(folder, path) if path else code_preview.entry_page(folder)
+            if not entry:
+                raise harness.ToolError("there is no web page (.html file) at that path in this project to check" if path else "this project has no web page (.html file) to check yet")
+            return browser_check.format_report(browser_check.check_page(folder, entry, width, height), entry, width, height)
+        return check_page
 
     def code_allowed(self, who):
         """(ok, why not). The owner and the admins the owner appointed always may. Others need VryxCode in their plan, and a container sandbox (or the owner
@@ -2795,7 +2810,8 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 allowed, why = st.code_allowed(who)
                 return self._send(200, {"allowed": allowed, "why_not": why, "sandbox": st.code.sandbox.get("mode", "none"),
                                         "usage": self._code_usage(who, None), "models": st.code_models(who), "projects": st.code.projects(user),
-                                        "running": run.id if run else None, "project": run.project if run else None, "environments": st.code.environments(who["admin"])})
+                                        "running": run.id if run else None, "project": run.project if run else None, "environments": st.code.environments(who["admin"]),
+                                        "browser_check": browser_check.available()})
             if path == "/api/code/sessions":
                 return self._send(200, {"sessions": st.code.list_sessions(user)})
             if path == "/api/code/github/repos":
@@ -2818,6 +2834,17 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 project = st.code.check_name(arg("project"))
                 return self._send(200, st.code.export_zip(user, project), "application/zip",
                                   {"Content-Disposition": f'attachment; filename="{project}.zip"'})
+            if path == "/api/code/shot":                                  # a screenshot the browser check took (only the owner of the project, only its own check files)
+                name = arg("name")
+                folder = st.code.project_path(user, arg("project"))
+                if not browser_check.SHOT_RX.fullmatch(name):
+                    return self._send(404, {"code": "not_found", "message": "Not found."})
+                try:
+                    with open(os.path.join(folder, browser_check.SHOT_DIR, name), "rb") as f:
+                        data = f.read()
+                except OSError:
+                    return self._send(404, {"code": "not_found", "message": "That screenshot is no longer kept."})
+                return self._send(200, data, "image/png", {"Cache-Control": "private, max-age=3600", "X-Content-Type-Options": "nosniff"})
             if path == "/api/code/files":
                 return self._send(200, {"files": st.code.files(user, arg("project"))})
             if path == "/api/code/file":
@@ -2912,6 +2939,8 @@ class Handler(http.server.BaseHTTPRequestHandler):
                         linked = False
                     if linked:
                         tools = {"github": st.github_tool(user, project)}
+                if browser_check.available():                                  # needs the playwright package: pip install playwright
+                    tools = dict(tools or {}, check_page=st.browser_tool(user, project))
                 s, note = st.code.start(user, project, body.get("task"), model["id"], generate, bool(body.get("auto_edits")),
                                         int(model.get("context_tested") or 8192), meter, outside=bool(model.get("outside")), tools=tools, identity=identity,
                                         env=str(body.get("env") or "local"), plan=bool(body.get("plan")), owner=who["admin"], queue=bool(body.get("queue")))

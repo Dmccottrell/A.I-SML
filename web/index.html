@@ -195,6 +195,7 @@ svg .core { fill: var(--core); stroke: var(--sun); stroke-width: 3; transition: 
 .code .cc-report.verified .mark { color: #3fb950; } .code .cc-report.checked .mark { color: #d29922; } .code .cc-report.not_verified .mark { color: var(--danger); } .code .cc-report.no_changes .mark { color: var(--muted); }
 .code .cc-report .rs { margin-top: 8px; color: var(--muted); font-size: 12px; text-transform: uppercase; letter-spacing: .04em; }
 .code .cc-report .ri { margin-top: 3px; word-break: break-word; } .code .cc-report .ri.bad { color: var(--danger); } .code .cc-report .ri code { font-size: 13px; }
+.code .cc-shot { display: block; margin: 6px 0; max-width: 260px; border: 1px solid var(--line); border-radius: 10px; overflow: hidden; } .code .cc-shot img { display: block; width: 100%; height: auto; max-height: 320px; object-fit: cover; object-position: top; }
 .code .cc-end { padding: 12px 0 4px; display: flex; gap: 10px; align-items: baseline; white-space: pre-wrap; word-break: break-word; }
 .code .cc-end.good .mark { color: #3fb950; } .code .cc-end.bad .mark { color: var(--danger); } .code .cc-end.stop .mark { color: var(--muted); }
 .code .cc-ask { border: 1px solid var(--accent); border-radius: 12px; padding: 10px 12px; display: flex; flex-direction: column; gap: 8px; margin: 6px 0; background: var(--surface); }
@@ -2707,7 +2708,9 @@ function cEvent(e) {
       const head = (lines[0] || 'Done').slice(0, 200) + (lines.length > 1 ? '  (+' + (lines.length - 1) + ' lines)' : '');
       const res = el('div', {class: 'cc-res', title: 'Tap to show the whole output'}, el('span', {class: 'arrow'}, '\u2192'), el('span', {class: 'txt'}, head));
       const node = C.last; res.onclick = () => node.classList.toggle('open');
-      node.append(res); if (lines.length > 1) node.append(el('div', {class: 'cc-more'}, t)); C.last = null;
+      node.append(res); if (lines.length > 1) node.append(el('div', {class: 'cc-more'}, t)); 
+      const shot = /Screenshot: (check-\d+\.png)/.exec(t); if (shot) feed.append(shotCard(shot[1]));
+      C.last = null;
     }
     return;
   }
@@ -2737,6 +2740,11 @@ function cEvent(e) {
     feed.append(el('div', {class: 'cc-end ' + cls}, el('span', {class: 'mark'}, e.error || e.limited ? '\u2717' : '\u25a0'),
       el('span', {}, /^(Stopped|Paused)/i.test(e.summary || '') ? e.summary : (e.error ? 'Could not finish: ' : e.limited ? 'Paused: ' : 'Stopped: ') + (e.summary || (e.turns + ' steps used')))));
   }
+}
+// a screenshot from the browser check: a small picture, tap to open it full size
+function shotCard(name) {
+  const url = '/api/code/shot?project=' + encodeURIComponent(C.project) + '&name=' + encodeURIComponent(name);
+  return el('a', {class: 'cc-shot', href: url, target: '_blank', rel: 'noopener', title: 'Open the screenshot'}, el('img', {src: url, alt: 'Screenshot of the page the browser check opened', loading: 'lazy'}));
 }
 // the verification report at the end of a turn that did work: how it was checked and what to look at
 function reportCard(e) {
