@@ -21,6 +21,13 @@ class Parts(unittest.TestCase):
         self.assertEqual(B.parse_vram("5120\n"), 5.0)
         self.assertIsNone(B.parse_vram("garbage"))
 
+    def test_reads_how_many_layers_went_to_the_card(self):
+        self.assertEqual(B.gpu_layers("llm_load_tensors: offloaded 33/33 layers to GPU\n"), (33, 33))
+        self.assertEqual(B.gpu_layers("load_tensors: offloaded 0/37 layers to GPU"), (0, 37))
+        self.assertIsNone(B.gpu_layers("nothing useful"))
+        text = B.render_report([dict(res("slow", 30, 5.0, baseline=True), contexts=[{"ctx": 8192, "vram_gb": 1.5, "gpu_layers": (0, 37)}])])
+        self.assertIn("only 0 of 37 layers on the card", text)
+
     def test_filler_is_about_the_right_size(self):
         self.assertAlmostEqual(len(B.filler(1000)), 3600, delta=40)
 
@@ -34,6 +41,18 @@ class Parts(unittest.TestCase):
         self.assertIn("tight", B.verdict(res("snug", 38, 40.0, vram=(10.9, 11.0, 11.2)), base))
         self.assertIn("did not run", B.verdict(res("x", 0, None, error="file not found"), base))
         self.assertTrue(B.verdict(base, base).startswith("the one to beat"))
+
+    def test_identity_is_left_out_of_the_score_that_decides(self):
+        base = res("old", 36, 40.0, baseline=True)
+        base["by_category"] = {"facts": [8, 8], "identity": [2, 2], "maths": [3, 4]}
+        plain = res("plain", 35, 40.0)
+        plain["by_category"] = {"facts": [8, 8], "identity": [0, 2], "maths": [4, 4]}
+        self.assertEqual(B.score(base), (11, 12))
+        self.assertEqual(B.score(plain), (12, 12))
+        self.assertIn("not clearly smarter", B.verdict(plain, base))          # one question up once identity is ignored, not "worse by 1"
+        text = B.render_report([base, plain])
+        self.assertIn("By category", text)
+        self.assertIn("| plain | 12/12 | 35/41 |", text)
 
     def test_report_has_a_table_per_slot(self):
         text = B.render_report([res("old", 30, 40.0, baseline=True), res("new", 36, 38.0), res("f", 20, 90.0, slot="flare", baseline=True)])

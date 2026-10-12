@@ -45,3 +45,39 @@ class Stream(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class DeepThinking(unittest.TestCase):
+    """Deep on a model that can think: no empty thinking block in the prompt, the reasoning is hidden, Quick and Balanced are unchanged."""
+
+    def setUp(self):
+        import app_engine as E
+        from tests.test_open_model import ThinkFormat
+        self.E = E
+        self.tok = ThinkFormat().tok("empty")
+        self.model = {"id": "solstice-3", "name": "Solstice", "version": 3, "where": "online"}
+
+    def ask(self, think, script="<think>\nlet me work it out\n</think>\n\nIt is 4."):
+        store = self.E.ChatStore()
+        cid = store.new_chat()
+        backend = self.E.FakeBackend(script)
+        r = self.E.run_turn(self.tok, store, cid, backend, self.model, 512, 100, user_text="hi", think=think)
+        return r, backend.prompts[-1], store.messages(cid)
+
+    def test_deep_leaves_the_empty_block_off_and_hides_the_reasoning(self):
+        r, prompt, msgs = self.ask(True)
+        self.assertEqual(prompt[-3:], self.tok.role_open("assistant", plain=True))
+        self.assertNotIn(4, prompt)
+        self.assertEqual(r["text"].strip(), "It is 4.")
+        self.assertNotIn("work it out", msgs[-1]["content"])                 # the saved chat never holds the reasoning
+
+    def test_quick_and_balanced_still_end_with_the_empty_block(self):
+        r, prompt, _ = self.ask(False, "It is 4.")
+        self.assertEqual(prompt[-9:], self.tok.role_open("assistant"))
+        self.assertEqual(r["text"].strip(), "It is 4.")
+
+    def test_the_server_turns_it_on_only_for_deep_on_thinking_models(self):
+        import app_server as A
+        src = open(A.__file__, encoding="utf-8").read()
+        self.assertIn('think = effort == "deep" and model.get("think") == "empty"', src)
+        self.assertEqual(src.count("pacer=pacer, think=think,"), 3)

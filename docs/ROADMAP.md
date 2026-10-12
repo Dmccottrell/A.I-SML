@@ -54,6 +54,22 @@ The owner's idea: an update to a model can raise its version (Flare 2.5 to 2.6 o
 
 **Decision (Oct 11, 2026): Apogee stays on its current base (Qwen3-14B, runs on the 4070 at about 9 GB) and gets the improved 2.5 release. Flare, Equinox and Solstice move to the new generation as Flare 3, Equinox 3 and Solstice 3.** Each model has its own version number, so Apogee can be 2.5 while the others are 3. Apogee 3 waits for a newer model of about 12B to 14B that clearly beats Qwen3-14B on our own tests (Gemma 4 12B and the Qwen3.5 9B in thinking mode are the ones to try in the pilot); nothing is forced. Details of the pilot: [EMVRYX3_PILOT.md](EMVRYX3_PILOT.md).
 
+**Version 3 plan (decided Oct 12, 2026; the owner asked for the approach most likely to work best, and the bake-off results confirm or change each pick):**
+
+| Slot | Base | Trained on | Thinking | Notes |
+|---|---|---|---|---|
+| Flare 3 | Qwen3.5 2B (the plain model already beat Flare 2.5 on the everyday sheet, 39 vs 35 of 41, first bake-off line) | Emvryx lessons (`--keep 0.4`) + 30% general lessons | Quick and Balanced only | Cheapest, so it is the A/B test: train once with and once without the general lessons, keep the winner |
+| Equinox 3 | Qwen3.5 4B | same recipe as the Flare winner | Deep | Gemma 4 E4B is the challenger |
+| Solstice 3 | Qwen3.5 9B | same recipe | Deep | DeepSeek-R1-0528-Qwen3-8B is the challenger |
+| Apogee 3 | the bake-off winner of Qwen3.5 9B (thinking) and DeepSeek-R1-Distill-Qwen-14B | same recipe if it fits training in 12 GB | always or Deep | Decided by `logs/bakeoff.md`, not by reputation |
+| Apogee 3.5 | Qwen3.8-27B at 2-bit (about 9 GB) | **not trained** (a 2-bit file cannot be trained; the 27B does not fit training in 12 GB) | Deep | Runs on the 4070 with Emvryx instructions in the prompt; only kept if it clearly beats Apogee 2/3 on the bake-off and passes identity checks; Gaming mode must unload it |
+
+- **The lessons:** all Emvryx lessons stay, identity, honesty and corrections always kept; general lessons from Nemotron-Post-Training-Dataset-v2 (cc-by-4.0, the "reasoning off" rows only, replies capped at 2,500 characters) are added as 30% of the final set (`data_prep/general_lessons.py`, `format_lessons_3x.py --general`).
+- **Thinking:** built in Oct 12, 2026: Deep effort on a model with `"think": "empty"` leaves the empty thinking block off the prompt so the model reasons first; the reasoning is hidden and the saved chat never holds it. After each training run, `evaluation/thinking_check.py` compares the tuned model with its plain base; only if tuning wore the thinking down do we make thinking lessons and retrain.
+- **From the 2.5 plan, built into 3.0 so training is paid for once:** preference training (DPO) from reported answers, tool calling in the base's own format, long-document lessons. **App-side, no retrain, for all models:** receipts on every answer, second opinion, careful mode, never-guess-a-number.
+- **Newer models make possible:** native pictures (keep the vision part and its extra llama.cpp file; Qwen3.5 is an image-and-text model), faster big models with a tiny same-family draft model (idea 14), long-document questions on 12 GB (the new design needs far less memory per token).
+- **Not decided by me:** nothing is rented or bought; every dataset's licence is read by the owner before it is used.
+
 **Apogee 2.5 (same base):** new lessons built from mistakes people reported, preference training (DPO), tool calling in the base's own format, the thinking dial, long-document lessons; about $12 to train by the earlier estimate. On top of that, the app-side features that make the top model feel smarter without a bigger base: careful mode (draft, critique, fix), receipts and checked quotes, second opinion, and tools the model asks for itself.
 
 **Candidates (all from web searches on Oct 11, 2026: secondhand, to be checked on the official model cards)**

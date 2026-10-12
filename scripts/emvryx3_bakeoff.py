@@ -63,6 +63,17 @@ def fit_word(peak_gb):
     return "too full"
 
 
+UNTRAINED_OK = ("identity",)            # plain downloads can't know they are Emvryx; training teaches that, so it is shown apart from the score that decides
+
+
+def score(result):
+    """(passed, total) without the identity questions (the number the verdicts compare), from the saved per-category scores."""
+    by = result.get("by_category") or {}
+    if not by:
+        return result.get("passed", 0), result.get("total", 0)
+    return (sum(v[0] for k, v in by.items() if k not in UNTRAINED_OK), sum(v[1] for k, v in by.items() if k not in UNTRAINED_OK))
+
+
 def verdict(result, base):
     """One line for a candidate against the one to beat in its slot (`base` None when it IS the baseline or there is none)."""
     if result.get("error"):
@@ -75,7 +86,7 @@ def verdict(result, base):
         notes.append("memory is tight (it may spill into RAM when other things are open)")
     if base is None or base is result:
         return "the one to beat" + ("; " + "; ".join(notes) if notes else "")
-    gain = result["passed"] - base["passed"]
+    gain = score(result)[0] - score(base)[0]                       # identity is left out: training fixes it
     speed, base_speed = result.get("speed"), base.get("speed")
     slow = bool(speed and base_speed and speed < SPEED_KEEP * base_speed)
     if gain > WOBBLE and not slow:
@@ -94,15 +105,27 @@ def render_report(results):
     slots = {}
     for r in results:
         slots.setdefault(r["slot"], []).append(r)
-    lines = ["# Emvryx 3 bake-off", "", f"{len(results)} candidates. Sheet: {results[0]['total'] if results else 0} everyday questions; a gap of {WOBBLE} questions or less is noise. Speed is words(tokens) a second answering; memory is the card in use with the model loaded at each conversation length.", ""]
+    lines = ["# Emvryx 3 bake-off", "", f"{len(results)} candidates. Sheet: {results[0]['total'] if results else 0} everyday questions; a gap of {WOBBLE} questions or less is noise. "
+             "'Score' leaves out the 2 identity questions (a plain model cannot know it is Emvryx; training teaches that), 'All' counts everything. Speed is words(tokens) a second answering; memory is the card in use with the model loaded at each conversation length.", ""]
     for slot, items in slots.items():
         base = next((r for r in items if r.get("baseline")), None)
-        lines += [f"## {slot}", "", "| Candidate | Everyday sheet | Words/sec | Memory 8K / 16K / 32K (GB) | Verdict |", "|---|---|---|---|---|"]
+        lines += [f"## {slot}", "", "| Candidate | Score | All | Words/sec | Memory 8K / 16K / 32K (GB) | Verdict |", "|---|---|---|---|---|---|"]
         for r in items:
             mem = " / ".join(str(c.get("vram_gb", "?")) for c in r.get("contexts", [])) or "?"
-            sheet = f"{r['passed']}/{r['total']}" if not r.get("error") else "-"
-            lines.append(f"| {r['name']}{' (to beat)' if r.get('baseline') else ''} | {sheet} | {r.get('speed') or '-'} | {mem} | {verdict(r, base)} |")
+            gl = next((c["gpu_layers"] for c in r.get("contexts", []) if c.get("gpu_layers")), None)
+            if gl and gl[0] < gl[1]:
+                mem += f" (only {gl[0]} of {gl[1]} layers on the card)"
+            sc = score(r)
+            sheet, every = (f"{sc[0]}/{sc[1]}", f"{r['passed']}/{r['total']}") if not r.get("error") else ("-", "-")
+            lines.append(f"| {r['name']}{' (to beat)' if r.get('baseline') else ''} | {sheet} | {every} | {r.get('speed') or '-'} | {mem} | {verdict(r, base)} |")
         lines.append("")
+        cats = sorted({c for r in items for c in (r.get("by_category") or {})})
+        if cats:
+            lines += ["By category (passed/asked):", "", "| Candidate | " + " | ".join(cats) + " |", "|---|" + "---|" * len(cats)]
+            for r in items:
+                by = r.get("by_category") or {}
+                lines.append(f"| {r['name']} | " + " | ".join(f"{by[c][0]}/{by[c][1]}" if c in by else "-" for c in cats) + " |")
+            lines.append("")
     return "\n".join(lines) + "\n"
 
 
@@ -126,12 +149,28 @@ def post(path, body, timeout=600):
         conn.close()
 
 
+def server_log_path(cand, ctx):
+    return os.path.join("logs", "bakeoff", f"{cand['name']}-{ctx}-server.log")
+
+
+def gpu_layers(log_text):
+    """From llama-server's start-up log: (layers on the card, total layers), or None when the log does not say (older/newer wording)."""
+    import re
+    m = re.search(r"offloaded (\d+)/(\d+) layers to GPU", log_text or "")
+    return (int(m.group(1)), int(m.group(2))) if m else None
+
+
 def start_server(llama_bin, cand, ctx):
     cmd = [llama_bin, "-m", cand["file"], "--port", str(PORT), "-c", str(ctx), "-ngl", str(cand.get("ngl", 99)), "-fa", "on"] + list(cand.get("args", []))
-    proc = subprocess.Popen(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE)
+    os.makedirs(os.path.join("logs", "bakeoff"), exist_ok=True)
+    log = open(server_log_path(cand, ctx), "wb")                  # to a file, never a pipe nobody reads: a full pipe freezes llama-server
+    proc = subprocess.Popen(cmd, stdout=log, stderr=log)
+    proc.log_file = log
     for _ in range(240):
         if proc.poll() is not None:
-            err = (proc.stderr.read() or b"").decode("utf-8", "replace").strip().splitlines()
+            log.close()
+            with open(server_log_path(cand, ctx), encoding="utf-8", errors="replace") as f:
+                err = f.read().strip().splitlines()
             raise RuntimeError("llama-server stopped: " + (err[-1] if err else "no message"))
         try:
             conn = http.client.HTTPConnection("127.0.0.1", PORT, timeout=3)
@@ -151,6 +190,9 @@ def stop_server(proc):
         proc.wait(timeout=20)
     except subprocess.TimeoutExpired:
         proc.kill()
+    log = getattr(proc, "log_file", None)
+    if log:
+        log.close()
 
 
 def chat_body(cand, prompt, max_tokens=700):
@@ -172,7 +214,9 @@ def run_candidate(llama_bin, cand, tests, contexts=CONTEXTS):
             try:
                 status, data = post("/completion", {"prompt": filler(ctx - 600) + "\nIn one sentence, what is the text above about?", "n_predict": 48, "temperature": 0, "cache_prompt": False})
                 speed = tokens_per_second(data.get("timings")) if status == 200 else None
-                entry = {"ctx": ctx, "vram_gb": smi_used_gb(), "speed": speed, "ok": status == 200}
+                with open(server_log_path(cand, ctx), encoding="utf-8", errors="replace") as f:
+                    layers = gpu_layers(f.read())
+                entry = {"ctx": ctx, "vram_gb": smi_used_gb(), "speed": speed, "ok": status == 200, "gpu_layers": layers}
                 out["contexts"].append(entry)
                 if ctx == contexts[0]:
                     def ask(prompt):
@@ -187,8 +231,9 @@ def run_candidate(llama_bin, cand, tests, contexts=CONTEXTS):
                     out["speed"] = speed
             finally:
                 stop_server(proc)
-    except RuntimeError as e:
-        out.update(error=str(e), passed=out.get("passed", 0), total=len(tests))
+    except (RuntimeError, OSError) as e:                              # includes a request that timed out: record it and go on to the next candidate
+        out.update(error=("timed out: the model answered far too slowly (is it running on the card?)" if isinstance(e, TimeoutError) else str(e)),
+                   passed=out.get("passed", 0), total=len(tests))
     return out
 
 
