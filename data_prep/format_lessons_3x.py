@@ -11,7 +11,9 @@ What it does, in order:
      stray thinking tags or control tokens. With --strict the SOFT rules drop lessons too.
   3. With --keep, keeps a share of what is left, chosen evenly across kinds of lessons (looking things up, "I don't know", corrections, identity, long
      chats, short answers ...) so a smaller set is still balanced. The rare, important kinds (identity, honesty, corrections) are always kept.
-  4. With --thinking, mixes in verified thinking lessons (data_prep/make_thinking_lessons.py) as a share of the final set.
+  4. With --general, mixes in general lessons from open datasets (data_prep/general_lessons.py) as a share of the final set (--general-share, default 30%).
+     The Emvryx lessons, including all identity, honesty and correction lessons, are kept exactly as before; the general ones only add range.
+  5. With --thinking, mixes in verified thinking lessons (data_prep/make_thinking_lessons.py) as a share of the final set.
 Nothing about the thinking format is baked into the file: the trainer adds the empty thinking block itself (the presets say think="empty").
 """
 import os, sys; sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), os.pardir)); import emvryx_paths  # noqa: E402,F401
@@ -122,6 +124,19 @@ def mix_thinking(rows, thinking_rows, share, seed=1337):
     return out
 
 
+def mix_general(rows, general_rows, share, seed=1337):
+    """Add general (open-dataset) lessons so they are `share` of the final set. The Emvryx lessons (identity, honesty, corrections...) are already in
+    `rows` and are untouched; general lessons are only ever added next to them (never more than we have)."""
+    if not general_rows or share <= 0:
+        return rows
+    n = min(len(general_rows), int(len(rows) * share / (1 - share)))
+    pool = general_rows[:]
+    random.Random(seed + 2).shuffle(pool)
+    out = rows + pool[:n]
+    random.Random(seed + 3).shuffle(out)
+    return out
+
+
 def read_jsonl(path):
     with open(path, encoding="utf-8") as f:
         return [json.loads(line) for line in f if line.strip()]
@@ -135,6 +150,8 @@ def main(argv=None):
     ap.add_argument("--strict", action="store_true", help="soft style rules drop lessons too")
     ap.add_argument("--thinking", default=None, help="a file of thinking lessons from make_thinking_lessons.py")
     ap.add_argument("--thinking-share", type=float, default=0.1)
+    ap.add_argument("--general", default=None, help="a file of general lessons from general_lessons.py")
+    ap.add_argument("--general-share", type=float, default=0.3, help="share of the final set that is general lessons (default 0.3)")
     ap.add_argument("--seed", type=int, default=1337)
     a = ap.parse_args(argv)
     if not 0 < a.keep <= 1:
@@ -142,6 +159,12 @@ def main(argv=None):
     if not os.path.exists(a.data):
         sys.exit(f"{a.data} not found. Build it first: python data_prep/make_chat_data_v3.py")
     rows, stats = select(read_jsonl(a.data), a.keep, a.strict, a.seed)
+    emvryx_count = len(rows)
+    if a.general:
+        if not 0 <= a.general_share < 1:
+            sys.exit("--general-share must be from 0 up to (not including) 1")
+        rows = mix_general(rows, read_jsonl(a.general), a.general_share, a.seed)
+        print(f"general lessons: {len(rows) - emvryx_count:,} added to {emvryx_count:,} Emvryx lessons (identity, honesty and corrections are all in the Emvryx part)")
     if a.thinking:
         rows = mix_thinking(rows, read_jsonl(a.thinking), a.thinking_share, a.seed)
     os.makedirs(os.path.dirname(a.out) or ".", exist_ok=True)
