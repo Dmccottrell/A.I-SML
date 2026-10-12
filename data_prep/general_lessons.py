@@ -18,6 +18,7 @@ ones, and say so with --synthetic if a dataset is model-written so it is recorde
 """
 import os, sys; sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), os.pardir)); import emvryx_paths  # noqa: E402,F401
 import argparse
+import glob
 import hashlib
 import json
 import random
@@ -63,9 +64,24 @@ def good_shape(msgs):
     return all(m["content"].strip() for m in msgs) and all(MIN_REPLY <= len(m["content"].strip()) <= MAX_REPLY for m in msgs if m["role"] == "assistant")
 
 
+EMPTY_THINK_RX = re.compile(r"<think>\s*</think>\s*")
+
+
+def row_allowed(row, filters=(), row_licences=()):
+    """(ok, reason). filters = [("reasoning", "off")...] (a row field must equal the value); row_licences = licences a row's own "license" field may have."""
+    for key, value in filters:
+        if str(row.get(key, "")).strip().lower() != value.lower():
+            return False, "filtered_out"
+    if row_licences and str(row.get("license", "")).strip().lower() not in row_licences:
+        return False, "row_licence"
+    return True, ""
+
+
 def clean_row(row, fmt, source, licence, synthetic=False):
     """(lesson or None, reason it was dropped)."""
     msgs = to_messages(row, fmt)
+    if msgs is not None:
+        msgs = [dict(m, content=EMPTY_THINK_RX.sub("", m["content"])) if m["role"] == "assistant" else m for m in msgs]
     if msgs is None:
         return None, "wrong_shape"
     msgs = [{"role": m["role"], "content": m["content"].strip()} for m in msgs]
@@ -82,11 +98,16 @@ def clean_row(row, fmt, source, licence, synthetic=False):
     return lesson, ""
 
 
-def convert(rows, fmt, source, licence, synthetic=False, limit=None, seed=1337):
-    """(lessons, {reason: count, ..., "kept": n})."""
-    stats, seen, out = {}, set(), []
+def convert(rows, fmt, source, licence, synthetic=False, limit=None, seed=1337, filters=(), row_licences=()):
+    """(lessons, {reason: count, ..., "kept": n}). With `limit`, a random sample of that many good lessons is kept (reservoir sampling: rows are streamed,
+    so a multi-gigabyte file never has to fit in memory). `rows` can be any iterable."""
+    stats, seen, out, good = {}, set(), [], 0
+    rng = random.Random(seed)
     for row in rows:
-        lesson, why = clean_row(row, fmt, source, licence, synthetic)
+        ok, why = row_allowed(row, filters, row_licences)
+        lesson = None
+        if ok:
+            lesson, why = clean_row(row, fmt, source, licence, synthetic)
         if lesson is None:
             stats[why] = stats.get(why, 0) + 1
             continue
@@ -95,17 +116,43 @@ def convert(rows, fmt, source, licence, synthetic=False, limit=None, seed=1337):
             stats["duplicate"] = stats.get("duplicate", 0) + 1
             continue
         seen.add(key)
-        out.append(lesson)
-    random.Random(seed).shuffle(out)
-    if limit:
-        out = out[:limit]
+        good += 1
+        if not limit or len(out) < limit:
+            out.append(lesson)
+        else:
+            j = rng.randrange(good)
+            if j < limit:
+                out[j] = lesson
+    rng.shuffle(out)
     stats["kept"] = len(out)
     return out, stats
 
 
+def read_rows(patterns):
+    """Rows from .jsonl and .parquet files (a pattern like data\\open\\nemotron-v2\\data\\math-* works), streamed."""
+    files = sorted(f for p in patterns for f in glob.glob(p))
+    if not files:
+        sys.exit("no files match " + " ".join(patterns))
+    for path in files:
+        if path.endswith(".parquet"):
+            try:
+                import pyarrow.parquet as pq
+            except ImportError:
+                sys.exit("reading .parquet files needs pyarrow: pip install pyarrow")
+            for batch in pq.ParquetFile(path).iter_batches(batch_size=1000):
+                yield from batch.to_pylist()
+        else:
+            with open(path, encoding="utf-8") as f:
+                for line in f:
+                    if line.strip():
+                        yield json.loads(line)
+
+
 def main(argv=None):
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("--input", required=True, help="the dataset's .jsonl file (downloaded already)")
+    ap.add_argument("--input", required=True, nargs="+", help="the dataset's .jsonl or .parquet files (downloaded already); patterns with * work")
+    ap.add_argument("--filter", action="append", default=[], metavar="FIELD=VALUE", help="keep only rows whose field equals the value, e.g. reasoning=off (can be repeated)")
+    ap.add_argument("--row-licences", default="", help="comma list: keep only rows whose own license field is one of these, e.g. cc-by-4.0")
     ap.add_argument("--format", required=True, choices=("messages", "pairs", "dolly"))
     ap.add_argument("--source", required=True, help="a short name, kept in every lesson")
     ap.add_argument("--licence", required=True, help="the dataset's licence, e.g. apache-2.0")
@@ -118,15 +165,20 @@ def main(argv=None):
     licence = a.licence.lower()
     if licence not in ALLOWED_LICENCES and not a.allow_other_licence:
         sys.exit(f"licence '{a.licence}' is not on the allowed list {ALLOWED_LICENCES}. Read the dataset's page; if it is fine, add --allow-other-licence.")
-    with open(a.input, encoding="utf-8") as f:
-        rows = [json.loads(line) for line in f if line.strip()]
-    lessons, stats = convert(rows, a.format, a.source, licence, a.synthetic, a.max)
+    filters = []
+    for item in a.filter:
+        if "=" not in item:
+            sys.exit(f"--filter {item!r} must look like field=value")
+        k, v = item.split("=", 1)
+        filters.append((k.strip(), v.strip()))
+    row_licences = tuple(x.strip().lower() for x in a.row_licences.split(",") if x.strip())
+    lessons, stats = convert(read_rows(a.input), a.format, a.source, licence, a.synthetic, a.max, filters=filters, row_licences=row_licences)
     os.makedirs(os.path.dirname(a.out) or ".", exist_ok=True)
     with open(a.out, "a" if a.append else "w", encoding="utf-8") as f:
         for l in lessons:
             f.write(json.dumps(l, ensure_ascii=False) + "\n")
     dropped = {k: v for k, v in stats.items() if k != "kept"}
-    print(f"read {len(rows):,}; kept {stats['kept']:,}; dropped {sum(dropped.values()):,} {dropped or ''}")
+    print(f"kept {stats['kept']:,}; dropped {sum(dropped.values()):,} {dropped or ''}")
     print(f"wrote to {a.out}")
     return 0
 

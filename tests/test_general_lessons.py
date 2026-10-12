@@ -50,6 +50,37 @@ class General(unittest.TestCase):
         self.assertEqual(sum(1 for r in mixed if r.get("kind") != "general"), 70)
         self.assertEqual(F.mix_general(emvryx, [], 0.3), emvryx)
 
+    def test_reasoning_off_and_row_licence_filters(self):
+        base = {"messages": [{"role": "system", "content": "/no_think"}, {"role": "user", "content": "What is photosynthesis?"}, {"role": "assistant", "content": "<think>\n\n</think>\n\n" + A}]}
+        rows = [dict(base, reasoning="off", license="cc-by-4.0"), dict(base, reasoning="on", license="cc-by-4.0"),
+                dict(base, reasoning="off", license="cc-by-sa-4.0")]
+        out, stats = G.convert(rows, "messages", "nemotron-v2", "cc-by-4.0", filters=[("reasoning", "off")], row_licences=("cc-by-4.0",))
+        self.assertEqual(len(out), 1)
+        self.assertEqual(stats["filtered_out"], 1)
+        self.assertEqual(stats["row_licence"], 1)
+        self.assertNotIn("think", out[0]["messages"][-1]["content"])
+        self.assertEqual([m["role"] for m in out[0]["messages"]], ["user", "assistant"])
+
+    def test_limit_samples_from_the_whole_stream(self):
+        rows = ({"prompt": f"Question number {i}?", "response": A + f" ({i})"} for i in range(1000))
+        out, stats = G.convert(rows, "pairs", "s", "mit", limit=50)
+        self.assertEqual((len(out), stats["kept"]), (50, 50))
+        self.assertGreater(max(int(l["messages"][0]["content"].split()[2].rstrip("?")) for l in out), 500)
+
+    def test_reads_parquet_and_jsonl(self):
+        import tempfile
+        with tempfile.TemporaryDirectory() as d:
+            path = os.path.join(d, "x.jsonl")
+            with open(path, "w", encoding="utf-8") as f:
+                f.write(json.dumps({"prompt": "q?", "response": A}) + "\n")
+            self.assertEqual(len(list(G.read_rows([os.path.join(d, "*.jsonl")]))), 1)
+            try:
+                import pyarrow as pa, pyarrow.parquet as pq
+            except ImportError:
+                return
+            pq.write_table(pa.Table.from_pylist([{"prompt": "q?", "response": A}] * 3), os.path.join(d, "y.parquet"))
+            self.assertEqual(len(list(G.read_rows([os.path.join(d, "*.parquet")]))), 3)
+
     def test_licence_gate(self):
         with self.assertRaises(SystemExit):
             G.main(["--input", "x", "--format", "pairs", "--source", "s", "--licence", "proprietary-eula"])
