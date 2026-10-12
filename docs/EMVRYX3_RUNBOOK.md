@@ -37,6 +37,16 @@ hf download databricks/databricks-dolly-15k --repo-type dataset --local-dir data
 python data_prep/general_lessons.py --input data\open\dolly\databricks-dolly-15k.jsonl --format dolly --source dolly-15k --licence cc-by-sa-3.0 --max 5000
 python data_prep/format_lessons_3x.py --general data\v3\general.jsonl --general-share 0.3 --keep 0.4
 ```
+**The strongest free one found (Oct 2026): NVIDIA Nemotron-Post-Training-Dataset-v2** (licence cc-by-4.0; answers written by DeepSeek-R1-0528 and Qwen models, so read the card's note about the Qwen and DeepSeek licence terms). It is gated: on its Hugging Face page accept the terms (it asks for a company and an email), make a read token in your Hugging Face settings, and run `hf auth login` (paste the token into that prompt only, never in chat or in a file in the repo). Take only the English parts (about 8 GB; the multilingual parts are 18 GB each):
+```
+hf download nvidia/Nemotron-Post-Training-Dataset-v2 --repo-type dataset --include "data/math-*" "data/stem-*" "data/code-*" "data/chat-*" --local-dir data\open\nemotron-v2
+python data_prep/general_lessons.py --input "data\open\nemotron-v2\data\math-*" --format messages --source nemotron-v2-math --licence cc-by-4.0 --filter reasoning=off --row-licences cc-by-4.0 --max 6000
+python data_prep/general_lessons.py --input "data\open\nemotron-v2\data\stem-*" --format messages --source nemotron-v2-stem --licence cc-by-4.0 --filter reasoning=off --row-licences cc-by-4.0 --max 6000 --append
+python data_prep/general_lessons.py --input "data\open\nemotron-v2\data\code-*" --format messages --source nemotron-v2-code --licence cc-by-4.0 --filter reasoning=off --row-licences cc-by-4.0 --max 6000 --append
+python data_prep/general_lessons.py --input "data\open\nemotron-v2\data\chat-*" --format messages --source nemotron-v2-chat --licence cc-by-4.0 --filter reasoning=off --row-licences cc-by-4.0 --max 12000 --append
+```
+`--filter reasoning=off` keeps only answers without thinking traces (our models use an empty thinking block); `--row-licences cc-by-4.0` leaves out the few rows that carry a different licence (ODC-By, CC-BY-SA). Needs `pip install pyarrow` (parquet files). The chat part is 6 GB and takes a few minutes to scan.
+
 `general_lessons.py` drops anything that claims to be another AI, "as an AI language model", personal details and duplicates, and does not apply the soft voice rules (filler openers, length) to general lessons. Use `--append` to combine several datasets into one general file. `--general-share` is the share of the final set (default 30%).
 
 Read the style report. The wording rules are first guesses until the voice in EMVRYX_STYLE.md is decided.
