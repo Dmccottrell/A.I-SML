@@ -54,6 +54,7 @@ import chat
 import data_tools
 import code_sandbox
 import chat_polish
+import code_review
 import code_sessions
 import harness
 import vryxcode
@@ -2840,6 +2841,22 @@ class Handler(http.server.BaseHTTPRequestHandler):
         except code_sessions.CodeError as e:
             self._code_error(e)
 
+    def _review_prompt(self, st, user, sid, review):
+        """The request the model gets for a code review: a GitHub pull request ({"pr": link}, read-only, with the connected token) or this session's changes."""
+        pr = review.get("pr") if isinstance(review, dict) else None
+        if not pr:
+            return st.code.review_session(user, sid)["prompt"]
+        ref = code_review.parse_pr_ref(pr)
+        if not ref:
+            raise code_sessions.CodeError("That isn't a pull request link.", "Paste a link like https://github.com/owner/repo/pull/12.")
+        try:
+            title, diff = st.github_api(user).pull_diff(*ref)
+        except github_link.GitHubError as e:
+            raise code_sessions.CodeError(e.message, e.action)
+        files = sorted(set(re.findall(r"^diff --git a/\S+ b/(\S+)", diff, re.M)))
+        cut = max(0, len(diff) - code_review.DEFAULT_LIMIT)
+        return code_review.review_prompt(diff[:code_review.DEFAULT_LIMIT], files, cut, f"pull request {ref[0]}/{ref[1]}#{ref[2]}" + (f" ({title})" if title else ""))
+
     def api_code_post(self, who, path, body):
         st, user = self.state, who["user"]
         try:
@@ -2914,6 +2931,11 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 allowed, why = st.code_allowed(who)
                 if not allowed:
                     raise code_sessions.CodeError(why, "Ask the owner about VryxCode access.")
+                review = body.get("review")
+                if review:                                           # a code review: the person sees a short line, the model gets the change (read-only, Plan-first)
+                    sess = st.code.get(user, m.group(1))
+                    sess.send(body.get("text") or "Review these changes", plan=True, model_text=self._review_prompt(st, user, m.group(1), review))
+                    return self._send(200, {"ok": True})
                 st.code.get(user, m.group(1)).send(body.get("text"), plan=bool(body.get("plan")))
                 return self._send(200, {"ok": True})
             m = re.fullmatch(r"/api/code/sessions/([\w-]+)/answer", path)
