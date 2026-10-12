@@ -16,8 +16,8 @@ Steps for each model (each is remembered in logs\\chain_home_state.json, so runn
   think     tuned model on a llama-server: evaluation/thinking_check.py  (you compare it with the base afterwards, see the runbook)
 
 PAUSE: create an empty file called PAUSE in this folder and the chain waits before its next step (training itself you stop with Ctrl+C: run the same
-command later to resume). The graphics card is shared with the Emvryx app and games: --stop-app stops the app's scheduled task and its llama-server first,
---restart-app starts the task again at the end. A phone message (ntfy) is sent at each step when NTFY_TOPIC is set.
+command later to resume). The graphics card is shared with the Emvryx app and games: --gaming switches Gaming mode on for the whole run (the app unloads its model and says it is resting; it is switched off again at the end), or --stop-app
+stops the app's scheduled task and its llama-server instead, and --restart-app starts the task again at the end. A phone message (ntfy) is sent at each step when NTFY_TOPIC is set.
 """
 import os, sys; sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), os.pardir)); import emvryx_paths  # noqa: E402,F401
 import argparse
@@ -108,6 +108,21 @@ def wait_while_paused(flag="PAUSE", sleep=time.sleep):
         sleep(15)
 
 
+def gaming_flag(a):
+    return os.path.join(a.data_dir, "gaming.flag")
+
+
+def set_gaming_flag(a, on):
+    """The file the app watches (see Admin > PC): while it exists the app unloads its model and refuses chats politely."""
+    path = gaming_flag(a)
+    if on:
+        os.makedirs(a.data_dir, exist_ok=True)
+        with open(path, "w", encoding="utf-8") as f:
+            f.write("Emvryx is paused while the models are being trained.\n")
+    elif os.path.exists(path):
+        os.remove(path)
+
+
 def stop_app():
     if os.name != "nt":
         print("--stop-app only works on Windows; stop the app yourself")
@@ -181,6 +196,8 @@ def main(argv=None):
     ap.add_argument("--quantize-bin", default=None)
     ap.add_argument("--llama-bin", default=None, help="llama-server for the thinking check")
     ap.add_argument("--think-port", type=int, default=8099)
+    ap.add_argument("--gaming", action="store_true", help="switch Gaming mode on for the run (the app frees the card and says it is resting), off again at the end")
+    ap.add_argument("--data-dir", default=".emvryx", help="the app's data folder (where gaming.flag goes)")
     ap.add_argument("--stop-app", action="store_true")
     ap.add_argument("--restart-app", action="store_true")
     ap.add_argument("--state", default=os.path.join("logs", "chain_home_state.json"))
@@ -196,6 +213,10 @@ def main(argv=None):
             shown = ("convert: " + " && ".join(" ".join(c) for c in convert_commands(model, a))) if cmd[0] == "@convert" else (f"think: thinking_check against {paths(model)['gguf']}" if cmd[0] == "@think" else " ".join(cmd))
             print(f"{'[done] ' if done else '       '}{model:<10} {step:<9} {shown}")
         return 0
+    if a.gaming:
+        notify("Gaming mode on: the app will unload its model (give it about 20 seconds)")
+        set_gaming_flag(a, True)
+        time.sleep(20)
     if a.stop_app:
         notify("stopping the Emvryx app to free the graphics card")
         stop_app()
@@ -218,6 +239,8 @@ def main(argv=None):
             save_state(a.state, state)
             notify(f"{model}: {step} done in {(time.time() - t0) / 60:.0f} min")
     finally:
+        if a.gaming:
+            set_gaming_flag(a, False)
         if a.restart_app:
             restart_app()
     notify("chain finished. Next: compare thinking and exam results (docs/EMVRYX3_RUNBOOK.md), then add the models in preview.")

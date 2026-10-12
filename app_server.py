@@ -98,6 +98,7 @@ SECURITY_DEFAULTS = {"session_days": 90, "pair_minutes": 15, "login_fail_limit":
                      "email_start_window": 600, "open_signups": False, "signup_mode": "closed", "trusted_proxies": ["127.0.0.1", "::1"], "audit_notify": True,
                      "allow_key_links": False, "allowed_origins": [], "code_unsandboxed_for_others": False,
                      "require_encryption": False, "grant_emails": ["darrylmccottrell16@gmail.com"], "public_url": "", "sharing": False, "weekly_summary": False, "backup_dir": "", "cloud_host": "", "cloud_user": "root", "cloud_port": 22, "cloud_for_others": False, "github_client_id": "", "contact_email": "", "operator_name": "", "alert_ntfy_topic": "",
+                     "idle_unload_minutes": 15,
                      **code_sandbox.QUOTA_DEFAULTS}
 PAIR_PAGE = ('<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">'
              '<meta name="robots" content="noindex"><title>Sign in: Emvryx</title><style>body{margin:0;min-height:100vh;display:grid;place-items:center;'
@@ -192,6 +193,8 @@ class ModelRunner:
         self.bin, self.files, self.timeout, self.extra, self.host = llama_bin, dict(files), start_timeout, list(extra_args), host
         self.proc = self.model_id = self.url = self.ctx = None
         self.memo = None                                        # a file that remembers the last model, so a restart can load it ahead of the first message
+        self.last_used = time.time()                            # the last time a message needed the model (idle unload looks at this)
+        self.loaded_at = None
         self.lock = threading.Lock()
         atexit.register(self.stop)
 
@@ -207,8 +210,27 @@ class ModelRunner:
             s.bind((self.host, 0))
             return s.getsockname()[1]
 
+    def loaded(self):
+        """The id of the model that is loaded right now, or None."""
+        return self.model_id if (self.proc and self.proc.poll() is None) else None
+
+    def touch(self):
+        self.last_used = time.time()
+
+    def unload(self):
+        """Free the graphics card and memory: stop llama-server. Not while a model is being loaded (the lock is busy). True if something was stopped."""
+        if not self.lock.acquire(blocking=False):
+            return False
+        try:
+            if not self.loaded():
+                return False
+            self.stop()
+            return True
+        finally:
+            self.lock.release()
+
     def stop(self):
-        proc, self.proc, self.model_id, self.url = self.proc, None, None, None
+        proc, self.proc, self.model_id, self.url, self.loaded_at = self.proc, None, None, None, None
         if proc and proc.poll() is None:
             proc.terminate()
             try:
@@ -257,6 +279,7 @@ class ModelRunner:
         """The URL of a llama-server running this model with at least `ctx` tokens of memory. Starts it if needed.
         `cancel()` is asked while it loads: when it says yes the half-loaded server is stopped and Cancelled is raised."""
         with self.lock:
+            self.last_used = time.time()
             if self.proc and self.proc.poll() is None and self.model_id == model_id and (self.ctx or 0) >= ctx:
                 return self.url
             self.stop()
@@ -288,6 +311,7 @@ class ModelRunner:
                             if took > 15:                      # a slow load is worth a line in the log: it is what makes the first answer late
                                 print(f"(loading {model_id} took {took:.0f} s; switching models reloads it each time)", flush=True)
                             self.remember(model_id, ctx)
+                            self.loaded_at = self.last_used = time.time()
                             return self.url
                 except (urllib.error.URLError, OSError, ValueError):
                     pass                                         # still loading (llama-server answers 503 until ready)
@@ -1017,6 +1041,73 @@ class AppState:
                 other.append(c)
         return {"cards": cards, "other": other}
 
+    # ---- the graphics card: idle unload and Gaming mode
+    def gaming_file(self):
+        return os.path.join(self.data_dir, "gaming.flag") if self.data_dir else None
+
+    def sync_gaming(self):
+        """Gaming mode is on when the switch says so OR the file gaming.flag exists in the data folder (so a shortcut on the desktop can switch it with no key)."""
+        f = self.gaming_file()
+        if f:
+            self.cfg["gaming"] = os.path.exists(f) or bool(self.cfg.get("gaming_mem"))
+        return bool(self.cfg.get("gaming"))
+
+    def set_gaming(self, on, by=""):
+        """Switch Gaming mode. On: nobody can start a reply, and the model is unloaded now (or as soon as the replies running finish)."""
+        on = bool(on)
+        f = self.gaming_file()
+        self.cfg["gaming_mem"] = on
+        if f:
+            try:
+                if on:
+                    with open(f, "w", encoding="utf-8") as h:
+                        h.write("Emvryx is paused for gaming. Delete this file (or use Admin > PC) to turn it off.\n")
+                elif os.path.exists(f):
+                    os.remove(f)
+            except OSError:
+                pass
+        self.cfg["gaming"] = on
+        unloaded = self.unload_model("gaming mode") if on else False
+        self.auth.event("gaming_mode", by or "owner", "", "on" if on else "off")
+        return {"gaming": on, "unloaded": unloaded, "loaded": self.runner.loaded() if self.runner else None}
+
+    def busy(self):
+        """True while a reply or a coding session is using the model."""
+        return bool(self.stops or self.code.any_running())
+
+    def unload_model(self, why=""):
+        """Stop the loaded model if nothing is using it. True if it was stopped."""
+        if not self.runner or self.busy():
+            return False
+        stopped = self.runner.unload()
+        if stopped:
+            self.auth.event("model_unloaded", "system", "", why)
+            print(f"(model unloaded: {why})", flush=True)
+        return stopped
+
+    def idle_tick(self, now=None):
+        """Called every few seconds by a background thread: honour Gaming mode, and unload a model nobody has used for `idle_unload_minutes`."""
+        if not self.runner:
+            return None
+        now = time.time() if now is None else now
+        if self.busy():
+            self.runner.touch()
+            return None
+        if self.sync_gaming():
+            return "gaming" if self.unload_model("gaming mode") else None
+        minutes = int(self.security.get("idle_unload_minutes") or 0)
+        if minutes > 0 and self.runner.loaded() and now - self.runner.last_used >= minutes * 60:
+            return "idle" if self.unload_model(f"idle for {minutes} minutes") else None
+        return None
+
+    def pc_status(self):
+        r = self.runner
+        loaded = r.loaded() if r else None
+        model = next((m for m in self.manifest["models"] if m["id"] == loaded), None) if loaded else None
+        return {"gaming": bool(self.cfg.get("gaming")), "has_runner": bool(r), "loaded": loaded, "loaded_label": (f"{model['name']} {model['version']:g}" if model else None),
+                "idle_seconds": int(time.time() - r.last_used) if (r and loaded) else None, "idle_unload_minutes": int(self.security.get("idle_unload_minutes") or 0),
+                "busy": self.busy()}
+
     def models_admin(self):
         """The Models tab: every model in the family, whether it is in preview or live, what a publish would replace, and the model releases so far."""
         mp, out = self.models_pub, []
@@ -1155,6 +1246,8 @@ class AppState:
         """generate(messages) for a coding session on this model (the llama-server that runs it)."""
         if self.code_generate:
             return self.code_generate(model)
+        if self.cfg.get("gaming"):
+            raise code_sessions.CodeError("Emvryx is resting while the PC is being used for something else.", "Try again in a little while.")
         ctx = min(int(model.get("context_tested") or 8192), 32768)
         if self.runner:
             url = self.runner.ensure(model["id"], ctx, cancel=cancel)
@@ -1169,6 +1262,8 @@ class AppState:
         Returns a short message for the log. Never raises: a model that cannot load only costs the head start."""
         if not self.runner:
             return "nothing to preload (no local models)"
+        if self.sync_gaming():
+            return "Gaming mode is on: not loading any model"
         model = next((m for m in list(self.manifest["models"]) + list(self.manifest.get("coders", [])) if m["id"] == model_id), None)
         if not model:
             return f"unknown model {model_id!r}"
@@ -1192,7 +1287,7 @@ class AppState:
             return False
         if model["state"] != "ready" or not self.runner.available(model_id):
             return False
-        if self.stops or self.code.any_running():
+        if self.stops or self.code.any_running() or self.cfg.get("gaming"):
             return False
         self._warm_target = (model_id, self.window_for(who, model)["window"])
         with self._warm_lock:
@@ -1929,6 +2024,9 @@ class Handler(http.server.BaseHTTPRequestHandler):
                                         "people": sorted(u["user"] for u in self.state.users.values())})
             if path == "/api/admin/models" and who["admin"]:
                 return self._send(200, self.state.models_admin())
+            if path == "/api/admin/pc" and who["admin"]:
+                self.state.sync_gaming()
+                return self._send(200, self.state.pc_status())
             if path == "/api/admin/users" and who["admin"]:
                 seen = self.state.auth.last_seen_map()
                 return self._send(200, {"users": [{"user": u["user"], "tier": self.state.usage.get_user(u["user"])["tier"], "email": u.get("email"),
@@ -2262,6 +2360,24 @@ class Handler(http.server.BaseHTTPRequestHandler):
                     except ValueError as e:
                         return self._send(400, {"code": "bad_request", "message": str(e)})
                     return self._send(200, {"flags": self.state.flags.listing(), "version": self.state.flags.version(), "releases": self.state.flags.releases()})
+                if path == "/api/admin/pc":                                       # Gaming mode, idle unload, unload now
+                    st = self.state
+                    if "gaming" in body:
+                        st.set_gaming(bool(body.get("gaming")), by=who["user"])
+                    if "idle_unload_minutes" in body:
+                        try:
+                            minutes = int(body["idle_unload_minutes"])
+                        except (TypeError, ValueError):
+                            return self._send(400, {"code": "bad_request", "message": "Choose a number of minutes (0 turns idle unload off)."})
+                        if not 0 <= minutes <= 720:
+                            return self._send(400, {"code": "bad_request", "message": "Choose between 0 and 720 minutes (0 turns idle unload off)."})
+                        st.save_security(idle_unload_minutes=minutes)
+                        st.auth.event("idle_unload_changed", who["user"], self._ip(), str(minutes))
+                    if body.get("unload"):
+                        if st.busy():
+                            return self._send(409, {"code": "busy", "message": "A reply is being written right now.", "action": "Try again in a moment."})
+                        st.unload_model(f"unloaded by {who['user']}")
+                    return self._send(200, st.pc_status())
                 if path == "/api/admin/models":                                   # publish a model that is in preview, schedule it, or record an update that keeps its version
                     mp, man, mid, by = self.state.models_pub, self.state.manifest, str(body.get("id", "")), who["user"]
                     try:
@@ -2613,7 +2729,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 "briefing": bool(st.get_settings(who["user"]).get("connected_apps", True) and st.links.store.connected(who["user"]) & set(app_links.BRIEF_APPS)),
                 "thinking_words": list(chat_polish.THINKING_WORDS), "think_switch_s": chat_polish.THINKING_SWITCH_S,
                 "pause_by_effort": chat_polish.PAUSE_BASE, "regen_options": regen_modes.menu(),
-                "features": st.flags.mapping(who)}
+                "features": st.flags.mapping(who), "gaming": bool(st.cfg.get("gaming"))}
 
     def api_get_chat(self, who, cid):
         store = self.state.store(who["user"])
@@ -3198,6 +3314,9 @@ class Handler(http.server.BaseHTTPRequestHandler):
             return self._send(400, {"code": "empty", "message": "Type a message first."})
         if len(text) > MAX_TEXT:
             return self._send(400, {"code": "too_long", "message": "That message is too long. Please shorten it."})
+        if st.cfg.get("gaming"):                              # Gaming mode: a plain "resting" answer at once, nothing is saved or counted
+            status, headers, payload = U.LimitError("gaming", "Emvryx is resting while the PC is being used for something else. Please try again in a little while.", retry_after=300).to_http()
+            return self._send(status, payload, headers=headers)
         try:
             q, stop, model, win, decision = start_turn(st, who, cid, text, str(body.get("model", "")), str(body.get("effort", "balanced")),
                                              regenerate, body.get("regen_mode") or None, cont=bool(body.get("continue")))
@@ -3444,6 +3563,21 @@ def main():
         state.web_fn = lambda question, k: web_answer(question, k, place=args.weather_place)        # Auto: only when the person's setting and the question call for it
     srv = make_server(state, args.host, args.port)
     threading.Thread(target=documents.warm_ocr, daemon=True).start()          # loads the picture reader now, so the first screenshot is quick
+    state.sync_gaming()
+    if state.runner:
+        def _idle_loop():                                    # frees the graphics card when nobody has used the model for a while, and in Gaming mode
+            while True:
+                time.sleep(15)
+                try:
+                    state.idle_tick()
+                except Exception as e:                       # noqa: BLE001 - a hiccup here must never take the app down
+                    print(f"(idle check failed: {e})", flush=True)
+        threading.Thread(target=_idle_loop, daemon=True).start()
+        if state.cfg.get("gaming"):
+            print("Gaming mode is ON (Admin > PC, or delete gaming.flag in the data folder): models stay unloaded and chats say Emvryx is resting.", flush=True)
+        else:
+            minutes = int(state.security.get("idle_unload_minutes") or 0)
+            print(f"A model nobody has used for {minutes} minutes is unloaded to free the graphics card (Admin > PC)." if minutes else "Idle unload is off (Admin > PC).", flush=True)
     if args.preload:
         def _preload():
             print("Preload: " + state.preload(args.preload), flush=True)
@@ -3473,7 +3607,7 @@ def main():
         print("Reachable from your network. Anyone with a key can use it; keep keys private.")
     try:
         summary.start(state)                                # the owner's weekly summary, when switched on
-        if runner and runner.warm_last():
+        if runner and not state.cfg.get("gaming") and runner.warm_last():
             print("Loading the model you used last in the background, so your first message is quick.", flush=True)
         srv.serve_forever()
     except KeyboardInterrupt:

@@ -277,7 +277,7 @@ class ThinkingCheck(unittest.TestCase):
 class Args:
     def __init__(self, **kw):
         self.__dict__.update(dict(models=list(CH.MODELS), only=None, skip=None, lessons="data/v3/chat_3x.jsonl", keep=0.4, thinking=None, thinking_share=0.1, exam_n=2000,
-                                  llama_cpp="..\\llama.cpp", quantize_bin=None, llama_bin=None, think_port=8099), **kw)
+                                  llama_cpp="..\\llama.cpp", quantize_bin=None, llama_bin=None, think_port=8099, data_dir=".emvryx"), **kw)
 
 
 class Chain(unittest.TestCase):
@@ -316,6 +316,15 @@ class Chain(unittest.TestCase):
             with contextlib.redirect_stdout(io.StringIO()):
                 CH.wait_while_paused(flag, sleep=fake_sleep)
             self.assertEqual(waits, [15])
+
+    def test_gaming_flag_is_created_and_removed(self):
+        with tempfile.TemporaryDirectory() as d:
+            a = Args(data_dir=os.path.join(d, "data"))
+            CH.set_gaming_flag(a, True)
+            self.assertTrue(os.path.exists(CH.gaming_flag(a)))
+            CH.set_gaming_flag(a, False)
+            self.assertFalse(os.path.exists(CH.gaming_flag(a)))
+            CH.set_gaming_flag(a, False)                                   # already off: fine
 
     def test_dry_run_prints_the_plan_and_marks_what_is_done(self):
         with tempfile.TemporaryDirectory() as d:
