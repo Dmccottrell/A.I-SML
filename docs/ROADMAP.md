@@ -138,9 +138,11 @@ Effort is a guess: **S** is days, **M** is a couple of weeks, **L** is a big pro
 **What we will not do:** train on people's chats without a clear opt-in, or let an answer claim a source it did not read.
 <!-- next:end -->
 
-## Emvryx API and connecting my own apps (to discuss Sunday, Oct 11, 2026)
+## Emvryx API and connecting my own apps (the API is built, Oct 12, 2026)
 
-The owner's request: use Emvryx inside the other apps already built (household finance, charting practice). Nothing here is built yet. The repos seen on the GitHub account: `household-finance` and `Personal-Finance-app`; the charting practice app is not identified yet.
+> **Built Oct 12, 2026:** `POST /api/v1/ask` with one key per app, managed in Admin > Apps (instructions, plan, speed limit, on/off, new key, remove), nothing saved, no lookups by default, errors an app can show kindly, a tiny client (`examples/emvryx_client.py`) and a guide for non-experts: [API.md](API.md). **Still to do:** pick the first app and add one small feature to it behind a switch (steps 1 and 3 below).
+
+The owner's request: use Emvryx inside the other apps already built (household finance, charting practice). The text below is the original plan. The repos seen on the GitHub account: `household-finance` and `Personal-Finance-app`; the charting practice app is not identified yet.
 
 **What to decide on Sunday**
 1. Which app goes first, what it is built with, and where it is hosted (Vercel, only on the PC, or a phone app).

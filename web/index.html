@@ -1829,7 +1829,7 @@ function sxBody() {
 }
 async function sxReload() { await sxAcct(); sxRender(); }
 const EVENT_NAMES = {login_ok: 'Signed in', login_fail: 'Wrong sign-in try', logout: 'Signed out', lockout: 'Address locked out', signup: 'New account', password_set: 'Password changed', mfa_on: 'Two-step turned on', mfa_off: 'Two-step turned off',
-  mfa_recovery_used: 'Recovery code used', mfa_recovery_new: 'New recovery codes', mfa_reset_by_owner: 'Two-step reset by owner', password_reset_by_admin: 'Password reset by admin', gaming_mode: 'Gaming mode', model_unloaded: 'Model unloaded', idle_unload_changed: 'Idle unload changed', model_published: 'Model published', reauth_fail: 'Wrong password or code', email_changed: 'Email changed', session_revoked: 'Device signed out', key_rotated: 'Key replaced',
+  mfa_recovery_used: 'Recovery code used', mfa_recovery_new: 'New recovery codes', mfa_reset_by_owner: 'Two-step reset by owner', password_reset_by_admin: 'Password reset by admin', gaming_mode: 'Gaming mode', model_unloaded: 'Model unloaded', idle_unload_changed: 'Idle unload changed', model_published: 'Model published', app_added: 'App added', app_changed: 'App changed', app_key_rotated: 'App key replaced', reauth_fail: 'Wrong password or code', email_changed: 'Email changed', session_revoked: 'Device signed out', key_rotated: 'Key replaced',
   pair_created: 'Sign-in link made', pair_used: 'Sign-in link used', user_added: 'Person added', ban: 'Account turned off', unban: 'Account turned on', signups_changed: 'Sign-up rule changed', invite_made: 'Invite made', bad_origin: 'Cross-site request refused', email_code: 'Email code sent'};
 
 async function sxFill(kind, box) {
@@ -1978,13 +1978,13 @@ function openAdmin(tab) {
 function admRender() {
   const root = ADM.root; if (!root || !root.isConnected) return;
   viewHash('admin/' + ADM.tab);
-  const tabs = [['previews', 'Previews'], ['models', 'Models'], ['pc', 'PC'], ['people', 'People'], ['signups', 'Sign-ups'], ['activity', 'Activity']];
+  const tabs = [['previews', 'Previews'], ['models', 'Models'], ['apps', 'Apps'], ['pc', 'PC'], ['people', 'People'], ['signups', 'Sign-ups'], ['activity', 'Activity']];
   const body = el('div', {class: 'adm-body', id: 'admBody'});
   root.replaceChildren(
     el('div', {class: 'adm-top'}, el('h2', {}, 'Admin'), el('button', {class: 'icon', type: 'button', 'aria-label': 'Close admin', onclick: closeAdmin}, icon('x'))),
     el('div', {class: 'adm-tabs', role: 'tablist'}, ...tabs.map(([id, n]) => el('button', {type: 'button', role: 'tab', class: ADM.tab === id ? 'on' : '', 'aria-selected': String(ADM.tab === id), onclick: () => { ADM.tab = id; ADM.q = ''; admRender(); }}, n))),
     body);
-  const fill = {previews: admPreviews, models: admModels, pc: admPc, people: admPeople, signups: () => admOld(body, 'a-signups'), activity: () => admOld(body, 'a-log')}[ADM.tab];
+  const fill = {previews: admPreviews, models: admModels, apps: admApps, pc: admPc, people: admPeople, signups: () => admOld(body, 'a-signups'), activity: () => admOld(body, 'a-log')}[ADM.tab];
   body.append(el('div', {style: 'color:var(--muted)'}, 'Loading...'));
   Promise.resolve(fill(body)).catch(() => body.replaceChildren(el('p', {class: 'lead'}, 'That did not load. Check your connection and try again.')));
 }
@@ -2056,6 +2056,45 @@ async function admModels(body) {
           sxBtn('Record an update', () => { const n = prompt('What changed in ' + m.label + '? (shown to everyone in What’s new)'); if (n && n.trim()) save({id: m.id, record_update: true, notes: n.trim()}); })), el('small', {}, m.tagline)))),
       el('div', {class: 'adm-card'}, el('h3', {}, 'Model release history'),
         ...(j.releases.length ? j.releases.map((r) => el('div', {class: 'adm-sub'}, el('div', {class: 'adm-row'}, el('span', {}, el('b', {}, relTitle(r)), ' ', el('span', {class: 'adm-tag'}, REL_KIND[r.kind] || r.kind)), el('small', {}, admDate(r.at))), r.notes ? el('small', {}, r.notes) : null, el('small', {}, 'By ' + r.by))) : [el('p', {}, 'No model releases yet.')])));
+  };
+  draw();
+}
+
+async function admApps(body) {
+  let j = await (await api('/api/admin/apps')).json();
+  const call = async (b) => { const r = await post('/api/admin/apps', b); const k = await r.json().catch(() => ({})); if (!r.ok) { toast(k.message || 'That did not work.'); return null; } j.apps = k.apps || j.apps; draw(); return k; };
+  const keyDialog = (title, key, slug) => {
+    const sample = 'curl -s ' + j.url + ' -H "Authorization: Bearer ' + key + '" -H "Content-Type: application/json" -d \'{"question": "Say hello in five words."}\'';
+    const cp = (text, label) => el('button', {class: 'btn ghost', onclick: (e) => { navigator.clipboard && navigator.clipboard.writeText(text).then(() => { e.target.textContent = 'Copied'; }).catch(() => { e.target.textContent = 'Press and hold to copy'; }); }}, label);
+    dialog([el('h2', {}, title), el('p', {}, 'This is the only time the key is shown. Copy it now and keep it in the app’s private settings (a server-side secret), never in code that runs in a browser or on a phone.'),
+      el('div', {style: 'word-break:break-all;background:var(--bg);border:1px solid var(--line);border-radius:12px;padding:12px;font-family:monospace;font-size:14px;margin:8px 0'}, key), cp(key, 'Copy key'),
+      el('p', {style: 'margin-top:14px'}, 'Try it from a computer on this network:'), el('pre', {style: 'white-space:pre-wrap;word-break:break-all;font-size:12px;background:var(--bg);border:1px solid var(--line);border-radius:12px;padding:10px'}, sample), cp(sample, 'Copy test command')], 'Done');
+  };
+  const draw = () => {
+    const slug = sxInput('text', 'a short name, e.g. finance', {'aria-label': 'App name', autocapitalize: 'none'}), disp = sxInput('text', 'Display name, e.g. Household finance', {'aria-label': 'Display name'});
+    const ins = el('textarea', {rows: '3', placeholder: 'What this app is for, e.g. You are a calm budgeting helper. Explain the numbers you are given; never do arithmetic yourself.', 'aria-label': 'Instructions', style: 'width:100%;box-sizing:border-box;background:var(--surface2);border:1px solid var(--line);border-radius:12px;color:var(--text);padding:10px;font:inherit'});
+    let plan = 'free', lookup = 'none';
+    body.replaceChildren(
+      el('div', {class: 'adm-card'}, el('h3', {}, '\u{1F50C} Apps'),
+        el('p', {}, 'Your own apps (household finance, charting practice...) can ask Emvryx a question and get an answer back. Each app has its own key, plan, instructions and speed limit, and you can switch one off or replace its key without touching the others. Nothing an app asks is saved.'),
+        el('p', {style: 'font-size:14px;word-break:break-all'}, 'Address: ' + j.url + '  (send POST with the header Authorization: Bearer <the app’s key>). The app must call it from its own server side (for example a Supabase edge function or a Vercel function), never from browser code. The PC must be on.')),
+      ...(j.apps.length ? j.apps.map((a) => {
+        const text = el('textarea', {rows: '3', 'aria-label': 'Instructions for ' + a.display, style: 'width:100%;box-sizing:border-box;background:var(--surface2);border:1px solid var(--line);border-radius:12px;color:var(--text);padding:10px;font:inherit'}); text.value = a.instructions;
+        const rpm = sxInput('number', '', {'aria-label': 'Questions per minute', min: '1', max: '600', inputmode: 'numeric'}); rpm.value = a.rpm; rpm.style.maxWidth = '90px';
+        return el('div', {class: 'adm-card'}, el('div', {class: 'adm-row'}, el('div', {}, el('h3', {}, a.display, ' ', el('span', {class: 'adm-tag ' + (a.enabled ? 'on' : '')}, a.enabled ? 'On' : 'Off')), el('small', {style: 'color:var(--muted)'}, a.name + ' · ' + a.plan + ' plan · ' + a.calls + ' questions' + (a.last_used ? ' · last ' + admAgo(a.last_used) : ' · not used yet'))),
+          sxSwitch(a.enabled, (v) => call({action: 'update', slug: a.slug, enabled: v}), 'App on or off')),
+          el('b', {style: 'font-size:15px'}, 'Instructions (sent with every question)'), text,
+          el('div', {class: 'adm-acts'}, el('span', {style: 'color:var(--muted);font-size:14px'}, 'Questions per minute'), rpm, sxBtn('Save', async () => { if (await call({action: 'update', slug: a.slug, instructions: text.value, rpm: parseInt(rpm.value, 10) || 20})) toast('Saved.'); })),
+          el('b', {style: 'font-size:15px'}, 'Plan (limits and models)'), sxSeg(j.plans.map((p) => [p, p[0].toUpperCase() + p.slice(1)]), a.plan, (v) => call({action: 'update', slug: a.slug, plan: v})),
+          el('b', {style: 'font-size:15px'}, 'May look things up'), el('small', {style: 'color:var(--muted)'}, 'None: nothing leaves this PC. Wikipedia: the local copy only. Auto: the web too (the question text is sent to the search service). Keep None for money and personal data.'),
+          sxSeg([['none', 'None'], ['wikipedia', 'Wikipedia'], ['auto', 'Auto']], a.lookup, (v) => call({action: 'update', slug: a.slug, lookup: v})),
+          el('div', {class: 'adm-acts'}, sxBtn('New key…', async () => { if (confirm('Make a new key for ' + a.display + '? The old key stops working at once, so update the app straight after.')) { const k = await call({action: 'rotate', slug: a.slug}); if (k) keyDialog('New key for ' + a.display, k.key, a.slug); } }),
+            sxBtn('Remove…', async () => { const n = prompt('Type the app’s name (' + a.slug + ') to remove it for good:'); if (n === a.slug) { if (await call({action: 'delete', slug: a.slug, confirm: n})) toast('Removed.'); } else if (n !== null) toast('That is not the name. Nothing was removed.'); }, 'bad')));
+      }) : [el('div', {class: 'adm-card'}, el('p', {}, 'No apps yet. Add the first one below.'))]),
+      el('div', {class: 'adm-card'}, el('h3', {}, 'Add an app'), authField('Short name (letters, numbers, -)', slug), authField('Display name', disp), el('b', {style: 'font-size:15px'}, 'Instructions'), ins,
+        el('b', {style: 'font-size:15px'}, 'Plan'), sxSeg(j.plans.map((p) => [p, p[0].toUpperCase() + p.slice(1)]), 'free', (v) => { plan = v; }),
+        el('b', {style: 'font-size:15px'}, 'May look things up'), sxSeg([['none', 'None (recommended)'], ['wikipedia', 'Wikipedia'], ['auto', 'Auto']], 'none', (v) => { lookup = v; }),
+        el('div', {}, sxBtn('Make the app and its key', async () => { const k = await call({action: 'create', slug: slug.value.trim().toLowerCase(), display: disp.value.trim(), plan, instructions: ins.value, lookup}); if (k) keyDialog('Key for ' + (disp.value.trim() || slug.value), k.key, slug.value); }, 'primary'))));
   };
   draw();
 }
