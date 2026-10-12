@@ -87,6 +87,9 @@ class CodeTests(Base):
         self.assertEqual(kinds[-1], "end")
         self.assertIn("step", kinds)
         self.assertIn("result", kinds)
+        report = allev[-1].get("report")                               # the end of a turn that wrote files carries its verification report
+        self.assertTrue(report and report["files"] and report["files"][0]["path"] == "slug.py", report)
+        self.assertIn(report["verdict"], ("verified", "checked", "not_verified"))
         files = self.owner.call("GET", "/api/code/files?project=demo")[1]["files"]
         self.assertIn("slug.py", files)
         text = self.owner.call("GET", "/api/code/file?project=demo&path=slug.py")[1]["text"]
