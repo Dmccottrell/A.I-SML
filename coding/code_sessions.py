@@ -220,6 +220,8 @@ class Session:
             return True
         if name == "github" and str(args.get("action", "status")) == "status":
             return True                                  # only looking at the link
+        if name == "check_page":
+            return True                                  # the browser check only looks (and cannot reach the internet): no question
         if name in getattr(self, "_always", set()) and name != "github":       # pulling and pushing always ask, every time
             return True
         qid = len(self.events)
