@@ -6,7 +6,7 @@ general_lessons.py - Turn an open assistant dataset into general "LLM lessons" i
     python data_prep/format_lessons_3x.py --general data\\v3\\general.jsonl --general-share 0.3 --keep 0.4
 
 What it does to each lesson: reads it (--format messages = {"messages":[{"role","content"}]}, pairs = {"prompt","response"} or {"instruction","output"},
-dolly = {"instruction","context","response"}), keeps normal question-and-answer chats (up to 6 turns, replies of 20 to 4,000 characters), and DROPS anything that
+dolly = {"instruction","context","response"}), keeps normal question-and-answer chats (up to 6 turns, replies of 20 to 2,500 characters (the Emvryx length cap, so the models are not taught to ramble)), and DROPS anything that
 breaks a HARD style rule (claims to be ChatGPT/Qwen/Claude..., "as an AI language model", stray thinking tags: data_prep/style_check.py), any lesson that
 mentions an email address or phone number, and duplicates. The soft voice rules (filler openers, length) are not applied: general lessons teach range, not voice.
 Every kept lesson carries "kind": "general", its source and its licence. The Emvryx identity, honesty and correction lessons are never touched: they stay in
@@ -27,7 +27,7 @@ import re
 import style_check
 
 ALLOWED_LICENCES = ("apache-2.0", "mit", "cc0-1.0", "cc-by-4.0", "cc-by-sa-3.0", "cc-by-sa-4.0", "odc-by")
-MAX_TURNS, MIN_REPLY, MAX_REPLY = 6, 20, 4000
+MAX_TURNS, MIN_REPLY, MAX_REPLY = 6, 20, 2500          # 2,500 characters: the same cap as the Emvryx voice (data_prep/style_check.py), so general lessons do not teach long-windedness
 PII_RX = re.compile(r"[\w.+-]+@[\w-]+\.[\w.-]+|\b\+?\d[\d\s().-]{8,}\d\b")
 
 

@@ -460,7 +460,7 @@ class ChatStore:
 # ------------------------------------------------------------------ one message, start to finish
 def run_turn(tok, store, chat_id, backend, model, window, max_new, user_text=None, stop=None, save_every=8,
              keep_notes=1, notes=None, limiter=None, user=None, effort="balanced", clock=time.time,
-             pacer=None, auto_compact=True, summarize=None, style_hint="", user_docs=None):
+             pacer=None, auto_compact=True, summarize=None, style_hint="", user_docs=None, think=False):
     """Answer one message. Adds the user's message (if given), streams the reply while saving it, and returns
     {"text", "reason", "forgotten_messages"}. If the model fails mid-reply, what was written is kept (marked
     partial) and the AppError is re-raised, so the screen can offer "Continue".
@@ -471,6 +471,8 @@ def run_turn(tok, store, chat_id, backend, model, window, max_new, user_text=Non
     the device (model["where"] == "device") is never counted.
 
     `style_hint` is a one-time line added to the end of the last question in the prompt only (Regenerate options).
+    `think=True` (Deep, on models that can think) leaves the empty thinking block off the end of the prompt, so the model reasons first; the reasoning is
+    hidden from the answer (strip_think below) and counts toward `max_new`.
     `pacer` (chat_polish.paced, with the time of sending) makes the reply appear after a short pause and write out
     steadily. `auto_compact` shortens a chat that fills the model's memory (chat_polish.compact_chat).
     """
@@ -481,6 +483,8 @@ def run_turn(tok, store, chat_id, backend, model, window, max_new, user_text=Non
     history = store.history(chat_id)
     if style_hint and history and history[-1]["role"] == "user":      # asked for only this once: the saved chat keeps the plain question
         history[-1] = dict(history[-1], content=history[-1]["content"].rstrip() + "\n\n" + style_hint)
+    if think and history and history[-1]["role"] == "user":           # Deep: no empty thinking block after this question (chat.build_prompt)
+        history[-1] = dict(history[-1], thinking=True)
     if notes and history and history[-1]["role"] == "user":       # also on Regenerate and on the second try with web notes
         history[-1]["notes"] = notes
     limit = window - max_new
