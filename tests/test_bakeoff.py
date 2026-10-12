@@ -42,7 +42,7 @@ class Parts(unittest.TestCase):
         self.assertIn("36/41", text)
 
     def test_candidates_file_is_valid(self):
-        with open(os.path.join(os.path.dirname(__file__), os.pardir, "data", "bakeoff_candidates.json"), encoding="utf-8") as f:
+        with open(os.path.join(os.path.dirname(__file__), os.pardir, "eval", "bakeoff_candidates.json"), encoding="utf-8") as f:
             cands = json.load(f)["candidates"]
         slots = {c["slot"] for c in cands}
         self.assertEqual(slots, {"flare", "equinox", "solstice", "apogee"})

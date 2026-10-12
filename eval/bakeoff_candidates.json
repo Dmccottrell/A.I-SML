@@ -1,0 +1,22 @@
+{
+  "_help": "One entry per .gguf to test. slot = flare / equinox / solstice / apogee. baseline = the model in that slot today (the one to beat). file = where the .gguf is. ngl = layers on the card (99 = all; lower it for models that do not fit). think false = answer without thinking (Qwen3.5 and similar). args = extra llama-server options. The Hugging Face names and file sizes were found by web search and are NOT confirmed: check each model card and licence.",
+  "candidates": [
+    {"name": "flare-2.5-q4", "slot": "flare", "baseline": true, "file": "export\\open\\flare-2.5\\my-ai-q4_k_m.gguf"},
+    {"name": "flare-qwen3.5-2b-q4", "slot": "flare", "file": "models\\base\\Qwen3.5-2B-Q4_K_M.gguf", "think": false},
+    {"name": "flare-qwen3.5-0.8b-q4", "slot": "flare", "file": "models\\base\\Qwen3.5-0.8B-Q4_K_M.gguf", "think": false},
+
+    {"name": "equinox-2-q4", "slot": "equinox", "baseline": true, "file": "export\\open\\equinox-2\\my-ai-q4_k_m.gguf"},
+    {"name": "equinox-qwen3.5-4b-q4", "slot": "equinox", "file": "models\\base\\Qwen3.5-4B-Q4_K_M.gguf", "think": false},
+    {"name": "equinox-gemma4-e4b-q4", "slot": "equinox", "file": "models\\base\\gemma-4-E4B-it-Q4_K_M.gguf"},
+
+    {"name": "solstice-2-q4", "slot": "solstice", "baseline": true, "file": "export\\open\\solstice-2\\my-ai-q4_k_m.gguf"},
+    {"name": "solstice-qwen3.5-9b-q4", "slot": "solstice", "file": "models\\base\\Qwen3.5-9B-Q4_K_M.gguf", "think": false},
+    {"name": "solstice-r1-0528-qwen3-8b-q4", "slot": "solstice", "file": "models\\base\\DeepSeek-R1-0528-Qwen3-8B-Q4_K_M.gguf"},
+
+    {"name": "apogee-2-q4", "slot": "apogee", "baseline": true, "file": "export\\open\\apogee-2\\my-ai-q4_k_m.gguf"},
+    {"name": "apogee-qwen3.5-9b-q4", "slot": "apogee", "file": "models\\base\\Qwen3.5-9B-Q4_K_M.gguf", "think": false},
+    {"name": "apogee-deepseek-r1-14b-q4", "slot": "apogee", "file": "models\\base\\DeepSeek-R1-Distill-Qwen-14B-Q4_K_M.gguf"},
+    {"name": "apogee-qwen3.8-27b-iq3", "slot": "apogee", "file": "models\\base\\Qwen3.8-27B-IQ3_S.gguf", "think": false, "ngl": 99},
+    {"name": "apogee-qwen3.8-27b-iq2", "slot": "apogee", "file": "models\\base\\Qwen3.8-27B-UD-IQ2_XXS.gguf", "think": false, "ngl": 99}
+  ]
+}
