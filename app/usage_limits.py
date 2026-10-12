@@ -45,7 +45,7 @@ class LimitError(Exception):
 
     def to_http(self):
         """(status, headers, body) for the server: 429 for limits, 403 for a model the plan doesn't include, 503 when paused."""
-        status = {"model_not_in_plan": 403, "model_unavailable": 403, "paused": 503, "bad_effort": 400,
+        status = {"model_not_in_plan": 403, "model_unavailable": 403, "paused": 503, "gaming": 503, "bad_effort": 400,
                   "deep_needs_bigger": 409, "effort_not_available": 409}.get(self.code, 429)
         headers = {"Retry-After": str(int(math.ceil(self.retry_after)))} if self.retry_after else {}
         return status, headers, self.to_dict()
@@ -223,6 +223,8 @@ class Limiter:
         if where == "device":
             return None                                        # a model on the person's own device: free and uncounted
         u, t = self.effective(user)
+        if self.cfg.get("gaming"):                               # Gaming mode: the model is off so the PC can be used for something else, for everyone
+            raise LimitError("gaming", "Emvryx is resting while the PC is being used for something else. Please try again in a little while.", retry_after=300)
         if self.cfg.get("paused") and not u["owner"]:
             raise LimitError("paused", "Emvryx is paused for now. Please try again later.", retry_after=600)
         allowed = t["models"]

@@ -14,7 +14,7 @@ Everything here runs on the owner's PC (RTX 4070, 12 GB, 32 GB RAM). Nothing is 
 | `data_prep/format_lessons_3x.py` | De-duplicates, drops style failures, and keeps a balanced share (`--keep 0.4`) with the rare important kinds (identity, honesty, corrections) always kept |
 | `data_prep/reasoning_problems.py`, `make_thinking_lessons.py` | Optional: thinking lessons the model writes itself and code checks (wrong ones are thrown away). Only if the thinking check says they are needed |
 | `evaluation/thinking_check.py` | Same checked problems, thinking on and off, plain base versus tuned: did tuning wear the thinking down? |
-| `scripts/chain_home.py` | Runs pilot, train, merge, convert, exam, identity and thinking check for each model, remembers where it is, pauses on a `PAUSE` file, can stop and restart the Emvryx app |
+| `scripts/chain_home.py` | Runs pilot, train, merge, convert, exam, identity and thinking check for each model, remembers where it is, pauses on a `PAUSE` file, can switch Gaming mode on for the run (or stop and restart the Emvryx app) |
 
 ## The run, in order
 **0. Before the day** (about 30 minutes)
@@ -41,7 +41,7 @@ Send me `logs\\emvryx3-pilot.md` (and the screen if it fails). It tells us: does
 
 **3. Train, one model at a time** (the app and games are off while it runs)
 ```
-python scripts/chain_home.py --models flare-3 --keep 0.4 --llama-cpp ..\\llama.cpp --llama-bin C:\\...\\llama-server.exe --stop-app --restart-app
+python scripts/chain_home.py --models flare-3 --keep 0.4 --llama-cpp ..\\llama.cpp --llama-bin C:\\...\\llama-server.exe --gaming
 python scripts/chain_home.py --dry-run --models flare-3 equinox-3 solstice-3 --keep 0.4 --llama-cpp ..\\llama.cpp     # the whole plan, nothing run
 ```
 Expected times at home (an estimate until the pilot measures it, for the full lessons; `--keep 0.4` is about 40% of this): Flare 3 about 6 to 8 hours, Equinox 3 about 15 to 20, Solstice 3 about 40 to 50, plus about a third more for preference training. **Ctrl+C stops training and saves; the same command resumes.** Create an empty file named `PAUSE` in the folder to make the chain wait before its next step. Set `NTFY_TOPIC` to get phone messages.
@@ -60,7 +60,7 @@ Add the model to `models.json` with `"status": "preview"` and `"think": "empty"`
 2. **llama-server settings for Qwen3.5** (`open_models.llama_args`): the memory the conversation takes is not layers x heads x size for this design; set it from the pilot's real figures.
 3. **The regression guard** (a fixed set of everyday questions a new model must pass before Admin > Models lets it be published).
 4. **Preference training (DPO)** from your reported answers: needs a corrected "better answer" for each report, not only the bad one.
-5. **Idle unload and Gaming mode** in the app, so a big model does not hold the card while you play.
+5. ~~Idle unload and Gaming mode~~ (built Oct 12, 2026: Admin > PC; the chain's `--gaming` switches it on for the run).
 6. **Voice** (decided in the style guide, not yet written) and the Emvryx style pass over the lessons.
 
 ## If something goes wrong

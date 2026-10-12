@@ -740,7 +740,9 @@ function renderAll() {
   $('who').textContent = st.user === 'owner' ? 'Owner' : st.user;
   $('avatar').textContent = (st.user[0] || 'Y').toUpperCase();
   $('plan').textContent = (st.owner ? (st.founder ? 'Owner, no limits' : 'Admin, no limits') : st.plan[0].toUpperCase() + st.plan.slice(1) + ' plan' + (st.admin ? ' \u00b7 Admin' : ''));
-  if (st.demo) { $('banner').hidden = false; $('banner').replaceChildren(el('b', {}, 'Demo mode. '), 'No model is attached, so replies are a stand-in. Start the server with --llama to use a real model.'); } else $('banner').hidden = true;
+  if (st.demo) { $('banner').hidden = false; $('banner').replaceChildren(el('b', {}, 'Demo mode. '), 'No model is attached, so replies are a stand-in. Start the server with --llama to use a real model.'); }
+  else if (st.gaming) { $('banner').hidden = false; $('banner').replaceChildren(el('b', {}, 'Emvryx is resting. '), 'The PC is being used for something else, so chats are paused for now.'); }
+  else $('banner').hidden = true;
   renderChats(); renderLinks(); renderComposer(); renderUsage(st.usage, true); renderThread(); warmModel(); maybeNudge();
 }
 function renderChats() {
@@ -1827,7 +1829,7 @@ function sxBody() {
 }
 async function sxReload() { await sxAcct(); sxRender(); }
 const EVENT_NAMES = {login_ok: 'Signed in', login_fail: 'Wrong sign-in try', logout: 'Signed out', lockout: 'Address locked out', signup: 'New account', password_set: 'Password changed', mfa_on: 'Two-step turned on', mfa_off: 'Two-step turned off',
-  mfa_recovery_used: 'Recovery code used', mfa_recovery_new: 'New recovery codes', mfa_reset_by_owner: 'Two-step reset by owner', password_reset_by_admin: 'Password reset by admin', reauth_fail: 'Wrong password or code', email_changed: 'Email changed', session_revoked: 'Device signed out', key_rotated: 'Key replaced',
+  mfa_recovery_used: 'Recovery code used', mfa_recovery_new: 'New recovery codes', mfa_reset_by_owner: 'Two-step reset by owner', password_reset_by_admin: 'Password reset by admin', gaming_mode: 'Gaming mode', model_unloaded: 'Model unloaded', idle_unload_changed: 'Idle unload changed', model_published: 'Model published', reauth_fail: 'Wrong password or code', email_changed: 'Email changed', session_revoked: 'Device signed out', key_rotated: 'Key replaced',
   pair_created: 'Sign-in link made', pair_used: 'Sign-in link used', user_added: 'Person added', ban: 'Account turned off', unban: 'Account turned on', signups_changed: 'Sign-up rule changed', invite_made: 'Invite made', bad_origin: 'Cross-site request refused', email_code: 'Email code sent'};
 
 async function sxFill(kind, box) {
@@ -1976,13 +1978,13 @@ function openAdmin(tab) {
 function admRender() {
   const root = ADM.root; if (!root || !root.isConnected) return;
   viewHash('admin/' + ADM.tab);
-  const tabs = [['previews', 'Previews'], ['models', 'Models'], ['people', 'People'], ['signups', 'Sign-ups'], ['activity', 'Activity']];
+  const tabs = [['previews', 'Previews'], ['models', 'Models'], ['pc', 'PC'], ['people', 'People'], ['signups', 'Sign-ups'], ['activity', 'Activity']];
   const body = el('div', {class: 'adm-body', id: 'admBody'});
   root.replaceChildren(
     el('div', {class: 'adm-top'}, el('h2', {}, 'Admin'), el('button', {class: 'icon', type: 'button', 'aria-label': 'Close admin', onclick: closeAdmin}, icon('x'))),
     el('div', {class: 'adm-tabs', role: 'tablist'}, ...tabs.map(([id, n]) => el('button', {type: 'button', role: 'tab', class: ADM.tab === id ? 'on' : '', 'aria-selected': String(ADM.tab === id), onclick: () => { ADM.tab = id; ADM.q = ''; admRender(); }}, n))),
     body);
-  const fill = {previews: admPreviews, models: admModels, people: admPeople, signups: () => admOld(body, 'a-signups'), activity: () => admOld(body, 'a-log')}[ADM.tab];
+  const fill = {previews: admPreviews, models: admModels, pc: admPc, people: admPeople, signups: () => admOld(body, 'a-signups'), activity: () => admOld(body, 'a-log')}[ADM.tab];
   body.append(el('div', {style: 'color:var(--muted)'}, 'Loading...'));
   Promise.resolve(fill(body)).catch(() => body.replaceChildren(el('p', {class: 'lead'}, 'That did not load. Check your connection and try again.')));
 }
@@ -2054,6 +2056,28 @@ async function admModels(body) {
           sxBtn('Record an update', () => { const n = prompt('What changed in ' + m.label + '? (shown to everyone in What’s new)'); if (n && n.trim()) save({id: m.id, record_update: true, notes: n.trim()}); })), el('small', {}, m.tagline)))),
       el('div', {class: 'adm-card'}, el('h3', {}, 'Model release history'),
         ...(j.releases.length ? j.releases.map((r) => el('div', {class: 'adm-sub'}, el('div', {class: 'adm-row'}, el('span', {}, el('b', {}, relTitle(r)), ' ', el('span', {class: 'adm-tag'}, REL_KIND[r.kind] || r.kind)), el('small', {}, admDate(r.at))), r.notes ? el('small', {}, r.notes) : null, el('small', {}, 'By ' + r.by))) : [el('p', {}, 'No model releases yet.')])));
+  };
+  draw();
+}
+
+async function admPc(body) {
+  let j = await (await api('/api/admin/pc')).json();
+  const save = async (b) => { const r = await post('/api/admin/pc', b); const k = await r.json().catch(() => ({})); if (!r.ok) return toast(k.message || 'That did not work.'); j = k; if (S.state) S.state.gaming = j.gaming; renderAll(); draw(); toast('Saved.'); };
+  const idle = [[0, 'Never'], [5, '5 min'], [10, '10 min'], [15, '15 min'], [30, '30 min'], [60, '1 hour']];
+  const draw = () => {
+    const mins = Math.floor((j.idle_seconds || 0) / 60);
+    body.replaceChildren(
+      el('div', {class: 'adm-card'}, el('h3', {}, '\u{1F3AE} Gaming mode'),
+        el('p', {}, 'Frees the graphics card and memory at once, so you can game or train on this PC. While it is on, chats say Emvryx is resting, for everyone. Turn it off and the next message loads the model again (the first reply is slow while it loads).'),
+        el('div', {class: 'adm-row'}, el('b', {}, j.gaming ? 'On: Emvryx is resting' : 'Off'), sxSwitch(j.gaming, (v) => save({gaming: v}), 'Gaming mode')),
+        el('p', {style: 'font-size:14px'}, 'You can also switch it from the PC itself: create a file called gaming.flag in the .emvryx folder to turn it on, and delete it to turn it off.')),
+      el('div', {class: 'adm-card'}, el('h3', {}, 'On the card right now'),
+        j.has_runner ? el('p', {}, j.loaded ? el('span', {}, el('b', {}, j.loaded_label || j.loaded), ' is loaded' + (j.busy ? ' and in use.' : ', idle for ' + (mins ? mins + ' min' : 'under a minute') + '.')) : 'Nothing is loaded. The next message loads a model.')
+          : el('p', {}, 'This server is not running models itself (no llama-server), so there is nothing to free here.'),
+        j.has_runner && j.loaded ? el('div', {class: 'adm-acts'}, sxBtn('Unload now', () => save({unload: true}))) : null),
+      el('div', {class: 'adm-card'}, el('h3', {}, 'Unload when idle'),
+        el('p', {}, 'When nobody has used the model for this long, it is unloaded to free the card. The next message loads it again. Never keeps it loaded until you pick another model.'),
+        sxSeg(idle, j.idle_unload_minutes, (v) => save({idle_unload_minutes: v}))));
   };
   draw();
 }
