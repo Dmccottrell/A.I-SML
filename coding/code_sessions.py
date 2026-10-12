@@ -36,6 +36,7 @@ MAX_FILE_BYTES = 200_000
 MAX_EVENT_TEXT = 6000
 RESULT_TAGS = re.compile(r"<\|/?(?:end_)?tool_result\|>|<\|end_tool_result\|>")
 MAX_IMPORT_FILES, MAX_IMPORT_BYTES, MAX_ONE_FILE = 1000, 20_000_000, 2_000_000
+MAX_QUEUED = 5                                             # sessions that may wait in one person's queue
 SKIP_DIRS = {".git", "__pycache__", "node_modules", ".emvryx"}
 
 
@@ -202,6 +203,11 @@ class Session:
             return True
 
     def request_stop(self):
+        if self.state == "queued":                       # never started: take it out of the queue
+            self.state = "stopped"
+            self.emit("end", finished=False, summary="Removed from the queue.", turns=0)
+            self.persist(force=True)
+            return
         self.stop.set()
         with self.cv:
             self.cv.notify_all()
@@ -360,6 +366,12 @@ class Session:
         finally:
             self.live = None
             self.persist(force=True)
+            idle = getattr(self, "on_idle", None)
+            if idle and self.state not in ("starting", "working", "asking"):
+                try:
+                    idle(self)                            # the next queued session may start
+                except Exception:
+                    pass
 
     def _end(self, **data):
         """The end of a turn. When it did any work the end carries its verification report (so it is in the history on disk too)."""
@@ -552,8 +564,11 @@ class CodeManager:
 
     # ---- sessions
     def running(self, user):
-        s = self.sessions.get(self.by_user.get(user))
-        return s if s and s.state in ("starting", "working", "asking") else None
+        """The user's session that is working now (queued ones are waiting, not running), or None."""
+        for s in list(self.sessions.values()):
+            if s.user == user and s.state in ("starting", "working", "asking"):
+                return s
+        return None
 
     def any_running(self):
         return any(x.state in ("starting", "working", "asking") for x in list(self.sessions.values()))
@@ -574,7 +589,7 @@ class CodeManager:
         return code_sandbox.docker_prefix(sb.get("image", code_sandbox.DEFAULT_IMAGE), workspace, cpus=sb.get("cpus", "1"), memory=sb.get("memory", "768m"),
                                           pids=sb.get("pids", 128), runtime=sb.get("runtime"))
 
-    def start(self, user, project, task, model_id, generate, auto_edits=False, context_tokens=None, meter=None, outside=False, tools=None, identity=None, env="local", plan=False, owner=False):
+    def start(self, user, project, task, model_id, generate, auto_edits=False, context_tokens=None, meter=None, outside=False, tools=None, identity=None, env="local", plan=False, owner=False, queue=False):
         task = str(task or "").strip()
         if not task:
             raise CodeError("Describe what to build or fix.")
@@ -587,8 +602,11 @@ class CodeManager:
             if not ok:
                 raise CodeError(note)
         with self.lock:
-            if self.running(user):
+            busy = self.running(user)
+            if busy and not queue:
                 raise CodeError("You already have a session running.", "Stop it or wait for it to finish.")
+            if busy and sum(1 for x in self.sessions.values() if x.user == user and x.state == "queued") >= MAX_QUEUED:
+                raise CodeError(f"{MAX_QUEUED} sessions are already waiting in your queue.", "Wait for some to finish, or stop one.")
             ok, why = self.sandbox_ready()
             if not ok:
                 raise CodeError("The code sandbox isn't available, so nothing was run. " + why, "The owner needs to start Docker or build the sandbox image.")
@@ -607,8 +625,32 @@ class CodeManager:
                         env=env, remote=(env == "cloud"), log=code_log.SessionLog(self.base(user)), snapshot=lambda u=user, p=project: self._snapshot(u, p), plan=bool(plan),
                         expand=lambda t, u=user, p=project: self.expand_mentions(u, p, t))
             self.sessions[s.id], self.by_user[user] = s, s.id
+            s.on_idle = self._session_idle
+            if busy:                                           # one model on one card: sessions wait their turn, so they never work on the same files at once
+                s.state, s.run_args = "queued", (generate, self.max_turns, context_tokens)
+                s.emit("queued", task=task, project=project, position=self.queue_position(user, s.id))
+                s.persist(force=True)
+                return s, note
         threading.Thread(target=s.run, args=(generate, self.max_turns, context_tokens), daemon=True).start()
         return s, note
+
+    def queue_position(self, user, sid):
+        """1 = next to start, or 0 when the session is not waiting."""
+        waiting = sorted((x for x in self.sessions.values() if x.user == user and x.state == "queued"), key=lambda x: x.started)
+        return next((i + 1 for i, x in enumerate(waiting) if x.id == sid), 0)
+
+    def _session_idle(self, finished):
+        """A session finished a turn: start the user's next queued session, if nothing of theirs is working."""
+        with self.lock:
+            if self.running(finished.user):
+                return
+            waiting = sorted((x for x in self.sessions.values() if x.user == finished.user and x.state == "queued"), key=lambda x: x.started)
+            if not waiting:
+                return
+            nxt = waiting[0]
+            nxt.state = "starting"
+            args = nxt.run_args
+        threading.Thread(target=nxt.run, args=args, daemon=True).start()
 
     # ---- @file mentions and the project instructions file
     MENTION = re.compile(r"(?<![\w@])@([\w][\w./-]{0,119})")
@@ -717,12 +759,14 @@ class CodeManager:
         """Newest first: the running ones from memory, the rest from the history on disk."""
         now, out = time.time(), {}
         for m in self.log(user).metas():
-            if m.get("state") in ("starting", "working", "asking") and m["id"] not in self.sessions:
-                m["state"] = "interrupted"                     # the server was restarted while it was working
+            if m.get("state") in ("starting", "working", "asking", "queued") and m["id"] not in self.sessions:
+                m["state"] = "interrupted"                     # the server was restarted while it was working (or waiting)
             out[m["id"]] = m
         for sid, s in self.sessions.items():
             if s.user == user:
                 out[sid] = s.meta()
+                if s.state == "queued":
+                    out[sid]["position"] = self.queue_position(user, sid)
         rows = sorted(out.values(), key=lambda m: m.get("updated", 0), reverse=True)[:code_log.MAX_SESSIONS]
         for m in rows:
             m["age"] = code_log.age_words(now, m.get("updated", now))
@@ -733,7 +777,7 @@ class CodeManager:
         d = self.log(user).load(sid)
         if not d:
             raise CodeError("That session isn't here.")
-        if d["meta"].get("state") in ("starting", "working", "asking"):
+        if d["meta"].get("state") in ("starting", "working", "asking", "queued"):
             d["meta"]["state"] = "interrupted"
         return d
 
