@@ -100,6 +100,8 @@ SECURITY_DEFAULTS = {"session_days": 90, "pair_minutes": 15, "login_fail_limit":
                      "require_encryption": False, "grant_emails": ["darrylmccottrell16@gmail.com"], "public_url": "", "sharing": False, "weekly_summary": False, "backup_dir": "", "cloud_host": "", "cloud_user": "root", "cloud_port": 22, "cloud_for_others": False, "github_client_id": "", "contact_email": "", "operator_name": "", "alert_ntfy_topic": "",
                      "idle_unload_minutes": 15,
                      **code_sandbox.QUOTA_DEFAULTS}
+API_KEY_PREFIX = "emvx_"                      # an app's key starts with this, so a key that leaks into a log or a repository is easy to recognise
+APP_PREFIX = "app-"
 PAIR_PAGE = ('<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">'
              '<meta name="robots" content="noindex"><title>Sign in: Emvryx</title><style>body{margin:0;min-height:100vh;display:grid;place-items:center;'
              'background:#07080D;color:#EEF0F6;font:17px/1.5 system-ui,sans-serif}main{max-width:380px;padding:24px}h1{font-size:26px;margin:0 0 8px}'
@@ -387,6 +389,7 @@ class AppState:
         self.usage = U.UsageStore(os.path.join(data_dir, "usage.db") if data_dir else ":memory:")
         self.limiter = U.Limiter(self.usage, self.cfg, self.manifest)
         self.stores, self.stops, self.settings = {}, {}, {}
+        self._api_hits = {}                                    # app name -> times of its recent API calls (the per-minute limit)
         self._load_settings()
         self.lock = threading.Lock()
         self.auth = auth.AuthDB(os.path.join(data_dir, "auth.db") if data_dir else ":memory:")
@@ -498,7 +501,7 @@ class AppState:
     def user_record(self, name):
         return next((u for u in self.users.values() if u["user"] == name), None)
 
-    def add_user(self, name, tier, tz_minutes=0, email=None):
+    def add_user(self, name, tier, tz_minutes=0, email=None, key_prefix=""):
         """A new person: returns their key (shown once, never stored). For someone who already exists the plan is updated and None is returned:
         make them a pairing link instead (or rotate their key)."""
         if tier not in self.cfg["tiers"]:
@@ -512,7 +515,7 @@ class AppState:
             return None
         if email and not auth.clean_email(email):
             raise ValueError("that does not look like an email address")
-        key = secrets.token_urlsafe(24)
+        key = key_prefix + secrets.token_urlsafe(24)
         entry = {"user": name, "tier": tier, "owner": False, "tz_minutes": tz_minutes}
         if email:
             entry["email"] = auth.clean_email(email)
@@ -540,9 +543,9 @@ class AppState:
         found = self._entries(name)
         if not found:
             raise ValueError(f"no one is called {name!r} (use owner, or a name you added with --add-user)")
-        key = secrets.token_urlsafe(24)
-        new = "h:" + auth.digest(key)
         rec = dict(self.users[found[0]])
+        key = (API_KEY_PREFIX if rec.get("app") else "") + secrets.token_urlsafe(24)
+        new = "h:" + auth.digest(key)
         for old in found:
             self.users.pop(old, None)
             self._fresh.pop(old, None)
@@ -564,7 +567,7 @@ class AppState:
         # who may give out plans, no-limits and admin rights: the PC owner, and an account that was made an admin by the PC owner AND has one of these emails
         granter = bool(entry.get("owner")) or bool(entry.get("admin") and auth.clean_email(entry.get("email") or "") in granters)
         return {"user": entry["user"], "owner": row["owner"], "admin": admin, "founder": bool(entry.get("owner")), "granter": granter,
-                "tier": row["tier"], "banned": bool(entry.get("banned")),
+                "tier": row["tier"], "banned": bool(entry.get("banned")), "app": bool(entry.get("app")),
                 "email": entry.get("email"), "has_password": bool(entry.get("pw")), "mfa": bool((entry.get("mfa") or {}).get("on"))}
 
     def who(self, key):
@@ -1029,7 +1032,7 @@ class AppState:
         keep = int(self.manifest.get("keep_older_versions", 6))
         for name in M.NAMES:
             eff = [dict(m, status=self.models_pub.status_of(m), preview=(m["status"] == "preview" and not self.models_pub.live(m["id"]))) for m in self.manifest["models"] if m["name"] == name]
-            versions = sorted((m for m in eff if m["status"] != "off" and (not m["preview"] or who["admin"])), key=lambda m: -m["version"])
+            versions = sorted((m for m in eff if m["status"] != "off" and (not m["preview"] or who.get("admin"))), key=lambda m: -m["version"])
             if not versions:
                 continue
             usable = [m for m in versions if m["status"] != "planned"]
@@ -1040,6 +1043,87 @@ class AppState:
                 c["older"] = True
                 other.append(c)
         return {"cards": cards, "other": other}
+
+    # ---- apps that use Emvryx through the API (POST /api/v1/ask): each one is a key-only account, never a person who signs in
+    APP_SLUG = re.compile(r"[a-z0-9][a-z0-9-]{1,27}")
+    LOOKUP_MODES = {"none": "none", "wikipedia": "off", "auto": "auto"}          # what an app's questions may be looked up in ("none": nothing leaves this PC)
+
+    def add_app(self, slug, display, tier="free", instructions="", rpm=20, model="flare", effort="balanced", lookup="none"):
+        """Make an app and return its key (shown once, never stored). The app's name in the logs is app-<slug>."""
+        slug = str(slug or "").strip().lower()
+        if not self.APP_SLUG.fullmatch(slug):
+            raise ValueError("an app's name is lowercase letters, numbers and - (2 to 28 characters), for example finance")
+        if lookup not in self.LOOKUP_MODES:
+            raise ValueError("lookup is none, wikipedia or auto")
+        name = APP_PREFIX + slug
+        key = self.add_user(name, tier, key_prefix=API_KEY_PREFIX)
+        if key is None:
+            raise ValueError("an app with that name already exists")
+        self._set_fields(name, app=True, app_name=(str(display or slug).strip() or slug)[:60], app_instructions=" ".join(str(instructions or "").split())[:2000],
+                         app_rpm=max(1, min(600, int(rpm))), app_model=str(model or "flare")[:40], app_effort=effort if effort in ("auto", "quick", "balanced", "deep") else "balanced",
+                         app_enabled=True, app_created=int(time.time()), app_lookup=lookup)
+        self.put_settings(name, {"memory": False, "live_data": False, "connected_apps": False, "web_search": "none", "custom_instructions": ""})
+        self.auth.event("app_added", name, "", f"plan {tier}")
+        return key
+
+    def app_record(self, name):
+        rec = self.user_record(name)
+        return rec if rec and rec.get("app") else None
+
+    def update_app(self, name, **ch):
+        rec = self.app_record(name)
+        if not rec:
+            raise ValueError("no such app")
+        fields = {}
+        if "display" in ch:
+            fields["app_name"] = (str(ch["display"]).strip() or name)[:60]
+        if "instructions" in ch:
+            fields["app_instructions"] = " ".join(str(ch["instructions"]).split())[:2000]
+        if "rpm" in ch:
+            fields["app_rpm"] = max(1, min(600, int(ch["rpm"])))
+        if "model" in ch:
+            fields["app_model"] = str(ch["model"])[:40]
+        if "effort" in ch and ch["effort"] in ("auto", "quick", "balanced", "deep"):
+            fields["app_effort"] = ch["effort"]
+        if "enabled" in ch:
+            fields["app_enabled"] = bool(ch["enabled"])
+        if "lookup" in ch:
+            if ch["lookup"] not in self.LOOKUP_MODES:
+                raise ValueError("lookup is none, wikipedia or auto")
+            fields["app_lookup"] = ch["lookup"]
+            self.put_settings(name, {"web_search": self.LOOKUP_MODES[ch["lookup"]]})
+        if "plan" in ch:
+            self.set_plan(name, ch["plan"])
+        if fields:
+            self._set_fields(name, **fields)
+
+    def apps(self):
+        out = []
+        for u in self.users.values():
+            if not u.get("app"):
+                continue
+            row = self.usage.get_user(u["user"])
+            out.append({"name": u["user"], "slug": u["user"][len(APP_PREFIX):], "display": u.get("app_name") or u["user"], "plan": row["tier"], "enabled": u.get("app_enabled", True),
+                        "instructions": u.get("app_instructions", ""), "rpm": u.get("app_rpm", 20), "model": u.get("app_model", "flare"), "effort": u.get("app_effort", "balanced"),
+                        "lookup": u.get("app_lookup", "none"), "created": u.get("app_created"), "last_used": u.get("app_last_used"), "calls": u.get("app_calls", 0)})
+        return sorted(out, key=lambda a: a["slug"])
+
+    def app_rate_ok(self, name, rpm, now=None):
+        """A sliding minute per app: True if this call may go ahead (and records it), else the seconds to wait."""
+        now = time.time() if now is None else now
+        with self.lock:
+            hits = [t for t in self._api_hits.get(name, []) if now - t < 60]
+            if len(hits) >= rpm:
+                self._api_hits[name] = hits
+                return False, max(1, int(60 - (now - hits[0])) + 1)
+            hits.append(now)
+            self._api_hits[name] = hits
+        return True, 0
+
+    def note_app_call(self, name):
+        rec = self.user_record(name)
+        if rec:
+            self._set_fields(name, app_last_used=int(time.time()), app_calls=int(rec.get("app_calls", 0)) + 1)
 
     # ---- the graphics card: idle unload and Gaming mode
     def gaming_file(self):
@@ -1371,10 +1455,10 @@ class AppState:
 CONTINUE_HINT = "[Your last answer was cut off because it hit the length limit. Continue it from exactly where it stopped. Do not repeat anything you already wrote, do not start over and do not apologise.]"
 
 
-def start_turn(state, who, chat_id, text, model_id, effort, regenerate=False, regen_mode=None, cont=False):
+def start_turn(state, who, chat_id, text, model_id, effort, regenerate=False, regen_mode=None, cont=False, pace=None, extra_notes=None, extra_hint=""):
     """Begin a reply in a worker thread. Returns (queue, stop_event); the queue yields ("piece", text), then
     ("done", result) or ("error", exception). With effort "auto" the level is chosen from the message (effort_router);
-    the page is told which one in `decision`."""
+    the page is told which one in `decision`. The API passes pace=False (no show of thinking), extra_notes (facts the app sends) and extra_hint (the app's instructions)."""
     store = state.store(who["user"])
     model = state.pick_model(who, model_id)
     if model["state"] == "too_big":
@@ -1428,6 +1512,8 @@ def start_turn(state, who, chat_id, text, model_id, effort, regenerate=False, re
     skill_hint = "\n\n".join(h for h in (app_skills.custom_hint(state.get_settings(who["user"]).get("custom_instructions")),
                                          app_skills.hint(store.skill(chat_id)),
                                          CONTINUE_HINT if cont else "") if h)   # the person's own preference, then the chat's skill (Study helper ...), then "continue": extra instructions for the model only
+    if extra_hint:
+        skill_hint = (skill_hint + "\n\n" if skill_hint else "") + extra_hint
     library = state.docs_for(who["user"])
     attached = [d for d in (library.info(i) for i in store.docs(chat_id)) if d]     # documents attached to this chat: their passages go in as notes
     if attached:
@@ -1444,7 +1530,7 @@ def start_turn(state, who, chat_id, text, model_id, effort, regenerate=False, re
 
     def pacer(stream):
         stream = timed(stream)
-        gen = chat_polish.paced(stream, min_first_s=pause, start=started) if state.pace else stream
+        gen = chat_polish.paced(stream, min_first_s=pause, start=started) if (state.pace if pace is None else pace) else stream
         try:
             for bit in gen:
                 q.put(("piece", bit))
@@ -1535,6 +1621,8 @@ def start_turn(state, who, chat_id, text, model_id, effort, regenerate=False, re
                 notes = [{"title": n["title"], "text": n["text"]} for n in live_notes] + list(notes or [])
             if app_notes:
                 notes = list(app_notes) + list(notes or [])
+            if extra_notes:                                                        # facts an app sent with its question: the answer must come from these
+                notes = list(extra_notes) + list(notes or [])
             today = lookup_auto.date_note(text or (store.messages(chat_id)[-1]["content"] if regenerate and store.messages(chat_id) else ""), state.clock())
             if today:                                                              # "what day is Christmas this year": the model has no clock
                 notes = [today] + list(notes or [])
@@ -1816,6 +1904,9 @@ class Handler(http.server.BaseHTTPRequestHandler):
                     who["session"] = self._start_session(who["user"], "old cookie upgraded")
             if not who:
                 self._fail("bad key")
+            elif who.get("app"):                            # an app's key opens the API only, never the app's screens or a person's data
+                self._send(403, {"code": "app_key", "message": "This key is for an app and works only with the Emvryx API.", "action": "Use POST /api/v1/ask."})
+                return None
         elif kind == "session":
             who = st.who_session(self._cookie_dict().get("emvryx_session"))
             if not who:
@@ -1890,10 +1981,12 @@ class Handler(http.server.BaseHTTPRequestHandler):
                                       csp="default-src 'none'; style-src 'unsafe-inline'; form-action 'self'; frame-ancestors 'none'; base-uri 'none'")
                 self._fail("bad pairing link")
                 return self._send(410, "This pairing link was already used or has expired. Ask for a new one.\n", "text/plain; charset=utf-8")
+            if path == "/api/v1/models":
+                return self.api_v1_models()
             if path == "/api/status":                          # for the website's "is Emvryx on?" line and its Open page: harmless, no sign-in, readable from the website
                 st = self.state
                 ready = sum(1 for m in st.catalog({"user": "", "owner": True, "tier": "mega", "banned": False})["cards"] if m["state"] == "ready")
-                return self._send(200, {"up": True, "paused": bool(st.cfg.get("paused")), "demo": bool(st.demo), "models_ready": ready, "signup": st.signup_mode()},
+                return self._send(200, {"up": True, "paused": bool(st.cfg.get("paused")), "resting": bool(st.cfg.get("gaming")), "demo": bool(st.demo), "models_ready": ready, "signup": st.signup_mode()},
                                   headers={"Access-Control-Allow-Origin": "*", "Cache-Control": "no-store"})
             if path == "/api/auth-options":
                 return self._send(200, {"email": bool(self.state.mailer), "signups": bool(self.state.mailer and self.state.security["open_signups"]),
@@ -2021,9 +2114,11 @@ class Handler(http.server.BaseHTTPRequestHandler):
             if path == "/api/admin/flags" and who["admin"]:
                 return self._send(200, {"flags": self.state.flags.listing(), "audiences": [[a, flags.AUDIENCE_NAMES[a]] for a in flags.AUDIENCES],
                                         "version": self.state.flags.version(), "releases": self.state.flags.releases(),
-                                        "people": sorted(u["user"] for u in self.state.users.values())})
+                                        "people": sorted(u["user"] for u in self.state.users.values() if not u.get("app"))})
             if path == "/api/admin/models" and who["admin"]:
                 return self._send(200, self.state.models_admin())
+            if path == "/api/admin/apps" and who["admin"]:
+                return self._send(200, {"apps": self.state.apps(), "plans": list(self.state.cfg["tiers"]), "url": self._public_base() + "/api/v1/ask"})
             if path == "/api/admin/pc" and who["admin"]:
                 self.state.sync_gaming()
                 return self._send(200, self.state.pc_status())
@@ -2032,7 +2127,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 return self._send(200, {"users": [{"user": u["user"], "tier": self.state.usage.get_user(u["user"])["tier"], "email": u.get("email"),
                                                    "banned": bool(u.get("banned")), "owner": bool(u.get("owner")), "admin": bool(u.get("admin")), "unlimited": bool(u.get("unlimited")), "mfa": bool((u.get("mfa") or {}).get("on")),
                                                    "has_password": bool(u.get("pw")), "created": u.get("created"), "last_seen": seen.get(u["user"])}
-                                                  for u in self.state.users.values()], "paused": bool(self.state.cfg.get("paused"))})
+                                                  for u in self.state.users.values() if not u.get("app")], "paused": bool(self.state.cfg.get("paused"))})
             return self._send(404, {"code": "not_found", "message": "Not found."})
         except (BrokenPipeError, ConnectionResetError):
             pass
@@ -2066,6 +2161,8 @@ class Handler(http.server.BaseHTTPRequestHandler):
                     return
                 key = str(body.get("key", "")).strip()
                 who = self.state.who(key)
+                if who and who.get("app"):
+                    return self._send(403, {"code": "app_key", "message": "This key is for an app, not a person.", "action": "Use POST /api/v1/ask."})
                 if not who:
                     self._fail("bad key")
                     return self._send(401, {"code": "bad_key", "message": "That key isn't right.", "action": "Check it and try again."})
@@ -2084,6 +2181,8 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 return self.api_email_start(body)
             if path == "/api/login/email/verify":
                 return self.api_email_verify(body)
+            if path == "/api/v1/ask":
+                return self.api_v1_ask(body)
             who = self._who()
             if not who:
                 return
@@ -2360,6 +2459,32 @@ class Handler(http.server.BaseHTTPRequestHandler):
                     except ValueError as e:
                         return self._send(400, {"code": "bad_request", "message": str(e)})
                     return self._send(200, {"flags": self.state.flags.listing(), "version": self.state.flags.version(), "releases": self.state.flags.releases()})
+                if path == "/api/admin/apps":                                     # make, change, switch off, rotate the key of, or remove an app
+                    st, act = self.state, str(body.get("action", ""))
+                    try:
+                        if act == "create":
+                            key = st.add_app(body.get("slug"), body.get("display"), body.get("plan", "free"), body.get("instructions", ""), body.get("rpm", 20),
+                                             body.get("model", "flare"), body.get("effort", "balanced"), body.get("lookup", "none"))
+                            return self._send(200, {"key": key, "apps": st.apps(), "url": self._public_base() + "/api/v1/ask"})
+                        name = APP_PREFIX + str(body.get("slug", ""))
+                        if not st.app_record(name):
+                            return self._send(404, {"code": "not_found", "message": "No such app."})
+                        if act == "rotate":
+                            key = st.rotate_key(name)
+                            st.auth.event("app_key_rotated", name, self._ip(), "by " + who["user"])
+                            return self._send(200, {"key": key, "apps": st.apps()})
+                        if act == "delete":
+                            if str(body.get("confirm", "")) != str(body.get("slug", "")):
+                                return self._send(400, {"code": "confirm", "message": "Type the app's name to confirm."})
+                            data_tools.delete_account(st, name, by=who["user"])
+                        elif act == "update":
+                            st.update_app(name, **{k: body[k] for k in ("display", "instructions", "rpm", "model", "effort", "enabled", "lookup", "plan") if k in body})
+                            st.auth.event("app_changed", name, self._ip(), "by " + who["user"])
+                        else:
+                            return self._send(400, {"code": "bad_request", "message": "Nothing to do."})
+                    except (ValueError, TypeError) as e:
+                        return self._send(400, {"code": "bad_request", "message": str(e)})
+                    return self._send(200, {"apps": st.apps()})
                 if path == "/api/admin/pc":                                       # Gaming mode, idle unload, unload now
                     st = self.state
                     if "gaming" in body:
@@ -3302,6 +3427,141 @@ class Handler(http.server.BaseHTTPRequestHandler):
             self._fail("email code for unknown address")
             return self._send(401, {"code": "bad_code", "message": "That code isn't right, or it has run out.", "action": "Ask for a new one."})
         return self._finish_login(user, "email code")
+
+    # ---- the Emvryx API: other programs (your own apps) ask a question and get an answer. Key-only, one key per app, never a browser.
+    def _app_auth(self):
+        """(who, record) for the app behind this request's key, or None after the right error was sent."""
+        st = self.state
+        if self._locked():
+            return None
+        h = self.headers.get("Authorization", "")
+        key = h[7:].strip() if h.startswith("Bearer ") else ""
+        who = st.who(key) if key else None
+        if not who or not who.get("app"):
+            self._fail("bad app key")
+            self._send(401, {"code": "bad_key", "message": "That key isn't right.", "action": "Use the key made for this app (Admin > Apps). It starts with emvx_."})
+            return None
+        rec = st.app_record(who["user"]) or {}
+        if who["banned"] or not rec.get("app_enabled", True):
+            self._send(403, {"code": "app_off", "message": "This app has been switched off.", "action": "Ask the owner of Emvryx to switch it on."})
+            return None
+        return who, rec
+
+    def _api_model_id(self, who, ref):
+        """A model's id from a name (flare, equinox, solstice, apogee: the newest of that name) or an id (flare-2.5), or None."""
+        cat = self.state.catalog(who)
+        ref = str(ref or "").strip().lower()
+        for m in cat["cards"]:
+            if m["name"].lower() == ref:
+                return m["id"]
+        return next((m["id"] for m in cat["cards"] + cat["other"] if m["id"].lower() == ref), None)
+
+    def api_v1_models(self):
+        got = self._app_auth()
+        if not got:
+            return
+        who, rec = got
+        cat = self.state.catalog(who)
+        self._send(200, {"default": rec.get("app_model", "flare"), "models": [{"name": m["name"].lower(), "id": m["id"], "label": f"{m['name']} {m['version']:g}", "state": m["state"]}
+                                                                          for m in cat["cards"]]})
+
+    def api_v1_ask(self, body):
+        st = self.state
+        got = self._app_auth()
+        if not got:
+            return
+        who, rec = got
+        ok, wait = st.app_rate_ok(who["user"], int(rec.get("app_rpm", 20)))
+        if not ok:
+            return self._send(429, {"code": "rate_limit", "message": "This app is asking too fast.", "action": f"Wait {wait} seconds and try again.", "retry_after": wait},
+                              headers={"Retry-After": str(wait)})
+        question = str(body.get("question") or "").strip()
+        if not question:
+            return self._send(400, {"code": "empty", "message": "Send a question.", "action": 'POST {"question": "..."} to /api/v1/ask.'})
+        if len(question) > 8000:
+            return self._send(400, {"code": "too_long", "message": "The question is too long (8,000 characters at most)."})
+        facts = body.get("facts") or []
+        if not isinstance(facts, list) or len(facts) > 50 or not all(isinstance(f, str) for f in facts) or sum(len(f) for f in facts) > 20000:
+            return self._send(400, {"code": "bad_facts", "message": '"facts" is a list of up to 50 short texts (20,000 characters in all).'})
+        effort = str(body.get("effort") or rec.get("app_effort", "balanced"))
+        if effort not in ("auto", "quick", "balanced", "deep"):
+            return self._send(400, {"code": "bad_effort", "message": "effort is auto, quick, balanced or deep."})
+        if st.cfg.get("gaming"):
+            status, headers, payload = U.LimitError("gaming", "Emvryx is resting while the PC is being used for something else. Please try again in a little while.", retry_after=300).to_http()
+            return self._send(status, payload, headers=headers)
+        model_id = self._api_model_id(who, body.get("model") or rec.get("app_model", "flare"))
+        if not model_id:
+            return self._send(400, {"code": "bad_model", "message": "That model isn't available to this app.", "action": "GET /api/v1/models lists them."})
+        hints = [rec.get("app_instructions", ""), " ".join(str(body.get("instructions") or "").split())[:2000]]
+        if facts:
+            hints.append("Use only the facts in the notes for any number or figure. Quote numbers exactly as given and never calculate or invent totals. If the notes do not contain the answer, say so.")
+        notes = [{"title": f"Fact {i + 1}", "text": f[:2000]} for i, f in enumerate(facts)]
+        store = st.store(who["user"])
+        cid = store.new_chat(private=True)                      # nothing about a call is ever saved
+        stream = bool(body.get("stream"))
+        try:
+            q, stop, model, win, decision = start_turn(st, who, cid, question, model_id, effort, pace=False, extra_notes=notes, extra_hint="\n\n".join(h for h in hints if h))
+        except ValueError as e:
+            store.delete_chat(cid)
+            return self._send(400, {"code": "bad_option", "message": str(e)})
+        except KeyError:
+            store.delete_chat(cid)
+            return self._send(400, {"code": "bad_model", "message": "That model isn't available to this app."})
+        except Exception as e:                                 # noqa: BLE001
+            store.delete_chat(cid)
+            status, headers, payload = error_payload(e)
+            return self._send(status, payload, headers=headers)
+        st.note_app_call(who["user"])
+
+        def finished(r):
+            snap = st.usage_snapshot(who, model, decision["effort"])
+            return {"answer": (r.get("text") or "").strip(), "model": f"{model['name']} {model['version']:g}", "model_id": model["id"], "effort": decision["effort"],
+                    "complete": r.get("reason") in ("done", None), "usage": {"left_pct": int(snap["tank"]["pct"]), "messages_left": int(snap["tank"]["messages_left"])}}
+        try:
+            if stream:
+                self.send_response(200)
+                self.send_header("Content-Type", "text/event-stream")
+                self.send_header("Cache-Control", "no-store")
+                self.send_header("X-Content-Type-Options", "nosniff")
+                for k, v in self._security_headers().items():
+                    self.send_header(k, v)
+                self.send_header("Connection", "close")
+                self.end_headers()
+                self.close_connection = True
+                emit = lambda ev, data: (self.wfile.write(f"event: {ev}\ndata: {json.dumps(data)}\n\n".encode()), self.wfile.flush())
+                deadline = time.monotonic() + 900
+                while True:
+                    try:
+                        kind, val = q.get(timeout=1)
+                    except queue.Empty:
+                        if time.monotonic() > deadline:
+                            stop.set()
+                            return emit("error", {"code": "timeout", "message": "The model took too long."})
+                        continue
+                    if kind == "piece":
+                        emit("piece", {"text": val})
+                    elif kind == "done":
+                        return emit("done", finished(val))
+                    elif kind == "error":
+                        return emit("error", error_payload(val)[2])
+            deadline = time.monotonic() + 900
+            while True:
+                try:
+                    kind, val = q.get(timeout=1)
+                except queue.Empty:
+                    if time.monotonic() > deadline:
+                        stop.set()
+                        return self._send(504, {"code": "timeout", "message": "The model took too long.", "action": "Try a shorter question or a smaller model."})
+                    continue
+                if kind == "done":
+                    return self._send(200, finished(val))
+                if kind == "error":
+                    status, headers, payload = error_payload(val)
+                    return self._send(status, payload, headers=headers)
+        except (BrokenPipeError, ConnectionResetError):
+            stop.set()
+        finally:
+            store.delete_chat(cid)
 
     def api_send(self, who, cid, body):
         st = self.state
