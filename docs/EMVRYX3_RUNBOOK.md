@@ -40,7 +40,7 @@ python scripts/emvryx3_pilot.py
 Send me `logs\\emvryx3-pilot.md` (and the screen if it fails). It tells us: does each model load and train, does it fit, and how long a full run takes. **Decision point:** if Solstice 3 (9B) does not fit, it uses a smaller batch or is dropped for now.
 
 **2b. The bake-off: which candidates earn a slot?** (about 2 to 4 hours, mostly downloads and waiting; free; nothing else may use the card)
-Download the candidate `.gguf` files named in `eval\bakeoff_candidates.json` (Q4 for the small ones; Qwen3.8-27B at IQ3_S and a 2-bit file for Apogee 3.5) into `models\base\`, and make sure the model in each slot today (`flare-2.5`, `equinox-2`, `solstice-2`, `apogee-2`) has its `.gguf` listed as the baseline. Check each model page and licence first (the names and sizes in the file came from web searches). Then:
+Download the candidate `.gguf` files named in `eval\bakeoff_candidates.json` (Q4 for the small ones; Qwen3.8-27B at 2-bit (UD-IQ2_XXS) for Apogee 3.5) into `models\base\`, and make sure the model in each slot today (`flare-2.5`, `equinox-2`, `solstice-2`, `apogee-2`) has its `.gguf` listed as the baseline. Check each model page and licence first (the names and sizes in the file came from web searches). Then:
 ```
 python scripts/emvryx3_bakeoff.py --llama-bin C:\...\llama-server.exe
 python scripts/emvryx3_bakeoff.py --llama-bin C:\...\llama-server.exe --only apogee      (one slot at a time is fine)
