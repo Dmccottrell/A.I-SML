@@ -58,12 +58,12 @@ python scripts/emvryx3_pilot.py
 Send me `logs\\emvryx3-pilot.md` (and the screen if it fails). It tells us: does each model load and train, does it fit, and how long a full run takes. **Decision point:** if Solstice 3 (9B) does not fit, it uses a smaller batch or is dropped for now.
 
 **2b. The bake-off: which candidates earn a slot?** (about 2 to 4 hours, mostly downloads and waiting; free; nothing else may use the card)
-Download the candidate `.gguf` files named in `eval\bakeoff_candidates.json` (Q4 for the small ones; Qwen3.8-27B at 2-bit (UD-IQ2_XXS) for Apogee 3.5) into `models\base\`, and make sure the model in each slot today (`flare-2.5`, `equinox-2`, `solstice-2`, `apogee-2`) has its `.gguf` listed as the baseline. Check each model page and licence first (the names and sizes in the file came from web searches). Then:
+Download the candidate `.gguf` files named in `eval\bakeoff_candidates.json` (Q4 for the small ones; Qwen3.8-27B at 2-bit (UD-IQ2_XXS) for Apogee 3) into `models\base\`, and make sure the model in each slot today (`flare-2.5`, `equinox-2`, `solstice-2`, `apogee-2`) has its `.gguf` listed as the baseline. Check each model page and licence first (the names and sizes in the file came from web searches). Then:
 ```
 python scripts/emvryx3_bakeoff.py --llama-bin C:\...\llama-server.exe
 python scripts/emvryx3_bakeoff.py --llama-bin C:\...\llama-server.exe --only apogee      (one slot at a time is fine)
 ```
-For each candidate it measures graphics memory and speed at 8K, 16K and 32K tokens, and runs the 41 everyday questions. `logs\bakeoff.md` has a table per slot with a verdict against the model it would replace (smarter by more than 3 questions, not slower than 90% of the speed, and fits the card). **Send me `logs\bakeoff.md`.** The slot winners are the ones to train (Flare, Equinox, Solstice, Apogee 3); the 27B is Apogee 3.5 and runs untrained (it cannot be fine-tuned in 12 GB).
+For each candidate it measures graphics memory and speed at 8K, 16K and 32K tokens, and runs the 41 everyday questions. `logs\bakeoff.md` has a table per slot with a verdict against the model it would replace (smarter by more than 3 questions, not slower than 90% of the speed, and fits the card). **Send me `logs\bakeoff.md`.** The slot winners are the ones to train (Flare, Equinox, Solstice, Apogee 3); the 27B is Apogee 3 and runs untrained (it cannot be fine-tuned in 12 GB).
 
 **3. Train, one model at a time** (the app and games are off while it runs)
 ```
