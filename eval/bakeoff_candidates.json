@@ -16,7 +16,7 @@
     {"name": "apogee-2-q4", "slot": "apogee", "baseline": true, "file": "export\\open\\apogee-2\\my-ai-q4_k_m.gguf"},
     {"name": "apogee-qwen3.5-9b-q4", "slot": "apogee", "file": "models\\base\\Qwen3.5-9B-Q4_K_M.gguf", "think": false},
     {"name": "apogee-deepseek-r1-14b-q4", "slot": "apogee", "file": "models\\base\\DeepSeek-R1-Distill-Qwen-14B-Q4_K_M.gguf"},
-    {"name": "apogee-qwen3.8-27b-iq3", "slot": "apogee", "file": "models\\base\\Qwen3.8-27B-IQ3_S.gguf", "think": false, "ngl": 99},
+    {"name": "apogee-qwen3.8-27b-iq3", "slot": "apogee", "file": "models\\base\\Qwen3.8-27B-UD-IQ3_XXS.gguf", "think": false, "ngl": 99},
     {"name": "apogee-qwen3.8-27b-iq2", "slot": "apogee", "file": "models\\base\\Qwen3.8-27B-UD-IQ2_XXS.gguf", "think": false, "ngl": 99}
   ]
 }
