@@ -2605,9 +2605,20 @@ function renderTodo() {
     C.todoOpen ? el('ul', {}, ...items.map((i) => el('li', {class: i.done ? 'done' : ''}, el('span', {class: 'bx'}, i.done ? '\u2713' : ''), el('span', {}, i.text)))) : '');
 }
 // "/" commands and "@" file mentions in the message box
+// a code review: the model gets the change (this session's, or a pull request's) in Plan-first mode, so it can only read; you see one short line
+async function startReview(review) {
+  if (!C.sid) { note('fin', 'Open a session first', 'Start or open a VryxCode session, then use /review.'); return; }
+  setMode('plan');
+  const line = review.pr ? 'Review pull request ' + review.pr : 'Review the changes this session made';
+  const r = await post('/api/code/sessions/' + C.sid + '/message', {text: line, plan: true, review});
+  if (!r.ok) { const j = await r.json().catch(() => ({})); note('fin', 'Could not start the review', (j.message || 'Try again.') + (j.action ? ' ' + j.action : '')); return; }
+  poll();
+}
 const SLASH = [['plan', 'Plan first: look and plan, change nothing', () => setMode('plan')], ['ask', 'Ask before editing', () => setMode('ask')], ['auto', 'Edit without asking', () => setMode('auto')],
   ['init', 'Create VRYX.md, notes VryxCode reads every session', async () => { const r = await post('/api/code/init', {project: C.project}); const j = await r.json().catch(() => ({})); note('fin', j.created ? 'Created VRYX.md' : 'VRYX.md is already there', 'Open it from Files and fill it in: what the project is, how to test it, your style rules.'); refreshFiles(); }],
-  ['review', 'See what this session changed', () => showDrawer(true, 'changes')], ['rewind', 'Put the files back to an earlier point', () => showDrawer(true, 'rewind')],
+  ['review', 'Review what this session changed: problems, worst first (read-only)', () => startReview({session: true})],
+  ['reviewpr', 'Review a GitHub pull request (read-only): paste its link', () => { const link = prompt('Paste the pull request link, like https://github.com/owner/repo/pull/12'); if (link) startReview({pr: link}); }],
+  ['changes', 'See what this session changed (the Changes list)', () => showDrawer(true, 'changes')], ['rewind', 'Put the files back to an earlier point', () => showDrawer(true, 'rewind')],
   ['files', 'Browse the project files', () => showDrawer(true, 'files')], ['preview', 'Open the live preview', () => openPreview()], ['new', 'Start a new session', () => newSession()],
   ['help', 'List these commands', () => note('fin', 'Commands', SLASH.map((x) => '/' + x[0] + ' \u2014 ' + x[1]).join('\n') + '\n@filename \u2014 point at a file in your message')]];
 let SUG = {items: [], at: -1};

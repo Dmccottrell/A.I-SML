@@ -190,7 +190,11 @@ def _urllib_http(method, url, headers, body):
     req = urllib.request.Request(url, data=body, method=method, headers=headers)
     try:
         with urllib.request.urlopen(req, timeout=30) as r:
-            return r.status, json.loads(r.read() or b"{}")
+            raw = r.read() or b"{}"
+            try:
+                return r.status, json.loads(raw)
+            except ValueError:
+                return r.status, {"_text": raw.decode("utf-8", "replace")}      # not JSON: a diff, for instance
     except urllib.error.HTTPError as e:
         try:
             return e.code, json.loads(e.read() or b"{}")
@@ -240,6 +244,22 @@ class Api:
                 break
             page += 1
         return out[:limit]
+
+    def pull_diff(self, owner, repo, number, limit=400_000):
+        """The unified diff of a pull request (read-only: a GET with GitHub's diff media type), plus its title: (title, diff text)."""
+        info = self._call("GET", f"/repos/{owner}/{repo}/pulls/{int(number)}")
+        title = str(info.get("title", "")) if isinstance(info, dict) else ""
+        headers_http = self.http
+
+        def diff_http(method, url, headers, body):
+            return headers_http(method, url, dict(headers, Accept="application/vnd.github.v3.diff"), body)
+        saved, self.http = self.http, diff_http
+        try:
+            data = self._call("GET", f"/repos/{owner}/{repo}/pulls/{int(number)}")
+        finally:
+            self.http = saved
+        text = data.get("_text", "") if isinstance(data, dict) else ""
+        return title, text[:limit]
 
     def create_repo(self, name, private=True, description=""):
         if not REPO_RE.fullmatch(name or "") or name in (".", "..") or name.endswith(".git"):

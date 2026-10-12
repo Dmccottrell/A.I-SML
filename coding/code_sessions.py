@@ -24,6 +24,7 @@ import zipfile
 
 import code_log
 import code_report
+import code_review
 import code_sandbox
 import harness
 import languages
@@ -296,7 +297,7 @@ class Session:
         self.generate, self.max_turns, self.context_tokens, self.extra_programs = generate, max_turns, context_tokens, tuple(extra_programs)
         self._turn(self.task, first=True, plan=self.plan_first)
 
-    def send(self, text, plan=False):
+    def send(self, text, plan=False, model_text=None):
         """The person's next message: another turn of the same conversation (the model sees everything said and done so far)."""
         text = str(text or "").strip()
         if not text:
@@ -310,6 +311,7 @@ class Session:
                 raise CodeError("This session cannot continue.", "Start a new one.")
             self.state = "working"
             self.stop.clear()
+        self._model_text = model_text                       # what the model gets instead of the line the person sees (a code review's diff)
         threading.Thread(target=self._turn, args=(text, False, bool(plan)), daemon=True).start()
 
     def _turn(self, text, first, plan=False):
@@ -329,7 +331,8 @@ class Session:
         if line:
             self.emit("language", text=line, language=lang["name"], mode=lang["mode"])
         try:
-            result = vryxcode.run_task(self.expand(text), self.wrap(self.generate), self.workspace, self.ask, self.max_turns, self.context_tokens, self.extra_programs, lang_note=languages.note_for(lang),
+            model_text, self._model_text = getattr(self, "_model_text", None), None
+            result = vryxcode.run_task(model_text or self.expand(text), self.wrap(self.generate), self.workspace, self.ask, self.max_turns, self.context_tokens, self.extra_programs, lang_note=languages.note_for(lang),
                                        out=lambda *_: None, tools=self.tools, git_identity=self.identity,
                                        command_prefix=self.prefix, container=bool(self.prefix) and not self.remote, history=self.history, chat_mode=True, plan=plan, todo=True, remote=self.remote)
             self.history = result["messages"]
@@ -740,6 +743,32 @@ class CodeManager:
             raise CodeError("That session is running.", "Stop it first.")
         self.sessions.pop(sid, None)
         self.log(user).delete(sid)
+
+    def review_session(self, user, sid):
+        """The review request for what a session changed: the project before its first message (a saved snapshot) against the files now."""
+        log = self.log(user)
+        d = self.saved(user, sid) if sid not in self.sessions else {"meta": self.sessions[sid].meta()}
+        turns = sorted(log.checkpoint_numbers(sid))
+        data = log.load_checkpoint(sid, turns[0]) if turns else None
+        if not data:
+            raise CodeError("The starting point of this session is no longer kept.", "Ask VryxCode to review with git instead: \"run git diff and review it\".")
+        workspace = self.project_path(user, d["meta"]["project"])
+        after = {}
+        for dirpath, dirs, names in os.walk(workspace):
+            dirs[:] = [x for x in dirs if x not in SKIP_DIRS and not os.path.islink(os.path.join(dirpath, x))]
+            for n in names:
+                full = os.path.join(dirpath, n)
+                if os.path.islink(full):
+                    continue
+                try:
+                    with open(full, "rb") as f:
+                        text = code_review._text_of(f.read(code_review.MAX_FILE_BYTES + 1))
+                except OSError:
+                    continue
+                if text is not None:
+                    after[os.path.relpath(full, workspace).replace(os.sep, "/")] = text
+        diff, changed, cut = code_review.diff_files(code_review.snapshot_files(data), after)
+        return {"prompt": code_review.review_prompt(diff, changed, cut, "the changes this session made"), "files": changed}
 
     def rewind(self, user, sid, turn):
         """Put the project back as it was before message `turn` of this session (files made since are removed; .git is left alone)."""
