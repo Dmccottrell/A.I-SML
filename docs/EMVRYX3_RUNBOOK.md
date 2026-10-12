@@ -31,6 +31,14 @@ python data_prep/make_chat_data_v3.py                   # if data\\v3\\chat.json
 python data_prep/style_check.py data/v3/chat.jsonl      # what would be dropped, with examples
 python data_prep/format_lessons_3x.py --keep 0.4        # -> data\\v3\\chat_3x.jsonl
 ```
+**General lessons (so the models are all-rounders, not only Emvryx-voiced):** the Emvryx lessons stay as they are, including every identity, honesty and correction lesson (those are always kept), and a share of general assistant lessons from open datasets is mixed in next to them. You choose each dataset after reading its page and licence (human-written ones are safest; answers written by another company's AI may be limited by that company's terms). Example with one human-written set (check its licence page first):
+```
+hf download databricks/databricks-dolly-15k --repo-type dataset --local-dir data\open\dolly
+python data_prep/general_lessons.py --input data\open\dolly\databricks-dolly-15k.jsonl --format dolly --source dolly-15k --licence cc-by-sa-3.0 --max 5000
+python data_prep/format_lessons_3x.py --general data\v3\general.jsonl --general-share 0.3 --keep 0.4
+```
+`general_lessons.py` drops anything that claims to be another AI, "as an AI language model", personal details and duplicates, and does not apply the soft voice rules (filler openers, length) to general lessons. Use `--append` to combine several datasets into one general file. `--general-share` is the share of the final set (default 30%).
+
 Read the style report. The wording rules are first guesses until the voice in EMVRYX_STYLE.md is decided.
 
 **2. Pilot** (1 to 3 hours, mostly downloads the first time; free)
