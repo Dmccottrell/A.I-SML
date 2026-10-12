@@ -1,7 +1,7 @@
 """
 emvryx3_bakeoff.py - Which candidate earns a slot? Speed, memory and the everyday sheet for every Flare / Equinox / Solstice / Apogee candidate, one at a time.
 
-    python scripts/emvryx3_bakeoff.py --llama-bin C:\\...\\llama-server.exe --candidates data\\bakeoff_candidates.json
+    python scripts/emvryx3_bakeoff.py --llama-bin C:\\...\\llama-server.exe --candidates eval\\bakeoff_candidates.json
     python scripts/emvryx3_bakeoff.py ... --only apogee                  # one slot (or --only apogee-27b-iq3 for one candidate)
     python scripts/emvryx3_bakeoff.py --from-logs                        # no new run: rewrite logs\\bakeoff.md from logs\\bakeoff\\*.json
 
@@ -195,7 +195,7 @@ def run_candidate(llama_bin, cand, tests, contexts=CONTEXTS):
 def main(argv=None):
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--llama-bin", help="path to llama-server(.exe)")
-    ap.add_argument("--candidates", default=os.path.join("data", "bakeoff_candidates.json"))
+    ap.add_argument("--candidates", default=os.path.join("eval", "bakeoff_candidates.json"))
     ap.add_argument("--sheet", default=os.path.join("eval", "everyday.jsonl"))
     ap.add_argument("--only", help="a slot (flare, equinox, solstice, apogee) or one candidate name")
     ap.add_argument("--from-logs", action="store_true")
