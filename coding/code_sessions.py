@@ -23,6 +23,7 @@ import time
 import zipfile
 
 import code_log
+import code_report
 import code_sandbox
 import harness
 import languages
@@ -332,30 +333,38 @@ class Session:
                                        out=lambda *_: None, tools=self.tools, git_identity=self.identity,
                                        command_prefix=self.prefix, container=bool(self.prefix) and not self.remote, history=self.history, chat_mode=True, plan=plan, todo=True, remote=self.remote)
             self.history = result["messages"]
-            self.emit("end", finished=result["finished"], said=bool(result.get("said")), summary=clip(result["summary"], 4000), turns=result["turns"],
+            self._end( finished=result["finished"], said=bool(result.get("said")), summary=clip(result["summary"], 4000), turns=result["turns"],
                       next=self.next_steps if result["finished"] else [], plan=bool(plan) and bool(result["finished"] or result.get("said")))
             self.state = "done" if (result["finished"] or result.get("said")) else "stopped"
         except U.LimitError as e:
             self._keep_history()
             when = f" Try again in about {max(1, int((e.retry_after or 0) // 60))} minutes." if e.retry_after else ""
-            self.emit("end", finished=False, summary=f"Your usage ran out: {e.message}{when} Your files so far are kept.", turns=0, limited=True)
+            self._end( finished=False, summary=f"Your usage ran out: {e.message}{when} Your files so far are kept.", turns=0, limited=True)
             self.state = "limited"
         except QuotaStop as e:
             self._keep_history()
-            self.emit("end", finished=False, summary="Stopped: " + e.message + " Your files so far are kept.", turns=0, limited=True)
+            self._end( finished=False, summary="Stopped: " + e.message + " Your files so far are kept.", turns=0, limited=True)
             self.state = "limited"
         except Stopped:
             self._keep_history()
-            self.emit("end", finished=False, summary="Stopped.", turns=0)
+            self._end( finished=False, summary="Stopped.", turns=0)
             self.state = "stopped"
         except BaseException as e:                     # a model that cannot be reached, a full disk, ...
             self._keep_history()
             msg = getattr(e, "message", None) or str(e) or e.__class__.__name__
-            self.emit("end", finished=False, summary="It could not finish: " + clip(msg, 500), turns=0, error=True)
+            self._end( finished=False, summary="It could not finish: " + clip(msg, 500), turns=0, error=True)
             self.state = "failed"
         finally:
             self.live = None
             self.persist(force=True)
+
+    def _end(self, **data):
+        """The end of a turn. When it did any work the end carries its verification report (so it is in the history on disk too)."""
+        try:
+            report = code_report.build_report(self.events, end=data)
+        except Exception:                                 # the report is a convenience: never fail a turn over it
+            report = None
+        self.emit("end", **data, **({"report": report} if report else {}))
 
     def _keep_history(self):
         """A stopped or failed turn still happened: the next message continues from where it got to."""

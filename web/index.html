@@ -190,6 +190,11 @@ svg .core { fill: var(--core); stroke: var(--sun); stroke-width: 3; transition: 
 .code .cc-live .what { transition: opacity .25s; } .code .cc-live .what.swap { opacity: 0; }
 .code .cc-live .meta { color: var(--muted); font-size: 13px; font-variant-numeric: tabular-nums; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
 .code .cc-live .prose { color: var(--muted); white-space: pre-wrap; word-break: break-word; max-height: 7.5em; overflow: hidden; padding-left: 30px; }
+.code .cc-report { margin: 10px 0 4px; border: 1px solid var(--line); border-radius: 12px; padding: 10px 12px; font-size: 14px; background: var(--card); }
+.code .cc-report .rh { display: flex; gap: 8px; align-items: baseline; font-weight: 600; } .code .cc-report .rh .mark { font-size: 16px; }
+.code .cc-report.verified .mark { color: #3fb950; } .code .cc-report.checked .mark { color: #d29922; } .code .cc-report.not_verified .mark { color: var(--danger); } .code .cc-report.no_changes .mark { color: var(--muted); }
+.code .cc-report .rs { margin-top: 8px; color: var(--muted); font-size: 12px; text-transform: uppercase; letter-spacing: .04em; }
+.code .cc-report .ri { margin-top: 3px; word-break: break-word; } .code .cc-report .ri.bad { color: var(--danger); } .code .cc-report .ri code { font-size: 13px; }
 .code .cc-end { padding: 12px 0 4px; display: flex; gap: 10px; align-items: baseline; white-space: pre-wrap; word-break: break-word; }
 .code .cc-end.good .mark { color: #3fb950; } .code .cc-end.bad .mark { color: var(--danger); } .code .cc-end.stop .mark { color: var(--muted); }
 .code .cc-ask { border: 1px solid var(--accent); border-radius: 12px; padding: 10px 12px; display: flex; flex-direction: column; gap: 8px; margin: 6px 0; background: var(--surface); }
@@ -2709,15 +2714,27 @@ function cEvent(e) {
     if (e.finished || e.said) {                       // the model talking to the person: what it did, what to run, what it suggests
       if (e.finished) setTimeout(() => { if (!$('codePv').hidden) reloadPreview(); else if (!$('codePreviewBtn').disabled) $('codePreviewBtn').classList.add('pulse'); }, 700);     // the page changed: refresh it, or point at Preview
       feed.append(renderMessage(e.summary || 'Done.', e.finished));
+      if (e.report) feed.append(reportCard(e.report));
       if (e.plan) feed.append(el('div', {class: 'plan-actions'}, el('button', {class: 'btn small', onclick: () => { setMode(C.prevMode === 'plan' ? 'ask' : C.prevMode); $('codeTask').value = 'Go ahead and build it as planned.'; $('codeGo').click(); }}, 'Build it'), el('button', {class: 'chip', onclick: () => { $('codeTask').value = 'Change the plan: '; $('codeTask').focus(); }}, 'Change the plan')));
       if (e.next && e.next.length) feed.append(el('div', {class: 'cc-next'}, el('span', {class: 'lead'}, 'Suggested next:'),
         ...e.next.map((t) => el('button', {class: 'chip', onclick: () => { $('codeTask').value = t; $('codeGo').click(); }}, t))));
       return;
     }
     const cls = e.error || e.limited ? 'bad' : 'stop';
+    if (e.report) feed.append(reportCard(e.report));
     feed.append(el('div', {class: 'cc-end ' + cls}, el('span', {class: 'mark'}, e.error || e.limited ? '\u2717' : '\u25a0'),
       el('span', {}, /^(Stopped|Paused)/i.test(e.summary || '') ? e.summary : (e.error ? 'Could not finish: ' : e.limited ? 'Paused: ' : 'Stopped: ') + (e.summary || (e.turns + ' steps used')))));
   }
+}
+// the verification report at the end of a turn that did work: how it was checked and what to look at
+function reportCard(e) {
+  const mark = {verified: '\u2713', checked: '\u25d0', not_verified: '!', no_changes: '\u2013'}[e.verdict] || '';
+  const card = el('div', {class: 'cc-report ' + e.verdict}, el('div', {class: 'rh'}, el('span', {class: 'mark'}, mark), el('span', {}, e.label)));
+  const section = (title, items) => { if (items.length) { card.append(el('div', {class: 'rs'}, title)); items.forEach((n) => card.append(n)); } };
+  section('Files', (e.files || []).map((f) => el('div', {class: 'ri'}, f.path + ' \u00b7 ' + (f.created ? 'new' : 'edited') + (f.added ? ' +' + f.added : '') + (f.removed ? ' \u2212' + f.removed : '') + (f.checked ? ' \u00b7 syntax checked' : ''))));
+  section('Tests', (e.tests || []).map((t) => el('div', {class: 'ri' + (t.passed ? '' : ' bad')}, (t.passed ? '\u2713 ' : '\u2717 ') + t.line + ' \u00b7 ', el('code', {}, t.command))));
+  section('Look at', (e.look_at || []).map((t) => el('div', {class: 'ri'}, '\u2022 ' + t)));
+  return card;
 }
 // a message from the model: paragraphs, `inline code`, and fenced blocks (commands to run) with a Copy button
 function renderMessage(text, good) {
