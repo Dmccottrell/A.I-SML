@@ -1829,7 +1829,7 @@ function sxBody() {
 }
 async function sxReload() { await sxAcct(); sxRender(); }
 const EVENT_NAMES = {login_ok: 'Signed in', login_fail: 'Wrong sign-in try', logout: 'Signed out', lockout: 'Address locked out', signup: 'New account', password_set: 'Password changed', mfa_on: 'Two-step turned on', mfa_off: 'Two-step turned off',
-  mfa_recovery_used: 'Recovery code used', mfa_recovery_new: 'New recovery codes', mfa_reset_by_owner: 'Two-step reset by owner', password_reset_by_admin: 'Password reset by admin', gaming_mode: 'Gaming mode', model_unloaded: 'Model unloaded', idle_unload_changed: 'Idle unload changed', model_published: 'Model published', app_added: 'App added', app_changed: 'App changed', app_key_rotated: 'App key replaced', reauth_fail: 'Wrong password or code', email_changed: 'Email changed', session_revoked: 'Device signed out', key_rotated: 'Key replaced',
+  mfa_recovery_used: 'Recovery code used', mfa_recovery_new: 'New recovery codes', mfa_reset_by_owner: 'Two-step reset by owner', password_reset_by_admin: 'Password reset by admin', gaming_mode: 'Gaming mode', model_unloaded: 'Model unloaded', idle_unload_changed: 'Idle unload changed', model_published: 'Model published', model_checks: 'Safety checks', app_added: 'App added', app_changed: 'App changed', app_key_rotated: 'App key replaced', reauth_fail: 'Wrong password or code', email_changed: 'Email changed', session_revoked: 'Device signed out', key_rotated: 'Key replaced',
   pair_created: 'Sign-in link made', pair_used: 'Sign-in link used', user_added: 'Person added', ban: 'Account turned off', unban: 'Account turned on', signups_changed: 'Sign-up rule changed', invite_made: 'Invite made', bad_origin: 'Cross-site request refused', email_code: 'Email code sent'};
 
 async function sxFill(kind, box) {
@@ -2030,32 +2030,51 @@ async function admPreviews(body) {
 
 
 async function admModels(body) {
-  let j = await (await api('/api/admin/models')).json();
+  let j = await (await api('/api/admin/models')).json(); let timer = null;
+  const refresh = async () => { try { j = await (await api('/api/admin/models')).json(); draw(); } catch (e) { /* try again next time */ } };
   const save = async (b) => { const r = await post('/api/admin/models', b); const k = await r.json().catch(() => ({})); if (!r.ok) return toast(k.message || 'That did not work.'); j = k; draw(); toast('Saved.'); };
+  const guardBox = (m) => {
+    const g = m.guard || {state: 'none'};
+    if (g.state === 'running') return el('div', {class: 'adm-sub'}, el('b', {}, 'Safety checks running… ' + g.progress[0] + ' of ' + g.progress[1]), el('small', {}, 'About 40 everyday questions, one at a time. The model has to be loaded first, so the first one is slow. You can leave this screen.'));
+    const run = sxBtn(g.state === 'done' ? 'Run the checks again' : 'Run safety checks', async () => { const r = await post('/api/admin/models', {id: m.id, run_checks: true}); const k = await r.json().catch(() => ({})); if (!r.ok) return toast(k.message || 'That did not work.'); toast('Checks started.'); refresh(); });
+    if (g.state !== 'done') return el('div', {class: 'adm-sub'}, el('b', {}, 'Safety checks: not run yet'), el('small', {}, 'A new model must pass about 40 everyday questions (facts, sums, following a format, saying I don’t know, refusing harm) before it can be published.'), el('div', {class: 'adm-acts'}, run));
+    return el('div', {class: 'adm-sub'}, el('b', {}, 'Safety checks: ', el('span', {class: 'adm-tag ' + (g.passed ? 'on' : '')}, g.passed ? 'Passed' : 'Not passed'), ' ' + g.summary.passed + ' of ' + g.summary.total + ' (' + g.summary.percent + '%)'),
+      el('small', {}, 'Run ' + admAgo(g.when) + (g.by ? ' by ' + g.by : '') + '. ' + Object.entries(g.summary.by_category).map(([k, v]) => k + ' ' + v[0] + '/' + v[1]).join(' · ')),
+      ...(g.reasons || []).map((r) => el('small', {style: 'color:var(--danger)'}, '• ' + r)),
+      g.failed && g.failed.length ? el('details', {}, el('summary', {style: 'cursor:pointer;color:var(--muted);font-size:14px'}, 'What it got wrong (' + g.failed.length + ')'), ...g.failed.map((f) => el('small', {style: 'display:block;margin-top:6px'}, el('b', {}, f.prompt), ' → ' + (f.error ? 'could not be asked: ' + f.error : (f.reply || '(nothing)'))))) : null,
+      el('div', {class: 'adm-acts'}, run));
+  };
   const previewCard = (m) => {
     const when = sxInput('datetime-local', '', {'aria-label': 'Publish date and time for ' + m.label}); when.min = new Date(Date.now() + 60000 - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 16);
+    const ok = m.guard && m.guard.state === 'done' && m.guard.passed;
     return el('div', {class: 'adm-sub'}, el('b', {}, m.label, ' ', el('span', {class: 'adm-tag on'}, 'Preview')), el('small', {}, m.tagline),
       el('small', {style: 'color:var(--accenttext)'}, m.replaces ? 'Only you see this. Publishing makes it the new ' + m.name + ' card and moves ' + m.replaces + ' to Other models (still usable).' : 'Only you see this until you publish it.'),
       m.available ? null : el('small', {style: 'color:var(--danger)'}, 'Its model file is not on this computer yet, so it cannot be published.'),
-      m.scheduled ? el('small', {style: 'color:var(--accenttext)'}, 'Goes live for everyone on ' + sxWhen(m.scheduled.at) + ' (set by ' + m.scheduled.by + ').') : null,
+      guardBox(m),
+      m.schedule_failed ? el('small', {style: 'color:var(--danger)'}, 'The scheduled publish did not happen: ' + m.schedule_failed.why) : null,
+      m.scheduled ? el('small', {style: 'color:var(--accenttext)'}, 'Goes live for everyone on ' + sxWhen(m.scheduled.at) + ' (set by ' + m.scheduled.by + ') if the checks have passed by then.') : null,
       el('div', {class: 'adm-acts'}, when,
         sxBtn('Schedule', () => { const t = new Date(when.value).getTime(); if (!when.value || !(t > Date.now())) return toast('Choose a date and time in the future.'); save({id: m.id, schedule_at: t / 1000}); }),
         m.scheduled ? sxBtn('Cancel schedule', () => save({id: m.id, cancel_schedule: true})) : null,
-        sxBtn('Publish', () => { if (confirm('Publish ' + m.label + ' to everyone now?' + (m.replaces ? ' ' + m.replaces + ' moves to Other models.' : ''))) save({id: m.id, publish: 'now'}); }, m.available ? 'primary' : '')));
+        ok ? sxBtn('Publish', () => { if (confirm('Publish ' + m.label + ' to everyone now?' + (m.replaces ? ' ' + m.replaces + ' moves to Other models.' : ''))) save({id: m.id, publish: 'now'}); }, m.available ? 'primary' : '')
+           : sxBtn('Publish without the checks…', () => { if (confirm('Publish ' + m.label + ' WITHOUT passing the safety checks? This is recorded in the security log. Only do it if you have tested the model yourself.')) save({id: m.id, publish: 'now', skip_checks: true}); }, 'bad')));
   };
   const draw = () => {
+    clearTimeout(timer);
     const prev = j.models.filter((m) => m.preview), live = j.models.filter((m) => !m.preview);
     body.replaceChildren(
       el('div', {class: 'adm-card'}, el('h3', {}, '\u{1F9E0} Model versions'),
-        el('p', {}, 'A new model version stays in preview (only you and admins see it, marked Preview in the model picker) until you publish it. Publishing makes it live for everyone and moves the older version of that name to Other models, where it stays usable. Other models keeps the newest ' + j.keep_older + ' older versions of each name.'),
+        el('p', {}, 'A new model version stays in preview (only you and admins see it, marked Preview in the model picker) until you publish it. Before it can be published it must pass the safety checks. Publishing makes it live for everyone and moves the older version of that name to Other models, where it stays usable. Other models keeps the newest ' + j.keep_older + ' older versions of each name.'),
         el('p', {}, 'Rule of thumb: a new version when the training lessons change (Flare 2.5 to 2.6); otherwise it is an update and the version stays (record it below). The app’s own version does not change.'),
         el('h3', {style: 'font-size:16px'}, 'In preview (' + prev.length + ')'),
         ...(prev.length ? prev.map(previewCard) : [el('p', {}, 'No model is waiting. A new build appears here once it is added to the model list with the status “preview”.')])),
       el('div', {class: 'adm-card'}, el('h3', {}, 'Live models'), el('p', {}, 'Made a small fix that keeps the same version? Record an update so it shows in the history and in What’s new.'),
         ...live.map((m) => el('div', {class: 'adm-sub'}, el('div', {class: 'adm-row'}, el('b', {}, m.label, m.live ? ' ' : '', m.live ? el('span', {class: 'adm-tag on'}, 'Published ' + admDate(m.live.at)) : null),
-          sxBtn('Record an update', () => { const n = prompt('What changed in ' + m.label + '? (shown to everyone in What’s new)'); if (n && n.trim()) save({id: m.id, record_update: true, notes: n.trim()}); })), el('small', {}, m.tagline)))),
+          sxBtn('Record an update', () => { const n = prompt('What changed in ' + m.label + '? (shown to everyone in What’s new)'); if (n && n.trim()) save({id: m.id, record_update: true, notes: n.trim()}); })), el('small', {}, m.tagline),
+          m.guard && m.guard.state !== 'none' ? guardBox(m) : null))),
       el('div', {class: 'adm-card'}, el('h3', {}, 'Model release history'),
         ...(j.releases.length ? j.releases.map((r) => el('div', {class: 'adm-sub'}, el('div', {class: 'adm-row'}, el('span', {}, el('b', {}, relTitle(r)), ' ', el('span', {class: 'adm-tag'}, REL_KIND[r.kind] || r.kind)), el('small', {}, admDate(r.at))), r.notes ? el('small', {}, r.notes) : null, el('small', {}, 'By ' + r.by))) : [el('p', {}, 'No model releases yet.')])));
+    if (j.checks_running && body.isConnected) timer = setTimeout(() => { if (body.isConnected) refresh(); }, 3000);
   };
   draw();
 }

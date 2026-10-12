@@ -44,7 +44,7 @@ The owner's idea: an update to a model can raise its version (Flare 2.5 to 2.6 o
 - **Checks before publishing:** the regression guard (idea 15) must pass, so a new version cannot replace a good one by accident. Plans follow the model name (Free gets Flare and Equinox, so Flare 2.6 is Free-eligible the moment it is published).
 - **Publish all** would cover features and models together (one release, one version number for the app) or each tab on its own; to decide.
 
-**The owner's answers:** (1) yes, a new version when the training lessons change, otherwise an update that keeps the version; (2) yes, the app's version and the model versions stay separate; (3) keep 5 to 6 older versions in Other models (set to 6, `keep_older_versions` in `models.json`). Built: Admin > **Models** tab, `app/model_publish.py`, see [FEATURE_FLAGS.md](FEATURE_FLAGS.md). Not built yet: the automatic regression check before a publish (idea 15).
+**The owner's answers:** (1) yes, a new version when the training lessons change, otherwise an update that keeps the version; (2) yes, the app's version and the model versions stay separate; (3) keep 5 to 6 older versions in Other models (set to 6, `keep_older_versions` in `models.json`). Built: Admin > **Models** tab, `app/model_publish.py`, see [FEATURE_FLAGS.md](FEATURE_FLAGS.md). The regression check before a publish (idea 15) is built too: Admin > Models > Run safety checks.
 
 ## Emvryx 3: the plan so far (Oct 11, 2026)
 

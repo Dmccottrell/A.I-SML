@@ -94,7 +94,7 @@ class Server(Base):
         sam, cards = self.cards(self.sam)
         self.assertNotIn("flare-2.6", sam)
         self.assertEqual(self.sam.call("GET", "/api/admin/models")[0], 404)           # admin pages do not exist for ordinary people
-        s, j = self.owner.call("POST", "/api/admin/models", {"id": "flare-2.6", "publish": "now"})
+        s, j = self.owner.call("POST", "/api/admin/models", {"id": "flare-2.6", "publish": "now", "skip_checks": True})      # (the safety checks have their own tests)
         self.assertEqual(s, 200, j)
         sam, cards = self.cards(self.sam)
         self.assertIn("flare-2.6", cards)                                              # the new Flare card

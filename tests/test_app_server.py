@@ -418,9 +418,10 @@ class Privacy(Base):
         ev = self.ask(self.sam, cid, "my-very-private-words")[2]
         self.assertEqual(ev[-1][0], "done")
         self.assertEqual(self.sam.call("GET", "/api/state")[1]["chats"], [])
-        for name in os.listdir(self.tmp.name):
-            with open(os.path.join(self.tmp.name, name), "rb") as f:
-                self.assertNotIn(b"my-very-private-words", f.read())
+        for root, _dirs, files in os.walk(self.tmp.name):
+            for name in files:
+                with open(os.path.join(root, name), "rb") as f:
+                    self.assertNotIn(b"my-very-private-words", f.read())
         self.assertEqual(self.sam.call("GET", f"/api/chats/{cid}")[1]["private"], True)
 
     def test_saved_chat_survives_a_restart(self):
