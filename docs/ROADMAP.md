@@ -140,7 +140,7 @@ Effort is a guess: **S** is days, **M** is a couple of weeks, **L** is a big pro
 
 ## Emvryx API and connecting my own apps (the API is built, Oct 12, 2026)
 
-> **Built Oct 12, 2026:** `POST /api/v1/ask` with one key per app, managed in Admin > Apps (instructions, plan, speed limit, on/off, new key, remove), nothing saved, no lookups by default, errors an app can show kindly, a tiny client (`examples/emvryx_client.py`) and a guide for non-experts: [API.md](API.md). **Still to do:** pick the first app and add one small feature to it behind a switch (steps 1 and 3 below).
+> **Built Oct 12, 2026:** `POST /api/v1/ask` with one key per app, managed in Admin > Apps (instructions, plan, speed limit, on/off, new key, remove), nothing saved, no lookups by default, errors an app can show kindly, a tiny client (`examples/emvryx_client.py`) and a guide for non-experts: [API.md](API.md). **First app chosen: household finance (PennyOtter).** The first feature (the otter coach answering through Emvryx, behind a feature preview) is built on the branch `claude/emvryx-coach` of the `household-finance` repository, not merged: see [HOUSEHOLD_FINANCE_PLAN.md](HOUSEHOLD_FINANCE_PLAN.md). Still to do: switch it on (steps in that file), try it, then pick the next job.
 
 The owner's request: use Emvryx inside the other apps already built (household finance, charting practice). The text below is the original plan. The repos seen on the GitHub account: `household-finance` and `Personal-Finance-app`; the charting practice app is not identified yet.
 

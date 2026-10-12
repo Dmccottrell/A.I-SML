@@ -3483,6 +3483,10 @@ class Handler(http.server.BaseHTTPRequestHandler):
         facts = body.get("facts") or []
         if not isinstance(facts, list) or len(facts) > 50 or not all(isinstance(f, str) for f in facts) or sum(len(f) for f in facts) > 20000:
             return self._send(400, {"code": "bad_facts", "message": '"facts" is a list of up to 50 short texts (20,000 characters in all).'})
+        history = body.get("history") or []
+        if (not isinstance(history, list) or len(history) > 10 or not all(isinstance(h, dict) and h.get("role") in ("user", "assistant") and isinstance(h.get("content"), str)
+                                                                      and len(h["content"]) <= 2000 for h in history)):
+            return self._send(400, {"code": "bad_history", "message": '"history" is up to 10 earlier turns: {"role": "user" or "assistant", "content": "..."} (2,000 characters each).'})
         effort = str(body.get("effort") or rec.get("app_effort", "balanced"))
         if effort not in ("auto", "quick", "balanced", "deep"):
             return self._send(400, {"code": "bad_effort", "message": "effort is auto, quick, balanced or deep."})
@@ -3498,6 +3502,8 @@ class Handler(http.server.BaseHTTPRequestHandler):
         notes = [{"title": f"Fact {i + 1}", "text": f[:2000]} for i, f in enumerate(facts)]
         store = st.store(who["user"])
         cid = store.new_chat(private=True)                      # nothing about a call is ever saved
+        for h in history:                                       # the earlier turns of a conversation the app keeps itself (Emvryx remembers nothing between calls)
+            store.add(cid, h["role"], h["content"].strip() or "...")
         stream = bool(body.get("stream"))
         try:
             q, stop, model, win, decision = start_turn(st, who, cid, question, model_id, effort, pace=False, extra_notes=notes, extra_hint="\n\n".join(h for h in hints if h))

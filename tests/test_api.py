@@ -48,6 +48,17 @@ class Api(Base):
         self.ask(question="Hello")
         self.assertNotIn("Savings: $4,200", self.prompt())                           # facts belong to one call only
 
+    def test_earlier_turns_from_the_app_reach_the_model_and_are_checked(self):
+        self.state.update_app("app-finance", rpm=100)
+        s, j = self.ask(question="And last month?", history=[{"role": "user", "content": "What did we spend on food?"}, {"role": "assistant", "content": "You spent $412 on food."}])
+        self.assertEqual(s, 200, j)
+        text = self.prompt()
+        self.assertIn("What did we spend on food?", text)
+        self.assertIn("You spent $412 on food.", text)
+        self.assertEqual(self.state.store("app-finance").list_chats(), [])
+        for bad in ("nope", [{"role": "system", "content": "x"}], [{"role": "user", "content": 5}], [{"role": "user", "content": "x"}] * 11, [{"role": "user", "content": "x" * 2001}]):
+            self.assertEqual(self.ask(question="hi", history=bad)[0], 400, bad)
+
     def test_a_looked_up_question_never_leaves_this_pc_by_default(self):
         self.assertEqual(self.state.get_settings("app-finance")["web_search"], "none")
         self.assertFalse(self.state.get_settings("app-finance")["memory"])

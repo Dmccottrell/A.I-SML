@@ -17,6 +17,7 @@ Content-Type: application/json
 {"question": "Can we afford a holiday this month?",
  "facts": ["Income this month: $4,800", "Spent so far: $3,950", "Planned bills still to come: $620"],
  "instructions": "Answer in two short sentences.",
+ "history": [{"role": "user", "content": "..."}, {"role": "assistant", "content": "..."}],     (optional: up to 10 earlier turns; Emvryx remembers nothing between calls, so your app sends them)
  "model": "flare",            (optional: flare, equinox, solstice, apogee, or an id like flare-2.5; the app's default otherwise)
  "effort": "balanced",        (optional: auto, quick, balanced, deep)
  "stream": false}             (optional: true streams the answer as server-sent events)
