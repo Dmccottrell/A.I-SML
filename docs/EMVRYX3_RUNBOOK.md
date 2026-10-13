@@ -71,6 +71,12 @@ python scripts/emvryx3_bakeoff.py --llama-bin C:\...\llama-server.exe --only apo
 ```
 For each candidate it measures graphics memory and speed at 8K, 16K and 32K tokens, and runs the 41 everyday questions. `logs\bakeoff.md` has a table per slot with a verdict against the model it would replace (smarter by more than 3 questions, not slower than 90% of the speed, and fits the card). **Send me `logs\bakeoff.md`.** The slot winners are the ones to train (Flare, Equinox, Solstice, Apogee 3); the 27B is Apogee 3 and runs untrained (it cannot be fine-tuned in 12 GB).
 
+**The everyday sheet is nearly full marks for the 9B-class models, so it cannot tell them apart** (first Apogee run: Apogee 2 38/39, Qwen3.5 9B 39/39, Qwen3.8-27B at 2-bit 38/39, DeepSeek-R1 14B 34/39). For that, run the harder sheet too: 52 questions of multi-step maths, logic puzzles, reading Python output, strict formats, trick questions and honesty about what it cannot know (`eval\\hard.jsonl`, made by `eval/make_hard_sheet.py`):
+```
+python scripts/emvryx3_bakeoff.py --llama-bin "C:\\path\\to\\llama-server.exe" --only apogee --sheet eval\\hard.jsonl --quick
+```
+It is saved apart (`logs\\bakeoff-hard.md`), so the first report is not overwritten. `--quick` measures memory and speed at 8K only. **Memory columns stuck at about 1.3 to 1.6 GB mean the model ran on the processor, not the graphics card**: fix that first (see "If something goes wrong").
+
 **3. Train, one model at a time** (the app and games are off while it runs)
 ```
 python scripts/chain_home.py --models flare-3 --keep 0.4 --llama-cpp ..\\llama.cpp --llama-bin C:\\...\\llama-server.exe --gaming
@@ -96,6 +102,7 @@ Add the model to `models.json` with `"status": "preview"` and `"think": "empty"`
 6. **Voice** (decided in the style guide, not yet written) and the Emvryx style pass over the lessons.
 
 ## If something goes wrong
+- *The bake-off shows 1.3 to 1.6 GB of memory and 3 to 12 words a second for every model:* llama-server is not using the graphics card. Run `llama-server.exe --list-devices`: it must list the RTX 4070. If not, unzip the matching `cudart-llama-bin-win-cuda-12.4-x64.zip` from the llama.cpp releases into the same folder (or use the newest CUDA build), and look in `logs\\bakeoff\\<model>-8192-server.log` for the line with "offloaded" (it must say all layers).
 - *Pilot says out of memory:* `python scripts/emvryx3_pilot.py --models solstice-3 -- --batch_tokens 512 --grad_accum 128`.
 - *"model type not recognized" or a loading error:* upgrade `transformers` (`pip install -U transformers`), or the newest `peft`; send me the message.
 - *The .gguf does not load in llama-server:* use a newer llama.cpp build; Qwen3.5 needs support for its hybrid design.
