@@ -79,7 +79,7 @@ class EditorUi(Base):
                 self.assertIn("Retrying", text)
                 self.assertIn("index.html", text)
                 self.assertIn("7s", text)
-                self.assertIn("52 words", text)
+                self.assertIn("52 tokens", text)
                 page.evaluate("cEvent({kind: 'step', tool: 'edit_file', preview: 'edit a.html\\n  - x\\n  + y', raw: ''}); cEvent({kind: 'result', text: 'error: the text in old was not found'})")
                 self.assertIn("Could not edit", page.inner_text("#codeIn"))                 # a failed edit does not read like a finished one
             finally:
@@ -155,7 +155,12 @@ class EditorUi(Base):
                 page.evaluate("openCode()")
                 page.wait_for_selector("#vxTpls button", state="visible")
                 self.assertGreaterEqual(page.locator("#vxTpls button").count(), 5)
-                self.assertTrue(page.is_visible("#vxNotifyRow"))                                  # the owner can ask for a phone notification
+                self.assertTrue(page.is_visible("#vxNotifyRow"))
+                self.assertRegex(page.inner_text("#vxModel"), "Equinox|Solstice")                        # which model will build it, on the home itself
+                page.click("#vxModel")
+                self.assertTrue(page.is_visible("#vxModelMenu"))
+                page.click("#vxModelMenu button.sel")
+                self.assertTrue(page.is_hidden("#vxModelMenu"))                                  # the owner can ask for a phone notification
                 page.click("#vxTpls button[data-id=todo]")                                        # pick a starter, then Build it with no words at all
                 self.assertIn("to-do", page.get_attribute("#vxQuick", "placeholder").lower())
                 page.evaluate("C.mode = 'auto'")

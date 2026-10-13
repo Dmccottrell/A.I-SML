@@ -294,7 +294,7 @@ function cEvent(e) {
     if (prose) feed.append(el('div', {class: 'cc-say'}, prose));
     const [name, arg, extra] = toolParts(e.preview, e.tool);
     const node = el('div', {class: 'cc-tool run'}, el('div', {class: 'cc-head'}, el('span', {class: 'cc-verb'}, name),
-      el('span', {class: 'cc-arg'}, [arg, extra, e.secs != null ? Math.round(e.secs) + 's' : '', e.words ? e.words + ' words' : ''].filter(Boolean).join('  \u00b7  '))));
+      el('span', {class: 'cc-arg'}, [arg, extra, e.secs != null ? Math.round(e.secs) + 's' : '', e.words ? fmt(e.words) + ' tokens' : ''].filter(Boolean).join('  \u00b7  '))));
     const d = (e.tool === 'write_file' || e.tool === 'edit_file') ? diffNode(e.preview) : null; if (d) node.append(d);
     feed.append(node); C.last = node; return;
   }
@@ -402,7 +402,7 @@ function paintLive() {
   if (!what.textContent) what.textContent = word + '\u2026';                                    // the first time: just show it
   else if (what.textContent !== word + '\u2026' && !what._swapping) { what._swapping = true; what.classList.add('swap'); setTimeout(() => { what.textContent = word + '\u2026'; what.classList.remove('swap'); what._swapping = false; }, 160); }
   const target = (l.target || '').split('\n')[0].slice(0, 60);
-  n.querySelector('.meta').textContent = (target ? target + '  \u00b7  ' : '') + secs + 's' + (l.tokens ? '  \u00b7  ' + fmt(l.tokens) + ' words' : '');
+  n.querySelector('.meta').textContent = (target ? target + '  \u00b7  ' : '') + secs + 's' + (l.tokens ? '  \u00b7  ' + fmt(l.tokens) + ' tokens' : '');
   n.querySelector('.prose').textContent = l.text || '';
   const f = $('codeFeed'); if (f.scrollTop + f.clientHeight > f.scrollHeight - 160) scrollCode();
 }
