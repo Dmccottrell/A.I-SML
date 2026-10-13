@@ -18,7 +18,6 @@ import os
 import re
 import shutil
 
-import emvryx_paths  # noqa: E402
 from site_fx import FX_CSS, FX_JS  # noqa: E402
 
 HERE = emvryx_paths.ROOT                      # the project folder (design/, site/ and web/ live there)
