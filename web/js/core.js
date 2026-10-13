@@ -104,11 +104,18 @@ function applyTheme() {
   for (const k in p) document.documentElement.style.setProperty('--' + k, p[k]);
   document.querySelector('meta[name=theme-color]').content = p.bg;
   const on = (id) => !!(S.state && S.state.features && S.state.features[id]);
-  // two looks behind feature flags: their stylesheets are only loaded (and their classes only set) while the flag is on for this person, so off means exactly the earlier look
-  const sheet = (id, href, want) => { const e = document.getElementById(id); if (want && !e) document.head.append(el('link', {id, rel: 'stylesheet', href})); else if (!want && e) e.remove(); };
-  document.body.classList.toggle('ml', on('modern_look')); sheet('cssModern', '/modern.css', on('modern_look'));
-  document.body.classList.toggle('vxn', on('vryxcode_update')); sheet('cssVryx', '/vryx.css', on('vryxcode_update'));
+  if (!S.state) return;                                  // before sign-in nothing is known: keep what this device remembered
+  applyLooks(on('modern_look'), on('vryxcode_update'));
+  try { localStorage.setItem('emvryx_looks', JSON.stringify({ml: on('modern_look'), vxn: on('vryxcode_update')})); } catch (e) { /* the sign-in screen then shows the plain look first */ }
 }
+// two looks behind feature flags: their stylesheets are only loaded (and their classes only set) while the flag is on for this person, so off means exactly the earlier look.
+// The last answer is remembered on this device so the sign-in screen (shown before anyone is known) already wears the look.
+function applyLooks(ml, vxn) {
+  const sheet = (id, href, want) => { const e = document.getElementById(id); if (want && !e) document.head.append(el('link', {id, rel: 'stylesheet', href})); else if (!want && e) e.remove(); };
+  document.body.classList.toggle('ml', !!ml); sheet('cssModern', '/modern.css', ml);
+  document.body.classList.toggle('vxn', !!vxn); sheet('cssVryx', '/vryx.css', vxn);
+}
+try { const k = JSON.parse(localStorage.getItem('emvryx_looks') || '{}'); if (k.ml || k.vxn) applyLooks(k.ml, k.vxn); } catch (e) { /* no memory of it: the plain look */ }
 function wash() { const w = el('div', {class: 'wash'}); document.body.append(w); setTimeout(() => w.remove(), 1100); }
 
 // ---------------------------------------------------------------- load
