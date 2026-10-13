@@ -24,7 +24,6 @@ import shlex
 import subprocess
 import sys
 import tarfile
-import tempfile
 
 SKIP_DIRS = {".git", "__pycache__", "node_modules", ".venv", "venv", ".worktrees"}
 MAX_DOWN = 100 * 1024 * 1024

@@ -50,7 +50,6 @@ import urllib.request
 import app_engine as E
 import accounts
 import auth
-import chat
 import data_tools
 import code_sandbox
 import chat_polish
@@ -2656,7 +2655,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
                     mp, man, mid, by = self.state.models_pub, self.state.manifest, str(body.get("id", "")), who["user"]
                     try:
                         if body.get("run_checks"):
-                            st_ = self.state.start_guard(mid, by=by)
+                            self.state.start_guard(mid, by=by)
                             self.state.auth.event("model_checks", by, self._ip(), f"{mid}: started")
                         elif body.get("publish") == "now":
                             if self.state.runner and not self.state.runner.available(mid):
@@ -3626,7 +3625,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
 
     def google_callback(self, qs):
         st = self.state
-        clear = f"emvryx_oauth=; Path=/auth/google; HttpOnly; SameSite=Lax; Max-Age=0" + ("; Secure" if self._https() else "")
+        clear = "emvryx_oauth=; Path=/auth/google; HttpOnly; SameSite=Lax; Max-Age=0" + ("; Secure" if self._https() else "")
         fail = lambda code: self._redirect("/?gerr=" + code, [clear])
         if not st.google_on():
             return fail("off")

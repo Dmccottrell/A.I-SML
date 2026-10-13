@@ -18,7 +18,6 @@ import shutil
 import subprocess
 import tempfile
 
-import languages as L
 
 # id -> (what to write, [(standard input, expected output)])
 TASKS = {

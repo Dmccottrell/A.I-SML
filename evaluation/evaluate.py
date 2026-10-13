@@ -35,7 +35,7 @@ Usage:  python evaluation/evaluate.py                        (v1 chat model)
 The report is saved next to the checkpoint: eval_<checkpoint name>.md
 """
 import os, sys; sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), os.pardir)); import emvryx_paths  # noqa: E402,F401  (the code folders become importable)
-import argparse, json, os, re
+import argparse, json, os
 from collections import defaultdict
 
 import torch

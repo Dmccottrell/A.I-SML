@@ -39,7 +39,6 @@ def paths(model):
 
 def step_command(step, model, a):
     """The command (a list) for one step, or None when the step has nothing to run."""
-    p = paths(model)
     if step == "lessons":
         cmd = [PY, os.path.join("data_prep", "format_lessons_3x.py"), "--out", a.lessons, "--keep", str(a.keep)]
         cmd += ["--general", a.general, "--general-share", str(getattr(a, "general_share", 0.3))] if getattr(a, "general", None) else []

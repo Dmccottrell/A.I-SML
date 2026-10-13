@@ -99,7 +99,7 @@ def load_base(model_id, device, quant4=False):
     """The plain model. quant4=True loads it in 4 bits (the 14B model is about 30 GB in bf16, more than a 32 GB card can score with):
     the same way it was trained (QLoRA), so base and tuned are still compared like for like."""
     global QUANT4
-    from transformers import AutoModelForCausalLM, AutoTokenizer
+    from transformers import AutoTokenizer
     dtype = torch.bfloat16 if device == "cuda" else torch.float32
     tok = AutoTokenizer.from_pretrained(model_id)
     QUANT4 = bool(quant4 and device == "cuda")

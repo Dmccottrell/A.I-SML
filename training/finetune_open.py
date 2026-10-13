@@ -25,7 +25,6 @@ import json
 import math
 import os
 import random
-import shutil
 import signal
 import sys
 import time
@@ -132,7 +131,7 @@ MERGE_SHARD_SIZE = "2GB"
 def merge_and_export(base_model, adapter_dir, export_dir, torch, spread=False):
     """Merge the LoRA adapter into the base weights and write a plain Hugging Face folder."""
     from peft import PeftModel
-    from transformers import AutoModelForCausalLM, AutoTokenizer
+    from transformers import AutoTokenizer
     model = None
     if spread and torch.cuda.is_available():       # a 14B model is about 30 GB in bf16: more than a 30 GB machine's RAM, so fill the GPU first and spill the rest to RAM
         gpu_gb = torch.cuda.get_device_properties(0).total_memory / 2**30
@@ -207,7 +206,7 @@ def main(argv=None):
         return 0
 
     from peft import LoraConfig, PeftModel, get_peft_model
-    from transformers import AutoModelForCausalLM, AutoTokenizer
+    from transformers import AutoTokenizer
     from open_tokenizer import OpenTokenizer
 
     if not os.path.exists(a.data):
