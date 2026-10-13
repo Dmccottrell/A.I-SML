@@ -3,7 +3,7 @@ import os, sys; sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(
 import unittest
 
 import browser_check
-from tests.test_app_server import Base
+from tests.test_app_server import Base, Client
 from tests.test_browser_check import find_browser
 from tests.test_code_sessions import open_to_everyone, wait_for
 
@@ -11,6 +11,7 @@ from tests.test_code_sessions import open_to_everyone, wait_for
 def ready(page):
     """The page has loaded and signed in (polled from Python: the page's own security rules block waiting on a script string)."""
     wait_for(lambda: page.evaluate("typeof S !== 'undefined' && !!S.state"), 15)
+    page.evaluate("S.tourChecked = true; openTour = () => {}; document.querySelectorAll('.tour').forEach((e) => e.remove())")      # the welcome tour must never cover a click
 
 
 @unittest.skipUnless(browser_check.available() and find_browser(), "needs the playwright package and a Chromium, Edge or Chrome")
@@ -43,6 +44,7 @@ class EditorUi(Base):
                 page.evaluate("document.querySelectorAll('.tour').forEach((e) => e.remove())")        # the welcome tour can appear late
                 page.click("#codeProjNew")
                 page.fill(".dialog input", "bad name")
+                page.evaluate("document.querySelectorAll('.tour').forEach((e) => e.remove())")
                 page.click(".dialog .btn.primary")
                 self.assertIn("no spaces", page.inner_text(".dialog"))                         # a clear reason, the dialog stays open
                 page.fill(".dialog input", "recipe-box")
@@ -96,6 +98,33 @@ class EditorUi(Base):
                 page.click("#pcTest >> text=Update and restart")
                 page.wait_for_timeout(400)
                 self.assertEqual(fake.applied, [])
+            finally:
+                b.close()
+
+    def test_vryxcode_is_violet_and_the_home_starts_a_build_from_its_box(self):
+        from playwright.sync_api import sync_playwright
+        import vryxcode
+        self.state.code_generate = lambda model: vryxcode.ScriptedChat(list(vryxcode.DEMO))
+        st, h, css = Client(self.port).call("GET", "/vryx.css", raw=True)
+        self.assertEqual(st, 200)
+        self.assertIn("text/css", h["Content-Type"])
+        with sync_playwright() as p:
+            b = p.chromium.launch(executable_path=find_browser())
+            try:
+                page = b.new_context(viewport={"width": 1200, "height": 850}, extra_http_headers={"Authorization": "Bearer " + self.state.owner_key()}).new_page()
+                page.goto(f"http://127.0.0.1:{self.port}/")
+                ready(page)
+                page.evaluate("document.querySelectorAll('.tour').forEach((e) => e.remove()); openCode()")
+                page.wait_for_selector("#vxQuick", state="visible")
+                accent = page.evaluate("getComputedStyle(document.getElementById('code')).getPropertyValue('--accent').trim().toUpperCase()")
+                self.assertEqual(accent, "#8B5CF6")                                              # VryxCode's own colour, whatever the chat model's colour is
+                self.assertIn("build", page.inner_text(".vx-hero h1").lower())
+                page.click("#vxChips button >> nth=0")                                           # an idea chip fills the box
+                self.assertIn("bill splitter", page.input_value("#vxQuick").lower())
+                page.click("#vxQuickGo")
+                wait_for(lambda: page.evaluate("C.view") == "session")                           # straight into a session that runs it
+                wait_for(lambda: "Build" in page.inner_text("#codeIn") or "bill splitter" in page.inner_text("#codeIn").lower())
+                self.assertEqual(page.evaluate("document.getElementById('vxQuick').value"), "")
             finally:
                 b.close()
 

@@ -22,7 +22,7 @@ function ideTree() {
   [...(C.files || [])].sort().forEach((f) => {
     const parts = f.split('/');
     parts.slice(0, -1).forEach((d, i) => { const p = parts.slice(0, i + 1).join('/'); if (!seen.has(p)) { seen.add(p); rows.push(el('div', {class: 'idir', style: 'padding-left:' + (8 + i * 12) + 'px'}, '\u25b8 ' + d)); } });
-    rows.push(el('button', {class: 'ifile' + (cur && cur.path === f ? ' on' : ''), style: 'padding-left:' + (8 + (parts.length - 1) * 12) + 'px', title: f, onclick: () => ideOpen(f)}, ideBase(f)));
+    rows.push(el('button', {class: 'ifile' + (cur && cur.path === f ? ' on' : ''), 'data-ext': (f.split('.').pop() || '').toLowerCase(), style: '--d:' + ((parts.length - 1) * 12) + 'px', title: f, onclick: () => ideOpen(f)}, ideBase(f)));
   });
   $('ideFiles').replaceChildren(...(rows.length ? rows : [el('div', {style: 'color:var(--muted);padding:6px 8px;font-size:14px'}, 'No files yet. Tap + New, or ask VryxCode.')]));
 }
@@ -36,7 +36,7 @@ function ideStash() {                       // remember the text and cursor of t
 }
 function ideShow() {                        // draw the active tab in the editor (or the empty message)
   const body = $('ideBody'), t = IDE.tabs[IDE.active];
-  if (!t) { if (IDE.ed) { body.replaceChildren(); IDE.ed = null; } body.replaceChildren(el('div', {class: 'iempty'}, 'Pick a file from the list to edit it. VryxCode works in the chat on the right; when it changes a file you have open, it updates here.')); ideStatus('', ''); $('ideLang').textContent = ''; $('ideSave').hidden = true; $('ideEditSel').hidden = true; $('ideExplain').hidden = true; ideConflict(); return; }
+  if (!t) { if (IDE.ed) { body.replaceChildren(); IDE.ed = null; } body.replaceChildren(el('div', {class: 'iempty'}, el('div', {class: 'vx-mark'}, '</>'), el('b', {}, 'Pick a file to edit'), el('span', {}, 'VryxCode works in the chat on the right. When it changes a file you have open, it updates here.'))); ideStatus('', ''); $('ideLang').textContent = ''; $('ideSave').hidden = true; $('ideEditSel').hidden = true; $('ideExplain').hidden = true; ideConflict(); return; }
   if (!IDE.ed || !body.querySelector('.ed')) { body.replaceChildren(); IDE.ed = null; }
   const ed = ideEditor(); ed.setReadOnly(t.readOnly); ed.setLang(EmvryxEditor.langOf(t.path)); ed.setText(t.text); ed.restore(t.state);
   $('ideLang').textContent = EmvryxEditor.langOf(t.path); $('ideSave').hidden = !!t.readOnly; $('ideEditSel').hidden = !!t.readOnly; $('ideExplain').hidden = false;

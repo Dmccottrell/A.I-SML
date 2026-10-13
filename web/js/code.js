@@ -5,7 +5,7 @@ try { C.env = localStorage.getItem('emvryx_code_env') || 'local'; } catch (e) {}
 const cOn = () => !$('code').hidden;
 const cModel = () => (C.info ? C.info.models.find((m) => m.id === C.model) : null);
 async function openCode() {
-  $('code').hidden = false; document.body.classList.remove('menu-open');
+  $('code').hidden = false; document.body.classList.remove('menu-open'); document.body.classList.add('vx'); startDots($('vxDots'), $('code'));
   const r = await api('/api/code'); C.info = await r.json(); showUsage(C.info.usage);
   const usable = C.info.models.filter((m) => m.state === 'ready');
   if (!cModel() || cModel().state !== 'ready') C.model = (usable.find((m) => m.id === S.model) || usable[0] || C.info.models[0] || {}).id;
@@ -139,7 +139,7 @@ $('codeAuto').onclick = (e) => {
     el('span', {class: 'grow'}, el('b', {}, x.name), el('small', {}, x.note)))));
   m.hidden = false;
 };
-$('codeBack').onclick = () => { if (C.view === 'session') { showHome(); return; } $('code').hidden = true; clearTimeout(C.timer); closeCodeMenus(); };
+$('codeBack').onclick = () => { if (C.view === 'session') { showHome(); return; } $('code').hidden = true; document.body.classList.remove('vx'); clearTimeout(C.timer); closeCodeMenus(); };
 function showDrawer(on, tab) {
   $('codeDrawer').hidden = !on; if (!on) return; tab = tab || C.tab || 'files'; C.tab = tab;
   document.querySelectorAll('#codeDrawer .dtabs button').forEach((b) => b.classList.toggle('on', b.dataset.tab === tab));
@@ -229,3 +229,20 @@ async function refreshFiles() {
   if (IDE.on) { ideTree(); ideSync(); }
   $('codeFiles').replaceChildren(...(j.files.length ? j.files.map((f) => el('button', {class: f === C.file ? 'on' : '', onclick: () => viewFile(f)}, f)) : [el('div', {style: 'color:var(--muted);padding:6px 8px;font-size:14px'}, 'No files yet.')]));
 }
+
+// ---- the home screen's start box and idea chips (a session starts the moment you press Build it)
+const VX_IDEAS = [['Bill splitter', 'A bill splitter: bill, tip percentage and number of people, and it shows what each person pays.'],
+  ['To-do list', 'A to-do list that saves in the browser, with tick, delete and filter, and looks good on a phone.'],
+  ['Focus timer', 'A focus timer with 25 and 5 minute rounds, a progress ring and a sound at the end.'],
+  ['Snake', 'The game Snake in one HTML file with arrow keys and swipe controls, a score and a high score.'],
+  ['Habit tracker', 'A 7-day habit grid I can tick off, with a streak counter, saved in the browser.']];
+function vxRenderChips() {
+  $('vxChips').replaceChildren(...VX_IDEAS.map(([name, text]) => el('button', {type: 'button', onclick: () => { $('vxQuick').value = text; $('vxQuick').focus(); }}, el('b', {}, '+'), name)));
+}
+$('vxQuickGo').onclick = () => {
+  const text = $('vxQuick').value.trim();
+  if (!text) { $('vxQuick').focus(); return; }
+  newSession(); $('codeTask').value = text; $('vxQuick').value = ''; $('codeGo').click();
+};
+$('vxQuick').addEventListener('keydown', (e) => { if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) { e.preventDefault(); $('vxQuickGo').click(); } });
+vxRenderChips();

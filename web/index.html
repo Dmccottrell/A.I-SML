@@ -231,7 +231,7 @@ svg .core { fill: var(--core); stroke: var(--sun); stroke-width: 3; transition: 
 .code .iout .oi pre { margin: 3px 0 0; white-space: pre-wrap; word-break: break-word; color: var(--text); opacity: .92; max-height: 40vh; overflow: auto; }
 .code .iout .oc { display: flex; gap: 8px; align-items: center; padding: 6px 10px; border-top: 1px solid var(--line); } .code .iout .oc span { color: var(--muted); font-family: ui-monospace, Menlo, Consolas, monospace; }
 .code .iout .oc input { flex: 1; min-width: 0; background: var(--bg); color: var(--text); border: 1px solid var(--line); border-radius: 8px; padding: 6px 10px; font: 13px ui-monospace, Menlo, Consolas, monospace; }
-.code .ibar #ideAc.on { border-color: #3fb950; color: #3fb950; } .code .ibar #ideOutBtn.new::after { content: ' \u25cf'; color: var(--accent); }
+.code .ibar #ideAc.on { border-color: #3fb950; color: #3fb950; } .code .ibar #ideOutBtn.new::after { content: ' \25cf'; color: var(--accent); }
 .code .iconf { padding: 8px 12px; background: rgba(245,165,36,.14); border-bottom: 1px solid var(--line); display: flex; gap: 8px; align-items: center; flex-wrap: wrap; font-size: 13px; } .code .iconf[hidden] { display: none; }
 .code .ibody { flex: 1; min-height: 0; display: flex; }
 .code .ibody .iempty { margin: auto; color: var(--muted); text-align: center; padding: 20px; max-width: 320px; }
@@ -564,6 +564,7 @@ html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
 /* features and testing */
 .fchips { display: flex; flex-wrap: wrap; gap: 8px; } .fchips .pill button { background: transparent; border: 0; color: inherit; padding: 0 0 0 6px; font-size: 16px; cursor: pointer; }
 </style>
+<link rel="stylesheet" href="/vryx.css">
 </head>
 <body>
 <div class="app" id="app" hidden>
@@ -617,6 +618,7 @@ html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
 </div>
 
 <div class="code" id="code" hidden>
+  <canvas class="vx-dots" id="vxDots" aria-hidden="true"></canvas>
   <div class="top2">
     <button class="icon" id="codeBack" aria-label="Back to chats"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M15 5l-7 7 7 7" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
     <span class="title" id="codeTitle">Code</span>
@@ -627,6 +629,12 @@ html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
     <button class="chip" id="codeFilesBtn">Files</button>
   </div>
   <div class="home" id="codeHome">
+    <div class="vx-hero">
+      <h1>What should we <em>build</em>?</h1>
+      <p>Describe it. VryxCode plans it, writes it, runs it and checks it, right here.</p>
+      <div class="vx-quick"><textarea id="vxQuick" rows="2" maxlength="8000" placeholder="A bill splitter with tip, a habit tracker, a snake game..." aria-label="What should VryxCode build?"></textarea><button class="vx-go" id="vxQuickGo" type="button">Build it</button></div>
+      <div class="vx-chips" id="vxChips"></div>
+    </div>
     <div class="envs" id="codeEnvs"></div>
     <div class="chead"><span class="lbl">Sessions</span><div style="position:relative"><button class="chip" id="codeFilter" aria-haspopup="true">All \u25be</button><div class="menu" id="codeFilterMenu" hidden></div></div></div>
     <div class="slist" id="codeList"></div>
