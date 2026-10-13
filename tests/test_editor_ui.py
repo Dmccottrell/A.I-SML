@@ -1,5 +1,6 @@
 """The Editor layout in a real browser: files | editor | VryxCode side by side, open, edit, Save, and a file VryxCode changes while it is open."""
 import os, sys; sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), os.pardir)); import emvryx_paths  # noqa: E402,F401
+import json
 import unittest
 
 import browser_check
@@ -200,7 +201,14 @@ class EditorUi(Base):
                     self.assertEqual(page.evaluate("document.body.classList.contains('ml')"), on)
                     self.assertEqual(page.evaluate("!!document.getElementById('cssModern')"), on)           # its stylesheet is not even loaded when the flag is off
                     self.assertEqual(page.is_visible(".ml-ideas"), on)                              # hidden entirely when the flag is off
+                    remembered = page.evaluate("localStorage.getItem('emvryx_looks')")                    # kept so the sign-in screen can wear the look
+                    self.assertEqual(json.loads(remembered)["ml"], on)
                     if on:
+                        anon = b.new_context(viewport={"width": 1200, "height": 850}).new_page()
+                        anon.add_init_script("localStorage.setItem('emvryx_looks', JSON.stringify({ml: true, vxn: false}))")
+                        anon.goto(f"http://127.0.0.1:{self.port}/")
+                        wait_for(lambda: anon.evaluate("document.body.classList.contains('ml') && !!document.getElementById('cssModern')"), 10)
+                        self.assertTrue(anon.is_visible("#auth"))                                       # the sign-in screen, in the modern look
                         page.click(".ml-ideas button >> nth=0")
                         self.assertIn("vaccines", page.input_value("#input"))
                     self.assertEqual(errors, [])
