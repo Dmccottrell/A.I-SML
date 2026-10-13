@@ -24,6 +24,7 @@ import zipfile
 
 import code_log
 import code_report
+import code_map
 import code_review
 import code_sandbox
 import harness
@@ -124,6 +125,7 @@ class Session:
         self.live_messages = None                      # the conversation as it grows during a turn (kept if the turn is stopped)
         self.generate, self.max_turns, self.context_tokens, self.extra_programs = None, 12, None, ()
         self.turns_run = 0
+        self.notify, self.on_notify = False, None       # tell the owner's phone when a turn ends or it needs an answer (set by the server)
 
     def emit(self, kind, **data):
         with self.cv:
@@ -239,6 +241,7 @@ class Session:
         with self.cv:
             self.pending, self.answer, self.state = {"id": qid, "tool": name, "preview": clip(shown, 2500)}, None, "asking"
         self.emit("ask", id=qid, tool=name, preview=self.pending["preview"])
+        self._tell("asking")
         with self.cv:
             while self.answer is None and not self.stop.is_set():
                 self.cv.wait(0.5)
@@ -384,12 +387,23 @@ class Session:
         finally:
             self.live = None
             self.persist(force=True)
+            if self.state not in ("starting", "working", "asking"):
+                self._tell(self.state)
             idle = getattr(self, "on_idle", None)
             if idle and self.state not in ("starting", "working", "asking"):
                 try:
                     idle(self)                            # the next queued session may start
                 except Exception:
                     pass
+
+    def _tell(self, kind):
+        """The phone notification (when it was asked for): the state and the project, never code or file contents. Never raises."""
+        cb = self.on_notify
+        if self.notify and cb:
+            try:
+                cb(self, kind)
+            except Exception:
+                pass
 
     def _end(self, **data):
         """The end of a turn. When it did any work the end carries its verification report (so it is in the history on disk too)."""
@@ -456,6 +470,12 @@ class CodeManager:
             if len(out) > 500:
                 break
         return out[:500]
+
+    def search(self, user, project, query):
+        return code_map.search(self.project_path(user, project), query)
+
+    def project_map(self, user, project):
+        return code_map.project_map(self.project_path(user, project))
 
     def read(self, user, project, rel):
         root = os.path.realpath(self.project_path(user, project))
@@ -650,6 +670,49 @@ class CodeManager:
         with open(full, "rb") as f:
             return f.read()
 
+    def fork_project(self, user, project):
+        """A separate copy of a project to try an idea in (the original is not touched). Returns the copy's name: "shop" -> "shop-try", "shop-try-2", ..."""
+        src = self.project_path(user, project)
+        if not os.path.isdir(src):
+            raise CodeError("That project isn't here.")
+        if self.running(user) and any(x.project == project and x.state in ("starting", "working", "asking") for x in self.sessions.values() if x.user == user):
+            raise CodeError("A session is working in that project.", "Wait for it to finish, then make the copy.")
+        base = re.sub(r"-try(-\d+)?$", "", project)[:34]
+        name, n = base + "-try", 2
+        while os.path.exists(self.project_path(user, name)):
+            name = f"{base}-try-{n}"
+            n += 1
+        try:
+            self.quotas.new_project(self.base(user), name)
+            self.quotas.room(self.base(user), src, extra_bytes=0)
+        except code_sandbox.QuotaError as e:
+            raise CodeError(e.message, e.action)
+        dst = self.project_path(user, name)
+        shutil.copytree(src, dst, ignore=shutil.ignore_patterns(".git", "node_modules", "__pycache__", ".emvryx"), symlinks=False)
+        return name
+
+    def adopt_project(self, user, copy, into):
+        """Use a copy's files in the original: the original is first saved as "<into>-before" (so nothing is lost), then its files are replaced by the copy's."""
+        a, b = self.project_path(user, copy), self.project_path(user, into)
+        if copy == into or not os.path.isdir(a) or not os.path.isdir(b):
+            raise CodeError("Pick a copy and the project it came from.")
+        if any(x.user == user and x.project in (copy, into) and x.state in ("starting", "working", "asking") for x in self.sessions.values()):
+            raise CodeError("A session is working in one of them.", "Wait for it to finish.")
+        backup, n = into + "-before", 2
+        while os.path.exists(self.project_path(user, backup)):
+            backup = f"{into}-before-{n}"
+            n += 1
+        try:
+            self.quotas.new_project(self.base(user), backup)
+        except code_sandbox.QuotaError as e:
+            raise CodeError(e.message, e.action)
+        os.rename(b, self.project_path(user, backup))
+        shutil.copytree(a, b, ignore=shutil.ignore_patterns(".emvryx"), symlinks=False)
+        git = os.path.join(self.project_path(user, backup), ".git")
+        if os.path.isdir(git):                                    # the history stays with the original
+            shutil.copytree(git, os.path.join(b, ".git"))
+        return {"project": into, "backup": backup}
+
     def delete_project(self, user, project):
         import shutil
         if self.running(user):
@@ -685,7 +748,7 @@ class CodeManager:
         return code_sandbox.docker_prefix(sb.get("image", code_sandbox.DEFAULT_IMAGE), workspace, cpus=sb.get("cpus", "1"), memory=sb.get("memory", "768m"),
                                           pids=sb.get("pids", 128), runtime=sb.get("runtime"))
 
-    def start(self, user, project, task, model_id, generate, auto_edits=False, context_tokens=None, meter=None, outside=False, tools=None, identity=None, env="local", plan=False, owner=False, queue=False):
+    def start(self, user, project, task, model_id, generate, auto_edits=False, context_tokens=None, meter=None, outside=False, tools=None, identity=None, env="local", plan=False, owner=False, queue=False, model_text=None):
         task = str(task or "").strip()
         if not task:
             raise CodeError("Describe what to build or fix.")
@@ -721,6 +784,7 @@ class CodeManager:
                         env=env, remote=(env == "cloud"), log=code_log.SessionLog(self.base(user)), snapshot=lambda u=user, p=project: self._snapshot(u, p), plan=bool(plan),
                         expand=lambda t, u=user, p=project: self.expand_mentions(u, p, t))
             self.sessions[s.id], self.by_user[user] = s, s.id
+            s._model_text = model_text                          # what the model gets instead of the line the person sees (a second opinion's diff)
             s.on_idle = self._session_idle
             if busy:                                           # one model on one card: sessions wait their turn, so they never work on the same files at once
                 s.state, s.run_args = "queued", (generate, self.max_turns, context_tokens)
@@ -884,8 +948,8 @@ class CodeManager:
         self.sessions.pop(sid, None)
         self.log(user).delete(sid)
 
-    def review_session(self, user, sid):
-        """The review request for what a session changed: the project before its first message (a saved snapshot) against the files now."""
+    def _before_and_after(self, user, sid):
+        """(workspace, the zip of the project before the session's first message, {path: text} then, {path: text} now)."""
         log = self.log(user)
         d = self.saved(user, sid) if sid not in self.sessions else {"meta": self.sessions[sid].meta()}
         turns = sorted(log.checkpoint_numbers(sid))
@@ -907,8 +971,55 @@ class CodeManager:
                     continue
                 if text is not None:
                     after[os.path.relpath(full, workspace).replace(os.sep, "/")] = text
-        diff, changed, cut = code_review.diff_files(code_review.snapshot_files(data), after)
+        return workspace, data, code_review.snapshot_files(data), after
+
+    def review_session(self, user, sid):
+        """The review request for what a session changed: the project before its first message (a saved snapshot) against the files now."""
+        _, _, before, after = self._before_and_after(user, sid)
+        diff, changed, cut = code_review.diff_files(before, after)
         return {"prompt": code_review.review_prompt(diff, changed, cut, "the changes this session made"), "files": changed}
+
+    def changes(self, user, sid):
+        """What the session changed, file by file: [{path, status: new|changed|removed, add, del, diff}], so each can be kept or undone."""
+        _, _, before, after = self._before_and_after(user, sid)
+        out = []
+        for p in sorted(set(before) | set(after)):
+            a, b = before.get(p), after.get(p)
+            if a == b:
+                continue
+            diff, _, _ = code_review.diff_files({p: a} if a is not None else {}, {p: b} if b is not None else {}, limit=6000)
+            lines = diff.splitlines()
+            out.append({"path": p, "status": "new" if a is None else "removed" if b is None else "changed",
+                        "add": sum(1 for x in lines if x.startswith("+") and not x.startswith("+++")), "del": sum(1 for x in lines if x.startswith("-") and not x.startswith("---")),
+                        "diff": diff})
+        return out
+
+    def reject_file(self, user, sid, path):
+        """Undo one file of a session: put it back as it was before the session's first message (a file the session made is removed)."""
+        if self.running(user):
+            raise CodeError("A session is running.", "Stop it first.")
+        workspace, data, before, after = self._before_and_after(user, sid)
+        rel = self._safe_rel(str(path or ""))
+        if rel is None:
+            raise CodeError("That is not a file in this project.")
+        root = os.path.realpath(workspace)
+        full = os.path.realpath(os.path.join(root, rel))
+        if not full.startswith(root + os.sep):
+            raise CodeError("That is not a file in this project.")
+        if before.get(rel) == after.get(rel):
+            raise CodeError("That file has not changed in this session.")
+        if rel in before:
+            with zipfile.ZipFile(io.BytesIO(data)) as z:
+                os.makedirs(os.path.dirname(full), exist_ok=True)
+                with open(full, "wb") as f:
+                    f.write(z.read(rel))
+        else:
+            os.remove(full)
+        live = self.sessions.get(sid)
+        if live:
+            live.history = None                                # what the model remembers no longer matches the files
+            live.emit("undo", path=rel)
+        return {"path": rel, "restored": rel in before}
 
     def rewind(self, user, sid, turn):
         """Put the project back as it was before message `turn` of this session (files made since are removed; .git is left alone)."""

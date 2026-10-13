@@ -128,6 +128,47 @@ class EditorUi(Base):
             finally:
                 b.close()
 
+    def test_templates_notify_box_search_map_and_the_changes_panel(self):
+        from playwright.sync_api import sync_playwright
+        import vryxcode
+        self.state.code_generate = lambda model: vryxcode.ScriptedChat(list(vryxcode.DEMO))
+        with sync_playwright() as p:
+            b = p.chromium.launch(executable_path=find_browser())
+            try:
+                page = b.new_context(viewport={"width": 1200, "height": 850}, extra_http_headers={"Authorization": "Bearer " + self.state.owner_key()}).new_page()
+                errors = []
+                page.on("pageerror", lambda e: errors.append(str(e)))
+                page.goto(f"http://127.0.0.1:{self.port}/")
+                ready(page)
+                page.evaluate("document.querySelectorAll('.tour').forEach((e) => e.remove()); openCode()")
+                page.wait_for_selector("#vxTpls button", state="visible")
+                self.assertGreaterEqual(page.locator("#vxTpls button").count(), 5)
+                self.assertTrue(page.is_visible("#vxNotifyRow"))                                  # the owner can ask for a phone notification
+                page.click("#vxTpls button[data-id=todo]")                                        # pick a starter, then Build it with no words at all
+                self.assertIn("to-do", page.get_attribute("#vxQuick", "placeholder").lower())
+                page.evaluate("C.mode = 'auto'")
+                page.click("#vxQuickGo")
+                wait_for(lambda: page.evaluate("C.view") == "session")
+                wait_for(lambda: "todo-app" in self.state.code.projects("owner") or "todo" in " ".join(self.state.code.projects("owner")))
+                project = page.evaluate("C.project")
+                self.assertTrue(project.startswith("todo"), project)
+                wait_for(lambda: all(self.state.code.sessions[k].state in ("done", "stopped", "failed") for k in self.state.code.sessions))
+                self.assertIn("style.css", self.state.code.files("owner", project))               # the starter's files were there from the start
+                # the Files drawer: search and the project map
+                page.evaluate("showDrawer(true, 'files')")
+                page.fill("#codeSearch", "getElementById")
+                wait_for(lambda: "app.js" in page.inner_text("#codeFiles"))
+                page.fill("#codeSearch", "")
+                page.click("#codeMapBtn")
+                wait_for(lambda: "app.js" in page.inner_text("#codeFiles") and "files" in page.inner_text("#codeFiles"))
+                # the Changes panel lists each file with Keep and Undo
+                page.evaluate("showDrawer(true, 'changes')")
+                page.wait_for_selector("#tabChanges details.chg", timeout=8000)
+                self.assertTrue(page.locator("#tabChanges >> text=Undo this file").count() >= 1)
+                self.assertEqual(errors, [])
+            finally:
+                b.close()
+
     def test_open_edit_save_and_a_change_from_outside(self):
         from playwright.sync_api import sync_playwright
         with sync_playwright() as p:

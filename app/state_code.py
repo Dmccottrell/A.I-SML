@@ -3,6 +3,7 @@ state_code.py - AppState's VryxCode part: which models may code, the cloud machi
 """
 import os, sys; sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), os.pardir)); import emvryx_paths  # noqa: E402,F401  (the code folders become importable)
 import json
+import threading
 import shutil
 import code_sessions
 import harness
@@ -104,6 +105,16 @@ class StateCode:
                 raise harness.ToolError(e.message + (" " + e.action if e.action else ""))
             raise harness.ToolError("action must be status, pull or push")
         return github
+
+    def code_notify(self, session, kind):
+        """A VryxCode session finished (or needs an answer): one short line to the owner's phone through ntfy. Off until alert_ntfy_topic is set. No code, no file names."""
+        topic = str(self.security.get("alert_ntfy_topic") or "")
+        if not topic:
+            return
+        said = {"done": "finished. Open it to see what it built.", "asking": "is waiting for your OK.", "stopped": "stopped.", "failed": "ran into a problem.", "limited": "paused: your usage ran out."}
+        text = f'"{session.project}" {said.get(kind, kind)}'
+        import notify
+        threading.Thread(target=notify.send, args=(topic, text, "VryxCode"), daemon=True).start()
 
     def browser_tool(self, user, project):
         """The `check_page` tool the model may call: a hidden browser opens a page of the project, clicks around and audits it (coding/browser_check.py)."""

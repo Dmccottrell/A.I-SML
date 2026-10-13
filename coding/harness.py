@@ -774,8 +774,23 @@ CODE_NUDGE = ("Do not paste code into the chat. Save it in the project with writ
               "If you really cannot do this, say so in a sentence and say what the user could do.")
 
 
+def steady_note(items, failures=0):
+    """One short line that keeps a small model on ONE step of its checklist: which item is next, and (after two failed tries in a row) to make the retry smaller."""
+    todo = [it for it in (items or []) if isinstance(it, dict) and str(it.get("text", "")).strip()]
+    if not todo:
+        return ""
+    left = [it for it in todo if not it.get("done")]
+    if not left:
+        return "Every checklist item is ticked. Check the result once (run it or its tests), then call finish."
+    n = len(todo) - len(left) + 1
+    line = f'Now do only step {n} of {len(todo)}: "{str(left[0]["text"]).strip()}". Check it worked, then tick it with todo before the next step.'
+    if failures >= 2:
+        line += " That step has failed twice: try a smaller change, one thing only, and read the file again first."
+    return line
+
+
 def run_agent(task, generate, sandbox, max_turns=8, system=None, project=True, hooks=None, permissions=None,
-              ask=None, context_tokens=None, history=None, chat_mode=False, checks=False):
+              ask=None, context_tokens=None, history=None, chat_mode=False, checks=False, steady=False):
     """Let a model work on `task`. `generate(messages)` returns the model's next reply as text.
 
     project        show the workspace's EMVRYX.md / AGENTS.md as "Project notes" before the task
@@ -786,6 +801,8 @@ def run_agent(task, generate, sandbox, max_turns=8, system=None, project=True, h
     history        the conversation so far (the `messages` an earlier call returned): `task` is then the person's next message, not a new task
     chat_mode      a reply in plain words (no tool call) is a message to the person, not a mistake: it ends the turn and `said` is True, so the person can
                    answer. (Once, if the model pastes code into the chat before doing any work, it is told to save the code in the project instead.)
+
+    steady         keep the model on one checklist (todo) item at a time: after each step it is told which item is next, and after two failures in a row to retry smaller
 
     checks         look at a Python or JSON change before it is made and refuse it if it would not even parse (nothing is saved and the model is told what is wrong, so
                    the person is not asked to approve broken code); say "checked" after a good change; and, once, ask for the tests to be run before finishing if code
@@ -805,6 +822,8 @@ def run_agent(task, generate, sandbox, max_turns=8, system=None, project=True, h
     episodes = []
     used_tools, nudged = 0, False
     edited_since_test, test_nudged = False, False
+    web_unchecked, page_nudges = False, 0                            # a web file changed since the page was last checked (proof before "done")
+    plan_items, step_fails = None, 0                                 # the model's todo list (steady mode) and failures in a row
     no_call, no_call_total, bad_calls, repeats = 0, 0, 0, {}        # replies with no tool call at all (the model is chatting, not working); steps repeated
     for turn in range(1, max_turns + 1):
         if context_tokens and estimate_tokens(messages) > context_tokens * 0.7:
@@ -830,10 +849,17 @@ def run_agent(task, generate, sandbox, max_turns=8, system=None, project=True, h
                 if checks and edited_since_test and not test_nudged and has_tests(sandbox.root):
                     test_nudged = True
                     raise ToolError("not finished yet: code changed since the tests last passed. Run them first (python -m unittest), then finish.")
+                if checks and web_unchecked and page_nudges < 2 and "check_page" in sandbox.extra_tools:
+                    page_nudges += 1
+                    raise ToolError("not finished yet: you changed the web page since it was last checked. Open it with check_page first, fix anything it reports, then finish.")
                 problems = hooks.run(sandbox, "on_finish")
                 if problems:
                     raise ToolError("not finished yet: " + "; ".join(problems))
             result, done = sandbox.call(name, args)
+            if name in ("write_file", "edit_file") and isinstance(args, dict) and str(args.get("path", "")).lower().endswith((".html", ".htm", ".css", ".js")):
+                web_unchecked = True
+            elif name == "check_page":
+                web_unchecked = False
             if checks and name in ("write_file", "edit_file") and isinstance(args, dict) and checkable(args.get("path", "")):
                 result += " \u00b7 checked \u2713"
                 edited_since_test = edited_since_test or str(args.get("path", "")).endswith(".py")
@@ -852,6 +878,9 @@ def run_agent(task, generate, sandbox, max_turns=8, system=None, project=True, h
                     continue
                 return {"finished": False, "said": True, "summary": words, "turns": turn, "messages": messages, "episodes": episodes}
             result, done = f"error: {e}", False
+            step_fails += 1
+            if steady and plan_items and step_fails >= 2:
+                result += "\n" + steady_note(plan_items, step_fails)
             bad_calls = bad_calls + 1 if str(e).startswith(("the tool call is not valid JSON", "the tool call was cut off")) else 0
             if bad_calls >= BAD_CALL_LIMIT:
                 return {"finished": False, "turns": turn, "messages": messages, "episodes": episodes, "stopped": "bad_call",
@@ -867,7 +896,13 @@ def run_agent(task, generate, sandbox, max_turns=8, system=None, project=True, h
         else:
             no_call = 0
             bad_calls = 0
+            step_fails = 0
             used_tools += 1
+            if steady:
+                if name == "todo" and isinstance(args, dict) and isinstance(args.get("items"), list):
+                    plan_items = [it if isinstance(it, dict) else {"text": str(it)} for it in args["items"]]
+                if plan_items and not done:
+                    result = str(result) + "\n" + steady_note(plan_items)
             if not done:
                 key = (name, json.dumps(args, sort_keys=True, default=str), str(result)[:300])     # the same step with the same result again
                 repeats[key] = repeats.get(key, 0) + 1
