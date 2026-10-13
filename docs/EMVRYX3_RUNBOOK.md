@@ -25,6 +25,12 @@ python scripts/emvryx3_preflight.py --llama-bin C:\\Users\\Darry\\Downloads\\lla
 ```
 Fix every FAIL it lists. You need a llama.cpp **source** folder (for `convert_hf_to_gguf.py` and `llama-quantize`) next to this one. About 60 GB free.
 
+**0b. The easy way: prepare everything in one command** (`scripts/emvryx3_prepare.py`, minutes; no GPU needed)
+```
+python scripts/emvryx3_prepare.py
+```
+It builds the Emvryx lessons if missing, converts the Nemotron files you downloaded (if they are in `data\open\nemotron-v2`) into general lessons, shows the style report, mixes and balances everything (`--keep 0.4` of the Emvryx lessons, identity, honesty and corrections always kept, general lessons as 30% of the final set), checks the result, estimates the hours for each model, and prints the commands to run next. `--dry-run` only says what it would do. After it, train with `chain_home.py ... --skip lessons --lessons data\v3\chat_3x.jsonl` so the chain uses exactly that file. Step 1 below is the same thing done by hand.
+
 **1. Lessons** (minutes)
 ```
 python data_prep/make_chat_data_v3.py                   # if data\\v3\\chat.jsonl is not there yet
