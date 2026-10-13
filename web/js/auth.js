@@ -119,18 +119,16 @@ function authView(view, ctx) {
 
 /* Sign-in backdrop: a field of small dashes that all turn to face the pointer, bunch away from it and glow near it.
    With no pointer (a phone) a soft invisible cursor wanders so it is never dead. Stops when the screen goes away. */
-let dotsStop = null;
-function startDots(canvas) {
-  if (dotsStop) dotsStop();
+function startDots(canvas, host = $('auth')) {
+  if (canvas._dotsStop) canvas._dotsStop();
   const ctx = canvas.getContext && canvas.getContext('2d');
   if (!ctx) return;
   const still = matchMedia('(prefers-reduced-motion: reduce)').matches;
-  const host = $('auth');
   let w = 0, h = 0, dpr = 1, raf = 0, last = 0, mx = null, my = null, tx = 0, ty = 0, cx = 0, cy = 0, rgb = '245,165,36';
   const GAP = 30;
   const size = () => { dpr = Math.min(devicePixelRatio || 1, 2); w = innerWidth; h = innerHeight; canvas.width = w * dpr; canvas.height = h * dpr; ctx.setTransform(dpr, 0, 0, dpr, 0, 0); };
   const colour = () => {
-    const c = (getComputedStyle(document.documentElement).getPropertyValue('--accent') || '').trim();
+    const c = (getComputedStyle(canvas).getPropertyValue('--accent') || '').trim();
     const m = /^#([0-9a-f]{6})$/i.exec(c);
     rgb = m ? [1, 3, 5].map(i => parseInt(m[1].slice(i - 1, i + 1), 16)).join(',') : '245,165,36';
   };
@@ -139,6 +137,7 @@ function startDots(canvas) {
   const frame = now => {
     raf = requestAnimationFrame(frame);
     if (host.hidden) return stop();
+    if (canvas.classList.contains('vx-dots') && !host.classList.contains('home')) return;       // the Code screen's dashes only move on its home
     const dt = Math.min(50, now - (last || now)); last = now;
     if (mx === null) { const t = now / 1000; tx = w * (.5 + .38 * Math.sin(t * .35)); ty = h * (.5 + .34 * Math.sin(t * .27 + 1.3)); }
     else { tx = mx; ty = my; }
@@ -159,11 +158,11 @@ function startDots(canvas) {
       ctx.beginPath(); ctx.moveTo(px - ux, py - uy); ctx.lineTo(px + ux, py + uy); ctx.stroke();
     }
   };
-  const stop = () => { cancelAnimationFrame(raf); removeEventListener('resize', onResize); host.removeEventListener('pointermove', move); host.removeEventListener('touchmove', move); host.removeEventListener('pointerleave', leave); dotsStop = null; };
+  const stop = () => { cancelAnimationFrame(raf); removeEventListener('resize', onResize); host.removeEventListener('pointermove', move); host.removeEventListener('touchmove', move); host.removeEventListener('pointerleave', leave); canvas._dotsStop = null; };
   const onResize = () => { size(); if (still) draw(); };
   size(); colour(); cx = tx = w / 2; cy = ty = h / 2;
   addEventListener('resize', onResize);
   host.addEventListener('pointermove', move); host.addEventListener('touchmove', move, {passive: true}); host.addEventListener('pointerleave', leave);
-  dotsStop = stop;
+  canvas._dotsStop = stop;
   if (still) draw(); else raf = requestAnimationFrame(frame);
 }
