@@ -247,11 +247,16 @@ class RoutesPost:
                 return self._send(400, {"code": "bad_request", "message": str(e)})
             self.state.auth.event("share_made", who["user"], self._ip(), "")
             return self._send(200, {"url": "/s/" + token, "shares": self.state.shares.list(who["user"])})
-        m = re.fullmatch(r"/api/chats/(-?\d+)/(pin|folder|branch)", path)
+        if path == "/api/chats/archive-all":                  # Settings > Data controls: clear the list but keep everything remembered
+            return self._send(200, {"archived": self.state.store(who["user"]).archive_all()})
+        m = re.fullmatch(r"/api/chats/(-?\d+)/(pin|folder|branch|archive)", path)
         if m:
             cid, what, store = int(m.group(1)), m.group(2), self.state.store(who["user"])
             if not store.exists(cid):
                 return self._send(404, {"code": "not_found", "message": "That chat is gone."})
+            if what == "archive":
+                store.set_archived(cid, bool(body.get("archived", True)))
+                return self._send(200, {"archived": bool(body.get("archived", True))})
             if what == "pin":
                 store.set_pinned(cid, bool(body.get("pinned", True)))
                 return self._send(200, store.meta(cid))

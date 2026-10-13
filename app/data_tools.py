@@ -53,8 +53,8 @@ def export_zip(state, user):
         z.writestr("settings.json", json.dumps(state.get_settings(user), indent=2))
         store = state.store(user)
         chats = []
-        for c in store.list_chats():
-            chats.append({"id": c["id"], "title": c["title"], "updated": c["updated"],
+        for c in store.list_chats(everything=True):
+            chats.append({"id": c["id"], "title": c["title"], "updated": c["updated"], "archived": c["archived"],
                           "messages": [{"role": m["role"], "content": m["content"], "model": m["model_id"]} for m in store.messages(c["id"])
                                        if m["content"]]})
         z.writestr("chats.json", json.dumps(chats, indent=2))

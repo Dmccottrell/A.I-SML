@@ -125,6 +125,9 @@ def start_turn(state, who, chat_id, text, model_id, effort, regenerate=False, re
                     last = [m for m in store.messages(chat_id) if m["role"] == "user"]
                     asked = last[-1]["content"] if last else ""
                 mem_note = memory.note(asked)
+                past = store.recall(asked, exclude_chat=chat_id)                   # "what did I tell you last time about...": earlier chats, archived ones too
+                if past:
+                    mem_note = (mem_note + "\n\n" + past) if mem_note else past
             doc_notes = []
             pictures = {"looked": 0, "read": 0}
             if attached:                                                           # the question is about the documents: no Wikipedia or web notes to distract

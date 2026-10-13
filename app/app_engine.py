@@ -193,7 +193,8 @@ class ChatStore:
                 pass
         for table, column in (("messages", "docs TEXT"),                       # the pictures and files that were sent with a message
                               ("messages", "flags TEXT"),                      # small marks on a message: {"cut": true, "fb": "wrong_fact"}
-                              ("chats", "pinned INTEGER"), ("chats", "folder TEXT")):
+                              ("chats", "pinned INTEGER"), ("chats", "folder TEXT"),
+                              ("chats", "archived INTEGER")):                  # archived: out of the list, still remembered
             try:
                 self.db.execute(f"ALTER TABLE {table} ADD COLUMN {column}")
                 self.db.commit()
@@ -388,11 +389,59 @@ class ChatStore:
         """Ids of the files and pictures already sent with an earlier message of this chat."""
         return {i for m in self.messages(chat_id) for i in (m.get("docs") or [])}
 
-    def list_chats(self):
-        """Saved chats, newest first: [{"id", "title", "updated", "skill"}]. Private chats are never listed."""
-        rows = self.db.execute("SELECT c.id, c.title, COALESCE(MAX(m.created), c.created) AS t, c.skill, c.pinned, c.folder FROM chats c "
-                               "LEFT JOIN messages m ON m.chat_id = c.id GROUP BY c.id ORDER BY t DESC, c.id DESC").fetchall()
-        return [{"id": r[0], "title": r[1], "updated": r[2], "skill": r[3] or "", "pinned": bool(r[4]), "folder": r[5] or ""} for r in rows]
+    def list_chats(self, archived=False, everything=False):
+        """Saved chats, newest first: [{"id", "title", "updated", "skill", "pinned", "folder", "archived"}]. Private chats are never listed.
+        The sidebar gets the ones not archived; `archived=True` gives only the archived ones (Settings > Data controls); `everything` gives both (data export)."""
+        where = "" if everything else ("WHERE COALESCE(c.archived, 0) = 1 " if archived else "WHERE COALESCE(c.archived, 0) = 0 ")
+        rows = self.db.execute("SELECT c.id, c.title, COALESCE(MAX(m.created), c.created) AS t, c.skill, c.pinned, c.folder, c.archived FROM chats c "
+                               "LEFT JOIN messages m ON m.chat_id = c.id " + where + "GROUP BY c.id ORDER BY t DESC, c.id DESC").fetchall()
+        return [{"id": r[0], "title": r[1], "updated": r[2], "skill": r[3] or "", "pinned": bool(r[4]), "folder": r[5] or "", "archived": bool(r[6])} for r in rows]
+
+    def set_archived(self, chat_id, archived=True):
+        """Archive (out of the chat list, still searchable and still remembered) or bring back one chat."""
+        if chat_id < 0:
+            return
+        self.db.execute("UPDATE chats SET archived = ?, pinned = CASE WHEN ? THEN 0 ELSE pinned END WHERE id = ?", (int(bool(archived)), int(bool(archived)), chat_id))
+        self.db.commit()
+
+    def archive_all(self):
+        """Archive every chat in the list. Returns how many."""
+        n = self.db.execute("UPDATE chats SET archived = 1, pinned = 0 WHERE COALESCE(archived, 0) = 0").rowcount
+        self.db.commit()
+        return n
+
+    RECALL_CUES = re.compile(r"\b(remember|recall|last time|earlier|before|previous(ly)?|we (talked|spoke|discussed|said)|i (told|asked|said|mentioned)|you (told|said|suggested|helped)|"
+                             r"our (chat|conversation)|that (chat|conversation)|again)\b", re.I)
+    STOP = set("the a an and or but to of in on at for with is are was were be been it this that what which who how why when where do did does i you me my your we our "
+               "can could would should will about from as by so not no yes just like get got have has had please tell remember recall last time earlier before previous "
+               "previously talked spoke discussed said told asked mentioned suggested helped chat conversation again".split())
+
+    def recall(self, question, exclude_chat=None, k=2, max_chars=700):
+        """Earlier exchanges (in other saved chats, archived ones included) that match a question about the past, as a note for the model, or "".
+        Only when the question points back ("last time", "remember when", "what did I tell you about"...), so ordinary questions are not distracted."""
+        q = str(question or "")
+        if not self.RECALL_CUES.search(q):
+            return ""
+        words = [w for w in re.findall(r"[a-z0-9']{3,}", q.lower()) if w not in self.STOP][:8]
+        if not words:
+            return ""
+        like = lambda w: "%" + w.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_") + "%"
+        rows = self.db.execute("SELECT m.id, m.chat_id, m.role, m.content, m.created, c.title FROM messages m JOIN chats c ON c.id = m.chat_id "
+                               "WHERE m.role = 'user' AND m.content != '' AND m.chat_id != ? AND (" + " OR ".join("lower(m.content) LIKE ? ESCAPE '\\'" for _ in words) + ") "
+                               "ORDER BY m.id DESC LIMIT 200", [exclude_chat if exclude_chat is not None else -1] + [like(w) for w in words]).fetchall()
+        scored = sorted(((sum(w in r[3].lower() for w in words), r) for r in rows), key=lambda x: (-x[0], -x[1][0]))
+        notes, used = [], 0
+        for score, (mid, cid, role, content, created, title) in scored:
+            if score < max(1, min(2, len(words))) or len(notes) >= k:
+                continue
+            ans = self.db.execute("SELECT content FROM messages WHERE chat_id = ? AND id > ? AND role = 'assistant' AND content != '' ORDER BY id LIMIT 1", (cid, mid)).fetchone()
+            when = time.strftime("%b %d", time.localtime(created)) if created else ""
+            line = f"Earlier chat \"{title}\" ({when}): User: {' '.join(content.split())[:220]}" + (f" AI: {' '.join(ans[0].split())[:260]}" if ans else "")
+            if used + len(line) > max_chars:
+                break
+            notes.append(line)
+            used += len(line)
+        return ("From the user's earlier chats:\n" + "\n".join(notes)) if notes else ""
 
     def exists(self, chat_id):
         if chat_id < 0:
