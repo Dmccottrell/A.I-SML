@@ -13,7 +13,7 @@ import subprocess
 KNOWN = (
     "app/live_data.py:'web_search' imported but unused",
     "app/app_engine.py:local variable 'started' is assigned to but never used",
-    "app_server.py:local variable 'migrated' is assigned to but never used",
+    "app/state_accounts.py:local variable 'migrated' is assigned to but never used",
     "tools/generate.py:redefinition of unused 'web_notes'",
     "training/finetune_open.py:'bitsandbytes' imported but unused",
     "data_prep/format_lessons_3x.py:f-string is missing placeholders",
@@ -35,6 +35,12 @@ def main():
             bad.append(line)
             continue
         path, msg = m.group(1), m.group(2)
+        try:
+            with open(os.path.join(emvryx_paths.ROOT, path), encoding="utf-8") as src:
+                if "noqa" in src.read().splitlines()[int(re.match(r".+?:(\d+):", line).group(1)) - 1]:          # a line marked `# noqa` was looked at on purpose
+                    continue
+        except (OSError, IndexError, AttributeError):
+            pass
         if "emvryx_paths" in msg and "imported but unused" in msg:
             continue
         if any(k.split(":", 1)[0] == path and k.split(":", 1)[1] in msg for k in KNOWN):

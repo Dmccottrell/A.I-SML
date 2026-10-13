@@ -11,7 +11,7 @@ import subprocess
 import threading
 import time
 import urllib.request
-from app_errors import AppError, ModelTooBig, PcUnreachable
+from app_errors import AppError
 from app_shared import Cancelled, HERE
 
 

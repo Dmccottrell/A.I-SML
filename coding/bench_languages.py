@@ -59,7 +59,8 @@ RETRY = "It still does not work. {detail}\nFix {file} (rewrite the whole file if
 
 
 def installed(lang):
-    return bool(shutil.which(TOOLS[lang])) and (lang != "java" or bool(shutil.which("java")))
+    import languages                                              # for the rust check: a rustup stand-in with no toolchain is on the PATH but cannot compile
+    return bool(shutil.which(TOOLS[lang])) and languages._really_runs(TOOLS[lang]) and (lang != "java" or bool(shutil.which("java")))
 
 
 def env_for(folder):

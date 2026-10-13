@@ -77,7 +77,9 @@ class DeepThinking(unittest.TestCase):
         self.assertEqual(r["text"].strip(), "It is 4.")
 
     def test_the_server_turns_it_on_only_for_deep_on_thinking_models(self):
+        import glob
         import app_server as A
-        src = open(A.__file__, encoding="utf-8").read()
+        root = os.path.dirname(os.path.abspath(A.__file__))
+        src = "".join(open(f, encoding="utf-8").read() for f in [A.__file__] + sorted(glob.glob(os.path.join(root, "app", "*.py"))))      # the server is split over several files
         self.assertIn('think = effort == "deep" and model.get("think") == "empty"', src)
         self.assertEqual(src.count("pacer=pacer, think=think,"), 3)
