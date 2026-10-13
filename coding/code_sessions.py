@@ -399,6 +399,7 @@ class CodeManager:
         self.sandbox = {"mode": "none"}                      # set from the command line: {"mode": "docker", "image", "runtime", "cpus", "memory", "pids"}
         self._avail = (0, None)
         self.sessions, self.by_user = {}, {}
+        self._run_locks = {}
         self.lock = threading.Lock()
         self._tmp = None
         self._n = 0
@@ -450,6 +451,42 @@ class CodeManager:
         if b"\0" in data[:2000]:
             return {"path": rel, "text": "(a binary file)", "truncated": False}
         return {"path": rel, "text": data[:MAX_FILE_BYTES].decode("utf-8", "replace"), "truncated": len(data) > MAX_FILE_BYTES}
+
+    def run_command(self, user, project, command, owner=False, env="local"):
+        """The editor's output panel: run one command in the project the way a session would (the same allowed programs, the same sandbox or cloud choice, no network where
+        it can be cut), for the person, with no model involved. Refused while VryxCode is working in the same project. Returns {"command", "exit", "output", "secs", "env"}."""
+        project = self.check_name(project)
+        command = str(command or "").strip()
+        if not command or len(command) > 500:
+            raise CodeError("Type a command to run.", "For example: python -m unittest")
+        for x in self.sessions.values():
+            if x.user == user and x.project == project and x.state in ("starting", "working", "asking"):
+                raise CodeError("VryxCode is working in this project right now.", "Wait for it to finish, or press Stop, then run it.")
+        ok, why = self.sandbox_ready()
+        if not ok:
+            raise CodeError("The code sandbox isn't available, so nothing was run. " + why, "The owner needs to start Docker or build the sandbox image.")
+        env = self.resolve_env(env, owner)
+        workspace = self.project_path(user, project)
+        os.makedirs(workspace, exist_ok=True)
+        prefix = self.cloud_prefix(user, project) if env == "cloud" else self.prefix_for(workspace, force=(env == "sandbox"))
+        kw = {}
+        if prefix:
+            kw.update(command_prefix=prefix, container=not env == "cloud", remote=(env == "cloud"))
+        lock = self._run_locks.setdefault(user, threading.Lock())
+        if not lock.acquire(blocking=False):
+            raise CodeError("A command is already running for you.", "Wait for it to finish.")
+        started = time.time()
+        try:
+            with harness.Sandbox(workspace=workspace, allowed_programs=set(harness.ALLOWED_PROGRAMS), command_timeout=120 if env == "cloud" else 60, output_limit=12000, **kw) as sb:
+                try:
+                    result = sb.run(command)
+                except harness.ToolError as e:
+                    result = f"exit code 126\n{e}"
+        finally:
+            lock.release()
+        first, _, rest = result.partition("\n")
+        m = re.match(r"exit code (-?\d+)", first)
+        return {"command": command, "exit": int(m.group(1)) if m else 0, "output": rest if m else result, "secs": round(time.time() - started, 1), "env": env}
 
     def save_file(self, user, project, rel, text):
         """The editor's Save: write one text file of the project (a new file too). Refused while VryxCode is working in the same project (the two would overwrite each

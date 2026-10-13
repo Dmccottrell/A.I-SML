@@ -2941,6 +2941,55 @@ class Handler(http.server.BaseHTTPRequestHandler):
         out = code_edit.parse_reply(reply, text[start:end], mode, prefix)
         return dict(out, mode=mode, model=f"{model['name']} {model['version']:g}".strip() if model.get("version") else model["name"])
 
+    def _complete(self, st, who, body):
+        """Inline autocomplete: a short continuation at the cursor, from the model's fill-in-the-middle endpoint when it has one, else from a short chat request.
+        Changes nothing; counted like a small coding step; at most one request a second per person."""
+        user = who["user"]
+        text, path = body.get("text"), str(body.get("path") or "")[:200]
+        if not isinstance(text, str) or len(text) > code_sessions.MAX_FILE_BYTES:
+            raise code_sessions.CodeError("That file is too big for autocomplete.")
+        try:
+            cursor = int(body.get("cursor"))
+        except (TypeError, ValueError):
+            raise code_sessions.CodeError("Where is the cursor?")
+        if not 0 <= cursor <= len(text):
+            raise code_sessions.CodeError("The cursor is outside the file.")
+        model = self._pick_code_model(st, who, str(body.get("model", "")))
+        memo = st.__dict__.setdefault("_complete_state", {"fim": {}, "last": {}})
+        now = time.monotonic()
+        if now - memo["last"].get(user, -9) < 0.8:
+            raise code_sessions.CodeError("Slow down: one suggestion a second.")
+        memo["last"][user] = now
+        prefix, suffix = text[max(0, cursor - 6000):cursor], text[cursor:cursor + 2000]
+        lang = os.path.splitext(path)[1].lstrip(".") or "text"
+        meter = code_sessions.Meter(st.limiter, user, model["limiter_key"], st.clock, max_new=96)
+        probe = [{"role": "user", "content": prefix[-1500:] + suffix[:500]}]
+        try:
+            res = meter.reserve(probe)
+        except U.LimitError as e:
+            raise code_sessions.CodeError(e.message, "Autocomplete counts like a coding step. Wait for the tank to refill.")
+        generate, raw, how = None, "", "fim"
+        try:
+            try:
+                generate = st.code_backend(model)
+            except AppError as e:
+                raise code_sessions.CodeError(e.message, e.action)
+            generate.max_tokens = 96
+            if hasattr(generate, "infill") and memo["fim"].get(model["id"], True):
+                try:
+                    raw = generate.infill(prefix, suffix, n_predict=64)
+                except vryxcode.NoInfill:
+                    memo["fim"][model["id"]] = False                   # this model cannot: use a chat request from now on
+            if not raw and (not hasattr(generate, "infill") or not memo["fim"].get(model["id"], True)):
+                how = "chat"
+                raw = generate(code_edit.build_messages(path, lang, text, cursor, cursor, code_edit.COMPLETE_INSTRUCTION))
+                raw = code_edit.parse_reply(raw, "", "edit")["replacement"] or ""
+        except BaseException:
+            meter.cancel(res)
+            raise
+        meter.settle(res, generate, probe, raw)
+        return {"completion": code_edit.clean_completion(raw, prefix, suffix), "how": how, "model": model["name"]}
+
     def api_code_post(self, who, path, body):
         st, user = self.state, who["user"]
         try:
@@ -3016,6 +3065,16 @@ class Handler(http.server.BaseHTTPRequestHandler):
             if m:
                 st.code.get(user, m.group(1)).request_stop()
                 return self._send(200, {"ok": True})
+            if path == "/api/code/run":                           # the editor's output panel: run a command in the project (no model involved)
+                allowed, why = st.code_allowed(who)
+                if not allowed:
+                    raise code_sessions.CodeError(why, "Ask the owner about VryxCode access.")
+                return self._send(200, st.code.run_command(user, body.get("project"), body.get("command"), owner=who["admin"], env=str(body.get("env") or "local")))
+            if path == "/api/code/complete":                      # inline autocomplete (grey text at the cursor)
+                allowed, why = st.code_allowed(who)
+                if not allowed:
+                    raise code_sessions.CodeError(why, "Ask the owner about VryxCode access.")
+                return self._send(200, self._complete(st, who, body))
             if path == "/api/code/edit":                          # the editor's "Edit this selection" and "Explain this" (a proposal; nothing is changed)
                 allowed, why = st.code_allowed(who)
                 if not allowed:

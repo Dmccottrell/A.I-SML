@@ -111,3 +111,33 @@ def parse_reply(reply, selection="", mode="edit", prefix=""):
     elif selection and not selection.endswith("\n"):
         code = code.rstrip("\n")
     return {"replacement": code, "message": ""}
+
+
+# ---------------------------------------------------------------- inline autocomplete
+COMPLETE_INSTRUCTION = ("Continue the code at the cursor: write only the next few lines the author most likely wants (at most 6 lines), in the file's own style. "
+                        "Do not repeat code that is already there, and do not explain.")
+MAX_COMPLETION_LINES = 8
+MAX_COMPLETION_CHARS = 600
+
+
+def clean_completion(raw, prefix, suffix):
+    """The text to show as grey "ghost" text at the cursor, or None. Keeps at most 8 lines (one line when the cursor is in the middle of a line), drops what repeats the code
+    right after the cursor (a closing bracket the editor already has), and drops empty or whitespace-only answers."""
+    text = THINK_RX.sub("", str(raw or "")).replace("\r\n", "\n")
+    m = FENCE_RX.search(text)
+    if m:
+        text = m.group(1)
+    text = text.rstrip()
+    lines = text.split("\n")
+    rest_of_line = suffix.split("\n", 1)[0]
+    if rest_of_line.strip():                                     # the cursor is in the middle of a line: only finish this line
+        lines = lines[:1]
+    text = "\n".join(lines[:MAX_COMPLETION_LINES])[:MAX_COMPLETION_CHARS]
+    follow = rest_of_line.lstrip()
+    for k in range(min(len(text), len(follow)), 0, -1):          # the completion ends with what already follows the cursor: do not show it twice
+        if follow[:k].strip() and text.endswith(follow[:k]):
+            text = text[:-k]
+            break
+    if not text.strip():
+        return None
+    return text
