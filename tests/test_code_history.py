@@ -48,6 +48,29 @@ class History(Base):
         self.assertEqual(self.sam.call("GET", "/api/code/sessions")[1]["sessions"], [])
         self.assertEqual(self.sam.call("GET", f"/api/code/sessions/{sid}")[0], 400)
 
+    def test_changes_are_listed_per_file_and_one_can_be_undone(self):
+        os.makedirs(os.path.join(self.state.code.project_path("owner", "demo")), exist_ok=True)
+        with open(os.path.join(self.state.code.project_path("owner", "demo"), "keep.txt"), "w") as f:
+            f.write("old\n")
+        sid = self.run_session()
+        ws = self.state.code.project_path("owner", "demo")
+        with open(os.path.join(ws, "keep.txt"), "w") as f:
+            f.write("new\n")                                                     # the session (or a person) changed a file that was there before
+        rows = {r["path"]: r for r in self.owner.call("GET", f"/api/code/sessions/{sid}/changes")[1]["changes"]}
+        self.assertEqual(rows["keep.txt"]["status"], "changed")
+        self.assertEqual((rows["keep.txt"]["add"], rows["keep.txt"]["del"]), (1, 1))
+        made = next(p for p, r in rows.items() if r["status"] == "new")
+        st, j = self.owner.call("POST", f"/api/code/sessions/{sid}/reject", {"path": "keep.txt"})
+        self.assertEqual((st, j["restored"]), (200, True), j)
+        with open(os.path.join(ws, "keep.txt")) as f:
+            self.assertEqual(f.read(), "old\n")
+        st, j = self.owner.call("POST", f"/api/code/sessions/{sid}/reject", {"path": made})
+        self.assertEqual((st, j["restored"]), (200, False), j)                    # a file the session made is removed
+        self.assertFalse(os.path.exists(os.path.join(ws, made)))
+        self.assertEqual(self.owner.call("POST", f"/api/code/sessions/{sid}/reject", {"path": "keep.txt"})[0], 400)    # nothing left to undo there
+        self.assertEqual(self.owner.call("POST", f"/api/code/sessions/{sid}/reject", {"path": "../x"})[0], 400)
+        self.assertNotIn("keep.txt", [r["path"] for r in self.owner.call("GET", f"/api/code/sessions/{sid}/changes")[1]["changes"]])
+
     def test_rewind_removes_what_the_session_made(self):
         sid = self.run_session()
         before = self.owner.call("GET", "/api/code/files?project=demo")[1]["files"]

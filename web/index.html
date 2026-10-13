@@ -633,6 +633,8 @@ html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
       <h1>What should we <em>build</em>?</h1>
       <p>Describe it. VryxCode plans it, writes it, runs it and checks it, right here.</p>
       <div class="vx-quick"><textarea id="vxQuick" rows="2" maxlength="8000" placeholder="A bill splitter with tip, a habit tracker, a snake game..." aria-label="What should VryxCode build?"></textarea><button class="vx-go" id="vxQuickGo" type="button">Build it</button></div>
+      <label class="vx-notify" id="vxNotifyRow" hidden><input type="checkbox" id="vxNotify"> Tell my phone when it finishes or needs me</label>
+      <div class="vx-tpl" id="vxTpl" hidden><span class="lbl">Or start from a template</span><div class="vx-tpls" id="vxTpls"></div></div>
       <div class="vx-chips" id="vxChips"></div>
     </div>
     <div class="envs" id="codeEnvs"></div>
@@ -695,7 +697,7 @@ html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
     </div>
     <div class="drawer" id="codeDrawer" hidden>
       <div class="dh"><div class="dtabs" role="tablist"><button data-tab="files" class="on">Files</button><button data-tab="changes">Changes</button><button data-tab="rewind">Rewind</button></div><button class="icon" id="codeDrawerX" aria-label="Close"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg></button></div>
-      <div class="dpane" id="tabFiles"><div class="flist" id="codeFiles"></div><div class="viewer"><pre id="codeView">Pick a file to read it.</pre></div></div>
+      <div class="dpane" id="tabFiles"><div class="fsearch"><input id="codeSearch" type="search" placeholder="Search the project..." aria-label="Search the project" autocomplete="off"><button class="chip" id="codeMapBtn" title="What is where in this project">Map</button></div><div class="flist" id="codeFiles"></div><div class="viewer"><pre id="codeView">Pick a file to read it.</pre></div></div>
       <div class="dpane" id="tabChanges" hidden></div>
       <div class="dpane" id="tabRewind" hidden></div>
     </div>

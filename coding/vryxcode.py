@@ -56,7 +56,7 @@ SYSTEM = ("You are VryxCode, Emvryx's coding assistant. You work in the user's p
 PLAN_NOTE = (" PLAN MODE: do not change anything in this turn. You may look around with list_files, read_file and diagnostics. Then reply in plain words with a short numbered plan "
              "(3 to 7 steps): what you will build or change, in which files, and how you will check it works. End by asking whether to go ahead. Do not write code in the reply, and do not call finish.")
 TODO_NOTE = (" For a job with more than two steps, first call todo with a short checklist, for example {\"name\": \"todo\", \"args\": {\"items\": [{\"text\": \"Write slug.py\", \"done\": false}, "
-             "{\"text\": \"Run the tests\", \"done\": false}]}}, and call it again to tick items off as you finish them. Keep each item a few words.")
+             "{\"text\": \"Run the tests\", \"done\": false}]}}, and call it again to tick items off as you finish them. Keep each item a few words. Then work on one item at a time: do it, check it, tick it, and only then start the next.")
 SAFE_RUNS = ("python -m unittest", "python3 -m unittest", "python -m pytest", "pytest")      # tests may run without asking
 ELIGIBLE_NOTE = {"equinox-2": "Equinox 2 is a small model: give it small tasks (one function, one file)."}
 
@@ -326,7 +326,7 @@ def run_task(task, generate, workspace, ask, max_turns=12, context_tokens=None, 
             sandbox.register_tool(name, fn)
         system = SYSTEM + (GITHUB_TOOL_NOTE if "github" in (tools or {}) else "") + (CHECK_PAGE_NOTE if "check_page" in (tools or {}) else "") + (TODO_NOTE if todo else "") + (PLAN_NOTE if plan else "") + (lang_note or "")
         result = harness.run_agent(task, generate, sandbox, max_turns=max_turns, system=system, ask=ask, context_tokens=context_tokens,
-                                   permissions=harness.Permissions(rules=rules, ask=ask), history=history, chat_mode=chat_mode, checks=checks)
+                                   permissions=harness.Permissions(rules=rules, ask=ask), history=history, chat_mode=chat_mode, checks=checks, steady=todo)
     out(("Done: " if result["finished"] else "Stopped without finishing: ") + (result["summary"] or f"{result['turns']} steps used") )
     return result
 

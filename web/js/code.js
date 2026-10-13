@@ -10,7 +10,7 @@ async function openCode() {
   const usable = C.info.models.filter((m) => m.state === 'ready');
   if (!cModel() || cModel().state !== 'ready') C.model = (usable.find((m) => m.id === S.model) || usable[0] || C.info.models[0] || {}).id;
   C.project = C.project || C.info.running && C.info.project || C.info.projects[0] || 'my-project';
-  renderCodeBar(); showHome();
+  renderCodeBar(); showHome(); vxRenderTemplates(); vxNotifyInit();
 }
 // ---- the Sessions list: where VryxCode opens, like a to-do list of everything it has worked on
 const ENV_NAME = {local: 'This computer', sandbox: 'Isolated sandbox', cloud: 'Cloud machine'};
@@ -160,13 +160,39 @@ function changesFromEvents() {
   }
   return [...files.values()];
 }
-function renderChanges() {
-  const list = changesFromEvents(), pane = $('tabChanges');
-  if (!list.length) { pane.replaceChildren(el('div', {class: 'hint'}, 'Nothing has been changed in this session yet. When VryxCode edits files they are listed here with what was added and removed.')); return; }
-  pane.replaceChildren(el('div', {class: 'hint'}, list.length + (list.length === 1 ? ' file' : ' files') + ' changed in this session. Long edits show only their first lines here; open the file to see all of it.'),
-    ...list.map((f) => el('details', {class: 'chg'}, el('summary', {}, el('span', {class: 'nm'}, f.path), f.add ? el('span', {class: 'a'}, '+' + f.add) : '', f.del ? el('span', {class: 'd'}, '\u2212' + f.del) : ''),
+// what this session changed: the real difference against the project as it was before the session (kept or undone file by file), or, without that, the steps' own diff lines
+C.kept = C.kept || new Set();
+async function renderChanges() {
+  const pane = $('tabChanges');
+  let list = null;
+  if (C.sid) {
+    try { const r = await api('/api/code/sessions/' + C.sid + '/changes'); if (r.ok) list = ((await r.json()).changes || []).filter((f) => !C.kept.has(C.sid + '|' + f.path)); } catch (e) { list = null; }
+  }
+  if (list) { renderRealChanges(pane, list); return; }
+  const old = changesFromEvents();
+  if (!old.length) { pane.replaceChildren(el('div', {class: 'hint'}, 'Nothing has been changed in this session yet. When VryxCode edits files they are listed here with what was added and removed.')); return; }
+  pane.replaceChildren(el('div', {class: 'hint'}, old.length + (old.length === 1 ? ' file' : ' files') + ' changed in this session. Long edits show only their first lines here; open the file to see all of it.'),
+    ...old.map((f) => el('details', {class: 'chg'}, el('summary', {}, el('span', {class: 'nm'}, f.path), f.add ? el('span', {class: 'a'}, '+' + f.add) : '', f.del ? el('span', {class: 'd'}, '\u2212' + f.del) : ''),
       el('pre', {}, ...f.lines.filter((l) => l !== '').map((l) => el('span', {class: /^\s*\+ /.test(l) ? 'add' : /^\s*- /.test(l) ? 'del' : ''}, l))),
       el('div', {class: 'acts'}, el('button', {class: 'chip', onclick: () => { showDrawer(true, 'files'); viewFile(f.path); }}, 'Open the file')))));
+}
+function renderRealChanges(pane, list) {
+  if (!list.length) { pane.replaceChildren(el('div', {class: 'hint'}, 'Nothing to review: every change in this session has been kept, or nothing was changed.')); return; }
+  const running = ['working', 'asking', 'starting'].includes(C.state);
+  const kind = {new: 'New', changed: 'Changed', removed: 'Removed'};
+  const others = ((C.info && C.info.models) || []).filter((m) => m.state === 'ready' && m.id !== C.model);
+  pane.replaceChildren(el('div', {class: 'hint'}, list.length + (list.length === 1 ? ' file' : ' files') + ' changed since this session began. Keep what you like and undo the rest, one file at a time.'),
+    others.length && C.sid && !C.saved ? el('div', {class: 'second'}, el('span', {}, 'Second opinion:'), ...others.map((m) => el('button', {class: 'chip', title: 'Another model reads these changes and lists problems. It cannot change anything.', onclick: () => secondOpinion(m)}, m.label || m.name || m.id))) : '',
+    ...list.map((f) => el('details', {class: 'chg'}, el('summary', {}, el('span', {class: 'nm'}, f.path), el('span', {class: 'k ' + f.status}, kind[f.status]), f.add ? el('span', {class: 'a'}, '+' + f.add) : '', f.del ? el('span', {class: 'd'}, '\u2212' + f.del) : ''),
+      el('pre', {}, ...f.diff.split('\n').filter((l) => !/^(---|\+\+\+)/.test(l)).map((l) => el('span', {class: l.startsWith('+') ? 'add' : l.startsWith('-') ? 'del' : ''}, l))),
+      el('div', {class: 'acts'},
+        el('button', {class: 'chip', onclick: () => { C.kept.add(C.sid + '|' + f.path); renderChanges(); }}, 'Keep'),
+        el('button', {class: 'chip bad', disabled: running, title: running ? 'Wait for VryxCode to finish, or press Stop' : '', onclick: async () => {
+          const r = await post('/api/code/sessions/' + C.sid + '/reject', {path: f.path}); const j = await r.json().catch(() => ({}));
+          if (!r.ok) { note('bad', 'Could not undo', (j.message || '') + ' ' + (j.action || '')); return; }
+          note('fin', 'Undone', f.path + (j.restored ? ' is back as it was.' : ' was removed.')); refreshFiles(); if (!$('codePv').hidden) reloadPreview(); renderChanges();
+        }}, 'Undo this file'),
+        f.status === 'removed' ? '' : el('button', {class: 'chip', onclick: () => { showDrawer(true, 'files'); viewFile(f.path); }}, 'Open')))));
 }
 function renderRewind() {
   const cps = [...(C.checkpoints || [])].reverse(), pane = $('tabRewind');
@@ -202,6 +228,9 @@ const SLASH = [['plan', 'Plan first: look and plan, change nothing', () => setMo
   ['init', 'Create VRYX.md, notes VryxCode reads every session', async () => { const r = await post('/api/code/init', {project: C.project}); const j = await r.json().catch(() => ({})); note('fin', j.created ? 'Created VRYX.md' : 'VRYX.md is already there', 'Open it from Files and fill it in: what the project is, how to test it, your style rules.'); refreshFiles(); }],
   ['review', 'Review what this session changed: problems, worst first (read-only)', () => startReview({session: true})],
   ['reviewpr', 'Review a GitHub pull request (read-only): paste its link', () => { const link = prompt('Paste the pull request link, like https://github.com/owner/repo/pull/12'); if (link) startReview({pr: link}); }],
+  ['copy', 'Try an idea in a separate copy of this project (the original is not touched)', () => forkProject()],
+  ['usecopy', 'Use this copy\u2019s files in the project it came from (the original is kept as -before)', () => adoptCopy()],
+  ['second', 'Ask another model to check what this session changed (read-only)', () => showDrawer(true, 'changes')],
   ['changes', 'See what this session changed (the Changes list)', () => showDrawer(true, 'changes')], ['rewind', 'Put the files back to an earlier point', () => showDrawer(true, 'rewind')],
   ['files', 'Browse the project files', () => showDrawer(true, 'files')], ['preview', 'Open the live preview', () => openPreview()], ['new', 'Start a new session', () => newSession()],
   ['help', 'List these commands', () => note('fin', 'Commands', SLASH.map((x) => '/' + x[0] + ' \u2014 ' + x[1]).join('\n') + '\n@filename \u2014 point at a file in your message')]];
@@ -239,10 +268,75 @@ const VX_IDEAS = [['Bill splitter', 'A bill splitter: bill, tip percentage and n
 function vxRenderChips() {
   $('vxChips').replaceChildren(...VX_IDEAS.map(([name, text]) => el('button', {type: 'button', onclick: () => { $('vxQuick').value = text; $('vxQuick').focus(); }}, el('b', {}, '+'), name)));
 }
+// starters: a small working project the model fills in (coding/templates.py). Tap one, say what you want, press Build it.
+async function vxRenderTemplates() {
+  let list = [];
+  try { list = ((await (await api('/api/code/templates')).json()).templates) || []; } catch (e) { /* the chips alone are fine */ }
+  $('vxTpl').hidden = !list.length;
+  $('vxTpls').replaceChildren(...list.map((t) => el('button', {type: 'button', class: C.template === t.id ? 'on' : '', title: t.desc, onclick: () => {
+    C.template = C.template === t.id ? null : t.id;
+    $('vxQuick').placeholder = C.template ? 'Make it yours: ' + t.idea : 'A bill splitter with tip, a habit tracker, a snake game...';
+    $('vxTpls').querySelectorAll('button').forEach((b) => b.classList.toggle('on', b.dataset.id === C.template)); $('vxQuick').focus();
+  }, 'data-id': t.id}, el('span', {}, t.icon), el('b', {}, t.name), el('small', {}, t.desc))));
+}
+const vxFreeName = (base) => { const have = new Set((C.info && C.info.projects) || []); let n = base, i = 2; while (have.has(n)) n = base + '-' + i++; return n; };
 $('vxQuickGo').onclick = () => {
   const text = $('vxQuick').value.trim();
-  if (!text) { $('vxQuick').focus(); return; }
-  newSession(); $('codeTask').value = text; $('vxQuick').value = ''; $('codeGo').click();
+  if (!text && !C.template) { $('vxQuick').focus(); return; }
+  const tpl = C.template; C.template = null; newSession(); C.startTemplate = tpl; if (tpl) C.project = vxFreeName(tpl); $('codeTask').value = text; $('vxQuick').value = ''; $('codeGo').click();
 };
 $('vxQuick').addEventListener('keydown', (e) => { if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) { e.preventDefault(); $('vxQuickGo').click(); } });
 vxRenderChips();
+// the phone notification (owner only; it needs the ntfy topic from Settings > Owner > Security): remembered on this device
+const vxNotifyOn = () => { try { return localStorage.getItem('vx_notify') === '1'; } catch (e) { return false; } };
+function vxNotifyInit() {
+  const row = $('vxNotifyRow'); row.hidden = !(S.state && S.state.owner); $('vxNotify').checked = vxNotifyOn();
+}
+$('vxNotify').onchange = () => { try { localStorage.setItem('vx_notify', $('vxNotify').checked ? '1' : '0'); } catch (e) { /* it simply is not remembered */ } };
+
+// ---- search the project, and its map (coding/code_map.py): what is where, made from the files alone; "Explain this project" asks the model to put it in words
+let pfSearchTimer = null;
+$('codeSearch').addEventListener('input', () => {
+  clearTimeout(pfSearchTimer); const q = $('codeSearch').value.trim();
+  if (q.length < 2) { refreshFiles(); return; }
+  pfSearchTimer = setTimeout(async () => {
+    const r = await api('/api/code/search?project=' + encodeURIComponent(C.project) + '&q=' + encodeURIComponent(q)); const j = await r.json().catch(() => ({hits: []}));
+    if ($('codeSearch').value.trim() !== q) return;                                // typed on meanwhile
+    $('codeFiles').replaceChildren(...(j.hits.length ? j.hits.map((h) => el('button', {onclick: () => viewFile(h.path)}, el('b', {}, h.path + (h.line ? ':' + h.line : '')), el('small', {style: 'display:block;color:var(--muted)'}, h.text)))
+      : [el('div', {style: 'color:var(--muted);padding:6px 8px;font-size:13px'}, 'Nothing matches "' + q + '".')]));
+  }, 250);
+});
+$('codeMapBtn').onclick = async () => {
+  const r = await api('/api/code/map?project=' + encodeURIComponent(C.project)); const m = await r.json().catch(() => null);
+  if (!m) return;
+  const langs = Object.entries(m.languages).map(([k, v]) => k + ' ' + v).join(' \u00b7 ');
+  const box = el('div', {class: 'vx-map'}, el('p', {}, m.files + (m.files === 1 ? ' file' : ' files') + (langs ? ' \u00b7 ' + langs : '') + (m.entry ? ' \u00b7 starts at ' + m.entry : '')),
+    ...(m.outline.length ? m.outline.map((o) => el('div', {class: 'o'}, el('b', {}, o.path), el('span', {}, o.items.slice(0, 8).join(', ')))) : [el('p', {}, 'Nothing to map yet.')]),
+    el('div', {class: 'acts'}, C.sid && !C.saved ? el('button', {class: 'chip', onclick: async () => {
+      const x = await post('/api/code/sessions/' + C.sid + '/message', {text: 'Explain this project', explain: true}); const j = await x.json().catch(() => ({}));
+      if (!x.ok) { note('bad', 'Could not start', (j.message || '') + ' ' + (j.action || '')); return; }
+      showDrawer(false); poll();
+    }}, 'Explain this project') : el('small', {}, 'Open a session to ask VryxCode to explain it.')));
+  $('codeFiles').replaceChildren(box);
+};
+
+// ---- parallel tries and a second opinion
+async function forkProject() {
+  if (!C.project) return;
+  const r = await post('/api/code/projects/fork', {project: C.project}); const j = await r.json().catch(() => ({}));
+  if (!r.ok) { note('bad', 'Could not make a copy', (j.message || '') + ' ' + (j.action || '')); return; }
+  C.project = j.project; newSession(); note('fin', 'Working in a copy', 'This is "' + j.project + '", a separate copy. Try your idea here; the original is not touched. When you like it, type /usecopy.');
+}
+async function adoptCopy() {
+  const m = /^(.*)-try(-\d+)?$/.exec(C.project || ''); if (!m) { note('fin', 'This is not a copy', 'Make one first with /copy, try your idea there, then come back to /usecopy.'); return; }
+  if (!confirm('Use the files of "' + C.project + '" in "' + m[1] + '"? "' + m[1] + '" is kept first as "' + m[1] + '-before".')) return;
+  const r = await post('/api/code/projects/adopt', {copy: C.project, into: m[1]}); const j = await r.json().catch(() => ({}));
+  if (!r.ok) { note('bad', 'Could not use the copy', (j.message || '') + ' ' + (j.action || '')); return; }
+  C.project = j.project; newSession(); note('fin', 'Done', '"' + j.project + '" now has the copy\u2019s files. Your old version is saved as "' + j.backup + '".');
+}
+async function secondOpinion(model) {
+  const r = await post('/api/code/sessions/' + C.sid + '/second-opinion', {model: model.id, notify: vxNotifyOn()}); const j = await r.json().catch(() => ({}));
+  if (!r.ok) { note('bad', 'Could not ask', (j.message || '') + ' ' + (j.action || '')); return; }
+  showDrawer(false); C.model = model.id; renderCodeBar();
+  C.sid = j.id; C.saved = false; C.checkpoints = []; C.pvAuto = false; C.chatKey = C.project + '|' + C.model; C.seen = 0; $('codeIn').replaceChildren(); poll();
+}

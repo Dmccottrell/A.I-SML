@@ -140,6 +140,53 @@ class Loop(unittest.TestCase):
             self.assertFalse(r["finished"])
             self.assertEqual(r["turns"], 3)
 
+    def test_steady_mode_names_the_next_step_after_each_one(self):
+        items = [{"text": "Write a.py", "done": False}, {"text": "Run it", "done": False}]
+        replies = scripted(call("todo", items=items), call("write_file", path="a.py", content="x = 1\n"),
+                           call("todo", items=[dict(items[0], done=True), items[1]]), call("finish", summary="ok"))
+        with h.Sandbox() as sb:
+            sb.register_tool("todo", lambda items=None: "saved")
+            r = h.run_agent("x", replies, sb, max_turns=6, steady=True, permissions=h.Permissions(rules={"todo": "allow"}))
+        seen = [m["content"] for m in r["messages"] if m["role"] == "user"]
+        self.assertTrue(any('step 1 of 2: "Write a.py"' in t for t in seen))
+        self.assertTrue(any('step 2 of 2: "Run it"' in t for t in seen))
+        self.assertTrue(r["finished"])
+
+    def test_steady_mode_says_to_retry_smaller_after_two_failures(self):
+        items = [{"text": "Edit a.py", "done": False}]
+        replies = scripted(call("todo", items=items), call("read_file", path="nope.py"), call("read_file", path="nope.py"), call("finish", summary="ok"))
+        with h.Sandbox() as sb:
+            sb.register_tool("todo", lambda items=None: "saved")
+            r = h.run_agent("x", replies, sb, max_turns=6, steady=True, permissions=h.Permissions(rules={"todo": "allow"}))
+        self.assertTrue(any("failed twice" in m["content"] for m in r["messages"] if m["role"] == "user"))
+
+    def test_without_steady_nothing_is_added(self):
+        replies = scripted(call("todo", items=[{"text": "A", "done": False}]), call("finish", summary="ok"))
+        with h.Sandbox() as sb:
+            sb.register_tool("todo", lambda items=None: "saved")
+            r = h.run_agent("x", replies, sb, max_turns=4, permissions=h.Permissions(rules={"todo": "allow"}))
+        self.assertFalse(any("Now do only step" in m["content"] for m in r["messages"] if m["role"] == "user"))
+
+    def test_a_web_change_must_be_checked_in_the_browser_before_finishing(self):
+        replies = scripted(call("write_file", path="index.html", content="<h1>Hi</h1>\n"), call("finish", summary="done"),
+                           call("check_page"), call("finish", summary="done"))
+        with h.Sandbox() as sb:
+            sb.register_tool("check_page", lambda path="", width=390, height=844: "Page check of index.html: loaded, no errors found.")
+            r = h.run_agent("x", replies, sb, max_turns=6, checks=True, permissions=h.Permissions(rules={"check_page": "allow"}))
+        seen = [m["content"] for m in r["messages"] if m["role"] == "user"]
+        self.assertTrue(any("check_page first" in t for t in seen))
+        self.assertTrue(r["finished"])
+        self.assertEqual(r["turns"], 4)
+
+    def test_no_page_check_is_asked_for_without_the_tool_or_a_web_file(self):
+        with h.Sandbox() as sb:
+            r = h.run_agent("x", scripted(call("write_file", path="index.html", content="<p>x</p>\n"), call("finish", summary="ok")), sb, max_turns=4, checks=True)
+        self.assertEqual(r["turns"], 2)
+        with h.Sandbox() as sb:
+            sb.register_tool("check_page", lambda **k: "ok")
+            r = h.run_agent("x", scripted(call("write_file", path="a.txt", content="x\n"), call("finish", summary="ok")), sb, max_turns=4, checks=True)
+        self.assertEqual(r["turns"], 2)
+
 
 def scripted(*steps):
     it = iter(steps)

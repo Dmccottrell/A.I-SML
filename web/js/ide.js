@@ -414,7 +414,7 @@ async function poll() {
   const j = await r.json(), feed = $('codeFeed'), atEnd = feed.scrollTop + feed.clientHeight > feed.scrollHeight - 120;
   const old = document.getElementById('codeLive'); if (old) old.remove();      // the live line sits below the newest step, so take it out while steps are added
   for (const e of j.events) cEvent(e); C.seen += j.events.length;
-  C.saved = !!j.saved; C.checkpoints = j.checkpoints || C.checkpoints || [];
+  C.saved = !!j.saved; C.state = j.state; C.checkpoints = j.checkpoints || C.checkpoints || [];
   $('codeTask').placeholder = C.saved ? 'Start a follow-up session in ' + C.project + '...' : 'Ask, answer, or tell VryxCode what to build or fix';
   if (j.events.some((e) => e.kind === 'result' || e.kind === 'end' || e.kind === 'rewind')) refreshFiles().then(() => livePreview(j.events));
   if (j.events.length && !$('codeDrawer').hidden && C.tab !== 'files') showDrawer(true, C.tab);
@@ -426,14 +426,14 @@ async function poll() {
   if (live) C.timer = setTimeout(poll, j.state === 'asking' ? 1500 : 350);
 }
 $('codeGo').onclick = async () => {
-  const task = $('codeTask').value.trim(); if (!task || !C.model) return;
+  const task = $('codeTask').value.trim(); if ((!task && !C.startTemplate) || !C.model) return;
   if (C.sid && !C.saved && C.chatKey === C.project + '|' + C.model) {         // a conversation is going in this project with this model: this is its next message
-    const r = await post('/api/code/sessions/' + C.sid + '/message', {text: task, plan: C.mode === 'plan'}); const j = await r.json().catch(() => ({}));
+    const r = await post('/api/code/sessions/' + C.sid + '/message', {text: task, plan: C.mode === 'plan', notify: vxNotifyOn()}); const j = await r.json().catch(() => ({}));
     if (r.ok) { C.stopping = false; $('codeStop').disabled = false; $('codeTask').value = ''; poll(); return; }
     if (r.status !== 404 && r.status !== 400) { note('bad', 'Could not send', (j.message || '') + ' ' + (j.action || '')); return; }
     if (r.status === 400 && /still working/i.test(j.message || '')) { note('bad', 'Still working', 'Press Stop first, or wait for it to finish.'); return; }
   }
-  const r = await post('/api/code/start', {project: C.project, task, model: C.model, auto_edits: C.mode === 'auto', plan: C.mode === 'plan', env: C.env, queue: true}); const j = await r.json();
+  const r = await post('/api/code/start', {project: C.project, task, model: C.model, auto_edits: C.mode === 'auto', plan: C.mode === 'plan', env: C.env, queue: true, notify: vxNotifyOn(), template: C.startTemplate || undefined}); const j = await r.json(); C.startTemplate = null;
   if (!r.ok) { note('bad', 'Could not start', j.message + ' ' + (j.action || '')); return; }
   C.sid = j.id; C.saved = false; C.checkpoints = []; C.pvAuto = false; C.chatKey = C.project + '|' + C.model; C.seen = 0; C.stopping = false; $('codeStop').disabled = false; $('codeTask').value = ''; $('codeIn').replaceChildren(); poll();
 };

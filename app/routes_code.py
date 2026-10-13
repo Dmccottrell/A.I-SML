@@ -7,7 +7,9 @@ import shutil
 import time
 import urllib.request
 import code_edit
+import code_map
 import code_review
+import templates
 import code_sessions
 import vryxcode
 import github_link
@@ -16,6 +18,11 @@ import browser_check
 import usage_limits as U
 from app_errors import AppError
 from app_shared import Cancelled
+
+
+def clip_line(text, n=80):
+    text = " ".join(str(text).split())
+    return text if len(text) <= n else text[:n - 1] + "\u2026"
 
 
 class RoutesCode:
@@ -97,6 +104,8 @@ class RoutesCode:
                                         "usage": self._code_usage(who, None), "models": st.code_models(who), "projects": st.code.projects(user),
                                         "running": run.id if run else None, "project": run.project if run else None, "environments": st.code.environments(who["admin"]),
                                         "browser_check": browser_check.available()})
+            if path == "/api/code/templates":
+                return self._send(200, {"templates": templates.list_templates()})
             if path == "/api/code/sessions":
                 return self._send(200, {"sessions": st.code.list_sessions(user)})
             if path == "/api/code/github/repos":
@@ -130,10 +139,17 @@ class RoutesCode:
                 except OSError:
                     return self._send(404, {"code": "not_found", "message": "That screenshot is no longer kept."})
                 return self._send(200, data, "image/png", {"Cache-Control": "private, max-age=3600", "X-Content-Type-Options": "nosniff"})
+            if path == "/api/code/search":
+                return self._send(200, {"hits": st.code.search(user, arg("project"), arg("q"))})
+            if path == "/api/code/map":
+                return self._send(200, st.code.project_map(user, arg("project")))
             if path == "/api/code/files":
                 return self._send(200, {"files": st.code.files(user, arg("project"))})
             if path == "/api/code/file":
                 return self._send(200, st.code.read(user, arg("project"), arg("path")))
+            m = re.fullmatch(r"/api/code/sessions/([\w-]+)/changes", path)
+            if m:
+                return self._send(200, {"changes": st.code.changes(user, m.group(1))})
             m = re.fullmatch(r"/api/code/sessions/([\w-]+)", path)
             if m:
                 if m.group(1) not in st.code.sessions:                  # a finished session from the history (read-only): also after a restart
@@ -275,6 +291,16 @@ class RoutesCode:
     def api_code_post(self, who, path, body):
         st, user = self.state, who["user"]
         try:
+            second = None
+            m = re.fullmatch(r"/api/code/sessions/([\w-]+)/second-opinion", path)
+            if m:                                                # another model reads what this session changed (read-only, Plan-first): a new session in the same project
+                old = st.code.get(user, m.group(1))
+                if str(body.get("model", "")) == old.model_id:
+                    raise code_sessions.CodeError("Pick a different model for the second opinion.", "The point is a fresh pair of eyes.")
+                prompt = st.code.review_session(user, m.group(1))["prompt"]
+                body = {"project": old.project, "task": "Second opinion on: " + clip_line(old.task), "model": body.get("model"), "plan": True, "queue": True, "notify": body.get("notify")}
+                second = prompt
+                path = "/api/code/start"
             if path == "/api/code/start":
                 allowed, why = st.code_allowed(who)
                 if not allowed:
@@ -313,9 +339,18 @@ class RoutesCode:
                         tools = {"github": st.github_tool(user, project)}
                 if browser_check.available():                                  # needs the playwright package: pip install playwright
                     tools = dict(tools or {}, check_page=st.browser_tool(user, project))
-                s, note = st.code.start(user, project, body.get("task"), model["id"], generate, bool(body.get("auto_edits")),
+                task = body.get("task")
+                if body.get("template"):                                       # a starter: its files are written first, and the task says to build on them
+                    if not templates.TEMPLATES.get(str(body["template"])):
+                        raise code_sessions.CodeError("That starter does not exist.", "Pick one from the list.")
+                    templates.apply(st.code.project_path(user, project), body["template"])
+                    task = templates.task_for(body["template"], task)
+                s, note = st.code.start(user, project, task, model["id"], generate, bool(body.get("auto_edits")),
                                         int(model.get("context_tested") or 8192), meter, outside=bool(model.get("outside")), tools=tools, identity=identity,
-                                        env=str(body.get("env") or "local"), plan=bool(body.get("plan")), owner=who["admin"], queue=bool(body.get("queue")))
+                                        env=str(body.get("env") or "local"), plan=bool(body.get("plan")), owner=who["admin"], queue=bool(body.get("queue")),
+                                        model_text=second)
+                if body.get("notify") and who["owner"]:                        # the phone notification is the owner's (it goes to their ntfy topic)
+                    s.notify, s.on_notify = True, st.code_notify
                 return self._send(200, {"id": s.id, "note": note, "queued": s.state == "queued", "position": st.code.queue_position(user, s.id)})
             if path == "/api/code/preview":
                 allowed, why = st.code_allowed(who)
@@ -332,13 +367,23 @@ class RoutesCode:
                 allowed, why = st.code_allowed(who)
                 if not allowed:
                     raise code_sessions.CodeError(why, "Ask the owner about VryxCode access.")
+                if body.get("explain"):                                  # "Explain this project": the map of the files, read-only (Plan-first), the person sees one short line
+                    sess = st.code.get(user, m.group(1))
+                    sess.send(body.get("text") or "Explain this project", plan=True, model_text=code_map.explain_prompt(st.code.project_map(user, sess.project)))
+                    return self._send(200, {"ok": True})
                 review = body.get("review")
                 if review:                                           # a code review: the person sees a short line, the model gets the change (read-only, Plan-first)
                     sess = st.code.get(user, m.group(1))
                     sess.send(body.get("text") or "Review these changes", plan=True, model_text=self._review_prompt(st, user, m.group(1), review))
                     return self._send(200, {"ok": True})
-                st.code.get(user, m.group(1)).send(body.get("text"), plan=bool(body.get("plan")))
+                sess = st.code.get(user, m.group(1))
+                if who["owner"]:
+                    sess.notify, sess.on_notify = bool(body.get("notify")), st.code_notify
+                sess.send(body.get("text"), plan=bool(body.get("plan")))
                 return self._send(200, {"ok": True})
+            m = re.fullmatch(r"/api/code/sessions/([\w-]+)/reject", path)
+            if m:                                                # undo one file of what a session changed
+                return self._send(200, st.code.reject_file(user, m.group(1), body.get("path")))
             m = re.fullmatch(r"/api/code/sessions/([\w-]+)/answer", path)
             if m:
                 ok = st.code.get(user, m.group(1)).respond(int(body.get("id", -1)), body.get("allow"), body.get("always"))
@@ -382,6 +427,16 @@ class RoutesCode:
             if path == "/api/code/import":
                 project = st.code.check_name(body.get("project"))
                 return self._send(200, {"imported": st.code.import_b64(user, project, body), "project": project})
+            if path == "/api/code/projects/fork":                  # a separate copy to try an idea in
+                allowed, why = st.code_allowed(who)
+                if not allowed:
+                    raise code_sessions.CodeError(why, "Ask the owner about VryxCode access.")
+                return self._send(200, {"project": st.code.fork_project(user, body.get("project"))})
+            if path == "/api/code/projects/adopt":                 # use the copy's files in the original (the original is kept as "-before")
+                allowed, why = st.code_allowed(who)
+                if not allowed:
+                    raise code_sessions.CodeError(why, "Ask the owner about VryxCode access.")
+                return self._send(200, st.code.adopt_project(user, body.get("copy"), body.get("into")))
             if path == "/api/code/projects/delete":
                 st.code.delete_project(user, body.get("project"))
                 return self._send(200, {"ok": True})
