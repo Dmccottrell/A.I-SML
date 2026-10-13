@@ -19,10 +19,8 @@ WHAT THIS FILE DOES
     Used by make_agent_data.py (traces for the final-phase data) and agent_lessons.py (chat lessons).
 """
 import json
-import random
 import shutil
 
-import harness as h
 
 # (function name, arguments, the correct expression, a wrong one, sample inputs)
 FAMILIES = [

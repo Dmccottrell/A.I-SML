@@ -15,7 +15,6 @@ WHAT THIS FILE DOES
 import json
 import os
 import threading
-import time
 from collections import defaultdict
 
 MIN_PERCENT = 85

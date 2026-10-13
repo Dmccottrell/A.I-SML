@@ -25,7 +25,6 @@ WHAT THIS FILE DOES
 import json
 import math
 import sqlite3
-import time
 
 LIMITS_PATH = "limits.json"
 STATUS_WORDS = ((50, "Plenty left"), (20, "Getting low"), (5, "Running low"), (0, "Almost out"))

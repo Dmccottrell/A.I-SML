@@ -25,7 +25,6 @@ import subprocess
 import sys
 import tempfile
 
-import harness
 import vryxcode as V
 
 PROMPT = ("You are fixing a bug in a real project. Read the issue, find the code that causes it, and change the source files so the problem is fixed. "

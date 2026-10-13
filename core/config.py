@@ -17,7 +17,7 @@ FOLDERS (all inside the current stage, see stage.py)
 
 To add another version, copy the latest entry in VERSIONS and change what you need.
 """
-from dataclasses import dataclass, field, replace
+from dataclasses import dataclass, replace
 
 from model import ModelConfig
 from tokenizer import EXTENDED_SPECIAL_TOKENS, SPECIAL_TOKENS

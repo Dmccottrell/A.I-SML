@@ -17,7 +17,6 @@ WHAT THIS FILE DOES
     Limit: lessons teach the MODEL to read a typo. The Wikipedia lookup (wiki_index.py) still searches by the typed
     words, so a badly misspelled key word may not find its article (fuzzy matching there is a separate job).
 """
-import random
 import re
 
 KEYS = ["qwertyuiop", "asdfghjkl", "zxcvbnm"]

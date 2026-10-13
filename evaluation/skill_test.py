@@ -83,7 +83,7 @@ def summarize(results, rules=None):
 
 def main():
     from config import add_version_arg, get_version
-    from skills import SKILLS, load_pack, pack_path
+    from skills import load_pack, pack_path
     p = argparse.ArgumentParser()
     add_version_arg(p)
     p.add_argument("--skill", required=True, choices=list(CHECKS))

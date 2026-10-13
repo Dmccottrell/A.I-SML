@@ -82,7 +82,6 @@ def parse(text):
     """Doc from the model's text. Lines that don't match anything special become paragraphs."""
     doc = Doc()
     cur = Section()
-    rows = None
     doc.sections.append(cur)
     for raw in text.replace("\r\n", "\n").split("\n"):
         line = raw.strip()

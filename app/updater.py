@@ -10,9 +10,7 @@ WHAT THIS FILE DOES
 """
 import os
 import subprocess
-import sys
 import threading
-import time
 
 BRANCH = "main"
 TASK = "Emvryx App"

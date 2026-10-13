@@ -32,7 +32,6 @@ import os, sys; sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(
 import argparse
 import os
 
-import numpy as np
 import torch
 
 from growth_test import Data, read_log, train_arm
