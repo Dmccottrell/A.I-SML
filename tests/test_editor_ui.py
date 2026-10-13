@@ -72,6 +72,8 @@ class EditorUi(Base):
                 self.assertIn("index.html", text)
                 self.assertIn("7s", text)
                 self.assertIn("52 words", text)
+                page.evaluate("cEvent({kind: 'step', tool: 'edit_file', preview: 'edit a.html\\n  - x\\n  + y', raw: ''}); cEvent({kind: 'result', text: 'error: the text in old was not found'})")
+                self.assertIn("Could not edit", page.inner_text("#codeIn"))                 # a failed edit does not read like a finished one
             finally:
                 b.close()
 
@@ -318,11 +320,11 @@ class EditorUi(Base):
                 self.assertNotIn("return a + b", page.input_value("#ideBody textarea"))         # the suggestion is only drawn, not in the file
                 page.keyboard.press("Tab")
                 self.assertTrue(page.input_value("#ideBody textarea").endswith("z = 1return a + b"))
-                self.assertEqual(page.locator("#ideBody .ghost").count(), 0)
+                wait_for(lambda: page.locator("#ideBody .ghost").count() == 0)                 # the grey text goes at the next repaint
                 # Escape dismisses a suggestion
                 page.wait_for_selector("#ideBody .ghost", timeout=10000)
                 page.keyboard.press("Escape")
-                self.assertEqual(page.locator("#ideBody .ghost").count(), 0)
+                wait_for(lambda: page.locator("#ideBody .ghost").count() == 0)                 # (a repaint later, which a slow machine takes longer to reach)
                 self.assertEqual(self.errors, [])
             finally:
                 b.close()

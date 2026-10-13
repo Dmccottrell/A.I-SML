@@ -18,18 +18,22 @@ class Headers(Base):
             self.assertIn("noindex", h["X-Robots-Tag"])
             self.assertIn("camera=()", h["Permissions-Policy"])
 
-    def test_the_page_policy_allows_only_its_own_script_by_nonce(self):
+    def test_the_page_has_no_inline_script_and_the_policy_allows_only_its_own_files(self):
         st, h, page = Client(self.port).call("GET", "/", raw=True)
         csp = h["Content-Security-Policy"]
-        nonce = re.search(r"'nonce-([^']+)'", csp).group(1)
-        self.assertIn(b'<script nonce="' + nonce.encode() + b'">', page)
-        self.assertNotIn(b"<script>", page)
-        self.assertIn("script-src 'self' 'nonce-", csp)
+        self.assertNotRegex(page.decode(), r"<script(?![^>]*\bsrc=)")                # every script tag points at a file: no inline code at all
+        self.assertIn('<script src="/js/core.js"></script>', page.decode())
+        self.assertIn("script-src 'self';", csp)
+        self.assertNotIn("nonce", csp)
         self.assertNotIn("unsafe-eval", csp)
         self.assertNotIn("script-src 'self' 'unsafe-inline'", csp)
         self.assertIn("object-src 'none'", csp)
-        again = Client(self.port).call("GET", "/", raw=True)[1]["Content-Security-Policy"]
-        self.assertNotEqual(csp, again)                                      # a new nonce each time
+        for name in ("core", "boot", "admin"):                                           # and each of those files is served, as JavaScript
+            st, h2, body = Client(self.port).call("GET", f"/js/{name}.js", raw=True)
+            self.assertEqual(st, 200, name)
+            self.assertIn("javascript", h2["Content-Type"])
+        self.assertEqual(Client(self.port).call("GET", "/js/nothing.js", raw=True)[0], 404)
+        self.assertEqual(Client(self.port).call("GET", "/js/../app_server.py", raw=True)[0], 404)
 
     def test_json_answers_allow_nothing(self):
         h = Client(self.port, self.state.owner_key()).call("GET", "/api/state", raw=True)[1]

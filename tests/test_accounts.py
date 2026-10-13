@@ -436,12 +436,12 @@ class Flows(Base):
         self.assertTrue(all(u == "sam" for u, _ in kinds))
 
     def test_the_page_has_the_new_sign_in_and_settings(self):
-        page = Client(self.port).call("GET", "/", raw=True)[2].decode()
+        page = self.page_text()
         for word in ('id="auth"', "Create account", "openSettings", "Two-step sign-in", "/api/login/mfa", "Sign-ups and invites"):
             self.assertIn(word, page)
 
     def test_the_page_reads_an_invite_link_and_draws_a_qr_code(self):
-        page = Client(self.port).call("GET", "/", raw=True)[2].decode()
+        page = self.page_text()
         for word in ("get('invite')", "function qrSvg", "Copy invite link", "history.replaceState"):
             self.assertIn(word, page)
 

@@ -25,11 +25,39 @@ class Repair(unittest.TestCase):
         with self.assertRaises(harness.ToolError) as cm:
             harness.parse_tool_call(call('{"name": "read_file", "args": {oops}'))
         self.assertIn("not valid JSON", str(cm.exception))
-        self.assertIn("smaller", str(cm.exception))
+        self.assertIn("append=true", str(cm.exception))
 
-    def test_a_cut_off_write_is_never_saved(self):
-        with self.assertRaises(harness.ToolError):
+    def test_a_cut_off_write_is_never_saved_and_the_model_is_told_to_send_it_in_parts(self):
+        with self.assertRaises(harness.ToolError) as cm:
             harness.parse_tool_call('<|tool_call|>{"name":"write_file","args":{"path":"a.html","content":"<p>cut off')
+        self.assertIn("cut off", str(cm.exception))
+        self.assertIn("append=true", str(cm.exception))
+
+    def test_a_broken_part_of_a_big_file_keeps_its_append_flag(self):
+        name, args = harness.parse_tool_call(call('{"name": "write_file", "args": {"path": "a.html", "append": true, "content": "<p class="x">more</p>\n"}}'))
+        self.assertEqual((name, args["path"], args.get("append")), ("write_file", "a.html", True))
+        self.assertEqual(args["content"], '<p class="x">more</p>\n')
+
+
+class Parts(unittest.TestCase):
+    def test_a_big_file_is_written_in_parts_and_nothing_is_lost(self):
+        with harness.Sandbox(workspace=tempfile.mkdtemp()) as box:
+            box.call("write_file", {"path": "big.html", "content": "<html>\n"})
+            self.assertIn("added to", box.call("write_file", {"path": "big.html", "content": "<p>1</p>\n", "append": True})[0])
+            box.call("write_file", {"path": "big.html", "content": "</html>\n", "append": True})
+            with open(os.path.join(box.root, "big.html")) as f:
+                self.assertEqual(f.read(), "<html>\n<p>1</p>\n</html>\n")
+            with self.assertRaises(harness.ToolError):
+                box.call("write_file", {"path": "missing.html", "content": "x", "append": True})      # a first part must not be an append
+
+    def test_a_half_written_python_file_is_not_refused_as_broken(self):
+        with harness.Sandbox(workspace=tempfile.mkdtemp()) as box:
+            box.call("write_file", {"path": "a.py", "content": "x = 1\n"})
+            self.assertIsNone(harness.preview_check(box.root, "write_file", {"path": "a.py", "content": "def f(:\n", "append": True}))
+            self.assertTrue(harness.preview_check(box.root, "write_file", {"path": "a.py", "content": "def f(:\n"}))      # replacing it with that is refused
+
+    def test_the_prompt_teaches_writing_in_parts(self):
+        self.assertIn("append=true", harness.TOOL_PROMPT)
 
 
 class Loop(unittest.TestCase):

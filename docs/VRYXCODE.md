@@ -227,3 +227,10 @@ The agentic coding benchmarks (SWE-bench Verified, Lite and Pro, Terminal-Bench,
 
 ## Name
 VryxCode follows the family (Emvryx, Ember, Flare...). **A first quick check (Oct 2026, a Google AI answer, so only a rough sign):** it said "VryxCode" was not registered or pending at the USPTO. That is encouraging but is not a clearance search: before a public launch, search the USPTO trademark database yourself (or ask a trademark attorney) for similar names in software, check for confusingly similar existing brands, and check domains and app-store names, like the other names.
+
+## Big files and small models (writing in parts)
+A small model often botches one long tool call (a quote or line break inside the file text that is not escaped, or the reply running out of room before the call ends). VryxCode now copes in four ways:
+- **Repair.** A `write_file` call with raw line breaks or unescaped quotes is repaired and saved (including its `append` flag); a call that was cut off is **never** saved, so a half file cannot appear.
+- **Write in parts.** `write_file` takes `append=true` to add to the end of a file. The tool prompt tells the model to write big files in parts of about 60 lines: the first part with `write_file`, each next part with `append=true`. A part that is not a complete Python or JSON file is not refused as broken while parts are still arriving.
+- **Say what happened.** A call that could not be read, or was cut off, is sent back to the model with that exact reason and the advice to use smaller parts. Each attempt stays visible in the feed as "Retrying", with what the model said and how long it took.
+- **Stop, don't loop.** After 3 unreadable or cut-off calls in a row the session stops and says why (a successful call resets the count).

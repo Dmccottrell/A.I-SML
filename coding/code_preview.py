@@ -22,7 +22,8 @@ MAX_TOKENS = 60
 MAX_FILE = 8 * 1024 * 1024
 
 REPORTER = b"""<script>(function(){function s(m){try{parent.postMessage({vryxPreview:1,msg:String(m).slice(0,300)},'*')}catch(e){}}
-window.addEventListener('error',function(e){var t=e.target;if(t&&t!==window&&(t.src||t.href)){s('Could not load '+String(t.src||t.href).replace(/^.*\/preview\/[^\/]+\//,''))}
+function host(u){return /cloudflareinsights\.com|\/cdn-cgi\//.test(String(u))}
+window.addEventListener('error',function(e){var t=e.target;if(t&&t!==window&&(t.src||t.href)){if(host(t.src||t.href))return;s('Could not load '+String(t.src||t.href).replace(/^.*\/preview\/[^\/]+\//,''))}
 else{s((e.message||'Script error')+(e.filename?' ('+String(e.filename).split('/').pop()+':'+e.lineno+')':''))}},true);
 window.addEventListener('unhandledrejection',function(e){var r=e.reason;s('Unhandled promise error: '+((r&&r.message)||r))});
 var ce=console.error;console.error=function(){s('console.error: '+[].slice.call(arguments).join(' '));ce.apply(console,arguments)};
@@ -85,16 +86,18 @@ def resolve(folder, rel):
 LOCAL_SCRIPT = re.compile(rb"<script\b(?![^>]*\bcrossorigin\b)([^>]*?\bsrc\s*=\s*(?![\"']?(?:https?:|//|data:|blob:)))", re.I)
 
 
+HEAD_TAG = re.compile(rb"<head\b[^>]*>", re.I)                                 # <head>, not <header>
+ROOT_URL = re.compile(rb"""((?:\bsrc|\bhref|\baction|\bposter)\s*=\s*["'])/(?!/)([^"']*)""", re.I)       # src="/style.css": the page lives in a folder, not at the site's root, so "/" would miss the project
+
+
 def inject(html):
     """The reporter script added at the very top of an HTML page (after <head> when there is one), so it sees every error that follows.
     The page's own scripts get `crossorigin` (the frame has an empty identity, so its own files count as another site's: without it a browser hides the details of their errors)."""
+    html = ROOT_URL.sub(lambda m: m.group(1) + (m.group(2) or b"./"), html)
     html = LOCAL_SCRIPT.sub(rb'<script crossorigin="anonymous"\1', html)
-    low = html.lower()
-    i = low.find(b"<head")
-    if i >= 0:
-        j = html.find(b">", i)
-        if j >= 0:
-            return html[:j + 1] + REPORTER + html[j + 1:]
+    m = HEAD_TAG.search(html)
+    if m:
+        return html[:m.end()] + REPORTER + html[m.end():]
     return REPORTER + html
 
 

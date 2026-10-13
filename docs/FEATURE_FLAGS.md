@@ -22,7 +22,7 @@ Changes apply at once (no restart) and are written to the security log. They are
 4. Try it as the owner. Move it to Everyone when you are happy.
 
 ## The welcome tour
-`welcome_tour` is the first flag: the animated introduction shown the first time someone signs in. It is on for owner and admins now. When you are happy,
+`violet_theme` (starts with the owner only) switches the chat app's own colour from amber to electric violet; each model keeps its own colour. `welcome_tour` is the first flag: the animated introduction shown the first time someone signs in. It is on for owner and admins now. When you are happy,
 choose **Everyone**. People can replay it from Settings > About. To show it again to everyone after you change it, raise `TOUR_VERSION` in `web/index.html`.
 
 

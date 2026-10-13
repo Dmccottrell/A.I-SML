@@ -311,7 +311,7 @@ class Session:
             except harness.ToolError as e:
                 if not str(e).startswith("no tool call found"):     # a tool call that could not be read: it is sent back to the model to try again, so say so and keep what it wrote
                     prose = RESULT_TAGS.sub("", re.split(r"<\|tool_call\|>|<tool_call>", reply)[0]).strip()
-                    self.emit("retry", text=clip(prose, 400), why=clip(str(e), 200), **took)
+                    self.emit("retry", text=clip(prose, 400), why=clip(str(e), 200), limit=bool(getattr(generate, "cut_off", False)), **took)
                 # words with no tool call: if the turn ends on them they arrive as the "end" message, so no step is shown
             return reply
         return call

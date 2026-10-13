@@ -91,13 +91,15 @@ class LlamaChat:
     `should_stop()` is asked every fifth of a second, also while the model is still reading the prompt and nothing has come back yet: when it says yes
     the connection is closed (llama-server stops writing when the client leaves) and Interrupted is raised, so Stop works at once."""
 
-    def __init__(self, url="http://127.0.0.1:8080", temperature=0.2, max_tokens=1024, timeout=600, thinking=False):
+    def __init__(self, url="http://127.0.0.1:8080", temperature=0.2, max_tokens=4096, timeout=600, thinking=False):
         self.url, self.temperature, self.max_tokens, self.timeout, self.thinking = url.rstrip("/"), temperature, max_tokens, timeout, thinking
+        self.cut_off = False                               # True when the last reply stopped because it reached max_tokens (a long file does that)
         self.usage = None                                  # {"fresh_in", "cached_in", "out"} of the last call (the app counts it)
         self.on_delta = None                               # function(info) or None; info = {"text", "thinking_chars", "chunks"}
         self.should_stop = None                            # function() -> bool, or None
 
     def __call__(self, messages):
+        self.cut_off = False
         body = json.dumps({"model": "local", "messages": messages, "temperature": self.temperature, "max_tokens": self.max_tokens,
                            "stream": True, "stream_options": {"include_usage": True}, "cache_prompt": True,
                            "chat_template_kwargs": {"enable_thinking": bool(self.thinking)}}).encode()
@@ -174,6 +176,8 @@ class LlamaChat:
                 continue
             usage = chunk.get("usage") or usage
             timings = chunk.get("timings") or timings
+            if ((chunk.get("choices") or [{}])[0].get("finish_reason")) == "length":
+                self.cut_off = True
             delta = ((chunk.get("choices") or [{}])[0].get("delta")) or {}
             piece, reasoning = delta.get("content") or "", delta.get("reasoning_content") or ""
             if not piece and not reasoning:
@@ -241,7 +245,8 @@ def preview(name, args):
     if name == "write_file":
         text = str(args.get("content", ""))
         shown = "\n".join("  + " + l for l in text.splitlines()[:12])
-        return f"write {args.get('path')} ({len(text.splitlines())} lines)\n{shown}"
+        more = " \u00b7 added to the end" if args.get("append") else ""
+        return f"write {args.get('path')} ({len(text.splitlines())} lines){more}\n{shown}"
     if name == "edit_file":
         return f"edit {args.get('path')}\n  - {str(args.get('old', ''))[:300]}\n  + {str(args.get('new', ''))[:300]}"
     if name == "todo":

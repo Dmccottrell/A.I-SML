@@ -13,6 +13,13 @@ you and your testers, or public). Where it runs is a choice per chat, not a prop
 | **v3-long** | v3 stretched to 8K → 16K → 32K tokens after it finishes (the rehearsal for v3.5's 75K–100K) | Code ready, tested on small models: see **[docs/LONG_CONTEXT.md](docs/LONG_CONTEXT.md)** |
 | **v3.5** | ~1.12B (24 layers), ~20B tokens (75,000 steps, 8K context), Muon optimizer; then stretched to 32K+ (goal 75K–100K) | Code ready, data build in progress: see **[docs/V3_5.md](docs/V3_5.md)** |
 
+## Where the project is now (Oct 2026)
+- **Live:** the Emvryx app (`python app_server.py`, served at chat.emvryx.app from the home PC) with four models: **Flare 2.5, Equinox 2, Solstice 2, Apogee 2** (the 2.x series on open bases). Plans and usage limits, accounts with passwords, two-step sign-in and passkeys, Skills, Teacher mode, documents, 21 connected apps, live facts, and **VryxCode** (the coding assistant with its editor, output panel, live preview, review, queue and "+" new projects). The owner can update the PC from the phone (Admin > PC > Software update). New things ship behind feature flags (Admin > Previews; see [docs/FEATURE_FLAGS.md](docs/FEATURE_FLAGS.md)).
+- **Website:** emvryx.app, built from `design/` by `python tools/build_site.py` into `site/` (Vercel). Violet look; chat is still amber behind the "Violet look" flag.
+- **Next models (3.x):** Flare 3 (Qwen3.5 2B), Equinox 3 (4B), Solstice 3 (9B) trained at home on the 4070, Apogee 3 (Qwen3.8 27B at 2-bit, untrained). Runbook: [docs/EMVRYX3_RUNBOOK.md](docs/EMVRYX3_RUNBOOK.md).
+- **Native apps:** Android (Kotlin) first, then iPhone (Swift); planned, not started: [docs/NATIVE.md](docs/NATIVE.md).
+- The v1 to v3.5 rows in the table above are the from-scratch line; the v3.5 run was stopped.
+
 **After v3's pretraining:** average the last snapshots → chat fine-tune (with NEFTune) → DPO → `evaluation/compare.py --old v2 --new v3`. Steps in [docs/V3.md](docs/V3.md).
 
 **Every version builds on the last:** each new one keeps everything the previous could do (the
@@ -63,8 +70,8 @@ The code lives in folders by job. Run everything from the project folder, for ex
 
 | Folder | What is in it |
 |---|---|
-| `app_server.py`, `web/` | The Emvryx app: the server (`python app_server.py`) and the chat page. Kept in the project folder because the Windows start-up task runs it from there |
-| `app/` | Everything behind the chat page: reliability and errors, sign-in and plans, usage limits, memory, look-ups (Wikipedia, web search), **live facts**, **Skills**, **Teacher mode**, **Documents**, saving answers as PDF or Word, connected apps |
+| `app_server.py`, `web/` | The Emvryx app: the server (`python app_server.py`, which holds the start-up, the request handler's plumbing and the page and file routes) and the chat page. Kept in the project folder because the Windows start-up task runs it from there. The page's code is split by part into `web/js/` (`core`, `chat`, `settings`, `admin`, `code`, `ide`, `auth`...; loaded in that order by `web/index.html`; there is no inline script) |
+| `app/` | The server's other parts, split out of `app_server.py` by job: `state_*.py` (what `AppState` does: accounts, settings, apps, the PC and models, VryxCode, operations), `routes_*.py` (the web routes: chat, account and sign-in, admin, VryxCode), `chat_turn.py` (one chat turn), `app_runner.py` (starting llama-server), `app_shared.py` (limits and small helpers). Also everything behind the chat page: reliability and errors, sign-in and plans, usage limits, memory, look-ups (Wikipedia, web search), **live facts**, **Skills**, **Teacher mode**, **Documents**, saving answers as PDF or Word, connected apps |
 | `coding/` | **VryxCode**: the coding assistant, its tools and loop, the safe sandbox, live preview, and the coding benchmarks |
 | `core/` | The model itself: the transformer, tokenizer, chat format, settings for each version, LoRA, and the open-base model list |
 | `training/` | Pretraining, fine-tuning (from scratch and on open bases), preference training, run supervision, backups and cloud hand-off |
@@ -72,7 +79,7 @@ The code lives in folders by job. Run everything from the project folder, for ex
 | `evaluation/` | The exams, test sheets, public benchmarks and the side-by-side comparison |
 | `tools/` | Export and convert (Hugging Face layout, GGUF), generate text, build the website, back up server data |
 | `scripts/` | The shell scripts for cloud runs (`chain_open.sh`, `wrap_open.sh`, `bench_all.sh`, `cloud_setup.sh`) |
-| `tests/` | The automatic tests (`python -m unittest discover -s tests`) |
+| `tests/` | The automatic tests. Fast way: `python scripts/run_tests.py` (runs the files side by side, about 2 minutes, lists the slowest); reference: `python -m unittest discover -s tests -t .`. `python tools/lint.py` checks for unused imports and undefined names. GitHub runs both on every push (`.github/workflows/tests.yml`) |
 | `docs/` | The guides: [Family guide](docs/FAMILY_GUIDE.md), versions, roadmap, benchmarks, how each feature works |
 | `site/`, `design/` | The website (built pages and design sources) and the brand |
 | `eval/`, `examples/`, `docker/`, `windows/` | Test sheets, sample data, the VryxCode sandbox image, the Windows start-up installer |

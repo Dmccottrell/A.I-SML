@@ -1,0 +1,36 @@
+# Runs the whole test suite (and a lint check) on every push and pull request, so a broken change cannot be merged unnoticed.
+# Locally the same thing is: python scripts/run_tests.py   and   python tools/lint.py
+name: tests
+
+on:
+  push:
+  pull_request:
+
+concurrency:
+  group: tests-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  tests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: requirements.txt
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install torch --index-url https://download.pytorch.org/whl/cpu
+          pip install -r requirements.txt peft playwright pyflakes
+          python -m playwright install --with-deps chromium
+      - name: Find the browser the browser tests use
+        run: |
+          echo "EMVRYX_BROWSER=$(python -c 'from playwright.sync_api import sync_playwright as s; p = s().start(); print(p.chromium.executable_path); p.stop()')" >> "$GITHUB_ENV"
+      - name: Lint (unused imports, undefined names)
+        run: python tools/lint.py
+      - name: Tests
+        run: python scripts/run_tests.py
