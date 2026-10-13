@@ -5,7 +5,7 @@ import unittest
 import browser_check
 from tests.test_app_server import Base
 from tests.test_browser_check import find_browser
-from tests.test_code_sessions import open_to_everyone
+from tests.test_code_sessions import open_to_everyone, wait_for
 
 
 @unittest.skipUnless(browser_check.available() and find_browser(), "needs the playwright package and a Chromium, Edge or Chrome")
@@ -155,6 +155,101 @@ class EditorUi(Base):
                 self.assertIn("text changed while the model was working", page.inner_text("#ideAiStat"))
                 self.assertEqual(text(), before)
                 self.assertEqual(errors, [])
+            finally:
+                b.close()
+
+    def open_editor(self, p):
+        b = p.chromium.launch(executable_path=find_browser())
+        page = b.new_context(viewport={"width": 1500, "height": 850}, extra_http_headers={"Authorization": "Bearer " + self.state.owner_key()}).new_page()
+        self.errors = []
+        page.on("pageerror", lambda x: self.errors.append(str(x)))
+        page.goto(f"http://127.0.0.1:{self.port}/")
+        page.wait_for_timeout(600)
+        page.evaluate("document.querySelectorAll('.tour').forEach((x) => x.remove()); openCode()")
+        page.wait_for_timeout(600)
+        page.evaluate("C.project = 'demo'; newSession()")
+        page.wait_for_timeout(400)
+        page.evaluate("document.querySelectorAll('.tour').forEach((x) => x.remove())")
+        page.click("#codeIdeBtn")
+        page.wait_for_timeout(400)
+        return b, page
+
+    def test_output_panel_runs_tests_saves_first_and_shows_what_vryxcode_ran(self):
+        from playwright.sync_api import sync_playwright
+        self.save("test_a.py", "import unittest\n\n\nclass T(unittest.TestCase):\n    def test_ok(self):\n        self.assertEqual(1 + 1, 2)\n")
+        with sync_playwright() as p:
+            b, page = self.open_editor(p)
+            try:
+                page.click("#ideOutBtn")
+                page.click("#outRunTests")
+                page.wait_for_selector("#ideOutLog .badge2.ok", timeout=15000)
+                self.assertIn("Ran 1 test", page.inner_text("#ideOutLog"))
+                # edit the test so it fails, WITHOUT saving: Run tests saves first, then runs
+                page.click("#ideFiles >> text=test_a.py")
+                page.wait_for_timeout(300)
+                page.click("#ideBody textarea")
+                page.keyboard.press("Control+End")
+                page.keyboard.type("\n    def test_bad(self):\n        self.assertEqual(1, 2)\n")
+                self.assertIn("\u25cf", page.inner_text("#ideTabs"))
+                page.click("#outRunTests")
+                page.wait_for_selector("#ideOutLog .badge2.bad", timeout=15000)
+                self.assertIn("FAILED", page.inner_text("#ideOutLog"))
+                self.assertIn("test_bad", self.disk("test_a.py"))                                # it was saved before it ran
+                self.assertNotIn("\u25cf", page.inner_text("#ideTabs"))
+                # a command of your own, and Run file
+                page.fill("#outCmd", "python -c \"print(6 * 7)\"")
+                page.press("#outCmd", "Enter")
+                wait_for(lambda: "42" in page.inner_text("#ideOutLog"))
+                page.click("#ideFiles >> text=app.py")
+                page.click("#outRunFile")
+                wait_for(lambda: page.locator("#ideOutLog .oi").count() >= 4)
+                self.assertIn("python app.py", page.inner_text("#ideOutLog"))
+                # a command VryxCode ran shows up too, marked as VryxCode's
+                page.evaluate("cEvent({kind: 'step', tool: 'run', preview: 'run {\"command\": \"python -m unittest -v\"}', raw: ''}); cEvent({kind: 'result', text: 'exit code 0\\nRan 5 tests\\n\\nOK'})")
+                text = page.inner_text("#ideOutLog")
+                self.assertIn("VRYXCODE", text.upper())
+                self.assertIn("python -m unittest -v", text)
+                self.assertIn("Ran 5 tests", text)
+                self.assertEqual(self.errors, [])
+            finally:
+                b.close()
+
+    def test_autocomplete_shows_grey_text_tab_accepts_and_escape_dismisses(self):
+        import vryxcode
+        from playwright.sync_api import sync_playwright
+        calls = []
+
+        def backend(model):
+            calls.append(1)
+            return vryxcode.ScriptedChat(["```python\nreturn a + b\n```"] * 4)
+        self.state.code_generate = backend
+        with sync_playwright() as p:
+            b, page = self.open_editor(p)
+            try:
+                page.click("#ideFiles >> text=app.py")
+                page.wait_for_timeout(300)
+                page.click("#ideBody textarea")
+                page.keyboard.press("Control+End")
+                page.keyboard.type("z = ")
+                page.wait_for_timeout(1500)
+                self.assertEqual(calls, [])                                                     # off by default: nothing was asked
+                self.assertEqual(page.locator("#ideBody .ghost").count(), 0)
+                page.click("#ideAc")
+                self.assertEqual(page.inner_text("#ideAc"), "Autocomplete: On")
+                page.click("#ideBody textarea")
+                page.keyboard.press("Control+End")
+                page.keyboard.type("1")                                                         # typing starts the timer
+                page.wait_for_selector("#ideBody .ghost", timeout=10000)
+                self.assertIn("return a + b", page.inner_text("#ideBody .ghost"))
+                self.assertNotIn("return a + b", page.input_value("#ideBody textarea"))         # the suggestion is only drawn, not in the file
+                page.keyboard.press("Tab")
+                self.assertTrue(page.input_value("#ideBody textarea").endswith("z = 1return a + b"))
+                self.assertEqual(page.locator("#ideBody .ghost").count(), 0)
+                # Escape dismisses a suggestion
+                page.wait_for_selector("#ideBody .ghost", timeout=10000)
+                page.keyboard.press("Escape")
+                self.assertEqual(page.locator("#ideBody .ghost").count(), 0)
+                self.assertEqual(self.errors, [])
             finally:
                 b.close()
 

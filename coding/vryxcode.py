@@ -29,6 +29,7 @@ import queue
 import socket
 import tempfile
 import threading
+import urllib.error
 import urllib.request
 
 import harness
@@ -75,6 +76,10 @@ def _hang_up(response):
 
 class Interrupted(Exception):
     """The person pressed Stop while the model was loading or writing."""
+
+
+class NoInfill(Exception):
+    """This model's llama-server cannot fill in the middle (the model has no fill-in-the-middle tokens)."""
 
 
 class LlamaChat:
@@ -134,6 +139,25 @@ class LlamaChat:
             prompt = int(usage["prompt_tokens"])
             self.usage = {"fresh_in": max(0, prompt - cached), "cached_in": min(cached, prompt), "out": int(usage.get("completion_tokens", 0))}
         return THINK.sub("", text).strip()
+
+    def infill(self, prefix, suffix, n_predict=64, timeout=30):
+        """Fill-in-the-middle through llama-server's /infill (for inline autocomplete): the text that belongs between `prefix` and `suffix`, or NoInfill when this model
+        has no fill-in-the-middle tokens. Fast and small: no chat template, no thinking."""
+        body = json.dumps({"input_prefix": prefix, "input_suffix": suffix, "n_predict": int(n_predict), "temperature": 0.1, "top_k": 40, "cache_prompt": True,
+                           "stop": ["\n\n\n"]}).encode()
+        req = urllib.request.Request(self.url + "/infill", data=body, headers={"Content-Type": "application/json"})
+        try:
+            with urllib.request.urlopen(req, timeout=timeout) as r:
+                data = json.load(r)
+        except urllib.error.HTTPError as e:
+            if e.code in (400, 404, 405, 500, 501):                 # llama-server answers an error when the model has no FIM tokens
+                raise NoInfill() from e
+            raise
+        timings = data.get("timings") or {}
+        cached = int(timings.get("cache_n") or data.get("tokens_cached") or 0)
+        prompt = int(data.get("tokens_evaluated") or 0)
+        self.usage = {"fresh_in": max(0, prompt - cached), "cached_in": min(cached, prompt), "out": int(data.get("tokens_predicted") or 0)}
+        return str(data.get("content") or "")
 
     def _read_stream(self, r):
         text, thought, chunks, usage, timings = "", 0, 0, {}, {}

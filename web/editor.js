@@ -40,9 +40,10 @@
   function esc(s) { return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
   /* The text as HTML with <span class="tk-?"> around comments (c), strings (s), numbers (n), keywords (k), names (p) and tags (t). Always ends with a newline
      character so a last empty line has height. Never throws: an odd file just comes out less coloured. */
-  function highlight(src, lang) {
+  function highlight(src, lang) { return highlightBody(src, lang) + '\n'; }
+  function highlightBody(src, lang) {
     var c = compiled(lang), out = '', pos = 0, m;
-    if (!c || src.length > 400000) return esc(src) + '\n';
+    if (!c || src.length > 400000) return esc(src);
     c.re.lastIndex = 0;
     while ((m = c.re.exec(src)) !== null) {
       if (m[0] === '') { c.re.lastIndex++; continue; }
@@ -50,7 +51,7 @@
       out += esc(src.slice(pos, m.index)) + '<span class="tk-' + c.cls[g - 1] + '">' + esc(m[0]) + '</span>';
       pos = m.index + m[0].length;
     }
-    return out + esc(src.slice(pos)) + '\n';
+    return out + esc(src.slice(pos));
   }
   /* What a new line should start with after Enter: the indent of the line before, plus one more level after an opening bracket or a colon (Python). */
   function indentAfter(textBeforeCursor, unit) {
@@ -82,24 +83,34 @@
     ta.setAttribute('spellcheck', 'false'); ta.setAttribute('autocapitalize', 'off'); ta.setAttribute('autocomplete', 'off'); ta.setAttribute('autocorrect', 'off'); ta.setAttribute('wrap', 'off');
     ta.setAttribute('aria-label', 'File editor'); ta.readOnly = !!opts.readOnly;
     pre.setAttribute('aria-hidden', 'true');
-    var lang = 'text', frame = 0, lines = 0;
+    var lang = 'text', frame = 0, lines = 0, ghost = '', ghostKey = '';
     function paint() {
       frame = 0;
-      var text = ta.value;
-      pre.innerHTML = highlight(text, lang);
-      var n = text.split('\n').length;
-      if (n !== lines) { lines = n; var s = ''; for (var i = 1; i <= n; i++) s += i + '\n'; gut.textContent = s; gut.style.width = (String(n).length * 9 + 22) + 'px'; }
+      var text = ta.value, n = text.split('\n').length, extra = 0, at = ta.selectionStart;
+      if (ghost && ta.selectionStart === ta.selectionEnd) {              // grey suggestion drawn after the cursor (the textarea itself never holds it)
+        pre.innerHTML = highlightBody(text.slice(0, at), lang) + '<span class="ghost">' + esc(ghost) + '</span>' + highlightBody(text.slice(at), lang) + '\n';
+        extra = ghost.split('\n').length - 1; ghostKey = text.slice(0, at).split('\n').length;
+      } else { ghost = ''; pre.innerHTML = highlight(text, lang); ghostKey = ''; }
+      var key = n + ':' + extra + ':' + ghostKey;
+      if (key !== lines) {                                               // line numbers (blank ones under the cursor's line while a multi-line suggestion pushes the rest down)
+        lines = key; var g = ''; for (var i = 1; i <= n; i++) { g += i + '\n'; if (extra && i === ghostKey) g += new Array(extra + 1).join('\n'); }
+        gut.textContent = g; gut.style.width = (String(n).length * 9 + 22) + 'px';
+      }
       sync();
     }
     function sync() { pre.scrollTop = ta.scrollTop; pre.scrollLeft = ta.scrollLeft; gut.scrollTop = ta.scrollTop; }
     function schedule() { if (!frame) frame = (root.requestAnimationFrame || function (f) { return setTimeout(f, 16); })(paint); }
     ta.addEventListener('scroll', sync);
-    ta.addEventListener('input', function () { schedule(); if (opts.onChange) opts.onChange(ta.value); });
+    ta.addEventListener('input', function () { ghost = ''; schedule(); if (opts.onChange) opts.onChange(ta.value); if (opts.onType) opts.onType(ta.value, ta.selectionStart); });
+    function clearGhost() { if (ghost) { ghost = ''; lines = -1; schedule(); } }
+    ta.addEventListener('click', clearGhost); ta.addEventListener('blur', clearGhost);
     ta.addEventListener('keydown', function (e) {
       if ((e.ctrlKey || e.metaKey) && (e.key === 's' || e.key === 'S')) { e.preventDefault(); if (opts.onSave) opts.onSave(); return; }
       if ((e.ctrlKey || e.metaKey) && (e.key === 'k' || e.key === 'K')) { e.preventDefault(); if (opts.onEdit) opts.onEdit(); return; }
       if (ta.readOnly) return;
       var s = ta.selectionStart, t = ta.selectionEnd, v = ta.value;
+      if (ghost && s === t && e.key === 'Tab' && !e.shiftKey) { e.preventDefault(); var g = ghost; ghost = ''; insert(g); return; }          // Tab accepts the grey suggestion
+      if (ghost && (e.key === 'Escape' || /^Arrow|^Home$|^End$|^Page/.test(e.key))) clearGhost();
       if (e.key === 'Tab') {
         e.preventDefault();
         if (s === t && !e.shiftKey) { insert('    '); return; }
@@ -118,6 +129,10 @@
     return {
       setText: function (text) { ta.value = text; lines = -1; paint(); ta.scrollTop = 0; ta.scrollLeft = 0; sync(); },
       getText: function () { return ta.value; },
+      setGhost: function (text) { if (ta.selectionStart !== ta.selectionEnd) return false; ghost = String(text || ''); lines = -1; paint(); return !!ghost; },
+      clearGhost: clearGhost,
+      hasGhost: function () { return !!ghost; },
+      cursor: function () { return ta.selectionStart; },
       setLang: function (l) { lang = l; lines = -1; paint(); },
       setReadOnly: function (on) { ta.readOnly = !!on; },
       focus: function () { ta.focus(); },

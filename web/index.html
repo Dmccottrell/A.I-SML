@@ -220,6 +220,16 @@ svg .core { fill: var(--core); stroke: var(--sun); stroke-width: 3; transition: 
 .code .iai .idiff { margin: 0; max-height: 34vh; overflow: auto; border: 1px solid var(--line); border-radius: 8px; font: 12.5px/1.5 ui-monospace, Menlo, Consolas, monospace; background: var(--bg); }
 .code .iai .idiff div { padding: 0 10px; white-space: pre; } .code .iai .idiff .add { background: rgba(63,185,80,.2); } .code .iai .idiff .del { background: rgba(248,81,73,.2); } .code .iai .idiff .gap { color: var(--muted); }
 .code .iai .acts { display: flex; gap: 8px; margin-top: 8px; } .code .iai .acts .chip.ok { border-color: #3fb950; color: #3fb950; }
+.code .ed .ghost { color: var(--muted); opacity: .75; font-style: italic; }
+.code .iout { flex: 0 0 auto; height: 32%; min-height: 150px; display: flex; flex-direction: column; border-top: 1px solid var(--line); background: var(--surface); } .code .iout[hidden] { display: none; }
+.code .iout .oh { display: flex; align-items: center; gap: 6px; padding: 5px 8px 5px 12px; border-bottom: 1px solid var(--line); } .code .iout .oh .chip, .code .iout .oc .chip { padding: 3px 10px; font-size: 12px; }
+.code .iout .ol { flex: 1; min-height: 0; overflow: auto; padding: 6px 12px; font: 12.5px/1.5 ui-monospace, Menlo, Consolas, monospace; }
+.code .iout .oi { margin-bottom: 10px; } .code .iout .oi .oc1 { display: flex; gap: 8px; align-items: baseline; } .code .iout .oi .src { color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: .04em; }
+.code .iout .oi .cmd { color: var(--text); font-weight: 600; word-break: break-all; } .code .iout .oi .badge2 { font-size: 11px; padding: 0 6px; border-radius: 8px; background: var(--surface2); color: var(--muted); } .code .iout .oi .badge2.ok { color: #3fb950; } .code .iout .oi .badge2.bad { color: var(--danger); }
+.code .iout .oi pre { margin: 3px 0 0; white-space: pre-wrap; word-break: break-word; color: var(--text); opacity: .92; max-height: 40vh; overflow: auto; }
+.code .iout .oc { display: flex; gap: 8px; align-items: center; padding: 6px 10px; border-top: 1px solid var(--line); } .code .iout .oc span { color: var(--muted); font-family: ui-monospace, Menlo, Consolas, monospace; }
+.code .iout .oc input { flex: 1; min-width: 0; background: var(--bg); color: var(--text); border: 1px solid var(--line); border-radius: 8px; padding: 6px 10px; font: 13px ui-monospace, Menlo, Consolas, monospace; }
+.code .ibar #ideAc.on { border-color: #3fb950; color: #3fb950; } .code .ibar #ideOutBtn.new::after { content: ' \u25cf'; color: var(--accent); }
 .code .iconf { padding: 8px 12px; background: rgba(245,165,36,.14); border-bottom: 1px solid var(--line); display: flex; gap: 8px; align-items: center; flex-wrap: wrap; font-size: 13px; } .code .iconf[hidden] { display: none; }
 .code .ibody { flex: 1; min-height: 0; display: flex; }
 .code .ibody .iempty { margin: auto; color: var(--muted); text-align: center; padding: 20px; max-width: 320px; }
@@ -631,7 +641,12 @@ html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
       </div>
       <div class="iconf" id="ideConf" hidden></div>
       <div class="ibody" id="ideBody"></div>
-      <div class="ibar" id="ideBar"><span id="ideStatus"></span><span class="grow"></span><span id="ideLang" class="lang"></span><button class="chip" id="ideExplain" title="Explain the selected code in plain words">Explain</button><button class="chip" id="ideEditSel" title="Select code, then describe the change (Ctrl+K). You see it before anything changes.">Edit selection</button><button class="chip" id="ideSave">Save</button></div>
+      <div class="iout" id="ideOut" hidden>
+        <div class="oh"><b>Output</b><span class="grow"></span><button class="chip" id="outRunFile" title="Run the open file">Run file</button><button class="chip" id="outRunTests" title="Run the project's tests">Run tests</button><button class="chip" id="outClear">Clear</button><button class="chip" id="outX" aria-label="Close output">&#10005;</button></div>
+        <div class="ol" id="ideOutLog"></div>
+        <form class="oc" id="outForm"><span>$</span><input id="outCmd" type="text" maxlength="500" placeholder="python -m unittest   (the same programs VryxCode may run)" aria-label="Command to run" autocomplete="off" spellcheck="false"><button class="chip" id="outGo" type="submit">Run</button></form>
+      </div>
+      <div class="ibar" id="ideBar"><span id="ideStatus"></span><span class="grow"></span><span id="ideLang" class="lang"></span><span id="acStat" class="lang"></span><button class="chip" id="ideAc" title="Grey suggestions as you type (Tab accepts, Esc dismisses). Uses the model picked for VryxCode and counts like a small coding step; a smaller model is faster.">Autocomplete: Off</button><button class="chip" id="ideOutBtn" title="Output: test and command results">Output</button><button class="chip" id="ideExplain" title="Explain the selected code in plain words">Explain</button><button class="chip" id="ideEditSel" title="Select code, then describe the change (Ctrl+K). You see it before anything changes.">Edit selection</button><button class="chip" id="ideSave">Save</button></div>
     </div>
     <div class="col">
       <div class="todo" id="codeTodo" hidden></div>
@@ -2534,7 +2549,7 @@ function envInfo() {
     ...C.info.environments.map((e) => el('div', {class: 'opt', style: 'cursor:default'}, el('span', {class: 'sicon', style: 'width:36px;height:36px;border-radius:10px;background:var(--surface2);display:grid;place-items:center'}, icon(ENV_ICON(e.id))),
       el('span', {class: 'grow'}, el('b', {}, e.name + (e.available ? '' : ' \u00b7 not available')), el('small', {}, e.note))))], 'Close');
 }
-function resetWork() { C.todo = []; C.events = []; renderTodo(); }
+function resetWork() { C.todo = []; C.events = []; renderTodo(); if (typeof OUT !== 'undefined') { OUT.items = []; OUT.pending = null; if (OUT.open) outRender(); } }
 function newSession() {
   C.view = 'session'; $('code').classList.remove('home'); $('codeTitle').textContent = 'VryxCode'; C.sid = null; C.saved = false; C.checkpoints = []; C.seen = 0; C.last = null; C.pvAuto = false;
   $('codeIn').replaceChildren(); $('codeGo').hidden = false; $('codeStop').hidden = true; resetWork(); renderCodeBar(); emptyFeed(); refreshFiles(); $('codeTask').focus();
@@ -2732,7 +2747,7 @@ function ideTree() {
   $('ideFiles').replaceChildren(...(rows.length ? rows : [el('div', {style: 'color:var(--muted);padding:6px 8px;font-size:14px'}, 'No files yet. Tap + New, or ask VryxCode.')]));
 }
 function ideEditor() {
-  if (!IDE.ed) IDE.ed = EmvryxEditor.makeEditor($('ideBody'), {onChange: ideChanged, onSave: ideSave, onEdit: () => aiStart('edit')});
+  if (!IDE.ed) IDE.ed = EmvryxEditor.makeEditor($('ideBody'), {onChange: ideChanged, onSave: ideSave, onEdit: () => aiStart('edit'), onType: acTyped});
   return IDE.ed;
 }
 function ideStash() {                       // remember the text and cursor of the tab being left
@@ -2865,6 +2880,86 @@ function aiAccept(sel, replacement) {
 $('ideEditSel').onclick = () => aiStart('edit'); $('ideExplain').onclick = () => aiStart('explain');
 $('ideAiGo').onclick = aiRun; $('ideAiX').onclick = aiClose;
 $('ideAiIn').addEventListener('keydown', (ev) => { if (ev.key === 'Enter') { ev.preventDefault(); aiRun(); } if (ev.key === 'Escape') aiClose(); });
+
+// ---- Output panel: results of tests and commands (yours, and the ones VryxCode ran)
+const OUT = {open: false, items: [], busy: false, pending: null};
+function outRender() {
+  const log = $('ideOutLog');
+  log.replaceChildren(...(OUT.items.length ? OUT.items.map((i) => el('div', {class: 'oi'},
+    el('div', {class: 'oc1'}, el('span', {class: 'src'}, i.src === 'agent' ? 'VryxCode' : 'You'), el('span', {class: 'cmd'}, '$ ' + i.cmd),
+      i.running ? el('span', {class: 'badge2'}, 'running\u2026') : el('span', {class: 'badge2 ' + (i.exit === 0 ? 'ok' : 'bad')}, i.exit === 0 ? 'ok' : 'exit ' + i.exit + (i.secs ? ' \u00b7 ' + i.secs + 's' : ''))),
+    i.out ? el('pre', {}, i.out) : '')) : [el('div', {style: 'color:var(--muted)'}, 'Nothing run yet. Press Run tests or Run file, or type a command below. What VryxCode runs shows up here too.')]));
+  log.scrollTop = log.scrollHeight;
+}
+function outAdd(item) { OUT.items.push(item); if (OUT.items.length > 60) OUT.items.shift(); outRender(); if (!OUT.open) $('ideOutBtn').classList.add('new'); return item; }
+function outShow(on) { OUT.open = on; $('ideOut').hidden = !on; $('ideOutBtn').classList.remove('new'); if (on) { outRender(); } }
+$('ideOutBtn').onclick = () => outShow(!OUT.open); $('outX').onclick = () => outShow(false); $('outClear').onclick = () => { OUT.items = []; outRender(); };
+async function ideSaveDirty() {            // before running: keep what you typed (a failed save stops the run)
+  for (const t of IDE.tabs.filter((x) => x.dirty && x.project === C.project && !x.readOnly)) {
+    const at = IDE.tabs[IDE.active]; if (at !== t) { ideActivate(IDE.tabs.indexOf(t)); }
+    await ideSave(); if (t.dirty) return false;
+  }
+  return true;
+}
+async function outRun(cmd) {
+  if (!cmd || OUT.busy) return; if (!C.project) return;
+  outShow(true); OUT.busy = true;
+  try {
+    if (!(await ideSaveDirty())) { outAdd({src: 'you', cmd, exit: 1, out: 'Not run: your unsaved changes could not be saved first (see the message under the editor).'}); return; }
+    const item = outAdd({src: 'you', cmd, running: true, out: ''});
+    const r = await post('/api/code/run', {project: C.project, command: cmd, env: C.env}); const j = await r.json().catch(() => ({}));
+    item.running = false;
+    if (!r.ok) { item.exit = 1; item.out = (j.message || 'Could not run it.') + (j.action ? ' ' + j.action : ''); } else { item.exit = j.exit; item.secs = j.secs; item.out = j.output; }
+    outRender(); if (r.ok) refreshFiles();
+  } finally { OUT.busy = false; }
+}
+$('outForm').onsubmit = (ev) => { ev.preventDefault(); const v = $('outCmd').value.trim(); if (v) { $('outCmd').value = ''; outRun(v); } };
+$('outRunTests').onclick = () => outRun((C.files || []).some((f) => /(^|\/)(conftest\.py|pytest\.ini)$/.test(f)) ? 'python -m pytest -q' : 'python -m unittest');
+const RUN_WITH = {py: 'python', js: 'node', mjs: 'node', rb: 'ruby', php: 'php', go: 'go run'};
+$('outRunFile').onclick = () => {
+  const t = IDE.tabs[IDE.active]; const run = t && RUN_WITH[EmvryxEditor.langOf(t.path) === 'py' ? 'py' : (t.path.split('.').pop() || '').toLowerCase()];
+  if (!t || !run) { outShow(true); outAdd({src: 'you', cmd: '(run file)', exit: 1, out: 'Open a .py, .js, .go, .rb or .php file first, or type the command below.'}); return; }
+  outRun(run + ' ' + t.path);
+};
+// what VryxCode runs (called from cEvent)
+function outAgentStep(e) {
+  const m = /"command"\s*:\s*"((?:[^"\\]|\\.)*)"/.exec(String(e.preview || '')); if (!m) { OUT.pending = null; return; }
+  let cmd = m[1]; try { cmd = JSON.parse('"' + m[1] + '"'); } catch (x) {}
+  OUT.pending = outAdd({src: 'agent', cmd, running: true, out: ''});
+}
+function outAgentResult(e) {
+  const i = OUT.pending; if (!i) return; OUT.pending = null;
+  const t = String(e.text || ''), first = t.split('\n')[0], m = /^exit code (-?\d+)/.exec(first);
+  i.running = false; i.exit = m ? +m[1] : (/^error/.test(first) ? 1 : 0); i.out = m ? t.split('\n').slice(1).join('\n') : t; outRender();
+}
+
+// ---- Autocomplete: grey suggestions while you type (off by default; Tab accepts, Esc dismisses)
+const AC = {on: false, timer: 0, token: 0, busy: false};
+try { AC.on = localStorage.getItem('emvryx_ac') === '1'; } catch (e) {}
+function acPaint() { $('ideAc').textContent = 'Autocomplete: ' + (AC.on ? 'On' : 'Off'); $('ideAc').classList.toggle('on', AC.on); }
+$('ideAc').onclick = () => { AC.on = !AC.on; try { localStorage.setItem('emvryx_ac', AC.on ? '1' : '0'); } catch (e) {} AC.token++; clearTimeout(AC.timer); if (IDE.ed) IDE.ed.clearGhost(); $('acStat').textContent = ''; acPaint(); };
+function acTyped(text, cursor) {
+  AC.token++; clearTimeout(AC.timer); $('acStat').textContent = '';
+  const t = IDE.tabs[IDE.active];
+  if (!AC.on || !t || t.readOnly || !C.model || AI.open || !text.trim()) return;
+  AC.timer = setTimeout(() => acFetch(t), 650);
+}
+async function acFetch(t) {
+  if (!IDE.ed || IDE.tabs[IDE.active] !== t) return;
+  if (AC.busy) { AC.timer = setTimeout(() => acFetch(t), 400); return; }           // one request at a time: ask again when it is done
+  const text = IDE.ed.getText(), cursor = IDE.ed.cursor(), token = ++AC.token;
+  AC.busy = true; $('acStat').textContent = 'suggesting\u2026';
+  try {
+    const r = await post('/api/code/complete', {project: t.project, path: t.path, model: C.model, text, cursor}); const j = await r.json().catch(() => ({}));
+    $('acStat').textContent = '';
+    if (!r.ok) {
+      if (!/Slow down/.test(j.message || '')) { $('acStat').textContent = (j.message || 'autocomplete paused').slice(0, 60); if (/usage|tank|week|ready|resting|not in your plan/i.test(j.message || '')) { AC.on = false; acPaint(); } }
+      return;
+    }
+    if (token === AC.token && j.completion && IDE.ed && IDE.tabs[IDE.active] === t && IDE.ed.getText() === text && IDE.ed.cursor() === cursor) IDE.ed.setGhost(j.completion);
+  } finally { AC.busy = false; }
+}
+acPaint();
 addEventListener('beforeunload', (ev) => { if (IDE.tabs.some((t) => t.dirty)) { ev.preventDefault(); ev.returnValue = ''; } });
 async function viewFile(f) {
   C.file = f; const r = await api('/api/code/file?project=' + encodeURIComponent(C.project) + '&path=' + encodeURIComponent(f)); const j = await r.json();
@@ -2915,6 +3010,7 @@ function cEvent(e) {
     if (e.tool === 'todo') { try { C.todo = JSON.parse(String(e.preview).replace(/^todo /, '')).items || C.todo; } catch (x) { /* a very long list was shortened: keep the last good one */ } renderTodo(); C.last = null; return; }
     if (e.tool === 'finish') { if (prose) feed.append(el('div', {class: 'cc-say'}, prose)); C.last = null; return; }
     if (!e.tool) { feed.append(el('div', {class: 'cc-say'}, e.preview)); C.last = null; return; }
+    if (e.tool === 'run') outAgentStep(e); else OUT.pending = null;
     if (prose) feed.append(el('div', {class: 'cc-say'}, prose));
     const [name, arg, extra] = toolParts(e.preview, e.tool);
     const node = el('div', {class: 'cc-tool run'}, el('div', {class: 'cc-head'}, el('span', {class: 'cc-verb'}, name),
@@ -2923,6 +3019,7 @@ function cEvent(e) {
     feed.append(node); C.last = node; return;
   }
   if (e.kind === 'result') {
+    outAgentResult(e);
     if (C.last) {
       const t = String(e.text || ''), bad = /^error|exit code [1-9]|Traceback|FAILED/m.test(t), lines = t.split('\n').filter((x) => x.trim());
       C.last.classList.remove('run'); C.last.classList.add(bad ? 'no' : 'ok');
