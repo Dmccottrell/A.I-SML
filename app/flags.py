@@ -68,7 +68,7 @@ class Flags:
         if a == "off" or not who:
             return False
         if a == "owner":
-            return bool(who.get("founder"))
+            return bool(who.get("founder") or who.get("granter"))
         return bool(who.get("admin"))
 
     def mapping(self, who):
