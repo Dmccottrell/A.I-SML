@@ -169,6 +169,42 @@ class RoutesCode:
         except code_sessions.CodeError as e:
             self._code_error(e)
 
+    def _code_kit(self, st, user, model, project):
+        """What a session needs to work with this model in this project: the model call, the usage meter, its tools (GitHub, the browser check) and the git name."""
+        box = {}
+
+        def generate(messages, model=model):          # the model loads on the first step, in the session's thread (it can take a minute)
+            if "fn" not in box:
+                try:
+                    box["fn"] = st.code_backend(model, cancel=getattr(generate, "should_stop", None))
+                except Cancelled:
+                    raise vryxcode.Interrupted()
+                except AppError as e:
+                    raise code_sessions.CodeError(e.message, e.action)
+            if hasattr(box["fn"], "on_delta"):
+                box["fn"].on_delta = getattr(generate, "on_delta", None)     # live progress for the page's "working" line
+                box["fn"].should_stop = getattr(generate, "should_stop", None)     # Stop works while it is still reading the prompt
+            reply = box["fn"](messages)
+            generate.usage = getattr(box["fn"], "usage", None)      # the real counts, for the usage meter
+            return reply
+        snap = st.limiter.snapshot(user, model["limiter_key"], "balanced", st.clock())
+        if not snap["exempt"] and snap["can_send"] < 1:
+            raise code_sessions.CodeError("Your usage has run out for now.", "Coding steps are counted like chat messages. Wait for the tank to refill or the week to reset.")
+        meter = code_sessions.Meter(st.limiter, user, model["limiter_key"], st.clock)
+        tools, identity = None, None
+        if st.github.connected(user):
+            g = st.git_for(user, project)
+            identity = g.identity
+            try:
+                linked = g.is_repo() and bool(g.remote())
+            except github_link.GitHubError:
+                linked = False
+            if linked:
+                tools = {"github": st.github_tool(user, project)}
+        if browser_check.available():                                  # needs the playwright package: pip install playwright
+            tools = dict(tools or {}, check_page=st.browser_tool(user, project))
+        return generate, meter, tools, identity
+
     def _review_prompt(self, st, user, sid, review):
         """The request the model gets for a code review: a GitHub pull request ({"pr": link}, read-only, with the connected token) or this session's changes."""
         pr = review.get("pr") if isinstance(review, dict) else None
@@ -307,38 +343,7 @@ class RoutesCode:
                     raise code_sessions.CodeError(why, "Ask the owner about VryxCode access.")
                 model = self._pick_code_model(st, who, str(body.get("model", "")))
                 project = st.code.check_name(body.get("project"))
-                box = {}
-
-                def generate(messages, model=model):          # the model loads on the first step, in the session's thread (it can take a minute)
-                    if "fn" not in box:
-                        try:
-                            box["fn"] = st.code_backend(model, cancel=getattr(generate, "should_stop", None))
-                        except Cancelled:
-                            raise vryxcode.Interrupted()
-                        except AppError as e:
-                            raise code_sessions.CodeError(e.message, e.action)
-                    if hasattr(box["fn"], "on_delta"):
-                        box["fn"].on_delta = getattr(generate, "on_delta", None)     # live progress for the page's "working" line
-                        box["fn"].should_stop = getattr(generate, "should_stop", None)     # Stop works while it is still reading the prompt
-                    reply = box["fn"](messages)
-                    generate.usage = getattr(box["fn"], "usage", None)      # the real counts, for the usage meter
-                    return reply
-                snap = st.limiter.snapshot(user, model["limiter_key"], "balanced", st.clock())
-                if not snap["exempt"] and snap["can_send"] < 1:
-                    raise code_sessions.CodeError("Your usage has run out for now.", "Coding steps are counted like chat messages. Wait for the tank to refill or the week to reset.")
-                meter = code_sessions.Meter(st.limiter, user, model["limiter_key"], st.clock)
-                tools, identity = None, None
-                if st.github.connected(user):
-                    g = st.git_for(user, project)
-                    identity = g.identity
-                    try:
-                        linked = g.is_repo() and bool(g.remote())
-                    except github_link.GitHubError:
-                        linked = False
-                    if linked:
-                        tools = {"github": st.github_tool(user, project)}
-                if browser_check.available():                                  # needs the playwright package: pip install playwright
-                    tools = dict(tools or {}, check_page=st.browser_tool(user, project))
+                generate, meter, tools, identity = self._code_kit(st, user, model, project)
                 task = body.get("task")
                 if body.get("template"):                                       # a starter: its files are written first, and the task says to build on them
                     if not templates.TEMPLATES.get(str(body["template"])):
@@ -376,11 +381,26 @@ class RoutesCode:
                     sess = st.code.get(user, m.group(1))
                     sess.send(body.get("text") or "Review these changes", plan=True, model_text=self._review_prompt(st, user, m.group(1), review))
                     return self._send(200, {"ok": True})
-                sess = st.code.get(user, m.group(1))
+                sid, want = m.group(1), str(body.get("model") or "")
+                if sid not in st.code.sessions:                          # an older session (from the history, e.g. after a restart): it comes back to life and carries on
+                    meta = st.code.saved(user, sid)["meta"]
+                    model = self._pick_code_model(st, who, want or meta["model"])
+                    generate, meter, tools, identity = self._code_kit(st, user, model, meta["project"])
+                    sess = st.code.revive(user, sid, model["id"], generate, int(model.get("context_tested") or 8192), meter, tools=tools, identity=identity, owner=who["admin"],
+                                           auto_edits=bool(body.get("auto_edits")))
+                    revived = True
+                else:
+                    sess, revived = st.code.get(user, sid), False
+                    if want and want != sess.model_id:                   # another model takes over the same conversation
+                        model = self._pick_code_model(st, who, want)
+                        generate, meter, tools, identity = self._code_kit(st, user, model, sess.project)
+                        sess.switch_model(model["id"], generate, int(model.get("context_tested") or 8192), meter)
+                if "auto_edits" in body:
+                    sess.auto_edits = bool(body.get("auto_edits"))             # the mode picked now applies to this message
                 if who["owner"]:
                     sess.notify, sess.on_notify = bool(body.get("notify")), st.code_notify
-                sess.send(body.get("text"), plan=bool(body.get("plan")))
-                return self._send(200, {"ok": True})
+                sess.send(body.get("text"), plan=bool(body.get("plan")), model_text=sess.catch_up(body.get("text")) if revived else None)
+                return self._send(200, {"ok": True, "revived": revived})
             m = re.fullmatch(r"/api/code/sessions/([\w-]+)/reject", path)
             if m:                                                # undo one file of what a session changed
                 return self._send(200, st.code.reject_file(user, m.group(1), body.get("path")))

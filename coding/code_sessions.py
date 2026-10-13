@@ -396,6 +396,26 @@ class Session:
                 except Exception:
                     pass
 
+    def switch_model(self, model_id, generate, context_tokens, meter):
+        """Another model takes over this conversation (the same session, the same history): the next message runs on it."""
+        with self.cv:
+            if self.state in ("starting", "working", "asking"):
+                raise CodeError("It is still working.", "Wait for it to finish, or press Stop, then pick the other model.")
+        old, self.model_id, self.generate, self.context_tokens, self.meter = self.model_id, model_id, generate, context_tokens, meter
+        self.emit("model", model=model_id, previous=old)
+
+    def catch_up(self, text):
+        """For a session brought back from the history (the model's own memory of it is gone): what happened so far, then the new message."""
+        lines = []
+        for e in self.events:
+            if e["kind"] in ("start", "user") and (e.get("task") or e.get("text")):
+                lines.append("The user asked: " + clip(str(e.get("task") or e.get("text")), 600))
+            elif e["kind"] == "end" and e.get("summary"):
+                lines.append("Result: " + clip(str(e["summary"]), 600))
+        recap = "\n".join(lines[-8:])
+        return (("This continues an earlier session in this project. What happened so far:\n" + recap + "\n\nThe files are as that work left them: read them before changing anything.\n\n")
+                if recap else "") + "Now: " + self.expand(str(text or ""))
+
     def _tell(self, kind):
         """The phone notification (when it was asked for): the state and the project, never code or file contents. Never raises."""
         cb = self.on_notify
@@ -793,6 +813,33 @@ class CodeManager:
                 return s, note
         threading.Thread(target=s.run, args=(generate, self.max_turns, context_tokens), daemon=True).start()
         return s, note
+
+    def revive(self, user, sid, model_id, generate, context_tokens, meter, tools=None, identity=None, owner=False, auto_edits=False):
+        """Bring a session from the history back to life, so a new message carries on in it (same id, same feed, same Rewind points)."""
+        with self.lock:
+            if self.running(user):
+                raise CodeError("You already have a session running.", "Stop it or wait for it to finish.")
+            d = self.saved(user, sid)
+            meta = d["meta"]
+            project = meta["project"]
+            env = self.resolve_env(meta.get("env") or "local", owner)
+            workspace = self.project_path(user, project)
+            os.makedirs(workspace, exist_ok=True)
+            s = Session(sid, user, project, meta.get("title") or "", model_id, workspace, auto_edits, meter, tools, identity,
+                        prefix=(self.cloud_prefix(user, project) if env == "cloud" else self.prefix_for(workspace, force=(env == "sandbox"))), quotas=self.quotas, base=self.base(user),
+                        env=env, remote=(env == "cloud"), log=code_log.SessionLog(self.base(user)), snapshot=lambda u=user, p=project: self._snapshot(u, p),
+                        expand=lambda t, u=user, p=project: self.expand_mentions(u, p, t))
+            s.events = list(d["events"])
+            s.checkpoints = list(meta.get("checkpoints") or [])
+            s.started = meta.get("started") or s.started
+            s.turns_run = max([c.get("turn", 0) for c in s.checkpoints] + [sum(1 for e in s.events if e["kind"] in ("start", "user"))])
+            s.generate, s.max_turns, s.context_tokens = generate, self.max_turns, context_tokens
+            s.state = "done"
+            s.on_idle = self._session_idle
+            if meta.get("model") and meta["model"] != model_id:
+                s.emit("model", model=model_id, previous=meta["model"])
+            self.sessions[sid], self.by_user[user] = s, sid
+        return s
 
     def queue_position(self, user, sid):
         """1 = next to start, or 0 when the session is not waiting."""

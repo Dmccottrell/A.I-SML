@@ -251,3 +251,6 @@ VryxCode has its own colour, electric violet, which it keeps whatever the chat m
 
 ## The modern look for the main chat (flag)
 The main chat has a newer look behind the feature flag `modern_look` (Settings > Owner > Features and testing; starts with the admins). It is one extra stylesheet, `web/modern.css`, loaded only while the flag is on, so switching the flag off puts everything back. It floats the sidebar and the message box as frosted glass, lets the model speak straight on the page with a thin line in its colour, puts your messages in a tinted bubble, glows the box when you type, and offers four things to try on an empty chat. It uses each model's own colour, so Flare, Equinox, Solstice and Apogee still look like themselves. VryxCode keeps its own violet look.
+
+## One session, any model
+A message in an open session always continues that session. Pick another model in the message box and it takes over the same conversation (the feed shows "Now using …"); it sees everything said and done so far. An older session (finished before a restart, or from the list) comes back to life when you send it a message: the model is told what was asked and what happened, then your new message, and the feed, Rewind points and Changes carry on in the same session. Start a separate session with New session or the + button.
