@@ -563,9 +563,9 @@ html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
 @keyframes tourspark { 0% { transform: translateY(20px) scale(.4); opacity: 0; } 30% { opacity: 1; } 100% { transform: translateY(-120px) scale(1.2); opacity: 0; } }
 /* features and testing */
 .fchips { display: flex; flex-wrap: wrap; gap: 8px; } .fchips .pill button { background: transparent; border: 0; color: inherit; padding: 0 0 0 6px; font-size: 16px; cursor: pointer; }
+body:not(.ml) .ml-ideas { display: none; }
+body:not(.vxn) .vx-hero, body:not(.vxn) .vx-dots { display: none; }   /* the new VryxCode home: only with the "VryxCode update" flag (vryx.css is loaded then too) */
 </style>
-<link rel="stylesheet" href="/vryx.css">
-<link rel="stylesheet" href="/modern.css">
 </head>
 <body>
 <div class="app" id="app" hidden>
