@@ -5,6 +5,7 @@ import tempfile
 import unittest
 
 import app_server as A
+import app_shared
 
 
 class FakeRunner:
@@ -95,15 +96,15 @@ class MemoryTests(unittest.TestCase):
             if str(path) == "/proc/meminfo":
                 raise OSError
             return real_open(path, *a, **k)
-        with mock.patch("builtins.open", no_proc), mock.patch.object(A, "_windows_memory", return_value=(32.0, 20.5)):
+        with mock.patch("builtins.open", no_proc), mock.patch.object(app_shared, "_windows_memory", return_value=(32.0, 20.5)):
             self.assertEqual(A.total_memory_gb(), 32.0)
             self.assertEqual(A.free_memory_gb(), 20.5)
-        with mock.patch("builtins.open", no_proc), mock.patch.object(A, "_windows_memory", return_value=None):
+        with mock.patch("builtins.open", no_proc), mock.patch.object(app_shared, "_windows_memory", return_value=None):
             self.assertEqual(A.total_memory_gb(), 8.0)
 
     def test_not_windows_gives_none(self):
         if os.name != "nt":
-            self.assertIsNone(A._windows_memory())
+            self.assertIsNone(app_shared._windows_memory())
 
 
 class ModelOnlyTests(unittest.TestCase):
