@@ -139,7 +139,8 @@ function renderThread(jump) {
   if (!S.messages.length && tc) { t.append(teacherHome(sk)); }
   else if (!S.messages.length) t.append(el('div', {class: 'empty'}, logo(64), el('h1', {}, sk ? sk.name : 'How can I help?'),
     el('div', {}, sk ? sk.does : 'Ask anything. Pick a model and how much it should think under the box.'),
-    sk ? el('button', {class: 'chip', style: 'margin-top:12px', onclick: () => { $('input').value = sk.try; $('input').focus(); }}, 'Try: ' + sk.try) : ''));
+    sk ? el('button', {class: 'chip', style: 'margin-top:12px', onclick: () => { $('input').value = sk.try; $('input').focus(); }}, 'Try: ' + sk.try) : '',
+    !sk && !S.private ? mlIdeas() : ''));
   if (!S.messages.length && !tc && !sk && !S.private && S.state && S.state.briefing) t.append(dayCard());
   const last = [...S.messages].reverse().find((m) => m.role === 'assistant');
   S.messages.forEach((m) => t.append(bubble(m, last && m.id === last.id && m === S.messages[S.messages.length - 1])));
@@ -278,4 +279,11 @@ function dialog(children, closeText, extra) {
   const m = el('div', {class: 'modal', role: 'dialog', 'aria-modal': 'true', onclick: (e) => { if (e.target === m) m.remove(); }},
     el('div', {class: 'dialog'}, ...children, extra || null, el('button', {class: 'btn ghost', onclick: () => m.remove()}, closeText || 'Close')));
   $('dialogs').append(m); return m;
+}
+
+// ideas to try on an empty chat (shown only in the modern look: modern.css hides them otherwise)
+const ML_IDEAS = [['Explain something', 'Explain how vaccines work like I am twelve.'], ['Plan my day', 'Help me plan a productive day around three things I need to get done.'],
+  ['Write for me', 'Write a short, friendly message asking my landlord to fix the heating.'], ['Look it up', 'What is in the news today?']];
+function mlIdeas() {
+  return el('div', {class: 'ml-ideas'}, ...ML_IDEAS.map(([name, text]) => el('button', {type: 'button', onclick: () => { $('input').value = text; $('input').dispatchEvent(new Event('input')); $('input').focus(); }}, el('b', {}, name), el('span', {}, text))));
 }

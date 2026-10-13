@@ -85,7 +85,7 @@ class Server(Base):
         self.owner.call("POST", "/api/admin/access", {"user": "sam", "admin": True})
         s, j = self.sam.call("GET", "/api/admin/flags")                                     # an appointed admin may
         self.assertEqual(s, 200)
-        self.assertEqual([f["id"] for f in j["flags"]], ["welcome_tour", "violet_theme"])
+        self.assertEqual([f["id"] for f in j["flags"]], ["welcome_tour", "violet_theme", "modern_look"])
         self.assertIn("owner", j["people"])
         self.assertEqual(self.sam.call("POST", "/api/admin/flags", {"id": "welcome_tour", "audience": "owner"})[0], 200)
         self.assertEqual(self.owner.call("POST", "/api/admin/flags", {"id": "welcome_tour", "audience": "bogus"})[0], 400)

@@ -1,0 +1,80 @@
+/* The modern look for the main chat (feature flag "modern_look", Settings > Owner > Features and testing). Loaded after the page's own styles and only active under body.ml,
+   so switching the flag off puts everything back. It never sets a colour of its own: it uses the model's (--accent, --glow, --surface...), so Flare, Equinox, Solstice and
+   Apogee each still look like themselves. */
+body.ml {
+  --r: 22px; --glass: color-mix(in srgb, var(--surface) 62%, transparent); --edge: color-mix(in srgb, var(--accent) 22%, var(--line));
+  --halo: color-mix(in srgb, var(--accent) 38%, transparent); --soft: color-mix(in srgb, var(--accent) 12%, transparent);
+  background: var(--bg);
+  background-image: radial-gradient(900px 520px at 78% -8%, color-mix(in srgb, var(--accent) 20%, transparent), transparent 70%),
+                    radial-gradient(760px 520px at -6% 108%, color-mix(in srgb, var(--accent) 12%, transparent), transparent 72%);
+  background-attachment: fixed;
+}
+/* the sidebar floats */
+body.ml:not(.vx) .app { gap: 0; }
+body.ml:not(.vx) .side { margin: 10px 0 10px 10px; height: calc(100% - 20px); border: 1px solid var(--edge); border-radius: 26px; background: var(--glass); -webkit-backdrop-filter: blur(22px) saturate(1.4); backdrop-filter: blur(22px) saturate(1.4); box-shadow: 0 18px 50px rgba(0, 0, 0, .35); overflow: hidden; }
+body.ml:not(.vx) .brand { font-weight: 700; letter-spacing: -.03em; }
+body.ml:not(.vx) .newchat { border-radius: 16px; min-height: 48px; background: linear-gradient(135deg, color-mix(in srgb, var(--accent) 92%, #fff), var(--accent) 55%, color-mix(in srgb, var(--accent) 80%, #000)); box-shadow: 0 8px 26px -6px var(--halo); transition: transform .18s, box-shadow .18s; }
+body.ml:not(.vx) .newchat:hover { transform: translateY(-1px); box-shadow: 0 12px 30px -6px var(--halo); }
+body.ml:not(.vx) .newchat:active { transform: scale(.98); }
+body.ml:not(.vx) .chatsearch input { border-radius: 14px; background: color-mix(in srgb, var(--surface2) 55%, transparent); border-color: transparent; transition: border-color .2s, box-shadow .2s; }
+body.ml:not(.vx) .chatsearch input:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 4px var(--soft); }
+body.ml:not(.vx) .label { letter-spacing: .14em; font-size: 10.5px; }
+body.ml:not(.vx) .row { border-radius: 14px; transition: background .15s; }
+body.ml:not(.vx) .row:hover { background: color-mix(in srgb, var(--surface2) 60%, transparent); }
+body.ml:not(.vx) .row.cur { background: linear-gradient(90deg, var(--soft), transparent 92%), color-mix(in srgb, var(--surface2) 70%, transparent); box-shadow: inset 2px 0 0 var(--accent); }
+body.ml:not(.vx) .links, body.ml:not(.vx) .account { border-color: color-mix(in srgb, var(--line) 70%, transparent); }
+body.ml:not(.vx) .link { border-radius: 14px; }
+body.ml:not(.vx) .link svg { transition: color .15s; } body.ml:not(.vx) .link:hover svg { color: var(--accenttext); }
+body.ml:not(.vx) .avatar { background: linear-gradient(135deg, color-mix(in srgb, var(--accent) 90%, #fff), var(--accent)); box-shadow: 0 0 0 3px var(--soft); }
+/* the top bar is glass over the page */
+body.ml:not(.vx) .top { border: 0; background: transparent; }
+body.ml:not(.vx) .banner { background: var(--glass); border: 1px solid var(--edge); border-radius: 16px; margin: 0 16px; }
+body.ml:not(.vx) .top .title { font-family: 'Sora', sans-serif; font-weight: 600; letter-spacing: -.02em; }
+body.ml:not(.vx) .icon { border-radius: 14px; transition: background .15s, transform .15s; } body.ml:not(.vx) .icon:active { transform: scale(.92); }
+/* the conversation: the model speaks straight on the page, you speak in a tinted bubble */
+body.ml:not(.vx) .thread { max-width: 780px; gap: 26px; }
+body.ml:not(.vx) .msg.user .bubble { background: linear-gradient(135deg, color-mix(in srgb, var(--accent) 22%, var(--surface2)), color-mix(in srgb, var(--accent) 10%, var(--surface2))); border: 1px solid var(--edge); border-radius: 22px 22px 6px 22px; padding: 12px 18px; box-shadow: 0 8px 24px -14px var(--halo); }
+body.ml:not(.vx) .msg.ai .bubble { background: transparent; border: 0; border-radius: 0; padding: 2px 2px 2px 14px; line-height: 1.72; font-size: 16.5px; position: relative; }
+body.ml:not(.vx) .msg.ai .bubble::before { content: ''; position: absolute; left: 0; top: 6px; bottom: 6px; width: 2px; border-radius: 2px; background: linear-gradient(var(--accent), transparent); opacity: .7; }
+body.ml:not(.vx) .msg.ai .meta { font-weight: 600; color: var(--accenttext); letter-spacing: .01em; }
+body.ml:not(.vx) .acts .chip { border-color: transparent; background: color-mix(in srgb, var(--surface2) 55%, transparent); border-radius: 999px; transition: background .15s, color .15s, transform .15s; }
+body.ml:not(.vx) .acts .chip:hover { background: var(--soft); color: var(--text); transform: translateY(-1px); }
+body.ml:not(.vx) .note { background: var(--glass); border-color: var(--edge); }
+body.ml:not(.vx) .thinking .word { background: linear-gradient(90deg, var(--muted), var(--text), var(--muted)); background-size: 220% 100%; -webkit-background-clip: text; background-clip: text; color: transparent; animation: mlShimmer 1.8s linear infinite, rise .35s ease both; }
+@keyframes mlShimmer { to { background-position: -220% 0; } }
+body.ml:not(.vx) .err { border-radius: 20px; background: color-mix(in srgb, var(--danger) 8%, var(--surface)); }
+body.ml:not(.vx) .down { background: var(--glass); border-color: var(--edge); -webkit-backdrop-filter: blur(12px); backdrop-filter: blur(12px); box-shadow: 0 8px 22px rgba(0, 0, 0, .3); }
+/* the composer floats and glows when you type */
+body.ml:not(.vx) .composer { padding-top: 8px; }
+body.ml:not(.vx) .composer .card { border-radius: 28px; background: var(--glass); border: 1px solid var(--edge); -webkit-backdrop-filter: blur(22px) saturate(1.4); backdrop-filter: blur(22px) saturate(1.4); box-shadow: 0 16px 44px -18px rgba(0, 0, 0, .6); transition: border-color .25s, box-shadow .25s; padding: 14px 12px 10px 18px; }
+body.ml:not(.vx) .composer .card:focus-within { border-color: var(--accent); box-shadow: 0 0 0 4px var(--soft), 0 20px 54px -16px var(--halo); }
+body.ml:not(.vx) .composer .card textarea { font-size: 16.5px; }
+body.ml:not(.vx) .pill { border-radius: 999px; background: color-mix(in srgb, var(--surface2) 60%, transparent); border-color: transparent; transition: background .15s; }
+body.ml:not(.vx) .pill:hover { background: var(--soft); }
+body.ml:not(.vx) .pill.plain { background: transparent; }
+body.ml:not(.vx) .send { border-radius: 999px; background: linear-gradient(135deg, color-mix(in srgb, var(--accent) 92%, #fff), var(--accent) 55%, color-mix(in srgb, var(--accent) 80%, #000)); box-shadow: 0 8px 22px -6px var(--halo); transition: transform .15s, box-shadow .15s; }
+body.ml:not(.vx) .send:not([disabled]):hover { transform: scale(1.06); }
+body.ml:not(.vx) .send[disabled] { box-shadow: none; background: var(--surface2); color: var(--muted); opacity: .8; }
+body.ml:not(.vx) .send.stop { background: var(--surface2); }
+body.ml:not(.vx) .menu, body.ml:not(.vx) .regen, body.ml:not(.vx) .acctmenu { border-radius: 24px; background: color-mix(in srgb, var(--surface) 82%, transparent); -webkit-backdrop-filter: blur(24px) saturate(1.4); backdrop-filter: blur(24px) saturate(1.4); border-color: var(--edge); box-shadow: 0 24px 60px -12px rgba(0, 0, 0, .55); }
+body.ml:not(.vx) .opt { border-radius: 16px; border-color: transparent; background: color-mix(in srgb, var(--surface2) 45%, transparent); transition: background .15s, border-color .15s; }
+body.ml:not(.vx) .opt:hover:not([disabled]) { background: var(--soft); } body.ml:not(.vx) .opt.sel { border-color: var(--accent); background: var(--soft); }
+body.ml:not(.vx) .usage .bar { height: 4px; background: color-mix(in srgb, var(--surface2) 80%, transparent); }
+body.ml:not(.vx) .usage .bar > div { background: linear-gradient(90deg, var(--accent), color-mix(in srgb, var(--accent) 60%, #fff)); box-shadow: 0 0 12px var(--halo); }
+/* the empty chat: a greeting and things to try */
+body.ml:not(.vx) .empty { margin: auto; padding: 28px 0 12px; }
+body.ml:not(.vx) .empty svg { filter: drop-shadow(0 0 22px var(--halo)); animation: mlFloat 5s ease-in-out infinite; }
+@keyframes mlFloat { 50% { transform: translateY(-6px); } }
+body.ml:not(.vx) .empty h1 { font-size: clamp(28px, 6vw, 40px); font-weight: 700; letter-spacing: -.035em; background: linear-gradient(180deg, var(--text), color-mix(in srgb, var(--text) 62%, var(--accent))); -webkit-background-clip: text; background-clip: text; color: transparent; }
+.ml-ideas { display: none; }
+body.ml:not(.vx) .ml-ideas { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; margin: 22px auto 0; max-width: 560px; text-align: left; }
+body.ml:not(.vx) .ml-ideas button { display: grid; gap: 3px; padding: 14px 16px; border-radius: 20px; border: 1px solid var(--edge); background: var(--glass); color: var(--text); text-align: left; cursor: pointer; transition: transform .18s, border-color .18s, background .18s, box-shadow .18s; animation: rise .5s ease both; }
+body.ml:not(.vx) .ml-ideas button:nth-child(2) { animation-delay: .06s; } body.ml:not(.vx) .ml-ideas button:nth-child(3) { animation-delay: .12s; } body.ml:not(.vx) .ml-ideas button:nth-child(4) { animation-delay: .18s; }
+body.ml:not(.vx) .ml-ideas button:hover { transform: translateY(-2px); border-color: var(--accent); background: var(--soft); box-shadow: 0 14px 30px -16px var(--halo); }
+body.ml:not(.vx) .ml-ideas b { font-weight: 600; font-size: 15px; } body.ml:not(.vx) .ml-ideas span { color: var(--muted); font-size: 13px; line-height: 1.35; }
+@media (max-width: 760px) {
+  body.ml:not(.vx) .side { margin: 0; height: 100%; border-radius: 0 26px 26px 0; }
+  body.ml:not(.vx) .ml-ideas { grid-template-columns: 1fr; }
+  body.ml:not(.vx) .msg.ai .bubble { font-size: 16px; }
+}
+@media (prefers-reduced-motion: reduce) { body.ml:not(.vx) .empty svg, body.ml:not(.vx) .thinking .word { animation: none; } }
