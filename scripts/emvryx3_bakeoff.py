@@ -34,6 +34,45 @@ def filler(tokens):
     return (base * (tokens // 18 + 1))[: int(tokens * 3.6)]
 
 
+NOUNS = ["harbour", "orchard", "workshop", "library", "greenhouse", "station", "market", "observatory", "bakery", "ferry", "garage", "museum"]
+THINGS = ["boxes", "letters", "tickets", "bottles", "tools", "maps", "lamps", "chairs", "books", "keys", "coins", "plants"]
+CODE_WORDS = ["ORCHID", "FALCON", "MARBLE", "TUNDRA", "COBALT", "JUNIPER", "SAFFRON", "BEACON"]
+NEEDLE_DEPTHS = (0.1, 0.5, 0.9)
+NEEDLE_QUESTION = "\n\nQuestion: What is the secret access code for the blue cabinet? Reply with just the code."
+
+
+def needle_code(seed):
+    return f"{CODE_WORDS[seed % len(CODE_WORDS)]}-{4000 + (seed * 7919) % 5000}"
+
+
+def haystack(tokens, code, depth, seed=1):
+    """About `tokens` tokens of varied, boring text (days at a few places, counting things) with ONE sentence hidden at `depth` (0 = start, 1 = end) that
+    states the secret code: a long-document test (can the model find it?). The text is varied on purpose so the model cannot just skip repeated lines."""
+    import random
+    rng = random.Random(seed)
+    target = int(tokens * 3.6)
+    parts, size, day = [], 0, 1
+    while size < target:
+        line = f"On day {day} the {rng.choice(NOUNS)} crew counted {rng.randint(11, 989)} {rng.choice(THINGS)} near the {rng.choice(NOUNS)}, and {rng.choice(['wrote it down', 'told the manager', 'moved on', 'took a photo'])}. "
+        parts.append(line); size += len(line); day += 1
+    parts.insert(int(len(parts) * min(max(depth, 0.0), 1.0)), f"Remember this: the secret access code for the blue cabinet is {code}. ")
+    return "".join(parts)
+
+
+def recommended_window(result, prefill_limit_s=60):
+    """The largest tested conversation length that fits the card (not 'too full'), answered, found the hidden sentence every time (when that was tested) and read the
+    prompt within `prefill_limit_s` seconds; None when none qualified. Memory figures only mean something when the model really ran on the card."""
+    best = None
+    for c in sorted(result.get("contexts", []), key=lambda c: c.get("ctx", 0)):
+        n = c.get("needle")
+        if not c.get("ok") or (c.get("vram_gb") or 0) > FIT_TIGHT_GB:
+            continue
+        if n and (n.get("error") or n.get("found") != n.get("total") or (n.get("prefill_s") or 0) > prefill_limit_s):
+            continue
+        best = c["ctx"]
+    return best
+
+
 def tokens_per_second(timings):
     """From llama-server's `timings` block: generation speed, or None."""
     if not timings:
@@ -110,7 +149,11 @@ def render_report(results):
              "'Score' leaves out the 2 identity questions (a plain model cannot know it is Emvryx; training teaches that), 'All' counts everything. Speed is words(tokens) a second answering; memory is the card in use with the model loaded at each conversation length.", ""]
     for slot, items in slots.items():
         base = next((r for r in items if r.get("baseline")), None)
-        lines += [f"## {slot}", "", "| Candidate | Score | All | Words/sec | Memory 8K / 16K / 32K (GB) | Verdict |", "|---|---|---|---|---|---|"]
+        sizes = sorted({c["ctx"] for r in items for c in r.get("contexts", [])}) or list(CONTEXTS)
+        label = " / ".join(f"{x // 1024}K" for x in sizes)
+        has_needle = any(c.get("needle") for r in items for c in r.get("contexts", []))
+        lines += [f"## {slot}", "", f"| Candidate | Score | All | Words/sec | Memory {label} (GB) |" + (" Long-document test |" if has_needle else "") + " Window | Verdict |",
+                  "|---|---|---|---|---|" + ("---|" if has_needle else "") + "---|---|"]
         for r in items:
             mem = " / ".join(str(c.get("vram_gb", "?")) for c in r.get("contexts", [])) or "?"
             gl = next((c["gpu_layers"] for c in r.get("contexts", []) if c.get("gpu_layers")), None)
@@ -118,7 +161,11 @@ def render_report(results):
                 mem += f" (only {gl[0]} of {gl[1]} layers on the card)"
             sc = score(r)
             sheet, every = (f"{sc[0]}/{sc[1]}", f"{r['passed']}/{r['total']}") if not r.get("error") else ("-", "-")
-            lines.append(f"| {r['name']}{' (to beat)' if r.get('baseline') else ''} | {sheet} | {every} | {r.get('speed') or '-'} | {mem} | {verdict(r, base)} |")
+            needle = " \u00b7 ".join(f"{c['ctx'] // 1024}K {c['needle']['found']}/{c['needle']['total']}" + (f" ({c['needle']['prefill_s']}s)" if c['needle'].get('prefill_s') else "") if c.get("needle") and not c["needle"].get("error")
+                                    else f"{c['ctx'] // 1024}K failed" for c in r.get("contexts", []) if c.get("needle")) or "-"
+            window = recommended_window(r)
+            lines.append(f"| {r['name']}{' (to beat)' if r.get('baseline') else ''} | {sheet} | {every} | {r.get('speed') or '-'} | {mem} |" + (f" {needle} |" if has_needle else "")
+                         + f" {str(window // 1024) + 'K' if window else '-'} | {verdict(r, base)} |")
         lines.append("")
         cats = sorted({c for r in items for c in (r.get("by_category") or {})})
         if cats:
@@ -203,7 +250,27 @@ def chat_body(cand, prompt, max_tokens=700):
     return body
 
 
-def run_candidate(llama_bin, cand, tests, contexts=CONTEXTS):
+def needle_test(cand, ctx, timeout=1800):
+    """Hide a code in about 70% of `ctx` tokens of text at 10%, 50% and 90% depth and ask for it: {"found", "total", "prefill_s"} (or {"error"})."""
+    found, prefill = 0, 0.0
+    try:
+        for i, depth in enumerate(NEEDLE_DEPTHS):
+            code = needle_code(ctx // 1024 + i)
+            body = chat_body(cand, haystack(int(ctx * 0.7), code, depth, seed=i + 1) + NEEDLE_QUESTION, max_tokens=40)
+            body["temperature"] = 0
+            body["cache_prompt"] = False
+            status, d = post("/v1/chat/completions", body, timeout=timeout)
+            if status != 200:
+                return {"error": f"HTTP {status}", "found": found, "total": len(NEEDLE_DEPTHS)}
+            text = ((d.get("choices") or [{}])[0].get("message", {}).get("content") or "").split("</think>")[-1]
+            found += int(code.lower() in text.lower())
+            prefill = max(prefill, round(float((d.get("timings") or {}).get("prompt_ms") or 0) / 1000, 1))
+    except (OSError, ValueError) as e:                       # a request that timed out or a broken answer
+        return {"error": str(e)[:100] or e.__class__.__name__, "found": found, "total": len(NEEDLE_DEPTHS)}
+    return {"found": found, "total": len(NEEDLE_DEPTHS), "prefill_s": prefill or None}
+
+
+def run_candidate(llama_bin, cand, tests, contexts=CONTEXTS, needle=False):
     from quality_check import run, totals
     out = {"name": cand["name"], "slot": cand["slot"], "baseline": bool(cand.get("baseline")), "contexts": [], "speed": None}
     if not os.path.isfile(cand["file"]):
@@ -219,6 +286,8 @@ def run_candidate(llama_bin, cand, tests, contexts=CONTEXTS):
                     layers = gpu_layers(f.read())
                 entry = {"ctx": ctx, "vram_gb": smi_used_gb(), "speed": speed, "ok": status == 200, "gpu_layers": layers}
                 out["contexts"].append(entry)
+                if needle and status == 200:
+                    entry["needle"] = needle_test(cand, ctx)
                 if ctx == contexts[0]:
                     def ask(prompt):
                         st, d = post("/v1/chat/completions", chat_body(cand, prompt))
@@ -238,6 +307,10 @@ def run_candidate(llama_bin, cand, tests, contexts=CONTEXTS):
     return out
 
 
+def parse_contexts(text):
+    return tuple(int(x) for x in text.split(",") if x.strip())
+
+
 def main(argv=None):
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--llama-bin", help="path to llama-server(.exe)")
@@ -246,8 +319,11 @@ def main(argv=None):
     ap.add_argument("--only", help="a slot (flare, equinox, solstice, apogee) or one candidate name")
     ap.add_argument("--from-logs", action="store_true")
     ap.add_argument("--label", default=None, help="keep this run apart from others (default: none for eval/everyday.jsonl, the sheet's name for any other sheet)")
+    ap.add_argument("--contexts", default=None, help="comma list of window sizes to test, e.g. 8192,32768,65536,131072")
+    ap.add_argument("--needle", action="store_true", help="long-document test: find a hidden code in a full window at each size")
     ap.add_argument("--quick", action="store_true", help="measure memory and speed at 8K only (not 8K, 16K and 32K)")
     a = ap.parse_args(argv)
+    ctxs = parse_contexts(a.contexts) if a.contexts else (CONTEXTS[:1] if a.quick else CONTEXTS)
     label = a.label if a.label is not None else ("" if os.path.basename(a.sheet).startswith("everyday") else os.path.splitext(os.path.basename(a.sheet))[0])
     outdir = os.path.join("logs", "bakeoff", label) if label else os.path.join("logs", "bakeoff")
     report_path = os.path.join("logs", f"bakeoff-{label}.md" if label else "bakeoff.md")
@@ -263,7 +339,7 @@ def main(argv=None):
             cands = [c for c in json.load(f)["candidates"] if not a.only or a.only in (c["slot"], c["name"])]
         for i, cand in enumerate(cands, 1):
             print(f"[{i}/{len(cands)}] {cand['name']} ...", flush=True)
-            res = run_candidate(a.llama_bin, cand, tests, CONTEXTS[:1] if a.quick else CONTEXTS)
+            res = run_candidate(a.llama_bin, cand, tests, ctxs, needle=a.needle)
             with open(os.path.join(outdir, cand["name"] + ".json"), "w", encoding="utf-8") as f:
                 json.dump(res, f, indent=1)
             print("   ", res.get("error") or f"{res['passed']}/{res['total']}, {res['speed']} words/sec", flush=True)

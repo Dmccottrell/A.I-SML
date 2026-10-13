@@ -13,6 +13,38 @@ def res(name, passed, speed, vram=(8.0, 8.5, 9.0), baseline=False, slot="apogee"
     return r
 
 
+class LongDocument(unittest.TestCase):
+    def test_haystack_hides_the_code_once_at_depth(self):
+        code = B.needle_code(3)
+        for d in B.NEEDLE_DEPTHS:
+            t = B.haystack(2000, code, d)
+            self.assertEqual(t.count(code), 1)
+            self.assertAlmostEqual(len(t), 7200, delta=900)
+            self.assertAlmostEqual(t.index(code) / len(t), d, delta=0.1)
+
+    def test_needle_codes_differ(self):
+        self.assertNotEqual(B.needle_code(1), B.needle_code(2))
+
+    def test_recommended_window(self):
+        def c(ctx, vram, ok=True, n=None):
+            d = {"ctx": ctx, "vram_gb": vram, "ok": ok}
+            if n:
+                d["needle"] = n
+            return d
+        good = {"found": 3, "total": 3, "prefill_s": 10}
+        r = {"contexts": [c(32768, 9, n=good), c(65536, 10, n=good), c(131072, 11.0, n=good)]}
+        self.assertEqual(B.recommended_window(r), 131072)
+        r["contexts"][2]["vram_gb"] = 12.5
+        self.assertEqual(B.recommended_window(r), 65536)
+        r["contexts"][1]["needle"] = {"found": 2, "total": 3, "prefill_s": 10}
+        self.assertEqual(B.recommended_window(r), 32768)
+        r["contexts"][0]["needle"] = {"found": 3, "total": 3, "prefill_s": 90}
+        self.assertIsNone(B.recommended_window(r))
+
+    def test_contexts_flag(self):
+        self.assertEqual(B.parse_contexts("8192, 65536,131072"), (8192, 65536, 131072))
+
+
 class Parts(unittest.TestCase):
     def test_timings_and_vram(self):
         self.assertEqual(B.tokens_per_second({"predicted_per_second": 31.234}), 31.2)

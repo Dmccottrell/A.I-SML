@@ -77,6 +77,12 @@ python scripts/emvryx3_bakeoff.py --llama-bin "C:\\path\\to\\llama-server.exe" -
 ```
 It is saved apart (`logs\\bakeoff-hard.md`), so the first report is not overwritten. `--quick` measures memory and speed at 8K only. **Memory columns stuck at about 1.3 to 1.6 GB mean the model ran on the processor, not the graphics card**: fix that first (see "If something goes wrong").
 
+**How big a conversation can each v3 model hold?** Plan: start every v3 model at 32K, then measure how far it can go on the 4070 (Apogee 3 stays small, 8K to 16K, because the 27B at 2-bit leaves little room). Test 64K for Flare, Equinox and Solstice, and 128K for Solstice too (try it with the q8 conversation memory setting if it gets tight). `--needle` also hides a secret code in a full-length document at three depths and asks for it, so the table shows whether the model really finds things at that length, plus how long it took to read the document:
+```
+python scripts/emvryx3_bakeoff.py --llama-bin "C:\\path\\to\\llama-server.exe" --only solstice --contexts 8192,32768,65536,131072 --needle --label window
+```
+The **Window** column is the largest size that fits the card, answered, found the code every time and read the document in under a minute. Publish each model at its window (set `context` and `context_tested` in `models.json`). Only trust this once the memory columns show the card in use (not stuck near 1.3 GB). Do not run it while training.
+
 **3. Train, one model at a time** (the app and games are off while it runs)
 ```
 python scripts/chain_home.py --models flare-3 --keep 0.4 --llama-cpp ..\\llama.cpp --llama-bin C:\\...\\llama-server.exe --gaming
