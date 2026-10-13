@@ -47,7 +47,7 @@ def make(path):
     d.ellipse([cx - 5.5 * k, cy - 5.5 * k, cx + 5.5 * k, cy + 5.5 * k], outline=CORE, width=int(3 * k))
     d.ellipse([cx - 1.8 * k, cy - 1.8 * k, cx + 1.8 * k, cy + 1.8 * k], fill=AMBER)
     d.text((600, 190), "Emvryx", font=font(120), fill=TEXT)
-    for i, line in enumerate(("A family of five AI models.", "Shows its sources.", "Says \"I don't know\".")):
+    for i, line in enumerate(("A family of four AI models.", "Shows its sources.", "Says \"I don't know\".")):
         d.text((602, 330 + i * 56), line, font=font(38, False), fill=MUTED)
     d.text((602, 540), "emvryx.app", font=font(34), fill=AMBER)
     img.save(path, "PNG", optimize=True)

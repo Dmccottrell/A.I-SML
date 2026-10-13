@@ -71,6 +71,16 @@ class Client:
         return r.status, hdr, events
 
 
+class OfflineNet:
+    """The internet as a computer with no connection sees it: every request fails, the way live_data's providers expect."""
+
+    def json(self, url):
+        raise OSError("no internet in the tests")
+
+    def text(self, url):
+        raise OSError("no internet in the tests")
+
+
 class Base(unittest.TestCase):
     data_dir = None
     factory = None
@@ -86,6 +96,7 @@ class Base(unittest.TestCase):
         self.srv = A.make_server(self.state, port=0, quiet=True)
         self.port = self.srv.server_address[1]
         threading.Thread(target=self.srv.serve_forever, daemon=True).start()
+        self.state.live_net = OfflineNet()                       # tests never reach the real internet (a live sports score would change what the question looks up)
         self.owner = Client(self.port, self.state.owner_key())
         self.sam_key = self.state.add_user("sam", "free")
         self.sam = Client(self.port, self.sam_key)

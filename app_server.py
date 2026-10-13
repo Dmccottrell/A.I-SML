@@ -1464,7 +1464,7 @@ class AppState:
             url = self.llama_url
         else:
             raise code_sessions.CodeError("No model is attached to this server.", "Start it with --gguf or --llama (see docs/VRYXCODE.md).")
-        return vryxcode.LlamaChat(url)
+        return vryxcode.LlamaChat(url, max_tokens=max(1024, min(4096, ctx // 3)))     # room for a whole file in one reply (1,024 cut a page of 100 lines off in the middle)
 
     def preload(self, model_id):
         """Start the model's llama-server now (with the window the owner's chats would ask for), so the first message is not slow.

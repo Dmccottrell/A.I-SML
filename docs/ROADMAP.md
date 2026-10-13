@@ -1097,9 +1097,9 @@ chat format and prompts live in one shared file, so a chat behaves the same on e
 **Build order (cheapest first):**
 1. A chat page on the local llama.cpp web server (works today with v2/v3)
 2. The same page as a website with the model running in the browser, and as an installable PWA
-3. Wrap it for Android (Capacitor) and PC (Tauri)
+3. Native apps: Android (Kotlin) and iPhone (Swift), see [NATIVE.md](NATIVE.md); PC (Tauri) stays optional
 4. Notes sync + online mode + lookups against the small phone index
-5. iPhone build, if wanted
+5. iPhone build (decided: native Swift, on the owner's Mac)
 
 ---
 

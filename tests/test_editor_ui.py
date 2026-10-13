@@ -72,6 +72,8 @@ class EditorUi(Base):
                 self.assertIn("index.html", text)
                 self.assertIn("7s", text)
                 self.assertIn("52 words", text)
+                page.evaluate("cEvent({kind: 'step', tool: 'edit_file', preview: 'edit a.html\\n  - x\\n  + y', raw: ''}); cEvent({kind: 'result', text: 'error: the text in old was not found'})")
+                self.assertIn("Could not edit", page.inner_text("#codeIn"))                 # a failed edit does not read like a finished one
             finally:
                 b.close()
 

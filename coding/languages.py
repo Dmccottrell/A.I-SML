@@ -16,6 +16,7 @@ WHAT THIS FILE DOES
 import os
 import re
 import shutil
+import subprocess
 
 # id -> name, file endings, the programs that must exist to RUN it (all of them), how it is run, and whether it is a "can't run here" language
 LANGS = {
@@ -96,13 +97,23 @@ def project_language(folder, limit=2000):
     return best if counts[best] >= 1 else None
 
 
+def _really_runs(name):
+    """Being on the PATH is not enough for Rust: `rustc` can be only rustup's stand-in with no toolchain installed, which fails when used. Ask it for its version."""
+    if name not in ("rustc", "cargo"):
+        return True
+    try:
+        return subprocess.run([name, "--version"], capture_output=True, timeout=15).returncode == 0
+    except (OSError, subprocess.SubprocessError):
+        return False
+
+
 def tools_here(env="local", which=shutil.which):
     """The set of programs VryxCode can use for this environment: what is installed (local), the sandbox image's, or None (cloud machine: not checked from here)."""
     if env == "sandbox":
         return set(SANDBOX_TOOLS)
     if env == "cloud":
         return None
-    have = {n for n in {t for i in LANGS.values() for t in i["needs"]} | {"python3"} if which(n)}
+    have = {n for n in {t for i in LANGS.values() for t in i["needs"]} | {"python3"} if which(n) and (which is not shutil.which or _really_runs(n))}
     if "python3" not in have and which("python"):
         have.add("python3")
     return have

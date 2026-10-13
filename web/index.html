@@ -185,6 +185,7 @@ svg .core { fill: var(--core); stroke: var(--sun); stroke-width: 3; transition: 
 .code .cc-diff .add { color: #3fb950; background: rgba(63,185,80,.12); } .code .cc-diff .del { color: #f85149; background: rgba(248,81,73,.12); } .code .cc-diff .hdr { color: var(--muted); }
 .code .cc-more { color: var(--muted); max-height: 260px; overflow: auto; white-space: pre-wrap; word-break: break-word; display: none; }
 .code .cc-tool.open .cc-more { display: block; }
+.code .cc-tool.no .cc-diff { opacity: .45; }
 .code .cc-live { display: flex; flex-direction: column; gap: 4px; padding: 10px 0 2px; }
 .code .cc-live .l1 { display: flex; gap: 10px; align-items: center; color: var(--accenttext); }
 .code .cc-live .mark { display: inline-flex; animation: ccpulse 1.2s ease-in-out infinite; }
@@ -3080,6 +3081,7 @@ function cEvent(e) {
     if (C.last) {
       const t = String(e.text || ''), bad = /^error|exit code [1-9]|Traceback|FAILED/m.test(t), lines = t.split('\n').filter((x) => x.trim());
       C.last.classList.remove('run'); C.last.classList.add(bad ? 'no' : 'ok');
+      if (bad) { const v = C.last.querySelector('.cc-verb'); if (v) v.textContent = ({Wrote: 'Could not write', Edited: 'Could not edit', Read: 'Could not read', Ran: 'Ran, with a problem'})[v.textContent] || v.textContent; }       // a failed edit must not read like a finished one
       const head = (lines[0] || 'Done').slice(0, 200) + (lines.length > 1 ? '  (+' + (lines.length - 1) + ' lines)' : '');
       const res = el('div', {class: 'cc-res', title: 'Tap to show the whole output'}, el('span', {class: 'arrow'}, '\u2192'), el('span', {class: 'txt'}, head));
       const node = C.last; res.onclick = () => node.classList.toggle('open');
@@ -3091,7 +3093,7 @@ function cEvent(e) {
   }
   if (e.kind === 'retry') {                     // the model's tool call could not be read: keep what it said and that it is trying again
     if (e.text) feed.append(el('div', {class: 'cc-say'}, e.text));
-    feed.append(el('div', {class: 'cc-tool no'}, el('div', {class: 'cc-head'}, el('span', {class: 'cc-verb'}, 'Retrying'), el('span', {class: 'cc-arg'}, ['That step was garbled, so VryxCode asked the model to send it again', e.secs != null ? Math.round(e.secs) + 's' : ''].filter(Boolean).join('  \u00b7  ')))));
+    feed.append(el('div', {class: 'cc-tool no'}, el('div', {class: 'cc-head'}, el('span', {class: 'cc-verb'}, 'Retrying'), el('span', {class: 'cc-arg'}, [e.limit ? 'The reply ran out of room while the model was writing, so VryxCode asked it to send smaller parts' : 'That step was garbled, so VryxCode asked the model to send it again', e.secs != null ? Math.round(e.secs) + 's' : ''].filter(Boolean).join('  \u00b7  ')))));
     C.last = null; return;
   }
   if (e.kind === 'compacted') { feed.append(el('div', {class: 'cc-say', style: 'color:var(--muted);font-size:13px'}, 'The conversation was getting long, so VryxCode folded its older steps into a short "Earlier steps" list to save room. The files and this log are unchanged.')); C.last = null; return; }
@@ -3249,11 +3251,12 @@ function fixPreviewErrors() {
   $('codeTask').value = 'The preview of ' + PV.entry + ' shows these problems:\n' + list + '\nPlease fix them.';
   $('codeGo').click();
 }
+const PV_NOISE = /cloudflareinsights\.com|\/cdn-cgi\//;      // scripts the hosting adds to every page (not in the person's files): never something VryxCode can fix
 window.addEventListener('message', (e) => {
   const f = $('pvFrame'); if (!f || e.source !== f.contentWindow) return;
   const d = e.data || {}; if (!d.vryxPreview) return;
   if (d.loaded) { PV.loaded = true; paintPv(); return; }
-  if (typeof d.msg === 'string' && PV.errors.length < 10 && !PV.errors.includes(d.msg)) { PV.errors.push(d.msg); paintPv(); }
+  if (typeof d.msg === 'string' && !PV_NOISE.test(d.msg) && PV.errors.length < 10 && !PV.errors.includes(d.msg)) { PV.errors.push(d.msg); paintPv(); }
 });
 $('codePreviewBtn').onclick = openPreview; $('pvBack').onclick = () => { $('codePv').hidden = true; }; $('pvReload').onclick = reloadPreview;
 document.querySelectorAll('#codePv .pvbar [data-size]').forEach((b) => { b.onclick = () => setPvSize(b.dataset.size); });

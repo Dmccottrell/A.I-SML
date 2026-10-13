@@ -18,7 +18,7 @@ THE FORMAT (uses tokens already reserved in v3's tokenizer)
 THE TOOLS
     list_files(path=".")              what's in a folder
     read_file(path, start=1, end=None)  a file, with line numbers (long files are cut)
-    write_file(path, content)         create or replace a file
+    write_file(path, content, append=false)  create or replace a file; append=true adds to the end (write big files in parts)
     edit_file(path, old, new)         replace ONE exact piece of text (fails if it isn't found exactly once)
     run(command)                      run a command such as: python -m unittest
     git(args)                         a safe set of git commands: status, diff, log, show, init, add, commit,
@@ -83,7 +83,8 @@ TOOL_PROMPT = ("You can use tools. Write one call at a time: <|tool_call|>{\"nam
                "{\"path\": \"main.py\"}}<|end_tool_call|> and wait for the result. Tools: list_files(path), "
                "read_file(path, start, end), write_file(path, content), edit_file(path, old, new), run(command), "
                "git(args), diagnostics(path), finish(summary, next). Small steps; run the tests before you finish; "
-               "if a task is too big, say so and suggest a first step.")
+               "if a task is too big, say so and suggest a first step. Write a big file in parts of about 60 lines: write_file(path, content) "
+               "for the first part, then write_file(path, content, append=true) for each next part. In the JSON, write line breaks as \\n and quotes as \\\".")
 
 
 class ToolError(Exception):
@@ -148,6 +149,12 @@ class Sandbox:
         """Turn a path the model gave into a real path INSIDE the workspace, or refuse."""
         if not isinstance(name, str) or not name.strip() or "\x00" in name:
             raise ToolError("path must be a non-empty string")
+        name = name.strip().replace("\\", "/")                   # a Windows-style path from the model
+        if re.match(r"^[A-Za-z]:/", name):
+            name = name[3:]
+        if name.startswith("/"):                                  # "/index.html" means the project's root, unless it already is a real path inside it
+            inside = os.path.realpath(name)
+            name = inside if inside == self.root or inside.startswith(self.root + os.sep) else name.lstrip("/") or "."
         full = os.path.realpath(os.path.join(self.root, name))    # resolves .. and symlinks
         if full != self.root and not full.startswith(self.root + os.sep):
             raise ToolError(f"{name!r} is outside the workspace; only files inside it can be used")
@@ -185,15 +192,19 @@ class Sandbox:
         if ".git" in self.rel(full).split("/"):
             raise ToolError("the .git folder is managed by git: use the git tool instead of editing it")
 
-    def write_file(self, path, content):
+    def write_file(self, path, content, append=False):
+        """Create or replace a file; with append=true the text is added to the end instead (big files are written in parts, so no single call has to be long)."""
         full = self.path(path)
         self._not_git_folder(full)
         if os.path.isdir(full):
             raise ToolError(f"{path!r} is a folder")
+        content = _unescape_if_flattened(path, content)
+        if append and not os.path.isfile(full):
+            raise ToolError(f"{path!r} does not exist yet: write the first part without append, then add the rest with append=true")
         os.makedirs(os.path.dirname(full), exist_ok=True)
-        with open(full, "w", encoding="utf-8", newline="\n") as f:
+        with open(full, "a" if append else "w", encoding="utf-8", newline="\n") as f:
             f.write(content)
-        return f"wrote {self.rel(full)} ({len(content.splitlines())} lines)"
+        return f"{'added to' if append else 'wrote'} {self.rel(full)} ({len(content.splitlines())} lines)"
 
     def edit_file(self, path, old, new):
         full = self.path(path)
@@ -206,7 +217,7 @@ class Sandbox:
             raise ToolError("'old' is empty; give the exact text to replace")
         n = text.count(old)
         if n == 0:
-            raise ToolError("the text in 'old' was not found. Copy it exactly from read_file (without the line numbers)")
+            raise ToolError(_not_found_hint(text, old, path))
         if n > 1:
             raise ToolError(f"the text in 'old' appears {n} times; include more surrounding lines so it matches once")
         with open(full, "w", encoding="utf-8", newline="\n") as f:
@@ -248,7 +259,10 @@ class Sandbox:
             raise ToolError("empty command")
         program = os.path.basename(argv[0])
         if program not in self.allowed:
-            raise ToolError(f"{program!r} is not allowed. Allowed: {', '.join(sorted(self.allowed))}")
+            extra = " Run one program at a time (no cd, &&, |, ; or >): the project folder is already the current folder." if program in ("cd", "sh", "bash", "cmd", "powershell") or any(t in argv for t in ("&&", "||", "|", ";", ">", ">>")) else ""
+            raise ToolError(f"{program!r} is not allowed. Allowed: {', '.join(sorted(self.allowed))}.{extra}")
+        if any(t in argv for t in ("&&", "||", "|", ";", ">", ">>")):
+            raise ToolError("run one program at a time: no &&, ||, |, ; or > (they are not understood here). The project folder is already the current folder.")
         if program in ("python", "python3") and not self.container and not self.remote:
             argv[0] = sys.executable                     # the same Python we are running (inside a container, or on a remote machine, that one's own python is used)
         return self._exec(argv)
@@ -346,6 +360,8 @@ class Sandbox:
             return tools[name](**args), False
         except TypeError as e:
             raise ToolError(f"wrong arguments for {name}: {e}")
+        except (ValueError, OSError) as e:                       # a bad number, a name the system refuses, a file that cannot be written: tell the model, do not crash the session
+            raise ToolError(f"{name} could not do that: {e}")
 
 
 # -------------------------------------------------------------------- checks before and after a change
@@ -458,6 +474,8 @@ def proposed_text(root, name, args):
     if full != root and not full.startswith(root + os.sep):
         return None
     if name == "write_file":
+        if args.get("append"):
+            return None                                           # one part of a bigger file: a half-written file is expected to be incomplete
         return args["path"], str(args.get("content", ""))
     try:
         with open(full, encoding="utf-8") as f:
@@ -490,23 +508,95 @@ TEST_COMMAND = re.compile(r"unittest|pytest")
 
 
 # -------------------------------------------------------------------- the loop
+def _unescape_if_flattened(path, text):
+    """A model sometimes writes a whole file as one line with the two letters \\n where the line breaks belong (it escaped twice). Turn those back into line breaks,
+    but never in JSON (where \\n inside a string is correct) and never when the text already has real line breaks."""
+    if not isinstance(text, str) or "\n" in text or str(path).lower().endswith(".json") or len(text) < 60:
+        return text
+    if text.count("\\n") < 3:
+        return text
+    return text.replace("\\n", "\n").replace("\\t", "\t").replace('\\"', '"')
+
+
+def _not_found_hint(text, old, path):
+    """Why edit_file could not find 'old', and what to do: the commonest cause is spaces or line endings that differ; the next is that the text is not in this file at all."""
+    squash = lambda t: re.sub(r"\s+", " ", t).strip()
+    want = squash(old)
+    if want:
+        lines = text.split("\n")
+        for i in range(len(lines)):
+            window = ""
+            for j in range(i, min(len(lines), i + max(1, old.count("\n") + 3))):
+                window = squash(window + " " + lines[j])
+                if window == want:
+                    return (f"the text in 'old' was not found exactly, but the same words are at lines {i + 1}-{j + 1} with different spaces or line breaks. "
+                            f"Use read_file {path} (start {i + 1}) and copy that text exactly, without the line numbers.")
+        first = squash(old.split("\n")[0])
+        if first and first in squash(text):
+            return ("the first line of 'old' is in the file but the rest does not match. Use read_file to see the exact text, and replace a smaller piece "
+                    "(one or two lines) so it matches once.")
+    return (f"the text in 'old' is not in {path} at all. It may be in another file, or may not be in the project (a page can show scripts that "
+            "the hosting adds, which are not in your files). Use read_file to look at the file; do not try the same edit again.")
+
+
+TOOL_ALIASES = {"create_file": "write_file", "write": "write_file", "create": "write_file", "save_file": "write_file", "new_file": "write_file",
+                "edit": "edit_file", "replace": "edit_file", "str_replace": "edit_file", "str_replace_editor": "edit_file", "update_file": "edit_file", "modify_file": "edit_file",
+                "read": "read_file", "view": "read_file", "cat": "read_file", "open_file": "read_file",
+                "ls": "list_files", "list": "list_files", "list_dir": "list_files", "list_directory": "list_files",
+                "bash": "run", "shell": "run", "execute": "run", "execute_command": "run", "run_command": "run", "terminal": "run", "exec": "run", "command": "run",
+                "done": "finish", "complete": "finish", "final_answer": "finish", "task_complete": "finish"}
+_PATH_KEYS = ("file_path", "filepath", "filename", "file_name", "file", "fname", "name", "target_file", "filePath")
+ARG_ALIASES = {
+    "write_file": {"path": _PATH_KEYS, "content": ("contents", "text", "code", "body", "data", "file_content", "file_text", "source")},
+    "edit_file": {"path": _PATH_KEYS, "old": ("old_string", "old_str", "old_text", "search", "find", "original", "oldText", "old_content"),
+                  "new": ("new_string", "new_str", "new_text", "replace", "replacement", "replace_with", "newText", "new_content")},
+    "read_file": {"path": _PATH_KEYS, "start": ("start_line", "from_line", "offset"), "end": ("end_line", "to_line")},
+    "list_files": {"path": ("dir", "directory", "folder", "dir_path", "directory_path") + _PATH_KEYS},
+    "run": {"command": ("cmd", "commandline", "command_line", "script", "shell_command", "code")},
+    "finish": {"summary": ("message", "result", "text", "answer", "output", "final_answer", "response")},
+}
+
+
+def normalize_call(name, args):
+    """What the model meant: another name for a tool (create_file, bash...) or another word for an argument (file_path, old_string, cmd...) is accepted,
+    and arguments sent as a JSON string are opened. The real names always win."""
+    name = TOOL_ALIASES.get(name, name) if isinstance(name, str) else name
+    if isinstance(args, str):
+        try:
+            args = json.loads(args)
+        except ValueError:
+            args = {"command": args} if name == "run" else args
+    if isinstance(args, dict) and name in ARG_ALIASES:
+        args = dict(args)
+        for real, others in ARG_ALIASES[name].items():
+            if real not in args:
+                for o in others:
+                    if o in args:
+                        args[real] = args.pop(o)
+                        break
+    return name, args
+
+
 def parse_tool_call(text):
     """The first tool call in the model's text -> (name, args). Raises ToolError if it can't be read."""
     m = TOOL_CALL.search(text) or QWEN_TOOL_CALL.search(text)
+    if not m and ("<|tool_call|>" in text or "<tool_call>" in text):
+        raise ToolError("the tool call was cut off before its end (it was too long). Send it again in smaller parts: write_file for the first part, "
+                        "then write_file with append=true for each next part, about 60 lines at a time.")
     if not m:
         raise ToolError('no tool call found. Write: <|tool_call|>{"name": "...", "args": {...}}<|end_tool_call|>')
     body = m.group(1)
     for strict in (True, False):                                  # models often put raw line breaks inside the file text; strict=False accepts those
         try:
             call = json.loads(body, strict=strict)
-            return call["name"], call.get("args", {})
+            return normalize_call(call["name"], call.get("args", {}))
         except (json.JSONDecodeError, KeyError, TypeError, AttributeError):
             continue
     salvaged = _salvage_write(body)
     if salvaged:
-        return salvaged
+        return normalize_call(*salvaged)
     raise ToolError('the tool call is not valid JSON with a "name". Example: {"name": "read_file", "args": {"path": "main.py"}}. '
-                    'Inside "content", write line breaks as \\n and quotes as \\", or keep the file smaller and build it in parts.')
+                    'Inside "content", write line breaks as \\n and quotes as \\", or keep each call small: write_file for the first part, then write_file with append=true for the rest.')
 
 
 _WRITE_NAME = re.compile(r'"name"\s*:\s*"write_file"')
@@ -528,7 +618,10 @@ def _salvage_write(body):
         return None                                               # cut off before the end: do not save half a file
     text = text[:end.start()]
     text = re.sub(r"\\(n|t|r|\"|\\)", lambda k: {"n": "\n", "t": "\t", "r": "\r", '"': '"', "\\": "\\"}[k.group(1)], text)
-    return "write_file", {"path": p.group(1), "content": text}
+    args = {"path": p.group(1), "content": text}
+    if re.search(r'"append"\s*:\s*true', body[:c.start()] + body[c.end() + len(text):]):
+        args["append"] = True                                     # a part of a bigger file must not replace what is already there
+    return "write_file", args
 
 
 def format_result(text):
@@ -759,7 +852,7 @@ def run_agent(task, generate, sandbox, max_turns=8, system=None, project=True, h
                     continue
                 return {"finished": False, "said": True, "summary": words, "turns": turn, "messages": messages, "episodes": episodes}
             result, done = f"error: {e}", False
-            bad_calls = bad_calls + 1 if str(e).startswith("the tool call is not valid JSON") else 0
+            bad_calls = bad_calls + 1 if str(e).startswith(("the tool call is not valid JSON", "the tool call was cut off")) else 0
             if bad_calls >= BAD_CALL_LIMIT:
                 return {"finished": False, "turns": turn, "messages": messages, "episodes": episodes, "stopped": "bad_call",
                         "summary": "The model kept sending a tool call that could not be read, so it was stopped instead of looping. This usually means the file was too big "

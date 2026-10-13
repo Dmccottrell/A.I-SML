@@ -43,6 +43,10 @@ def repo_folder(repo):
     return repo.replace("/", "__")
 
 
+def _skip_git_locks(folder, names):
+    return [n for n in names if n.endswith(".lock") and ".git" in folder.replace("\\", "/").split("/")]
+
+
 def prepare_repo(instance, repos_dir, clone=False):
     """A fresh copy of the project at the instance's base commit (a temp folder the caller deletes). Never touches the original checkout."""
     src = os.path.join(repos_dir, repo_folder(instance["repo"]))
@@ -53,7 +57,7 @@ def prepare_repo(instance, repos_dir, clone=False):
         git(["clone", f"https://github.com/{instance['repo']}.git", src], cwd=repos_dir)
     work = tempfile.mkdtemp(prefix="vryxswe_")
     dest = os.path.join(work, "repo")
-    shutil.copytree(src, dest)
+    shutil.copytree(src, dest, ignore=_skip_git_locks)      # git's own background upkeep can create and remove a lock file while we copy
     git(["checkout", "-f", "-q", instance["base_commit"]], cwd=dest)
     git(["clean", "-fdq"], cwd=dest)
     return work, dest

@@ -12,7 +12,7 @@ Google Play and the App Store, and check that emvryx.ai and emvryx.com are free.
 Backups if Emvryx fails those checks (Emvryx is the previous name): Brynja, Quenby, Eirvala, Vardrun.
 
 This builds on [ROADMAP.md: One app for phone and PC](ROADMAP.md#one-app-for-phone-and-pc-the-plan-for-the-website-and-app)
-(one web codebase, packaged for Android with Capacitor and for the PC with Tauri). This file adds how the
+(one web codebase, used by the website and the PC; the Android and iPhone apps are built natively, see [NATIVE.md](NATIVE.md)). This file adds how the
 existing Python features plug in, the two modes, the screens, and the build order.
 
 ## Principles
