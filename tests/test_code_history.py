@@ -34,14 +34,42 @@ class History(Base):
         self.assertEqual(len(row["checkpoints"]), 1)
         self.assertTrue(row["age"])
 
-    def test_history_survives_a_restart_and_is_read_only(self):
+    def test_history_survives_a_restart_and_the_session_carries_on(self):
         sid = self.run_session()
         self.state.code.sessions.clear()                              # what a restart does to the running ones
         j = self.owner.call("GET", f"/api/code/sessions/{sid}")[1]
         self.assertTrue(j["saved"])
         self.assertEqual(j["events"][0]["kind"], "start")
-        self.assertEqual(self.owner.call("POST", f"/api/code/sessions/{sid}/message", {"text": "more"})[0], 400)
-        self.assertEqual(self.owner.call("GET", "/api/code/sessions")[1]["sessions"][0]["id"], sid)
+        before = len(j["events"])
+        seen = []
+        self.state.code_generate = lambda model: (lambda messages: (seen.append(messages), "Fixed it.")[1])
+        st, r = self.owner.call("POST", f"/api/code/sessions/{sid}/message", {"text": "the page shows an error, fix it"})
+        self.assertEqual((st, r["revived"]), (200, True), r)
+        wait_for(lambda: self.state.code.sessions[sid].state in ("done", "stopped", "failed"))
+        told = [m for m in seen[0] if m["role"] == "user"][-1]["content"]
+        self.assertIn("continues an earlier session", told)                  # the model is told what happened before
+        self.assertIn("slugify", told)
+        self.assertIn("the page shows an error, fix it", told)
+        j = self.owner.call("GET", f"/api/code/sessions/{sid}")[1]
+        self.assertGreater(len(j["events"]), before)                          # the same session, its feed goes on
+        self.assertEqual(j["events"][0]["kind"], "start")
+        rows = self.owner.call("GET", "/api/code/sessions")[1]["sessions"]
+        self.assertEqual([r["id"] for r in rows], [sid])                    # no new session in the list
+
+    def test_another_model_takes_over_the_same_session(self):
+        sid = self.run_session()
+        seen = []
+        self.state.code_generate = lambda model: (lambda messages: (seen.append((model["id"], messages)), "Done.")[1])
+        st, r = self.owner.call("POST", f"/api/code/sessions/{sid}/message", {"text": "now add a docstring", "model": "equinox-2"})
+        self.assertEqual((st, r["revived"]), (200, False), r)
+        wait_for(lambda: self.state.code.sessions[sid].state in ("done", "stopped", "failed"))
+        self.assertEqual(seen[0][0], "equinox-2")
+        self.assertTrue(any("slugify" in str(m["content"]) for m in seen[0][1]))     # it sees the whole conversation so far
+        s = self.state.code.sessions[sid]
+        self.assertEqual(s.model_id, "equinox-2")
+        ev = [e for e in s.events if e["kind"] == "model"]
+        self.assertEqual((ev[0]["model"], ev[0]["previous"]), ("equinox-2", "solstice-2"))
+        self.assertEqual(len(self.owner.call("GET", "/api/code/sessions")[1]["sessions"]), 1)
 
     def test_other_people_do_not_see_my_sessions(self):
         sid = self.run_session()
