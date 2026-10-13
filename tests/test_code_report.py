@@ -95,3 +95,24 @@ class Compaction(unittest.TestCase):
         self.assertLess(kinds.index("compacted"), kinds.index("end"))
         report = s.events[-1].get("report")
         self.assertEqual(len(report["files"]), 10)                                    # the report is built from the events, so folding loses nothing from it
+
+
+class Retry(unittest.TestCase):
+    def test_a_garbled_tool_call_is_kept_in_the_feed_and_steps_carry_their_timing(self):
+        import tempfile, shutil
+        import code_sessions
+        import vryxcode
+        d = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, d, True)
+        bad = 'I see the issue. I will correct the tool call.\n<|tool_call|>{"name": "write_file", "args": {oops}<|end_tool_call|>'
+        replies = [bad, bad, vryxcode.harness_call("write_file", path="index.html", content="<h1>Hi</h1>\n"), vryxcode.harness_call("finish", summary="done")]
+        s = code_sessions.Session("s1", "owner", "demo", "make a page", "solstice-2", d, auto_edits=True)
+        s.generate = vryxcode.ScriptedChat(replies)
+        s.run(s.generate, 8, 8000)
+        retries = [e for e in s.events if e["kind"] == "retry"]
+        self.assertEqual(len(retries), 2)                                              # each failed attempt is shown, not silently dropped
+        self.assertIn("I see the issue", retries[0]["text"])
+        self.assertNotIn("tool_call", retries[0]["text"])
+        write = next(e for e in s.events if e["kind"] == "step" and e.get("tool") == "write_file")
+        self.assertIn("secs", write)
+        self.assertTrue(s.events[-1]["finished"])

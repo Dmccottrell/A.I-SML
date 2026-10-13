@@ -50,6 +50,48 @@ class EditorUi(Base):
             finally:
                 b.close()
 
+    def test_a_garbled_step_and_the_timing_stay_in_the_feed(self):
+        from playwright.sync_api import sync_playwright
+        with sync_playwright() as p:
+            b = p.chromium.launch(executable_path=find_browser())
+            try:
+                page = b.new_context(viewport={"width": 1000, "height": 800}, extra_http_headers={"Authorization": "Bearer " + self.state.owner_key()}).new_page()
+                page.goto(f"http://127.0.0.1:{self.port}/")
+                page.wait_for_timeout(600)
+                page.evaluate("document.querySelectorAll('.tour').forEach((e) => e.remove()); openCode(); newSession()")
+                page.wait_for_timeout(500)
+                page.evaluate("cEvent({kind: 'retry', text: 'I see the issue. I will correct the tool call.', why: 'x', secs: 19.2, words: 94}); cEvent({kind: 'step', tool: 'write_file', preview: 'write index.html (3 lines)\\n  + a', raw: '', secs: 7.4, words: 52}); cEvent({kind: 'result', text: 'wrote index.html'})")
+                text = page.inner_text("#codeIn")
+                self.assertIn("I see the issue", text)
+                self.assertIn("Retrying", text)
+                self.assertIn("index.html", text)
+                self.assertIn("7s", text)
+                self.assertIn("52 words", text)
+            finally:
+                b.close()
+
+    def test_update_now_card_lists_the_changes_and_asks_before_updating(self):
+        from playwright.sync_api import sync_playwright
+        from tests.test_updater import Server
+        fake = self.state.updater = Server.Fake()
+        with sync_playwright() as p:
+            b = p.chromium.launch(executable_path=find_browser())
+            try:
+                page = b.new_context(viewport={"width": 1000, "height": 900}, extra_http_headers={"Authorization": "Bearer " + self.state.owner_key()}).new_page()
+                page.goto(f"http://127.0.0.1:{self.port}/")
+                page.wait_for_timeout(700)
+                page.evaluate("document.querySelectorAll('.tour').forEach((e) => e.remove()); const d = document.createElement('div'); d.id = 'pcTest'; document.body.append(d); admPc(d)")
+                page.wait_for_selector("#pcTest >> text=Software update")
+                page.click("#pcTest >> text=Check for updates")
+                page.wait_for_selector("#pcTest >> text=1 new change")
+                self.assertIn("x", page.inner_text("#pcTest"))
+                page.on("dialog", lambda d: d.dismiss())                                   # "No" at the confirmation: nothing happens
+                page.click("#pcTest >> text=Update and restart")
+                page.wait_for_timeout(400)
+                self.assertEqual(fake.applied, [])
+            finally:
+                b.close()
+
     def test_open_edit_save_and_a_change_from_outside(self):
         from playwright.sync_api import sync_playwright
         with sync_playwright() as p:

@@ -2202,6 +2202,40 @@ async function admApps(body) {
   draw();
 }
 
+// Admin > PC > Software update (owner only): see what is new on GitHub, then pull it onto this computer and restart
+function updateCard() {
+  const box = el('div', {class: 'adm-card'}), out = el('div', {});
+  let info = null;
+  const show = (nodes) => out.replaceChildren(...nodes.filter(Boolean));
+  const waitBack = async () => {                                     // the app stops for a few seconds while it restarts: wait for it, then reload
+    for (let i = 0; i < 90; i++) { await new Promise((r) => setTimeout(r, 2000)); try { const r = await fetch('/api/status', {cache: 'no-store'}); if (r.ok && i > 2) { location.reload(); return; } } catch (e) { /* still restarting */ } }
+    show([el('p', {}, 'It is taking longer than usual to come back. Reload this page in a minute.')]);
+  };
+  const apply = async (force) => {
+    show([el('p', {}, 'Updating\u2026')]);
+    const r = await post('/api/admin/update', {expected: info.latest, force: !!force}), j = await r.json().catch(() => ({}));
+    if (!r.ok) {
+      return show([el('p', {style: 'color:var(--danger)'}, (j.message || 'The update did not work.') + ' ' + (j.action || '')),
+        j.code === 'busy' ? el('div', {class: 'adm-acts'}, sxBtn('Update anyway', () => apply(true), 'bad')) : null, el('div', {class: 'adm-acts'}, sxBtn('Check again', check))]);
+    }
+    if (j.restarting) { show([el('p', {}, 'Updated (' + j.changes + (j.changes === 1 ? ' change' : ' changes') + '). Restarting now: this page reloads by itself when Emvryx is back.' + (j.deps_changed ? ' Note: requirements changed, run pip install -r requirements.txt on the PC.' : ''))]); waitBack(); }
+    else show([el('p', {}, 'Updated (' + j.changes + (j.changes === 1 ? ' change' : ' changes') + '), but it cannot restart itself here. Restart the app on the PC to use it.' + (j.deps_changed ? ' Also run pip install -r requirements.txt.' : ''))]);
+  };
+  const check = async () => {
+    show([el('p', {}, 'Checking GitHub\u2026')]);
+    const r = await api('/api/admin/update'); info = await r.json().catch(() => ({}));
+    if (!info.can_update) return show([el('p', {}, info.reason || 'Nothing to update.'), el('div', {class: 'adm-acts'}, sxBtn('Check again', check))]);
+    show([el('p', {}, el('b', {}, info.behind + (info.behind === 1 ? ' new change' : ' new changes')), ' ready (you have ' + info.current + ', newest is ' + info.latest + '):'),
+      el('ul', {style: 'margin:6px 0 10px 18px;padding:0;font-size:14px'}, ...info.incoming.slice(0, 12).map((c) => el('li', {}, c.subject))),
+      info.busy ? el('p', {style: 'color:var(--muted);font-size:14px'}, 'A reply or coding session is running now, so it will ask before updating.') : null,
+      info.restart ? null : el('p', {style: 'color:var(--muted);font-size:14px'}, 'This computer cannot restart the app by itself (no "Emvryx App" scheduled task), so you will need to restart it after.'),
+      el('div', {class: 'adm-acts'}, sxBtn('Update and restart', () => { if (confirm('Update Emvryx to the newest version and restart it now? Everyone is disconnected for a few seconds.')) apply(false); }, 'primary'), sxBtn('Check again', check))]);
+  };
+  box.append(el('h3', {}, '\u2B07\uFE0F Software update'), el('p', {}, 'Pull the newest Emvryx onto this computer and restart it, without touching the PC. Only the owner sees this. It only moves forward and refuses if files here were changed by hand.'),
+    el('div', {class: 'adm-acts'}, sxBtn('Check for updates', check)), out);
+  return box;
+}
+
 async function admPc(body) {
   let j = await (await api('/api/admin/pc')).json();
   const save = async (b) => { const r = await post('/api/admin/pc', b); const k = await r.json().catch(() => ({})); if (!r.ok) return toast(k.message || 'That did not work.'); j = k; if (S.state) S.state.gaming = j.gaming; renderAll(); draw(); toast('Saved.'); };
@@ -2217,6 +2251,7 @@ async function admPc(body) {
         j.has_runner ? el('p', {}, j.loaded ? el('span', {}, el('b', {}, j.loaded_label || j.loaded), ' is loaded' + (j.busy ? ' and in use.' : ', idle for ' + (mins ? mins + ' min' : 'under a minute') + '.')) : 'Nothing is loaded. The next message loads a model.')
           : el('p', {}, 'This server is not running models itself (no llama-server), so there is nothing to free here.'),
         j.has_runner && j.loaded ? el('div', {class: 'adm-acts'}, sxBtn('Unload now', () => save({unload: true}))) : null),
+      S.state.owner ? updateCard() : null,
       el('div', {class: 'adm-card'}, el('h3', {}, 'Unload when idle'),
         el('p', {}, 'When nobody has used the model for this long, it is unloaded to free the card. The next message loads it again. Never keeps it loaded until you pick another model.'),
         sxSeg(idle, j.idle_unload_minutes, (v) => save({idle_unload_minutes: v}))));
@@ -3036,7 +3071,7 @@ function cEvent(e) {
     if (prose) feed.append(el('div', {class: 'cc-say'}, prose));
     const [name, arg, extra] = toolParts(e.preview, e.tool);
     const node = el('div', {class: 'cc-tool run'}, el('div', {class: 'cc-head'}, el('span', {class: 'cc-verb'}, name),
-      el('span', {class: 'cc-arg'}, arg ? arg + (extra ? '  \u00b7  ' + extra : '') : '')));
+      el('span', {class: 'cc-arg'}, [arg, extra, e.secs != null ? Math.round(e.secs) + 's' : '', e.words ? e.words + ' words' : ''].filter(Boolean).join('  \u00b7  '))));
     const d = (e.tool === 'write_file' || e.tool === 'edit_file') ? diffNode(e.preview) : null; if (d) node.append(d);
     feed.append(node); C.last = node; return;
   }
@@ -3053,6 +3088,11 @@ function cEvent(e) {
       C.last = null;
     }
     return;
+  }
+  if (e.kind === 'retry') {                     // the model's tool call could not be read: keep what it said and that it is trying again
+    if (e.text) feed.append(el('div', {class: 'cc-say'}, e.text));
+    feed.append(el('div', {class: 'cc-tool no'}, el('div', {class: 'cc-head'}, el('span', {class: 'cc-verb'}, 'Retrying'), el('span', {class: 'cc-arg'}, ['That step was garbled, so VryxCode asked the model to send it again', e.secs != null ? Math.round(e.secs) + 's' : ''].filter(Boolean).join('  \u00b7  ')))));
+    C.last = null; return;
   }
   if (e.kind === 'compacted') { feed.append(el('div', {class: 'cc-say', style: 'color:var(--muted);font-size:13px'}, 'The conversation was getting long, so VryxCode folded its older steps into a short "Earlier steps" list to save room. The files and this log are unchanged.')); C.last = null; return; }
   if (e.kind === 'queued') { feed.append(el('div', {class: 'cc-say', style: 'color:var(--muted);font-size:14px'}, 'Waiting in the queue' + (e.position ? ' (#' + e.position + ')' : '') + '. It starts by itself when your current session finishes.')); return; }

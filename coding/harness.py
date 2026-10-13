@@ -495,12 +495,40 @@ def parse_tool_call(text):
     m = TOOL_CALL.search(text) or QWEN_TOOL_CALL.search(text)
     if not m:
         raise ToolError('no tool call found. Write: <|tool_call|>{"name": "...", "args": {...}}<|end_tool_call|>')
-    try:
-        call = json.loads(m.group(1))
-        return call["name"], call.get("args", {})
-    except (json.JSONDecodeError, KeyError, TypeError):
-        raise ToolError('the tool call is not valid JSON with a "name". Example: '
-                        '{"name": "read_file", "args": {"path": "main.py"}}')
+    body = m.group(1)
+    for strict in (True, False):                                  # models often put raw line breaks inside the file text; strict=False accepts those
+        try:
+            call = json.loads(body, strict=strict)
+            return call["name"], call.get("args", {})
+        except (json.JSONDecodeError, KeyError, TypeError, AttributeError):
+            continue
+    salvaged = _salvage_write(body)
+    if salvaged:
+        return salvaged
+    raise ToolError('the tool call is not valid JSON with a "name". Example: {"name": "read_file", "args": {"path": "main.py"}}. '
+                    'Inside "content", write line breaks as \\n and quotes as \\", or keep the file smaller and build it in parts.')
+
+
+_WRITE_NAME = re.compile(r'"name"\s*:\s*"write_file"')
+_WRITE_PATH = re.compile(r'"path"\s*:\s*"([^"\n]{1,200})"')
+_WRITE_CONTENT = re.compile(r'"content"\s*:\s*"', re.S)
+
+
+def _salvage_write(body):
+    """A write_file call whose JSON is broken (usually a quote or line break inside the file that was not escaped): the path and the text between
+    "content": " and the closing "}} are still plain to see. (name, args) or None."""
+    if not _WRITE_NAME.search(body):
+        return None
+    p, c = _WRITE_PATH.search(body), _WRITE_CONTENT.search(body)
+    if not p or not c:
+        return None
+    text = body[c.end():]
+    end = re.search(r'"\s*\}\s*\}?\s*$', text)
+    if not end:
+        return None                                               # cut off before the end: do not save half a file
+    text = text[:end.start()]
+    text = re.sub(r"\\(n|t|r|\"|\\)", lambda k: {"n": "\n", "t": "\t", "r": "\r", '"': '"', "\\": "\\"}[k.group(1)], text)
+    return "write_file", {"path": p.group(1), "content": text}
 
 
 def format_result(text):
@@ -630,6 +658,7 @@ def compact(messages, keep=4):
 
 THINK_TAGS = re.compile(r"<think>.*?</think>", re.S)
 NO_CALL_LIMIT = 3          # stop after this many replies in a row without a tool call, instead of using every step on the same answer
+BAD_CALL_LIMIT = 3         # ...and this many replies in a row whose tool call could not be read (a file too big to write in one go, say)
 NO_CALL_TOTAL = 5          # ...or this many in one run (a model that alternates "I can't" with the same tool call is stuck too)
 REPEAT_HINT_AT = 3         # the same step with the same result this many times: tell the model to try something else
 REPEAT_STOP_AT = 5         # ...and stop the run at this many
@@ -683,7 +712,7 @@ def run_agent(task, generate, sandbox, max_turns=8, system=None, project=True, h
     episodes = []
     used_tools, nudged = 0, False
     edited_since_test, test_nudged = False, False
-    no_call, no_call_total, repeats = 0, 0, {}        # replies with no tool call at all (the model is chatting, not working); steps repeated
+    no_call, no_call_total, bad_calls, repeats = 0, 0, 0, {}        # replies with no tool call at all (the model is chatting, not working); steps repeated
     for turn in range(1, max_turns + 1):
         if context_tokens and estimate_tokens(messages) > context_tokens * 0.7:
             messages, dropped = compact(messages)
@@ -730,6 +759,11 @@ def run_agent(task, generate, sandbox, max_turns=8, system=None, project=True, h
                     continue
                 return {"finished": False, "said": True, "summary": words, "turns": turn, "messages": messages, "episodes": episodes}
             result, done = f"error: {e}", False
+            bad_calls = bad_calls + 1 if str(e).startswith("the tool call is not valid JSON") else 0
+            if bad_calls >= BAD_CALL_LIMIT:
+                return {"finished": False, "turns": turn, "messages": messages, "episodes": episodes, "stopped": "bad_call",
+                        "summary": "The model kept sending a tool call that could not be read, so it was stopped instead of looping. This usually means the file was too big "
+                                   "to write in one go. Ask for it in smaller parts (for example the page first, then the styles, then the script), or pick Solstice or the Qwen coder."}
             no_call = no_call + 1 if str(e).startswith("no tool call found") else 0
             no_call_total += 1 if str(e).startswith("no tool call found") else 0
             if no_call >= NO_CALL_LIMIT or no_call_total >= NO_CALL_TOTAL:
@@ -739,6 +773,7 @@ def run_agent(task, generate, sandbox, max_turns=8, system=None, project=True, h
                                    "Try a specific task (for example: create hello.py that prints a greeting, with a test), or pick Solstice or the Qwen coder."}
         else:
             no_call = 0
+            bad_calls = 0
             used_tools += 1
             if not done:
                 key = (name, json.dumps(args, sort_keys=True, default=str), str(result)[:300])     # the same step with the same result again
