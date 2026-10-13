@@ -3,6 +3,7 @@ emvryx3_bakeoff.py - Which candidate earns a slot? Speed, memory and the everyda
 
     python scripts/emvryx3_bakeoff.py --llama-bin C:\\...\\llama-server.exe --candidates eval\\bakeoff_candidates.json
     python scripts/emvryx3_bakeoff.py ... --only apogee                  # one slot (or --only apogee-27b-iq3 for one candidate)
+    python scripts/emvryx3_bakeoff.py ... --sheet eval\\hard.jsonl --quick  # the harder 52 questions (saved apart: logs\\bakeoff-hard.md), speed at 8K only
     python scripts/emvryx3_bakeoff.py --from-logs                        # no new run: rewrite logs\\bakeoff.md from logs\\bakeoff\\*.json
 
 For each candidate (a .gguf file) it starts llama-server, and measures: graphics memory at 8K / 16K / 32K tokens of conversation, words per second at each,
@@ -105,7 +106,7 @@ def render_report(results):
     slots = {}
     for r in results:
         slots.setdefault(r["slot"], []).append(r)
-    lines = ["# Emvryx 3 bake-off", "", f"{len(results)} candidates. Sheet: {results[0]['total'] if results else 0} everyday questions; a gap of {WOBBLE} questions or less is noise. "
+    lines = ["# Emvryx 3 bake-off", "", f"{len(results)} candidates. Sheet: {results[0]['total'] if results else 0} questions; a gap of {WOBBLE} questions or less is noise. "
              "'Score' leaves out the 2 identity questions (a plain model cannot know it is Emvryx; training teaches that), 'All' counts everything. Speed is words(tokens) a second answering; memory is the card in use with the model loaded at each conversation length.", ""]
     for slot, items in slots.items():
         base = next((r for r in items if r.get("baseline")), None)
@@ -244,8 +245,13 @@ def main(argv=None):
     ap.add_argument("--sheet", default=os.path.join("eval", "everyday.jsonl"))
     ap.add_argument("--only", help="a slot (flare, equinox, solstice, apogee) or one candidate name")
     ap.add_argument("--from-logs", action="store_true")
+    ap.add_argument("--label", default=None, help="keep this run apart from others (default: none for eval/everyday.jsonl, the sheet's name for any other sheet)")
+    ap.add_argument("--quick", action="store_true", help="measure memory and speed at 8K only (not 8K, 16K and 32K)")
     a = ap.parse_args(argv)
-    os.makedirs(os.path.join("logs", "bakeoff"), exist_ok=True)
+    label = a.label if a.label is not None else ("" if os.path.basename(a.sheet).startswith("everyday") else os.path.splitext(os.path.basename(a.sheet))[0])
+    outdir = os.path.join("logs", "bakeoff", label) if label else os.path.join("logs", "bakeoff")
+    report_path = os.path.join("logs", f"bakeoff-{label}.md" if label else "bakeoff.md")
+    os.makedirs(outdir, exist_ok=True)
     if not a.from_logs:
         if not a.llama_bin:
             ap.error("--llama-bin is needed")
@@ -257,18 +263,18 @@ def main(argv=None):
             cands = [c for c in json.load(f)["candidates"] if not a.only or a.only in (c["slot"], c["name"])]
         for i, cand in enumerate(cands, 1):
             print(f"[{i}/{len(cands)}] {cand['name']} ...", flush=True)
-            res = run_candidate(a.llama_bin, cand, tests)
-            with open(os.path.join("logs", "bakeoff", cand["name"] + ".json"), "w", encoding="utf-8") as f:
+            res = run_candidate(a.llama_bin, cand, tests, CONTEXTS[:1] if a.quick else CONTEXTS)
+            with open(os.path.join(outdir, cand["name"] + ".json"), "w", encoding="utf-8") as f:
                 json.dump(res, f, indent=1)
             print("   ", res.get("error") or f"{res['passed']}/{res['total']}, {res['speed']} words/sec", flush=True)
     results = []
-    for p in sorted(glob.glob(os.path.join("logs", "bakeoff", "*.json"))):
+    for p in sorted(glob.glob(os.path.join(outdir, "*.json"))):
         with open(p, encoding="utf-8") as f:
             results.append(json.load(f))
     report = render_report(results)
-    with open(os.path.join("logs", "bakeoff.md"), "w", encoding="utf-8") as f:
+    with open(report_path, "w", encoding="utf-8") as f:
         f.write(report)
-    print("\n" + report + "Written to logs\\bakeoff.md - send me that file.")
+    print("\n" + report + f"Written to {report_path} - send me that file.")
 
 
 if __name__ == "__main__":
