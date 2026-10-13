@@ -84,6 +84,13 @@ function sxSections(id) {
       {title: 'Documents', desc: 'Files and pictures you added to chats.', ctl: sxBtn('Open documents', () => { closeSettings(); openDocs(); })},
       {title: 'Download my data', desc: 'Everything saved about you in one zip: chats, notes, memory, projects.', ctl: el('a', {class: 'sbtn', href: '/api/export', download: ''}, 'Download'), keys: 'export backup'},
       {title: 'Private chats', desc: 'Chats started as Private are never saved, never searched on the web and never use memory.'}]},
+      {title: 'Archive', rows: [
+      {title: 'Archived chats', desc: 'Chats you archived: out of the list, but kept, searchable and still remembered. Open, bring back or delete them here.', ctl: sxBtn('See archived', openArchived), keys: 'archive archived hidden old chats'},
+      {title: 'Archive all my chats', desc: 'Clears your chat list without losing anything. Emvryx still remembers them, so you can ask things like \u201cwhat did we talk about last time about my car?\u201d', ctl: sxBtn('Archive all', async () => {
+        if (!confirm('Archive every chat? They leave the list but are kept and still remembered. You can bring any of them back.')) return;
+        const j = await (await post('/api/chats/archive-all')).json().catch(() => ({})); S.chatId = null; S.messages = []; S.title = 'New chat'; remember(); await load(); renderThread(true);
+        alert((j.archived || 0) + ' chats archived. Find them under Archived chats.');
+      }), keys: 'archive all clear list keep remember'}]},
       {title: 'Delete', rows: [
       {title: 'Delete all my chats', desc: 'Removes every chat. This cannot be undone.', danger: true, ctl: sxBtn('Delete chats', async () => { if (confirm('Delete every chat? This cannot be undone.')) { await post('/api/delete-everything'); S.chatId = null; S.messages = []; remember(); await load(); } }, 'bad')}]},
       {title: 'Legal', rows: [

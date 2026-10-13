@@ -176,6 +176,7 @@ function chatMenu(c, btn) {   // a small menu next to the chat: pin, folder, del
   const menu = el('div', {class: 'acctmenu chatmenu', style: 'position:fixed;left:' + Math.max(8, btn.getBoundingClientRect().left - 150) + 'px;top:' + (btn.getBoundingClientRect().bottom + 4) + 'px;right:auto;bottom:auto;width:200px;z-index:60'},
     item(c.pinned ? 'Unpin' : '\ud83d\udccc Pin to the top', async () => { await post('/api/chats/' + c.id + '/pin', {pinned: !c.pinned}); await load(); }),
     item('Move to a folder\u2026', async () => { const f = prompt('Folder name (leave empty to take it out of its folder):', c.folder || ''); if (f === null) return; await post('/api/chats/' + c.id + '/folder', {folder: f}); await load(); }),
+    item('\ud83d\uddc4\ufe0f Archive (still remembered)', () => archiveChat(c, true)),
     item('Delete', () => delChat(c)));
   document.body.append(menu);
   setTimeout(() => document.addEventListener('click', function off() { menu.remove(); document.removeEventListener('click', off); }, {once: false}), 0);

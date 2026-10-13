@@ -106,6 +106,8 @@ class RoutesGet:
             return self._send(200, app_links.briefing(self.state.links, who["user"], self.state.usage.get_user(who["user"]).get("tz_minutes", 0)))
         if path == "/api/shares":
             return self._send(200, {"shares": self.state.shares.list(who["user"]), "on": bool(self.state.security.get("sharing"))})
+        if path == "/api/chats/archived":
+            return self._send(200, {"chats": self.state.store(who["user"]).list_chats(archived=True)})
         if path == "/api/chats/search":
             return self._send(200, {"results": self.state.store(who["user"]).search((qs.get("q") or [""])[0])})
         m = re.fullmatch(r"/api/chats/(-?\d+)", path)

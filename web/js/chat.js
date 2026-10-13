@@ -12,6 +12,26 @@ async function openChat(id) {
   remember(); document.body.classList.remove('menu-open'); renderThread(true); renderAttached(); renderChats();
   if (c.generating) followReply();
 }
+// archive: out of the chat list, but kept, searchable, and still remembered (questions like "what did we talk about last time" can use it)
+async function archiveChat(c, on) {
+  await post('/api/chats/' + c.id + '/archive', {archived: on});
+  if (on && S.chatId === c.id) { S.chatId = null; S.messages = []; S.title = 'New chat'; remember(); }
+  await load();
+}
+async function openArchived() {
+  const box = el('div', {class: 'arch'}, el('p', {style: 'color:var(--muted)'}, 'Loading\u2026'));
+  const fill = async () => {
+    const j = await (await api('/api/chats/archived')).json().catch(() => ({chats: []}));
+    if (!j.chats.length) { box.replaceChildren(el('p', {style: 'color:var(--muted)'}, 'Nothing archived. Archive a chat from its \u22ef menu, or everything at once in Settings > Data controls.')); return; }
+    box.replaceChildren(...j.chats.map((c) => el('div', {class: 'srow'}, el('div', {class: 'stxt'}, el('b', {}, c.title || 'Untitled'), el('small', {}, new Date(c.updated * 1000).toLocaleDateString())),
+      el('div', {class: 'sctl'},
+        sxBtn('Open', async () => { m.remove(); closeSettings(); await openChat(c.id); }),
+        sxBtn('Unarchive', async () => { await archiveChat(c, false); fill(); }),
+        sxBtn('Delete', async () => { await delChat(c); fill(); }, 'bad')))));
+  };
+  const m = dialog([el('h2', {}, 'Archived chats'), el('div', {style: 'color:var(--muted);margin-bottom:8px'}, 'Out of your chat list, but kept, searchable and still remembered.'), box], 'Close');
+  fill();
+}
 async function delChat(c) {
   if (!confirm('Delete "' + c.title + '"? This cannot be undone.')) return;
   await api('/api/chats/' + c.id, {method: 'DELETE'});
