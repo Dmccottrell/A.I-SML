@@ -254,3 +254,6 @@ The main chat has a newer look behind the feature flag `modern_look` (Settings >
 
 ## One session, any model
 A message in an open session always continues that session. Pick another model in the message box and it takes over the same conversation (the feed shows "Now using …"); it sees everything said and done so far. An older session (finished before a restart, or from the list) comes back to life when you send it a message: the model is told what was asked and what happened, then your new message, and the feed, Rewind points and Changes carry on in the same session. Start a separate session with New session or the + button.
+
+## It carries on by itself after a hiccup
+If the model's server went away between steps (unloaded after being idle, swapped for another model by a chat, or crashed), the step loads the model again and is tried again, up to three times, instead of the session stopping with "can't reach the model". Any other unexpected failure is tried once more by itself: the feed shows "↻ Something went wrong (…). Trying again by itself." and the model is told the error so it can carry on. Problems you need to act on (usage ran out, Emvryx resting, the sandbox off) still stop and say so.

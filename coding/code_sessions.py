@@ -125,6 +125,7 @@ class Session:
         self.live_messages = None                      # the conversation as it grows during a turn (kept if the turn is stopped)
         self.generate, self.max_turns, self.context_tokens, self.extra_programs = None, 12, None, ()
         self.turns_run = 0
+        self._auto_tries = 0                            # automatic second tries after an unexpected failure, this message
         self.notify, self.on_notify = False, None       # tell the owner's phone when a turn ends or it needs an answer (set by the server)
 
     def emit(self, kind, **data):
@@ -338,10 +339,12 @@ class Session:
                 raise CodeError("This session cannot continue.", "Start a new one.")
             self.state = "working"
             self.stop.clear()
+        self._auto_tries = 0
         self._model_text = model_text                       # what the model gets instead of the line the person sees (a code review's diff)
         threading.Thread(target=self._turn, args=(text, False, bool(plan)), daemon=True).start()
 
-    def _turn(self, text, first, plan=False):
+    def _turn(self, text, first, plan=False, auto=False):
+        retried = False
         self.state = "working"
         self.next_steps = []
         self.turns_run += 1
@@ -351,7 +354,7 @@ class Session:
         if first:
             self.emit("start", task=text, model=self.model_id, project=self.project, plan=plan)
         else:
-            self.emit("user", text=text, plan=plan)
+            self.emit("user", text=text, plan=plan, **({"auto": True} if auto else {}))
         self.live_messages = None
         lang = languages.decide(text, self.env, self.workspace)                  # which language fits, and what can run here: told to the person and to the model
         line = languages.page_line(lang)
@@ -382,9 +385,17 @@ class Session:
         except BaseException as e:                     # a model that cannot be reached, a full disk, ...
             self._keep_history()
             msg = getattr(e, "message", None) or str(e) or e.__class__.__name__
-            self._end( finished=False, summary="It could not finish: " + clip(msg, 500), turns=0, error=True)
-            self.state = "failed"
+            if not isinstance(e, (CodeError, SystemExit, KeyboardInterrupt)) and not self.stop.is_set() and self._auto_tries < 1 and self.generate is not None:
+                # something unexpected broke the step: like a person would, look at what went wrong and carry on once, before giving up
+                self._auto_tries += 1
+                retried = True
+                self.emit("note", text="Something went wrong (" + clip(msg, 160) + "). Trying again by itself.")
+            else:
+                self._end( finished=False, summary="It could not finish: " + clip(msg, 500), turns=0, error=True)
+                self.state = "failed"
         finally:
+            if retried:
+                return self._turn("The last step failed with this error: " + clip(msg, 400) + ". Look at what went wrong, then carry on from where you stopped and finish the task.", False, auto=True)
             self.live = None
             self.persist(force=True)
             if self.state not in ("starting", "working", "asking"):

@@ -56,6 +56,54 @@ class History(Base):
         rows = self.owner.call("GET", "/api/code/sessions")[1]["sessions"]
         self.assertEqual([r["id"] for r in rows], [sid])                    # no new session in the list
 
+    def test_a_model_server_that_went_away_is_loaded_again_and_the_step_retried(self):
+        loads = []
+
+        def backend(model):
+            loads.append(model["id"])
+            if len(loads) == 1:                                            # the first server is gone (unloaded while idle, or swapped for another model)
+                def dead(messages):
+                    raise SystemExit("can't reach the model at http://127.0.0.1:51775 (refused). Start llama-server first.")
+                return dead
+            return lambda messages: "All fixed."
+        self.state.code_generate = backend
+        st, j = self.owner.call("POST", "/api/code/start", {"project": "demo", "task": "fix the error", "model": "solstice-2"})
+        self.assertEqual(st, 200, j)
+        wait_for(lambda: self.state.code.sessions[j["id"]].state in ("done", "stopped", "failed"), 20)
+        s = self.state.code.sessions[j["id"]]
+        self.assertEqual(s.state, "done")                                   # it carried on instead of stopping with the error
+        self.assertEqual(len(loads), 2)
+        self.assertIn("All fixed.", s.events[-1].get("summary", ""))
+
+    def test_an_unexpected_failure_is_tried_again_once_by_itself(self):
+        calls = []
+
+        def backend(model):
+            def chat(messages):
+                calls.append(messages)
+                if len(calls) == 1:
+                    raise RuntimeError("the disk hiccuped")
+                return "Done after the hiccup."
+            return chat
+        self.state.code_generate = backend
+        st, j = self.owner.call("POST", "/api/code/start", {"project": "demo", "task": "fix it", "model": "solstice-2"})
+        wait_for(lambda: self.state.code.sessions[j["id"]].state in ("done", "stopped", "failed"), 20)
+        s = self.state.code.sessions[j["id"]]
+        self.assertEqual(s.state, "done")
+        kinds = [e["kind"] for e in s.events]
+        self.assertIn("note", kinds)
+        auto = [e for e in s.events if e["kind"] == "user" and e.get("auto")]
+        self.assertIn("the disk hiccuped", auto[0]["text"])
+        self.assertIn("the disk hiccuped", [m for m in calls[-1] if m["role"] == "user"][-1]["content"])
+
+    def test_it_gives_up_after_one_automatic_try(self):
+        self.state.code_generate = lambda model: (lambda messages: (_ for _ in ()).throw(RuntimeError("still broken")))
+        st, j = self.owner.call("POST", "/api/code/start", {"project": "demo", "task": "fix it", "model": "solstice-2"})
+        wait_for(lambda: self.state.code.sessions[j["id"]].state in ("done", "stopped", "failed"), 20)
+        s = self.state.code.sessions[j["id"]]
+        self.assertEqual(s.state, "failed")
+        self.assertEqual(sum(1 for e in s.events if e["kind"] == "note"), 1)
+
     def test_another_model_takes_over_the_same_session(self):
         sid = self.run_session()
         seen = []

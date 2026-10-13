@@ -284,6 +284,7 @@ function diffNode(preview) {
 function cEvent(e) {
   const feed = $('codeIn'); C.events.push(e);
   if (e.kind === 'model') { feed.append(el('div', {class: 'note', style: 'align-self:center;margin:6px auto'}, 'Now using ' + modelName(e.model) + (e.previous ? ' (was ' + modelName(e.previous) + ')' : ''))); C.last = null; return; }
+  if (e.kind === 'note' || (e.kind === 'user' && e.auto)) { if (e.kind === 'note') feed.append(el('div', {class: 'note', style: 'align-self:center;margin:6px auto;max-width:92%'}, '\u21bb ' + e.text)); C.last = null; return; }
   if (e.kind === 'user') { feed.append(el('div', {class: 'cc-user'}, el('span', {class: 'ember'}), el('span', {}, (e.plan ? '[Plan] ' : '') + e.text))); C.last = null; return; }
   if (e.kind === 'start') { feed.replaceChildren(el('div', {class: 'cc-user'}, el('span', {class: 'ember'}), el('span', {}, (e.plan ? '[Plan] ' : '') + e.task))); C.last = null; return; }
   if (e.kind === 'step') {

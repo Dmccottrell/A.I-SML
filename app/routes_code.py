@@ -174,19 +174,30 @@ class RoutesCode:
         box = {}
 
         def generate(messages, model=model):          # the model loads on the first step, in the session's thread (it can take a minute)
-            if "fn" not in box:
+            # A server that went away since the last step (unloaded while idle, swapped for another model by a chat, or crashed) is loaded again and the step retried,
+            # instead of the session stopping with "can't reach the model".
+            for attempt in range(3):
+                if "fn" not in box:
+                    try:
+                        box["fn"] = st.code_backend(model, cancel=getattr(generate, "should_stop", None))
+                    except Cancelled:
+                        raise vryxcode.Interrupted()
+                    except AppError as e:
+                        raise code_sessions.CodeError(e.message, e.action)
+                fn = box["fn"]
+                if hasattr(fn, "on_delta"):
+                    fn.on_delta = getattr(generate, "on_delta", None)     # live progress for the page's "working" line
+                    fn.should_stop = getattr(generate, "should_stop", None)     # Stop works while it is still reading the prompt
                 try:
-                    box["fn"] = st.code_backend(model, cancel=getattr(generate, "should_stop", None))
-                except Cancelled:
-                    raise vryxcode.Interrupted()
-                except AppError as e:
-                    raise code_sessions.CodeError(e.message, e.action)
-            if hasattr(box["fn"], "on_delta"):
-                box["fn"].on_delta = getattr(generate, "on_delta", None)     # live progress for the page's "working" line
-                box["fn"].should_stop = getattr(generate, "should_stop", None)     # Stop works while it is still reading the prompt
-            reply = box["fn"](messages)
-            generate.usage = getattr(box["fn"], "usage", None)      # the real counts, for the usage meter
-            return reply
+                    reply = fn(messages)
+                except SystemExit as e:
+                    if "can't reach the model" not in str(e) or attempt == 2:
+                        raise
+                    box.pop("fn", None)
+                    time.sleep(1 + 2 * attempt)
+                    continue
+                generate.usage = getattr(fn, "usage", None)      # the real counts, for the usage meter
+                return reply
         snap = st.limiter.snapshot(user, model["limiter_key"], "balanced", st.clock())
         if not snap["exempt"] and snap["can_send"] < 1:
             raise code_sessions.CodeError("Your usage has run out for now.", "Coding steps are counted like chat messages. Wait for the tank to refill or the week to reset.")
