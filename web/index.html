@@ -131,6 +131,7 @@ svg .core { fill: var(--core); stroke: var(--sun); stroke-width: 3; transition: 
 .code[hidden] { display: none; }
 .code .top2 { height: 60px; flex-shrink: 0; display: flex; align-items: center; gap: 4px; padding: 0 8px 0 4px; }
 .code .top2 .title { font: 600 18px 'Sora', sans-serif; flex: 1; white-space: nowrap; padding-left: 4px; }
+.code .top2 .chip.plus { padding: 4px 11px; font-size: 18px; line-height: 1; font-weight: 600; color: var(--accenttext); }
 .code .top2 .chip { max-width: 34vw; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; padding: 4px 11px; font-size: 13px; flex-shrink: 0; } .code .top2 #codeProj { flex-shrink: 1; min-width: 0; max-width: 26vw; }
 .code .main2 { flex: 1; min-height: 0; display: flex; position: relative; }
 .code .col { flex: 1; min-width: 0; display: flex; flex-direction: column; }
@@ -312,7 +313,7 @@ svg .core { fill: var(--core); stroke: var(--sun); stroke-width: 3; transition: 
 }
 /* VryxCode home: the Sessions list */
 .code .home { flex: 1; min-height: 0; overflow-y: auto; padding: 4px 16px 110px; display: none; }
-.code.home .home { display: block; } .code.home .main2, .code.home #codeProj, .code.home #codePreviewBtn, .code.home #codeFilesBtn { display: none; } .code:not(.home) .fab { display: none; }
+.code.home .home { display: block; } .code.home .main2, .code.home #codePreviewBtn, .code.home #codeFilesBtn { display: none; } .code:not(.home) .fab { display: none; }
 .code .home .envs { display: flex; flex-wrap: wrap; gap: 8px; padding: 6px 0 14px; align-items: center; } .code .home .lbl { color: var(--muted); font-size: 15px; }
 .code .home .chead { display: flex; justify-content: space-between; align-items: center; padding: 6px 0 10px; }
 .code .home .chead .menu { right: 0; left: auto; width: 200px; }
@@ -619,6 +620,7 @@ html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
     <button class="icon" id="codeBack" aria-label="Back to chats"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M15 5l-7 7 7 7" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
     <span class="title" id="codeTitle">Code</span>
     <div style="position:relative"><button class="chip" id="codeProj" aria-haspopup="true"></button><div class="menu" id="codeProjMenu" hidden></div></div>
+    <button class="chip plus" id="codeProjNew" aria-label="New project" title="Start a new project">+</button>
     <button class="chip" id="codePreviewBtn" disabled title="See what was built, live">Preview</button>
     <button class="chip" id="codeIdeBtn" title="Editor layout: files, editor, VryxCode and preview side by side (wide screens)">Editor</button>
     <button class="chip" id="codeFilesBtn">Files</button>
@@ -2596,6 +2598,7 @@ function emptyFeed() {
     el('p', {style: 'font-size:13px'}, C.files.includes('VRYX.md') ? 'Using the notes in VRYX.md. Type / for commands and @ to point at a file.' : 'Type / for commands and @ to point at a file. /init creates VRYX.md, notes VryxCode reads every time.')));
 }
 function closeCodeMenus() { $('codeProjMenu').hidden = true; $('codeModelMenu').hidden = true; $('codeEnvMenu').hidden = true; $('codeFilterMenu').hidden = true; $('codeModeMenu').hidden = true; $('codeSuggest').hidden = true; }
+$('codeProjNew').onclick = (e) => { e.stopPropagation(); newProject(); };
 $('codeProj').onclick = (e) => {
   e.stopPropagation(); const m = $('codeProjMenu'); if (!m.hidden) { m.hidden = true; return; } closeCodeMenus();
   const item = (label, fn, cls) => el('button', {class: 'opt' + (cls ? ' ' + cls : ''), onclick: () => { closeCodeMenus(); fn(); }}, el('span', {class: 'grow'}, label));
@@ -2607,8 +2610,22 @@ $('codeProj').onclick = (e) => {
   m.hidden = false;
 };
 function newProject() {
-  const n = (prompt('Project name (letters, numbers, dashes):') || '').trim();
-  if (!/^[A-Za-z0-9_-]{1,40}$/.test(n)) return; C.project = n; C.file = null; renderCodeBar(); refreshFiles();
+  closeCodeMenus();
+  const name = el('input', {type: 'text', placeholder: 'my-new-app', maxlength: '40', autocomplete: 'off', autocapitalize: 'none', spellcheck: 'false', 'aria-label': 'Project name', style: 'width:100%;box-sizing:border-box'});
+  const msg = el('div', {style: 'color:var(--muted);font-size:14px;min-height:20px'}, 'Letters, numbers, dashes and underscores. Up to 40.');
+  let m;
+  const make = () => {
+    const n = name.value.trim();
+    if (!/^[A-Za-z0-9_-]{1,40}$/.test(n)) { msg.style.color = 'var(--danger)'; msg.textContent = 'Use letters, numbers, dashes or underscores only (no spaces), up to 40.'; name.focus(); return; }
+    if ((C.info.projects || []).includes(n)) { msg.style.color = 'var(--danger)'; msg.textContent = 'You already have a project called ' + n + '. Pick it from the project list instead.'; name.focus(); return; }
+    C.info.projects = (C.info.projects || []).concat([n]); C.project = n; C.file = null; m.remove();
+    if (C.view === 'home') newSession(); else { renderCodeBar(); refreshFiles(); }          // from the Sessions list: straight to a blank session in the new project
+    toast('Started ' + n + '. Tell VryxCode what to build.');
+  };
+  name.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); make(); } });
+  m = dialog([el('h2', {}, 'New project'), el('div', {style: 'color:var(--muted)'}, 'A project is a folder of files VryxCode builds in. Give it a short name.'), name, msg],
+    'Cancel', el('button', {class: 'btn primary', type: 'button', onclick: make}, 'Create project'));
+  setTimeout(() => name.focus(), 50);
 }
 async function deleteProject() {
   if (!confirm('Delete the project "' + C.project + '" and all its files? This cannot be undone.')) return;

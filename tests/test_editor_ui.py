@@ -24,6 +24,32 @@ class EditorUi(Base):
         with open(os.path.join(self.state.code.project_path("owner", "demo"), path), encoding="utf-8") as f:
             return f.read()
 
+    def test_plus_button_starts_a_new_project_from_the_sessions_list(self):
+        from playwright.sync_api import sync_playwright
+        with sync_playwright() as p:
+            b = p.chromium.launch(executable_path=find_browser())
+            try:
+                page = b.new_context(viewport={"width": 1000, "height": 800}, extra_http_headers={"Authorization": "Bearer " + self.state.owner_key()}).new_page()
+                page.goto(f"http://127.0.0.1:{self.port}/")
+                page.wait_for_timeout(600)
+                page.evaluate("document.querySelectorAll('.tour').forEach((e) => e.remove()); openCode()")
+                page.wait_for_selector("#codeProjNew", state="visible")                        # on the Sessions list itself, not only inside a session
+                self.assertTrue(page.is_visible("#codeProj"))
+                page.evaluate("document.querySelectorAll('.tour').forEach((e) => e.remove())")        # the welcome tour can appear late
+                page.click("#codeProjNew")
+                page.fill(".dialog input", "bad name")
+                page.click(".dialog .btn.primary")
+                self.assertIn("no spaces", page.inner_text(".dialog"))                         # a clear reason, the dialog stays open
+                page.fill(".dialog input", "recipe-box")
+                page.click(".dialog .btn.primary")
+                page.wait_for_timeout(500)
+                self.assertEqual(page.evaluate("C.project"), "recipe-box")
+                self.assertEqual(page.evaluate("C.view"), "session")                           # straight to a blank session in it
+                self.assertIn("recipe-box", page.inner_text("#codeProj"))
+                self.assertEqual(page.evaluate("document.querySelectorAll('.dialog').length"), 0)
+            finally:
+                b.close()
+
     def test_open_edit_save_and_a_change_from_outside(self):
         from playwright.sync_api import sync_playwright
         with sync_playwright() as p:
@@ -201,6 +227,7 @@ class EditorUi(Base):
                 page.press("#outCmd", "Enter")
                 wait_for(lambda: "42" in page.inner_text("#ideOutLog"))
                 page.click("#ideFiles >> text=app.py")
+                page.wait_for_timeout(400)                                                       # let the editor switch to app.py before Run file reads the open file
                 page.click("#outRunFile")
                 wait_for(lambda: page.locator("#ideOutLog .oi").count() >= 4)
                 self.assertIn("python app.py", page.inner_text("#ideOutLog"))
