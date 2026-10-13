@@ -451,6 +451,47 @@ class CodeManager:
             return {"path": rel, "text": "(a binary file)", "truncated": False}
         return {"path": rel, "text": data[:MAX_FILE_BYTES].decode("utf-8", "replace"), "truncated": len(data) > MAX_FILE_BYTES}
 
+    def save_file(self, user, project, rel, text):
+        """The editor's Save: write one text file of the project (a new file too). Refused while VryxCode is working in the same project (the two would overwrite each
+        other), for paths outside the project or in hidden folders, for binary files, and past the file-size and project quotas. Returns {"path", "size", "created"}."""
+        project = self.check_name(project)
+        for x in self.sessions.values():
+            if x.user == user and x.project == project and x.state in ("starting", "working", "asking"):
+                raise CodeError("VryxCode is working in this project right now.", "Wait for it to finish, or press Stop, then save again.")
+        if not isinstance(text, str):
+            raise CodeError("There is nothing to save.")
+        data = text.replace("\r\n", "\n").encode("utf-8")
+        if len(data) > MAX_FILE_BYTES:
+            raise CodeError("That file is too big to edit here.", f"The editor handles files up to {MAX_FILE_BYTES // 1000} KB.")
+        name = self._safe_rel(rel)
+        if not name or any(p in SKIP_DIRS for p in name.split("/")) or len(name) > 200:
+            raise CodeError("That file name isn't allowed.", "Use a name inside the project, not in .git or .emvryx.")
+        workspace = self.project_path(user, project)
+        root = os.path.realpath(workspace)
+        full = os.path.realpath(os.path.join(root, name))
+        if not full.startswith(root + os.sep):
+            raise CodeError("That file isn't in the project.")
+        exists = os.path.isfile(full)
+        if os.path.islink(os.path.join(root, name)):
+            raise CodeError("That is a link, not a file.")
+        if os.path.isdir(full):
+            raise CodeError("That name is a folder.")
+        if exists:
+            with open(full, "rb") as f:
+                if b"\0" in f.read(2000):
+                    raise CodeError("That is a binary file; it can't be edited here.")
+        try:
+            os.makedirs(root, exist_ok=True)
+            self.quotas.room(self.base(user), workspace, extra_bytes=len(data), extra_files=0 if exists else 1)
+        except code_sandbox.QuotaError as e:
+            raise CodeError(e.message, e.action)
+        os.makedirs(os.path.dirname(full), exist_ok=True)
+        tmp = full + ".saving"
+        with open(tmp, "wb") as f:
+            f.write(data)
+        os.replace(tmp, full)
+        return {"path": name, "size": len(data), "created": not exists}
+
     def export_zip(self, user, project):
         """The whole project as zip bytes (without .git, caches and node_modules)."""
         path = self.project_path(user, project)

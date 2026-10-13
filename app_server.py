@@ -2141,6 +2141,8 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 return self._file("manifest.webmanifest", "application/manifest+json")
             if path == "/sw.js":
                 return self._file("sw.js", "text/javascript")
+            if path == "/editor.js":                      # the VryxCode editor (a plain script of its own, so the page's one inline script stays the only inline one)
+                return self._file("editor.js", "text/javascript; charset=utf-8")
             if path == "/icon.svg":
                 return self._file("icon.svg", "image/svg+xml")
             if path in ("/icon-192.png", "/icon-512.png", "/icon-maskable-512.png", "/apple-touch-icon.png"):
@@ -2975,6 +2977,11 @@ class Handler(http.server.BaseHTTPRequestHandler):
             if m:
                 st.code.get(user, m.group(1)).request_stop()
                 return self._send(200, {"ok": True})
+            if path == "/api/code/file":                          # the editor's Save (a new file too)
+                allowed, why = st.code_allowed(who)
+                if not allowed:
+                    raise code_sessions.CodeError(why, "Ask the owner about VryxCode access.")
+                return self._send(200, st.code.save_file(user, body.get("project"), body.get("path"), body.get("text")))
             if path == "/api/code/init":
                 project = st.code.check_name(body.get("project"))
                 return self._send(200, st.code.init_instructions(user, project))
