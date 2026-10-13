@@ -87,13 +87,13 @@ class Flags:
             self._apply(fid, audience, by, self.clock())
             self._save()
 
-    def _apply(self, fid, audience, by, at, kind="minor"):
+    def _apply(self, fid, audience, by, at, kind="minor", notes=""):
         """Set one feature's audience (caller holds the lock). Going live for everyone is a release: the version goes up and the release history gets a line."""
         was = self.audience_raw(fid)
         self.data["audiences"][fid] = audience
         self.data["changed"][fid] = {"by": by, "at": at}
         if audience == "everyone" and was != "everyone":
-            self._release([fid], by, at, kind)
+            self._release([fid], by, at, kind, notes)
 
     def audience_raw(self, fid):
         a = self.data["audiences"].get(fid)
@@ -122,6 +122,12 @@ class Flags:
                                           "items": [{"id": model_id, "title": label, "desc": desc}]})
             del self.data["releases"][:-200]
             self._save()
+
+    @staticmethod
+    def next_version(version, kind):
+        """What publishing would make the version: 1.4.2 -> patch 1.4.3, minor 1.5.0, major 2.0.0."""
+        major, minor, patch = (int(x) for x in str(version).split("."))
+        return {"major": f"{major + 1}.0.0", "minor": f"{major}.{minor + 1}.0", "patch": f"{major}.{minor}.{patch + 1}"}[kind]
 
     def version(self):
         return self.data["version"]
@@ -155,7 +161,7 @@ class Flags:
         if due and self.clock() >= due["at"]:
             with self.lock:
                 del self.data["scheduled"][fid]
-                self._apply(fid, due["audience"], "schedule (set by %s)" % due.get("by", "?"), due["at"])
+                self._apply(fid, due["audience"], "schedule (set by %s)" % due.get("by", "?"), due["at"], due.get("kind", "minor"), due.get("notes", ""))
                 self._save()
             return due
         return None
@@ -173,9 +179,11 @@ class Flags:
                 self._release([fid], by, self.clock(), kind, str(notes)[:500])
             self._save()
 
-    def schedule(self, fid, at, audience="everyone", by=""):
+    def schedule(self, fid, at, audience="everyone", by="", kind="minor", notes=""):
         if fid not in BY_ID:
             raise ValueError("no such feature")
+        if kind not in KINDS:
+            raise ValueError("choose " + ", ".join(KINDS))
         if audience not in AUDIENCES:
             raise ValueError("choose " + ", ".join(AUDIENCES))
         try:
@@ -188,7 +196,7 @@ class Flags:
         if at > now + 366 * 86400:
             raise ValueError("choose a time within the next year")
         with self.lock:
-            self.data["scheduled"][fid] = {"at": at, "audience": audience, "by": by}
+            self.data["scheduled"][fid] = {"at": at, "audience": audience, "by": by, "kind": kind, "notes": str(notes)[:500]}
             self._save()
 
     def cancel_schedule(self, fid):

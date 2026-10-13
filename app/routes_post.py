@@ -340,7 +340,8 @@ class RoutesPost:
                         self.state.flags.cancel_schedule(str(body["id"]))
                         self.state.auth.event("flag_changed", who["user"], self._ip(), f"{body['id']}: schedule cancelled")
                     elif body.get("id") and "schedule_at" in body:                       # publish at a chosen time (seconds since 1970)
-                        self.state.flags.schedule(str(body["id"]), body.get("schedule_at"), str(body.get("audience") or "everyone"), by=who["user"])
+                        self.state.flags.schedule(str(body["id"]), body.get("schedule_at"), str(body.get("audience") or "everyone"), by=who["user"],
+                                                 kind=str(body.get("kind") or "minor"), notes=str(body.get("notes") or ""))
                         self.state.auth.event("flag_changed", who["user"], self._ip(), f"{body['id']}: scheduled for {time.strftime('%Y-%m-%d %H:%M', time.localtime(float(body['schedule_at'])))}")
                     elif body.get("id"):
                         self.state.flags.set_audience(str(body["id"]), str(body.get("audience", "")), by=who["user"])

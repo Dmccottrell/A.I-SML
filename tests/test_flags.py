@@ -133,6 +133,20 @@ class Scheduling(unittest.TestCase):
         self.assertIsNone(f.listing()[0]["scheduled"])
         self.assertIn("schedule", f.listing()[0]["changed"]["by"])
 
+    def test_a_scheduled_release_keeps_its_kind_and_notes(self):
+        f = self.make()
+        f.schedule("welcome_tour", 2000, by="owner", kind="patch", notes="Smoother tour")
+        self.assertEqual(f.listing()[0]["scheduled"]["kind"], "patch")
+        self.now = 2001
+        f.audience("welcome_tour")
+        self.assertEqual(f.version(), "1.0.1")
+        self.assertEqual((f.releases()[0]["kind"], f.releases()[0]["notes"]), ("patch", "Smoother tour"))
+        with self.assertRaises(ValueError):
+            f.schedule("violet_theme", 3000, kind="huge")
+
+    def test_next_version(self):
+        self.assertEqual([F.Flags.next_version("1.4.2", k) for k in ("patch", "minor", "major")], ["1.4.3", "1.5.0", "2.0.0"])
+
     def test_cancel_publish_now_and_changes_by_hand(self):
         f = self.make()
         f.schedule("welcome_tour", 2000)
@@ -276,3 +290,34 @@ class WhatsNewServer(Base):
         self.assertEqual(self.sam.call("GET", "/api/whats-new")[1]["unseen"], [])
         self.sam.call("POST", "/api/settings", {"whats_new_seq": "banana"})               # nonsense is ignored
         self.assertEqual(self.state.get_settings("sam")["whats_new_seq"], j["seq"])
+
+
+@unittest.skipUnless(__import__("browser_check").available() and __import__("tests.test_browser_check", fromlist=["find_browser"]).find_browser(), "needs a browser")
+class PublishDialog(Base):
+    def test_publish_asks_patch_minor_or_major_and_shows_the_new_version(self):
+        from playwright.sync_api import sync_playwright
+        from tests.test_browser_check import find_browser
+        from tests.test_editor_ui import ready
+        with sync_playwright() as p:
+            b = p.chromium.launch(executable_path=find_browser())
+            try:
+                page = b.new_context(viewport={"width": 1200, "height": 900}, extra_http_headers={"Authorization": "Bearer " + self.state.owner_key()}).new_page()
+                errors = []
+                page.on("pageerror", lambda e: errors.append(str(e)))
+                page.goto(f"http://127.0.0.1:{self.port}/")
+                ready(page)
+                page.evaluate("const d = document.createElement('div'); d.id = 'admTest'; document.body.append(d); admPreviews(d)")
+                page.wait_for_selector("#admTest >> text=Publish all")
+                page.click("#admTest .adm-sub >> nth=0 >> button:text-is('Publish')")
+                page.wait_for_selector(".modal >> text=What kind of release is this?")
+                self.assertIn("v1.0.0 \u2192 v1.1.0", page.inner_text(".modal"))             # minor is the default
+                page.click(".modal >> text=Patch")
+                self.assertIn("v1.0.0 \u2192 v1.0.1", page.inner_text(".modal"))
+                page.fill(".modal textarea", "Small fixes")
+                page.click(".modal >> button:text-is('Publish now')")
+                page.wait_for_timeout(800)
+                self.assertEqual(self.state.flags.version(), "1.0.1")
+                self.assertEqual(self.state.flags.releases()[0]["notes"], "Small fixes")
+                self.assertEqual(errors, [])
+            finally:
+                b.close()

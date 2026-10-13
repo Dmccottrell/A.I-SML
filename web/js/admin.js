@@ -25,6 +25,23 @@ const admAgo = (t) => { if (!t) return 'never'; const d = Date.now() / 1000 - t;
 const admDate = (t) => t ? new Date(t * 1000).toLocaleDateString([], {month: 'short', day: 'numeric', year: 'numeric'}) : 'an unknown date';
 async function admCopy(text, btn) { try { await navigator.clipboard.writeText(text); btn.textContent = 'Copied'; } catch (e) { btn.textContent = 'Press and hold to copy'; } setTimeout(() => { btn.textContent = 'Copy'; }, 1800); }
 
+// choosing what kind of release this is: patch (fixes), minor (new features) or major (big changes), with the version it becomes and optional notes
+const REL_KINDS = [['patch', 'Patch', 'Fixes and small polish'], ['minor', 'Minor', 'New features'], ['major', 'Major', 'Big changes']];
+function nextVersion(v, kind) { const [a, b, c] = String(v).split('.').map(Number); return kind === 'major' ? (a + 1) + '.0.0' : kind === 'minor' ? a + '.' + (b + 1) + '.0' : a + '.' + b + '.' + (c + 1); }
+function releaseDialog(title, version, verb, go) {
+  let kind = 'minor';
+  const notes = el('textarea', {rows: 3, maxlength: 500, placeholder: 'What changed (optional, shown in What\u2019s new)', style: 'width:100%;border-radius:12px;padding:10px;background:var(--surface2);color:var(--text);border:1px solid var(--line);font:inherit'});
+  const line = el('p', {style: 'margin:4px 0 0;font-weight:600'});
+  const opts = el('div', {style: 'display:flex;flex-direction:column;gap:8px;margin:10px 0'});
+  const paint = () => {
+    line.textContent = 'v' + version + '  \u2192  v' + nextVersion(version, kind);
+    opts.replaceChildren(...REL_KINDS.map(([k, name, what]) => el('button', {type: 'button', class: 'opt' + (k === kind ? ' sel' : ''), onclick: () => { kind = k; paint(); }},
+      el('span', {class: 'grow'}, el('b', {}, name + '  \u00b7  v' + nextVersion(version, k)), el('small', {}, what)))));
+  };
+  paint();
+  const m = dialog([el('h2', {}, title), el('div', {style: 'color:var(--muted)'}, 'What kind of release is this?'), opts, line, notes], 'Cancel',
+    el('button', {class: 'btn', style: 'margin-bottom:8px', onclick: () => { m.remove(); go(kind, notes.value.trim()); }}, verb));
+}
 async function admPreviews(body) {
   let j = await (await api('/api/admin/flags')).json(); let view = ADM.view || 'preview';
   const save = async (b) => { const r = await post('/api/admin/flags', b); const k = await r.json().catch(() => ({})); if (!r.ok) return toast(k.message || 'That did not work.'); Object.assign(j, k); draw(); toast('Saved. It applies at once.'); };
@@ -33,11 +50,12 @@ async function admPreviews(body) {
     const when = sxInput('datetime-local', '', {'aria-label': 'Publish date and time for ' + f.title}); when.min = new Date(Date.now() + 60000 - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 16);
     return el('div', {class: 'adm-sub'}, el('b', {}, f.title), el('small', {}, f.desc),
       el('small', {style: 'color:var(--accenttext)'}, 'Only you see this until you publish it.'),
-      f.scheduled ? el('small', {style: 'color:var(--accenttext)'}, 'Goes live for everyone on ' + sxWhen(f.scheduled.at) + ' (set by ' + f.scheduled.by + ').') : null,
+      f.scheduled ? el('small', {style: 'color:var(--accenttext)'}, 'Goes live for everyone on ' + sxWhen(f.scheduled.at) + ' as a ' + (f.scheduled.kind || 'minor') + ' release (set by ' + f.scheduled.by + ').') : null,
       el('div', {class: 'adm-acts'}, when,
-        sxBtn('Schedule', () => { const t = new Date(when.value).getTime(); if (!when.value || !(t > Date.now())) return toast('Choose a date and time in the future.'); save({id: f.id, schedule_at: t / 1000}); }),
+        sxBtn('Schedule', () => { const t = new Date(when.value).getTime(); if (!when.value || !(t > Date.now())) return toast('Choose a date and time in the future.');
+          releaseDialog('Schedule "' + f.title + '"', j.version, 'Schedule it', (kind, notes) => save({id: f.id, schedule_at: t / 1000, kind, notes})); }),
         f.scheduled ? sxBtn('Cancel schedule', () => save({id: f.id, cancel_schedule: true})) : null,
-        sxBtn('Publish', () => { if (confirm('Publish "' + f.title + '" to everyone now?')) save({id: f.id, publish: 'now'}); }, 'primary')));
+        sxBtn('Publish', () => releaseDialog('Publish "' + f.title + '" to everyone', j.version, 'Publish now', (kind, notes) => save({id: f.id, publish: 'now', kind, notes})), 'primary')));
   };
   const pubCard = (f) => el('div', {class: 'adm-sub'}, el('b', {}, f.title, ' ', el('span', {class: 'adm-tag on'}, 'Live')), el('small', {}, f.desc),
     el('small', {}, f.changed ? 'Live since ' + admDate(f.changed.at) + ' (' + f.changed.by + ').' : 'Live for everyone.'),
@@ -48,7 +66,7 @@ async function admPreviews(body) {
       el('div', {class: 'adm-card'}, el('h3', {}, '\u{1F9EA} Feature previews'),
         el('p', {}, 'New features can ship to the live app visible only to you first. Publish here once you are happy with one, so everyone starts seeing it too.'),
         el('div', {class: 'adm-row'}, el('span', {style: 'color:var(--muted)'}, 'Current version: v' + j.version),
-          sxBtn('Publish all', () => { if (confirm('Publish ' + ready2.length + ' feature' + (ready2.length === 1 ? '' : 's') + ' to everyone now?')) save({publish: 'all'}); }, ready2.length ? 'primary' : '')),
+          sxBtn('Publish all', () => { if (!ready2.length) return toast('Nothing is waiting to publish.'); releaseDialog('Publish ' + ready2.length + ' feature' + (ready2.length === 1 ? '' : 's') + ' to everyone', j.version, 'Publish all now', (kind, notes) => save({publish: 'all', kind, notes})); }, ready2.length ? 'primary' : '')),
         sxSeg([['preview', 'In preview (' + prev.length + ')'], ['published', 'Published (' + pub.length + ')']], view, (v) => { view = ADM.view = v; draw(); }),
         ...(view === 'preview' ? (prev.length ? prev.map(previewCard) : [el('p', {}, 'Nothing is in preview. New features appear here until you publish them.')])
                               : (pub.length ? pub.map(pubCard) : [el('p', {}, 'Nothing has been published yet.')]))),

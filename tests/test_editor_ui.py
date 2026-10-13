@@ -442,7 +442,8 @@ class EditorUi(Base):
                 page.keyboard.press("Tab")
                 self.assertTrue(page.input_value("#ideBody textarea").endswith("z = 1return a + b"))
                 wait_for(lambda: page.locator("#ideBody .ghost").count() == 0)                 # the grey text goes at the next repaint
-                # Escape dismisses a suggestion
+                # Escape dismisses a suggestion (typing asks for a new one, so the test does not depend on when the editor asks by itself)
+                page.keyboard.type(" ")
                 page.wait_for_selector("#ideBody .ghost", timeout=10000)
                 page.keyboard.press("Escape")
                 wait_for(lambda: page.locator("#ideBody .ghost").count() == 0)                 # (a repaint later, which a slow machine takes longer to reach)
