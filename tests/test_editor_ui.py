@@ -8,6 +8,11 @@ from tests.test_browser_check import find_browser
 from tests.test_code_sessions import open_to_everyone, wait_for
 
 
+def vryx_on(page):
+    """The new VryxCode look is behind a flag: wait until the page has applied it."""
+    wait_for(lambda: page.evaluate("document.body.classList.contains('vxn') && !!document.getElementById('cssVryx')"), 10)
+
+
 def ready(page):
     """The page has loaded and signed in (polled from Python: the page's own security rules block waiting on a script string)."""
     wait_for(lambda: page.evaluate("typeof S !== 'undefined' && !!S.state"), 15)
@@ -102,6 +107,7 @@ class EditorUi(Base):
                 b.close()
 
     def test_vryxcode_is_violet_and_the_home_starts_a_build_from_its_box(self):
+        self.state.flags.set_audience("vryxcode_update", "owner", "test")
         from playwright.sync_api import sync_playwright
         import vryxcode
         self.state.code_generate = lambda model: vryxcode.ScriptedChat(list(vryxcode.DEMO))
@@ -114,7 +120,9 @@ class EditorUi(Base):
                 page = b.new_context(viewport={"width": 1200, "height": 850}, extra_http_headers={"Authorization": "Bearer " + self.state.owner_key()}).new_page()
                 page.goto(f"http://127.0.0.1:{self.port}/")
                 ready(page)
-                page.evaluate("document.querySelectorAll('.tour').forEach((e) => e.remove()); openCode()")
+                page.evaluate("document.querySelectorAll('.tour').forEach((e) => e.remove())")
+                vryx_on(page)
+                page.evaluate("openCode()")
                 page.wait_for_selector("#vxQuick", state="visible")
                 accent = page.evaluate("getComputedStyle(document.getElementById('code')).getPropertyValue('--accent').trim().toUpperCase()")
                 self.assertEqual(accent, "#8B5CF6")                                              # VryxCode's own colour, whatever the chat model's colour is
@@ -129,6 +137,7 @@ class EditorUi(Base):
                 b.close()
 
     def test_templates_notify_box_search_map_and_the_changes_panel(self):
+        self.state.flags.set_audience("vryxcode_update", "owner", "test")
         from playwright.sync_api import sync_playwright
         import vryxcode
         self.state.code_generate = lambda model: vryxcode.ScriptedChat(list(vryxcode.DEMO))
@@ -140,7 +149,9 @@ class EditorUi(Base):
                 page.on("pageerror", lambda e: errors.append(str(e)))
                 page.goto(f"http://127.0.0.1:{self.port}/")
                 ready(page)
-                page.evaluate("document.querySelectorAll('.tour').forEach((e) => e.remove()); openCode()")
+                page.evaluate("document.querySelectorAll('.tour').forEach((e) => e.remove())")
+                vryx_on(page)
+                page.evaluate("openCode()")
                 page.wait_for_selector("#vxTpls button", state="visible")
                 self.assertGreaterEqual(page.locator("#vxTpls button").count(), 5)
                 self.assertTrue(page.is_visible("#vxNotifyRow"))                                  # the owner can ask for a phone notification
@@ -187,6 +198,7 @@ class EditorUi(Base):
                     page.evaluate("document.querySelectorAll('.tour').forEach((e) => e.remove())")
                     page.wait_for_timeout(1200)                                                      # the page applies its look just after it has signed in
                     self.assertEqual(page.evaluate("document.body.classList.contains('ml')"), on)
+                    self.assertEqual(page.evaluate("!!document.getElementById('cssModern')"), on)           # its stylesheet is not even loaded when the flag is off
                     self.assertEqual(page.is_visible(".ml-ideas"), on)                              # hidden entirely when the flag is off
                     if on:
                         page.click(".ml-ideas button >> nth=0")
