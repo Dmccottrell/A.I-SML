@@ -19,6 +19,7 @@ import re
 import shutil
 
 import emvryx_paths  # noqa: E402
+from site_fx import FX_CSS, FX_JS  # noqa: E402
 
 HERE = emvryx_paths.ROOT                      # the project folder (design/, site/ and web/ live there)
 PAGES = {"Main": "index.html", "SiteModels": "models.html", "SitePlans": "plans.html", "SiteUsage": "usage.html",
@@ -154,8 +155,8 @@ def convert(source, active=""):
     helmet = helmet.replace("body{margin:0}", "") + HEAD_META.format(desc=DESCRIPTION, title=title.replace("&", "&amp;"), site=SITE)
     return (f'<!doctype html>\n<html lang="en" data-theme="dark">\n<head>\n<meta charset="utf-8">\n'
             f'<meta name="viewport" content="width=device-width, initial-scale=1">\n<title>{title}</title>\n'
-            f'<link rel="icon" href="/icon.svg" type="image/svg+xml">\n{helmet}\n<style>\n{THEME_CSS}{NAV_CSS}</style>\n</head>\n<body>\n'
-            f'{body}\n{THEME_JS}\n{STATUS_JS}\n{NAV_JS}\n</body>\n</html>\n')
+            f'<link rel="icon" href="/icon.svg" type="image/svg+xml">\n{helmet}\n<style>\n{THEME_CSS}{NAV_CSS}{FX_CSS}</style>\n</head>\n<body>\n'
+            f'{body}\n{THEME_JS}\n{STATUS_JS}\n{NAV_JS}\n{FX_JS}\n</body>\n</html>\n')
 
 
 # ---------------------------------------------------------------- pages made from plain documents: What's new, the scorecard, and the Open page
@@ -228,8 +229,8 @@ def extra_page(title, body, active="", description=DESCRIPTION, extra_head="", e
     return (f'<!doctype html>\n<html lang="en" data-theme="dark">\n<head>\n<meta charset="utf-8">\n<meta name="viewport" content="width=device-width, initial-scale=1">\n<title>{title} - Emvryx</title>\n'
             f'<link rel="icon" href="/icon.svg" type="image/svg+xml">\n<link rel="preconnect" href="https://fonts.googleapis.com">\n'
             f'<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Sora:wght@500;600;700&family=DM+Sans:wght@400;500;600&display=swap">\n'
-            f'{HEAD_META.format(desc=description, title=title, site=SITE)}{extra_head}<style>\n{THEME_CSS}body{{font-family:\'DM Sans\',sans-serif;color:var(--text);line-height:1.55;font-size:17px}}{NAV_CSS}{PAGE_CSS}</style>\n</head>\n<body>\n'
-            f'<div style="background-image:radial-gradient(1200px 600px at 50% -5%, var(--glow), transparent 70%)">{nav}{body}{foot}</div>\n{THEME_JS}\n{STATUS_JS}\n{NAV_JS}\n{extra_js}\n</body>\n</html>\n')
+            f'{HEAD_META.format(desc=description, title=title, site=SITE)}{extra_head}<style>\n{THEME_CSS}body{{font-family:\'DM Sans\',sans-serif;color:var(--text);line-height:1.55;font-size:17px}}{NAV_CSS}{PAGE_CSS}{FX_CSS}</style>\n</head>\n<body>\n'
+            f'<div style="background-image:radial-gradient(1200px 600px at 50% -5%, var(--glow), transparent 70%)">{nav}{body}{foot}</div>\n{THEME_JS}\n{STATUS_JS}\n{NAV_JS}\n{FX_JS}\n{extra_js}\n</body>\n</html>\n')
 
 
 OPEN_BODY = """<div class="center"><div style="max-width:520px;display:flex;flex-direction:column;gap:16px;align-items:center">
