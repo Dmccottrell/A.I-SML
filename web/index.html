@@ -3032,6 +3032,7 @@ function cEvent(e) {
     }
     return;
   }
+  if (e.kind === 'compacted') { feed.append(el('div', {class: 'cc-say', style: 'color:var(--muted);font-size:13px'}, 'The conversation was getting long, so VryxCode folded its older steps into a short "Earlier steps" list to save room. The files and this log are unchanged.')); C.last = null; return; }
   if (e.kind === 'queued') { feed.append(el('div', {class: 'cc-say', style: 'color:var(--muted);font-size:14px'}, 'Waiting in the queue' + (e.position ? ' (#' + e.position + ')' : '') + '. It starts by itself when your current session finishes.')); return; }
   if (e.kind === 'language') { feed.append(el('div', {class: 'cc-say', style: 'color:var(--muted);font-size:14px'}, e.text)); return; }
   if (e.kind === 'rewind') { feed.append(el('div', {class: 'cc-end stop'}, el('span', {class: 'mark'}, '\u21b6'), el('span', {}, 'Rewound the files to before: ' + (e.label || 'message ' + e.turn)))); C.last = null; return; }
