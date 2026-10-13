@@ -99,7 +99,7 @@ class Server(Base):
         self.assertEqual(Client(self.port).call("GET", url, raw=True)[0], 404)
 
     def test_the_page_has_the_chat_menu_the_export_and_the_stronger_model_button(self):
-        page = Client(self.port).call("GET", "/", raw=True)[2].decode()
+        page = self.page_text()
         for word in ("chatMore", "shareDialog", "chatAsText", "strongerModel", "dayCard", "Plan my day with Emvryx"):
             self.assertIn(word, page)
 

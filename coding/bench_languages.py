@@ -64,7 +64,9 @@ def installed(lang):
 
 
 def env_for(folder):
-    return dict(os.environ, HOME=folder, GOCACHE=os.path.join(folder, ".gocache"), GOFLAGS="", CARGO_HOME=os.path.join(folder, ".cargo"), PYTHONDONTWRITEBYTECODE="1")
+    return dict(os.environ, HOME=folder, GOCACHE=os.path.join(folder, ".gocache"), GOFLAGS="", CARGO_HOME=os.path.join(folder, ".cargo"),
+                RUSTUP_HOME=os.environ.get("RUSTUP_HOME") or os.path.join(os.path.expanduser("~"), ".rustup"),      # rust's installed toolchains live under the real home, not the throw-away one
+                PYTHONDONTWRITEBYTECODE="1")
 
 
 def score(lang, folder, task, timeout=10):

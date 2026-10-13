@@ -4,6 +4,7 @@ import contextlib
 import http.client
 import io
 import json
+import re
 import os
 import sqlite3
 import sys
@@ -105,6 +106,13 @@ class Base(unittest.TestCase):
         self.srv.shutdown()
         self.srv.server_close()
         self.tmp.cleanup()
+
+    def page_text(self):
+        """The chat page and all the script files it loads (the page's code is split over web/js/), as one text: for tests that look for a feature's words in the page."""
+        page = Client(self.port).call("GET", "/", raw=True)[2].decode()
+        for src in re.findall(r'<script src="(/[^"]+)"', page):
+            page += "\n" + Client(self.port).call("GET", src, raw=True)[2].decode()
+        return page
 
     def new_chat(self, who, private=False):
         s, j = who.call("POST", "/api/chats", {"private": private})
