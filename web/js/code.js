@@ -29,6 +29,7 @@ async function renderHome() {
   const rows = C.sessions.filter(pick);
   $('codeList').replaceChildren(...(rows.length ? rows.map(sessionCard) : [el('div', {class: 'empty-list'}, C.sessions.length ? 'Nothing here with this filter.' : 'No sessions yet. Tap New session to start one. Everything VryxCode does is listed here, so you can come back to it, see what it changed, or rewind it.')]));
 }
+const modelName = (id) => { const x = ((C.info && C.info.models) || []).find((y) => y.id === id); return x ? (x.outside ? x.name : x.label) : (id || 'model'); };
 function sessionCard(m) {
   const live = ['starting', 'working'].includes(m.state), ask = m.state === 'asking', queued = m.state === 'queued', bad = ['failed', 'interrupted'].includes(m.state);
   const ic = live ? el('span', {class: 'spin', 'aria-label': 'Working'}) : queued ? el('b', {style: 'font-size:15px;color:var(--muted)'}, '\u22ef') : ask ? el('b', {style: 'color:#f5a524;font-size:20px'}, '!') : bad ? el('b', {style: 'color:var(--danger);font-size:18px'}, '\u2717') : m.state === 'stopped' ? el('b', {style: 'font-size:14px'}, '\u25a0') : icon('code');
@@ -36,7 +37,7 @@ function sessionCard(m) {
   const badge = queued ? el('span', {class: 'badge'}, 'Queued' + (m.position ? ' \u00b7 #' + m.position : '')) : ask ? el('span', {class: 'badge ask'}, 'Needs you') : bad ? el('span', {class: 'badge bad'}, m.state === 'interrupted' ? 'Interrupted' : 'Failed') : m.state === 'stopped' ? el('span', {class: 'badge'}, 'Stopped') : '';
   const stats = [m.steps ? m.steps + (m.steps === 1 ? ' step' : ' steps') : '', m.files ? m.files + (m.files === 1 ? ' file' : ' files') + ' changed' : ''].filter(Boolean).join(' \u00b7 ');
   return el('div', {class: 'scard', role: 'button', tabindex: '0', onclick: () => openSession(m), onkeydown: (ev) => { if (ev.key === 'Enter') openSession(m); }},
-    el('div', {class: 'top'}, el('span', {class: 'sicon'}, ic), el('div', {class: 'mid'}, el('div', {class: 't'}, m.title), el('div', {class: 'sub'}, icon(ENV_ICON(env.id)), el('span', {}, m.project + ' \u00b7 ' + env.name))), el('span', {class: 'age'}, m.age)),
+    el('div', {class: 'top'}, el('span', {class: 'sicon'}, ic), el('div', {class: 'mid'}, el('div', {class: 't'}, m.title), el('div', {class: 'sub'}, icon(ENV_ICON(env.id)), el('span', {}, m.project + ' \u00b7 ' + modelName(m.model) + ' \u00b7 ' + env.name))), el('span', {class: 'age'}, m.age)),
     m.snippet ? el('div', {class: 'snip'}, m.snippet) : '',
     el('div', {class: 'foot'}, badge, el('span', {}, stats), el('span', {class: 'grow'}), live || ask ? '' : el('button', {class: 'del', 'aria-label': 'Delete this session', onclick: async (ev) => { ev.stopPropagation(); if (!confirm('Delete this session from the list? Your files are kept.')) return; await post('/api/code/sessions/' + m.id + '/delete', {}); renderHome(); }}, '\u00d7')));
 }
@@ -71,6 +72,7 @@ function renderCodeBar() {
   $('codeProj').textContent = C.project + ' ▾';
   const m = cModel();
   $('codeModelBtn').replaceChildren(m ? (m.outside ? m.name + ' · outside' : m.label) : 'No model', el('span', {style: 'color:var(--muted)'}, '▾'));
+  $('vxModel').replaceChildren(el('span', {class: 'k'}, 'Model'), el('b', {}, m ? (m.outside ? m.name + ' · outside' : m.label) : 'none ready'), el('span', {class: 'c'}, '▾'));
   const env = C.info && C.info.environments.find((x) => x.id === C.env); $('codeEnv').replaceChildren(icon(ENV_ICON(C.env)), el('span', {class: 'lab'}, (env ? env.name : ENV_NAME[C.env] || 'This computer'))); $('codeEnv').disabled = !!(C.sid && !C.saved);
   C.auto = C.mode === 'auto'; $('codeAuto').replaceChildren(MODES[C.mode].short); $('codeAuto').setAttribute('aria-label', 'How VryxCode works: ' + MODES[C.mode].name);
   $('codeFilesBtn').replaceChildren(icon('folder'), el('span', {class: 'lab'}, 'Files' + (C.files.length ? ' (' + C.files.length + ')' : '')));
@@ -86,7 +88,7 @@ function emptyFeed() {
     el('div', {class: 'row'}, tip('Write a function with a unit test'), tip('Fix the failing test in this project'), tip('Explain what this project does')),
     el('p', {style: 'font-size:13px'}, C.files.includes('VRYX.md') ? 'Using the notes in VRYX.md. Type / for commands and @ to point at a file.' : 'Type / for commands and @ to point at a file. /init creates VRYX.md, notes VryxCode reads every time.')));
 }
-function closeCodeMenus() { $('codeProjMenu').hidden = true; $('codeModelMenu').hidden = true; $('codeEnvMenu').hidden = true; $('codeFilterMenu').hidden = true; $('codeModeMenu').hidden = true; $('codeSuggest').hidden = true; }
+function closeCodeMenus() { $('vxModelMenu').hidden = true; $('codeProjMenu').hidden = true; $('codeModelMenu').hidden = true; $('codeEnvMenu').hidden = true; $('codeFilterMenu').hidden = true; $('codeModeMenu').hidden = true; $('codeSuggest').hidden = true; }
 $('codeProjNew').onclick = (e) => { e.stopPropagation(); newProject(); };
 $('codeProj').onclick = (e) => {
   e.stopPropagation(); const m = $('codeProjMenu'); if (!m.hidden) { m.hidden = true; return; } closeCodeMenus();
@@ -122,12 +124,14 @@ async function deleteProject() {
   if (!r.ok) { note('bad', 'COULD NOT DELETE', j.message + ' ' + (j.action || '')); return; }
   C.info.projects = C.info.projects.filter((p) => p !== C.project); C.project = C.info.projects[0] || 'my-project'; renderCodeBar(); refreshFiles();
 }
-$('codeModelBtn').onclick = (e) => {
-  e.stopPropagation(); const m = $('codeModelMenu'); if (!m.hidden) { m.hidden = true; return; } closeCodeMenus();
+function modelMenu(e, m) {
+  e.stopPropagation(); if (!m.hidden) { m.hidden = true; return; } closeCodeMenus();
   m.replaceChildren(el('div', {class: 'head'}, 'WHICH MODEL SHOULD CODE?'), ...C.info.models.map((x) => el('button', {class: 'opt' + (x.id === C.model ? ' sel' : ''), disabled: x.state !== 'ready',
     onclick: () => { C.model = x.id; closeCodeMenus(); renderCodeBar(); }}, el('span', {class: 'grow'}, el('b', {}, x.label), el('small', {}, x.state === 'ready' ? (x.note || 'Ready') : x.badge)))));
   m.hidden = false;
-};
+}
+$('codeModelBtn').onclick = (e) => modelMenu(e, $('codeModelMenu'));
+$('vxModel').onclick = (e) => modelMenu(e, $('vxModelMenu'));
 document.addEventListener('click', (e) => { if (cOn() && !e.target.closest('.menu')) closeCodeMenus(); });
 const MODES = {ask: {short: 'Ask', name: 'Ask before editing', note: 'It asks you before it changes a file or runs something.'},
   auto: {short: 'Auto-edit', name: 'Edit without asking', note: 'It writes and edits files by itself. It still asks before anything riskier.'},

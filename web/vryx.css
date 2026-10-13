@@ -211,3 +211,10 @@ body.vx #dialogs input:focus { outline: 2px solid var(--accent); outline-offset:
 .code .second { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; padding: 0 0 10px; color: var(--muted); font: 13px 'DM Sans', sans-serif; }
 .code .vx-tpls button b { margin-top: 4px; }
 @media (min-width: 900px) { .code .vx-tpls { grid-template-columns: repeat(5, 1fr); } }
+
+/* ---- the model picker on the home */
+.code .vx-under { display: flex; gap: 10px; align-items: center; margin: 0 0 12px; }
+.code .vx-model { display: inline-flex; align-items: center; gap: 8px; border: 1px solid var(--vx-edge); background: var(--vx-glass); color: var(--text); border-radius: 999px; padding: 8px 14px; font: 500 14px 'DM Sans', sans-serif; cursor: pointer; transition: border-color .18s, background .18s; }
+.code .vx-model:hover { border-color: var(--accent); background: var(--vx-soft); }
+.code .vx-model .k { color: var(--muted); } .code .vx-model b { font-weight: 600; color: var(--accenttext); } .code .vx-model .c { color: var(--muted); }
+.code #vxModelMenu { top: calc(100% + 8px); bottom: auto; left: 0; right: auto; width: min(360px, 86vw); z-index: 40; }
