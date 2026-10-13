@@ -1,4 +1,4 @@
-/* editor.js - the small code editor behind VryxCode's Editor layout: colours for the code, line numbers, Tab, auto-indent and Ctrl/Cmd+S.
+/* editor.js - the small code editor behind VryxCode's Editor layout: colours for the code, line numbers, Tab, auto-indent and Ctrl/Cmd+S, and Ctrl/Cmd+K for "edit this selection" (the page handles it through opts.onEdit).
    No libraries: a textarea with the colouring drawn underneath it (so the phone keyboard, selection, undo and paste are the browser's own).
    Works on files up to about 200 KB (the server's limit for the editor). Exposed as window.EmvryxEditor; also usable from Node for the tests. */
 (function (root) {
@@ -58,6 +58,22 @@
     var line = textBeforeCursor.slice(textBeforeCursor.lastIndexOf('\n') + 1), lead = /^[ \t]*/.exec(line)[0];
     return /[{[(:]\s*$/.test(line) ? lead + unit : lead;
   }
+  /* A line diff of two texts: [{t: '=' | '-' | '+', s: line}], by the longest common run of lines (fine for the few dozen lines of a selection). */
+  function diffLines(a, b) {
+    var x = a.split('\n'), y = b.split('\n'), n = x.length, m = y.length, i, j, t = [];
+    if (n * m > 250000) return x.map(function (l) { return {t: '-', s: l}; }).concat(y.map(function (l) { return {t: '+', s: l}; }));
+    for (i = 0; i <= n; i++) t.push(new Array(m + 1).fill(0));
+    for (i = n - 1; i >= 0; i--) for (j = m - 1; j >= 0; j--) t[i][j] = x[i] === y[j] ? t[i + 1][j + 1] + 1 : Math.max(t[i + 1][j], t[i][j + 1]);
+    var out = []; i = 0; j = 0;
+    while (i < n && j < m) {
+      if (x[i] === y[j]) { out.push({t: '=', s: x[i]}); i++; j++; }
+      else if (t[i + 1][j] >= t[i][j + 1]) { out.push({t: '-', s: x[i]}); i++; }
+      else { out.push({t: '+', s: y[j]}); j++; }
+    }
+    while (i < n) out.push({t: '-', s: x[i++]});
+    while (j < m) out.push({t: '+', s: y[j++]});
+    return out;
+  }
   function el(tag, cls, parent) { var e = document.createElement(tag); if (cls) e.className = cls; if (parent) parent.appendChild(e); return e; }
   /* An editor in `host` (an empty element). opts: onChange(text), onSave(), readOnly. Returns {setText, getText, focus, setLang, setReadOnly, scrollTo}. */
   function makeEditor(host, opts) {
@@ -81,6 +97,7 @@
     ta.addEventListener('input', function () { schedule(); if (opts.onChange) opts.onChange(ta.value); });
     ta.addEventListener('keydown', function (e) {
       if ((e.ctrlKey || e.metaKey) && (e.key === 's' || e.key === 'S')) { e.preventDefault(); if (opts.onSave) opts.onSave(); return; }
+      if ((e.ctrlKey || e.metaKey) && (e.key === 'k' || e.key === 'K')) { e.preventDefault(); if (opts.onEdit) opts.onEdit(); return; }
       if (ta.readOnly) return;
       var s = ta.selectionStart, t = ta.selectionEnd, v = ta.value;
       if (e.key === 'Tab') {
@@ -104,11 +121,14 @@
       setLang: function (l) { lang = l; lines = -1; paint(); },
       setReadOnly: function (on) { ta.readOnly = !!on; },
       focus: function () { ta.focus(); },
+      selection: function () { return {start: ta.selectionStart, end: ta.selectionEnd, text: ta.value.slice(ta.selectionStart, ta.selectionEnd)}; },
+      // replace a range with new text as an ordinary edit (so Undo works), and select the new text
+      replaceRange: function (from, to, text) { ta.focus(); ta.setSelectionRange(from, to); insert(text); ta.setSelectionRange(from, from + text.length); },
       state: function () { return {start: ta.selectionStart, end: ta.selectionEnd, top: ta.scrollTop}; },
       restore: function (st) { if (!st) return; ta.setSelectionRange(st.start, st.end); ta.scrollTop = st.top; sync(); }
     };
   }
-  var api = {langOf: langOf, highlight: highlight, indentAfter: indentAfter, makeEditor: makeEditor};
+  var api = {langOf: langOf, highlight: highlight, indentAfter: indentAfter, diffLines: diffLines, makeEditor: makeEditor};
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   root.EmvryxEditor = api;
 })(typeof window !== 'undefined' ? window : globalThis);

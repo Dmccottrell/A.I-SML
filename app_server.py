@@ -54,6 +54,7 @@ import chat
 import data_tools
 import code_sandbox
 import chat_polish
+import code_edit
 import code_review
 import code_sessions
 import harness
@@ -2886,6 +2887,60 @@ class Handler(http.server.BaseHTTPRequestHandler):
         cut = max(0, len(diff) - code_review.DEFAULT_LIMIT)
         return code_review.review_prompt(diff[:code_review.DEFAULT_LIMIT], files, cut, f"pull request {ref[0]}/{ref[1]}#{ref[2]}" + (f" ({title})" if title else ""))
 
+    def _pick_code_model(self, st, who, model_id):
+        """The model dict VryxCode (a session, or the editor's edit and explain) runs on: an outside coding model, or an Emvryx model flagged for coding and ready."""
+        coder = st.coder(model_id)
+        if coder:                                            # an outside coding model: labelled as such, costs like its plan_like model
+            cstate, cbadge = st._coder_state(coder, who)
+            if cstate != "ready":
+                raise code_sessions.CodeError(f"{coder['label']} isn't ready: {cbadge}.")
+            return {"id": coder["id"], "name": coder["label"], "version": 0, "context_tested": coder.get("context_tested", 8192),
+                    "limiter_key": coder.get("plan_like", "solstice"), "outside": True}
+        try:
+            model = st.pick_model(who, model_id)
+        except KeyError:
+            raise code_sessions.CodeError("Pick a model for VryxCode.")
+        if not model.get("vryxcode"):
+            raise code_sessions.CodeError(vryxcode.check_model(model["id"])[1])
+        if model["state"] != "ready":
+            raise code_sessions.CodeError(f"{model['name']} {model['version']:g} isn't ready: {model['badge']}.")
+        model["limiter_key"] = model["name"].lower()
+        return model
+
+    def _edit_selection(self, st, who, body):
+        """The editor's "Edit this selection" / "Explain this": one model call about a selected part of one file. Changes nothing; counted like a coding step."""
+        user = who["user"]
+        mode = "explain" if body.get("mode") == "explain" else "edit"
+        model = self._pick_code_model(st, who, str(body.get("model", "")))
+        text, path = body.get("text"), str(body.get("path") or "")[:200]
+        if not isinstance(text, str) or len(text) > code_sessions.MAX_FILE_BYTES:
+            raise code_sessions.CodeError("That file is too big to edit here.")
+        try:
+            start, end = int(body.get("start")), int(body.get("end"))
+            messages = code_edit.build_messages(path, os.path.splitext(path)[1].lstrip(".") or "text", text, start, end, body.get("instruction"), mode)
+        except (TypeError, ValueError) as e:
+            raise code_sessions.CodeError(str(e) if str(e) and "int()" not in str(e) else "Select some code first.")
+        meter = code_sessions.Meter(st.limiter, user, model["limiter_key"], st.clock, max_new=1024)
+        try:
+            res = meter.reserve(messages)
+        except U.LimitError as e:
+            raise code_sessions.CodeError(e.message, "Coding steps are counted like chat messages. Wait for the tank to refill.")
+        generate = None
+        try:
+            try:
+                generate = st.code_backend(model)
+            except AppError as e:
+                raise code_sessions.CodeError(e.message, e.action)
+            reply = generate(messages)
+        except BaseException:
+            meter.cancel(res)
+            raise
+        meter.settle(res, generate, messages, reply)
+        line_start = text.rfind("\n", 0, start) + 1
+        prefix = text[line_start:start] if not text[line_start:start].strip() else ""
+        out = code_edit.parse_reply(reply, text[start:end], mode, prefix)
+        return dict(out, mode=mode, model=f"{model['name']} {model['version']:g}".strip() if model.get("version") else model["name"])
+
     def api_code_post(self, who, path, body):
         st, user = self.state, who["user"]
         try:
@@ -2893,23 +2948,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 allowed, why = st.code_allowed(who)
                 if not allowed:
                     raise code_sessions.CodeError(why, "Ask the owner about VryxCode access.")
-                coder = st.coder(str(body.get("model", "")))
-                if coder:                                            # an outside coding model: labelled as such, costs like its plan_like model
-                    cstate, cbadge = st._coder_state(coder, who)
-                    if cstate != "ready":
-                        raise code_sessions.CodeError(f"{coder['label']} isn't ready: {cbadge}.")
-                    model = {"id": coder["id"], "name": coder["label"], "version": 0, "context_tested": coder.get("context_tested", 8192),
-                             "limiter_key": coder.get("plan_like", "solstice"), "outside": True}
-                else:
-                    try:
-                        model = st.pick_model(who, str(body.get("model", "")))
-                    except KeyError:
-                        raise code_sessions.CodeError("Pick a model for VryxCode.")
-                    if not model.get("vryxcode"):
-                        raise code_sessions.CodeError(vryxcode.check_model(model["id"])[1])
-                    if model["state"] != "ready":
-                        raise code_sessions.CodeError(f"{model['name']} {model['version']:g} isn't ready: {model['badge']}.")
-                    model["limiter_key"] = model["name"].lower()
+                model = self._pick_code_model(st, who, str(body.get("model", "")))
                 project = st.code.check_name(body.get("project"))
                 box = {}
 
@@ -2977,6 +3016,11 @@ class Handler(http.server.BaseHTTPRequestHandler):
             if m:
                 st.code.get(user, m.group(1)).request_stop()
                 return self._send(200, {"ok": True})
+            if path == "/api/code/edit":                          # the editor's "Edit this selection" and "Explain this" (a proposal; nothing is changed)
+                allowed, why = st.code_allowed(who)
+                if not allowed:
+                    raise code_sessions.CodeError(why, "Ask the owner about VryxCode access.")
+                return self._send(200, self._edit_selection(st, who, body))
             if path == "/api/code/file":                          # the editor's Save (a new file too)
                 allowed, why = st.code_allowed(who)
                 if not allowed:

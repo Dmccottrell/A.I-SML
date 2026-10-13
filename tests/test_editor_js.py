@@ -41,6 +41,12 @@ class EditorJs(unittest.TestCase):
             import re
             self.assertEqual(re.sub(r"</?span[^>]*>", "", plain), text + "\n", lang)
 
+    def test_line_diff_marks_removed_added_and_unchanged_lines(self):
+        d = run("E.diffLines('a\\nb\\nc', 'a\\nB\\nc\\nd')")
+        self.assertEqual([(x["t"], x["s"]) for x in d], [("=", "a"), ("-", "b"), ("+", "B"), ("=", "c"), ("+", "d")])
+        self.assertEqual([x["t"] for x in run("E.diffLines('same', 'same')")], ["="])
+        self.assertEqual([x["t"] for x in run("E.diffLines('', 'x')")], ["-", "+"])                  # an empty selection: the one empty line goes, the new text comes
+
     def test_enter_keeps_the_indent_and_adds_one_after_an_opening_line(self):
         self.assertEqual(run("E.indentAfter('def f():\\n    if x:')"), "        ")
         self.assertEqual(run("E.indentAfter('    a = 1')"), "    ")

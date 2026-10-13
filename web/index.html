@@ -212,6 +212,14 @@ svg .core { fill: var(--core); stroke: var(--sun); stroke-width: 3; transition: 
 .code .itabs { display: flex; overflow-x: auto; border-bottom: 1px solid var(--line); background: var(--surface); flex: 0 0 auto; min-height: 36px; }
 .code .itab { display: flex; align-items: center; gap: 6px; padding: 0 8px 0 12px; font: 13px ui-monospace, Menlo, Consolas, monospace; color: var(--muted); border-right: 1px solid var(--line); cursor: pointer; white-space: nowrap; }
 .code .itab.on { color: var(--text); background: var(--bg); box-shadow: inset 0 -2px 0 var(--accent); } .code .itab .x { background: transparent; border: 0; color: inherit; font-size: 16px; line-height: 1; padding: 2px 4px; border-radius: 4px; cursor: pointer; } .code .itab .x:hover { background: var(--surface2); }
+.code .iai { border-bottom: 1px solid var(--line); background: var(--surface); padding: 8px 12px; flex: 0 0 auto; } .code .iai[hidden] { display: none; }
+.code .iai .airow { display: flex; gap: 8px; } .code .iai input { flex: 1; min-width: 0; background: var(--bg); color: var(--text); border: 1px solid var(--line); border-radius: 8px; padding: 7px 10px; font: 14px system-ui, sans-serif; }
+.code .iai .chip { padding: 5px 12px; } .code .iai .chip.go { border-color: var(--accent); }
+.code .iai .aistat { margin-top: 6px; font-size: 13px; color: var(--muted); } .code .iai .aistat.bad { color: var(--danger); }
+.code .iai .aires { margin-top: 6px; } .code .iai .aires .text { font-size: 14px; white-space: pre-wrap; max-height: 30vh; overflow: auto; }
+.code .iai .idiff { margin: 0; max-height: 34vh; overflow: auto; border: 1px solid var(--line); border-radius: 8px; font: 12.5px/1.5 ui-monospace, Menlo, Consolas, monospace; background: var(--bg); }
+.code .iai .idiff div { padding: 0 10px; white-space: pre; } .code .iai .idiff .add { background: rgba(63,185,80,.2); } .code .iai .idiff .del { background: rgba(248,81,73,.2); } .code .iai .idiff .gap { color: var(--muted); }
+.code .iai .acts { display: flex; gap: 8px; margin-top: 8px; } .code .iai .acts .chip.ok { border-color: #3fb950; color: #3fb950; }
 .code .iconf { padding: 8px 12px; background: rgba(245,165,36,.14); border-bottom: 1px solid var(--line); display: flex; gap: 8px; align-items: center; flex-wrap: wrap; font-size: 13px; } .code .iconf[hidden] { display: none; }
 .code .ibody { flex: 1; min-height: 0; display: flex; }
 .code .ibody .iempty { margin: auto; color: var(--muted); text-align: center; padding: 20px; max-width: 320px; }
@@ -616,9 +624,14 @@ html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
     </div>
     <div class="ide-ed" id="ideEd">
       <div class="itabs" id="ideTabs" role="tablist"></div>
+      <div class="iai" id="ideAi" hidden>
+        <div class="airow"><input id="ideAiIn" type="text" maxlength="500" placeholder="What should change in the selected code? (empty selection: what to write here)" aria-label="What to change"><button class="chip go" id="ideAiGo">Go</button><button class="chip" id="ideAiX" aria-label="Close">&#10005;</button></div>
+        <div class="aistat" id="ideAiStat"></div>
+        <div class="aires" id="ideAiRes"></div>
+      </div>
       <div class="iconf" id="ideConf" hidden></div>
       <div class="ibody" id="ideBody"></div>
-      <div class="ibar" id="ideBar"><span id="ideStatus"></span><span class="grow"></span><span id="ideLang" class="lang"></span><button class="chip" id="ideSave">Save</button></div>
+      <div class="ibar" id="ideBar"><span id="ideStatus"></span><span class="grow"></span><span id="ideLang" class="lang"></span><button class="chip" id="ideExplain" title="Explain the selected code in plain words">Explain</button><button class="chip" id="ideEditSel" title="Select code, then describe the change (Ctrl+K). You see it before anything changes.">Edit selection</button><button class="chip" id="ideSave">Save</button></div>
     </div>
     <div class="col">
       <div class="todo" id="codeTodo" hidden></div>
@@ -2719,7 +2732,7 @@ function ideTree() {
   $('ideFiles').replaceChildren(...(rows.length ? rows : [el('div', {style: 'color:var(--muted);padding:6px 8px;font-size:14px'}, 'No files yet. Tap + New, or ask VryxCode.')]));
 }
 function ideEditor() {
-  if (!IDE.ed) IDE.ed = EmvryxEditor.makeEditor($('ideBody'), {onChange: ideChanged, onSave: ideSave});
+  if (!IDE.ed) IDE.ed = EmvryxEditor.makeEditor($('ideBody'), {onChange: ideChanged, onSave: ideSave, onEdit: () => aiStart('edit')});
   return IDE.ed;
 }
 function ideStash() {                       // remember the text and cursor of the tab being left
@@ -2728,10 +2741,10 @@ function ideStash() {                       // remember the text and cursor of t
 }
 function ideShow() {                        // draw the active tab in the editor (or the empty message)
   const body = $('ideBody'), t = IDE.tabs[IDE.active];
-  if (!t) { if (IDE.ed) { body.replaceChildren(); IDE.ed = null; } body.replaceChildren(el('div', {class: 'iempty'}, 'Pick a file from the list to edit it. VryxCode works in the chat on the right; when it changes a file you have open, it updates here.')); ideStatus('', ''); $('ideLang').textContent = ''; $('ideSave').hidden = true; ideConflict(); return; }
+  if (!t) { if (IDE.ed) { body.replaceChildren(); IDE.ed = null; } body.replaceChildren(el('div', {class: 'iempty'}, 'Pick a file from the list to edit it. VryxCode works in the chat on the right; when it changes a file you have open, it updates here.')); ideStatus('', ''); $('ideLang').textContent = ''; $('ideSave').hidden = true; $('ideEditSel').hidden = true; $('ideExplain').hidden = true; ideConflict(); return; }
   if (!IDE.ed || !body.querySelector('.ed')) { body.replaceChildren(); IDE.ed = null; }
   const ed = ideEditor(); ed.setReadOnly(t.readOnly); ed.setLang(EmvryxEditor.langOf(t.path)); ed.setText(t.text); ed.restore(t.state);
-  $('ideLang').textContent = EmvryxEditor.langOf(t.path); $('ideSave').hidden = !!t.readOnly;
+  $('ideLang').textContent = EmvryxEditor.langOf(t.path); $('ideSave').hidden = !!t.readOnly; $('ideEditSel').hidden = !!t.readOnly; $('ideExplain').hidden = false;
   ideStatus(t.readOnly ? (t.note || 'Read-only') : t.dirty ? 'Unsaved changes' : '', t.readOnly ? '' : t.dirty ? '' : '');
   ideConflict();
 }
@@ -2740,7 +2753,7 @@ function ideRenderTabs() {
   $('ideTabs').replaceChildren(...IDE.tabs.map((t, i) => el('div', {class: 'itab' + (i === IDE.active ? ' on' : ''), role: 'tab', title: t.path, onclick: () => ideActivate(i)},
     el('span', {}, ideBase(t.path) + (t.project !== C.project ? ' (' + t.project + ')' : '') + (t.dirty ? ' \u25cf' : '')), el('button', {class: 'x', 'aria-label': 'Close ' + t.path, onclick: (ev) => { ev.stopPropagation(); ideClose(i); }}, '\u00d7'))));
 }
-function ideActivate(i) { ideStash(); IDE.active = i; ideRenderTabs(); ideShow(); ideTree(); }
+function ideActivate(i) { if (AI.open) aiClose(); ideStash(); IDE.active = i; ideRenderTabs(); ideShow(); ideTree(); }
 async function ideOpen(path) {
   const have = IDE.tabs.findIndex((t) => t.path === path && t.project === C.project);
   if (have >= 0) { ideActivate(have); return; }
@@ -2802,6 +2815,56 @@ async function ideSync() {
     if (here) ideConflict();
   }
 }
+
+// ---- Edit this selection / Explain this: the model proposes, you see the before and after, you Accept or Reject (Accept only changes the editor; Save is separate)
+const AI = {open: false, mode: 'edit', sel: null, busy: false, token: 0};
+function aiStat(text, bad) { const n = $('ideAiStat'); n.textContent = text; n.className = 'aistat' + (bad ? ' bad' : ''); }
+function aiClose() { AI.open = false; AI.token++; AI.busy = false; $('ideAi').hidden = true; $('ideAiRes').replaceChildren(); if (IDE.ed) IDE.ed.focus(); }
+function aiStart(mode) {
+  const t = IDE.tabs[IDE.active]; if (!t || !IDE.ed) return;
+  if (mode === 'edit' && t.readOnly) { ideStatus('This file is read-only here.', 'bad'); return; }
+  const sel = IDE.ed.selection();
+  if (mode === 'explain' && !sel.text.trim()) { ideStatus('Select the code you want explained.', 'bad'); return; }
+  if (!C.model) { ideStatus('Pick a model for VryxCode first.', 'bad'); return; }
+  AI.open = true; AI.mode = mode; AI.sel = sel; AI.token++; $('ideAi').hidden = false; $('ideAiRes').replaceChildren();
+  $('ideAiIn').hidden = mode === 'explain'; $('ideAiGo').hidden = mode === 'explain';
+  aiStat(mode === 'explain' ? 'Asking ' + (cModel() ? cModel().label : 'the model') + '\u2026' : sel.text ? 'Editing ' + sel.text.split('\n').length + ' selected line(s)' : 'Nothing selected: the new code will go at the cursor');
+  if (mode === 'explain') aiRun(); else { $('ideAiIn').value = ''; $('ideAiIn').focus(); }
+}
+async function aiRun() {
+  const t = IDE.tabs[IDE.active]; if (!t || AI.busy) return;
+  const instruction = $('ideAiIn').value.trim();
+  if (AI.mode === 'edit' && !instruction) { aiStat('Say what to change.', true); return; }
+  const token = ++AI.token; AI.busy = true; $('ideAiRes').replaceChildren(); aiStat('Working\u2026 (' + (cModel() ? cModel().label : 'the model') + ')');
+  const text = IDE.ed.getText(), sel = AI.sel;
+  try {
+    const r = await post('/api/code/edit', {project: t.project, path: t.path, model: C.model, text, start: sel.start, end: sel.end, instruction, mode: AI.mode}); const j = await r.json().catch(() => ({}));
+    if (token !== AI.token) return;                                            // closed or restarted meanwhile
+    if (!r.ok) { aiStat((j.message || 'Could not do that.') + (j.action ? ' ' + j.action : ''), true); return; }
+    if (AI.mode === 'explain' || !j.replacement) { aiStat(j.model ? 'Answer from ' + j.model : ''); $('ideAiRes').replaceChildren(el('div', {class: 'text'}, j.message || 'No answer.'), el('div', {class: 'acts'}, el('button', {class: 'chip', onclick: aiClose}, 'Close'))); return; }
+    if (j.replacement === sel.text) { aiStat('The model proposed no change.'); $('ideAiRes').replaceChildren(el('div', {class: 'acts'}, el('button', {class: 'chip', onclick: aiClose}, 'Close'))); return; }
+    aiShowDiff(sel, text, j);
+  } finally { if (token === AI.token) AI.busy = false; }
+}
+function aiShowDiff(sel, fileText, j) {
+  const rows = EmvryxEditor.diffLines(sel.text, j.replacement), out = []; let run = 0;
+  rows.forEach((d, i) => {
+    if (d.t === '=') { run++; const near = rows.slice(Math.max(0, i - 2), i + 3).some((x) => x.t !== '='); if (near) out.push(el('div', {}, '  ' + d.s)); else if (run === 3) out.push(el('div', {class: 'gap'}, '  \u2026')); }
+    else { run = 0; out.push(el('div', {class: d.t === '+' ? 'add' : 'del'}, d.t + ' ' + d.s)); }
+  });
+  aiStat('Proposed by ' + (j.model || 'the model') + ': nothing has changed yet.');
+  $('ideAiRes').replaceChildren(el('pre', {class: 'idiff'}, ...out), el('div', {class: 'acts'},
+    el('button', {class: 'chip ok', id: 'aiAccept', onclick: () => aiAccept(sel, j.replacement)}, 'Accept'), el('button', {class: 'chip', onclick: aiClose}, 'Reject'),
+    el('button', {class: 'chip', onclick: () => { $('ideAiRes').replaceChildren(); aiStat('Describe the change again.'); $('ideAiIn').focus(); $('ideAiIn').select(); }}, 'Try again')));
+}
+function aiAccept(sel, replacement) {
+  if (!IDE.ed || IDE.ed.getText().slice(sel.start, sel.end) !== sel.text) { aiStat('The text changed while the model was working. Select it again and try again.', true); $('ideAiRes').replaceChildren(); return; }
+  IDE.ed.replaceRange(sel.start, sel.end, replacement);
+  aiClose(); ideStatus('Edit applied. Press Save (Ctrl+S) to keep it, or Undo (Ctrl+Z).', 'good');
+}
+$('ideEditSel').onclick = () => aiStart('edit'); $('ideExplain').onclick = () => aiStart('explain');
+$('ideAiGo').onclick = aiRun; $('ideAiX').onclick = aiClose;
+$('ideAiIn').addEventListener('keydown', (ev) => { if (ev.key === 'Enter') { ev.preventDefault(); aiRun(); } if (ev.key === 'Escape') aiClose(); });
 addEventListener('beforeunload', (ev) => { if (IDE.tabs.some((t) => t.dirty)) { ev.preventDefault(); ev.returnValue = ''; } });
 async function viewFile(f) {
   C.file = f; const r = await api('/api/code/file?project=' + encodeURIComponent(C.project) + '&path=' + encodeURIComponent(f)); const j = await r.json();
