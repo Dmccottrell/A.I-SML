@@ -159,7 +159,9 @@ class StateAccounts:
         granters = {auth.clean_email(e) for e in (self.security.get("grant_emails") or []) if auth.clean_email(e)}
         # who may give out plans, no-limits and admin rights: the PC owner, and an account that was made an admin by the PC owner AND has one of these emails
         granter = bool(entry.get("owner")) or bool(entry.get("admin") and auth.clean_email(entry.get("email") or "") in granters)
-        return {"user": entry["user"], "owner": row["owner"], "admin": admin, "founder": bool(entry.get("owner")), "granter": granter,
+        owner = bool(row["owner"]) or granter                  # an admin the PC owner trusts (their email is in grant_emails) acts as the owner for everything
+        admin = admin or owner
+        return {"user": entry["user"], "owner": owner, "admin": admin, "founder": bool(entry.get("owner")), "granter": granter,
                 "tier": row["tier"], "banned": bool(entry.get("banned")), "app": bool(entry.get("app")),
                 "email": entry.get("email"), "has_password": bool(entry.get("pw")), "mfa": bool((entry.get("mfa") or {}).get("on"))}
 

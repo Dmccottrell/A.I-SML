@@ -196,6 +196,7 @@ class Flows(Base):
         self.assertEqual(self.owner.call("POST", "/api/admin/access", {"user": "darryl_mail", "admin": True, "unlimited": True})[0], 200)
         state = c.call("GET", "/api/state")[1]
         self.assertEqual((state["admin"], state["granter"], state["founder"]), (True, True, False))
+        self.assertTrue(state["owner"])                                            # and it acts as the owner for the owner-only things (update, phone notice, flags)
         s, j = c.call("POST", "/api/admin/access", {"user": "sam", "plan": "pro", "admin": True})
         self.assertEqual((s, j["plan"], j["admin"]), (200, "pro", True))
         # a second admin with a different email still cannot
@@ -211,6 +212,7 @@ class Flows(Base):
         c.cookie = cookie_of(h)
         self.assertEqual(self.owner.call("POST", "/api/admin/access", {"user": "helper1", "admin": True})[0], 200)
         self.assertEqual(c.call("GET", "/api/state")[1]["granter"], False)
+        self.assertEqual(c.call("GET", "/api/state")[1]["owner"], False)           # an ordinary admin does not get the owner's powers
         self.assertEqual(c.call("POST", "/api/admin/access", {"user": "sam", "plan": "pro"})[0], 403)
 
     # ---- admins deleting accounts
