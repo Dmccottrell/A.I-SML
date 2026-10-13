@@ -1075,9 +1075,9 @@ package it several ways:
 | Where | How it's packaged | Model runs with |
 |---|---|---|
 | Website (any browser) | The site itself. Also **installable as an app** (a "PWA": works offline once the model file is cached) | wllama (llama.cpp in the browser) for small models; a server for bigger ones |
-| Android | Wrapped with **Capacitor** (same web code in an app shell) | llama.cpp through a native plugin |
+| Android | **Decided Oct 2026: native Kotlin + Jetpack Compose** (was: Capacitor); plan in [NATIVE.md](NATIVE.md) | llama.cpp in native code |
 | Windows / Mac PC | Wrapped with **Tauri** (small) or Electron | llama.cpp (`llama-server`) or wllama |
-| iPhone | Same Capacitor wrapper; needs a Mac + Xcode ($99/year to keep installed) | llama.cpp |
+| iPhone | **Decided Oct 2026: native Swift + SwiftUI**, built on the owner's Mac (Xcode, $99/year to keep installed); plan in [NATIVE.md](NATIVE.md) | llama.cpp |
 
 **Same files everywhere:** one `.gguf` per model size, exactly what `tools/to_gguf.py` already makes. The
 chat format and prompts live in one shared file, so a chat behaves the same on every device.
