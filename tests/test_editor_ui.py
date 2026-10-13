@@ -8,6 +8,11 @@ from tests.test_browser_check import find_browser
 from tests.test_code_sessions import open_to_everyone, wait_for
 
 
+def ready(page):
+    """The page has loaded and signed in (polled from Python: the page's own security rules block waiting on a script string)."""
+    wait_for(lambda: page.evaluate("typeof S !== 'undefined' && !!S.state"), 15)
+
+
 @unittest.skipUnless(browser_check.available() and find_browser(), "needs the playwright package and a Chromium, Edge or Chrome")
 class EditorUi(Base):
     def setUp(self):
@@ -31,7 +36,7 @@ class EditorUi(Base):
             try:
                 page = b.new_context(viewport={"width": 1000, "height": 800}, extra_http_headers={"Authorization": "Bearer " + self.state.owner_key()}).new_page()
                 page.goto(f"http://127.0.0.1:{self.port}/")
-                page.wait_for_timeout(600)
+                ready(page)
                 page.evaluate("document.querySelectorAll('.tour').forEach((e) => e.remove()); openCode()")
                 page.wait_for_selector("#codeProjNew", state="visible")                        # on the Sessions list itself, not only inside a session
                 self.assertTrue(page.is_visible("#codeProj"))
@@ -57,7 +62,7 @@ class EditorUi(Base):
             try:
                 page = b.new_context(viewport={"width": 1000, "height": 800}, extra_http_headers={"Authorization": "Bearer " + self.state.owner_key()}).new_page()
                 page.goto(f"http://127.0.0.1:{self.port}/")
-                page.wait_for_timeout(600)
+                ready(page)
                 page.evaluate("document.querySelectorAll('.tour').forEach((e) => e.remove()); openCode(); newSession()")
                 page.wait_for_timeout(500)
                 page.evaluate("cEvent({kind: 'retry', text: 'I see the issue. I will correct the tool call.', why: 'x', secs: 19.2, words: 94}); cEvent({kind: 'step', tool: 'write_file', preview: 'write index.html (3 lines)\\n  + a', raw: '', secs: 7.4, words: 52}); cEvent({kind: 'result', text: 'wrote index.html'})")
@@ -79,7 +84,7 @@ class EditorUi(Base):
             try:
                 page = b.new_context(viewport={"width": 1000, "height": 900}, extra_http_headers={"Authorization": "Bearer " + self.state.owner_key()}).new_page()
                 page.goto(f"http://127.0.0.1:{self.port}/")
-                page.wait_for_timeout(700)
+                ready(page)
                 page.evaluate("document.querySelectorAll('.tour').forEach((e) => e.remove()); const d = document.createElement('div'); d.id = 'pcTest'; document.body.append(d); admPc(d)")
                 page.wait_for_selector("#pcTest >> text=Software update")
                 page.click("#pcTest >> text=Check for updates")
@@ -101,7 +106,7 @@ class EditorUi(Base):
                 errors = []
                 page.on("pageerror", lambda e: errors.append(str(e)))
                 page.goto(f"http://127.0.0.1:{self.port}/")
-                page.wait_for_timeout(600)
+                ready(page)
                 page.evaluate("document.querySelectorAll('.tour').forEach((e) => e.remove()); openCode()")
                 page.wait_for_timeout(600)
                 page.evaluate("C.project = 'demo'; newSession()")
@@ -164,7 +169,7 @@ class EditorUi(Base):
                 errors = []
                 page.on("pageerror", lambda x: errors.append(str(x)))
                 page.goto(f"http://127.0.0.1:{self.port}/")
-                page.wait_for_timeout(600)
+                ready(page)
                 page.evaluate("document.querySelectorAll('.tour').forEach((x) => x.remove()); openCode()")
                 page.wait_for_timeout(600)
                 page.evaluate("C.project = 'demo'; newSession()")
@@ -232,7 +237,7 @@ class EditorUi(Base):
         self.errors = []
         page.on("pageerror", lambda x: self.errors.append(str(x)))
         page.goto(f"http://127.0.0.1:{self.port}/")
-        page.wait_for_timeout(600)
+        ready(page)
         page.evaluate("document.querySelectorAll('.tour').forEach((x) => x.remove()); openCode()")
         page.wait_for_timeout(600)
         page.evaluate("C.project = 'demo'; newSession()")
