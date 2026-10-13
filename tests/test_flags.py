@@ -20,12 +20,13 @@ class Rules(unittest.TestCase):
         self.assertTrue(f.on("welcome_tour", who(admin=True)))
         self.assertFalse(f.on("welcome_tour", who()))
 
-    def test_violet_look_starts_with_the_owner_only(self):
+    def test_the_new_looks_start_with_the_admins(self):
         f = F.Flags(None)
-        self.assertEqual(f.audience("violet_theme"), "owner")
-        self.assertTrue(f.on("violet_theme", who(founder=True, admin=True)))
-        self.assertFalse(f.on("violet_theme", who(admin=True)))
-        self.assertFalse(f.on("violet_theme", who()))
+        for fid in ("violet_theme", "modern_look", "vryxcode_update"):
+            self.assertEqual(f.audience(fid), "admins", fid)
+            self.assertTrue(f.on(fid, who(founder=True, admin=True)), fid)
+            self.assertTrue(f.on(fid, who(admin=True)), fid)
+            self.assertFalse(f.on(fid, who()), fid)
 
     def test_each_audience(self):
         f = F.Flags(None)
