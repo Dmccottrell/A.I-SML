@@ -169,6 +169,32 @@ class EditorUi(Base):
             finally:
                 b.close()
 
+    def test_modern_look_is_a_flag_and_the_empty_chat_offers_ideas(self):
+        from playwright.sync_api import sync_playwright
+        st, h, css = Client(self.port).call("GET", "/modern.css", raw=True)
+        self.assertEqual(st, 200)
+        self.assertIn("body.ml", css.decode())
+        with sync_playwright() as p:
+            b = p.chromium.launch(executable_path=find_browser())
+            try:
+                for audience, on in (("owner", True), ("off", False)):
+                    self.state.flags.set_audience("modern_look", audience, "test")
+                    page = b.new_context(viewport={"width": 1200, "height": 850}, extra_http_headers={"Authorization": "Bearer " + self.state.owner_key()}).new_page()
+                    errors = []
+                    page.on("pageerror", lambda e: errors.append(str(e)))
+                    page.goto(f"http://127.0.0.1:{self.port}/")
+                    ready(page)
+                    page.evaluate("document.querySelectorAll('.tour').forEach((e) => e.remove())")
+                    page.wait_for_timeout(1200)                                                      # the page applies its look just after it has signed in
+                    self.assertEqual(page.evaluate("document.body.classList.contains('ml')"), on)
+                    self.assertEqual(page.is_visible(".ml-ideas"), on)                              # hidden entirely when the flag is off
+                    if on:
+                        page.click(".ml-ideas button >> nth=0")
+                        self.assertIn("vaccines", page.input_value("#input"))
+                    self.assertEqual(errors, [])
+            finally:
+                b.close()
+
     def test_open_edit_save_and_a_change_from_outside(self):
         from playwright.sync_api import sync_playwright
         with sync_playwright() as p:

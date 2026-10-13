@@ -84,6 +84,8 @@ class RoutesGet:
             return self._file("js/" + mjs.group(1) + ".js", "text/javascript; charset=utf-8")
         if path == "/editor.js":                      # the VryxCode editor (a plain script of its own, like the files in web/js/)
             return self._file("editor.js", "text/javascript; charset=utf-8")
+        if path == "/modern.css":
+            return self._file("modern.css", "text/css; charset=utf-8")
         if path == "/vryx.css":                       # VryxCode's own look (violet, glass panels), loaded after the page's styles
             return self._file("vryx.css", "text/css; charset=utf-8")
         if path == "/icon.svg":

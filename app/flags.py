@@ -20,6 +20,7 @@ AUDIENCE_NAMES = {"off": "Off", "owner": "Owner", "admins": "Admins", "everyone"
 FLAGS = [
     {"id": "welcome_tour", "title": "Welcome tour", "desc": "The animated introduction and walk-through people see the first time they sign in (and can replay in Settings).", "default": "admins"},
     {"id": "violet_theme", "title": "Violet look", "desc": "Emvryx's own colour (sign-in screen, logo, buttons before a model is chosen) in electric violet instead of amber. Each model keeps its own colour.", "default": "owner"},
+    {"id": "modern_look", "title": "Modern look", "desc": "A newer look for the main chat: a floating glass sidebar and composer, the model speaking straight on the page, soft glow in the model's own colour, and ideas to try on the empty chat. Switch it off to go back.", "default": "owner"},
 ]
 BY_ID = {f["id"]: f for f in FLAGS}
 VERSION_RE = re.compile(r"\d{1,3}\.\d{1,3}\.\d{1,3}")

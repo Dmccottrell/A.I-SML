@@ -103,6 +103,7 @@ function applyTheme() {
   const m = curModel(), p = Object.assign({}, BASE[mode], (!m && violetOn() ? VIOLET : (MODEL[m ? m.name : 'Emvryx'] || MODEL.Flare))[mode]);
   for (const k in p) document.documentElement.style.setProperty('--' + k, p[k]);
   document.querySelector('meta[name=theme-color]').content = p.bg;
+  document.body.classList.toggle('ml', !!(S.state && S.state.features && S.state.features.modern_look));      // the modern look (a feature flag): modern.css only applies under body.ml
 }
 function wash() { const w = el('div', {class: 'wash'}); document.body.append(w); setTimeout(() => w.remove(), 1100); }
 
