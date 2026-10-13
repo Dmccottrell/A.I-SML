@@ -63,6 +63,14 @@ def clip(text, limit=MAX_EVENT_TEXT):
     return text if len(text) <= limit else text[:limit] + f"\n... ({len(text) - limit} more characters)"
 
 
+def _folded_steps(messages):
+    """How many old steps are listed under "Earlier steps" in the task message (harness.compact puts them there); 0 when nothing was folded."""
+    first = next((m for m in messages if m.get("role") == "user"), None)
+    if not first or "\n\nEarlier steps:\n" not in str(first.get("content", "")):
+        return 0
+    return len([l for l in str(first["content"]).split("\n\nEarlier steps:\n", 1)[1].split("\n") if l.strip()])
+
+
 class Meter:
     """Counts a coding session against the person's plan, step by step, exactly like chat messages (same tank, same week, same model weight).
     Before each model call the likely cost is held; afterwards the real counts (from llama-server when it reports them) replace the hold."""
@@ -258,6 +266,10 @@ class Session:
         seen = {"n": 0}
 
         def call(messages):
+            folded = _folded_steps(messages)
+            if seen.get("folded") == 0 and folded > 0:                               # the first time this turn that old steps were folded into the "Earlier steps" list to save room
+                self.emit("compacted", steps=folded)
+            seen["folded"] = folded
             self.live_messages = messages
             if self.stop.is_set():
                 raise Stopped()

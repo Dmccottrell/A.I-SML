@@ -75,3 +75,23 @@ class Report(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class Compaction(unittest.TestCase):
+    """A long conversation folds its old steps into a short list; the session says so (it used to be silent) and the report still sees every step."""
+
+    def test_the_session_notes_when_old_steps_are_folded(self):
+        import tempfile, shutil
+        import code_sessions
+        import vryxcode
+        d = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, d, True)
+        replies = [vryxcode.harness_call("write_file", path=f"f{i}.py", content="x = %d\n" % i) for i in range(10)] + [vryxcode.harness_call("finish", summary="done")]
+        s = code_sessions.Session("s1", "owner", "demo", "write ten files", "solstice-2", d, auto_edits=True)
+        s.generate = vryxcode.ScriptedChat(replies)
+        s.run(s.generate, 14, 120)                                                    # a tiny memory (120 tokens) so folding must happen
+        kinds = [e["kind"] for e in s.events]
+        self.assertIn("compacted", kinds)
+        self.assertLess(kinds.index("compacted"), kinds.index("end"))
+        report = s.events[-1].get("report")
+        self.assertEqual(len(report["files"]), 10)                                    # the report is built from the events, so folding loses nothing from it

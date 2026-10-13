@@ -91,7 +91,7 @@ Expected times at home (an estimate until the pilot measures it, for the full le
 - **Pass:** better than the model it replaces by more than the wobble (about 4 points) on average, nothing important worse (identity, honesty, rules), same speed or faster.
 
 **5. Put it in the app as a preview**
-Add the model to `models.json` with `"status": "preview"` and `"think": "empty"` (copy the Flare 2.5 entry; set `file`, `tokenizer` to `export\\open\\<model>\\my-ai\\tokenizer.json`, `context` 32768, sampling, and the memory figures the pilot measured). Restart the app: only you and admins see it, marked Preview. Try it on your phone. Then Admin > Models > **Run safety checks** (about 40 questions, a few minutes), and when it passes and you are happy: Publish.
+Add the model to `models.json` with `"status": "preview"` and `"think": "empty"` (copy the Flare 2.5 entry; set `file`, `tokenizer` to `export\\open\\<model>\\my-ai\\tokenizer.json`, `context` 32768 and `context_tested` 32768 (VryxCode folds old steps at 70% of `context_tested`), sampling, and the memory figures the pilot measured). Restart the app: only you and admins see it, marked Preview. Try it on your phone. Then Admin > Models > **Run safety checks** (about 40 questions, a few minutes), and when it passes and you are happy: Publish.
 
 ## Not built yet (known gaps, to do before or while the models are trained)
 1. **Deep effort with thinking in the app:** send the newest question with `"thinking": true` (no empty block), pass the reply through `core/thinking.py`'s `ThinkFilter`, show "thinking..." while inside the block. The pieces and tests exist; wiring them into the chat stream waits until a model is here to try it on.
