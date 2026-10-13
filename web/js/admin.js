@@ -198,7 +198,7 @@ async function admPc(body) {
         j.has_runner ? el('p', {}, j.loaded ? el('span', {}, el('b', {}, j.loaded_label || j.loaded), ' is loaded' + (j.busy ? ' and in use.' : ', idle for ' + (mins ? mins + ' min' : 'under a minute') + '.')) : 'Nothing is loaded. The next message loads a model.')
           : el('p', {}, 'This server is not running models itself (no llama-server), so there is nothing to free here.'),
         j.has_runner && j.loaded ? el('div', {class: 'adm-acts'}, sxBtn('Unload now', () => save({unload: true}))) : null),
-      S.state.owner ? updateCard() : null,
+      ...(S.state.owner ? [updateCard()] : []),
       el('div', {class: 'adm-card'}, el('h3', {}, 'Unload when idle'),
         el('p', {}, 'When nobody has used the model for this long, it is unloaded to free the card. The next message loads it again. Never keeps it loaded until you pick another model.'),
         sxSeg(idle, j.idle_unload_minutes, (v) => save({idle_unload_minutes: v}))));
