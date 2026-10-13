@@ -66,6 +66,7 @@ import app_links
 import connected_apps
 import documents
 import feedback
+import updater
 import vision
 import live_data
 import flags
@@ -411,6 +412,7 @@ class AppState:
         self.models_pub = model_publish.ModelPublisher(os.path.join(data_dir, "models_state.json") if data_dir else None, None, guard=self.guard_ok)
         self.flags = flags.Flags(os.path.join(data_dir, "flags.json") if data_dir else None)
         self.models_pub.flags = self.flags
+        self.updater = updater.Updater(HERE, busy=self.busy)                         # Admin > PC > Update now (owner only)
         self.guard_sheet = os.path.join(HERE, "eval", "everyday.jsonl")            # the safety checks a new model must pass before it can be published
         self.guards = model_guard.GuardStore(os.path.join(data_dir, "guard") if data_dir else None)
         self.guard_run, self._guard_lock = None, threading.Lock()    # which new features each kind of person can see (Settings > Owner > Features and testing)
@@ -2252,6 +2254,11 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 return self._send(200, self.state.models_admin())
             if path == "/api/admin/apps" and who["admin"]:
                 return self._send(200, {"apps": self.state.apps(), "plans": list(self.state.cfg["tiers"]), "url": self._public_base() + "/api/v1/ask"})
+            if path == "/api/admin/update" and who["owner"]:
+                try:
+                    return self._send(200, self.state.updater.check())
+                except updater.UpdateError as e:
+                    return self._send(200, {"can_update": False, "reason": e.message, "incoming": [], "dirty": []})
             if path == "/api/admin/pc" and who["admin"]:
                 self.state.sync_gaming()
                 return self._send(200, self.state.pc_status())
@@ -2618,6 +2625,15 @@ class Handler(http.server.BaseHTTPRequestHandler):
                     except (ValueError, TypeError) as e:
                         return self._send(400, {"code": "bad_request", "message": str(e)})
                     return self._send(200, {"apps": st.apps()})
+                if path == "/api/admin/update":                                   # pull the newest main and restart: only the PC owner, and only the change they were shown
+                    if not who["owner"]:
+                        return self._send(403, {"code": "owner_only", "message": "Only the PC owner can update Emvryx.", "action": "Nothing was changed."})
+                    try:
+                        res = self.state.updater.apply(str(body.get("expected", "")), force=bool(body.get("force")))
+                    except updater.UpdateError as e:
+                        return self._send(409 if e.code in ("busy", "changed") else 400, {"code": e.code, "message": e.message, "action": e.action or "Nothing was changed."})
+                    self.state.auth.event("update_applied", who["user"], self._ip(), f"{res['from']} -> {res['to']} ({res['changes']} changes, restarting={res['restarting']})")
+                    return self._send(200, res)
                 if path == "/api/admin/pc":                                       # Gaming mode, idle unload, unload now
                     st = self.state
                     if "gaming" in body:

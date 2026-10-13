@@ -297,18 +297,22 @@ class Session:
                 self.meter.settle(res, generate, messages, reply)
             if self.stop.is_set():
                 raise Stopped()
+            took = {"secs": round(time.time() - self.live["since"], 1), "words": self.live.get("chunks", 0)} if self.live else {}      # what the live line showed: kept on the step
             self.live = None
             try:
                 name, args = harness.parse_tool_call(reply)
-                self.emit("step", tool=name, preview=clip(vryxcode.preview(name, args), 2500), raw=clip(reply, 1500))
+                self.emit("step", tool=name, preview=clip(vryxcode.preview(name, args), 2500), raw=clip(reply, 1500), **took)
                 if name == "finish" and isinstance(args, dict):
                     nxt = args.get("next")
                     self.next_steps = [clip(str(x), 120) for x in nxt[:3]] if isinstance(nxt, list) else []
                 if name != "finish":
                     target = str(args.get("path") or args.get("command") or args.get("args") or args.get("action") or "") if isinstance(args, dict) else ""
                     self.live = {"phase": "running", "since": time.time(), "tool": name, "target": target[:120]}      # the tool runs next; cleared when the next model call starts
-            except harness.ToolError:
-                pass                                       # words with no tool call: if the turn ends on them they arrive as the "end" message, so no step is shown
+            except harness.ToolError as e:
+                if not str(e).startswith("no tool call found"):     # a tool call that could not be read: it is sent back to the model to try again, so say so and keep what it wrote
+                    prose = RESULT_TAGS.sub("", re.split(r"<\|tool_call\|>|<tool_call>", reply)[0]).strip()
+                    self.emit("retry", text=clip(prose, 400), why=clip(str(e), 200), **took)
+                # words with no tool call: if the turn ends on them they arrive as the "end" message, so no step is shown
             return reply
         return call
 
