@@ -9,6 +9,7 @@ from app_errors import AppError, ModelTooBig, PcUnreachable
 from tokenizer import BPETokenizer
 
 
+UNHANDLED = object()                          # what a part of the web routes returns when the address is not one of its own (the next part is tried)
 HERE = emvryx_paths.ROOT                      # the project folder (web/, models.json and the code folders live there)
 WEB = os.path.join(HERE, "web")
 MAX_BODY = 1_000_000
