@@ -26,8 +26,8 @@ a:hover{color:var(--accenttext)}
 <meta name="twitter:image" content="https://emvryx.app/og.png">
 
 <style>
-:root{--bg:#07080D;--side:#0A0B11;--surface:#0F1119;--surface2:#161926;--line:#232739;--text:#EEF0F6;--muted:#9AA3BC;--accent:#F5A524;--onaccent:#1A1204;--accenttext:#F5A524;--sun:#F5A524;--core:#F5A524;--glow:rgba(245,165,36,.14)}
-:root[data-theme=light]{--bg:#F7F8FC;--side:#EEF0F7;--surface:#FFFFFF;--surface2:#EEF0F7;--line:#D8DCEA;--text:#0D0F1A;--muted:#4A526B;--accent:#F5A524;--onaccent:#1A1204;--accenttext:#8F5600;--sun:#E08A00;--core:#E08A00;--glow:rgba(245,165,36,.12)}
+:root{--bg:#07080D;--side:#0A0B11;--surface:#0F1119;--surface2:#161926;--line:#232739;--text:#EEF0F6;--muted:#9AA3BC;--accent:#8B5CF6;--onaccent:#FFFFFF;--accenttext:#A78BFA;--sun:#8B5CF6;--core:#C4B5FD;--glow:rgba(139,92,246,.14)}
+:root[data-theme=light]{--bg:#F7F8FC;--side:#EEF0F7;--surface:#FFFFFF;--surface2:#EEF0F7;--line:#D8DCEA;--text:#0D0F1A;--muted:#4A526B;--accent:#7C3AED;--onaccent:#FFFFFF;--accenttext:#6D28D9;--sun:#7C3AED;--core:#8B5CF6;--glow:rgba(139,92,246,.12)}
 html,body{margin:0;background:var(--bg)}
 .theme-toggle{position:fixed;right:16px;bottom:16px;z-index:50;width:44px;height:44px;border-radius:999px;border:1px solid var(--line);background:var(--surface);color:var(--text);cursor:pointer;font-size:18px}
 .theme-toggle:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
@@ -278,11 +278,11 @@ Read 2 notes from Wikipedia
   /* ---- the dashes that turn to face the pointer */
   var canvas = document.createElement('canvas'); canvas.className = 'fx-dots'; canvas.setAttribute('aria-hidden', 'true'); document.body.prepend(canvas); doc.classList.add('fx-has');
   var ctx = canvas.getContext && canvas.getContext('2d');
-  var w = 0, h = 0, mx = null, my = null, cx = 0, cy = 0, rgb = '245,165,36', GAP = 34, last = 0, fade = 1;
+  var w = 0, h = 0, mx = null, my = null, cx = 0, cy = 0, rgb = '139,92,246', GAP = 34, last = 0, fade = 1;
   function size() { var d = Math.min(window.devicePixelRatio || 1, 2); w = innerWidth; h = innerHeight; canvas.width = w * d; canvas.height = h * d; if (ctx) ctx.setTransform(d, 0, 0, d, 0, 0); }
   function colour() {
     var c = cs(doc).getPropertyValue('--accent').trim(), m = /^#([0-9a-f]{6})$/i.exec(c);
-    rgb = m ? [1, 3, 5].map(function (i) { return parseInt(m[1].slice(i - 1, i + 1), 16); }).join(',') : '245,165,36';
+    rgb = m ? [1, 3, 5].map(function (i) { return parseInt(m[1].slice(i - 1, i + 1), 16); }).join(',') : '139,92,246';
   }
   function draw() {
     ctx.clearRect(0, 0, w, h);

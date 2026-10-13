@@ -11,7 +11,7 @@ import os, sys; sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(
 from PIL import Image, ImageDraw, ImageFont
 
 W, H = 1200, 630
-BG, TEXT, MUTED, AMBER, CORE = (7, 8, 13), (238, 240, 246), (154, 163, 188), (245, 165, 36), (255, 210, 122)
+BG, TEXT, MUTED, AMBER, CORE = (7, 8, 13), (238, 240, 246), (154, 163, 188), (139, 92, 246), (196, 181, 253)
 FONTS = ["DejaVuSans-Bold.ttf", "LiberationSans-Bold.ttf", "NotoSans-Bold.ttf", "arialbd.ttf", "Arial Bold.ttf"]
 
 
@@ -28,7 +28,7 @@ def make(path):
     img = Image.new("RGB", (W, H), BG)
     glow = Image.new("RGB", (W, H), BG)
     gd = ImageDraw.Draw(glow)
-    gd.ellipse([-300, -420, 900, 480], fill=(38, 28, 12))
+    gd.ellipse([-300, -420, 900, 480], fill=(24, 16, 46))
     img = Image.blend(img, glow, 0.9)
     d = ImageDraw.Draw(img)
     # the mark, drawn on a 64 x 64 grid scaled up
@@ -43,7 +43,7 @@ def make(path):
     x, y = px(17, 32)
     d.ellipse([x - 3 * k, y - 3 * k, x + 3 * k, y + 3 * k], fill=AMBER)
     cx, cy = px(46, 32)
-    d.ellipse([cx - 12 * k, cy - 12 * k, cx + 12 * k, cy + 12 * k], fill=(52, 38, 14))
+    d.ellipse([cx - 12 * k, cy - 12 * k, cx + 12 * k, cy + 12 * k], fill=(44, 30, 84))
     d.ellipse([cx - 5.5 * k, cy - 5.5 * k, cx + 5.5 * k, cy + 5.5 * k], outline=CORE, width=int(3 * k))
     d.ellipse([cx - 1.8 * k, cy - 1.8 * k, cx + 1.8 * k, cy + 1.8 * k], fill=AMBER)
     d.text((600, 190), "Emvryx", font=font(120), fill=TEXT)

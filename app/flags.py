@@ -19,6 +19,7 @@ AUDIENCE_NAMES = {"off": "Off", "owner": "Owner", "admins": "Admins", "everyone"
 # id, what the owner sees, what it does, and where it starts. New features start with the owner and the admins.
 FLAGS = [
     {"id": "welcome_tour", "title": "Welcome tour", "desc": "The animated introduction and walk-through people see the first time they sign in (and can replay in Settings).", "default": "admins"},
+    {"id": "violet_theme", "title": "Violet look", "desc": "Emvryx's own colour (sign-in screen, logo, buttons before a model is chosen) in electric violet instead of amber. Each model keeps its own colour.", "default": "owner"},
 ]
 BY_ID = {f["id"]: f for f in FLAGS}
 VERSION_RE = re.compile(r"\d{1,3}\.\d{1,3}\.\d{1,3}")

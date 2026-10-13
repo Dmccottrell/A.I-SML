@@ -23,18 +23,18 @@
   "models": {
     "brand": {
       "dark": {
-        "accent": "#F5A524",
-        "onaccent": "#1A1204",
-        "accenttext": "#F5A524",
-        "sun": "#F5A524",
-        "core": "#F5A524"
+        "accent": "#8B5CF6",
+        "onaccent": "#FFFFFF",
+        "accenttext": "#A78BFA",
+        "sun": "#8B5CF6",
+        "core": "#C4B5FD"
       },
       "light": {
-        "accent": "#F5A524",
-        "onaccent": "#1A1204",
-        "accenttext": "#8F5600",
-        "sun": "#E08A00",
-        "core": "#E08A00"
+        "accent": "#7C3AED",
+        "onaccent": "#FFFFFF",
+        "accenttext": "#6D28D9",
+        "sun": "#7C3AED",
+        "core": "#8B5CF6"
       }
     },
     "ember": {

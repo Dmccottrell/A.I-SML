@@ -34,6 +34,20 @@ class SignInDots(Base):
             finally:
                 b.close()
 
+    def test_violet_look_is_behind_the_flag(self):
+        from playwright.sync_api import sync_playwright
+        with sync_playwright() as p:
+            b = p.chromium.launch(executable_path=find_browser())
+            try:
+                page = b.new_context(extra_http_headers={"Authorization": "Bearer " + self.state.owner_key()}).new_page()
+                for audience, want in (("owner", True), ("off", False)):
+                    self.state.flags.set_audience("violet_theme", audience)
+                    page.goto(f"http://127.0.0.1:{self.port}/")
+                    page.wait_for_timeout(1200)
+                    self.assertEqual(page.evaluate("violetOn()"), want, audience)
+            finally:
+                b.close()
+
 
 if __name__ == "__main__":
     unittest.main()
