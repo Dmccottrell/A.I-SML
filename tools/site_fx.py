@@ -35,11 +35,11 @@ FX_JS = """<script>
   /* ---- the dashes that turn to face the pointer */
   var canvas = document.createElement('canvas'); canvas.className = 'fx-dots'; canvas.setAttribute('aria-hidden', 'true'); document.body.prepend(canvas); doc.classList.add('fx-has');
   var ctx = canvas.getContext && canvas.getContext('2d');
-  var w = 0, h = 0, mx = null, my = null, cx = 0, cy = 0, rgb = '245,165,36', GAP = 34, last = 0, fade = 1;
+  var w = 0, h = 0, mx = null, my = null, cx = 0, cy = 0, rgb = '139,92,246', GAP = 34, last = 0, fade = 1;
   function size() { var d = Math.min(window.devicePixelRatio || 1, 2); w = innerWidth; h = innerHeight; canvas.width = w * d; canvas.height = h * d; if (ctx) ctx.setTransform(d, 0, 0, d, 0, 0); }
   function colour() {
     var c = cs(doc).getPropertyValue('--accent').trim(), m = /^#([0-9a-f]{6})$/i.exec(c);
-    rgb = m ? [1, 3, 5].map(function (i) { return parseInt(m[1].slice(i - 1, i + 1), 16); }).join(',') : '245,165,36';
+    rgb = m ? [1, 3, 5].map(function (i) { return parseInt(m[1].slice(i - 1, i + 1), 16); }).join(',') : '139,92,246';
   }
   function draw() {
     ctx.clearRect(0, 0, w, h);

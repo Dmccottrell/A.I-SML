@@ -66,14 +66,14 @@ def write(path, text):
 
 def main():
     dark, pale = "#07080D", "#EEF0F6"
-    write(os.path.join(HERE, "emvryx-mark-dark.svg"), file(mark("main", pale, "#F5A524", "#FFD27A"), dark))
-    write(os.path.join(HERE, "emvryx-mark-light.svg"), file(mark("main", "#0D0F1A", "#E08A00", "#F5A524"), "#F7F8FC"))
+    write(os.path.join(HERE, "emvryx-mark-dark.svg"), file(mark("main", pale, "#8B5CF6", "#C4B5FD"), dark))
+    write(os.path.join(HERE, "emvryx-mark-light.svg"), file(mark("main", "#0D0F1A", "#7C3AED", "#8B5CF6"), "#F7F8FC"))
     models = {"ember": (pale, "#FFB05A", None), "flare": (pale, "#FF4B1F", "#FFF3E6"), "equinox": (pale, pale, None),
               "solstice": (pale, "#F2A60C", "#FFE7A0"), "apogee": ("#A8D1F5", "#A8D1F5", "#F4F9FF")}
     for name, (m, a, l) in models.items():
         write(os.path.join(HERE, f"{name}.svg"), file(mark(name, m, a, l), dark))
-    write(os.path.join(ROOT, "web", "icon.svg"), file(small(pale, "#F5A524"), dark))
-    write(os.path.join(HERE, "emvryx-icon-small.svg"), file(small(pale, "#F5A524"), dark))
+    write(os.path.join(ROOT, "web", "icon.svg"), file(small(pale, "#F5A524"), dark))       # the chat app keeps its amber icon (the website's violet one is emvryx-icon-small.svg)
+    write(os.path.join(HERE, "emvryx-icon-small.svg"), file(small(pale, "#8B5CF6"), dark))
     return ["emvryx-mark-dark", "emvryx-mark-light", *models, "web/icon.svg", "emvryx-icon-small"]
 
 

@@ -2,7 +2,7 @@
 import os, sys; sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), os.pardir)); import emvryx_paths  # noqa: E402,F401
 import tempfile
 import time
-import unittest
+import unittest, unittest.mock
 
 import flags as F
 from tests.test_app_server import Base
@@ -19,6 +19,13 @@ class Rules(unittest.TestCase):
         self.assertTrue(f.on("welcome_tour", who(founder=True, admin=True)))
         self.assertTrue(f.on("welcome_tour", who(admin=True)))
         self.assertFalse(f.on("welcome_tour", who()))
+
+    def test_violet_look_starts_with_the_owner_only(self):
+        f = F.Flags(None)
+        self.assertEqual(f.audience("violet_theme"), "owner")
+        self.assertTrue(f.on("violet_theme", who(founder=True, admin=True)))
+        self.assertFalse(f.on("violet_theme", who(admin=True)))
+        self.assertFalse(f.on("violet_theme", who()))
 
     def test_each_audience(self):
         f = F.Flags(None)
@@ -78,7 +85,7 @@ class Server(Base):
         self.owner.call("POST", "/api/admin/access", {"user": "sam", "admin": True})
         s, j = self.sam.call("GET", "/api/admin/flags")                                     # an appointed admin may
         self.assertEqual(s, 200)
-        self.assertEqual([f["id"] for f in j["flags"]], ["welcome_tour"])
+        self.assertEqual([f["id"] for f in j["flags"]], ["welcome_tour", "violet_theme"])
         self.assertIn("owner", j["people"])
         self.assertEqual(self.sam.call("POST", "/api/admin/flags", {"id": "welcome_tour", "audience": "owner"})[0], 200)
         self.assertEqual(self.owner.call("POST", "/api/admin/flags", {"id": "welcome_tour", "audience": "bogus"})[0], 400)
@@ -176,6 +183,13 @@ class ScheduleServer(Base):
 
 
 class Releases(unittest.TestCase):
+    def setUp(self):                                                  # these rules are about one flag: leave the others out
+        only = [f for f in F.FLAGS if f["id"] == "welcome_tour"]
+        for name, value in (("FLAGS", only), ("BY_ID", {f["id"]: f for f in only})):
+            patch = unittest.mock.patch.object(F, name, value)
+            patch.start()
+            self.addCleanup(patch.stop)
+
     def test_publishing_makes_a_release_and_raises_the_version(self):
         f = F.Flags(None)
         self.assertEqual((f.version(), f.releases(), f.preview_ids()), ("1.0.0", [], ["welcome_tour"]))

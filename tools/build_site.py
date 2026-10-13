@@ -33,7 +33,7 @@ with open(os.path.join(HERE, "design", "brand-tokens.json"), encoding="utf-8") a
 def css_vars(mode):
     t = dict(TOKENS["base"][mode])
     t.update({k: v for k, v in TOKENS["models"]["brand"][mode].items()})
-    t.setdefault("glow", "rgba(245,165,36,.14)" if mode == "dark" else "rgba(245,165,36,.12)")
+    t.setdefault("glow", "rgba(139,92,246,.14)" if mode == "dark" else "rgba(139,92,246,.12)")
     return ";".join(f"--{k}:{v}" for k, v in t.items())
 
 
@@ -288,7 +288,7 @@ def build(out=None):
         with open(os.path.join(out, name), "w", encoding="utf-8") as f:
             f.write(html)
         written.append(name)
-    shutil.copy(os.path.join(HERE, "web", "icon.svg"), os.path.join(out, "icon.svg"))
+    shutil.copy(os.path.join(HERE, "design", "logo", "emvryx-icon-small.svg"), os.path.join(out, "icon.svg"))
     og = os.path.join(HERE, "design", "og.png")
     if os.path.exists(og):
         shutil.copy(og, os.path.join(out, "og.png"))

@@ -721,6 +721,9 @@ const MODEL = {
   Solstice: {dark: {accent:'#F2A60C', onaccent:'#1F1400', accenttext:'#FFBE3B', sun:'#F2A60C', core:'#FFE7A0', glow:'rgba(242,166,12,.18)'}, light: {accent:'#F2A60C', onaccent:'#1F1400', accenttext:'#8A5A00', sun:'#D18A00', core:'#FFE7A0', glow:'rgba(242,166,12,.13)'}},
   Apogee:   {dark: {accent:'#A8D1F5', onaccent:'#06121F', accenttext:'#B5D8F8', sun:'#A8D1F5', core:'#F4F9FF', glow:'rgba(168,209,245,.15)'}, light: {accent:'#A8D1F5', onaccent:'#06121F', accenttext:'#2A5F96', sun:'#4F8FC9', core:'#F4F9FF', glow:'rgba(120,170,220,.15)'}}
 };
+// The violet look (a feature flag, "violet_theme": Admin > Previews). Only Emvryx's own colour changes; each model keeps its own.
+const VIOLET = {dark: {accent:'#8B5CF6', onaccent:'#FFFFFF', accenttext:'#A78BFA', sun:'#8B5CF6', core:'#C4B5FD', glow:'rgba(139,92,246,.14)'}, light: {accent:'#7C3AED', onaccent:'#FFFFFF', accenttext:'#6D28D9', sun:'#7C3AED', core:'#8B5CF6', glow:'rgba(124,58,237,.12)'}};
+const violetOn = () => !!(S.state && S.state.features && S.state.features.violet_theme);
 const BASE = {
   dark:  {bg:'#07080D', side:'#0A0B11', surface:'#0F1119', surface2:'#161926', line:'#232739', text:'#EEF0F6', muted:'#9AA3BC'},
   light: {bg:'#F7F8FC', side:'#EEF0F7', surface:'#FFFFFF', surface2:'#EEF0F7', line:'#D8DCEA', text:'#0D0F1A', muted:'#4A526B'}
@@ -747,9 +750,9 @@ const logo = (size, animate, kind) => {
   const s = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
   s.setAttribute('width', size); s.setAttribute('height', size); s.setAttribute('viewBox', '0 0 64 64'); s.setAttribute('fill', 'none'); s.setAttribute('aria-hidden', 'true');
   const pulse = (v) => animate ? `<animate attributeName="r" values="${v}" dur="1.6s" repeatCount="indefinite"/>` : '';
-  const sun = k === 'brand' ? '#F5A524' : 'var(--sun)', main = k === 'apogee' ? 'var(--sun)' : 'var(--text)';
+  const sun = k === 'brand' ? (violetOn() ? '#8B5CF6' : '#F5A524') : 'var(--sun)', main = k === 'apogee' ? 'var(--sun)' : 'var(--text)';
   let ring;
-  if (k === 'brand') ring = `<circle cx="46" cy="32" r="5.5" stroke="#FFD27A" stroke-width="3">${pulse('4.5;7;4.5')}</circle><circle cx="46" cy="32" r="1.8" fill="#F5A524"/>`;
+  if (k === 'brand') ring = `<circle cx="46" cy="32" r="5.5" stroke="${violetOn() ? '#C4B5FD' : '#FFD27A'}" stroke-width="3">${pulse('4.5;7;4.5')}</circle><circle cx="46" cy="32" r="1.8" fill="${sun}"/>`;
   else if (k === 'ember') ring = `<circle cx="45" cy="32" r="3.4" fill="${sun}">${pulse('2.6;4.4;2.6')}</circle>`;
   else if (k === 'apogee') ring = `<circle class="core" cx="46" cy="32" r="4.5" style="stroke-width:2.5">${pulse('4;6;4')}</circle><circle cx="46" cy="32" r="8.5" stroke="${sun}" stroke-width="1.6" stroke-opacity="0.7"/><circle cx="46" cy="32" r="12" stroke="${sun}" stroke-width="1.2" stroke-opacity="0.4"/>`;
   else ring = `<circle class="core" cx="46" cy="32" r="5.5">${pulse('4.5;7;4.5')}</circle>` + (k === 'equinox' ? logoRays(8.5, 11, 4, 'var(--text)') : k === 'solstice' ? logoRays(8.5, 11.5, 8, sun) : '');
@@ -795,7 +798,7 @@ function applyTheme() {
   applySize();
   const mode = S.theme === 'auto' ? (matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark') : S.theme;
   document.documentElement.dataset.mode = mode;
-  const m = curModel(), p = Object.assign({}, BASE[mode], (MODEL[m ? m.name : 'Emvryx'] || MODEL.Flare)[mode]);
+  const m = curModel(), p = Object.assign({}, BASE[mode], (!m && violetOn() ? VIOLET : (MODEL[m ? m.name : 'Emvryx'] || MODEL.Flare))[mode]);
   for (const k in p) document.documentElement.style.setProperty('--' + k, p[k]);
   document.querySelector('meta[name=theme-color]').content = p.bg;
 }
