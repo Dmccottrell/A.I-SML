@@ -1,6 +1,7 @@
 """The sign-in screen's reactive dots: a canvas behind the form that redraws when the pointer moves."""
 import os, sys; sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), os.pardir)); import emvryx_paths  # noqa: E402,F401
 import unittest
+from tests.test_editor_ui import eventually
 
 import browser_check
 from tests.test_app_server import Base
@@ -43,8 +44,7 @@ class SignInDots(Base):
                 for audience, want in (("owner", True), ("off", False)):
                     self.state.flags.set_audience("violet_theme", audience)
                     page.goto(f"http://127.0.0.1:{self.port}/")
-                    page.wait_for_timeout(1200)
-                    self.assertEqual(page.evaluate("violetOn()"), want, audience)
+                    eventually(lambda: self.assertEqual(page.evaluate("violetOn()"), want, audience))
             finally:
                 b.close()
 

@@ -14,6 +14,36 @@ def vryx_on(page):
     wait_for(lambda: page.evaluate("document.body.classList.contains('vxn') && !!document.getElementById('cssVryx')"), 10)
 
 
+def eventually(check, timeout=10):
+    """Run `check` (a function with assertions) until it passes: what the page shows next can take a moment on a slow machine. Re-raises the last failure."""
+    import time
+    end = time.time() + timeout
+    while True:
+        try:
+            return check()
+        except AssertionError:
+            if time.time() > end:
+                raise
+            time.sleep(0.1)
+
+
+def open_ide(page):
+    """VryxCode open on a blank session in the 'demo' project, in the Editor layout, with the file tree drawn (waits for each, instead of guessing how long)."""
+    page.evaluate("document.querySelectorAll('.tour').forEach((x) => x.remove()); openCode()")
+    wait_for(lambda: page.evaluate("!!(C.info && C.view === 'home')"), 15)
+    page.evaluate("C.project = 'demo'; newSession()")
+    wait_for(lambda: page.evaluate("C.view === 'session'"), 15)
+    page.evaluate("document.querySelectorAll('.tour').forEach((x) => x.remove())")
+    page.click("#codeIdeBtn")
+    wait_for(lambda: page.evaluate("document.getElementById('code').classList.contains('ide') && document.querySelectorAll('#ideFiles button').length > 0"), 15)
+
+
+def open_file(page, name):
+    """Open a file in the editor and wait until it is the one showing."""
+    page.click(f"#ideFiles >> text={name}")
+    wait_for(lambda: page.evaluate("(IDE.tabs[IDE.active] || {}).path") == name and page.locator("#ideBody textarea").count() > 0, 15)
+
+
 def ready(page):
     """The page has loaded and signed in (polled from Python: the page's own security rules block waiting on a script string)."""
     wait_for(lambda: page.evaluate("typeof S !== 'undefined' && !!S.state"), 15)
@@ -55,8 +85,7 @@ class EditorUi(Base):
                 self.assertIn("no spaces", page.inner_text(".dialog"))                         # a clear reason, the dialog stays open
                 page.fill(".dialog input", "recipe-box")
                 page.click(".dialog .btn.primary")
-                page.wait_for_timeout(500)
-                self.assertEqual(page.evaluate("C.project"), "recipe-box")
+                eventually(lambda: self.assertEqual(page.evaluate("C.project"), "recipe-box"))
                 self.assertEqual(page.evaluate("C.view"), "session")                           # straight to a blank session in it
                 self.assertIn("recipe-box", page.inner_text("#codeProj"))
                 self.assertEqual(page.evaluate("document.querySelectorAll('.dialog').length"), 0)
@@ -72,7 +101,7 @@ class EditorUi(Base):
                 page.goto(f"http://127.0.0.1:{self.port}/")
                 ready(page)
                 page.evaluate("document.querySelectorAll('.tour').forEach((e) => e.remove()); openCode(); newSession()")
-                page.wait_for_timeout(500)
+                wait_for(lambda: page.evaluate("C.view === 'session'"), 15)
                 page.evaluate("cEvent({kind: 'retry', text: 'I see the issue. I will correct the tool call.', why: 'x', secs: 19.2, words: 94}); cEvent({kind: 'step', tool: 'write_file', preview: 'write index.html (3 lines)\\n  + a', raw: '', secs: 7.4, words: 52}); cEvent({kind: 'result', text: 'wrote index.html'})")
                 text = page.inner_text("#codeIn")
                 self.assertIn("I see the issue", text)
@@ -202,8 +231,7 @@ class EditorUi(Base):
                     page.goto(f"http://127.0.0.1:{self.port}/")
                     ready(page)
                     page.evaluate("document.querySelectorAll('.tour').forEach((e) => e.remove())")
-                    page.wait_for_timeout(1200)                                                      # the page applies its look just after it has signed in
-                    self.assertEqual(page.evaluate("document.body.classList.contains('ml')"), on)
+                    eventually(lambda: self.assertEqual(page.evaluate("document.body.classList.contains('ml')"), on))
                     self.assertEqual(page.evaluate("!!document.getElementById('cssModern')"), on)           # its stylesheet is not even loaded when the flag is off
                     self.assertEqual(page.is_visible(".ml-ideas"), on)                              # hidden entirely when the flag is off
                     remembered = page.evaluate("localStorage.getItem('emvryx_looks')")                    # kept so the sign-in screen can wear the look
@@ -230,49 +258,37 @@ class EditorUi(Base):
                 page.on("pageerror", lambda e: errors.append(str(e)))
                 page.goto(f"http://127.0.0.1:{self.port}/")
                 ready(page)
-                page.evaluate("document.querySelectorAll('.tour').forEach((e) => e.remove()); openCode()")
-                page.wait_for_timeout(600)
-                page.evaluate("C.project = 'demo'; newSession()")
-                page.wait_for_timeout(400)
-                page.evaluate("document.querySelectorAll('.tour').forEach((e) => e.remove())")        # the welcome tour can appear late
-                page.click("#codeIdeBtn")
-                page.wait_for_timeout(500)
+                open_ide(page)
                 box = lambda sel: page.eval_on_selector(sel, "e => { const r = e.getBoundingClientRect(); return [Math.round(r.left), Math.round(r.width)]; }")
                 (tl, tw), (el_, ew), (cl, cw) = box("#ideTree"), box("#ideEd"), box(".code .col")
                 self.assertTrue(tl < el_ < cl, (tl, el_, cl))                                   # files | editor | VryxCode, left to right
                 self.assertGreater(ew, 450)
-                page.click("#ideFiles >> text=app.py")
-                page.wait_for_timeout(300)
+                open_file(page, "app.py")
                 self.assertIn("tk-k", page.inner_html("#ideBody pre.hl"))                       # coloured
                 page.click("#ideBody textarea")
                 page.keyboard.press("Control+End")
                 page.keyboard.type("x = 1")
-                page.wait_for_timeout(100)
-                self.assertIn("●", page.inner_text("#ideTabs"))                            # the tab shows unsaved changes
+                eventually(lambda: self.assertIn("●", page.inner_text("#ideTabs")))  # the tab shows unsaved changes
                 page.keyboard.press("Control+s")
-                page.wait_for_timeout(600)
-                self.assertEqual(page.inner_text("#ideStatus"), "Saved")
+                eventually(lambda: self.assertEqual(page.inner_text("#ideStatus"), "Saved"))
                 self.assertEqual(self.disk("app.py"), "def hello(name):\n    return name\nx = 1")
                 self.assertNotIn("●", page.inner_text("#ideTabs"))
                 # VryxCode (or anything else) changes the open file on disk: the tab updates by itself when there are no edits of yours
                 self.save("app.py", "def hello(name):\n    return name.title()\n")
                 page.evaluate("ideSync()")
-                page.wait_for_timeout(500)
-                self.assertIn("title()", page.input_value("#ideBody textarea"))
+                eventually(lambda: self.assertIn("title()", page.input_value("#ideBody textarea")))
                 # ...and asks when there are
                 page.click("#ideBody textarea")
                 page.keyboard.press("Control+End")
                 page.keyboard.type("# mine")
                 self.save("app.py", "def hello(name):\n    return 'changed again'\n")
                 page.evaluate("ideSync()")
-                page.wait_for_timeout(500)
-                self.assertIn("VryxCode changed this file", page.inner_text("#ideConf"))
+                eventually(lambda: self.assertIn("VryxCode changed this file", page.inner_text("#ideConf")))
                 page.click("#ideConf >> text=Keep mine")
                 self.assertIn("# mine", page.input_value("#ideBody textarea"))
                 # narrower than 1100px: the Editor layout switches itself off and the normal screen comes back
                 page.set_viewport_size({"width": 900, "height": 800})
-                page.wait_for_timeout(300)
-                self.assertFalse(page.eval_on_selector("#code", "e => e.classList.contains('ide')"))
+                eventually(lambda: self.assertFalse(page.eval_on_selector("#code", "e => e.classList.contains('ide')")))
                 self.assertEqual(errors, [])
             finally:
                 b.close()
@@ -293,15 +309,8 @@ class EditorUi(Base):
                 page.on("pageerror", lambda x: errors.append(str(x)))
                 page.goto(f"http://127.0.0.1:{self.port}/")
                 ready(page)
-                page.evaluate("document.querySelectorAll('.tour').forEach((x) => x.remove()); openCode()")
-                page.wait_for_timeout(600)
-                page.evaluate("C.project = 'demo'; newSession()")
-                page.wait_for_timeout(400)
-                page.evaluate("document.querySelectorAll('.tour').forEach((x) => x.remove())")
-                page.click("#codeIdeBtn")
-                page.wait_for_timeout(400)
-                page.click("#ideFiles >> text=calc.py")
-                page.wait_for_timeout(300)
+                open_ide(page)
+                open_file(page, "calc.py")
                 select = lambda a, z: page.evaluate("([a, z]) => { const t = document.querySelector('#ideBody textarea'); t.focus(); t.setSelectionRange(a, z); }", [a, z])
                 text = lambda: page.input_value("#ideBody textarea")
                 # Ctrl+K opens the panel for the selection; the proposal is shown as a diff and the editor is untouched
@@ -329,8 +338,7 @@ class EditorUi(Base):
                 self.assertIn("\u25cf", page.inner_text("#ideTabs"))
                 self.assertEqual(self.disk("calc.py"), FILE)
                 page.keyboard.press("Control+s")
-                page.wait_for_timeout(600)
-                self.assertIn("if x is not None", self.disk("calc.py"))
+                eventually(lambda: self.assertIn("if x is not None", self.disk("calc.py")))
                 # Explain: words, no edit
                 reply["text"] = "It adds up the numbers in the list."
                 select(s, s + 20)
@@ -361,13 +369,7 @@ class EditorUi(Base):
         page.on("pageerror", lambda x: self.errors.append(str(x)))
         page.goto(f"http://127.0.0.1:{self.port}/")
         ready(page)
-        page.evaluate("document.querySelectorAll('.tour').forEach((x) => x.remove()); openCode()")
-        page.wait_for_timeout(600)
-        page.evaluate("C.project = 'demo'; newSession()")
-        page.wait_for_timeout(400)
-        page.evaluate("document.querySelectorAll('.tour').forEach((x) => x.remove())")
-        page.click("#codeIdeBtn")
-        page.wait_for_timeout(400)
+        open_ide(page)
         return b, page
 
     def test_output_panel_runs_tests_saves_first_and_shows_what_vryxcode_ran(self):
@@ -381,8 +383,7 @@ class EditorUi(Base):
                 page.wait_for_selector("#ideOutLog .badge2.ok", timeout=15000)
                 self.assertIn("Ran 1 test", page.inner_text("#ideOutLog"))
                 # edit the test so it fails, WITHOUT saving: Run tests saves first, then runs
-                page.click("#ideFiles >> text=test_a.py")
-                page.wait_for_timeout(300)
+                open_file(page, "test_a.py")
                 page.click("#ideBody textarea")
                 page.keyboard.press("Control+End")
                 page.keyboard.type("\n    def test_bad(self):\n        self.assertEqual(1, 2)\n")
@@ -396,8 +397,7 @@ class EditorUi(Base):
                 page.fill("#outCmd", "python -c \"print(6 * 7)\"")
                 page.press("#outCmd", "Enter")
                 wait_for(lambda: "42" in page.inner_text("#ideOutLog"))
-                page.click("#ideFiles >> text=app.py")
-                page.wait_for_timeout(400)                                                       # let the editor switch to app.py before Run file reads the open file
+                open_file(page, "app.py")                                                         # the editor has switched to app.py before Run file reads the open file
                 page.click("#outRunFile")
                 wait_for(lambda: page.locator("#ideOutLog .oi").count() >= 4)
                 self.assertIn("python app.py", page.inner_text("#ideOutLog"))
@@ -423,8 +423,7 @@ class EditorUi(Base):
         with sync_playwright() as p:
             b, page = self.open_editor(p)
             try:
-                page.click("#ideFiles >> text=app.py")
-                page.wait_for_timeout(300)
+                open_file(page, "app.py")
                 page.click("#ideBody textarea")
                 page.keyboard.press("Control+End")
                 page.keyboard.type("z = ")

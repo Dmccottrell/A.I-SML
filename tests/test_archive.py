@@ -4,6 +4,7 @@ import unittest
 
 import app_engine as E
 from tests.test_app_server import Base
+from tests.test_editor_ui import eventually
 
 
 def chat(store, title, user, ai):
@@ -93,13 +94,11 @@ class Page(Base):
                 page.goto(f"http://127.0.0.1:{self.port}/")
                 ready(page)
                 page.evaluate(f"archiveChat({{id: {a}, title: 'Car trouble'}}, true)")
-                page.wait_for_timeout(600)
-                self.assertNotIn("Car trouble", page.inner_text("#chatList"))
+                eventually(lambda: self.assertNotIn("Car trouble", page.inner_text("#chatList")))
                 page.evaluate("openArchived()")
                 page.wait_for_selector(".modal >> text=Car trouble", timeout=5000)
                 page.click(".modal >> text=Unarchive")
-                page.wait_for_timeout(800)
-                self.assertIn("Car trouble", page.inner_text("#chatList"))
+                eventually(lambda: self.assertIn("Car trouble", page.inner_text("#chatList")))
                 self.assertEqual(errors, [])
             finally:
                 b.close()

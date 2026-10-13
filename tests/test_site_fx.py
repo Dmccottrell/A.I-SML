@@ -1,6 +1,7 @@
 """The website's motion layer in a real browser: dashes that follow the pointer, things that rise into view as you scroll, and a menu that stays put."""
 import os, sys; sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), os.pardir)); import emvryx_paths  # noqa: E402,F401
 import functools, http.server, threading, unittest
+from tests.test_editor_ui import eventually
 
 import browser_check
 import build_site
@@ -44,17 +45,14 @@ class SiteFx(unittest.TestCase):
                 page.wait_for_timeout(600)
                 one = grab()
                 page.mouse.move(1000, 500, steps=6)
-                page.wait_for_timeout(600)
-                self.assertNotEqual(one, grab())                                           # the dashes follow the pointer
+                eventually(lambda: self.assertNotEqual(one, grab()))  # the dashes follow the pointer
                 self.assertGreater(page.evaluate("document.querySelectorAll('.fx-r').length"), 10)
                 page.evaluate("window.scrollTo(0, document.body.scrollHeight)")
-                page.wait_for_timeout(1200)
-                self.assertLess(abs(page.eval_on_selector(".nav", "e => e.getBoundingClientRect().top")), 1)   # the menu stays at the top
+                eventually(lambda: self.assertLess(abs(page.eval_on_selector(".nav", "e => e.getBoundingClientRect().top")), 1))  # the menu stays at the top
                 for y in range(0, page.evaluate("document.documentElement.scrollHeight"), 500):
                     page.evaluate(f"window.scrollTo(0, {y})")
                     page.wait_for_timeout(60)
-                page.wait_for_timeout(1000)
-                self.assertEqual(page.evaluate("document.querySelectorAll('.fx-r:not(.fx-in)').length"), 0)     # everything rose into view
+                eventually(lambda: self.assertEqual(page.evaluate("document.querySelectorAll('.fx-r:not(.fx-in)').length"), 0))  # everything rose into view
                 self.assertEqual(errors, [])
             finally:
                 b.close()
@@ -66,8 +64,7 @@ class SiteFx(unittest.TestCase):
             try:
                 page = b.new_context(viewport={"width": 1000, "height": 700}, reduced_motion="reduce").new_page()
                 page.goto(f"http://127.0.0.1:{self.port}/index.html")
-                page.wait_for_timeout(500)
-                self.assertEqual(page.evaluate("document.querySelectorAll('.fx-r').length"), 0)
+                eventually(lambda: self.assertEqual(page.evaluate("document.querySelectorAll('.fx-r').length"), 0))
                 self.assertFalse(page.evaluate("document.documentElement.classList.contains('fx-on')"))
             finally:
                 b.close()
