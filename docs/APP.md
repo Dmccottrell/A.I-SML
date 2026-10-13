@@ -167,7 +167,7 @@ Both are planned, and they are separate choices:
 ## Build order
 1. **PC/web version (about a week after v3's chat model is ready):** the app server + a web chat page
    on `llama-server`; chat, memory, web search, skills, PDF export. This is also the online-mode server.
-2. **Android app (while v3.5 trains):** the same screens in Capacitor, llama.cpp on the phone, the
+2. **Android app (while v3.5 trains):** built natively in Kotlin (decided Oct 2026, see [NATIVE.md](NATIVE.md); originally planned in Capacitor), llama.cpp on the phone, the
    ported chat format and memory; online mode connects to the PC.
 3. **v3.5 swap:** new `.gguf` files and retrained skill packs; no app changes.
 4. **v4:** tools, voice, phone assistant mode, more skill packs.
