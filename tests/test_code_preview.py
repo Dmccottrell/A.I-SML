@@ -126,7 +126,7 @@ class HostingNoise(unittest.TestCase):
         # Cloudflare adds its analytics script to every page it serves; it is blocked inside the preview, and VryxCode kept trying to "fix" a file that never had it
         self.assertIn("cloudflareinsights", P.REPORTER.decode())
         self.assertIn("cdn-cgi", P.REPORTER.decode())
-        with open(os.path.join(os.path.dirname(os.path.abspath(__file__)), os.pardir, "web", "index.html"), encoding="utf-8") as f:
+        with open(os.path.join(os.path.dirname(os.path.abspath(__file__)), os.pardir, "web", "js", "preview.js"), encoding="utf-8") as f:
             page = f.read()
         self.assertIn("PV_NOISE.test(d.msg)", page)
 

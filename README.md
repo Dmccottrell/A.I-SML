@@ -70,8 +70,8 @@ The code lives in folders by job. Run everything from the project folder, for ex
 
 | Folder | What is in it |
 |---|---|
-| `app_server.py`, `web/` | The Emvryx app: the server (`python app_server.py`) and the chat page. Kept in the project folder because the Windows start-up task runs it from there |
-| `app/` | Everything behind the chat page: reliability and errors, sign-in and plans, usage limits, memory, look-ups (Wikipedia, web search), **live facts**, **Skills**, **Teacher mode**, **Documents**, saving answers as PDF or Word, connected apps |
+| `app_server.py`, `web/` | The Emvryx app: the server (`python app_server.py`, which holds the start-up, the request handler's plumbing and the page and file routes) and the chat page. Kept in the project folder because the Windows start-up task runs it from there. The page's code is split by part into `web/js/` (`core`, `chat`, `settings`, `admin`, `code`, `ide`, `auth`...; loaded in that order by `web/index.html`; there is no inline script) |
+| `app/` | The server's other parts, split out of `app_server.py` by job: `state_*.py` (what `AppState` does: accounts, settings, apps, the PC and models, VryxCode, operations), `routes_*.py` (the web routes: chat, account and sign-in, admin, VryxCode), `chat_turn.py` (one chat turn), `app_runner.py` (starting llama-server), `app_shared.py` (limits and small helpers). Also everything behind the chat page: reliability and errors, sign-in and plans, usage limits, memory, look-ups (Wikipedia, web search), **live facts**, **Skills**, **Teacher mode**, **Documents**, saving answers as PDF or Word, connected apps |
 | `coding/` | **VryxCode**: the coding assistant, its tools and loop, the safe sandbox, live preview, and the coding benchmarks |
 | `core/` | The model itself: the transformer, tokenizer, chat format, settings for each version, LoRA, and the open-base model list |
 | `training/` | Pretraining, fine-tuning (from scratch and on open bases), preference training, run supervision, backups and cloud hand-off |

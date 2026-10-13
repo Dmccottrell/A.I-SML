@@ -182,7 +182,7 @@ class Handler(RoutesCode, RoutesAccount, RoutesAdmin, RoutesChat, http.server.Ba
 
     # ---- browser protections
     def _security_headers(self, csp=None):
-        """Headers every answer carries. The page gets a content security policy that allows only its own script (by a one-time nonce), its own
+        """Headers every answer carries. The page gets a content security policy that allows only its own script files, its own
         files and Google's font files; everything else (JSON answers, icons) gets a policy that allows nothing."""
         h = {"Content-Security-Policy": csp or "default-src 'none'; frame-ancestors 'none'; base-uri 'none'",
              "X-Frame-Options": "DENY", "Referrer-Policy": "no-referrer", "Cross-Origin-Opener-Policy": "same-origin",
@@ -375,7 +375,7 @@ class Handler(RoutesCode, RoutesAccount, RoutesAdmin, RoutesChat, http.server.Ba
                              "action": "Open the link the server printed, a pairing link from the owner, or sign in with an email code."})
         return who
 
-    PAGE_CSP = ("default-src 'self'; script-src 'self' 'nonce-{nonce}'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; "
+    PAGE_CSP = ("default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; "
                 "font-src 'self' https://fonts.gstatic.com; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; "
                 "frame-ancestors 'none'; base-uri 'none'; form-action 'self'; object-src 'none'")
 
@@ -385,10 +385,8 @@ class Handler(RoutesCode, RoutesAccount, RoutesAdmin, RoutesChat, http.server.Ba
             return self._send(404, {"code": "not_found", "message": "Not found."})
         with open(path, "rb") as f:
             data = f.read()
-        if name == "index.html":                      # the one inline script gets a fresh nonce each time; nothing else may run
-            nonce = secrets.token_urlsafe(16)
-            data = data.replace(b"<script>", b'<script nonce="' + nonce.encode() + b'">')
-            return self._send(200, data, ctype, csp=self.PAGE_CSP.format(nonce=nonce))
+        if name == "index.html":                      # the page has no inline script at all (its code is the files in web/js/), so only its own files may run
+            return self._send(200, data, ctype, csp=self.PAGE_CSP)
         csp = None
         if name in ("privacy.html", "terms.html"):               # the owner's name and contact go in where the page says {{operator}} and {{contact}}
             import html as _html
@@ -467,7 +465,10 @@ class Handler(RoutesCode, RoutesAccount, RoutesAdmin, RoutesChat, http.server.Ba
                 return self._file("manifest.webmanifest", "application/manifest+json")
             if path == "/sw.js":
                 return self._file("sw.js", "text/javascript")
-            if path == "/editor.js":                      # the VryxCode editor (a plain script of its own, so the page's one inline script stays the only inline one)
+            mjs = re.fullmatch(r"/js/([a-z0-9_-]{1,40})\.js", path)
+            if mjs:                                       # the page's own script files (web/js/): one file per part of the app
+                return self._file("js/" + mjs.group(1) + ".js", "text/javascript; charset=utf-8")
+            if path == "/editor.js":                      # the VryxCode editor (a plain script of its own, like the files in web/js/)
                 return self._file("editor.js", "text/javascript; charset=utf-8")
             if path == "/icon.svg":
                 return self._file("icon.svg", "image/svg+xml")
