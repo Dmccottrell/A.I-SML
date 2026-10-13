@@ -6,7 +6,8 @@ chain_home.py - Train Flare 3, Equinox 3 and Solstice 3 one after another on THI
     python scripts/chain_home.py --models flare-3 equinox-3 solstice-3 --llama-cpp ..\\llama.cpp --stop-app --restart-app
 
 Steps for each model (each is remembered in logs\\chain_home_state.json, so running the same command again carries on where it stopped):
-  lessons   once: data_prep/format_lessons_3x.py (style filter, de-duplicate, keep a spread share)
+  lessons   once: data_prep/format_lessons_3x.py (style filter, de-duplicate, keep a spread share, optionally mix in general lessons with --general).
+            If you already ran scripts/emvryx3_prepare.py, use --skip lessons so its finished file (--lessons) is used as it is.
   pilot     3 steps: memory and speed (skipped when logs\\<model>-pilot.txt already says it finished)
   train     training/finetune_open.py (it also resumes by itself after Ctrl+C or a restart)
   merge     writes the full model folder from the saved adapter
@@ -41,6 +42,7 @@ def step_command(step, model, a):
     p = paths(model)
     if step == "lessons":
         cmd = [PY, os.path.join("data_prep", "format_lessons_3x.py"), "--out", a.lessons, "--keep", str(a.keep)]
+        cmd += ["--general", a.general, "--general-share", str(getattr(a, "general_share", 0.3))] if getattr(a, "general", None) else []
         return cmd + (["--thinking", a.thinking, "--thinking-share", str(a.thinking_share)] if a.thinking else [])
     if step == "pilot":
         return [PY, os.path.join("scripts", "emvryx3_pilot.py"), "--models", model, "--data", a.lessons]
@@ -189,6 +191,8 @@ def main(argv=None):
     ap.add_argument("--skip", nargs="+", choices=STEPS, help="leave these steps out")
     ap.add_argument("--lessons", default=os.path.join("data", "v3", "chat_3x.jsonl"))
     ap.add_argument("--keep", type=float, default=1.0, help="share of the lessons to train on (0.4 = a spread 40%%)")
+    ap.add_argument("--general", default=None, help="a general-lessons file (data_prep/general_lessons.py) to mix into the lessons step; or run scripts/emvryx3_prepare.py first and use --skip lessons")
+    ap.add_argument("--general-share", type=float, default=0.3)
     ap.add_argument("--thinking", default=None, help="a thinking-lessons file to mix in (only if the thinking check says it is needed)")
     ap.add_argument("--thinking-share", type=float, default=0.1)
     ap.add_argument("--exam-n", type=int, default=2000)
