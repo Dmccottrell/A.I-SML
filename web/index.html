@@ -195,6 +195,37 @@ svg .core { fill: var(--core); stroke: var(--sun); stroke-width: 3; transition: 
 .code .cc-report.verified .mark { color: #3fb950; } .code .cc-report.checked .mark { color: #d29922; } .code .cc-report.not_verified .mark { color: var(--danger); } .code .cc-report.no_changes .mark { color: var(--muted); }
 .code .cc-report .rs { margin-top: 8px; color: var(--muted); font-size: 12px; text-transform: uppercase; letter-spacing: .04em; }
 .code .cc-report .ri { margin-top: 3px; word-break: break-word; } .code .cc-report .ri.bad { color: var(--danger); } .code .cc-report .ri code { font-size: 13px; }
+/* VryxCode Editor layout (wide screens): files | editor | VryxCode | preview */
+.code .ide-tree, .code .ide-ed, .code #codeIdeBtn { display: none; }
+@media (min-width: 1100px) { .code:not(.home) #codeIdeBtn { display: inline-flex; } .code #codeIdeBtn.on { border-color: var(--accent); } }
+.code.ide .ide-tree { display: flex; flex-direction: column; flex: 0 0 230px; min-width: 0; min-height: 0; border-right: 1px solid var(--line); background: var(--surface); }
+.code.ide .ide-ed { display: flex; flex-direction: column; flex: 1 1 0; min-width: 0; min-height: 0; }
+.code.ide .col { flex: 0 0 430px; max-width: 36%; border-left: 1px solid var(--line); }
+.code.ide .pv { flex: 0 0 30%; }
+.code.ide .col .composer .tools .left { flex-wrap: wrap; row-gap: 4px; }
+.code.ide #codeFilesBtn { display: none; }
+.code .ith { display: flex; align-items: center; gap: 6px; padding: 8px 8px 6px 12px; font-weight: 600; flex-wrap: wrap; } .code .ith .chip { padding: 4px 8px; font-size: 12px; }
+.code .itl { flex: 1; overflow-y: auto; padding: 0 6px 10px; }
+.code .itl .idir { color: var(--muted); font-size: 12px; padding: 6px 6px 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.code .itl .ifile { display: block; width: 100%; text-align: left; background: transparent; border: 0; border-radius: 6px; padding: 5px 8px; font: 13px ui-monospace, Menlo, Consolas, monospace; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; cursor: pointer; }
+.code .itl .ifile:hover, .code .itl .ifile.on { background: var(--surface2); }
+.code .itabs { display: flex; overflow-x: auto; border-bottom: 1px solid var(--line); background: var(--surface); flex: 0 0 auto; min-height: 36px; }
+.code .itab { display: flex; align-items: center; gap: 6px; padding: 0 8px 0 12px; font: 13px ui-monospace, Menlo, Consolas, monospace; color: var(--muted); border-right: 1px solid var(--line); cursor: pointer; white-space: nowrap; }
+.code .itab.on { color: var(--text); background: var(--bg); box-shadow: inset 0 -2px 0 var(--accent); } .code .itab .x { background: transparent; border: 0; color: inherit; font-size: 16px; line-height: 1; padding: 2px 4px; border-radius: 4px; cursor: pointer; } .code .itab .x:hover { background: var(--surface2); }
+.code .iconf { padding: 8px 12px; background: rgba(245,165,36,.14); border-bottom: 1px solid var(--line); display: flex; gap: 8px; align-items: center; flex-wrap: wrap; font-size: 13px; } .code .iconf[hidden] { display: none; }
+.code .ibody { flex: 1; min-height: 0; display: flex; }
+.code .ibody .iempty { margin: auto; color: var(--muted); text-align: center; padding: 20px; max-width: 320px; }
+.code .ibar { display: flex; align-items: center; gap: 10px; padding: 5px 10px; border-top: 1px solid var(--line); font-size: 12px; color: var(--muted); background: var(--surface); }
+.code .ibar .bad { color: var(--danger); } .code .ibar .good { color: #3fb950; } .code .ibar .chip { padding: 3px 10px; font-size: 12px; }
+.code .ed { flex: 1; min-width: 0; display: flex; overflow: hidden; font: 13px/1.55 ui-monospace, Menlo, Consolas, monospace; background: var(--bg); }
+.code .ed .gut { flex: 0 0 auto; text-align: right; padding: 10px 8px 10px 0; color: var(--muted); opacity: .7; white-space: pre; overflow: hidden; user-select: none; border-right: 1px solid var(--line); }
+.code .ed .wrapx { position: relative; flex: 1; min-width: 0; overflow: hidden; }
+.code .ed pre.hl, .code .ed textarea.in { position: absolute; inset: 0; margin: 0; padding: 10px 14px; border: 0; font: inherit !important; line-height: inherit !important; font-size: 13px !important; white-space: pre; tab-size: 4; letter-spacing: 0; }
+.code .ed pre.hl { overflow: hidden; pointer-events: none; color: var(--text); }
+.code .ed textarea.in { width: 100%; height: 100%; overflow: auto; resize: none; background: transparent; color: transparent; caret-color: var(--text); outline: none; -webkit-text-fill-color: transparent; }
+.code .ed textarea.in::selection { background: rgba(98,134,255,.35); -webkit-text-fill-color: transparent; }
+.code .tk-c { color: var(--muted); font-style: italic; } .code .tk-s { color: #7ee787; } .code .tk-n { color: #79c0ff; } .code .tk-k { color: #ff7b72; } .code .tk-p { color: #d2a8ff; } .code .tk-t { color: #ffa657; }
+:root[data-theme="light"] .code .tk-s { color: #0a7d2c; } :root[data-theme="light"] .code .tk-n { color: #0a5bb5; } :root[data-theme="light"] .code .tk-k { color: #c2243a; } :root[data-theme="light"] .code .tk-p { color: #7a3fc1; } :root[data-theme="light"] .code .tk-t { color: #b5530a; }
 .code .cc-shot { display: block; margin: 6px 0; max-width: 260px; border: 1px solid var(--line); border-radius: 10px; overflow: hidden; } .code .cc-shot img { display: block; width: 100%; height: auto; max-height: 320px; object-fit: cover; object-position: top; }
 .code .cc-end { padding: 12px 0 4px; display: flex; gap: 10px; align-items: baseline; white-space: pre-wrap; word-break: break-word; }
 .code .cc-end.good .mark { color: #3fb950; } .code .cc-end.bad .mark { color: var(--danger); } .code .cc-end.stop .mark { color: var(--muted); }
@@ -569,6 +600,7 @@ html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
     <span class="title" id="codeTitle">Code</span>
     <div style="position:relative"><button class="chip" id="codeProj" aria-haspopup="true"></button><div class="menu" id="codeProjMenu" hidden></div></div>
     <button class="chip" id="codePreviewBtn" disabled title="See what was built, live">Preview</button>
+    <button class="chip" id="codeIdeBtn" title="Editor layout: files, editor, VryxCode and preview side by side (wide screens)">Editor</button>
     <button class="chip" id="codeFilesBtn">Files</button>
   </div>
   <div class="home" id="codeHome">
@@ -578,6 +610,16 @@ html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
   </div>
   <button class="fab" id="codeNew"><span style="font-size:22px;line-height:1">+</span> New session</button>
   <div class="main2">
+    <div class="ide-tree" id="ideTree">
+      <div class="ith"><span>Files</span><span class="grow"></span><button class="chip" id="ideNew" title="Make a new file">+ New</button><button class="chip" id="ideChanges">Changes</button><button class="chip" id="ideRewind">Rewind</button></div>
+      <div class="itl" id="ideFiles"></div>
+    </div>
+    <div class="ide-ed" id="ideEd">
+      <div class="itabs" id="ideTabs" role="tablist"></div>
+      <div class="iconf" id="ideConf" hidden></div>
+      <div class="ibody" id="ideBody"></div>
+      <div class="ibar" id="ideBar"><span id="ideStatus"></span><span class="grow"></span><span id="ideLang" class="lang"></span><button class="chip" id="ideSave">Save</button></div>
+    </div>
     <div class="col">
       <div class="todo" id="codeTodo" hidden></div>
       <div class="feed" id="codeFeed" aria-live="polite"><div class="feedin" id="codeIn"></div></div>
@@ -623,6 +665,7 @@ html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
 <div class="auth" id="auth" hidden></div>
 <div id="dialogs"></div>
 
+<script src="/editor.js"></script>
 <script>
 // iPhone installed app: the page can be given a height shorter than the screen (an empty band under the message box). The device's own screen size is
 // reliable there, so the app is sized to it (never smaller than what the browser reports), and again after a turn of the phone.
@@ -2449,7 +2492,7 @@ async function openCode() {
 const ENV_NAME = {local: 'This computer', sandbox: 'Isolated sandbox', cloud: 'Cloud machine'};
 const FILTERS = [['all', 'All'], ['running', 'Running'], ['queued', 'Queued'], ['needs', 'Needs you'], ['done', 'Finished']];
 async function showHome() {
-  clearTimeout(C.timer); C.view = 'home'; $('code').classList.add('home'); closeCodeMenus(); $('codePv').hidden = true; showDrawer(false);
+  clearTimeout(C.timer); C.view = 'home'; $('code').classList.remove('ide'); $('code').classList.add('home'); closeCodeMenus(); $('codePv').hidden = true; showDrawer(false);
   $('codeTitle').textContent = 'Code'; $('codeBack').setAttribute('aria-label', 'Back to chats'); await renderHome();
 }
 function envLine(e) { return e ? [icon(ENV_ICON(e.id)), el('span', {}, e.name)] : []; }
@@ -2508,6 +2551,7 @@ function renderCodeBar() {
   C.auto = C.mode === 'auto'; $('codeAuto').replaceChildren(MODES[C.mode].short); $('codeAuto').setAttribute('aria-label', 'How VryxCode works: ' + MODES[C.mode].name);
   $('codeFilesBtn').replaceChildren(icon('folder'), el('span', {class: 'lab'}, 'Files' + (C.files.length ? ' (' + C.files.length + ')' : '')));
   $('codePreviewBtn').replaceChildren(icon('eye'), el('span', {class: 'lab'}, 'Preview'));
+  ideApply();
 }
 function emptyFeed() {
   if (C.info && C.info.allowed === false) { $('codeIn').replaceChildren(el('div', {class: 'empty'}, el('h1', {}, 'VryxCode is not open to you yet'), el('p', {}, C.info.why_not || 'Ask the owner for access.'))); $('codeGo').disabled = true; return; }
@@ -2643,8 +2687,122 @@ async function refreshFiles() {
   if (!C.project) return;
   const r = await api('/api/code/files?project=' + encodeURIComponent(C.project)); const j = await r.json(); C.files = j.files; renderCodeBar();
   $('codePreviewBtn').disabled = !j.files.some((f) => /\.html?$/i.test(f));       // a web page can be previewed
+  if (IDE.on) { ideTree(); ideSync(); }
   $('codeFiles').replaceChildren(...(j.files.length ? j.files.map((f) => el('button', {class: f === C.file ? 'on' : '', onclick: () => viewFile(f)}, f)) : [el('div', {style: 'color:var(--muted);padding:6px 8px;font-size:14px'}, 'No files yet.')]));
 }
+
+// ---------------------------------------------------------------- Editor layout (wide screens): files | editor | VryxCode | preview
+const IDE = {want: false, on: false, tabs: [], active: -1, ed: null, busy: false, project: null};
+try { IDE.want = localStorage.getItem('emvryx_ide') === '1'; } catch (e) {}
+const ideCan = () => matchMedia('(min-width: 1100px)').matches;
+const ideBase = (p) => p.split('/').pop();
+function ideApply() {                       // idempotent: it is called after every file refresh, so it only redraws when something really changed
+  const on = IDE.want && ideCan() && C.view === 'session', was = IDE.on;
+  IDE.on = on; $('code').classList.toggle('ide', on); $('codeIdeBtn').classList.toggle('on', IDE.want);
+  if (!on) return;
+  if (IDE.project !== C.project) {          // another project: tabs of the old one go, unless they hold unsaved changes (those keep their own project)
+    IDE.project = C.project; ideStash();
+    const cur = IDE.tabs[IDE.active]; IDE.tabs = IDE.tabs.filter((t) => t.dirty || t.project === C.project);
+    IDE.active = cur && IDE.tabs.includes(cur) ? IDE.tabs.indexOf(cur) : IDE.tabs.length - 1; ideTree(); ideRenderTabs(); ideShow(); return;
+  }
+  if (!was) { ideStash(); ideTree(); ideRenderTabs(); ideShow(); }
+}
+$('codeIdeBtn').onclick = () => { IDE.want = !IDE.want; try { localStorage.setItem('emvryx_ide', IDE.want ? '1' : '0'); } catch (e) {} ideApply(); };
+addEventListener('resize', () => { if ($('code').hidden) return; ideApply(); });
+function ideTree() {
+  const rows = [], seen = new Set(), cur = IDE.tabs[IDE.active];
+  [...(C.files || [])].sort().forEach((f) => {
+    const parts = f.split('/');
+    parts.slice(0, -1).forEach((d, i) => { const p = parts.slice(0, i + 1).join('/'); if (!seen.has(p)) { seen.add(p); rows.push(el('div', {class: 'idir', style: 'padding-left:' + (8 + i * 12) + 'px'}, '\u25b8 ' + d)); } });
+    rows.push(el('button', {class: 'ifile' + (cur && cur.path === f ? ' on' : ''), style: 'padding-left:' + (8 + (parts.length - 1) * 12) + 'px', title: f, onclick: () => ideOpen(f)}, ideBase(f)));
+  });
+  $('ideFiles').replaceChildren(...(rows.length ? rows : [el('div', {style: 'color:var(--muted);padding:6px 8px;font-size:14px'}, 'No files yet. Tap + New, or ask VryxCode.')]));
+}
+function ideEditor() {
+  if (!IDE.ed) IDE.ed = EmvryxEditor.makeEditor($('ideBody'), {onChange: ideChanged, onSave: ideSave});
+  return IDE.ed;
+}
+function ideStash() {                       // remember the text and cursor of the tab being left
+  const t = IDE.tabs[IDE.active]; if (!t || !IDE.ed || t.readOnly) return;
+  t.text = IDE.ed.getText(); t.state = IDE.ed.state();
+}
+function ideShow() {                        // draw the active tab in the editor (or the empty message)
+  const body = $('ideBody'), t = IDE.tabs[IDE.active];
+  if (!t) { if (IDE.ed) { body.replaceChildren(); IDE.ed = null; } body.replaceChildren(el('div', {class: 'iempty'}, 'Pick a file from the list to edit it. VryxCode works in the chat on the right; when it changes a file you have open, it updates here.')); ideStatus('', ''); $('ideLang').textContent = ''; $('ideSave').hidden = true; ideConflict(); return; }
+  if (!IDE.ed || !body.querySelector('.ed')) { body.replaceChildren(); IDE.ed = null; }
+  const ed = ideEditor(); ed.setReadOnly(t.readOnly); ed.setLang(EmvryxEditor.langOf(t.path)); ed.setText(t.text); ed.restore(t.state);
+  $('ideLang').textContent = EmvryxEditor.langOf(t.path); $('ideSave').hidden = !!t.readOnly;
+  ideStatus(t.readOnly ? (t.note || 'Read-only') : t.dirty ? 'Unsaved changes' : '', t.readOnly ? '' : t.dirty ? '' : '');
+  ideConflict();
+}
+function ideStatus(text, cls) { const n = $('ideStatus'); n.textContent = text; n.className = cls || ''; }
+function ideRenderTabs() {
+  $('ideTabs').replaceChildren(...IDE.tabs.map((t, i) => el('div', {class: 'itab' + (i === IDE.active ? ' on' : ''), role: 'tab', title: t.path, onclick: () => ideActivate(i)},
+    el('span', {}, ideBase(t.path) + (t.project !== C.project ? ' (' + t.project + ')' : '') + (t.dirty ? ' \u25cf' : '')), el('button', {class: 'x', 'aria-label': 'Close ' + t.path, onclick: (ev) => { ev.stopPropagation(); ideClose(i); }}, '\u00d7'))));
+}
+function ideActivate(i) { ideStash(); IDE.active = i; ideRenderTabs(); ideShow(); ideTree(); }
+async function ideOpen(path) {
+  const have = IDE.tabs.findIndex((t) => t.path === path && t.project === C.project);
+  if (have >= 0) { ideActivate(have); return; }
+  const r = await api('/api/code/file?project=' + encodeURIComponent(C.project) + '&path=' + encodeURIComponent(path)); const j = await r.json().catch(() => ({}));
+  if (!r.ok) { ideStatus(j.message || 'Could not open that file.', 'bad'); return; }
+  const binary = j.text === '(a binary file)';
+  ideStash();
+  IDE.tabs.push({path, project: C.project, text: binary ? '' : j.text, orig: j.text, disk: j.text, dirty: false, readOnly: binary || !!j.truncated, note: binary ? 'A binary file: it cannot be edited here.' : j.truncated ? 'Too big to edit here (the editor shows the first 200 KB).' : '', state: null, conflict: null});
+  IDE.active = IDE.tabs.length - 1; ideRenderTabs(); ideShow(); ideTree();
+}
+function ideChanged(text) {
+  const t = IDE.tabs[IDE.active]; if (!t) return;
+  const dirty = text !== t.orig; t.text = text;
+  if (dirty !== t.dirty) { t.dirty = dirty; ideRenderTabs(); ideStatus(dirty ? 'Unsaved changes' : '', ''); }
+}
+async function ideSave() {
+  const t = IDE.tabs[IDE.active]; if (!t || t.readOnly || IDE.busy) return;
+  ideStash(); IDE.busy = true; ideStatus('Saving\u2026', '');
+  try {
+    const text = t.text, r = await post('/api/code/file', {project: t.project, path: t.path, text}); const j = await r.json().catch(() => ({}));
+    if (!r.ok) { ideStatus((j.message || 'Could not save.') + (j.action ? ' ' + j.action : ''), 'bad'); return; }
+    t.orig = t.disk = text.replace(/\r\n/g, '\n'); t.dirty = t.text !== t.orig; t.conflict = null; ideRenderTabs(); ideConflict(); ideStatus('Saved', 'good'); refreshFiles();
+  } finally { IDE.busy = false; }
+}
+$('ideSave').onclick = ideSave;
+function ideClose(i) {
+  const t = IDE.tabs[i]; if (t.dirty && !confirm('Close ' + ideBase(t.path) + ' without saving your changes?')) return;
+  if (i === IDE.active) ideStash();
+  IDE.tabs.splice(i, 1);
+  IDE.active = IDE.tabs.length ? Math.min(i === IDE.active ? Math.max(0, i - 1) : (i < IDE.active ? IDE.active - 1 : IDE.active), IDE.tabs.length - 1) : -1;
+  ideRenderTabs(); ideShow(); ideTree();
+}
+$('ideNew').onclick = async () => {
+  const name = (prompt('Name of the new file, like notes.txt or src/app.py') || '').trim(); if (!name) return;
+  const r = await post('/api/code/file', {project: C.project, path: name, text: ''}); const j = await r.json().catch(() => ({}));
+  if (!r.ok) { ideStatus((j.message || 'Could not make that file.') + (j.action ? ' ' + j.action : ''), 'bad'); return; }
+  await refreshFiles(); ideOpen(j.path);
+};
+$('ideChanges').onclick = () => showDrawer(true, 'changes'); $('ideRewind').onclick = () => showDrawer(true, 'rewind');
+// VryxCode changed files on disk: update the tabs that have no edits of yours; ask about the ones that do
+function ideConflict() {
+  const t = IDE.tabs[IDE.active], box = $('ideConf');
+  if (!t || !t.conflict) { box.hidden = true; box.replaceChildren(); return; }
+  box.hidden = false;
+  box.replaceChildren(el('span', {}, t.conflict.gone ? 'This file was deleted on disk while you had changes.' : 'VryxCode changed this file while you had unsaved changes.'),
+    t.conflict.gone ? '' : el('button', {class: 'chip', onclick: () => { t.text = t.orig = t.disk = t.conflict.text; t.dirty = false; t.conflict = null; t.state = null; ideRenderTabs(); ideShow(); }}, 'Use VryxCode\u2019s version'),
+    el('button', {class: 'chip', onclick: () => { if (!t.conflict.gone) t.disk = t.conflict.text; t.conflict = null; ideConflict(); }}, 'Keep mine'));
+}
+async function ideSync() {
+  if (!IDE.on || !IDE.tabs.length) return;
+  for (const t of IDE.tabs.slice()) {
+    if (t.readOnly) continue;
+    const r = await api('/api/code/file?project=' + encodeURIComponent(t.project) + '&path=' + encodeURIComponent(t.path)); const j = await r.json().catch(() => ({}));
+    const here = IDE.tabs[IDE.active] === t;
+    if (!r.ok) { if (r.status === 400 && !t.dirty) { continue; } if (t.dirty) t.conflict = {gone: true}; continue; }
+    if (j.text === t.disk) continue;
+    if (!t.dirty) { const st = here && IDE.ed ? IDE.ed.state() : t.state; t.text = t.orig = t.disk = j.text; t.state = st; if (here) ideShow(); }
+    else t.conflict = {text: j.text};
+    if (here) ideConflict();
+  }
+}
+addEventListener('beforeunload', (ev) => { if (IDE.tabs.some((t) => t.dirty)) { ev.preventDefault(); ev.returnValue = ''; } });
 async function viewFile(f) {
   C.file = f; const r = await api('/api/code/file?project=' + encodeURIComponent(C.project) + '&path=' + encodeURIComponent(f)); const j = await r.json();
   $('codeView').textContent = r.ok ? j.text + (j.truncated ? '\n... (shortened)' : '') : j.message; refreshFiles();
