@@ -47,6 +47,29 @@ class Facts(unittest.TestCase):
         self.assertEqual(m.learn("forget everything about me")["forgot"], 1)
         self.assertIsNone(m.note())
 
+    def test_everyday_details(self):
+        m = U.Memory()
+        for t, want in (("I love playing basketball and cooking", "The user loves playing basketball."), ("I'm allergic to peanuts", "The user is allergic to peanuts."),
+                        ("I'm vegan", "The user is vegan."), ("I'm learning Spanish at school", "The user is learning Spanish."),
+                        ("my birthday is March 3", "The user's birthday is March 3."), ("I have 2 kids", "The user has 2 kids."),
+                        ("I attend Texas State", "The user goes to Texas State."), ("I have a dog named Rex", "The user's dog is called Rex.")):
+            self.assertEqual(m.learn(t)["saved"], [want], t)
+        for t in ("I like that", "I hate when that happens", "I like it when you explain", "I go to Walmart", "I love you"):
+            self.assertEqual(m.learn(t)["saved"], [], t)
+
+    def test_how_they_want_it_to_talk(self):
+        m = U.Memory()
+        self.assertEqual(m.style_hint(), "")
+        self.assertEqual(m.learn("I don't talk like that though")["saved"], ["The user wants a natural voice: no forced slang, and never copy or guess how they talk."])
+        m.learn("no emojis please")
+        hint = m.style_hint()
+        self.assertIn("no forced slang", hint)
+        self.assertIn("no emojis", hint)
+        m.learn("actually use more emojis")                         # the newest wish of a kind wins
+        self.assertIn("enjoys emojis", m.style_hint())
+        self.assertNotIn("no emojis", m.style_hint())
+        self.assertEqual(m.learn("what is the capital of France")["saved"], [])
+
     def test_it_never_keeps_more_than_the_limit(self):
         m = U.Memory()
         for i in range(U.MAX_FACTS + 10):
@@ -73,6 +96,13 @@ class Server(Base):
         second = self.new_chat(self.sam)
         self.ask(self.sam, second, "what is my name?")
         self.assertIn("The user's name is Darryl.", self.prompt_text())
+
+    def test_how_to_talk_goes_with_every_message(self):
+        chat = self.new_chat(self.sam)
+        ev = dict(self.ask(self.sam, chat, "I don't talk like that though")[2])
+        self.assertIn("memory", ev)
+        self.ask(self.sam, self.new_chat(self.sam), "tell me a joke about cats")      # a new chat, and not a question about the person
+        self.assertIn("no forced slang", self.prompt_text())
 
     def test_each_person_has_their_own_memory(self):
         self.ask(self.sam, self.new_chat(self.sam), "my name is darryl")
