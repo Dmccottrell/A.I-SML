@@ -29,12 +29,22 @@ def run_one(name):
     return name, p.returncode, time.time() - t, ran, (p.stdout or "") + (p.stderr or "")
 
 
+# the slow files (seconds, roughly): dealt out first so each shard gets its share of them
+WEIGHT = {"test_editor_ui": 35, "test_agent": 25, "test_accounts": 22, "test_app_server": 21, "test_languages": 20, "test_signin": 13, "test_muon_cpu": 12,
+          "test_model_runner": 11, "test_code_sessions": 11, "test_code_history": 10, "test_cloud_mode": 10, "test_site_fx": 9, "test_code_complete_run": 8, "test_flags": 8}
+
+
 def main(argv=None):
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("files", nargs="*", help="test file names (without .py); default: all")
     ap.add_argument("-j", type=int, default=min(6, os.cpu_count() or 2), help="how many files at once")
+    ap.add_argument("--shard", default="", metavar="I/N", help="run only part I of N (CI runs the halves side by side); files are dealt out biggest first so the parts take about as long")
     a = ap.parse_args(argv)
     names = a.files or sorted(os.path.splitext(os.path.basename(p))[0] for p in glob.glob(os.path.join(ROOT, "tests", "test_*.py")))
+    if a.shard:
+        i, n = (int(x) for x in a.shard.split("/"))
+        dealt = sorted(names, key=lambda m: (-WEIGHT.get(m, 0), -os.path.getsize(os.path.join(ROOT, "tests", m + ".py"))))
+        names = [m for k, m in enumerate(dealt) if k % n == i - 1]
     started = time.time()
     results = []
     with concurrent.futures.ThreadPoolExecutor(max_workers=max(1, a.j)) as pool:
