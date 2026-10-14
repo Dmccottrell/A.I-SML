@@ -120,7 +120,7 @@ function newProject() {
 }
 async function deleteProject() {
   if (!confirm('Delete the project "' + C.project + '" and all its files? This cannot be undone.')) return;
-  const r = await post('/api/code/projects/delete', {project: C.project}); const j = await r.json();
+  const r = await post('/api/code/projects/delete', {project: C.project}); const j = await r.json().catch(() => ({message: 'The server did not answer properly.', action: 'Try again in a moment.'}));
   if (!r.ok) { note('bad', 'COULD NOT DELETE', j.message + ' ' + (j.action || '')); return; }
   C.info.projects = C.info.projects.filter((p) => p !== C.project); C.project = C.info.projects[0] || 'my-project'; renderCodeBar(); refreshFiles();
 }
