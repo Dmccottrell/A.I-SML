@@ -47,6 +47,7 @@ class SignInDots(Base):
                     eventually(lambda: self.assertEqual(page.evaluate("violetOn()"), want, audience))
                     accent = lambda: page.evaluate("getComputedStyle(document.documentElement).getPropertyValue('--accent').trim().toUpperCase()")
                     eventually(lambda: self.assertEqual(accent() in ("#8B5CF6", "#7C3AED"), want, audience))      # the chat itself, with a model chosen
+                    eventually(lambda: self.assertEqual(page.evaluate("!!S.state && !!JSON.parse(localStorage.getItem('emvryx_looks') || '{}').vi"), want, audience))   # signed in and remembered
                     page.evaluate("S.state = null; applyTheme()")                                             # signed out: the sign-in screen remembers the look
                     self.assertEqual(accent() in ("#8B5CF6", "#7C3AED"), want, audience)
             finally:

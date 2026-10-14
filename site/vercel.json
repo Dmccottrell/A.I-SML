@@ -15,17 +15,5 @@
         }
       ]
     }
-  ],
-  "redirects": [
-    {
-      "source": "/next",
-      "destination": "/",
-      "permanent": false
-    },
-    {
-      "source": "/next.html",
-      "destination": "/",
-      "permanent": false
-    }
   ]
 }
