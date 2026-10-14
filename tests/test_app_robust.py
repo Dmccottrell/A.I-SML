@@ -104,6 +104,26 @@ class Runaway(unittest.TestCase):
         self.assertEqual(closed, [True])                                      # the connection to the model was closed
 
 
+    def test_stop_works_while_the_model_is_still_thinking(self):
+        stop, closed, made = threading.Event(), [], []
+
+        def pieces():                                                         # hidden reasoning that would go on for a long time
+            try:
+                yield "<think>"
+                for i in range(100000):
+                    if i == 5:
+                        stop.set()
+                    made.append(i)
+                    yield f"hmm {i} "
+                yield "</think>The answer."
+            finally:
+                closed.append(True)
+        g = E.Guard(E.strip_think(E.until_stopped(pieces(), stop)), stop=stop)
+        self.assertEqual("".join(g), "")
+        self.assertLess(len(made), 10)                                        # it stopped at once, not after the thinking
+        self.assertEqual(closed, [True])
+
+
 class Saving(unittest.TestCase):
     @classmethod
     def setUpClass(cls):

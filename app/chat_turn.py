@@ -216,7 +216,7 @@ def start_turn(state, who, chat_id, text, model_id, effort, regenerate=False, re
                            style_hint="\n\n".join(h for h in (skill_hint, regen_modes.get(mode)["hint"] if regenerate else "",
                                                     "" if regenerate else (chat_polish.answer_hint(text, next((m["content"] for m in reversed(store.messages(chat_id)) if m["role"] == "assistant"), ""))
                                                                                  or chat_polish.follow_up_hint(text, any(m["role"] == "assistant" for m in store.messages(chat_id))))) if h))
-            if text and not canned and not regenerate and r.get("reason") in ("done", None) and chat_polish.is_repeat(r["text"], prior_reply):
+            if text and not canned and not regenerate and not stop.is_set() and r.get("reason") in ("done", None) and chat_polish.is_repeat(r["text"], prior_reply):
                 # A small model answered its own last message again. Take that reply back and ask once more, firmly, a little less predictably.
                 msgs = [m for m in store.messages(chat_id) if m["status"] != "compacted"]
                 if msgs and msgs[-1]["role"] == "assistant":
@@ -234,7 +234,7 @@ def start_turn(state, who, chat_id, text, model_id, effort, regenerate=False, re
                        web_mode_now not in ("off", "none") and chat_id >= 0)
             pretended = bool(text and not regenerate and chat_id >= 0 and state.web_fn is not None and web_mode_now not in ("off", "none")
                              and not (found and found.get("web")) and lookup_auto.pretends_to_search(r["text"]))      # it wrote "checking online" but no search ran: do the real one
-            if ((old_way or knowledge_first) and lookup_auto.gave_up(r["text"])) or pretended:
+            if not stop.is_set() and (((old_way or knowledge_first) and lookup_auto.gave_up(r["text"])) or pretended):     # never a second try after Stop
                 # The model said it doesn't know. Old way: the web has not been tried, so search it. Knowledge-first models (Qwen) had no notes yet:
                 # look it up now. Then answer again (the second chance).
                 notes2, found2 = lookup_auto.gather(lookup_auto.search_query(text, earlier, force=pretended), state.wiki, state.web_fn, "always" if (old_way or pretended) else web_mode_now, private=(chat_id < 0 and knowledge_first),

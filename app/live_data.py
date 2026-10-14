@@ -697,7 +697,8 @@ def news(q, now, net, online):
             lines.append(f"{title}" + (f" ({when})" if when else ""))
     if not lines:
         return []
-    return [_note("News headlines - Google News" + (f": {topic}" if topic else ""), "; ".join(lines) + ". Headlines only: they say what was reported, not that it is true.",
+    return [_note("News headlines - Google News" + (f": {topic}" if topic else ""), "\n".join("- " + ln for ln in lines) + "\nHeadlines only: they say what was reported, not that it is true. "
+                  "Give them as a short bulleted list: one line per story, each starting with \"- \", with the source in brackets at the end.",
                   "https://news.google.com/")]
 
 
