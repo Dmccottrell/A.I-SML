@@ -285,8 +285,8 @@ class Chain(unittest.TestCase):
         a = Args()
         todo = CH.plan(["flare-3", "equinox-3"], a)
         self.assertEqual(todo[0], ("all", "lessons"))
-        self.assertEqual([s for m, s in todo if m == "flare-3"], ["pilot", "train", "merge", "convert", "exam", "identity", "think"])
-        self.assertEqual(todo[-1], ("equinox-3", "think"))
+        self.assertEqual([s for m, s in todo if m == "flare-3"], ["pilot", "train", "merge", "convert", "exam", "identity", "think", "eyes"])
+        self.assertEqual(todo[-1], ("equinox-3", "eyes"))
         self.assertEqual(CH.plan(["flare-3"], Args(only=["train"])), [("flare-3", "train")])
         self.assertNotIn(("flare-3", "think"), CH.plan(["flare-3"], Args(skip=["think"])))
 
@@ -341,3 +341,30 @@ class Chain(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class Eyes(unittest.TestCase):
+    """The "eyes" step: the model's own picture reader, and the check that reads a number off a picture."""
+
+    def test_the_chain_ends_with_the_eyes_step(self):
+        import argparse
+        a = argparse.Namespace(llama_cpp="C:/llama.cpp", llama_bin="C:/llama/llama-server.exe")
+        self.assertEqual(CH.STEPS[-1], "eyes")
+        cmd = CH.step_command("eyes", "flare-3", a)
+        self.assertIn(os.path.join("scripts", "export_projector.py"), cmd)
+        self.assertEqual(cmd[cmd.index("--model") + 1], "flare-3")
+        self.assertEqual(cmd[cmd.index("--llama-bin") + 1], "C:/llama/llama-server.exe")
+
+    def test_projector_comes_from_the_base_model_and_lands_beside_the_gguf(self):
+        import export_projector as EP
+        self.assertEqual(EP.base_id("solstice-3"), "Qwen/Qwen3.5-9B")
+        cmd = EP.make_command("flare-3", "C:/llama.cpp", "/cache/qwen")
+        self.assertIn("--mmproj", cmd)
+        self.assertEqual(cmd[cmd.index("--outfile") + 1], os.path.join("export", "open", "flare-3", "mmproj.gguf"))
+
+    def test_reading_the_number(self):
+        import export_projector as EP
+        self.assertTrue(EP.sees_the_number("The number is 4,729.", 4729))
+        self.assertTrue(EP.sees_the_number("4 7 2 9", 4729))
+        self.assertFalse(EP.sees_the_number("I can't see any picture.", 4729))
+        self.assertGreater(len(EP.number_picture(4729)), 500)

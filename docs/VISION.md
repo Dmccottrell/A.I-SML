@@ -1,6 +1,12 @@
 # Pictures and screenshots
 
-The Emvryx models read text only. Two things make pictures work in the chat.
+Emvryx 2 models read text only; Emvryx 3 models (Qwen3.5 bases) can look at pictures themselves. Three things make pictures work in the chat.
+
+**0. The model looks itself (Emvryx 3).** When a model has its own picture reader, `mmproj.gguf` in the same folder as its `.gguf` (`app/app_runner.py`
+`projector_for`), llama-server is started with `--mmproj` and a picture goes straight into the prompt, just before the question (`app_engine.with_pictures`,
+llama-server's `multimodal_data`). Nothing is turned into words first, so code keeps its indentation and the model can say what it means. The training
+chain's **eyes** step (`scripts/export_projector.py`) makes that file from the base model and checks the tuned model reads a number off a picture; when the
+check fails the file is set aside (`mmproj.gguf.failed`) and the two ways below are used for that model, as before.
 
 **1. Reading the words in a picture (always on).** `app/documents.py` reads the text in a screenshot or photo (needs `pip install rapidocr-onnxruntime`, in requirements.txt). A picture without words says so plainly.
 

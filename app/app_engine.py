@@ -81,6 +81,20 @@ def cut_bleed(text):
     return (text, False) if cut < 0 else (text[:cut], True)
 
 
+MEDIA_MARKER = "<__media__>"          # llama-server's place-holder for one picture in a prompt (multimodal_data fills them in order)
+
+
+def with_pictures(prompt, asked, n):
+    """The prompt text with one picture marker per picture, just before the person's question (the last place it appears). Before the whole prompt's last
+    line when the question cannot be found, so the pictures are never lost."""
+    marks = (MEDIA_MARKER + "\n") * n
+    anchor = (asked or "").strip()[:200]
+    at = prompt.rfind(anchor) if anchor else -1
+    if at < 0:
+        at = prompt.rfind("\n", 0, max(0, len(prompt.rstrip()) - 1)) + 1
+    return prompt[:at] + marks + prompt[at:]
+
+
 def until_stopped(pieces, stop):
     """Pass the model's raw pieces on until `stop` is set (the Stop button). Checked on every raw piece, hidden reasoning included: Guard only sees the
     visible answer, so on its own it could not stop a model that is still thinking."""
@@ -522,7 +536,7 @@ class ChatStore:
 # ------------------------------------------------------------------ one message, start to finish
 def run_turn(tok, store, chat_id, backend, model, window, max_new, user_text=None, stop=None, save_every=8,
              keep_notes=1, notes=None, limiter=None, user=None, effort="balanced", clock=time.time,
-             pacer=None, auto_compact=True, summarize=None, style_hint="", user_docs=None, think=False):
+             pacer=None, auto_compact=True, summarize=None, style_hint="", user_docs=None, think=False, pictures=None):
     """Answer one message. Adds the user's message (if given), streams the reply while saving it, and returns
     {"text", "reason", "forgotten_messages"}. If the model fails mid-reply, what was written is kept (marked
     partial) and the AppError is re-raised, so the screen can offer "Continue".
@@ -535,6 +549,7 @@ def run_turn(tok, store, chat_id, backend, model, window, max_new, user_text=Non
     `style_hint` is a one-time line added to the end of the last question in the prompt only (Regenerate options).
     `think=True` (Deep, on models that can think) leaves the empty thinking block off the end of the prompt, so the model reasons first; the reasoning is
     hidden from the answer (strip_think below) and counts toward `max_new`.
+    `pictures` (base64 strings) go to a model that can look at pictures itself (an Emvryx 3 model run with its mmproj): they are placed just before the question.
     `pacer` (chat_polish.paced, with the time of sending) makes the reply appear after a short pause and write out
     steadily. `auto_compact` shortens a chat that fills the model's memory (chat_polish.compact_chat).
     """
@@ -543,6 +558,7 @@ def run_turn(tok, store, chat_id, backend, model, window, max_new, user_text=Non
     if auto_compact:
         folded = chat_polish.compact_chat(tok, store, chat_id, window, max_new, summarize=summarize, keep_notes=keep_notes)
     history = store.history(chat_id)
+    asked = history[-1]["content"] if history and history[-1]["role"] == "user" else ""     # where the pictures go (before any hint is added)
     if style_hint and history and history[-1]["role"] == "user":      # asked for only this once: the saved chat keeps the plain question
         history[-1] = dict(history[-1], content=history[-1]["content"].rstrip() + "\n\n" + style_hint)
     if think and history and history[-1]["role"] == "user":           # Deep: no empty thinking block after this question (chat.build_prompt)
@@ -563,7 +579,8 @@ def run_turn(tok, store, chat_id, backend, model, window, max_new, user_text=Non
                 store.remove_message(chat_id, user_row)
             raise
     row = store.add(chat_id, "assistant", "", model["id"], "partial")
-    stream = strip_source(strip_think(until_stopped(backend.stream(ids, max_new), stop)))
+    prompt = {"prompt_string": with_pictures(tok.decode(ids), asked, len(pictures)), "multimodal_data": list(pictures)} if pictures else ids
+    stream = strip_source(strip_think(until_stopped(backend.stream(prompt, max_new), stop)))
     guard = Guard(pacer(stream) if pacer else stream, stop=stop, max_chars=max(MAX_REPLY_CHARS, int(max_new * 5)))   # a long answer is not a loop: room for what the model was allowed
     count = 0
     try:
@@ -617,7 +634,7 @@ class FakeBackend:
         self.pause = pause                 # seconds between words in "forever" mode: a reply a test can interrupt
 
     def stream(self, ids, max_new):
-        self.prompts.append(list(ids))
+        self.prompts.append(dict(ids) if isinstance(ids, dict) else list(ids))       # a dict: the prompt text with pictures (see with_pictures)
         self.limits.append(max_new)
         if self.mode == "dead":
             raise PcUnreachable()
@@ -661,7 +678,8 @@ class LlamaServer:
             raise PcUnreachable()
 
     def stream(self, ids, max_new):
-        r = self._request("/completion", {"prompt": list(ids), "n_predict": max_new, "stream": True, **self.sampling})
+        prompt = ids if isinstance(ids, dict) else list(ids)       # token ids, or {"prompt_string", "multimodal_data"} when pictures go with it
+        r = self._request("/completion", {"prompt": prompt, "n_predict": max_new, "stream": True, **self.sampling})
         try:
             for line in r:
                 line = line.decode("utf-8", "replace").strip()

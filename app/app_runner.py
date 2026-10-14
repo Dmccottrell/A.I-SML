@@ -28,6 +28,15 @@ class ModelRunner:
         self.lock = threading.Lock()
         atexit.register(self.stop)
 
+    def projector(self, model_id):
+        """The model's own picture reader (an "mmproj" .gguf) when one sits in the same folder as its .gguf, else None. Emvryx 3 (Qwen3.5) models can look
+        at pictures themselves with it; the export step (scripts/export_projector.py) puts it there."""
+        path = self.files.get(model_id)
+        return projector_for(path) if path else None
+
+    def sees(self, model_id):
+        return bool(self.projector(model_id))
+
     def available(self, model_id):
         return model_id in self.files and os.path.exists(self.files[model_id]) and bool(self.bin)
 
@@ -118,6 +127,9 @@ class ModelRunner:
                                "Put the .gguf next to the others (see docs/V2.md) or start the server with --gguf.")
             port = self._free_port()
             cmd = [self.bin, "-m", self.files[model_id], "--host", self.host, "--port", str(port), "-c", str(ctx)] + self.extra
+            proj = self.projector(model_id)
+            if proj:
+                cmd += ["--mmproj", proj]                       # it can look at pictures itself (no separate picture reader)
             flags = getattr(subprocess, "CREATE_NO_WINDOW", 0)
             try:
                 self.proc = subprocess.Popen(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, creationflags=flags)
@@ -168,6 +180,20 @@ def gpu_note(llama_bin, extra_args):
 def find_llama_server():
     """llama-server on the PATH, or None."""
     return shutil.which("llama-server") or shutil.which("llama-server.exe")
+
+
+def projector_for(gguf_path):
+    """The picture reader that goes with a model file: mmproj.gguf (or one other file with "mmproj" in its name) in the same folder. None when there is none,
+    or when the folder holds several (they could belong to different models)."""
+    folder = os.path.dirname(os.path.abspath(gguf_path))
+    exact = os.path.join(folder, "mmproj.gguf")
+    if os.path.exists(exact):
+        return exact
+    try:
+        found = [n for n in os.listdir(folder) if "mmproj" in n.lower() and n.lower().endswith(".gguf")]
+    except OSError:
+        return None
+    return os.path.join(folder, found[0]) if len(found) == 1 else None
 
 
 def discover_ggufs(manifest, root=HERE):

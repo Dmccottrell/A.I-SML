@@ -102,6 +102,25 @@ class InChat(Base):
         self.assertEqual([d for e, d in ev if e == "notes"][0]["pictures"], 1)
         self.assertIn("Did he actually say this?", helper.calls[0]["messages"][0]["content"][1]["text"])
 
+    def test_a_model_that_can_see_gets_the_picture_itself(self):
+        helper = FakeHelper()
+        self.state.vision = helper                                     # there is a picture reader too, but the model does not need it
+        self.state.seeing = {m["id"] for m in self.state.manifest["models"]}     # whichever model answers can see
+        did = self.add_picture(self.sam)
+        cid = self.new_chat(self.sam)
+        self.sam.call("POST", f"/api/chats/{cid}/docs", {"ids": [did]})
+        ev = self.ask(self.sam, cid, "What does this code print?")[2]
+        self.assertEqual([d for e, d in ev if e == "notes"][0]["pictures"], 1)
+        self.assertEqual(helper.calls, [])                               # not turned into words first
+        sent = self.state_backend.prompts[-1]
+        self.assertIsInstance(sent, dict)
+        self.assertEqual(base64.b64decode(sent["multimodal_data"][0]), png())
+        text = sent["prompt_string"]
+        self.assertEqual(text.count("<__media__>"), 1)
+        self.assertLess(text.index("<__media__>"), text.rindex("What does this code print?"))     # the picture comes just before the question
+        self.ask(self.sam, cid, "And why?")
+        self.assertIsInstance(self.state_backend.prompts[-1], list)      # a later message without a new picture is plain text again
+
     def test_a_picture_the_helper_could_not_read_and_with_no_text_is_said_plainly(self):
         class Broken(FakeHelper):
             def _post(self, url, body):
@@ -128,3 +147,31 @@ class InChat(Base):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class Projector(unittest.TestCase):
+    """A model's own picture reader is found next to its .gguf and passed to llama-server."""
+
+    def test_found_next_to_the_model_and_used_when_it_starts(self):
+        import tempfile, shutil
+        import app_runner as R
+        d = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, d, True)
+        model = os.path.join(d, "my-ai-q4_k_m.gguf")
+        open(model, "wb").close()
+        runner = R.ModelRunner("llama-server", {"flare-3": model})
+        self.assertFalse(runner.sees("flare-3"))
+        open(os.path.join(d, "mmproj.gguf"), "wb").close()
+        self.assertTrue(runner.sees("flare-3"))
+        self.assertEqual(R.projector_for(model), os.path.join(d, "mmproj.gguf"))
+        two = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, two, True)
+        for n in ("a-mmproj.gguf", "b-mmproj.gguf", "m.gguf"):
+            open(os.path.join(two, n), "wb").close()
+        self.assertIsNone(R.projector_for(os.path.join(two, "m.gguf")))     # two readers in one folder: which belongs to the model is unclear
+
+    def test_markers_go_before_the_question(self):
+        import app_engine as E
+        out = E.with_pictures("<|im_start|>user\nWhat is this?<|im_end|>\n<|im_start|>assistant\n", "What is this?", 2)
+        self.assertIn("user\n<__media__>\n<__media__>\nWhat is this?", out)
+        self.assertEqual(E.with_pictures("abc\nlast line", "not there", 1).count("<__media__>"), 1)
