@@ -11,7 +11,11 @@ The hard sheet (52 questions), 4-bit, after the graphics card was fixed (llama-s
 | Equinox 3 | Equinox 2: 28/52, 98 tokens/s | Qwen3.5 4B: **39/52, 106 tokens/s** | Qwen3.5 4B (wins by 11) |
 | Solstice 3 | Solstice 2: 40/52, 64 tokens/s | Qwen3.5 9B: 40/52, 68 tokens/s | **Qwen3.5 9B, the owner's choice**: a tie on the sheet (so the rule alone keeps Solstice 2), chosen for the same family as Flare and Equinox 3 (one lesson set, one chat format) and slightly faster |
 
-These are the presets `flare-3`, `equinox-3` and `solstice-3` in `core/open_models.py`. Apogee 3 is decided by the rest of the bake-off. The scores are before training; the identity and thinking checks after training make sure tuning does not wear them down.
+These are the presets `flare-3`, `equinox-3` and `solstice-3` in `core/open_models.py`.
+
+**Conversation size (the needle test, same night):** all three new bases fit a 128K window on the 4070 and found the hidden code 3/3 at 8K, 32K, 64K and 128K (graphics memory at 128K: 2B 5.0 GB, 4B 8.5 GB, 9B 10.5 GB; reading a full 128K document took 12, 36 and 44 s). Today's Flare 2.5, Equinox 2 and Solstice 2 top out at 32K (beyond that they spill past the card). So the v3 models get a 128K window.
+
+**Apogee stays as it is for now (owner's decision).** Nothing beat Apogee 2 on the hard sheet: Apogee 2 43/52 (41 tokens/s; fails to load at 64K), Qwen3.5 9B 41/52 (61 tokens/s, 128K), Qwen3.8 27B at 2-bit 35/52 (35 tokens/s, too slow past 32K), DeepSeek-R1 14B 23/52 (thinks too long, 0/10 on maths). The table showed "-" for Apogee 2, the 27B and the 14B because a failure at a bigger window threw away the whole row; the scores above are added up from the by-category table, and the bake-off now keeps a model's score when only a bigger size fails. Revisit when a stronger model that fits 12 GB comes out. The scores are before training; the identity and thinking checks after training make sure tuning does not wear them down.
 
 ## What was prepared (all in the repository, all tested)
 | Piece | What it does |

@@ -152,10 +152,10 @@ def render_report(results):
         sizes = sorted({c["ctx"] for r in items for c in r.get("contexts", [])}) or list(CONTEXTS)
         label = " / ".join(f"{x // 1024}K" for x in sizes)
         has_needle = any(c.get("needle") for r in items for c in r.get("contexts", []))
-        lines += [f"## {slot}", "", f"| Candidate | Score | All | Words/sec | Memory {label} (GB) |" + (" Long-document test |" if has_needle else "") + " Window | Verdict |",
+        lines += [f"## {slot}", "", f"| Candidate | Score | All | Tokens/sec | Memory {label} (GB) |" + (" Long-document test |" if has_needle else "") + " Window | Verdict |",
                   "|---|---|---|---|---|" + ("---|" if has_needle else "") + "---|---|"]
         for r in items:
-            mem = " / ".join(str(c.get("vram_gb", "?")) for c in r.get("contexts", [])) or "?"
+            mem = " / ".join(str(c.get("vram_gb", "?")) if c.get("ok", True) or c.get("vram_gb") else "too big" for c in r.get("contexts", [])) or "?"
             gl = next((c["gpu_layers"] for c in r.get("contexts", []) if c.get("gpu_layers")), None)
             if gl and gl[0] < gl[1]:
                 mem += f" (only {gl[0]} of {gl[1]} layers on the card)"
@@ -276,34 +276,48 @@ def run_candidate(llama_bin, cand, tests, contexts=CONTEXTS, needle=False):
     if not os.path.isfile(cand["file"]):
         out.update(error=f"file not found: {cand['file']}", passed=0, total=len(tests))
         return out
-    try:
-        for ctx in contexts:
+    for ctx in contexts:
+        try:
             proc = start_server(llama_bin, cand, ctx)
-            try:
-                status, data = post("/completion", {"prompt": filler(ctx - 600) + "\nIn one sentence, what is the text above about?", "n_predict": 48, "temperature": 0, "cache_prompt": False})
-                speed = tokens_per_second(data.get("timings")) if status == 200 else None
-                with open(server_log_path(cand, ctx), encoding="utf-8", errors="replace") as f:
-                    layers = gpu_layers(f.read())
-                entry = {"ctx": ctx, "vram_gb": smi_used_gb(), "speed": speed, "ok": status == 200, "gpu_layers": layers}
-                out["contexts"].append(entry)
-                if needle and status == 200:
-                    entry["needle"] = needle_test(cand, ctx)
-                if ctx == contexts[0]:
-                    def ask(prompt):
-                        st, d = post("/v1/chat/completions", chat_body(cand, prompt))
-                        if st != 200:
-                            return "", f"HTTP {st}"
-                        text = (d.get("choices") or [{}])[0].get("message", {}).get("content") or ""
-                        return text.split("</think>")[-1].strip(), ""
-                    results = run(tests, ask)
-                    t = totals(results)
-                    out.update(passed=t["passed"], total=t["total"], by_category=t["by_category"], replies=results)
-                    out["speed"] = speed
-            finally:
-                stop_server(proc)
-    except (RuntimeError, OSError) as e:                              # includes a request that timed out: record it and go on to the next candidate
-        out.update(error=("timed out: the model answered far too slowly (is it running on the card?)" if isinstance(e, TimeoutError) else str(e)),
-                   passed=out.get("passed", 0), total=len(tests))
+        except (RuntimeError, OSError) as e:
+            if ctx == contexts[0]:                                       # it does not even start at the smallest size: the candidate is out
+                out.update(error=str(e), passed=0, total=len(tests))
+                return out
+            out["contexts"].append({"ctx": ctx, "ok": False, "error": "does not fit: " + str(e)[:160]})     # too big for the card at this size: note it and stop going bigger
+            print(f"    {ctx // 1024}K: does not fit on the card", flush=True)
+            break
+        try:
+            status, data = post("/completion", {"prompt": filler(ctx - 600) + "\nIn one sentence, what is the text above about?", "n_predict": 48, "temperature": 0, "cache_prompt": False})
+            speed = tokens_per_second(data.get("timings")) if status == 200 else None
+            with open(server_log_path(cand, ctx), encoding="utf-8", errors="replace") as f:
+                layers = gpu_layers(f.read())
+            entry = {"ctx": ctx, "vram_gb": smi_used_gb(), "speed": speed, "ok": status == 200, "gpu_layers": layers}
+            out["contexts"].append(entry)
+            if needle and status == 200:
+                entry["needle"] = needle_test(cand, ctx)
+            n = entry.get("needle") or {}
+            print(f"    {ctx // 1024}K: {entry['vram_gb']} GB on the card" + (f", hidden code found {n['found']}/{n['total']}" if n.get("total") else ("" if not needle else ", long-document test failed")), flush=True)
+            if ctx == contexts[0]:
+                def ask(prompt):
+                    st, d = post("/v1/chat/completions", chat_body(cand, prompt))
+                    if st != 200:
+                        return "", f"HTTP {st}"
+                    text = (d.get("choices") or [{}])[0].get("message", {}).get("content") or ""
+                    return text.split("</think>")[-1].strip(), ""
+                results = run(tests, ask)
+                t = totals(results)
+                out.update(passed=t["passed"], total=t["total"], by_category=t["by_category"], replies=results)
+                out["speed"] = speed
+        except (RuntimeError, OSError) as e:                          # includes a request that timed out
+            why = "timed out: the model answered far too slowly (is it running on the card?)" if isinstance(e, TimeoutError) else str(e)
+            if ctx == contexts[0] and "passed" not in out:
+                out.update(error=why, passed=0, total=len(tests))
+                return out
+            out["contexts"].append({"ctx": ctx, "ok": False, "error": why[:160]})           # a bigger size was too slow or failed: keep what was measured
+            print(f"    {ctx // 1024}K: {why[:80]}", flush=True)
+            break
+        finally:
+            stop_server(proc)
     return out
 
 

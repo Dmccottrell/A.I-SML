@@ -99,9 +99,11 @@ function ideConflict() {
 }
 async function ideSync() {
   if (!IDE.on || !IDE.tabs.length) return;
+  const run = IDE.syncRun = (IDE.syncRun || 0) + 1;          // only the newest check may change a tab: an older, slower answer would put a stale file back
   for (const t of IDE.tabs.slice()) {
     if (t.readOnly) continue;
     const r = await api('/api/code/file?project=' + encodeURIComponent(t.project) + '&path=' + encodeURIComponent(t.path)); const j = await r.json().catch(() => ({}));
+    if (run !== IDE.syncRun) return;
     const here = IDE.tabs[IDE.active] === t;
     if (!r.ok) { if (r.status === 400 && !t.dirty) { continue; } if (t.dirty) t.conflict = {gone: true}; continue; }
     if (j.text === t.disk) continue;

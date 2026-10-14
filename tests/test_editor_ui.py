@@ -275,15 +275,13 @@ class EditorUi(Base):
                 self.assertNotIn("●", page.inner_text("#ideTabs"))
                 # VryxCode (or anything else) changes the open file on disk: the tab updates by itself when there are no edits of yours
                 self.save("app.py", "def hello(name):\n    return name.title()\n")
-                page.evaluate("ideSync()")
-                eventually(lambda: self.assertIn("title()", page.input_value("#ideBody textarea")))
+                eventually(lambda: (page.evaluate("ideSync()"), self.assertIn("title()", page.input_value("#ideBody textarea"))))
                 # ...and asks when there are
                 page.click("#ideBody textarea")
                 page.keyboard.press("Control+End")
                 page.keyboard.type("# mine")
                 self.save("app.py", "def hello(name):\n    return 'changed again'\n")
-                page.evaluate("ideSync()")
-                eventually(lambda: self.assertIn("VryxCode changed this file", page.inner_text("#ideConf")))
+                eventually(lambda: (page.evaluate("ideSync()"), self.assertIn("VryxCode changed this file", page.inner_text("#ideConf"))))
                 page.click("#ideConf >> text=Keep mine")
                 self.assertIn("# mine", page.input_value("#ideBody textarea"))
                 # narrower than 1100px: the Editor layout switches itself off and the normal screen comes back
