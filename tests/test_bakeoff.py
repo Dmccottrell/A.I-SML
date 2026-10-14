@@ -106,5 +106,33 @@ class Parts(unittest.TestCase):
         self.assertIn("file not found", r["error"])
 
 
+    def test_a_size_too_big_for_the_card_keeps_what_was_measured(self):
+        import tempfile, unittest.mock as M
+        tests = [{"prompt": "x", "category": "c", "expect": ["x"]}]
+        with tempfile.NamedTemporaryFile(suffix=".gguf", delete=False) as f:
+            gguf = f.name
+        self.addCleanup(os.remove, gguf)
+        cand = {"name": "big", "slot": "apogee", "file": gguf}
+
+        def start(bin_, c, ctx):
+            if ctx > 8192:
+                raise RuntimeError("llama-server stopped: exiting due to model loading error")
+            return object()
+        log = tempfile.NamedTemporaryFile("w", suffix=".log", delete=False)
+        log.close()
+        self.addCleanup(os.remove, log.name)
+        fake_run = M.MagicMock(return_value=[])
+        with M.patch.object(B, "start_server", start), M.patch.object(B, "stop_server", lambda p: None), \
+             M.patch.object(B, "post", lambda path, body, timeout=600: (200, {"timings": {"predicted_per_second": 50}})), \
+             M.patch.object(B, "server_log_path", lambda c, ctx: log.name), M.patch.object(B, "smi_used_gb", lambda: 10.5), \
+             M.patch.dict(sys.modules, {"quality_check": M.MagicMock(run=fake_run, totals=lambda r: {"passed": 30, "total": 52, "by_category": {}})}):
+            r = B.run_candidate("bin", cand, tests, contexts=[8192, 32768, 65536])
+        self.assertNotIn("error", r)                                  # the model is still scored
+        self.assertEqual(r["passed"], 30)
+        self.assertEqual([c["ctx"] for c in r["contexts"]], [8192, 32768])     # it stops going bigger after the first size that does not fit
+        self.assertIn("does not fit", r["contexts"][1]["error"])
+        self.assertIn("too big", B.render_report([r]))
+
+
 if __name__ == "__main__":
     unittest.main()
