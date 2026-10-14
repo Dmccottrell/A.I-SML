@@ -116,3 +116,47 @@ class Retry(unittest.TestCase):
         write = next(e for e in s.events if e["kind"] == "step" and e.get("tool") == "write_file")
         self.assertIn("secs", write)
         self.assertTrue(s.events[-1]["finished"])
+
+
+class PageProof(unittest.TestCase):
+    """A web page is opened by the app itself before the session says it is done, and a broken page is sent back to be fixed."""
+
+    def session(self, replies, reports):
+        import tempfile, shutil
+        import code_sessions
+        import vryxcode
+        d = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, d, True)
+        checked = []
+
+        def check_page(path="", width=390, height=844):
+            checked.append(path)
+            return reports.pop(0)
+        s = code_sessions.Session("s1", "owner", "demo", "make a page", "solstice-2", d, auto_edits=True, tools={"check_page": check_page})
+        s.generate = vryxcode.ScriptedChat(replies)
+        return s, checked
+
+    def test_a_broken_page_goes_back_to_be_fixed_and_a_clean_one_counts_as_verified(self):
+        import vryxcode
+        replies = [vryxcode.harness_call("write_file", path="index.html", content="<h1>Hi</h1>\n"), "Your page is ready!",       # it says so without checking
+                   vryxcode.harness_call("edit_file", path="index.html", old="Hi", new="Hello"), "Fixed it."]
+        bad = "Page check of index.html at 390x844: loaded, with problems.\nScript errors (1):\n  - SyntaxError: Unexpected token '<'"
+        good = "Page check of index.html at 390x844: loaded, no errors found."
+        s, checked = self.session(replies, [bad, good])
+        s.run(s.generate, 8, 8000)
+        self.assertEqual(checked, ["index.html", "index.html"])                     # nobody asked: the app opened it after each round
+        auto = [e for e in s.events if e["kind"] == "user" and e.get("auto")]
+        self.assertEqual(len(auto), 1)
+        self.assertIn("Unexpected token", auto[0]["text"])
+        self.assertEqual(s.events[-1]["report"]["verdict"], "verified")
+
+    def test_it_gives_up_fixing_after_two_rounds(self):
+        import vryxcode
+        write = lambda n: vryxcode.harness_call("write_file", path="index.html", content=f"<h1>{n}</h1>\n")
+        replies = [write(1), "Done.", write(2), "Done.", write(3), "Done."]
+        bad = "Page check of index.html at 390x844: loaded, with problems."
+        s, checked = self.session(replies, [bad, bad, bad])
+        s.run(s.generate, 8, 8000)
+        self.assertEqual(len(checked), 3)
+        self.assertEqual(len([e for e in s.events if e["kind"] == "user" and e.get("auto")]), 2)
+        self.assertIn("still found problems", " ".join(s.events[-1]["report"]["look_at"]))

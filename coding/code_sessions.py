@@ -63,6 +63,11 @@ def remove_tree(path, tries=3):
     return False
 
 
+WEB_FILES = (".html", ".htm", ".js", ".mjs", ".css", ".jsx")
+PAGE_TROUBLE = re.compile(r"loaded, with problems|did not finish loading", re.I)
+PAGE_FIX_TRIES = 2
+
+
 class CodeError(Exception):
     def __init__(self, message, action=""):
         super().__init__(message)
@@ -148,6 +153,7 @@ class Session:
         self.generate, self.max_turns, self.context_tokens, self.extra_programs = None, 12, None, ()
         self.turns_run = 0
         self._auto_tries = 0                            # automatic second tries after an unexpected failure, this message
+        self._page_tries = 0                            # automatic fixes after the app's own page check found problems, this message
         self.notify, self.on_notify = False, None       # tell the owner's phone when a turn ends or it needs an answer (set by the server)
 
     def emit(self, kind, **data):
@@ -361,12 +367,12 @@ class Session:
                 raise CodeError("This session cannot continue.", "Start a new one.")
             self.state = "working"
             self.stop.clear()
-        self._auto_tries = 0
+        self._auto_tries = self._page_tries = 0
         self._model_text = model_text                       # what the model gets instead of the line the person sees (a code review's diff)
         threading.Thread(target=self._turn, args=(text, False, bool(plan)), daemon=True).start()
 
     def _turn(self, text, first, plan=False, auto=False):
-        retried = False
+        retried, again = False, None
         self.state = "working"
         self.next_steps = []
         self.turns_run += 1
@@ -388,6 +394,13 @@ class Session:
                                        out=lambda *_: None, tools=self.tools, git_identity=self.identity,
                                        command_prefix=self.prefix, container=bool(self.prefix) and not self.remote, history=self.history, chat_mode=True, plan=plan, todo=True, remote=self.remote)
             self.history = result["messages"]
+            report = None if self.stop.is_set() else self._page_proof()
+            if report and PAGE_TROUBLE.search(report) and self._page_tries < PAGE_FIX_TRIES:
+                # the app opened the page itself and it is broken: like a person would, it goes back and fixes it before saying it is done
+                self._page_tries += 1
+                again = ("I opened the page in a browser and it does not work yet:\n" + clip(report, 1500) +
+                         "\nFix these problems, then open it again with check_page and finish only when it loads with no errors.")
+                return
             self._end( finished=result["finished"], said=bool(result.get("said")), summary=clip(result["summary"], 4000), turns=result["turns"],
                       next=self.next_steps if result["finished"] else [], plan=bool(plan) and bool(result["finished"] or result.get("said")))
             self.state = "done" if (result["finished"] or result.get("said")) else "stopped"
@@ -416,6 +429,8 @@ class Session:
                 self._end( finished=False, summary="It could not finish: " + clip(msg, 500), turns=0, error=True)
                 self.state = "failed"
         finally:
+            if again:
+                return self._turn(again, False, auto=True)
             if retried:
                 return self._turn("The last step failed with this error: " + clip(msg, 400) + ". Look at what went wrong, then carry on from where you stopped and finish the task.", False, auto=True)
             self.live = None
@@ -428,6 +443,31 @@ class Session:
                     idle(self)                            # the next queued session may start
                 except Exception:
                     pass
+
+    def _page_proof(self):
+        """Proof before "done": when this turn changed the web page and nothing opened it since, the app opens it itself (the model is not trusted to
+        remember) and the result goes in the feed. The report, or None when there was nothing to check."""
+        tool = (self.tools or {}).get("check_page")
+        if not tool:
+            return None
+        last_web, last_check, page = -1, -1, ""
+        for i, e in enumerate(code_report._turn_events(self.events)):
+            if e.get("kind") != "step":
+                continue
+            m = re.match(r"(?:write|edit) (\S+)", str(e.get("preview", "")))
+            if e.get("tool") in ("write_file", "edit_file") and m and m.group(1).lower().endswith(WEB_FILES):
+                last_web, page = i, (m.group(1) if m.group(1).lower().endswith((".html", ".htm")) else page)
+            elif e.get("tool") == "check_page":
+                last_check = i
+        if last_web < 0 or last_check > last_web:
+            return None
+        self.emit("step", tool="check_page", preview=f"check_page {page or 'the main page'} (the app opens the page itself before it says it is done)", auto=True)
+        try:
+            report = tool(page) if page else tool()
+        except Exception as e:                            # noqa: BLE001  (a missing browser is not a broken page)
+            report = "Browser check could not run: " + (getattr(e, "message", None) or str(e))
+        self.emit("result", text=clip(report))
+        return report
 
     def switch_model(self, model_id, generate, context_tokens, meter):
         """Another model takes over this conversation (the same session, the same history): the next message runs on it."""

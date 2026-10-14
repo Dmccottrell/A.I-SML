@@ -56,6 +56,7 @@ def build_report(events, end=None):
 
     files, other_runs, test_runs, problems = {}, [], [], []
     last_edit = last_pass = -1
+    page = None                                        # the last browser check of the page: (step index, it loaded with no errors)
     for i, s in enumerate(steps):
         tool, prev, res = s["tool"], s["preview"], s["result"]
         if res.startswith("error:") or res.startswith("refused"):
@@ -77,6 +78,8 @@ def build_report(events, end=None):
             f["checked"] = f["checked"] or "checked" in res
             if not res.startswith("error:") and not res.startswith("refused"):
                 last_edit = i
+        elif tool == "check_page":
+            page = (i, "no errors found" in res)
         elif tool == "run":
             cmd = re.sub(r"^run\s*", "", prev)
             m_cmd = re.search(r'"command"\s*:\s*"([^"]*)', cmd)
@@ -93,8 +96,11 @@ def build_report(events, end=None):
     file_list = sorted(files.values(), key=lambda f: f["path"])
     verified = bool(test_runs) and last_pass > last_edit and last_pass >= 0 and test_runs[-1]["passed"]
     checked = any(f["checked"] for f in file_list)
+    page_ok = bool(page and page[0] > last_edit and page[1])
     if verified:
         verdict, label = "verified", "Verified: the tests passed after the last change"
+    elif page_ok:
+        verified, verdict, label = True, "verified", "Verified: the page was opened in a browser after the last change and showed no errors"
     elif file_list and checked:
         verdict, label = "checked", "Checked: changes passed the syntax check, but no passing test run came after them"
     elif file_list:
@@ -105,7 +111,9 @@ def build_report(events, end=None):
     look = []
     if test_runs and not test_runs[-1]["passed"]:
         look.append("The last test run failed. Read its output before trusting the change.")
-    if file_list and not test_runs:
+    if page and page[0] > last_edit and not page[1]:
+        look.append("The page check after the last change still found problems: open Preview to see them.")
+    if file_list and not test_runs and not page_ok:
         look.append("No tests were run. Ask it to add or run tests, or try the result yourself.")
     elif file_list and test_runs and not verified and test_runs[-1]["passed"]:
         look.append("Code changed after the last passing test run. Ask it to run the tests again.")
@@ -115,7 +123,7 @@ def build_report(events, end=None):
         look.append(f"It hit {len(problems)} error(s) or refusals while working; it may have worked around them.")
     if end and not end.get("finished"):
         look.append("It did not say it was finished: check what is missing.")
-    if any(re.search(r"\.(html?|css|js)$", f["path"]) for f in file_list):
+    if any(re.search(r"\.(html?|css|js)$", f["path"]) for f in file_list) and not page_ok:
         look.append("A web page was changed: open Preview and try it.")
     return {"verdict": verdict, "label": label, "steps": len(steps), "files": file_list, "tests": test_runs, "failed_commands": other_runs,
             "problems": problems[:5], "look_at": look[:5], "finished": bool(end and end.get("finished"))}
