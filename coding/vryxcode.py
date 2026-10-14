@@ -282,7 +282,9 @@ GITHUB_TOOL_NOTE = (" github(action) with action status, pull or push works with
 
 CHECK_PAGE_NOTE = (" check_page(path, width, height) opens a web page of this project in a hidden browser (phone size by default), clicks around, and tells you the errors and "
                    "layout problems it finds (sideways scrolling, tiny buttons, broken pictures, no labels) with a screenshot for the person. Use it after you build or change a page, "
-                   "fix what it reports, and check again. It cannot reach the internet except a few common CDNs.")
+                   "fix what it reports, and check again. It cannot reach the internet except a few common CDNs. "
+                   "React from a CDN in one HTML file: load react, react-dom AND @babel/standalone (unpkg.com), and put the app in <script type=\"text/babel\">: "
+                   "a plain <script> cannot run JSX tags like <div>.")
 
 
 def make_todo():

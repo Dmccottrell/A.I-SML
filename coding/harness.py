@@ -388,12 +388,46 @@ def check_text(path, text):
             return [f"{path}: not valid JSON: {e}"]
     if low.endswith((".js", ".mjs")):
         return _check_js(path, text)
+    if low.endswith((".html", ".htm")):
+        return _check_html(path, text)
     other = _check_other(path, text)
     return other
 
 
 def checkable(path):
-    return str(path).lower().endswith((".py", ".json", ".js", ".mjs") + tuple(OTHER_CHECKS))
+    return str(path).lower().endswith((".py", ".json", ".js", ".mjs", ".html", ".htm") + tuple(OTHER_CHECKS))
+
+
+SCRIPT_RX = re.compile(r"<script\b([^>]*)>(.*?)</script\s*>", re.I | re.S)
+_STRINGS = re.compile(r"`(?:\\.|[^`\\])*`|'(?:\\.|[^'\\\n])*'|\"(?:\\.|[^\"\\\n])*\"|//[^\n]*|/\*.*?\*/", re.S)
+_JSX = re.compile(r"(?:\breturn|[=(,?:]|&&|\|\||=>)\s*<(?:[A-Za-z][\w.]*|>)(?:[\s/>])")
+JSX_FIX = ('this <script> uses JSX (tags like <div> written inside JavaScript), which a browser cannot run in a plain <script> ("Unexpected token \'<\'"). '
+           'Either add <script src="https://unpkg.com/@babel/standalone@7.26.4/babel.min.js"></script> before it and change it to <script type="text/babel">, '
+           'or write React.createElement(...) instead of tags')
+
+
+def _check_html(path, text):
+    """The JavaScript inside a web page: JSX in a plain <script> (the most common reason a React page shows nothing), then a syntax check of each inline script."""
+    out = []
+    for m in SCRIPT_RX.finditer(text):
+        attrs, body = m.group(1), m.group(2)
+        if re.search(r"\bsrc\s*=", attrs, re.I) or not body.strip():
+            continue
+        kind = (re.search(r"\btype\s*=\s*[\"']?([\w/+.-]+)", attrs, re.I) or [None, ""])[1].lower()
+        if kind not in ("", "text/javascript", "application/javascript", "module"):
+            continue                                              # text/babel, JSON, templates: not plain JavaScript
+        line = text.count("\n", 0, m.start(2)) + 1
+        bare = _STRINGS.sub(lambda x: "\n" * x.group(0).count("\n"), body)
+        jsx = _JSX.search(bare)
+        if jsx:
+            out.append(f"{path}:{line + bare.count(chr(10), 0, jsx.start() + jsx.group(0).index('<'))}: syntax error: {JSX_FIX}")    # the line of the tag itself
+            continue
+        for err in _check_js(path + (".mjs" if kind == "module" else ""), body):
+            mm = re.match(r".*?:(\d+): (.*)", err)
+            out.append(f"{path}:{line + int(mm.group(1)) - 1}: {mm.group(2)}" if mm else err)
+        if len(out) >= 3:
+            break
+    return out
 
 
 # Other languages: only a SYNTAX check, and only when that language's tool is installed on this machine (nothing is reported otherwise).

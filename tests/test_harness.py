@@ -193,6 +193,29 @@ def scripted(*steps):
     return lambda msgs: next(it)
 
 
+class WebPageScripts(unittest.TestCase):
+    """The JavaScript inside an HTML page is checked before it is saved: JSX in a plain <script> is the usual reason a React page is blank."""
+    PAGE = ('<!doctype html><html><body><div id="root"></div>\n'
+            '<script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>\n'
+            '<script>\n// a comment with <b>tags</b> is fine\nconst s = "<div>in a string</div>";\nfunction App() {\n  return (\n    <div className="board">Snake</div>\n  );\n}\n</script></body></html>')
+
+    def test_jsx_in_a_plain_script_is_caught_with_the_fix(self):
+        problems = h.check_text("snake_game.html", self.PAGE)
+        self.assertEqual(len(problems), 1)
+        self.assertTrue(problems[0].startswith("snake_game.html:8:"), problems[0])
+        self.assertIn('type="text/babel"', problems[0])
+        self.assertIn("React.createElement", problems[0])
+
+    def test_babel_scripts_and_ordinary_code_pass(self):
+        self.assertEqual(h.check_text("ok.html", self.PAGE.replace("<script>\n//", '<script type="text/babel">\n//')), [])
+        self.assertEqual(h.check_text("ok.html", '<script>if (a < b && c<d) { el.innerHTML = "<p>x</p>"; }</script><script type="application/json">{"<a>": 1}</script>'), [])
+
+    def test_a_broken_page_is_not_saved(self):
+        with tempfile.TemporaryDirectory() as d:
+            self.assertIn("JSX", h.preview_check(d, "write_file", {"path": "index.html", "content": self.PAGE}))
+            self.assertTrue(h.checkable("index.html"))
+
+
 class AroundTheLoop(unittest.TestCase):
     def setUp(self):
         self.sb = h.Sandbox()
