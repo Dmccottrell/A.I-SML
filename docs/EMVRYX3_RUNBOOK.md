@@ -123,6 +123,8 @@ Add the model to `models.json` with `"status": "preview"` and `"think": "empty"`
 6. **Voice** (decided in the style guide, not yet written) and the Emvryx style pass over the lessons.
 7. ~~Pictures the model sees itself~~ (built Oct 14, 2026: the chain's **eyes** step puts the base's picture reader, `mmproj.gguf`, beside each Emvryx 3
    model and checks it reads a number off a picture; the app then sends pictures straight to the model. See docs/VISION.md.)
+8. ~~Long memory kept after training~~ (built Oct 14, 2026: the chain's **long** step, `scripts/long_check.py`, hides a code at 32K, 64K and 128K;
+   passed = the model's window is set to 128K when it is added; failed = retrain that model with some long lessons before publishing.)
 
 ## If something goes wrong
 - *The bake-off shows 1.3 to 1.6 GB of memory and 3 to 12 words a second for every model:* llama-server is not using the graphics card. Run `llama-server.exe --list-devices`: it must list the RTX 4070. If not, unzip the matching `cudart-llama-bin-win-cuda-12.4-x64.zip` from the llama.cpp releases into the same folder (or use the newest CUDA build), and look in `logs\\bakeoff\\<model>-8192-server.log` for the line with "offloaded" (it must say all layers).

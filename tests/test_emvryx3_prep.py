@@ -303,8 +303,8 @@ class Chain(unittest.TestCase):
         a = Args()
         todo = CH.plan(["flare-3", "equinox-3"], a)
         self.assertEqual(todo[0], ("all", "lessons"))
-        self.assertEqual([s for m, s in todo if m == "flare-3"], ["pilot", "train", "merge", "convert", "exam", "identity", "think", "eyes"])
-        self.assertEqual(todo[-1], ("equinox-3", "eyes"))
+        self.assertEqual([s for m, s in todo if m == "flare-3"], ["pilot", "train", "merge", "convert", "exam", "identity", "think", "eyes", "long"])
+        self.assertEqual(todo[-1], ("equinox-3", "long"))
         self.assertEqual(CH.plan(["flare-3"], Args(only=["train"])), [("flare-3", "train")])
         self.assertNotIn(("flare-3", "think"), CH.plan(["flare-3"], Args(skip=["think"])))
 
@@ -367,7 +367,7 @@ class Eyes(unittest.TestCase):
     def test_the_chain_ends_with_the_eyes_step(self):
         import argparse
         a = argparse.Namespace(llama_cpp="C:/llama.cpp", llama_bin="C:/llama/llama-server.exe")
-        self.assertEqual(CH.STEPS[-1], "eyes")
+        self.assertEqual(CH.STEPS[-2:], ("eyes", "long"))
         cmd = CH.step_command("eyes", "flare-3", a)
         self.assertIn(os.path.join("scripts", "export_projector.py"), cmd)
         self.assertEqual(cmd[cmd.index("--model") + 1], "flare-3")
@@ -386,3 +386,18 @@ class Eyes(unittest.TestCase):
         self.assertTrue(EP.sees_the_number("4 7 2 9", 4729))
         self.assertFalse(EP.sees_the_number("I can't see any picture.", 4729))
         self.assertGreater(len(EP.number_picture(4729)), 500)
+
+
+class LongMemory(unittest.TestCase):
+    def test_the_long_step_and_its_verdict(self):
+        import argparse
+        import long_check as LC
+        cmd = CH.step_command("long", "solstice-3", argparse.Namespace(llama_bin="llama-server.exe"))
+        self.assertIn(os.path.join("scripts", "long_check.py"), cmd)
+        self.assertEqual(CH.step_command("long", "solstice-3", argparse.Namespace(llama_bin=None))[-1], "llama-server")
+        ok, lines = LC.verdict({32768: {"found": 3, "total": 3}, 131072: {"found": 3, "total": 3, "prefill_s": 41.0}})
+        self.assertTrue(ok)
+        self.assertEqual(lines, ["32K: found 3/3", "128K: found 3/3 (41.0 s to read)"])
+        self.assertFalse(LC.verdict({65536: {"found": 2, "total": 3}})[0])
+        self.assertFalse(LC.verdict({131072: {"error": "out of memory", "found": 0, "total": 3}})[0])
+        self.assertFalse(LC.verdict({})[0])

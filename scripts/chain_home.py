@@ -17,6 +17,8 @@ Steps for each model (each is remembered in logs\\chain_home_state.json, so runn
   think     tuned model on a llama-server: evaluation/thinking_check.py  (you compare it with the base afterwards, see the runbook)
   eyes      scripts/export_projector.py: the base model's picture reader (mmproj.gguf) beside the .gguf, and a check that it reads a number off a picture.
             Passed: the app sends pictures straight to the model. Failed: the file is set aside and the separate picture reader is used, as before.
+  long      scripts/long_check.py: a code hidden deep in 32K, 64K and 128K of text must be found by the trained model (logs\\<model>-long.md, and a phone
+            message). Passed: its window can be 128K in the app. Failed: that model is retrained with some long lessons before it is published.
 
 PAUSE: create an empty file called PAUSE in this folder and the chain waits before its next step (training itself you stop with Ctrl+C: run the same
 command later to resume). The graphics card is shared with the Emvryx app and games: --gaming switches Gaming mode on for the whole run (the app unloads its model and says it is resting; it is switched off again at the end), or --stop-app
@@ -30,7 +32,7 @@ import time
 import urllib.request
 
 MODELS = ("flare-3", "equinox-3", "solstice-3")
-STEPS = ("lessons", "pilot", "train", "merge", "convert", "exam", "identity", "think", "eyes")
+STEPS = ("lessons", "pilot", "train", "merge", "convert", "exam", "identity", "think", "eyes", "long")
 PY = sys.executable
 
 
@@ -63,6 +65,8 @@ def step_command(step, model, a):
         cmd = [PY, os.path.join("scripts", "export_projector.py"), "--model", model]
         cmd += ["--llama-cpp", a.llama_cpp] if a.llama_cpp else []
         return cmd + (["--llama-bin", a.llama_bin] if a.llama_bin else [])
+    if step == "long":                                                            # long memory kept after training: 32K, 64K, 128K (never stops the chain)
+        return [PY, os.path.join("scripts", "long_check.py"), "--model", model, "--llama-bin", a.llama_bin or "llama-server"]    # without --llama-bin: the one on PATH
     raise ValueError(step)
 
 
