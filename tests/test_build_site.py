@@ -20,7 +20,7 @@ class Site(unittest.TestCase):
             return f.read()
 
     def test_five_pages_icon_and_config(self):
-        self.assertEqual(sorted(self.written), ["about.html", "index.html", "models.html", "next.html", "open.html", "plans.html", "scorecard.html", "usage.html", "whatsnew.html"])
+        self.assertEqual(sorted(self.written), ["about.html", "index.html", "models.html", "open.html", "plans.html", "scorecard.html", "usage.html", "whatsnew.html"])
         for name in self.written + ["icon.svg", "vercel.json"]:
             self.assertTrue(os.path.exists(os.path.join(self.out, name)), name)
         json.loads(self.read("vercel.json"))
