@@ -235,6 +235,7 @@ async function acFetch(t) {
     const r = await post('/api/code/complete', {project: t.project, path: t.path, model: C.model, text, cursor}); const j = await r.json().catch(() => ({}));
     $('acStat').textContent = '';
     if (!r.ok) {
+      if (/Slow down/.test(j.message || '')) { if (token === AC.token) AC.timer = setTimeout(() => acFetch(t), 1100); return; }   // asked too soon after the last one: ask again in a moment (unless they typed on)
       if (!/Slow down/.test(j.message || '')) { $('acStat').textContent = (j.message || 'autocomplete paused').slice(0, 60); if (/usage|tank|week|ready|resting|not in your plan/i.test(j.message || '')) { AC.on = false; acPaint(); } }
       return;
     }
