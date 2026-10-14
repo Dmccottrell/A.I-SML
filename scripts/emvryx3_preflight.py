@@ -24,7 +24,7 @@ def check_python(version):
 
 def check_gpu(available, name, vram_gb):
     if not available:
-        return FAIL, "torch cannot see the graphics card", "Install PyTorch with CUDA: https://pytorch.org/get-started (pip install torch --index-url https://download.pytorch.org/whl/cu124)"
+        return FAIL, "torch cannot see the graphics card", "Install PyTorch with CUDA: https://pytorch.org/get-started (pip install torch --index-url https://download.pytorch.org/whl/cu128; if pip finds nothing, use cu130). Uninstall the CPU one first: pip uninstall -y torch"
     if vram_gb < 11:
         return FAIL, f"{name}: only {vram_gb:.1f} GB of graphics memory", "These runs are sized for 12 GB."
     note = "" if "4070" in name or vram_gb >= 11.5 else "Not a 4070, but it has enough memory."
