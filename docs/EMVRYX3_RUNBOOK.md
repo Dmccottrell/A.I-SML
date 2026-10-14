@@ -2,6 +2,17 @@
 
 Everything here runs on the owner's PC (RTX 4070, 12 GB, 32 GB RAM). Nothing is rented. The preparation code was written and tested on Oct 11, 2026 without the real models (the sandbox cannot download them), so **expect the first pilot to find small things to fix**: that is what the pilot is for. Background and choices: [ROADMAP.md](ROADMAP.md) ("Emvryx 3"), [EMVRYX3_PILOT.md](EMVRYX3_PILOT.md).
 
+## Decided: the bases for Flare, Equinox and Solstice 3 (bake-off of Oct 13, 2026, on the RTX 4070)
+The hard sheet (52 questions), 4-bit, after the graphics card was fixed (llama-server had been running on the processor because the CUDA runtime files were missing):
+
+| Slot | Today | Candidate | Decision |
+|---|---|---|---|
+| Flare 3 | Flare 2.5: 23/52, 191 tokens/s | Qwen3.5 2B: **28/52, 207 tokens/s** | Qwen3.5 2B (wins the rule) |
+| Equinox 3 | Equinox 2: 28/52, 98 tokens/s | Qwen3.5 4B: **39/52, 106 tokens/s** | Qwen3.5 4B (wins by 11) |
+| Solstice 3 | Solstice 2: 40/52, 64 tokens/s | Qwen3.5 9B: 40/52, 68 tokens/s | **Qwen3.5 9B, the owner's choice**: a tie on the sheet (so the rule alone keeps Solstice 2), chosen for the same family as Flare and Equinox 3 (one lesson set, one chat format) and slightly faster |
+
+These are the presets `flare-3`, `equinox-3` and `solstice-3` in `core/open_models.py`. Apogee 3 is decided by the rest of the bake-off. The scores are before training; the identity and thinking checks after training make sure tuning does not wear them down.
+
 ## What was prepared (all in the repository, all tested)
 | Piece | What it does |
 |---|---|
