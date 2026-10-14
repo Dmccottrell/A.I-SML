@@ -126,7 +126,7 @@ function startDots(canvas, host = $('auth')) {
   const still = matchMedia('(prefers-reduced-motion: reduce)').matches;
   let w = 0, h = 0, dpr = 1, raf = 0, last = 0, mx = null, my = null, tx = 0, ty = 0, cx = 0, cy = 0, rgb = '245,165,36';
   const GAP = 30;
-  const size = () => { dpr = Math.min(devicePixelRatio || 1, 2); w = innerWidth; h = innerHeight; canvas.width = w * dpr; canvas.height = h * dpr; ctx.setTransform(dpr, 0, 0, dpr, 0, 0); };
+  const size = () => { dpr = Math.min(devicePixelRatio || 1, 1.5); w = innerWidth; h = innerHeight; canvas.width = w * dpr; canvas.height = h * dpr; ctx.setTransform(dpr, 0, 0, dpr, 0, 0); };
   const colour = () => {
     const c = (getComputedStyle(canvas).getPropertyValue('--accent') || '').trim();
     const m = /^#([0-9a-f]{6})$/i.exec(c);
@@ -143,23 +143,33 @@ function startDots(canvas, host = $('auth')) {
     else { tx = mx; ty = my; }
     const k = 1 - Math.exp(-dt / (mx === null ? 400 : 90));
     cx += (tx - cx) * k; cy += (ty - cy) * k;
-    draw();
+    if (Math.abs(cx - drawnX) < .3 && Math.abs(cy - drawnY) < .3) return;     // nothing moved: no need to draw again
+    drawnX = cx; drawnY = cy; draw();
   };
-  const draw = () => {
+  let drawnX = -1, drawnY = -1;
+  const draw = () => {      // the dashes far from the pointer all look the same, so they are one stroke; only the few near it are drawn one by one
     ctx.clearRect(0, 0, w, h);
     const R = Math.max(160, Math.min(w, h) * .4);
-    ctx.lineCap = 'round';
+    ctx.lineCap = 'round'; ctx.beginPath();
     for (let y = GAP / 2; y < h; y += GAP) for (let x = GAP / 2 + ((y / GAP | 0) % 2) * GAP / 2; x < w; x += GAP) {
-      const dx = cx - x, dy = cy - y, d = Math.hypot(dx, dy) || 1, near = Math.max(0, 1 - d / R), a = Math.atan2(dy, dx);
-      const push = near * near * 14, px = x - dx / d * push, py = y - dy / d * push;
-      const len = 5 + near * 10, ux = Math.cos(a) * len / 2, uy = Math.sin(a) * len / 2;
-      ctx.strokeStyle = `rgba(${rgb},${(.18 + near * .8).toFixed(3)})`;
-      ctx.lineWidth = 1.4 + near * 1.4;
-      ctx.beginPath(); ctx.moveTo(px - ux, py - uy); ctx.lineTo(px + ux, py + uy); ctx.stroke();
+      const dx = cx - x, dy = cy - y, d = Math.hypot(dx, dy) || 1;
+      if (d >= R) { ctx.moveTo(x - dx / d * 2.5, y - dy / d * 2.5); ctx.lineTo(x + dx / d * 2.5, y + dy / d * 2.5); }
+    }
+    ctx.strokeStyle = `rgba(${rgb},.18)`; ctx.lineWidth = 1.4; ctx.stroke();
+    for (let y = GAP / 2; y < h; y += GAP) {
+      if (y < cy - R || y > cy + R) continue;
+      for (let x = GAP / 2 + ((y / GAP | 0) % 2) * GAP / 2; x < w; x += GAP) {
+        const dx = cx - x, dy = cy - y, d = Math.hypot(dx, dy) || 1;
+        if (d >= R) continue;
+        const near = 1 - d / R, push = near * near * 14, px = x - dx / d * push, py = y - dy / d * push, half = (5 + near * 10) / 2, ux = dx / d * half, uy = dy / d * half;
+        ctx.strokeStyle = `rgba(${rgb},${(.18 + near * .8).toFixed(3)})`;
+        ctx.lineWidth = 1.4 + near * 1.4;
+        ctx.beginPath(); ctx.moveTo(px - ux, py - uy); ctx.lineTo(px + ux, py + uy); ctx.stroke();
+      }
     }
   };
   const stop = () => { cancelAnimationFrame(raf); removeEventListener('resize', onResize); host.removeEventListener('pointermove', move); host.removeEventListener('touchmove', move); host.removeEventListener('pointerleave', leave); canvas._dotsStop = null; };
-  const onResize = () => { size(); if (still) draw(); };
+  const onResize = () => { size(); drawnX = -1; if (still) draw(); };
   size(); colour(); cx = tx = w / 2; cy = ty = h / 2;
   addEventListener('resize', onResize);
   host.addEventListener('pointermove', move); host.addEventListener('touchmove', move, {passive: true}); host.addEventListener('pointerleave', leave);
