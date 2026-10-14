@@ -6,7 +6,7 @@ emvryx3_pilot.py - Run the pilot (3 training steps) for Flare 3, Equinox 3 and S
     python scripts/emvryx3_pilot.py --from-logs           # no new run: re-read logs\\<model>-pilot.txt and rewrite the report
 
 Writes logs\\<model>-pilot.txt (the full output) and logs\\emvryx3-pilot.md (peak graphics memory, seconds per step, projected hours for a full run,
-and whether it fits). Training itself is never started here. Extra options after -- go to training/finetune_open.py, e.g. -- --batch_tokens 1024.
+and whether it fits). Training itself is never started here. --ntfy TOPIC (or NTFY_TOPIC) sends a phone message as each model starts and finishes. Extra options after -- go to training/finetune_open.py, e.g. -- --batch_tokens 1024.
 """
 import os, sys; sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), os.pardir)); import emvryx_paths  # noqa: E402,F401
 import argparse
@@ -17,6 +17,17 @@ import time
 MODELS = ("flare-3", "equinox-3", "solstice-3")
 FIT_OK_GB, FIT_TIGHT_GB = 10.8, 11.6          # peak memory the pilot saw: under the first is comfortable, under the second is tight, over it will not fit a 12 GB card
 HOME_FACTOR = 1.0                              # the pilot already runs on the real card, so no scaling is needed
+
+
+def phone(topic, msg):
+    """A message to the phone through ntfy.sh (the free notification app), when a topic is set. Never stops the pilot."""
+    if not topic:
+        return
+    import urllib.request
+    try:
+        urllib.request.urlopen(urllib.request.Request(f"https://ntfy.sh/{topic}", msg.encode("utf-8"), headers={"Title": "Emvryx 3"}), timeout=10)
+    except Exception:                                                              # noqa: BLE001
+        pass
 
 
 def parse_pilot(text):
@@ -93,13 +104,16 @@ def main(argv=None):
     ap.add_argument("--from-logs", action="store_true")
     ap.add_argument("--logs", default="logs")
     ap.add_argument("--data", default=os.path.join("data", "v3", "chat.jsonl"))
+    ap.add_argument("--ntfy", default=os.environ.get("NTFY_TOPIC"), help="an ntfy.sh topic: a phone message when each model starts and finishes (or set NTFY_TOPIC)")
     a = ap.parse_args(argv)
+    tell = lambda msg: phone(a.ntfy, msg)
     os.makedirs(a.logs, exist_ok=True)
     results = {}
     for m in a.models:
         path = os.path.join(a.logs, f"{m}-pilot.txt")
         if not a.from_logs:
             print(f"=== {m}: pilot (the first run downloads the model) ===", flush=True)
+            tell(f"Pilot: {m} started (it downloads the model the first time)")
             t0 = time.time()
             cmd = [sys.executable, os.path.join("training", "finetune_open.py"), "--model", m, "--pilot", "--data", a.data] + extra
             proc = subprocess.run(cmd, capture_output=True, text=True)
@@ -111,11 +125,18 @@ def main(argv=None):
             continue
         with open(path, encoding="utf-8", errors="replace") as f:
             results[m] = parse_pilot(f.read())
+        if not a.from_logs:
+            r = results[m]
+            tell(f"Pilot: {m} OK, {r['peak_gb']} GB peak, {r['sec_per_step']} s/step" if r["ok"] else
+                 f"Pilot: {m} FAILED{' (out of memory)' if r['oom'] else ''}: {r['error'][:200]}")
     text = report(results)
     with open(os.path.join(a.logs, "emvryx3-pilot.md"), "w", encoding="utf-8") as f:
         f.write(text)
     print("\n" + text)
-    return 0 if results and all(r["ok"] for r in results.values()) else 1
+    ok = bool(results) and all(r["ok"] for r in results.values())
+    if not a.from_logs:
+        tell("Pilot finished: " + ("all models fit. " if ok else "something needs a look. ") + "Send logs\\emvryx3-pilot.md to Claude.")
+    return 0 if ok else 1
 
 
 if __name__ == "__main__":

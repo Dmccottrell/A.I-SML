@@ -82,6 +82,24 @@ class Pilot(unittest.TestCase):
         self.assertIn("tight", PI.fit_verdict({"ok": True, "oom": False, "peak_gb": 11.2}))
         self.assertEqual(PI.parse_pilot("")["error"], "no output")
 
+    def test_phone_messages_as_each_model_starts_and_finishes(self):
+        import subprocess as SP
+        sent, real_open, real_run = [], PI.__dict__.get("urllib"), SP.run
+        import urllib.request as UR
+        real_urlopen = UR.urlopen
+        UR.urlopen = lambda req, timeout=10: sent.append((req.full_url, req.data.decode()))
+        SP.run = lambda cmd, capture_output=True, text=True: SP.CompletedProcess(cmd, 0, PILOT_OK, "")       # no real training
+        try:
+            with tempfile.TemporaryDirectory() as d, contextlib.redirect_stdout(io.StringIO()):
+                PI.main(["--models", "flare-3", "--logs", d, "--ntfy", "my-topic"])
+        finally:
+            UR.urlopen, SP.run = real_urlopen, real_run
+        self.assertTrue(all(url == "https://ntfy.sh/my-topic" for url, _ in sent))
+        texts = [t for _, t in sent]
+        self.assertIn("started", texts[0])
+        self.assertIn("flare-3 OK, 9.8 GB peak", texts[1])
+        self.assertIn("Pilot finished: all models fit", texts[2])
+
     def test_the_real_presets_are_known(self):
         self.assertIsNotNone(PI.full_run_steps("equinox-3", 6400))
 

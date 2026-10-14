@@ -211,7 +211,10 @@ def main(argv=None):
     ap.add_argument("--restart-app", action="store_true")
     ap.add_argument("--state", default=os.path.join("logs", "chain_home_state.json"))
     ap.add_argument("--dry-run", action="store_true")
+    ap.add_argument("--ntfy", default=None, help="an ntfy.sh topic for the phone messages (instead of setting NTFY_TOPIC)")
     a = ap.parse_args(argv)
+    if a.ntfy:
+        os.environ["NTFY_TOPIC"] = a.ntfy
 
     todo = plan(a.models, a)
     state = load_state(a.state)
