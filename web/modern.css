@@ -7,11 +7,10 @@ body.ml {
   background: var(--bg);
   background-image: radial-gradient(900px 520px at 78% -8%, color-mix(in srgb, var(--accent) 20%, transparent), transparent 70%),
                     radial-gradient(760px 520px at -6% 108%, color-mix(in srgb, var(--accent) 12%, transparent), transparent 72%);
-  background-attachment: fixed;
 }
 /* the sidebar floats */
 body.ml:not(.vx) .app { gap: 0; }
-body.ml:not(.vx) .side { margin: 10px 0 10px 10px; height: calc(100% - 20px); border: 1px solid var(--edge); border-radius: 26px; background: var(--glass); -webkit-backdrop-filter: blur(22px) saturate(1.4); backdrop-filter: blur(22px) saturate(1.4); box-shadow: 0 18px 50px rgba(0, 0, 0, .35); overflow: hidden; }
+body.ml:not(.vx) .side { margin: 10px 0 10px 10px; height: calc(100% - 20px); border: 1px solid var(--edge); border-radius: 26px; background: var(--glass); box-shadow: 0 18px 50px rgba(0, 0, 0, .35); overflow: hidden; }
 body.ml:not(.vx) .brand { font-weight: 700; letter-spacing: -.03em; }
 body.ml:not(.vx) .newchat { border-radius: 16px; min-height: 48px; background: linear-gradient(135deg, color-mix(in srgb, var(--accent) 92%, #fff), var(--accent) 55%, color-mix(in srgb, var(--accent) 80%, #000)); box-shadow: 0 8px 26px -6px var(--halo); transition: transform .18s, box-shadow .18s; }
 body.ml:not(.vx) .newchat:hover { transform: translateY(-1px); box-shadow: 0 12px 30px -6px var(--halo); }
@@ -43,10 +42,10 @@ body.ml:not(.vx) .note { background: var(--glass); border-color: var(--edge); }
 body.ml:not(.vx) .thinking .word { background: linear-gradient(90deg, var(--muted), var(--text), var(--muted)); background-size: 220% 100%; -webkit-background-clip: text; background-clip: text; color: transparent; animation: mlShimmer 1.8s linear infinite, rise .35s ease both; }
 @keyframes mlShimmer { to { background-position: -220% 0; } }
 body.ml:not(.vx) .err { border-radius: 20px; background: color-mix(in srgb, var(--danger) 8%, var(--surface)); }
-body.ml:not(.vx) .down { background: var(--glass); border-color: var(--edge); -webkit-backdrop-filter: blur(12px); backdrop-filter: blur(12px); box-shadow: 0 8px 22px rgba(0, 0, 0, .3); }
+body.ml:not(.vx) .down { background: color-mix(in srgb, var(--surface) 92%, transparent); border-color: var(--edge); box-shadow: 0 8px 22px rgba(0, 0, 0, .3); }
 /* the composer floats and glows when you type */
 body.ml:not(.vx) .composer { padding-top: 8px; }
-body.ml:not(.vx) .composer .card { border-radius: 28px; background: var(--glass); border: 1px solid var(--edge); -webkit-backdrop-filter: blur(22px) saturate(1.4); backdrop-filter: blur(22px) saturate(1.4); box-shadow: 0 16px 44px -18px rgba(0, 0, 0, .6); transition: border-color .25s, box-shadow .25s; padding: 14px 12px 10px 18px; }
+body.ml:not(.vx) .composer .card { border-radius: 28px; background: var(--glass); border: 1px solid var(--edge); -webkit-backdrop-filter: blur(12px); backdrop-filter: blur(12px); box-shadow: 0 16px 44px -18px rgba(0, 0, 0, .6); transition: border-color .25s, box-shadow .25s; padding: 14px 12px 10px 18px; }
 body.ml:not(.vx) .composer .card:focus-within { border-color: var(--accent); box-shadow: 0 0 0 4px var(--soft), 0 20px 54px -16px var(--halo); }
 body.ml:not(.vx) .composer .card textarea { font-size: 16.5px; }
 body.ml:not(.vx) .pill { border-radius: 999px; background: color-mix(in srgb, var(--surface2) 60%, transparent); border-color: transparent; transition: background .15s; }
@@ -56,7 +55,7 @@ body.ml:not(.vx) .send { border-radius: 999px; background: linear-gradient(135de
 body.ml:not(.vx) .send:not([disabled]):hover { transform: scale(1.06); }
 body.ml:not(.vx) .send[disabled] { box-shadow: none; background: var(--surface2); color: var(--muted); opacity: .8; }
 body.ml:not(.vx) .send.stop { background: var(--surface2); }
-body.ml:not(.vx) .menu, body.ml:not(.vx) .regen, body.ml:not(.vx) .acctmenu { border-radius: 24px; background: color-mix(in srgb, var(--surface) 82%, transparent); -webkit-backdrop-filter: blur(24px) saturate(1.4); backdrop-filter: blur(24px) saturate(1.4); border-color: var(--edge); box-shadow: 0 24px 60px -12px rgba(0, 0, 0, .55); }
+body.ml:not(.vx) .menu, body.ml:not(.vx) .regen, body.ml:not(.vx) .acctmenu { border-radius: 24px; background: color-mix(in srgb, var(--surface) 82%, transparent); -webkit-backdrop-filter: blur(14px); backdrop-filter: blur(14px); border-color: var(--edge); box-shadow: 0 24px 60px -12px rgba(0, 0, 0, .55); }
 body.ml:not(.vx) .opt { border-radius: 16px; border-color: transparent; background: color-mix(in srgb, var(--surface2) 45%, transparent); transition: background .15s, border-color .15s; }
 body.ml:not(.vx) .opt:hover:not([disabled]) { background: var(--soft); } body.ml:not(.vx) .opt.sel { border-color: var(--accent); background: var(--soft); }
 body.ml:not(.vx) .usage .bar { height: 4px; background: color-mix(in srgb, var(--surface2) 80%, transparent); }
@@ -86,7 +85,7 @@ body.ml .auth .hero .mark { letter-spacing: -.02em; }
 body.ml .auth .hero h1 { font-size: clamp(34px, 4.4vw, 54px); font-weight: 700; letter-spacing: -.04em; line-height: 1.06; background: linear-gradient(180deg, var(--text), color-mix(in srgb, var(--text) 60%, var(--accent))); -webkit-background-clip: text; background-clip: text; color: transparent; }
 body.ml .auth .hero h1 em { background: linear-gradient(120deg, var(--accenttext), color-mix(in srgb, var(--accent) 55%, #fff)); -webkit-background-clip: text; background-clip: text; color: transparent; }
 body.ml .auth .hero li i { border-radius: 14px; background: var(--glass); border-color: var(--edge); box-shadow: 0 8px 22px -12px var(--halo); }
-body.ml .auth .card { border-radius: 30px; padding: 26px 24px; border: 1px solid var(--edge); background: var(--glass); -webkit-backdrop-filter: blur(26px) saturate(1.5); backdrop-filter: blur(26px) saturate(1.5); box-shadow: 0 30px 80px -20px rgba(0, 0, 0, .65), 0 0 0 1px color-mix(in srgb, var(--accent) 6%, transparent); }
+body.ml .auth .card { border-radius: 30px; padding: 26px 24px; border: 1px solid var(--edge); background: color-mix(in srgb, var(--surface) 90%, transparent); box-shadow: 0 30px 80px -20px rgba(0, 0, 0, .65), 0 0 0 1px color-mix(in srgb, var(--accent) 6%, transparent); }
 body.ml .auth .card h2 { font-size: 28px; font-weight: 700; letter-spacing: -.03em; }
 body.ml .auth .tabs2 { background: color-mix(in srgb, var(--surface2) 55%, transparent); border-color: transparent; }
 body.ml .auth .tabs2 button { transition: background .2s, color .2s; }
@@ -99,7 +98,7 @@ body.ml .btn.ghost { border-radius: 16px; border-color: var(--edge); background:
 body.ml .authnote { border-radius: 16px; background: var(--glass); border-color: var(--edge); }
 /* ---- Settings */
 body.ml .sx { background: var(--bg); background-image: radial-gradient(900px 520px at 80% -10%, color-mix(in srgb, var(--accent) 16%, transparent), transparent 70%); }
-body.ml .sx-nav { margin: 10px 0 10px 10px; height: calc(100% - 20px); border: 1px solid var(--edge); border-radius: 26px; background: var(--glass); -webkit-backdrop-filter: blur(22px) saturate(1.4); backdrop-filter: blur(22px) saturate(1.4); overflow: hidden; box-shadow: 0 18px 50px rgba(0, 0, 0, .35); }
+body.ml .sx-nav { margin: 10px 0 10px 10px; height: calc(100% - 20px); border: 1px solid var(--edge); border-radius: 26px; background: var(--glass); overflow: hidden; box-shadow: 0 18px 50px rgba(0, 0, 0, .35); }
 body.ml .sx-head h2, body.ml .sx-body h1 { font-weight: 700; letter-spacing: -.03em; }
 body.ml .sx-search input { border-radius: 14px; background: color-mix(in srgb, var(--surface2) 55%, transparent); border-color: transparent; transition: border-color .2s, box-shadow .2s; }
 body.ml .sx-search input:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 4px var(--soft); }
@@ -108,7 +107,7 @@ body.ml .sx-item:hover { background: color-mix(in srgb, var(--surface2) 60%, tra
 body.ml .sx-item.on { background: linear-gradient(90deg, var(--soft), transparent 92%), color-mix(in srgb, var(--surface2) 70%, transparent); box-shadow: inset 2px 0 0 var(--accent); }
 body.ml .sx-item.on svg { color: var(--accenttext); }
 body.ml .sx-sec { letter-spacing: .14em; font-size: 11px; }
-body.ml .sx-card { border-radius: 22px; background: var(--glass); border-color: var(--edge); -webkit-backdrop-filter: blur(16px); backdrop-filter: blur(16px); box-shadow: 0 14px 40px -24px rgba(0, 0, 0, .6); }
+body.ml .sx-card { border-radius: 22px; background: var(--glass); border-color: var(--edge); box-shadow: 0 14px 40px -24px rgba(0, 0, 0, .6); }
 body.ml .srow, body.ml .check, body.ml .logline { border-color: color-mix(in srgb, var(--line) 70%, transparent); }
 body.ml .sbtn { background: color-mix(in srgb, var(--surface2) 55%, transparent); border-color: transparent; transition: background .15s, border-color .15s; }
 body.ml .sbtn:hover { background: var(--soft); border-color: var(--accent); }
@@ -120,3 +119,5 @@ body.ml .stat b { background: linear-gradient(180deg, var(--text), color-mix(in 
 body.ml .pill { background: color-mix(in srgb, var(--surface2) 60%, transparent); }
 body.ml .sx .seg { border-radius: 999px; }
 @media (max-width: 760px) { body.ml .sx-nav { margin: 0; height: 100%; border-radius: 0; border-left: 0; border-right: 0; } }
+/* Smooth on phones: no live blur behind the message box (it would be redrawn on every scroll frame), a nearly solid box instead */
+@media (hover: none), (pointer: coarse) { body.ml:not(.vx) .composer .card { -webkit-backdrop-filter: none; backdrop-filter: none; background: color-mix(in srgb, var(--surface) 94%, transparent); } }

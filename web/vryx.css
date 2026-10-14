@@ -18,7 +18,7 @@
 .code.home .vx-dots { opacity: 1; }
 
 /* ---- top bar */
-.code .top2 { height: 58px; padding: 0 12px 0 6px; gap: 6px; background: color-mix(in srgb, var(--bg) 62%, transparent); -webkit-backdrop-filter: blur(16px); backdrop-filter: blur(16px); border-bottom: 1px solid color-mix(in srgb, var(--line) 80%, transparent); position: relative; z-index: 3; }
+.code .top2 { height: 58px; padding: 0 12px 0 6px; gap: 6px; background: color-mix(in srgb, var(--bg) 62%, transparent); border-bottom: 1px solid color-mix(in srgb, var(--line) 80%, transparent); position: relative; z-index: 3; }
 .code .top2 .title { font: 700 18px 'Sora', sans-serif; letter-spacing: -.01em; background: linear-gradient(90deg, var(--text) 30%, var(--accenttext)); -webkit-background-clip: text; background-clip: text; color: transparent; }
 .code .chip { border-radius: 999px; border: 1px solid var(--line); background: var(--vx-glass); color: var(--text); transition: border-color .18s, background .18s, transform .18s, box-shadow .18s; }
 .code .chip:hover:not(:disabled) { border-color: var(--vx-edge); background: var(--vx-soft); }
@@ -35,7 +35,7 @@
 .code .vx-hero h1 { margin: 0; font: 700 clamp(30px, 5vw, 46px)/1.08 'Sora', sans-serif; letter-spacing: -.03em; }
 .code .vx-hero h1 em { font-style: normal; background: linear-gradient(95deg, #C4B5FD, #8B5CF6 45%, #6D5CFF); -webkit-background-clip: text; background-clip: text; color: transparent; }
 .code .vx-hero p { margin: 0; color: var(--muted); font-size: 17px; max-width: 540px; }
-.code .vx-quick { position: relative; display: flex; gap: 10px; align-items: flex-end; padding: 12px 12px 12px 18px; border-radius: 22px; border: 1px solid var(--vx-edge); background: var(--vx-glass); -webkit-backdrop-filter: blur(14px); backdrop-filter: blur(14px); box-shadow: 0 18px 60px rgba(124, 92, 255, .14), inset 0 1px 0 rgba(255, 255, 255, .04); transition: box-shadow .25s, border-color .25s; }
+.code .vx-quick { position: relative; display: flex; gap: 10px; align-items: flex-end; padding: 12px 12px 12px 18px; border-radius: 22px; border: 1px solid var(--vx-edge); background: color-mix(in srgb, var(--surface) 90%, transparent); box-shadow: 0 18px 60px rgba(124, 92, 255, .14), inset 0 1px 0 rgba(255, 255, 255, .04); transition: box-shadow .25s, border-color .25s; }
 .code .vx-quick:focus-within { border-color: var(--accent); box-shadow: 0 0 0 4px rgba(139, 92, 246, .16), 0 22px 70px rgba(124, 92, 255, .22); }
 .code .vx-quick textarea { flex: 1; min-width: 0; min-height: 52px; max-height: 160px; resize: none; background: transparent; border: 0; outline: 0; color: var(--text); font: 16px/1.5 'DM Sans', system-ui, sans-serif; padding: 6px 0; }
 .code .vx-quick textarea::placeholder { color: var(--muted); }
@@ -53,7 +53,7 @@
 .code .envs .dot.on { background: var(--vx-ok); box-shadow: 0 0 8px var(--vx-ok); }
 
 .code .slist { gap: 12px; }
-.code .scard { position: relative; border-radius: 20px; background: var(--vx-glass); -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px); border: 1px solid var(--line); transition: transform .2s, border-color .2s, box-shadow .2s; overflow: hidden; }
+.code .scard { position: relative; border-radius: 20px; background: color-mix(in srgb, var(--surface) 88%, transparent); border: 1px solid var(--line); transition: transform .2s, border-color .2s, box-shadow .2s; overflow: hidden; }
 .code .scard::before { content: ""; position: absolute; left: 0; top: 14px; bottom: 14px; width: 3px; border-radius: 0 3px 3px 0; background: var(--line); transition: background .2s; }
 .code .scard:hover { transform: translateY(-2px); border-color: var(--vx-edge); box-shadow: 0 14px 40px rgba(124, 92, 255, .14); }
 .code .scard:hover::before { background: var(--vx-grad); }
@@ -133,7 +133,7 @@ body.vx #dialogs input:focus { outline: 2px solid var(--accent); outline-offset:
 /* ---- the Editor layout: floating panels with room between them, like an IDE built for this */
 @media (min-width: 1100px) {
   .code.ide .main2 { gap: 10px; padding: 8px 10px 10px; }
-  .code.ide .ide-tree, .code.ide .ide-ed, .code.ide .col, .code.ide .pv { border: 1px solid var(--line); border-radius: 18px; background: var(--vx-glass); -webkit-backdrop-filter: blur(14px); backdrop-filter: blur(14px); overflow: hidden; box-shadow: 0 10px 40px rgba(0, 0, 0, .22); }
+  .code.ide .ide-tree, .code.ide .ide-ed, .code.ide .col, .code.ide .pv { border: 1px solid var(--line); border-radius: 18px; background: var(--vx-glass); overflow: hidden; box-shadow: 0 10px 40px rgba(0, 0, 0, .22); }
   .code.ide .ide-ed { background: color-mix(in srgb, var(--bg) 70%, var(--surface)); }
   .code.ide .col { border-left: 1px solid var(--line); }
 }

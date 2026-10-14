@@ -72,6 +72,7 @@ svg .core { fill: var(--core); stroke: var(--sun); stroke-width: 3; transition: 
 .scroll { flex: 1; overflow-y: auto; scroll-behavior: auto; padding: 24px 16px 8px; }
 .thread { max-width: 760px; margin: 0 auto; min-height: 100%; display: flex; flex-direction: column; justify-content: flex-end; gap: 22px; }
 .msg { display: flex; flex-direction: column; gap: 6px; animation: rise .35s ease both; }
+.msg:not(:nth-last-child(-n+2)) { animation: none; }   /* only the newest messages slide in: a long chat does not replay every message each time it is drawn */
 .msg.user { align-self: flex-end; max-width: 80%; }
 .msg.user .bubble { background: var(--surface2); border-radius: 18px 18px 4px 18px; padding: 12px 16px; }
 .msg.ai { align-self: flex-start; max-width: 94%; }
@@ -386,7 +387,7 @@ svg .core { fill: var(--core); stroke: var(--sun); stroke-width: 3; transition: 
 .auth .hero li span { color: var(--muted); font-size: 15px; display: block; }
 .auth .hero li b { display: block; font-weight: 600; }
 .auth .panel { display: grid; place-items: center; padding: 32px 20px; }
-.auth .card { width: min(420px, 100%); display: flex; flex-direction: column; gap: 16px; padding: 18px; border-radius: 22px; border: 1px solid var(--line); background: color-mix(in srgb, var(--bg) 72%, transparent); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); }
+.auth .card { width: min(420px, 100%); display: flex; flex-direction: column; gap: 16px; padding: 18px; border-radius: 22px; border: 1px solid var(--line); background: color-mix(in srgb, var(--bg) 90%, transparent); }
 .auth .card .mark { display: none; align-items: center; gap: 10px; font: 700 22px 'Sora', sans-serif; }
 .auth .card h2 { margin: 0; font: 600 26px 'Sora', sans-serif; }
 .auth .card .sub { margin: -8px 0 0; color: var(--muted); }
