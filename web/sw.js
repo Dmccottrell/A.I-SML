@@ -1,5 +1,5 @@
 // Emvryx service worker: keeps the page shell so the app opens instantly and can be installed. It never caches the API.
-const SHELL = 'emvryx-shell-v27';
+const SHELL = 'emvryx-shell-v28';
 self.addEventListener('install', (e) => {
   e.waitUntil(caches.open(SHELL).then((c) => c.addAll(['/', '/editor.js', '/vryx.css', '/modern.css', '/js/core.js', '/js/tour.js', '/js/chat.js', '/js/documents.js', '/js/qr.js', '/js/settings.js', '/js/admin.js', '/js/send.js', '/js/code.js', '/js/ide.js', '/js/preview.js', '/js/auth.js', '/js/boot.js', '/icon.svg', '/icon-192.png', '/manifest.webmanifest'])).then(() => self.skipWaiting()));
 });

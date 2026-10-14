@@ -19,7 +19,7 @@ AUDIENCE_NAMES = {"off": "Off", "owner": "Owner", "admins": "Admins", "everyone"
 # id, what the owner sees, what it does, and where it starts. New features start with the owner and the admins.
 FLAGS = [
     {"id": "welcome_tour", "title": "Welcome tour", "desc": "The animated introduction and walk-through people see the first time they sign in (and can replay in Settings).", "default": "admins"},
-    {"id": "violet_theme", "title": "Violet look", "desc": "Emvryx's own colour (sign-in screen, logo, buttons before a model is chosen) in electric violet instead of amber. Each model keeps its own colour.", "default": "admins"},
+    {"id": "violet_theme", "title": "Violet look", "desc": "The whole chat app and the sign-in screen in electric violet instead of amber: buttons, the message box, glows and the Emvryx logo. Each model's logo keeps its own colour.", "default": "admins"},
     {"id": "modern_look", "title": "Modern look", "desc": "A newer look for the main chat: a floating glass sidebar and composer, the model speaking straight on the page, soft glow in the model's own colour, and ideas to try on the empty chat. Switch it off to go back.", "default": "admins"},
     {"id": "vryxcode_update", "title": "VryxCode update", "desc": "The new VryxCode look: electric violet, the \"What should we build?\" home with starter templates and the phone-notification box, glass panels and the floating editor. Switch it off to get the earlier VryxCode look back. (The new tools, like keep or undo per file, search and second opinions, stay available.)", "default": "admins"},
 ]

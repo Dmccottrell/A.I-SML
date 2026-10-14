@@ -45,6 +45,10 @@ class SignInDots(Base):
                     self.state.flags.set_audience("violet_theme", audience)
                     page.goto(f"http://127.0.0.1:{self.port}/")
                     eventually(lambda: self.assertEqual(page.evaluate("violetOn()"), want, audience))
+                    accent = lambda: page.evaluate("getComputedStyle(document.documentElement).getPropertyValue('--accent').trim().toUpperCase()")
+                    eventually(lambda: self.assertEqual(accent() in ("#8B5CF6", "#7C3AED"), want, audience))      # the chat itself, with a model chosen
+                    page.evaluate("S.state = null; applyTheme()")                                             # signed out: the sign-in screen remembers the look
+                    self.assertEqual(accent() in ("#8B5CF6", "#7C3AED"), want, audience)
             finally:
                 b.close()
 

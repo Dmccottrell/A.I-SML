@@ -25,7 +25,9 @@ const MODEL = {
 };
 // The violet look (a feature flag, "violet_theme": Admin > Previews). Only Emvryx's own colour changes; each model keeps its own.
 const VIOLET = {dark: {accent:'#8B5CF6', onaccent:'#FFFFFF', accenttext:'#A78BFA', sun:'#8B5CF6', core:'#C4B5FD', glow:'rgba(139,92,246,.14)'}, light: {accent:'#7C3AED', onaccent:'#FFFFFF', accenttext:'#6D28D9', sun:'#7C3AED', core:'#8B5CF6', glow:'rgba(124,58,237,.12)'}};
-const violetOn = () => !!(S.state && S.state.features && S.state.features.violet_theme);
+const lookMemory = () => { try { return JSON.parse(localStorage.getItem('emvryx_looks') || '{}'); } catch (e) { return {}; } };
+// Before sign-in nothing is known about the person: the sign-in screen uses what this device remembered from last time.
+const violetOn = () => S.state ? !!(S.state.features && S.state.features.violet_theme) : !!lookMemory().vi;
 const BASE = {
   dark:  {bg:'#07080D', side:'#0A0B11', surface:'#0F1119', surface2:'#161926', line:'#232739', text:'#EEF0F6', muted:'#9AA3BC'},
   light: {bg:'#F7F8FC', side:'#EEF0F7', surface:'#FFFFFF', surface2:'#EEF0F7', line:'#D8DCEA', text:'#0D0F1A', muted:'#4A526B'}
@@ -100,13 +102,15 @@ function applyTheme() {
   applySize();
   const mode = S.theme === 'auto' ? (matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark') : S.theme;
   document.documentElement.dataset.mode = mode;
-  const m = curModel(), p = Object.assign({}, BASE[mode], (!m && violetOn() ? VIOLET : (MODEL[m ? m.name : 'Emvryx'] || MODEL.Flare))[mode]);
+  const m = curModel(), vi = violetOn(), own = (MODEL[m ? m.name : 'Emvryx'] || MODEL.Flare)[mode], v = VIOLET[mode];
+  // The violet look colours the whole app (buttons, the box, glows) violet; a chosen model keeps only its own logo colour (sun, core).
+  const p = Object.assign({}, BASE[mode], vi ? (m ? Object.assign({}, own, {accent: v.accent, onaccent: v.onaccent, accenttext: v.accenttext, glow: v.glow}) : v) : own);
   for (const k in p) document.documentElement.style.setProperty('--' + k, p[k]);
   document.querySelector('meta[name=theme-color]').content = p.bg;
   const on = (id) => !!(S.state && S.state.features && S.state.features[id]);
   if (!S.state) return;                                  // before sign-in nothing is known: keep what this device remembered
   applyLooks(on('modern_look'), on('vryxcode_update'));
-  try { localStorage.setItem('emvryx_looks', JSON.stringify({ml: on('modern_look'), vxn: on('vryxcode_update')})); } catch (e) { /* the sign-in screen then shows the plain look first */ }
+  try { localStorage.setItem('emvryx_looks', JSON.stringify({ml: on('modern_look'), vxn: on('vryxcode_update'), vi: on('violet_theme')})); } catch (e) { /* the sign-in screen then shows the plain look first */ }
 }
 // two looks behind feature flags: their stylesheets are only loaded (and their classes only set) while the flag is on for this person, so off means exactly the earlier look.
 // The last answer is remembered on this device so the sign-in screen (shown before anyone is known) already wears the look.
