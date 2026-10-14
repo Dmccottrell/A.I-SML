@@ -144,6 +144,28 @@ class CodeTests(Base):
         self.assertEqual(self.owner.call("POST", "/api/code/projects/delete", {"project": "demo"})[0], 200)
         self.assertNotIn("demo", self.owner.call("GET", "/api/code")[1]["projects"])
 
+    def test_delete_project_with_read_only_files(self):
+        import stat, tempfile
+        import code_sessions
+        folder = os.path.join(tempfile.mkdtemp(), "imported")
+        os.makedirs(os.path.join(folder, ".git", "objects"))
+        locked = os.path.join(folder, ".git", "objects", "pack.idx")
+        with open(locked, "w") as f:
+            f.write("x")
+        os.chmod(locked, stat.S_IREAD)                                      # what a git checkout leaves behind on Windows
+        self.assertTrue(code_sessions.remove_tree(folder))
+        self.assertFalse(os.path.exists(folder))
+
+    def test_a_session_in_another_project_does_not_block_delete(self):
+        import code_sessions
+        os.makedirs(self.state.code.project_path("owner", "old-one"), exist_ok=True)
+        busy = type("S", (), {"project": "demo"})()
+        self.state.code.running = lambda user: busy
+        self.state.code.delete_project("owner", "old-one")
+        self.assertFalse(os.path.isdir(self.state.code.project_path("owner", "old-one")))
+        with self.assertRaises(code_sessions.CodeError):
+            self.state.code.delete_project("owner", "demo")
+
     def test_needs_a_key(self):
         self.assertEqual(Client(self.port).call("GET", "/api/code")[0], 401)
 

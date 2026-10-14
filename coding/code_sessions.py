@@ -41,6 +41,28 @@ MAX_QUEUED = 5                                             # sessions that may w
 SKIP_DIRS = {".git", "__pycache__", "node_modules", ".emvryx"}
 
 
+def remove_tree(path, tries=3):
+    """Delete a folder and everything in it. True when it is gone. On Windows, files a git checkout made read-only (.git/objects) stop a plain
+    rmtree, so they are made writable and tried again; a file another program has open is retried after a short wait."""
+    import stat
+
+    def unlock(func, p, *_):
+        try:
+            os.chmod(p, stat.S_IWRITE | stat.S_IREAD)
+            func(p)
+        except OSError:
+            pass
+    for n in range(tries):
+        if sys.version_info >= (3, 12):
+            shutil.rmtree(path, onexc=unlock)
+        else:
+            shutil.rmtree(path, onerror=unlock)
+        if not os.path.exists(path):
+            return True
+        time.sleep(0.3 * (n + 1))
+    return False
+
+
 class CodeError(Exception):
     def __init__(self, message, action=""):
         super().__init__(message)
@@ -745,12 +767,13 @@ class CodeManager:
         return {"project": into, "backup": backup}
 
     def delete_project(self, user, project):
-        import shutil
-        if self.running(user):
-            raise CodeError("A session is running.", "Stop it first.")
+        busy = self.running(user)
+        if busy and busy.project == project:
+            raise CodeError("A session is working in this project.", "Stop it first, then delete the project.")
         path = self.project_path(user, project)
-        if os.path.isdir(path):
-            shutil.rmtree(path)
+        if os.path.isdir(path) and not remove_tree(path):
+            raise CodeError("Some files in this project could not be deleted because something is still using them.",
+                            "Close anything that has the project open (an editor, a terminal or the preview) and try again.")
 
     # ---- sessions
     def running(self, user):
