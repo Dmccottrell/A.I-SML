@@ -2,6 +2,7 @@
 chat_turn.py - One chat turn: look things up, build the prompt, run the model and stream the answer (start_turn), and the model safety-check helper.
 """
 import os, sys; sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), os.pardir)); import emvryx_paths  # noqa: E402,F401  (the code folders become importable)
+import base64
 import queue
 import threading
 import time
@@ -133,15 +134,23 @@ def start_turn(state, who, chat_id, text, model_id, effort, regenerate=False, re
                 if past:
                     mem_note = (mem_note + "\n\n" + past) if mem_note else past
             doc_notes = []
+            seen_pictures = []                                                     # base64 pictures for a model that can see (state.sees)
             pictures = {"looked": 0, "read": 0}
             if attached:                                                           # the question is about the documents: no Wikipedia or web notes to distract
                 asked_doc = text or next((m["content"] for m in reversed(store.messages(chat_id)) if m["role"] == "user"), "")
                 described, picture_notes = set(), []
                 helper = state.vision if (state.vision and state.vision.available()) else None
+                own_eyes = state.sees(model)                                       # an Emvryx 3 model looks at the picture itself
                 for d in attached:
                     if d["kind"] not in documents.IMAGE_KINDS:
                         continue
                     pictures["read"] += 1
+                    if own_eyes and (d["id"] not in sent_before or not text):        # new pictures (all of them on Regenerate) go to the model as they are
+                        img = library.image(d["id"])
+                        if img:
+                            seen_pictures.append(base64.b64encode(img[0]).decode("ascii"))
+                            described.add(d["id"]); pictures["looked"] += 1
+                            continue
                     img = library.image(d["id"]) if helper else None
                     if not img:
                         continue
@@ -210,7 +219,7 @@ def start_turn(state, who, chat_id, text, model_id, effort, regenerate=False, re
                 t = regen_modes.sampling_for(backend.sampling.get("temperature", 0.8), mode)
                 backend.sampling = dict(backend.sampling, temperature=round(min(bounds[1], max(bounds[0], t)), 2))   # never outside the model's safe range
             prior_reply = next((m["content"] for m in reversed(store.messages(chat_id)) if m["role"] == "assistant"), "")      # to notice a reply that is only a copy of this one
-            r = E.run_turn(tok, store, chat_id, backend, counted_model, window, max_new, user_text=text, stop=stop, notes=notes or None,
+            r = E.run_turn(tok, store, chat_id, backend, counted_model, window, max_new, pictures=seen_pictures or None, user_text=text, stop=stop, notes=notes or None,
                            user_docs=[d["id"] for d in attached if d["id"] not in sent_before] if text else None,
                            limiter=state.limiter, user=who["user"], effort=effort, clock=state.clock, pacer=pacer, think=think,
                            style_hint="\n\n".join(h for h in (skill_hint, regen_modes.get(mode)["hint"] if regenerate else "",
@@ -224,7 +233,7 @@ def start_turn(state, who, chat_id, text, model_id, effort, regenerate=False, re
                 if hasattr(backend, "sampling"):
                     backend.sampling = dict(backend.sampling, temperature=round(min(1.0, backend.sampling.get("temperature", 0.8) + 0.2), 2),
                                             repeat_penalty=max(1.3, backend.sampling.get("repeat_penalty", 1.15)))
-                r = E.run_turn(tok, store, chat_id, backend, counted_model, window, max_new, user_text=None, stop=stop, notes=notes or None,
+                r = E.run_turn(tok, store, chat_id, backend, counted_model, window, max_new, pictures=seen_pictures or None, user_text=None, stop=stop, notes=notes or None,
                                limiter=state.limiter, user=who["user"], effort=effort, clock=state.clock, pacer=pacer, think=think,
                                style_hint="\n\n".join(h for h in (skill_hint, chat_polish.repeat_hint(text)) if h))
             web_mode_now = state.get_settings(who["user"])["web_search"]
@@ -245,7 +254,7 @@ def start_turn(state, who, chat_id, text, model_id, effort, regenerate=False, re
                     msgs = [m for m in store.messages(chat_id) if m["status"] != "compacted"]
                     if msgs and msgs[-1]["role"] == "assistant":
                         store.remove_message(chat_id, msgs[-1]["id"])
-                    r = E.run_turn(tok, store, chat_id, backend, counted_model, window, max_new, user_text=None, stop=stop, notes=([mem_note] if mem_note else []) + list(notes2 or []),
+                    r = E.run_turn(tok, store, chat_id, backend, counted_model, window, max_new, pictures=seen_pictures or None, user_text=None, stop=stop, notes=([mem_note] if mem_note else []) + list(notes2 or []),
                                    limiter=state.limiter, user=who["user"], effort=effort, clock=state.clock, pacer=pacer, think=think, style_hint=skill_hint)
                     found = found2
             if found and found["asked"] and text:

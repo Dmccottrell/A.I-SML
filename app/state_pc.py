@@ -292,6 +292,11 @@ class StatePC:
         self.tokens[model["id"]] = tok
         return tok
 
+    def sees(self, model):
+        """True when this model looks at pictures itself (an Emvryx 3 model with its mmproj file): the picture then goes straight to it, not through the
+        separate picture reader that turns it into words first."""
+        return model["id"] in self.seeing or bool(self.runner and self.runner.sees(model["id"]))
+
     def backend_for(self, model, question, ctx=1024):
         if self.backend_factory:
             return self.backend_factory(model, question)

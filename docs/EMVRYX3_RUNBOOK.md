@@ -121,6 +121,8 @@ Add the model to `models.json` with `"status": "preview"` and `"think": "empty"`
 4. **Preference training (DPO)** from your reported answers: needs a corrected "better answer" for each report, not only the bad one.
 5. ~~Idle unload and Gaming mode~~ (built Oct 12, 2026: Admin > PC; the chain's `--gaming` switches it on for the run).
 6. **Voice** (decided in the style guide, not yet written) and the Emvryx style pass over the lessons.
+7. ~~Pictures the model sees itself~~ (built Oct 14, 2026: the chain's **eyes** step puts the base's picture reader, `mmproj.gguf`, beside each Emvryx 3
+   model and checks it reads a number off a picture; the app then sends pictures straight to the model. See docs/VISION.md.)
 
 ## If something goes wrong
 - *The bake-off shows 1.3 to 1.6 GB of memory and 3 to 12 words a second for every model:* llama-server is not using the graphics card. Run `llama-server.exe --list-devices`: it must list the RTX 4070. If not, unzip the matching `cudart-llama-bin-win-cuda-12.4-x64.zip` from the llama.cpp releases into the same folder (or use the newest CUDA build), and look in `logs\\bakeoff\\<model>-8192-server.log` for the line with "offloaded" (it must say all layers).

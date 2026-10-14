@@ -107,6 +107,7 @@ class AppState(StateAccounts, StateSettings, StateApps, StatePC, StateCode, Stat
         self.web_fn = None                                     # web(question, k) -> notes; None = this server never searches the web
         self._warm_target, self._warm_thread, self._warm_lock = None, None, threading.Lock()
         self.vision = None                                     # vision.VisionHelper: describes pictures for the models (None = only the words in a picture are read)
+        self.seeing = set()                                    # model ids that look at pictures themselves without a runner (tests, a remote server with --mmproj)
         self._demo_tok = None
         self.usage = U.UsageStore(os.path.join(data_dir, "usage.db") if data_dir else ":memory:")
         self.limiter = U.Limiter(self.usage, self.cfg, self.manifest)
