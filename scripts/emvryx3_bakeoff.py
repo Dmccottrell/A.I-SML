@@ -342,7 +342,7 @@ def main(argv=None):
             res = run_candidate(a.llama_bin, cand, tests, ctxs, needle=a.needle)
             with open(os.path.join(outdir, cand["name"] + ".json"), "w", encoding="utf-8") as f:
                 json.dump(res, f, indent=1)
-            print("   ", res.get("error") or f"{res['passed']}/{res['total']}, {res['speed']} words/sec", flush=True)
+            print("   ", res.get("error") or f"{res['passed']}/{res['total']}, {res['speed']} tokens/sec", flush=True)
     results = []
     for p in sorted(glob.glob(os.path.join(outdir, "*.json"))):
         with open(p, encoding="utf-8") as f:
