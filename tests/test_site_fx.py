@@ -63,7 +63,7 @@ class SiteFx(unittest.TestCase):
             b = p.chromium.launch(executable_path=find_browser())
             try:
                 page = b.new_context(viewport={"width": 1400, "height": 800}).new_page()
-                for name in ("next.html", "scorecard.html", "whatsnew.html"):
+                for name in ("about.html", "scorecard.html", "whatsnew.html"):
                     page.goto(f"http://127.0.0.1:{self.port}/{name}")
                     page.wait_for_selector("canvas.fx-dots", state="attached")
                     page.evaluate("window.scrollTo(0, document.documentElement.scrollHeight)")

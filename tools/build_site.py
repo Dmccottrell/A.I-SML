@@ -77,7 +77,7 @@ STATUS_JS = """<script>
 
 
 NAV_MAIN = [("models.html", "Models"), ("plans.html", "Plans"), ("usage.html", "How usage works"), ("about.html", "About")]
-NAV_MORE = [("whatsnew.html", "What&rsquo;s new"), ("scorecard.html", "Scorecard"), ("next.html", "What&rsquo;s next")]
+NAV_MORE = [("whatsnew.html", "What&rsquo;s new"), ("scorecard.html", "Scorecard")]
 NAV_CSS = (".nav{max-width:1200px;margin:0 auto;padding:18px 24px;display:flex;flex-wrap:wrap;align-items:center;gap:14px 20px;position:relative}"
            ".nav .brand{display:flex;align-items:center;gap:10px;margin-right:auto}.nav .brand span{font-family:'Sora',sans-serif;font-weight:600;font-size:24px;letter-spacing:-0.02em}"
            ".nav .links{display:flex;align-items:center;gap:6px;font-size:16px;font-weight:500}.nav .links>a,.nav summary{padding:8px 12px;border-radius:999px;cursor:pointer;list-style:none;color:var(--text)}"
@@ -224,7 +224,7 @@ def extra_page(title, body, active="", description=DESCRIPTION, extra_head="", e
         return f'<a href="{href}"' + (' style="color: var(--accenttext); border-bottom: 2px solid var(--accent); padding-bottom: 2px"' if href == active else "") + f">{label}</a>"
     nav = nav_html(active)
     foot = (f'<div class="foot"><div><span>&copy; Emvryx.AI {YEAR}. Private by design.</span><span><a href="models.html">Models</a> &middot; <a href="plans.html">Plans</a> &middot; <a href="usage.html">How usage works</a> '
-            f'&middot; <a href="about.html">About</a> &middot; <a href="whatsnew.html">What&rsquo;s new</a> &middot; <a href="scorecard.html">Scorecard</a> &middot; <a href="next.html">What&rsquo;s next</a></span></div></div>')
+            f'&middot; <a href="about.html">About</a> &middot; <a href="whatsnew.html">What&rsquo;s new</a> &middot; <a href="scorecard.html">Scorecard</a></span></div></div>')
     return (f'<!doctype html>\n<html lang="en" data-theme="dark">\n<head>\n<meta charset="utf-8">\n<meta name="viewport" content="width=device-width, initial-scale=1">\n<title>{title} - Emvryx</title>\n'
             f'<link rel="icon" href="/icon.svg" type="image/svg+xml">\n<link rel="preconnect" href="https://fonts.googleapis.com">\n'
             f'<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Sora:wght@500;600;700&family=DM+Sans:wght@400;500;600&display=swap">\n'
@@ -264,11 +264,6 @@ def extra_pages():
     for name, doc, title, active in (("whatsnew.html", "WHATS_NEW.md", "What's new", "whatsnew.html"), ("scorecard.html", "SCORECARD.md", "Scorecard", "scorecard.html")):
         with open(os.path.join(HERE, "docs", doc), encoding="utf-8") as f:
             out[name] = extra_page(title.replace("'", "&rsquo;"), '<div class="doc">' + md_to_html(f.read()) + "</div>", active)
-    with open(os.path.join(HERE, "docs", "ROADMAP.md"), encoding="utf-8") as f:
-        road = f.read()
-    part = road.split("<!-- next:start -->", 1)[1].split("<!-- next:end -->", 1)[0].strip().splitlines()[1:]       # the section without its own heading
-    intro = "# What\u2019s next\n\nWhere Emvryx could go from here: the plan for the 2.5 models and 25 ideas.\n"
-    out["next.html"] = extra_page("What's next".replace("'", "&rsquo;"), '<div class="doc">' + md_to_html(intro + "\n".join(part)) + "</div>", "next.html")
     out["open.html"] = extra_page("Open Emvryx", OPEN_BODY, extra_head='<meta name="robots" content="noindex">\n', extra_js=OPEN_JS)
     return out
 
