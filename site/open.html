@@ -205,6 +205,7 @@ body{font-family:'DM Sans',sans-serif;color:var(--text);line-height:1.55;font-si
   /* ---- scroll: progress line, frosted menu, hero drifting away, dashes dimming */
   var bar = document.createElement('div'); bar.className = 'fx-bar'; document.body.appendChild(bar);
   var nav = document.querySelector('.nav'), heroBlock = h1 && (h1.closest('section') || h1.parentElement), ticking = false;
+  if (heroBlock && heroBlock.getBoundingClientRect().height > innerHeight * 1.1) heroBlock = null;   // on a long text page the box round the headline is the whole page: it must not fade
   if (heroBlock) heroBlock.classList.add('fx-hero-in');
   function onScroll() {
     var y = window.pageYOffset, max = Math.max(1, doc.scrollHeight - innerHeight);

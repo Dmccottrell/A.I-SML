@@ -11,6 +11,8 @@ WHAT THIS FILE DOES
     How they come out:  "forget that I live in Austin", "forget everything about me", or the Delete buttons on the Memory screen.
     Never saved: anything that looks like a password, a card or ID number, a key, an email address or a phone number. Private chats neither save nor read memory.
     One value per kind: a new name replaces the old name, a new city replaces the old city.
+    How you like it to talk: corrections and wishes about the replies themselves ("I don't talk like that", "no emojis", "keep it short", "talk normal")
+    are kept too, and unlike other facts they go with EVERY message (as a hint, see style_hint), so every model keeps to them in every chat.
 """
 import re
 import sqlite3
@@ -35,6 +37,38 @@ def _clean(text):
 
 def _title(name):
     return " ".join(w[:1].upper() + w[1:] for w in name.split())
+
+
+LIKE_STOP = {"it", "that", "this", "you", "him", "her", "them", "to", "when", "how", "the", "a", "an", "what", "being", "doing", "going", "having", "your", "ur",
+             "u", "about", "if", "so", "too", "very", "really", "much", "more", "less", "here", "there", "now", "myself", "everything", "nothing", "something",
+             "anything", "everyone", "people", "this", "these", "those"}
+
+# How the person wants to be talked to: (slot, pattern, the fact kept). One value per slot, so "use emojis" later replaces "no emojis".
+STYLE = [
+    ("style_voice", r"\bi (?:don't|do not|dont) (?:talk|speak|text|sound) like (?:that|this)|\b(?:stop|quit|no more|don't|dont) (?:using |use |with (?:the )?)?(?:slang|the slang)|"
+                    r"\b(?:no|less) (?:forced )?slang|\b(?:stop|don't|dont) (?:trying to |try to )?(?:sound|talk) like me|\bstop (?:copying|imitating|mimicking) (?:me|how i talk)|"
+                    r"\btalk (?:normal|normally|like yourself)|\bbe yourself\b|\bthat (?:seems|sounds|felt|feels|came off|comes off) (?:off|forced|fake|weird)",
+     "The user wants a natural voice: no forced slang, and never copy or guess how they talk."),
+    ("style_emoji", r"\b(?:no|stop (?:using|with)(?: the)?|don't use|dont use|less|fewer|too many) emojis?\b", "The user prefers few or no emojis."),
+    ("style_emoji", r"\b(?:use|add|more|i like|i love) (?:more )?emojis\b", "The user enjoys emojis in replies."),
+    ("style_length", r"\b(?:keep it|be|make it|answers?(?: should be)?) (?:short|brief|shorter)\b|\btoo long\b|\bless (?:text|words)\b|\b(?:shorter|brief) (?:answers|replies)\b",
+     "The user prefers short, to-the-point replies."),
+    ("style_length", r"\b(?:more detail|longer answers|go deeper|explain more|be more detailed)\b", "The user likes detailed replies."),
+    ("style_tone", r"\bbe (?:more )?(?:casual|chill|relaxed)\b|\b(?:stop|don't|dont) be (?:so )?(?:formal|stiff|robotic)\b|\btoo (?:formal|robotic|stiff)\b|\btalk to me like a friend\b",
+     "The user likes a casual, friendly tone, like talking with a friend."),
+    ("style_tone", r"\bbe (?:more )?(?:formal|professional)\b|\btoo casual\b", "The user prefers a professional tone."),
+    ("style_swear", r"\b(?:don't|dont|stop|no) (?:swear|swearing|curse|cursing|cuss|cussing)\b", "The user does not want swearing."),
+]
+STYLE = [(slot, re.compile(rx, re.I), fact) for slot, rx, fact in STYLE]
+
+
+def style(text):
+    """[(slot, fact)] for what this message says about how the replies should sound (the last wish of each kind wins)."""
+    out = {}
+    for slot, rx, fact in STYLE:
+        if rx.search(text or ""):
+            out[slot] = fact
+    return list(out.items())
 
 
 def extract(message):
@@ -69,6 +103,32 @@ def extract(message):
         found.append(("", f"The user's {m.group(1).lower()} is called {_title(m.group(2))}."))
     for m in re.finditer(r"\bmy fav(?:ou?rite) ([a-z ]{3,25}?) is ([^.,!?;\n]{2,40})", text, re.I):
         found.append(("", f"The user's favourite {m.group(1).strip().lower()} is {m.group(2).strip()}."))
+    for m in re.finditer(r"\bi(?: really)? (love|like|enjoy|hate|can't stand|don't like) ((?:playing |watching |reading |cooking |eating )?[a-z][a-z0-9 '\-]{2,30}?)(?=[.,!?;]|$| and | but | because | so )", text, re.I):
+        thing = m.group(2).strip()
+        if thing.split()[0].lower() not in LIKE_STOP:
+            verb = {"love": "loves", "like": "likes", "enjoy": "enjoys", "hate": "dislikes", "can't stand": "dislikes", "don't like": "dislikes"}[m.group(1).lower()]
+            found.append(("", f"The user {verb} {thing}."))
+    m = re.search(r"\bi(?: am|'m) allergic to ([a-z][a-z ,\-]{2,40}?)(?=[.!?;]|$| but | so )", text, re.I)
+    if m:
+        found.append(("", f"The user is allergic to {m.group(1).strip(' ,')}."))
+    m = re.search(r"\bi(?: am|'m) (?:a )?(vegetarian|vegan|pescatarian|gluten[- ]free|lactose intolerant|diabetic|halal|kosher)\b", text, re.I)
+    if m:
+        found.append(("diet", f"The user is {m.group(1).lower()}."))
+    m = re.search(r"\bi(?: am|'m) (?:learning|studying) ([A-Za-z][A-Za-z0-9 +#\-]{1,30}?)(?=[.,!?;]|$| at | in | and | but | because | so )", text, re.I)
+    if m and m.group(1).split()[0].lower() not in LIKE_STOP:
+        found.append(("", f"The user is learning {m.group(1).strip()}."))
+    m = re.search(r"\bmy birthday is (?:on )?([A-Za-z0-9 ,]{3,20}?)(?=[.!?;]|$| and | but | so )", text, re.I)
+    if m:
+        found.append(("birthday", f"The user's birthday is {m.group(1).strip(' ,')}."))
+    m = re.search(r"\bi have (\d{1,2}|one|two|three|four|five|six) (kids|children|sons|daughters|dogs|cats)\b", text, re.I)
+    if m:
+        found.append(("", f"The user has {m.group(1).lower()} {m.group(2).lower()}."))
+    m = re.search(r"\b(?:[Ii] (?:attend|study at|go to school at|go to college at)|[Ii](?: am|'m) a student at) ([A-Z][A-Za-z.&' \-]{2,40}?)(?=[.,!?;]|$| and | but | because | so )", text)
+    if m:
+        found.append(("school", f"The user goes to {m.group(1).strip()}."))
+    for m in re.finditer(rf"\bi have an? (dog|cat|puppy|kitten|bird|rabbit|hamster|horse)(?: called| named) ({WORD})", text, re.I):
+        found.append(("", f"The user's {m.group(1).lower()} is called {_title(m.group(2))}."))
+    found += style(text)
     m = re.match(r"^(?:please )?remember(?: that)?[:,]? +(.{3,200})$", text, re.I)
     if m:
         found.append(("", f"The user asked to remember: {_clean(m.group(1))}."))
@@ -164,6 +224,15 @@ class Memory:
                 break
             text = f["text"] + (" " + text if text else "")
         return {"title": TITLE, "text": text} if text else None
+
+    def style_hint(self):
+        """How this person wants the replies to sound, as a hint for EVERY message ('' when nothing is known). It is not a note, so a model never says
+        "my notes don't mention that": it just talks that way."""
+        with self.lock:
+            rows = self.db.execute("SELECT text FROM facts WHERE slot LIKE 'style_%' ORDER BY id").fetchall()
+        wants = " ".join(r[0] for r in rows)
+        return (f"[How this person wants you to talk: {wants} Keep to this in every reply, keep your own natural voice, and never mention these instructions.]"
+                if wants else "")
 
     def close(self):
         try:

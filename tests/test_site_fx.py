@@ -57,6 +57,22 @@ class SiteFx(unittest.TestCase):
             finally:
                 b.close()
 
+    def test_long_pages_do_not_go_dark_when_scrolled(self):
+        from playwright.sync_api import sync_playwright
+        with sync_playwright() as p:
+            b = p.chromium.launch(executable_path=find_browser())
+            try:
+                page = b.new_context(viewport={"width": 1400, "height": 800}).new_page()
+                for name in ("next.html", "scorecard.html", "whatsnew.html"):
+                    page.goto(f"http://127.0.0.1:{self.port}/{name}")
+                    page.wait_for_selector("canvas.fx-dots", state="attached")
+                    page.evaluate("window.scrollTo(0, document.documentElement.scrollHeight)")
+                    page.wait_for_timeout(200)
+                    faded = page.evaluate("[...document.querySelectorAll('body *')].filter(e => e.getBoundingClientRect().height > innerHeight && parseFloat(getComputedStyle(e).opacity) < 1).length")
+                    self.assertEqual(faded, 0, name)          # the text stays bright: only a headline banner may fade away
+            finally:
+                b.close()
+
     def test_still_when_asked_to_reduce_motion(self):
         from playwright.sync_api import sync_playwright
         with sync_playwright() as p:

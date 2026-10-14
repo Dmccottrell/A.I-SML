@@ -41,7 +41,7 @@ async function send(regen, mode) {
         }
       } else if (ev === 'memory') {
         const bits = [...(data.saved || []).map((t) => t.replace(/^The user\W?s? ?/i, '').replace(/\.$/, '')), ...(data.forgot ? ['forgot ' + data.forgot + (data.forgot === 1 ? ' thing' : ' things')] : [])];
-        if (bits.length) $('thread').append(el('div', {class: 'note', style: 'align-self:flex-start', title: 'Open Memory in the menu to see or change what is kept'}, '\u2713 ' + (data.saved && data.saved.length ? 'Remembered: ' : '') + bits.join('; ')));
+        if (bits.length) $('thread').append(el('div', {class: 'note', style: 'align-self:flex-start', title: 'Open Memory in the menu to see or change what is kept'}, '\ud83d\udcd6 Memory updated' + (bits.length ? ': ' + bits.join('; ') : '')));
       } else if (ev === 'loading') {   // the model is still starting: the normal thinking words carry on (no extra message)
       } else if (ev === 'piece') {
         if (!aiWrap) { think._stop(); think.remove(); const m = curModel(); aiBubble = el('div', {class: 'bubble'}); const note = S.autoNote ? el('span', {title: S.autoNote.reason}, ' \u00b7 Auto chose ' + S.autoNote.effort[0].toUpperCase() + S.autoNote.effort.slice(1)) : null;
