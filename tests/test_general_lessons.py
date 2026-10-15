@@ -58,8 +58,17 @@ class General(unittest.TestCase):
         self.assertEqual(len(out), 1)
         self.assertEqual(stats["filtered_out"], 1)
         self.assertEqual(stats["row_licence"], 1)
+        self.assertEqual(stats["licences_seen"], {"cc-by-sa-4.0": 1})
         self.assertNotIn("think", out[0]["messages"][-1]["content"])
         self.assertEqual([m["role"] for m in out[0]["messages"]], ["user", "assistant"])
+
+    def test_row_licences_are_matched_loosely_and_unlabelled_rows_keep_the_dataset_licence(self):
+        base = {"messages": [{"role": "user", "content": "What is photosynthesis?"}, {"role": "assistant", "content": A}]}
+        rows = [dict(base, license="CC BY 4.0"), dict(base, license="cc_by_4.0", messages=base["messages"][:1] + [{"role": "assistant", "content": A + " Indeed."}]),
+                {"messages": [base["messages"][0], {"role": "assistant", "content": A + " Also."}]}, dict(base, license="odc-by")]
+        out, stats = G.convert(rows, "messages", "nemotron-v2", "cc-by-4.0", row_licences=("cc-by-4.0",))
+        self.assertEqual(len(out), 3)                                        # NVIDIA writes it as "CC BY 4.0": that is the same licence
+        self.assertEqual(stats["row_licence"], 1)
 
     def test_limit_samples_from_the_whole_stream(self):
         rows = ({"prompt": f"Question number {i}?", "response": A + f" ({i})"} for i in range(1000))
