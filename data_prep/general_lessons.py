@@ -72,9 +72,16 @@ def row_allowed(row, filters=(), row_licences=()):
     for key, value in filters:
         if str(row.get(key, "")).strip().lower() != value.lower():
             return False, "filtered_out"
-    if row_licences and str(row.get("license", "")).strip().lower() not in row_licences:
-        return False, "row_licence"
+    if row_licences:
+        own = licence_key(row.get("license") or row.get("licence"))
+        if own and own not in {licence_key(x) for x in row_licences}:     # no label on the row: the dataset's own licence applies
+            return False, "row_licence"
     return True, ""
+
+
+def licence_key(name):
+    """A licence name as letters and digits only, so "CC BY 4.0", "cc-by-4.0" and "CC_BY_4.0" are the same."""
+    return re.sub(r"[^a-z0-9]", "", str(name or "").lower())
 
 
 def clean_row(row, fmt, source, licence, synthetic=False):
@@ -105,6 +112,9 @@ def convert(rows, fmt, source, licence, synthetic=False, limit=None, seed=1337, 
     rng = random.Random(seed)
     for row in rows:
         ok, why = row_allowed(row, filters, row_licences)
+        if why == "row_licence" and len(stats.setdefault("licences_seen", {})) < 8:
+            lic = str(row.get("license") or row.get("licence"))
+            stats["licences_seen"][lic] = stats["licences_seen"].get(lic, 0) + 1          # shown when everything is dropped, to see what the rows say
         lesson = None
         if ok:
             lesson, why = clean_row(row, fmt, source, licence, synthetic)
@@ -177,8 +187,11 @@ def main(argv=None):
     with open(a.out, "a" if a.append else "w", encoding="utf-8") as f:
         for l in lessons:
             f.write(json.dumps(l, ensure_ascii=False) + "\n")
+    seen = stats.pop("licences_seen", {})
     dropped = {k: v for k, v in stats.items() if k != "kept"}
     print(f"kept {stats['kept']:,}; dropped {sum(dropped.values()):,} {dropped or ''}")
+    if seen:
+        print("  licences on the dropped rows (first kinds seen): " + ", ".join(f"{k!r} x{v}" for k, v in seen.items()))
     print(f"wrote to {a.out}")
     return 0
 
