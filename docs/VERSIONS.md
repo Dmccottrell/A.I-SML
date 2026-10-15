@@ -45,7 +45,12 @@ The first build on a newer open-model generation. **Flare 3, Equinox 3 and Solst
 | Flare 3 | Qwen3.5 2B | about 1.5 to 2 GB | Flare 2.5 (Qwen2.5 1.5B) | preparation code ready, not run |
 | Equinox 3 | Qwen3.5 4B | about 3 GB | Equinox 2 (Qwen3 4B) | preparation code ready, not run |
 | Solstice 3 | Qwen3.5 9B | about 6 GB | Solstice 2 (Qwen3 8B) | preparation code ready, not run; may not fit for training |
-| Apogee 2.5 | Qwen3 14B (unchanged) | about 9 GB | Apogee 2 | planned after the 3 builds |
+| Apogee 3 (flagship) | Qwen3.5 9B grown to about 12B (decided Oct 15, 2026) | about 7.3 GB | Apogee 2 | planned on an RTX 5090: new layers + major tune + Lessons 4 + DPO; runs on the 4070 with 128K |
+
+**Update (Oct 15, 2026):** chat stays on the RTX 4070 only; Flare 3 and Equinox 3 train on the 4070 (Flare 3 is training now, on 59,764 lessons:
+41,835 Emvryx + 17,929 NVIDIA Nemotron), **Solstice 3 and Apogee 3 train on an RTX 5090** (Solstice with a major tune in 16-bit). The flagship
+**Apogee 3** is grown from Qwen3.5 9B to about 12B and trained on **Lessons 4**, written to the [Emvryx Constitution](EMVRYX_CONSTITUTION.md);
+expected 47 to 50 on the hard sheet (Apogee 2: 43). Later **Apogee 3.5** grows to about 14B on Lessons 4.5. Full plan: [LESSONS_4.md](LESSONS_4.md).
 
 What changes in the way they work: the new bases can think step by step before answering (hidden from the answer), see pictures natively (reported), and use a newer memory design. Quick and Balanced answer straight away (an empty thinking block in the prompt, `think="empty"`); Deep lets the model think. The 2.x versions move to Other models when a 3 is published (Admin > Models keeps the newest 6 older versions).
 

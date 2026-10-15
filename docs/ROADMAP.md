@@ -46,6 +46,20 @@ The owner's idea: an update to a model can raise its version (Flare 2.5 to 2.6 o
 
 **The owner's answers:** (1) yes, a new version when the training lessons change, otherwise an update that keeps the version; (2) yes, the app's version and the model versions stay separate; (3) keep 5 to 6 older versions in Other models (set to 6, `keep_older_versions` in `models.json`). Built: Admin > **Models** tab, `app/model_publish.py`, see [FEATURE_FLAGS.md](FEATURE_FLAGS.md). The regression check before a publish (idea 15) is built too: Admin > Models > Run safety checks.
 
+## Decided Oct 15, 2026: Lessons 4, the Emvryx Constitution and a grown flagship
+
+- **Chat runs on the RTX 4070 only**; training may use an RTX 5090. Flare 3 (training now) and Equinox 3 on the 4070; Solstice 3 (major tune,
+  16-bit) and **Apogee 3** on the 5090.
+- **Apogee 3 = Qwen3.5 9B grown to about 12B** (10 to 12 new pass-through layers of the "fast" kind so the chat memory does not grow; 128K still fits
+  the 4070), trained with the new layers fully, a major tune on the rest and preference training (DPO). Expected 47 to 50 on the hard sheet
+  (Apogee 2: 43). This replaces the earlier 27B-at-2-bit idea for Apogee 3 (it scored 35 and leaves no room for a window on 12 GB).
+- **Lessons 4:** about 100,000 answers written to the [Emvryx Constitution](EMVRYX_CONSTITUTION.md), each judged and rewritten, with code run,
+  maths verified and facts checked, plus 30,000 to 50,000 preference pairs and thinking lessons; one Emvryx voice everywhere. Answers come from open
+  models whose licences allow it (never from Claude or ChatGPT). Then Flare 3.1 and Equinox 3.1 retrain on them.
+- **Apogee 3.5 (later):** grown to about 14B (the 4070's limit with 128K) on Lessons 4.5 (with the app's reports and approvals) and a second DPO
+  round; a harder test sheet first.
+- Full plan and order of work: [LESSONS_4.md](LESSONS_4.md).
+
 ## Emvryx 3: the plan so far (Oct 11, 2026)
 
 **The owner's rule: every model must run on the owner's RTX 4070 (12 GB), by itself, with nothing split into system RAM.** That rules out the 27B, the 26B and 35B mixture models and anything else that needs more than the card holds, and it keeps gaming possible alongside a small model. Training can still be done on a rented GPU (with the owner's approval first); only running has to fit at home.
