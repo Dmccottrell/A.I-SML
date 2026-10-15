@@ -28,7 +28,24 @@ of problems (exclamation overload 3,774, too long 3,191, filler openers 1,965, "
 | Real use | none | reported and approved answers from the app become new lessons |
 | Size | about 60,000 used | about 100,000 checked answers + 30,000 to 50,000 pairs |
 
-## The lesson factory (to build)
+## The lesson factory (built October 15, 2026: `data_prep/lesson_factory.py`)
+
+```
+llama-server -m Qwen3.5-27B-Q4_K_M.gguf -ngl 99 -c 32768 --parallel 8 --jinja --port 8099   # the teacher (on the 5090)
+python data_prep/lesson_factory.py questions --per 40          # the teacher writes 40 questions per area and level (20 areas x 3 levels)
+python data_prep/lesson_factory.py maths --n 3000              # exact maths with known answers
+python data_prep/lesson_factory.py import FILE.jsonl --source NAME --area AREA   # questions from an open dataset (licence read first)
+python data_prep/lesson_factory.py run --workers 8              # drafts, checks, judging, rewriting, pairs, thinking (resumes by itself)
+python data_prep/lesson_factory.py review --n 30                # data\v4\review.md: a random sample for the owner to read
+python data_prep/lesson_factory.py stats
+```
+Files in `data\v4\`: questions, lessons, pairs (DPO), thinking, rejected (with the reason) and review.md. The parts: `factory_questions.py` (the
+20 areas, importers for GSM8K-, MBPP-, Alpaca- and chat-shaped files, de-duplication), `factory_checks.py` (the voice rules, known answers,
+code that must parse and pass its tests, run in an isolated Python process with a time limit), `lesson_factory.py` (the steps below).
+A lesson is kept only when every check passes and every Constitution score is at least 7 of 10 (average at least 8); a weaker draft that is
+clearly worse becomes the "rejected" side of a pair. Tested with a scripted teacher (`tests/test_lesson_factory.py`).
+
+### The steps
 1. **Questions:** 50,000 to 100,000 across about 20 areas (maths, code in several languages, science, writing, advice, planning, everyday knowledge,
    multi-step tasks, tools, long chats, sensitive topics, "should it ask first?"), tagged easy, medium or hard. Questions may come from open datasets
    (their licences read by the owner); the answers are always made here.
@@ -74,7 +91,7 @@ sheet, because the current one runs out of room. If a newer open base fits 12 GB
 ## Order of work
 1. Now: Flare 3 trains on the 4070 (Lessons 3); Equinox 3 next.
 2. The Constitution: the owner reviews and decides the open choices.
-3. Build the lesson factory, "grow Qwen" (pass-through layers, fast-layer-only option, train new layers plus major tune) and the 5090 training
+3. ~~Build the lesson factory~~ (built Oct 15). Build "grow Qwen" (pass-through layers, fast-layer-only option, train new layers plus major tune) and the 5090 training
    settings; tests for each.
 4. With the 5090: Lessons 4, then Solstice 3, then Apogee 3 (pilot first).
 5. Flare 3.1 and Equinox 3.1 on Lessons 4 (one night each on the 4070).
