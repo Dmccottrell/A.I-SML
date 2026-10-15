@@ -25,6 +25,8 @@ import time
 import urllib.error
 import urllib.request
 
+from safe_db import SafeDB
+
 import chat
 import chat_polish
 from app_errors import AppError, BadKey, ModelTooBig, PcUnreachable, ReplyInterrupted, WrongServer
@@ -208,7 +210,7 @@ class ChatStore:
     """Chats and messages in SQLite. A reply is "partial" until finish() is called, and is saved as it streams."""
 
     def __init__(self, path=":memory:"):
-        self.db = sqlite3.connect(path, check_same_thread=False)
+        self.db = SafeDB(path)                                   # shared by the server's threads: every statement takes its lock
         self.db.executescript("""
             CREATE TABLE IF NOT EXISTS chats (id INTEGER PRIMARY KEY, title TEXT, created REAL);
             CREATE TABLE IF NOT EXISTS messages (id INTEGER PRIMARY KEY, chat_id INTEGER, role TEXT, content TEXT,

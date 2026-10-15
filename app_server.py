@@ -160,6 +160,14 @@ class AppState(StateAccounts, StateSettings, StateApps, StatePC, StateCode, Stat
 
 
 # ------------------------------------------------------------------ HTTP
+def log_crash(method, path):
+    """A request that failed in an unexpected way: the error and where it happened, to server.log (stderr). The address is cut at "?" so nothing
+    from a query string (codes, keys) is written down."""
+    import traceback
+    sys.stderr.write(time.strftime("%Y-%m-%d %H:%M:%S") + f" request failed: {method} {str(path).split('?', 1)[0]}\n" + traceback.format_exc())
+    sys.stderr.flush()
+
+
 class Handler(RoutesGet, RoutesPost, RoutesCode, RoutesAccount, RoutesAdmin, RoutesChat, http.server.BaseHTTPRequestHandler):
     server_version = "Emvryx"
     protocol_version = "HTTP/1.1"
@@ -418,6 +426,7 @@ class Handler(RoutesGet, RoutesPost, RoutesCode, RoutesAccount, RoutesAdmin, Rou
         except (BrokenPipeError, ConnectionResetError):
             pass
         except Exception:
+            log_crash(self.command, self.path)                 # what broke goes in server.log, so it can be found and fixed
             self._send(500, {"code": "error", "message": "Something went wrong. Please try again."})
 
     def do_POST(self):
@@ -456,6 +465,7 @@ class Handler(RoutesGet, RoutesPost, RoutesCode, RoutesAccount, RoutesAdmin, Rou
         except ValueError as e:
             self._send(400, {"code": "bad_request", "message": str(e)})
         except Exception:
+            log_crash(self.command, self.path)                 # what broke goes in server.log, so it can be found and fixed
             self._send(500, {"code": "error", "message": "Something went wrong. Please try again."})
 
     def do_DELETE(self):

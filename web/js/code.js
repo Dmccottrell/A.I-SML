@@ -255,11 +255,14 @@ $('codeTask').addEventListener('input', suggest);
 $('codeTask').addEventListener('keydown', (e) => { if (!$('codeSuggest').hidden && SUG.items.length && (e.key === 'Tab' || (e.key === 'Enter' && !e.shiftKey && !e.ctrlKey && !e.metaKey))) { e.preventDefault(); SUG.items[SUG.at].run(); } else if (e.key === 'Escape') $('codeSuggest').hidden = true; });
 $('codeFilesBtn').onclick = () => showDrawer($('codeDrawer').hidden);
 $('codeDrawerX').onclick = () => showDrawer(false);
+let pfView = 0;          // the Files drawer shows one thing at a time (the list, search hits or the map): only the newest request may draw it
 async function refreshFiles() {
   if (!C.project) return;
+  const view = ++pfView;
   const r = await api('/api/code/files?project=' + encodeURIComponent(C.project)); const j = await r.json(); C.files = j.files; renderCodeBar();
   $('codePreviewBtn').disabled = !j.files.some((f) => /\.html?$/i.test(f));       // a web page can be previewed
   if (IDE.on) { ideTree(); ideSync(); }
+  if (view !== pfView) return;                                                   // a search or the map was asked for meanwhile: leave it showing
   $('codeFiles').replaceChildren(...(j.files.length ? j.files.map((f) => el('button', {class: f === C.file ? 'on' : '', onclick: () => viewFile(f)}, f)) : [el('div', {style: 'color:var(--muted);padding:6px 8px;font-size:14px'}, 'No files yet.')]));
 }
 
@@ -304,15 +307,17 @@ $('codeSearch').addEventListener('input', () => {
   clearTimeout(pfSearchTimer); const q = $('codeSearch').value.trim();
   if (q.length < 2) { refreshFiles(); return; }
   pfSearchTimer = setTimeout(async () => {
+    const view = ++pfView;
     const r = await api('/api/code/search?project=' + encodeURIComponent(C.project) + '&q=' + encodeURIComponent(q)); const j = await r.json().catch(() => ({hits: []}));
-    if ($('codeSearch').value.trim() !== q) return;                                // typed on meanwhile
+    if ($('codeSearch').value.trim() !== q || view !== pfView) return;             // typed on, or asked for something else, meanwhile
     $('codeFiles').replaceChildren(...(j.hits.length ? j.hits.map((h) => el('button', {onclick: () => viewFile(h.path)}, el('b', {}, h.path + (h.line ? ':' + h.line : '')), el('small', {style: 'display:block;color:var(--muted)'}, h.text)))
       : [el('div', {style: 'color:var(--muted);padding:6px 8px;font-size:13px'}, 'Nothing matches "' + q + '".')]));
   }, 250);
 });
 $('codeMapBtn').onclick = async () => {
+  clearTimeout(pfSearchTimer); const view = ++pfView;
   const r = await api('/api/code/map?project=' + encodeURIComponent(C.project)); const m = await r.json().catch(() => null);
-  if (!m) return;
+  if (!m || view !== pfView) return;
   const langs = Object.entries(m.languages).map(([k, v]) => k + ' ' + v).join(' \u00b7 ');
   const box = el('div', {class: 'vx-map'}, el('p', {}, m.files + (m.files === 1 ? ' file' : ' files') + (langs ? ' \u00b7 ' + langs : '') + (m.entry ? ' \u00b7 starts at ' + m.entry : '')),
     ...(m.outline.length ? m.outline.map((o) => el('div', {class: 'o'}, el('b', {}, o.path), el('span', {}, o.items.slice(0, 8).join(', ')))) : [el('p', {}, 'Nothing to map yet.')]),

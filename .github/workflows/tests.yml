@@ -1,13 +1,17 @@
-# Runs the whole test suite (and a lint check) on every push and pull request, so a broken change cannot be merged unnoticed.
+# Runs the whole test suite (and a lint check) on every pull request and on main, so a broken change cannot be merged unnoticed.
 # Locally the same thing is: python scripts/run_tests.py   and   python tools/lint.py
 name: tests
 
+# Once per change: on a pull request (every push to it), and on main after a merge. A push to a working branch alone does not run it,
+# so the same commit is no longer tested two or three times over (push + pull request + main).
 on:
   push:
+    branches: [main]
   pull_request:
+  workflow_dispatch:
 
 concurrency:
-  group: tests-${{ github.ref }}
+  group: tests-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 
 jobs:

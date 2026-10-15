@@ -24,7 +24,8 @@ WHAT THIS FILE DOES
 """
 import json
 import math
-import sqlite3
+
+from safe_db import SafeDB
 
 LIMITS_PATH = "limits.json"
 STATUS_WORDS = ((50, "Plenty left"), (20, "Getting low"), (5, "Running low"), (0, "Almost out"))
@@ -88,7 +89,7 @@ class UsageStore:
     """SQLite: users and their plan, the usage rows, each person's tank, and requests in flight."""
 
     def __init__(self, path=":memory:"):
-        self.db = sqlite3.connect(path, check_same_thread=False)
+        self.db = SafeDB(path)                                   # shared by the server's threads (safe_db.py)
         self.db.executescript("""
             CREATE TABLE IF NOT EXISTS users (user TEXT PRIMARY KEY, tier TEXT, tz_minutes INTEGER, owner INTEGER, overrides TEXT);
             CREATE TABLE IF NOT EXISTS usage (id INTEGER PRIMARY KEY, user TEXT, model TEXT, fresh_in INTEGER, cached_in INTEGER,
@@ -216,7 +217,11 @@ class Limiter:
         return start, resets_at
 
     # ---------------------------------------------------------------- the flow
-    def reserve(self, user, model_key, effort, est_counted, now, where="server"):
+    def reserve(self, *a, **k):
+        with self.store.db.lock:                               # check-then-spend in one piece: two requests at once cannot both pass
+            return self._reserve(*a, **k)
+
+    def _reserve(self, user, model_key, effort, est_counted, now, where="server"):
         """Check the limits and hold the estimated cost. Returns a reservation (or None when nothing is counted).
         Raises LimitError when the request may not run."""
         if where == "device":
@@ -250,7 +255,11 @@ class Limiter:
         db.commit()
         return {"id": cur.lastrowid, "user": user, "model": model_key, "est": float(est_counted), "exempt": False}
 
-    def settle(self, res, fresh_in, cached_in, out, effort, now):
+    def settle(self, *a, **k):
+        with self.store.db.lock:                               # check-then-spend in one piece: two requests at once cannot both pass
+            return self._settle(*a, **k)
+
+    def _settle(self, res, fresh_in, cached_in, out, effort, now):
         """Replace the held estimate with what was really used. Returns the counted tokens."""
         if res is None:
             return 0.0
@@ -265,7 +274,11 @@ class Limiter:
         db.commit()
         return actual
 
-    def cancel(self, res, now):
+    def cancel(self, *a, **k):
+        with self.store.db.lock:                               # check-then-spend in one piece: two requests at once cannot both pass
+            return self._cancel(*a, **k)
+
+    def _cancel(self, res, now):
         """The request failed before anything was used: give the held amount back."""
         if res is None:
             return
