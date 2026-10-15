@@ -20,6 +20,8 @@ import re
 import sqlite3
 import time
 
+from safe_db import SafeDB
+
 MAX_FILE_BYTES = 10_000_000
 MAX_CHARS = 1_500_000
 MAX_DOCS = 40
@@ -163,7 +165,7 @@ class Library:
     """One person's documents."""
 
     def __init__(self, path=":memory:", clock=time.time):
-        self.db = sqlite3.connect(path, check_same_thread=False)
+        self.db = SafeDB(path)                                   # shared by the server's threads (safe_db.py)
         self.clock = clock
         self.db.execute("CREATE TABLE IF NOT EXISTS docs (id INTEGER PRIMARY KEY, name TEXT, kind TEXT, chars INTEGER, created REAL, text TEXT)")
         try:
