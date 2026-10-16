@@ -184,6 +184,52 @@ def lr_at(step, total, base, warmup):
 MERGE_SHARD_SIZE = "2GB"
 
 
+def restore_mtp(base_model, export_dir, log=print):
+    """Put Qwen3.5's built-in "guess ahead" head (the mtp.* weights) back into a merged model. transformers does not load that head, so a merged model
+    is saved without it; llama.cpp uses it (--spec-type draft-mtp) to answer faster with exactly the same words. Returns how many weights were copied."""
+    import json
+    import grow_qwen
+    from safetensors import safe_open
+    from safetensors.torch import save_file
+    try:
+        src = grow_qwen.resolve(base_model)
+        names = grow_qwen.all_names(src)
+    except Exception as e:                          # noqa: BLE001 - the head is a bonus: never fail a merge over it
+        log(f"(guess-ahead head not copied: {e})")
+        return 0
+    have = grow_qwen.all_names(export_dir)
+    missing = [k for k in names if k.startswith(("mtp.", "model.mtp.")) and k not in have]
+    if not missing:
+        return 0
+    tensors = {}
+    for k in missing:
+        with safe_open(os.path.join(src, names[k]), "pt") as f:
+            tensors[k] = f.get_tensor(k)
+    save_file(tensors, os.path.join(export_dir, "model-mtp.safetensors"), metadata={"format": "pt"})
+    index_path = os.path.join(export_dir, "model.safetensors.index.json")
+    if os.path.exists(index_path):
+        with open(index_path, encoding="utf-8") as f:
+            index = json.load(f)
+    else:
+        index = {"metadata": {}, "weight_map": dict(have)}
+    index["weight_map"].update({k: "model-mtp.safetensors" for k in tensors})
+    index["metadata"]["total_size"] = int(index["metadata"].get("total_size", 0)) + sum(t.numel() * t.element_size() for t in tensors.values())
+    with open(index_path, "w", encoding="utf-8") as f:
+        json.dump(index, f, indent=2)
+    with open(os.path.join(src, "config.json"), encoding="utf-8") as f:
+        base_tc = grow_qwen.text_config(json.load(f))
+    cfg_path = os.path.join(export_dir, "config.json")
+    with open(cfg_path, encoding="utf-8") as f:
+        cfg = json.load(f)
+    tc = grow_qwen.text_config(cfg)
+    if base_tc.get("mtp_num_hidden_layers") and not tc.get("mtp_num_hidden_layers"):
+        tc["mtp_num_hidden_layers"] = base_tc["mtp_num_hidden_layers"]
+        with open(cfg_path, "w", encoding="utf-8") as f:
+            json.dump(cfg, f, indent=2)
+    log(f"kept the guess-ahead head: {len(tensors)} weights copied from the base")
+    return len(tensors)
+
+
 def merge_and_export(base_model, adapter_dir, export_dir, torch, spread=False):
     """Merge the LoRA adapter into the base weights and write a plain Hugging Face folder."""
     from peft import PeftModel
@@ -208,6 +254,7 @@ def merge_and_export(base_model, adapter_dir, export_dir, torch, spread=False):
     # (no error message, the log just ends after "Writing model shards 0/1"). Shards of 2 GB are written one at a time.
     model.save_pretrained(export_dir, safe_serialization=True, max_shard_size=MERGE_SHARD_SIZE)
     AutoTokenizer.from_pretrained(base_model).save_pretrained(export_dir)
+    restore_mtp(base_model, export_dir)
     return export_dir
 
 

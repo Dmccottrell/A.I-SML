@@ -25,6 +25,8 @@ class ModelRunner:
         self.memo = None                                        # a file that remembers the last model, so a restart can load it ahead of the first message
         self.last_used = time.time()                            # the last time a message needed the model (idle unload looks at this)
         self.loaded_at = None
+        self.draft_ahead = set()                                # model ids whose built-in "guess ahead" head (Qwen3.5 MTP) is used: models.json "mtp": true
+        self.no_draft = set()                                   # ...and those it failed for (an older llama-server, or a file without the head): loaded plainly
         self.lock = threading.Lock()
         atexit.register(self.stop)
 
@@ -130,6 +132,9 @@ class ModelRunner:
             proj = self.projector(model_id)
             if proj:
                 cmd += ["--mmproj", proj]                       # it can look at pictures itself (no separate picture reader)
+            drafting = model_id in self.draft_ahead and model_id not in self.no_draft
+            if drafting:
+                cmd += ["--spec-type", "draft-mtp"]             # the model guesses a few words ahead and checks them in one go: same answers, faster
             flags = getattr(subprocess, "CREATE_NO_WINDOW", 0)
             try:
                 self.proc = subprocess.Popen(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, creationflags=flags)
@@ -144,6 +149,14 @@ class ModelRunner:
                     raise Cancelled()
                 if self.proc.poll() is not None:
                     self.stop()
+                    if drafting:                                 # the speed-up is optional: load the model plainly instead of failing
+                        self.no_draft.add(model_id)
+                        print(f"({model_id}: guess-ahead decoding did not start, loading it without)", flush=True)
+                        self.lock.release()
+                        try:
+                            return self.ensure(model_id, ctx, cancel)
+                        finally:
+                            self.lock.acquire()
                     raise AppError("The model stopped while loading.", "Check that the .gguf file is complete and fits in memory.")
                 try:
                     with urllib.request.urlopen(self.url + "/health", timeout=2) as r:

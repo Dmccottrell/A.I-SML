@@ -134,6 +134,16 @@ About 5 to 6 weeks and about $210 for the whole family. Why this order: the flag
 next (cheap; Flare trains at home), the biggest growths last (when the lessons are at their best). Risk: growing with only fast layers is newer; every
 grown model has a pilot and the long-memory check (32K, 64K, 128K), and falls back to the normal layer rhythm with a 64K window if it fails.
 
+## Using what Qwen3.5 does natively (decided Oct 16, 2026)
+| Native feature | Status |
+|---|---|
+| Seeing pictures | built: the "eyes" step and the picture check |
+| Long memory | built: 128K on the 4070, the long-memory check at 32K, 64K and 128K |
+| Thinking mode | built: Deep mode uses it, the thinking check guards it |
+| **Guess-ahead decoding (MTP)** | **built Oct 16:** a merged model now keeps the mtp.* head (transformers drops it; `finetune_open.restore_mtp` copies it back from the base, and the grown Apogee keeps it too). In the app a model with `"mtp": true` in models.json starts llama-server with `--spec-type draft-mtp`: the same answers, expected about 1.5 to 2 times faster on the 4070. If llama-server refuses the option or the file has no head, it loads the model without it. **To test** with Flare 3: words per second with and without, in the app |
+| **Native tool calls** | **planned for the 3.1 lessons:** chat tools (search, calculator, memory, pictures) taught in Qwen's own `<tool_call>` format instead of ours, so tool use is as reliable as Qwen trained it; VryxCode already reads both |
+| 201 languages | works already; the Emvryx voice in other languages would need lessons in them (not planned yet) |
+
 ## Later: Apogee 3.5
 Grow Apogee 3 again to about **14B** (the most that fits the 4070 with 128K; 64K comfortable), train on **Lessons 4.5** (Lessons 4 plus what the app's
 reports and approvals teach) with a second round of DPO and more thinking lessons. Expected about **50 to 52**; before it, write a harder test
