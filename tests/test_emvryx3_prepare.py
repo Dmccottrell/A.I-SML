@@ -79,6 +79,15 @@ class Prepare(unittest.TestCase):
         self.assertLess(h["flare-3"], h["equinox-3"])
         self.assertLess(h["equinox-3"], h["solstice-3"])
 
+    def test_emvryx_everyday_chat_does_not_count_as_general(self):
+        with tempfile.TemporaryDirectory() as d:
+            path = os.path.join(d, "mix.jsonl")
+            chat = [{"role": "user", "content": "Hi"}, {"role": "assistant", "content": "Hello."}]
+            with open(path, "w", encoding="utf-8") as f:
+                f.write(json.dumps({"kind": "general", "messages": chat}) + "\n")                          # Emvryx everyday chat (no licence)
+                f.write(json.dumps({"kind": "general", "licence": "cc-by-4.0", "source": "x", "messages": chat}) + "\n")
+            self.assertEqual(P.count_kinds(path).get("general"), 1)
+
     def test_chain_home_can_mix_general_lessons_and_can_skip_the_lessons_step(self):
         import argparse
         a = argparse.Namespace(lessons="l.jsonl", keep=0.4, thinking=None, thinking_share=0.1, general="g.jsonl", general_share=0.3)

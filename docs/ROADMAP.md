@@ -59,6 +59,7 @@ The owner's idea: an update to a model can raise its version (Flare 2.5 to 2.6 o
 - **VryxCode 3 (decided Oct 16):** one dedicated coding model on top of Apogee 3, trained on whole projects the teacher **Qwen3.6 27B** builds in VryxCode's own
   long-build loop (kept only when hidden tests pass) plus preference pairs. The loop (150 steps, checkpoints, rollback, a step back when stuck, a pinned plan),
   a 15-project test with hidden tests and the build factory are built. Target: whole projects 60 to 70% (version 1: about 10 to 20%). See [VRYXCODE.md](VRYXCODE.md).
+- **The whole family (decided Oct 16):** every model gets Lessons 4 (a .1 version), then grows (a .5 version: Flare about 3B, Equinox about 6B, Solstice about 11B, Apogee about 14B), in three rounds over about 5 to 6 weeks and about $210 of rented cards. Each round, what improves per model and the expected scores: [LESSONS_4.md](LESSONS_4.md).
 - **Apogee 3.5 (later):** grown to about 14B (the 4070's limit with 128K) on Lessons 4.5 (with the app's reports and approvals) and a second DPO
   round; a harder test sheet first.
 - Full plan and order of work: [LESSONS_4.md](LESSONS_4.md).
