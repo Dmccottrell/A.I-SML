@@ -152,6 +152,7 @@ class Session:
         self.live_messages = None                      # the conversation as it grows during a turn (kept if the turn is stopped)
         self.generate, self.max_turns, self.context_tokens, self.extra_programs = None, 12, None, ()
         self.turns_run = 0
+        self.build = False                              # the long-build loop (a VryxCode 3 model): set by CodeManager.start / revive / switch_model
         self._auto_tries = 0                            # automatic second tries after an unexpected failure, this message
         self._page_tries = 0                            # automatic fixes after the app's own page check found problems, this message
         self.notify, self.on_notify = False, None       # tell the owner's phone when a turn ends or it needs an answer (set by the server)
@@ -255,7 +256,7 @@ class Session:
     def ask(self, name, args):
         if name == "run" and str(args.get("command", "")).strip().startswith(vryxcode.SAFE_RUNS):
             return True
-        if self.auto_edits and name in ("write_file", "edit_file", "run"):
+        if self.auto_edits and name in ("write_file", "edit_file", "run", "rollback"):
             return True
         if name == "github" and str(args.get("action", "status")) == "status":
             return True                                  # only looking at the link
@@ -392,7 +393,8 @@ class Session:
             model_text, self._model_text = getattr(self, "_model_text", None), None
             result = vryxcode.run_task(model_text or self.expand(text), self.wrap(self.generate), self.workspace, self.ask, self.max_turns, self.context_tokens, self.extra_programs, lang_note=languages.note_for(lang),
                                        out=lambda *_: None, tools=self.tools, git_identity=self.identity,
-                                       command_prefix=self.prefix, container=bool(self.prefix) and not self.remote, history=self.history, chat_mode=True, plan=plan, todo=True, remote=self.remote)
+                                       command_prefix=self.prefix, container=bool(self.prefix) and not self.remote, history=self.history, chat_mode=True, plan=plan, todo=True, remote=self.remote,
+                                       build=getattr(self, "build", False))
             self.history = result["messages"]
             report = None if self.stop.is_set() else self._page_proof()
             if report and PAGE_TROUBLE.search(report) and self._page_tries < PAGE_FIX_TRIES:
@@ -469,12 +471,13 @@ class Session:
         self.emit("result", text=clip(report))
         return report
 
-    def switch_model(self, model_id, generate, context_tokens, meter):
+    def switch_model(self, model_id, generate, context_tokens, meter, build_steps=None, default_turns=12):
         """Another model takes over this conversation (the same session, the same history): the next message runs on it."""
         with self.cv:
             if self.state in ("starting", "working", "asking"):
                 raise CodeError("It is still working.", "Wait for it to finish, or press Stop, then pick the other model.")
         old, self.model_id, self.generate, self.context_tokens, self.meter = self.model_id, model_id, generate, context_tokens, meter
+        self.build, self.max_turns = bool(build_steps), int(build_steps or default_turns)
         self.emit("model", model=model_id, previous=old)
 
     def catch_up(self, text):
@@ -842,7 +845,8 @@ class CodeManager:
         return code_sandbox.docker_prefix(sb.get("image", code_sandbox.DEFAULT_IMAGE), workspace, cpus=sb.get("cpus", "1"), memory=sb.get("memory", "768m"),
                                           pids=sb.get("pids", 128), runtime=sb.get("runtime"))
 
-    def start(self, user, project, task, model_id, generate, auto_edits=False, context_tokens=None, meter=None, outside=False, tools=None, identity=None, env="local", plan=False, owner=False, queue=False, model_text=None):
+    def start(self, user, project, task, model_id, generate, auto_edits=False, context_tokens=None, meter=None, outside=False, tools=None, identity=None, env="local", plan=False, owner=False, queue=False, model_text=None,
+              build_steps=None):
         task = str(task or "").strip()
         if not task:
             raise CodeError("Describe what to build or fix.")
@@ -879,16 +883,18 @@ class CodeManager:
                         expand=lambda t, u=user, p=project: self.expand_mentions(u, p, t))
             self.sessions[s.id], self.by_user[user] = s, s.id
             s._model_text = model_text                          # what the model gets instead of the line the person sees (a second opinion's diff)
+            s.build = bool(build_steps)                         # a model made for long builds (VryxCode 3): the long-build loop and its own step budget
+            turns = int(build_steps or self.max_turns)
             s.on_idle = self._session_idle
             if busy:                                           # one model on one card: sessions wait their turn, so they never work on the same files at once
-                s.state, s.run_args = "queued", (generate, self.max_turns, context_tokens)
+                s.state, s.run_args = "queued", (generate, turns, context_tokens)
                 s.emit("queued", task=task, project=project, position=self.queue_position(user, s.id))
                 s.persist(force=True)
                 return s, note
-        threading.Thread(target=s.run, args=(generate, self.max_turns, context_tokens), daemon=True).start()
+        threading.Thread(target=s.run, args=(generate, turns, context_tokens), daemon=True).start()
         return s, note
 
-    def revive(self, user, sid, model_id, generate, context_tokens, meter, tools=None, identity=None, owner=False, auto_edits=False):
+    def revive(self, user, sid, model_id, generate, context_tokens, meter, tools=None, identity=None, owner=False, auto_edits=False, build_steps=None):
         """Bring a session from the history back to life, so a new message carries on in it (same id, same feed, same Rewind points)."""
         with self.lock:
             if self.running(user):
@@ -907,7 +913,8 @@ class CodeManager:
             s.checkpoints = list(meta.get("checkpoints") or [])
             s.started = meta.get("started") or s.started
             s.turns_run = max([c.get("turn", 0) for c in s.checkpoints] + [sum(1 for e in s.events if e["kind"] in ("start", "user"))])
-            s.generate, s.max_turns, s.context_tokens = generate, self.max_turns, context_tokens
+            s.generate, s.max_turns, s.context_tokens = generate, int(build_steps or self.max_turns), context_tokens
+            s.build = bool(build_steps)
             s.state = "done"
             s.on_idle = self._session_idle
             if meta.get("model") and meta["model"] != model_id:

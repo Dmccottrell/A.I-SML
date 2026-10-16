@@ -1,0 +1,6 @@
+{
+  "title": "Gradebook with weighted categories",
+  "lang": "python",
+  "level": "medium",
+  "prompt": "Build a gradebook in Python as a package grades/ with grades/__init__.py, grades/book.py and grades/export.py.\n- grades/book.py: letter(percent) -> \"A\" (90 and up), \"B\" (80 and up), \"C\" (70 and up), \"D\" (60 and up) or \"F\". class Gradebook(weights) where weights is {category: percent}; the percents must add up to 100, otherwise ValueError. add_score(student, category, score, out_of): an unknown category or out_of <= 0 or a score outside 0..out_of raises ValueError. average(student) -> the weighted average percent rounded to 2 decimals: each category's percent is (sum of scores / sum of out_of * 100), and categories with no scores for that student are left out with the remaining weights scaled up to 100; a student with no scores raises KeyError. students() -> the names sorted. ranking() -> a list of (student, average) sorted by average, highest first (ties by name).\n- grades/export.py: to_csv(book, path) writes the header student,average,letter then one row per student in sorted order, with the average written with 2 decimals (e.g. 87.50).\nWrite unit tests too."
+}

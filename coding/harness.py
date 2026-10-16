@@ -762,9 +762,11 @@ def describe_step(call_text, result):
                                         first.startswith("error") else "")
 
 
-def compact(messages, keep=4):
+def compact(messages, keep=4, pinned=""):
     """Shorten a long conversation: the system message and the task stay, the last `keep` messages stay, and
-    everything between becomes an "Earlier steps" list inside the task message. Returns (messages, dropped)."""
+    everything between becomes an "Earlier steps" list inside the task message. Returns (messages, dropped).
+    `pinned` (a long build's "Where you are" note: checklist, files written, last test, checkpoint) goes in front of that list, replacing the previous one,
+    so a fold never loses the plan."""
     system = [m for m in messages[:1] if m["role"] == "system"]
     rest = messages[len(system):]
     if len(rest) <= keep + 1:
@@ -774,12 +776,12 @@ def compact(messages, keep=4):
     steps = []
     for i in range(0, len(middle) - 1, 2):
         steps.append("- " + describe_step(middle[i]["content"], middle[i + 1]["content"]))
-    task = rest[0]["content"].split("\n\nEarlier steps", 1)[0]
+    task = rest[0]["content"].split("\n\n" + PINNED_HEAD, 1)[0].split("\n\nEarlier steps", 1)[0]
     old = rest[0]["content"].split("\n\nEarlier steps:\n", 1)
     if len(old) == 2:
         steps = old[1].split("\n") + steps
     steps = steps[-30:]
-    head = {"role": "user", "content": task + "\n\nEarlier steps:\n" + "\n".join(steps)}
+    head = {"role": "user", "content": task + ("\n\n" + pinned.strip() if pinned else "") + "\n\nEarlier steps:\n" + "\n".join(steps)}
     return system + [head] + tail, middle
 
 
@@ -823,8 +825,103 @@ def steady_note(items, failures=0):
     return line
 
 
+# -------------------------------------------------------------------- long builds (VryxCode 3): a pinned "where you are" note, checkpoints, rollback, the same failure again
+PINNED_HEAD = "Where you are (kept up to date by VryxCode):"
+CHECKPOINT_SKIP = {".git", "node_modules", "__pycache__", ".emvryx", ".worktrees", ".venv", "venv", ".pytest_cache"}
+CHECKPOINT_LIMIT = 5_000_000          # bytes kept for the safe point; a bigger project gets no checkpoint (rollback says so)
+SAME_FAIL_HINT_AT = 3                 # the tests failed the same way this many runs in a row: stop patching, step back
+STUCK_HINT = ("The tests have failed the same way {n} times in a row, so small patches are not working. Stop and step back: read the files involved again, "
+              "work out the real cause in one sentence, then try a different approach.")
+ROLLBACK_HINT = " If your changes since then made things worse, call rollback to go back to the last checkpoint (step {step}, where the tests passed) and redo it a better way."
+
+
+class Checkpoints:
+    """The project as it was the last time the tests passed: a long build's safe point. Plain code, kept in memory (up to 5 MB); .git, caches and node_modules are left alone."""
+
+    def __init__(self, root):
+        self.root, self.files, self.step = root, None, 0
+
+    def _walk(self):
+        for dirpath, dirs, names in os.walk(self.root):
+            dirs[:] = sorted(d for d in dirs if d not in CHECKPOINT_SKIP and not os.path.islink(os.path.join(dirpath, d)))
+            for n in sorted(names):
+                full = os.path.join(dirpath, n)
+                if not os.path.islink(full) and os.path.isfile(full):
+                    yield full, os.path.relpath(full, self.root).replace("\\", "/")
+
+    def save(self, step):
+        """Remember every file now. False (and the old checkpoint is kept) when the project is too big."""
+        files, total = {}, 0
+        for full, rel in self._walk():
+            try:
+                total += os.path.getsize(full)
+                if total > CHECKPOINT_LIMIT:
+                    return False
+                with open(full, "rb") as f:
+                    files[rel] = f.read()
+            except OSError:
+                continue
+        self.files, self.step = files, step
+        return True
+
+    def restore(self):
+        """Put the project back as it was at the checkpoint: changed files are rewritten, files made since are removed. Returns the tool's answer."""
+        if self.files is None:
+            raise ToolError("there is no checkpoint yet: one is saved each time the tests pass")
+        removed, changed = [], []
+        for full, rel in list(self._walk()):
+            if rel not in self.files:
+                os.remove(full)
+                removed.append(rel)
+        for rel, data in self.files.items():
+            full = os.path.join(self.root, *rel.split("/"))
+            try:
+                with open(full, "rb") as f:
+                    same = f.read() == data
+            except OSError:
+                same = False
+            if not same:
+                os.makedirs(os.path.dirname(full), exist_ok=True)
+                with open(full, "wb") as f:
+                    f.write(data)
+                changed.append(rel)
+        parts = [f"rolled back to the checkpoint from step {self.step} (the tests passed there)"]
+        if changed:
+            parts.append("put back: " + ", ".join(changed[:15]) + (" ..." if len(changed) > 15 else ""))
+        if removed:
+            parts.append("removed (made after it): " + ", ".join(removed[:15]) + (" ..." if len(removed) > 15 else ""))
+        if not changed and not removed:
+            parts.append("nothing had changed since")
+        return ". ".join(parts) + ". Read the files again before you change them."
+
+
+def failure_signature(output):
+    """What a failed test run complained about, without the parts that change every run (line numbers, timings), so the same failure is recognised."""
+    lines = [l.strip() for l in str(output).splitlines() if l.strip()]
+    keys = [l for l in lines if re.match(r"^(\w+(Error|Exception)\b|FAIL:|ERROR:|AssertionError|not ok|Error:)", l)]
+    sig = " | ".join(keys[-3:]) if keys else (lines[-1] if lines else "")
+    sig = re.sub(r"line \d+", "line N", sig)
+    return re.sub(r"\d+(\.\d+)?s\b", "Ns", sig)[:240]
+
+
+def progress_note(items, written, last_test, checkpoint_step):
+    """The pinned note for a long build (see `compact`)."""
+    lines = [PINNED_HEAD]
+    items = [it for it in (items or []) if isinstance(it, dict) and str(it.get("text", "")).strip()]
+    if items:
+        lines.append("Checklist: " + "; ".join(("[x] " if it.get("done") else "[ ] ") + str(it["text"]).strip() for it in items))
+    if written:
+        names = sorted(written)
+        lines.append("Files you wrote or changed: " + ", ".join(names[:40]) + (f" and {len(names) - 40} more" if len(names) > 40 else ""))
+    if last_test:
+        lines.append("Last test run: " + last_test)
+    if checkpoint_step:
+        lines.append(f"Last checkpoint: step {checkpoint_step} (the tests passed; rollback goes back to it).")
+    return "\n".join(lines) if len(lines) > 1 else ""
+
+
 def run_agent(task, generate, sandbox, max_turns=8, system=None, project=True, hooks=None, permissions=None,
-              ask=None, context_tokens=None, history=None, chat_mode=False, checks=False, steady=False):
+              ask=None, context_tokens=None, history=None, chat_mode=False, checks=False, steady=False, build=False):
     """Let a model work on `task`. `generate(messages)` returns the model's next reply as text.
 
     project        show the workspace's EMVRYX.md / AGENTS.md as "Project notes" before the task
@@ -837,6 +934,10 @@ def run_agent(task, generate, sandbox, max_turns=8, system=None, project=True, h
                    answer. (Once, if the model pastes code into the chat before doing any work, it is told to save the code in the project instead.)
 
     steady         keep the model on one checklist (todo) item at a time: after each step it is told which item is next, and after two failures in a row to retry smaller
+
+    build          a long, multi-step build (VryxCode 3): each passing test run saves a checkpoint and the `rollback` tool goes back to it; when the tests fail
+                   the same way three runs in a row the model is told to step back and try another way; a fold keeps a pinned "where you are" note
+                   (checklist, files written, last test, checkpoint) and more recent steps
 
     checks         look at a Python or JSON change before it is made and refuse it if it would not even parse (nothing is saved and the model is told what is wrong, so
                    the person is not asked to approve broken code); say "checked" after a good change; and, once, ask for the tests to be run before finishing if code
@@ -859,9 +960,16 @@ def run_agent(task, generate, sandbox, max_turns=8, system=None, project=True, h
     web_unchecked, page_nudges = False, 0                            # a web file changed since the page was last checked (proof before "done")
     plan_items, step_fails = None, 0                                 # the model's todo list (steady mode) and failures in a row
     no_call, no_call_total, bad_calls, repeats = 0, 0, 0, {}        # replies with no tool call at all (the model is chatting, not working); steps repeated
+    written, last_test, last_sig, same_fail = set(), "", None, 0     # a long build's progress (build mode)
+    checkpoints = Checkpoints(sandbox.root) if build else None
+    if build and "rollback" not in sandbox.extra_tools:
+        sandbox.register_tool("rollback", lambda: checkpoints.restore())
     for turn in range(1, max_turns + 1):
         if context_tokens and estimate_tokens(messages) > context_tokens * 0.7:
-            messages, dropped = compact(messages)
+            if build:
+                messages, dropped = compact(messages, keep=12, pinned=progress_note(plan_items, written, last_test, checkpoints.step))
+            else:
+                messages, dropped = compact(messages)
             episodes.extend(dropped)
         reply = generate(messages)
         messages.append({"role": "assistant", "content": reply})
@@ -899,6 +1007,22 @@ def run_agent(task, generate, sandbox, max_turns=8, system=None, project=True, h
                 edited_since_test = edited_since_test or str(args.get("path", "")).endswith(".py")
             if checks and name == "run" and isinstance(args, dict) and TEST_COMMAND.search(str(args.get("command", ""))) and str(result).startswith("exit code 0"):
                 edited_since_test = False
+            if build:
+                if name in ("write_file", "edit_file") and isinstance(args, dict) and args.get("path"):
+                    written.add(re.sub(r"^(\./)+", "", str(args["path"]).replace("\\", "/")))
+                elif name == "rollback":
+                    last_sig, same_fail = None, 0
+                elif name == "run" and isinstance(args, dict) and TEST_COMMAND.search(str(args.get("command", ""))):
+                    if str(result).startswith("exit code 0"):
+                        last_test, last_sig, same_fail = f"passed (step {turn})", None, 0
+                        if checkpoints.save(turn):
+                            result = str(result) + f"\nCheckpoint saved (step {turn}): the tests pass here."
+                    else:
+                        sig = failure_signature(result)
+                        same_fail = same_fail + 1 if sig == last_sig else 1
+                        last_sig, last_test = sig, f"failed (step {turn}): {cut(sig, 160)}"
+                        if same_fail >= SAME_FAIL_HINT_AT and (same_fail - SAME_FAIL_HINT_AT) % 2 == 0:
+                            result = str(result) + "\n" + STUCK_HINT.format(n=same_fail) + (ROLLBACK_HINT.format(step=checkpoints.step) if checkpoints.files is not None else "")
             if name in ("write_file", "edit_file") and not done:
                 problems = hooks.run(sandbox, "after_edit", str(args.get("path", "")))
                 if problems:

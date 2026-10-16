@@ -1,0 +1,6 @@
+{
+  "title": "Bank ledger with transfers and statements",
+  "lang": "python",
+  "level": "medium",
+  "prompt": "Build a small bank ledger in Python as a package bank/ with these files:\n- bank/errors.py: class InsufficientFunds(Exception).\n- bank/accounts.py: class Account(owner) with .owner, .balance (starts at 0), deposit(amount) and withdraw(amount). Amounts are whole numbers of cents (int). An amount that is not a positive int raises ValueError; withdrawing more than the balance raises InsufficientFunds and changes nothing.\n- bank/ledger.py: class Ledger with open_account(owner) -> an id string \"A1\", \"A2\", ... in order; deposit(id, amount); withdraw(id, amount); transfer(from_id, to_id, amount) (all or nothing: if it fails, neither balance changes); balance(id) -> int; history(id) -> a list of (kind, amount, balance_after) tuples in order, where kind is \"deposit\", \"withdraw\", \"transfer_in\" or \"transfer_out\". An unknown id raises KeyError. Failed operations add nothing to the history.\n- bank/report.py: statement(ledger, id) -> a string: the first line `Statement for OWNER (ID)`, then one line per history entry `KIND AMOUNT -> BALANCE` with money as dollars with 2 decimals (e.g. `deposit 12.50 -> 12.50`), and the last line `Balance: 12.50`.\nWrite unit tests too."
+}

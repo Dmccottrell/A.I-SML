@@ -1,0 +1,7 @@
+{
+  "title": "Unit converter page",
+  "lang": "javascript",
+  "level": "easy",
+  "needs": ["node"],
+  "prompt": "Build a unit converter web page with index.html, style.css, convert.js and page.js (plain JavaScript, no libraries, no build step).\nconvert.js must also work in Node: end it with `if (typeof module !== \"undefined\") module.exports = { convert, units, format };`.\n- Units: length mm, cm, m, km, in, ft, yd, mi (1 in = 2.54 cm, 1 ft = 12 in, 1 yd = 3 ft, 1 mi = 1760 yd); mass g, kg, oz, lb (1 lb = 453.59237 g, 1 lb = 16 oz); temperature C, F, K.\n- units(kind) -> the list of units for \"length\", \"mass\" or \"temperature\", in the order above; an unknown kind throws an Error.\n- convert(value, from, to) -> the converted number. An unknown unit, or units of different kinds, throws an Error whose message contains \"cannot convert\". A temperature below absolute zero throws an Error.\n- format(n) -> a string with at most 4 decimals and no trailing zeros (format(2.50000) is \"2.5\", format(1/3) is \"0.3333\", format(5) is \"5\", format(-0.00001) is \"0\").\npage.js connects the page: a kind picker, a number input, from and to pickers, and the result shown as you type. Write a Node test file for convert.js too (node test_convert.js)."
+}

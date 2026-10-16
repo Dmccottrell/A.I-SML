@@ -335,6 +335,31 @@ class Chain(unittest.TestCase):
                 CH.wait_while_paused(flag, sleep=fake_sleep)
             self.assertEqual(waits, [15])
 
+    def test_ctrl_c_waits_for_the_step_to_save(self):
+        class FakeProc:
+            def __init__(self, *a, **k):
+                self.waits, self.killed = 0, False
+
+            def wait(self):
+                self.waits += 1
+                if self.waits == 1:
+                    raise KeyboardInterrupt
+                return 0
+
+            def kill(self):
+                self.killed = True
+        made = []
+        real = CH.subprocess.Popen
+        CH.subprocess.Popen = lambda *a, **k: made.append(FakeProc()) or made[-1]
+        try:
+            with tempfile.TemporaryDirectory() as d, contextlib.redirect_stdout(io.StringIO()) as out:
+                with self.assertRaises(KeyboardInterrupt):
+                    CH.run_logged(["x"], os.path.join(d, "log.txt"))
+        finally:
+            CH.subprocess.Popen = real
+        self.assertEqual((made[0].waits, made[0].killed), (2, False))          # it waited for the save, it did not kill the training
+        self.assertIn("Do not press Ctrl+C again", out.getvalue())
+
     def test_gaming_flag_is_created_and_removed(self):
         with tempfile.TemporaryDirectory() as d:
             a = Args(data_dir=os.path.join(d, "data"))

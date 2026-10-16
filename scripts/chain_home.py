@@ -158,7 +158,17 @@ def run_logged(cmd, log):
     with open(log, "a", encoding="utf-8") as f:
         f.write(f"\n$ {' '.join(cmd)}\n")
         f.flush()
-        return subprocess.run(cmd, stdout=f, stderr=subprocess.STDOUT).returncode
+        proc = subprocess.Popen(cmd, stdout=f, stderr=subprocess.STDOUT)
+        try:
+            return proc.wait()
+        except KeyboardInterrupt:
+            # Ctrl+C reaches the step too: training finishes its current step and saves, so wait for that instead of leaving it behind
+            print("Stopping: the current step is finishing and saving (a minute or two). Do not press Ctrl+C again.", flush=True)
+            try:
+                proc.wait()
+            except KeyboardInterrupt:
+                proc.kill()
+            raise
 
 
 def run_think(model, a, log):
@@ -247,7 +257,11 @@ def main(argv=None):
                 continue
             notify(f"{model}: {step}")
             t0 = time.time()
-            rc, log = run_step(model, step, a)
+            try:
+                rc, log = run_step(model, step, a)
+            except KeyboardInterrupt:
+                notify(f"PAUSED by you at {model} {step} (what was done is saved). Run the same command to carry on.")
+                return 130
             if rc:
                 notify(f"STOPPED at {model} {step} (exit {rc}). See {log}. Run the same command to resume.")
                 return 1

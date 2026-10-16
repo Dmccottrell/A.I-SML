@@ -1,0 +1,6 @@
+{
+  "title": "URL shortener with click counts",
+  "lang": "python",
+  "level": "medium",
+  "prompt": "Build a URL shortener in Python (standard library only, sqlite3 for storage) as a package shortener/ with shortener/__init__.py, shortener/codes.py and shortener/service.py.\n- shortener/codes.py: ALPHABET = \"0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ\"; encode(n) turns a non-negative int into base 62 with that alphabet (encode(0) == \"0\", encode(61) == \"Z\", encode(62) == \"10\"); decode(s) is the reverse; a negative number or a character outside the alphabet raises ValueError.\n- shortener/service.py: class Shortener(db_path=\":memory:\"). shorten(url, alias=None) -> the code. A url must start with http:// or https:// and have something after it, otherwise ValueError. Without an alias the code is encode(row id + 10000); shortening the same url again (without an alias) returns the same code. An alias must be 3 to 30 characters of letters, digits, _ or -, otherwise ValueError; an alias already in use raises ValueError too. resolve(code) -> the url (and counts one click) or None if unknown. stats(code) -> {\"url\": ..., \"clicks\": n} or None. top(n=3) -> a list of (code, clicks) with the most clicks first (ties by code).\nWrite unit tests too."
+}

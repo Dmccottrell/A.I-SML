@@ -1,0 +1,2 @@
+class LoanError(Exception):
+    pass

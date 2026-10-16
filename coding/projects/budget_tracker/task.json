@@ -1,0 +1,6 @@
+{
+  "title": "Budget tracker from a CSV file",
+  "lang": "python",
+  "level": "medium",
+  "prompt": "Build a budget tracker in Python as a package budget/ with budget/__init__.py, budget/io.py, budget/report.py and budget/__main__.py.\n- budget/io.py: a dataclass Transaction(date, description, category, amount_cents) where date is a datetime.date and amount_cents an int (negative = spending, positive = income). load_csv(path) reads a CSV with the header date,description,category,amount (date like 2026-03-05, amount like -12.50 or 1500) and returns a list of Transaction; save_csv(path, transactions) writes the same format (amount with 2 decimals) so load_csv(save_csv(...)) gives the same list.\n- budget/report.py: spending_by_category(transactions, month) -> {category: cents spent} for the month \"YYYY-MM\", counting only spending, as positive numbers; over_budget(transactions, limits, month) -> a list of (category, spent_cents, limit_cents) for the categories in limits whose spending that month is more than the limit, sorted by category; monthly_net(transactions) -> {\"YYYY-MM\": income minus spending in cents}.\n- `python -m budget report FILE.csv 2026-03` prints one line per category with spending that month, sorted by category, like `food: 42.50`, then `total: 99.00`.\nWrite unit tests too."
+}

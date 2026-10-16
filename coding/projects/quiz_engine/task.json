@@ -1,0 +1,6 @@
+{
+  "title": "Quiz engine with topics and results",
+  "lang": "python",
+  "level": "medium",
+  "prompt": "Build a quiz engine in Python as a package quiz/ with quiz/__init__.py, quiz/bank.py and quiz/session.py.\n- quiz/bank.py: load_questions(path) reads a JSON list of {\"q\": text, \"choices\": [at least 2 strings], \"answer\": index of the right choice, \"topic\": text} and returns it as a list of dicts. A question with fewer than 2 choices, an answer index out of range, or a missing key raises ValueError naming the question number (starting at 1).\n- quiz/session.py: class QuizSession(questions, seed=0, count=None). The order is: qs = list(questions); random.Random(seed).shuffle(qs); then only the first count (all if None). current() -> the current question dict, or None when finished. answer(index) -> True or False and moves to the next question; answering when finished raises RuntimeError. finished -> bool property. score -> number right. results() -> {\"score\": n, \"total\": number of questions in this session, \"percent\": rounded to 1 decimal, \"by_topic\": {topic: [right, asked]}, \"missed\": [the q text of each wrong answer, in order]}.\nWrite unit tests too."
+}

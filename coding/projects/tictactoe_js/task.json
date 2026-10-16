@@ -1,0 +1,7 @@
+{
+  "title": "Tic-tac-toe in the browser with an unbeatable computer",
+  "lang": "javascript",
+  "level": "hard",
+  "needs": ["node"],
+  "prompt": "Build a tic-tac-toe web page where you play X against the computer (O), with index.html, style.css, game.js and ui.js (plain JavaScript, no libraries, no build step).\ngame.js holds only the game logic and must also work in Node: at the end write `if (typeof module !== \"undefined\") module.exports = { winner, nextPlayer, bestMove };`. A board is an array of 9 cells, each \"X\", \"O\" or null, indexed 0-8 left to right, top to bottom.\n- winner(board) -> \"X\" or \"O\" if that player has three in a row, \"draw\" if the board is full with no winner, otherwise null.\n- nextPlayer(board) -> \"X\" if both have played the same number of times (X always starts), otherwise \"O\".\n- bestMove(board) -> the index of the best move for nextPlayer(board), using minimax: it takes a winning move if there is one, blocks the opponent's immediate win, and never loses; with several equally good moves pick the lowest index. It returns -1 if the game is already over.\nui.js draws the board, lets the person click an empty square, then lets the computer answer with bestMove, shows whose turn it is and the result, and has a New game button. Write a Node test file for game.js too (node test_game.js)."
+}

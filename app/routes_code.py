@@ -20,6 +20,16 @@ from app_errors import AppError
 from app_shared import Cancelled
 
 
+def build_steps(model):
+    """A model made for long builds (models.json "vryxcode_build": true, VryxCode 3) gets the long-build loop and its step budget ("vryxcode_steps", default 150); None for the others."""
+    if not model.get("vryxcode_build"):
+        return None
+    try:
+        return max(12, min(400, int(model.get("vryxcode_steps") or vryxcode.BUILD_STEPS)))
+    except (TypeError, ValueError):
+        return vryxcode.BUILD_STEPS
+
+
 def clip_line(text, n=80):
     text = " ".join(str(text).split())
     return text if len(text) <= n else text[:n - 1] + "\u2026"
@@ -364,7 +374,7 @@ class RoutesCode:
                 s, note = st.code.start(user, project, task, model["id"], generate, bool(body.get("auto_edits")),
                                         int(model.get("context_tested") or 8192), meter, outside=bool(model.get("outside")), tools=tools, identity=identity,
                                         env=str(body.get("env") or "local"), plan=bool(body.get("plan")), owner=who["admin"], queue=bool(body.get("queue")),
-                                        model_text=second)
+                                        model_text=second, build_steps=build_steps(model))
                 if body.get("notify") and who["owner"]:                        # the phone notification is the owner's (it goes to their ntfy topic)
                     s.notify, s.on_notify = True, st.code_notify
                 return self._send(200, {"id": s.id, "note": note, "queued": s.state == "queued", "position": st.code.queue_position(user, s.id)})
@@ -397,7 +407,7 @@ class RoutesCode:
                     meta = st.code.saved(user, sid)["meta"]
                     model = self._pick_code_model(st, who, want or meta["model"])
                     generate, meter, tools, identity = self._code_kit(st, user, model, meta["project"])
-                    sess = st.code.revive(user, sid, model["id"], generate, int(model.get("context_tested") or 8192), meter, tools=tools, identity=identity, owner=who["admin"],
+                    sess = st.code.revive(user, sid, model["id"], generate, int(model.get("context_tested") or 8192), meter, tools=tools, identity=identity, owner=who["admin"], build_steps=build_steps(model),
                                            auto_edits=bool(body.get("auto_edits")))
                     revived = True
                 else:
@@ -405,7 +415,7 @@ class RoutesCode:
                     if want and want != sess.model_id:                   # another model takes over the same conversation
                         model = self._pick_code_model(st, who, want)
                         generate, meter, tools, identity = self._code_kit(st, user, model, sess.project)
-                        sess.switch_model(model["id"], generate, int(model.get("context_tested") or 8192), meter)
+                        sess.switch_model(model["id"], generate, int(model.get("context_tested") or 8192), meter, build_steps=build_steps(model), default_turns=st.code.max_turns)
                 if "auto_edits" in body:
                     sess.auto_edits = bool(body.get("auto_edits"))             # the mode picked now applies to this message
                 if who["owner"]:
