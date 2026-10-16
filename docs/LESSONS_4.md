@@ -68,6 +68,16 @@ clearly worse becomes the "rejected" side of a pair. Tested with a scripted teac
   exactly as good as the 9B, no dip), and only Qwen3.5's "fast" (linear-attention) kind is added, so the chat memory does not grow and **128K still
   fits the 4070** (about 10.5 GB with the chat memory in 8-bit).
 - **Train (on the 5090):** the new layers fully, a major tune (high-rank LoRA) on the rest, on Lessons 4, then preference training (DPO).
+- **Built (Oct 16): `training/grow_qwen.py`.** Each new layer is a copy of the fast layer before it with its two output weights set to zero, so the grown
+  model answers exactly like the 9B before training (tested: difference 0.0). The new layers sit after fast layers spread over the middle, and llama.cpp
+  reads the new layer pattern from config.json when converting. Training (`finetune_open.py --model apogee-3`) tunes every language layer, the fast
+  layers' own projections included, at rank 64, and the new layers at rank 256 (fits a 24 GB card), or fully with `--grow_full` on a 40 GB+ card.
+  ```
+  python training/grow_qwen.py --base Qwen/Qwen3.5-9B --add 12 --out checkpoints/grown/apogee-3-base     # about 10 minutes, no graphics card needed
+  python training/finetune_open.py --model apogee-3 --data data/v3/chat_3x.jsonl --pilot                  # memory and speed first
+  python training/finetune_open.py --model apogee-3 --data data/v3/chat_3x.jsonl                          # then the real run (resumes by itself)
+  python training/finetune_open.py --model apogee-3 --merge                                               # then convert with llama.cpp as usual
+  ```
 - **Checks before publishing:** the hard sheet, the everyday sheet, identity, honesty and safety, the long-memory check (32K, 64K, 128K) and the
   picture check. Published only if it beats Apogee 2.
 - **Expected (hard sheet, out of 52):** Apogee 2 today 43; Apogee 3 **47 to 50**; about 50 tokens/sec on the 4070.
@@ -94,8 +104,8 @@ sheet, because the current one runs out of room. If a newer open base fits 12 GB
 ## Order of work
 1. Now: Flare 3 trains on the 4070 (Lessons 3); Equinox 3 next.
 2. The Constitution: the owner reviews and decides the open choices.
-3. ~~Build the lesson factory~~ (built Oct 15). Build "grow Qwen" (pass-through layers, fast-layer-only option, train new layers plus major tune) and the 5090 training
-   settings; tests for each.
+3. ~~Build the lesson factory~~ (built Oct 15). ~~Build "grow Qwen"~~ (built Oct 16: (pass-through layers, fast-layer-only option, train new layers plus major tune) and the 5090 training
+   settings; tests for each).
 4. With the 5090: Lessons 4 and VryxCode 3's builds (the same teacher), then Solstice 3, then Apogee 3 (pilot first), then VryxCode 3 on top of Apogee 3.
 5. Flare 3.1 and Equinox 3.1 on Lessons 4 (one night each on the 4070).
 6. Collect feedback in the app, then Lessons 4.5 and Apogee 3.5.

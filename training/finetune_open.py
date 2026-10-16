@@ -33,6 +33,62 @@ import open_models
 
 DEFAULT_MODEL = "Qwen/Qwen2.5-1.5B-Instruct"
 LORA_TARGETS = ["q_proj", "k_proj", "v_proj", "o_proj", "gate_proj", "up_proj", "down_proj"]
+# A grown model (training/grow_qwen.py) is tuned harder: the fast layers' own projections too, on every language-model layer (not the picture side or MTP)
+GROWN_TARGETS = (r"^(?!.*(?:mtp|visual)).*\.layers\.\d+\.(?:self_attn\.(?:q_proj|k_proj|v_proj|o_proj)|mlp\.(?:gate_proj|up_proj|down_proj)"
+                 r"|linear_attn\.(?:in_proj_qkv|in_proj_z|out_proj))$")
+GROWN_FILE = "grown_layers.safetensors"        # --grow_full: the new layers' own weights (they are trained fully, not through LoRA)
+
+
+def grown_layer_re(growth):
+    return r"\.layers\.(?:" + "|".join(str(j) for j in growth["new_layers"]) + r")\."
+
+
+def grown_lora_config(LoraConfig, growth, rank, grow_rank, full):
+    """Every language-model layer at `rank`; the new layers at `grow_rank` (they start empty, so they get far more room to learn), or left out
+    of LoRA entirely when they are trained fully."""
+    new = "|".join(str(j) for j in growth["new_layers"])
+    kw = {}
+    if full:
+        kw["exclude_modules"] = rf".*\.layers\.(?:{new})\..*"
+    else:
+        pattern = rf"layers\.(?:{new})\.(?:self_attn|mlp|linear_attn)\.\w+"
+        kw.update(rank_pattern={pattern: grow_rank}, alpha_pattern={pattern: grow_rank * 2})
+    return LoraConfig(r=rank, lora_alpha=rank * 2, lora_dropout=0.0, target_modules=GROWN_TARGETS, task_type="CAUSAL_LM", **kw)
+
+
+def grown_params(model, growth):
+    """(name, parameter) of the new layers' own weights (not LoRA), for --grow_full."""
+    import re
+    rx = re.compile(grown_layer_re(growth))
+    return [(n, p) for n, p in model.named_parameters() if rx.search(n) and "lora_" not in n]
+
+
+def plain_name(name):
+    """A parameter name without PEFT's wrapping, as in the merged model."""
+    for pre in ("base_model.model.",):
+        if name.startswith(pre):
+            name = name[len(pre):]
+    return name.replace(".base_layer.", ".")
+
+
+def save_grown(model, growth, path):
+    from safetensors.torch import save_file
+    save_file({plain_name(n): p.detach().to("cpu").contiguous() for n, p in grown_params(model, growth)}, path + ".tmp")
+    os.replace(path + ".tmp", path)
+
+
+def load_grown(model, path, torch):
+    """Put trained new-layer weights (grown_layers.safetensors) into a model, PEFT-wrapped or merged. Returns how many were loaded."""
+    from safetensors.torch import load_file
+    saved = load_file(path)
+    n = 0
+    with torch.no_grad():
+        for name, p in model.named_parameters():
+            key = plain_name(name)
+            if key in saved and "lora_" not in name:
+                p.copy_(saved[key].to(p.dtype))
+                n += 1
+    return n
 
 
 def short_name(model):
@@ -144,6 +200,9 @@ def merge_and_export(base_model, adapter_dir, export_dir, torch, spread=False):
     if model is None:
         model = open_models.load_lm(base_model, dtype=torch.bfloat16)
     model = PeftModel.from_pretrained(model, adapter_dir).merge_and_unload()
+    grown = os.path.join(os.path.dirname(adapter_dir.rstrip("/\\")), GROWN_FILE)
+    if os.path.exists(grown):                       # a grown model trained with --grow_full: its new layers were trained outside LoRA
+        print(f"merge: {load_grown(model, grown, torch)} trained new-layer weights put in", flush=True)
     os.makedirs(export_dir, exist_ok=True)
     # Small shards: with one big file (a 14B model is about 30 GB) saving collects every weight in RAM first, and a 30 GB machine's kernel kills the process
     # (no error message, the log just ends after "Writing model shards 0/1"). Shards of 2 GB are written one at a time.
@@ -179,6 +238,8 @@ def main(argv=None):
     p.add_argument("--merge", action="store_true", help="write the merged Hugging Face folder from the saved adapter and exit")
     p.add_argument("--seed", type=int, default=1337)
     p.add_argument("--no_grad_checkpoint", action="store_true")
+    p.add_argument("--grow_rank", type=int, default=256, help="a grown model (grow_qwen.py): LoRA rank of the new layers")
+    p.add_argument("--grow_full", action="store_true", help="a grown model: train the new layers fully (8-bit Adam; needs about 40 GB of graphics memory)")
     a = p.parse_args(argv)
     import open_models
     preset, cfg = open_models.resolve(a.model)
@@ -197,6 +258,14 @@ def main(argv=None):
         a.out = legacy                                                           # keep resuming / merging a run started that way
     a.out = a.out or os.path.join("checkpoints", "dev", "open", name)
     a.export = a.export or os.path.join("export", "open", name, "my-ai")
+
+    import grow_qwen
+    growth = grow_qwen.read_growth(a.model)
+    if a.grow_full and not growth:
+        sys.exit("--grow_full is only for a grown model (a folder made by training/grow_qwen.py)")
+    if growth:
+        print(f"grown model: {growth['base_layers']} -> {growth['layers']} layers; new layers {growth['new_layers']} "
+              + ("trained fully" if a.grow_full else f"at LoRA rank {a.grow_rank}") + f", the rest at rank {a.rank}")
 
     import torch
     if a.merge:
@@ -247,8 +316,13 @@ def main(argv=None):
         model = open_models.load_lm(
             a.model, dtype=dtype, device_map={"": 0},
             quantization_config=BitsAndBytesConfig(load_in_4bit=True, bnb_4bit_quant_type="nf4", bnb_4bit_use_double_quant=True,
-                                                   bnb_4bit_compute_dtype=dtype))
+                                                   bnb_4bit_compute_dtype=dtype,
+                                                   # the new layers of a grown model stay in 16 bits: their zeroed outputs would not survive 4-bit rounding, and --grow_full trains them
+                                                   **({"llm_int8_skip_modules": ["lm_head"] + [rf".*\.layers\.{j}\." for j in growth["new_layers"]]} if growth else {})))
         model = prepare_model_for_kbit_training(model, use_gradient_checkpointing=not a.no_grad_checkpoint)
+        if growth:                                  # prepare_model_for_kbit_training turns 16-bit weights into 32-bit: keep the new layers at 16 bits (half the memory)
+            for _, q in grown_params(model, growth):
+                q.data = q.data.to(dtype)
     else:
         model = open_models.load_lm(a.model, dtype=dtype).to(device)
     model.config.use_cache = False
@@ -269,13 +343,25 @@ def main(argv=None):
         state = torch.load(state_path, map_location="cpu", weights_only=False)
         step = state["step"]
         print(f"resuming at step {step:,}")
+        if a.grow_full and os.path.exists(os.path.join(a.out, GROWN_FILE)):
+            print(f"resumed {load_grown(model, os.path.join(a.out, GROWN_FILE), torch)} trained new-layer weights")
     else:
-        model = get_peft_model(model, LoraConfig(r=a.rank, lora_alpha=a.rank * 2, lora_dropout=0.0,
-                                                 target_modules=LORA_TARGETS, task_type="CAUSAL_LM"))
+        if growth:
+            model = get_peft_model(model, grown_lora_config(LoraConfig, growth, a.rank, a.grow_rank, a.grow_full))
+        else:
+            model = get_peft_model(model, LoraConfig(r=a.rank, lora_alpha=a.rank * 2, lora_dropout=0.0,
+                                                     target_modules=LORA_TARGETS, task_type="CAUSAL_LM"))
         state = None
+    if a.grow_full:
+        for _, q in grown_params(model, growth):
+            q.requires_grad_(True)
     model.print_trainable_parameters()
     params = [q for q in model.parameters() if q.requires_grad]
-    opt = torch.optim.AdamW(params, lr=a.lr, weight_decay=0.0, betas=(0.9, 0.99))
+    if a.grow_full and device == "cuda":            # billions of trainable weights: 8-bit Adam keeps its memory a quarter of the usual
+        import bitsandbytes as bnb
+        opt = bnb.optim.AdamW8bit(params, lr=a.lr, weight_decay=0.0, betas=(0.9, 0.99))
+    else:
+        opt = torch.optim.AdamW(params, lr=a.lr, weight_decay=0.0, betas=(0.9, 0.99))
     if state and "opt" in state:
         opt.load_state_dict(state["opt"])
 
@@ -289,6 +375,8 @@ def main(argv=None):
 
     def save():
         model.save_pretrained(adapter_dir)
+        if a.grow_full:
+            save_grown(model, growth, os.path.join(a.out, GROWN_FILE))
         torch.save({"step": step, "opt": opt.state_dict()}, state_path + ".tmp")
         os.replace(state_path + ".tmp", state_path)
         print(f"saved at step {step:,}")
