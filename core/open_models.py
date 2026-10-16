@@ -5,6 +5,7 @@ open_models.py - The open-base Emvryx models: which base each one starts from, a
 published model configs, written from memory: finetune_open.py --pilot prints the real ones, and the settings are first guesses for
 the pilot to confirm. Times scale from the measured Flare 3.5 run (1.5B: 7.1 s/step, 18.6 GB, 988 steps). Licences: check the model page.
 """
+import os
 
 PRESETS = {
     "flare-2.5": dict(display="Flare 2.5", hf="Qwen/Qwen2.5-1.5B-Instruct", params_b=1.54, layers=28, kv_heads=2, head_dim=128, licence="Apache 2.0",
@@ -27,6 +28,11 @@ PRESETS.update({
                       quant4=True, rank=32, batch_tokens=2048, grad_accum=32, measured=False, context=32768, untried=True, think="empty"),
     "solstice-3": dict(display="Solstice 3", hf="Qwen/Qwen3.5-9B", params_b=9.0, layers=32, kv_heads=2, head_dim=128, licence="Apache 2.0 (check)",
                        quant4=True, rank=16, batch_tokens=1024, grad_accum=64, measured=False, context=32768, untried=True, think="empty"),
+    # The flagship: Qwen3.5 9B grown to 44 layers (about 12B) with 12 new pass-through "fast" layers (training/grow_qwen.py), then a major tune:
+    # LoRA rank 64 on every layer (fast layers included), the new layers at rank 256 (or trained fully with --grow_full on a 40 GB+ card).
+    "apogee-3": dict(display="Apogee 3", hf=os.path.join("checkpoints", "grown", "apogee-3-base"), grown_from="Qwen/Qwen3.5-9B", grow_add=12,
+                     params_b=11.9, layers=44, kv_heads=2, head_dim=128, licence="Apache 2.0 (check)",
+                     quant4=True, rank=64, batch_tokens=2048, grad_accum=32, measured=False, context=32768, untried=True, think="empty"),
 })
 CONTEXT = 32768                     # all of these read 32,768 tokens natively
 YARN_FACTOR = 4.0                   # the Qwen3 models stretch to 4 x 32,768 = 131,072 tokens with YaRN (their model cards say so);
