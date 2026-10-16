@@ -139,6 +139,29 @@ class Runner(unittest.TestCase):
             A.ModelRunner(crash, self.files, start_timeout=10).ensure("ember-2", 1024)
         self.assertIn("stopped while loading", c.exception.message)
 
+    def test_guess_ahead_flag_and_its_fallback(self):
+        log = os.path.join(self.tmp.name, "argv.txt")
+        recording = FAKE.replace("t0 = time.time()", "open(" + repr(log) + ", 'a').write(' '.join(a) + chr(10)); t0 = time.time()", 1)
+        r = A.ModelRunner(write_fake(self.tmp.name, recording.format(py=sys.executable), "rec"), self.files, start_timeout=20)
+        r.draft_ahead = {"ember-2"}
+        try:
+            r.ensure("ember-2", 1024)
+            r.ensure("flare-2", 1024)                                       # a model without the flag is started plainly
+        finally:
+            r.stop()
+        lines = open(log).read().splitlines()
+        self.assertIn("--spec-type draft-mtp", lines[0])
+        self.assertNotIn("--spec-type", lines[1])
+        refusing = FAKE.replace("t0 = time.time()", "t0 = time.time()\nif '--spec-type' in a: sys.exit(1)", 1)    # an older llama-server
+        r = A.ModelRunner(write_fake(self.tmp.name, refusing.format(py=sys.executable), "old"), self.files, start_timeout=20)
+        r.draft_ahead = {"ember-2"}
+        try:
+            url = r.ensure("ember-2", 1024)                                 # loads without the speed-up instead of failing
+            self.assertIn("ember-2.gguf", "".join(E.LlamaServer(url).stream([1], 5)))
+            self.assertIn("ember-2", r.no_draft)
+        finally:
+            r.stop()
+
     def test_never_starts_without_a_binary(self):
         self.assertFalse(A.ModelRunner(None, self.files).available("ember-2"))
 

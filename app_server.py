@@ -574,6 +574,7 @@ def main():
     if files and not args.llama:
         runner = ModelRunner(args.llama_bin or find_llama_server(), files, extra_args=args.llama_args.split())
         runner.memo = os.path.join(args.data, "last_model.json")
+        runner.draft_ahead = {m["id"] for m in manifest["models"] if m.get("mtp")}      # Emvryx 3 models with their guess-ahead head kept
         note = gpu_note(args.llama_bin or find_llama_server(), args.llama_args.split())
         if note:
             print("Speed: " + note, flush=True)

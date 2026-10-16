@@ -138,5 +138,30 @@ class Grow(unittest.TestCase):
         self.assertTrue(torch.equal(dict(merged.named_parameters())[f"model.language_model.layers.{j}.mlp.down_proj.weight"], down.detach()))
 
 
+@unittest.skipUnless(HAVE_MODEL, "needs torch and safetensors")
+class KeepTheGuessAheadHead(unittest.TestCase):
+    def test_merged_model_gets_the_mtp_weights_back(self):
+        import finetune_open as FO
+        from safetensors.torch import load_file, save_file
+        with tempfile.TemporaryDirectory() as d:
+            base, out = os.path.join(d, "base"), os.path.join(d, "out")
+            os.makedirs(base)
+            os.makedirs(out)
+            save_file({"model.layers.0.w": torch.ones(2), "mtp.fc.weight": torch.full((2, 2), 3.0)}, os.path.join(base, "model.safetensors"))
+            with open(os.path.join(base, "config.json"), "w") as f:
+                json.dump({"text_config": {"num_hidden_layers": 1, "mtp_num_hidden_layers": 1}}, f)
+            save_file({"model.layers.0.w": torch.zeros(2)}, os.path.join(out, "model.safetensors"))          # what save_pretrained writes: no mtp
+            with open(os.path.join(out, "config.json"), "w") as f:
+                json.dump({"text_config": {"num_hidden_layers": 1}}, f)
+            self.assertEqual(FO.restore_mtp(base, out, log=lambda *_: None), 1)
+            with open(os.path.join(out, "model.safetensors.index.json")) as f:
+                wm = json.load(f)["weight_map"]
+            self.assertEqual(wm, {"model.layers.0.w": "model.safetensors", "mtp.fc.weight": "model-mtp.safetensors"})
+            self.assertTrue(torch.equal(load_file(os.path.join(out, "model-mtp.safetensors"))["mtp.fc.weight"], torch.full((2, 2), 3.0)))
+            with open(os.path.join(out, "config.json")) as f:
+                self.assertEqual(json.load(f)["text_config"]["mtp_num_hidden_layers"], 1)
+            self.assertEqual(FO.restore_mtp(base, out, log=lambda *_: None), 0)                              # already there: nothing to do
+
+
 if __name__ == "__main__":
     unittest.main()
