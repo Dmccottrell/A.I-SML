@@ -46,7 +46,9 @@ def count_kinds(path):
         for line in f:
             if line.strip():
                 row = json.loads(line)
-                k = "general" if row.get("kind") == "general" else F.kind_of(row)
+                # only the open-dataset lessons count as "general" here: they carry a licence. The Emvryx everyday-chat lessons also say kind "general"
+                # but have none, and counting them made the check report "FIX general lessons 69%" when the mix was right.
+                k = "general" if row.get("kind") == "general" and row.get("licence") else F.kind_of(row)
                 out[k] = out.get(k, 0) + 1
     return out
 

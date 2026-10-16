@@ -96,6 +96,44 @@ clearly worse becomes the "rejected" side of a pair. Tested with a scripted teac
 
 **VryxCode 3** (decided Oct 16, 2026): one dedicated coding model instead of VryxCode on several chat models. Its lessons are whole projects the teacher (Qwen3.6 27B) builds in VryxCode's own long-build loop, kept only when hidden tests pass, plus bug hunts and preference pairs (`coding/project_factory.py`). Measured with the 15-project test (`coding/bench_projects.py`). Details: [VRYXCODE.md](VRYXCODE.md).
 
+## The whole family: Lessons 4 for every model, then growing every model (decided Oct 16, 2026)
+Every model gets Lessons 4 first (a **.1** version, same size), and later grows (a **.5** version, bigger). The four stay clearly spaced from fastest
+to smartest, and every one still runs on the RTX 4070 with 128K (only "fast" layers are added, so the chat memory does not grow). All numbers are
+estimates until each model's exam; a version is published only if it beats the one before it (hard sheet, everyday sheet, identity, safety).
+
+### What Lessons 4 does for each model (no growth)
+| Model | Today | With Lessons 4 (.1) | What gets better | Hard sheet |
+|---|---|---|---|---|
+| Flare 3.1 (2B) | Lessons 3 | 25,000 to 50,000 checked lessons, short answers weighted | one Emvryx voice; follows instructions and formats exactly; honest "I don't know"; fewer wrong numbers (maths checked) | 30-33 -> 31-35 |
+| Equinox 3.1 (4B) | Lessons 3 | the same, plus the code and maths lessons | code that runs, maths with checked answers, longer chats without losing track, kinder refusals | 40-43 -> 41-45 |
+| Solstice 3.1 (9B) | Lessons 3 (training now) | the same, plus thinking lessons and the first preference pairs | step-by-step reasoning on hard problems, documents and pictures explained better, calibrated confidence | 43-46 -> 45-47 |
+| Apogee 3 (grown 12B) | - | trained on Lessons 4 from the start, then preference training | everything above, plus the hardest problems and Deep mode thinking | 46-48 |
+| Apogee 3.1 | Apogee 3 | 50,000 lessons aimed at what Apogee 3 still misses, a second preference round | weak areas found by its exam, long conversations, tool use | 48-49 |
+
+Small models gain most in voice, instruction-following and honesty (the parts that are about habits); big models gain most in reasoning and code
+(the parts that need capacity). The checked answers help every model: a wrong number or code that does not run is never taught.
+
+### Growing every model (.5)
+| Model | Now -> grown | Speed on the 4070 (words/sec, rough) | What gets better | Hard sheet |
+|---|---|---|---|---|
+| Flare 3.5 | 2B -> about 3B | about 120 -> 100 | multi-step questions, planning, fewer slips; stays the fast Free-plan default, so the smallest growth | 33-36 |
+| Equinox 3.5 | 4B -> about 6B | about 80 -> 65 | the biggest everyday upgrade: maths, code, long chats; close to today's Solstice | 43-46 |
+| Solstice 3.5 | 9B -> about 11B | about 55 -> 45 | deep explanations, long documents, pictures; about where Apogee 3 starts, but faster | 46-49 |
+| Apogee 3.5 | 12B -> about 14B | about 45 -> 38 | the hardest reasoning, Deep mode, expert questions; the most that fits the 4070 with 128K | 50-52 |
+| VryxCode 3.5 | on Apogee 3.5 | - | bigger projects (10 to 20 files), fewer stuck loops, better at fixing its own failed tests | whole projects 70-80% |
+
+### The rounds
+| Round | Lessons 4 total | Trained | Where | Time, cost (rented 3090 at about $0.23/hr) |
+|---|---|---|---|---|
+| 1 | 25,000 | Apogee 3 (grow to 12B), Solstice 3.1 | rented | about 1 to 1.5 weeks, about $45 |
+| VryxCode | + the teacher's builds | VryxCode 3 on Apogee 3 | rented | about 1 week, about $35 |
+| 2 | 50,000 | Flare 3.1 and 3.5, Equinox 3.1 and 3.5, Apogee 3.1 | Flare on the 4070 (free), the rest rented | about 1.5 weeks, about $40 |
+| 3 | 100,000 (Lessons 4.5, with the app's approved reports) | Solstice 3.5 (11B), Apogee 3.5 (14B), VryxCode 3.5 | rented (a 48 GB card or a 5090 for Apogee) | about 2 weeks, about $90 |
+
+About 5 to 6 weeks and about $210 for the whole family. Why this order: the flagship first (it proves growing works before the rest), the small models
+next (cheap; Flare trains at home), the biggest growths last (when the lessons are at their best). Risk: growing with only fast layers is newer; every
+grown model has a pilot and the long-memory check (32K, 64K, 128K), and falls back to the normal layer rhythm with a 64K window if it fails.
+
 ## Later: Apogee 3.5
 Grow Apogee 3 again to about **14B** (the most that fits the 4070 with 128K; 64K comfortable), train on **Lessons 4.5** (Lessons 4 plus what the app's
 reports and approvals teach) with a second round of DPO and more thinking lessons. Expected about **50 to 52**; before it, write a harder test

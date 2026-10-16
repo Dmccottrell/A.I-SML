@@ -46,6 +46,8 @@ The first build on a newer open-model generation. **Flare 3, Equinox 3 and Solst
 | Equinox 3 | Qwen3.5 4B | about 3 GB | Equinox 2 (Qwen3 4B) | preparation code ready, not run |
 | Solstice 3 | Qwen3.5 9B | about 6 GB | Solstice 2 (Qwen3 8B) | preparation code ready, not run; may not fit for training |
 | Apogee 3 (flagship) | Qwen3.5 9B grown to about 12B (decided Oct 15, 2026) | about 7.3 GB | Apogee 2 | planned on an RTX 5090: new layers + major tune + Lessons 4 + DPO; runs on the 4070 with 128K |
+| Flare / Equinox / Solstice 3.1 | same bases, on Lessons 4 | same | the 3.0 versions | planned: one Emvryx voice, checked maths and code; hard sheet +1 to +2 |
+| Flare 3.5 / Equinox 3.5 / Solstice 3.5 | grown: about 3B / 6B / 11B (fast layers only) | slightly larger | the 3.1 versions | planned in rounds 2 and 3 of the plan in [LESSONS_4.md](LESSONS_4.md); every one runs on the 4070 with 128K |
 | VryxCode 3 (the coding model) | Apogee 3 (decided Oct 16, 2026) | about 7.3 GB | VryxCode on Equinox, Solstice and Apogee 2 | planned on an RTX 5090: coding tune on the teacher's (Qwen3.6 27B) checked builds + DPO; runs on the 4070 with 128K |
 
 **Update (Oct 15, 2026):** chat stays on the RTX 4070 only; Flare 3 and Equinox 3 train on the 4070 (Flare 3 is training now, on 59,764 lessons:
