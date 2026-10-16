@@ -1,0 +1,7 @@
+{
+  "title": "To-do web app with a saved store",
+  "lang": "javascript",
+  "level": "medium",
+  "needs": ["node"],
+  "prompt": "Build a to-do web app with index.html, style.css, store.js and app.js (plain JavaScript, no libraries, no build step).\nstore.js holds the data logic and must also work in Node: end it with `if (typeof module !== \"undefined\") module.exports = { createStore };`.\ncreateStore(storage) takes an object with getItem(key) and setItem(key, value) (localStorage in the page, a fake in tests) and returns a store with:\n- add(text) -> the new item {id, text, done: false}; text is trimmed; empty text throws an Error. Ids are 1, 2, 3... and never reused.\n- toggle(id), edit(id, text) (trimmed; empty throws), remove(id); an unknown id throws an Error.\n- list(filter) with filter \"all\" (default), \"active\" or \"done\", in the order added.\n- clearDone() removes the done items and returns how many it removed.\n- counts() -> {all, active, done}.\nEvery change saves {\"nextId\": n, \"items\": [...]} as JSON under the key \"todos\", and createStore loads what is already saved there (a missing or broken value starts empty).\napp.js connects the page: an input and Add button, the list with a checkbox, edit and delete for each item, All/Active/Done filters, the counts, and Clear done. Write a Node test file for store.js too (node test_store.js)."
+}

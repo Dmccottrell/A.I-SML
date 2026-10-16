@@ -1,0 +1,14 @@
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>To-do</title><link rel="stylesheet" href="style.css"></head>
+<body>
+  <h1>To-do</h1>
+  <form id="add-form"><input id="text" aria-label="New task" placeholder="Something to do"><button>Add</button></form>
+  <div><button data-filter="all">All</button><button data-filter="active">Active</button><button data-filter="done">Done</button></div>
+  <ul id="list"></ul>
+  <p id="counts"></p>
+  <button id="clear">Clear done</button>
+  <script src="store.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>

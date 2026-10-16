@@ -56,6 +56,9 @@ The owner's idea: an update to a model can raise its version (Flare 2.5 to 2.6 o
 - **Lessons 4:** about 100,000 answers written to the [Emvryx Constitution](EMVRYX_CONSTITUTION.md), each judged and rewritten, with code run,
   maths verified and facts checked, plus 30,000 to 50,000 preference pairs and thinking lessons; one Emvryx voice everywhere. Answers come from open
   models whose licences allow it (never from Claude or ChatGPT). Then Flare 3.1 and Equinox 3.1 retrain on them.
+- **VryxCode 3 (decided Oct 16):** one dedicated coding model on top of Apogee 3, trained on whole projects the teacher **Qwen3.6 27B** builds in VryxCode's own
+  long-build loop (kept only when hidden tests pass) plus preference pairs. The loop (150 steps, checkpoints, rollback, a step back when stuck, a pinned plan),
+  a 15-project test with hidden tests and the build factory are built. Target: whole projects 60 to 70% (version 1: about 10 to 20%). See [VRYXCODE.md](VRYXCODE.md).
 - **Apogee 3.5 (later):** grown to about 14B (the 4070's limit with 128K) on Lessons 4.5 (with the app's reports and approvals) and a second DPO
   round; a harder test sheet first.
 - Full plan and order of work: [LESSONS_4.md](LESSONS_4.md).

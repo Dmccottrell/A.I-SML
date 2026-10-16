@@ -1,0 +1,6 @@
+{
+  "title": "To-do app for the command line",
+  "lang": "python",
+  "level": "medium",
+  "prompt": "Build a command-line to-do app in Python as a package folder todo/ with todo/__init__.py, todo/storage.py and todo/__main__.py, so it runs as `python -m todo`.\nTasks are saved as JSON in the file named by the environment variable TODO_FILE (default: todo.json in the current folder). The file holds {\"next_id\": 1, \"tasks\": []}; each task is {\"id\": int, \"text\": str, \"done\": bool}. Ids start at 1 and are never reused, even after a task is removed.\nIn todo/storage.py write load(path) (a missing file gives {\"next_id\": 1, \"tasks\": []}) and save(path, data).\nCommands and exactly what they print:\n- python -m todo add \"Buy milk\"  ->  Added 1: Buy milk\n- python -m todo list  ->  one line per task: `1 [ ] Buy milk`, or `1 [x] Buy milk` when done; `No tasks` when there are none\n- python -m todo list --pending  ->  only the tasks not done (same format; `No tasks` if none)\n- python -m todo done 1  ->  Done 1: Buy milk\n- python -m todo remove 1  ->  Removed 1: Buy milk\n- done or remove with an id that does not exist prints `No task 7` to stderr and exits with code 1.\nWrite unit tests too."
+}

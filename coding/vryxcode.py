@@ -57,6 +57,15 @@ PLAN_NOTE = (" PLAN MODE: do not change anything in this turn. You may look arou
              "(3 to 7 steps): what you will build or change, in which files, and how you will check it works. End by asking whether to go ahead. Do not write code in the reply, and do not call finish.")
 TODO_NOTE = (" For a job with more than two steps, first call todo with a short checklist, for example {\"name\": \"todo\", \"args\": {\"items\": [{\"text\": \"Write slug.py\", \"done\": false}, "
              "{\"text\": \"Run the tests\", \"done\": false}]}}, and call it again to tick items off as you finish them. Keep each item a few words. Then work on one item at a time: do it, check it, tick it, and only then start the next.")
+BUILD_NOTE = (" BUILDING SOMETHING BIGGER (several files or steps): work like a careful engineer. "
+              "1) First decide the files and what each one does, and call todo with one item per milestone (a milestone is a piece you can test on its own). "
+              "2) For each milestone: write the code, write or extend a unit test for it, run the tests, fix until they pass, then tick the item. "
+              "3) Each time the tests pass, VryxCode saves a checkpoint. If a change breaks things and a few tries do not fix it, call rollback (no arguments) "
+              "to go back to the last checkpoint, then try a different way. "
+              "4) Keep each file focused (under about 300 lines). Read a file again before you edit it if you have not looked at it recently, and copy the old text exactly. "
+              "5) Follow every name in the request exactly (files, functions, classes, commands, output text): other code will rely on them. "
+              "6) At the end run all the tests once more, then finish.")
+BUILD_STEPS = 150                  # steps per message in the long-build loop (a model's "vryxcode_steps" in models.json can set its own)
 SAFE_RUNS = ("python -m unittest", "python3 -m unittest", "python -m pytest", "pytest")      # tests may run without asking
 ELIGIBLE_NOTE = {"equinox-2": "Equinox 2 is a small model: give it small tasks (one function, one file)."}
 
@@ -251,6 +260,8 @@ def preview(name, args):
         return f"edit {args.get('path')}\n  - {str(args.get('old', ''))[:300]}\n  + {str(args.get('new', ''))[:300]}"
     if name == "todo":
         return "todo " + json.dumps(args)[:1500]
+    if name == "rollback":
+        return "rollback: put the project back as it was at the last checkpoint (the last time the tests passed); files made since are removed"
     if name == "github":
         return {"pull": "github pull: fetch new work from the linked GitHub repository (fast-forward only)",
                 "push": "github push: send this project's current branch to the linked GitHub repository"}.get(str(args.get("action")), f"github {args.get('action')}")
@@ -264,7 +275,7 @@ def make_ask(auto_yes=False, input_fn=input, out=print):
     def ask(name, args):
         if name == "run" and str(args.get("command", "")).strip().startswith(SAFE_RUNS):
             return True
-        if auto_yes and name in ("write_file", "edit_file", "run"):
+        if auto_yes and name in ("write_file", "edit_file", "run", "rollback"):
             return True
         if name in always:
             return True
@@ -306,10 +317,14 @@ def make_todo():
 
 
 def run_task(task, generate, workspace, ask, max_turns=12, context_tokens=None, extra_programs=(), out=print, tools=None, git_identity=None, command_prefix=None, container=False,
-             history=None, chat_mode=False, checks=True, plan=False, todo=False, remote=False, lang_note=""):
+             history=None, chat_mode=False, checks=True, plan=False, todo=False, remote=False, lang_note="", build=False):
     """Run one task. Returns harness.run_agent's result (finished, summary, turns, messages).
     `tools` is {name: function(**args) -> text} of extra tools (the GitHub tool, run by the server, never by the sandbox).
-    `plan` looks only (no edits, runs or git changes) and answers with a plan; `todo` adds the checklist tool the page shows as a to-do list."""
+    `plan` looks only (no edits, runs or git changes) and answers with a plan; `todo` adds the checklist tool the page shows as a to-do list.
+    `build` is the long-build loop (VryxCode 3, harness.run_agent's build mode): checkpoints when the tests pass, the rollback tool, a step back after the
+    same failure, the checklist kept through folds. It implies `todo`."""
+    build = bool(build) and not plan
+    todo = todo or build
     programs = set(harness.ALLOWED_PROGRAMS) | set(extra_programs)
     rules = {"write_file": "ask", "edit_file": "ask", "run": "ask"}
     if plan:
@@ -318,6 +333,8 @@ def run_task(task, generate, workspace, ask, max_turns=12, context_tokens=None, 
     if todo:
         tools["todo"] = make_todo()
         rules["todo"] = "allow"
+    if build:
+        rules["rollback"] = "ask"                                 # it rewrites files, so it asks like an edit (--yes / Edit without asking: it just runs)
     kw = {"git_identity": git_identity} if git_identity else {}
     if command_prefix:
         kw.update(command_prefix=command_prefix, container=container, remote=remote)
@@ -326,9 +343,9 @@ def run_task(task, generate, workspace, ask, max_turns=12, context_tokens=None, 
     with harness.Sandbox(workspace=workspace, allowed_programs=programs, **kw) as sandbox:
         for name, fn in (tools or {}).items():
             sandbox.register_tool(name, fn)
-        system = SYSTEM + (GITHUB_TOOL_NOTE if "github" in (tools or {}) else "") + (CHECK_PAGE_NOTE if "check_page" in (tools or {}) else "") + (TODO_NOTE if todo else "") + (PLAN_NOTE if plan else "") + (lang_note or "")
+        system = SYSTEM + (GITHUB_TOOL_NOTE if "github" in (tools or {}) else "") + (CHECK_PAGE_NOTE if "check_page" in (tools or {}) else "") + (TODO_NOTE if todo else "") + (BUILD_NOTE if build else "") + (PLAN_NOTE if plan else "") + (lang_note or "")
         result = harness.run_agent(task, generate, sandbox, max_turns=max_turns, system=system, ask=ask, context_tokens=context_tokens,
-                                   permissions=harness.Permissions(rules=rules, ask=ask), history=history, chat_mode=chat_mode, checks=checks, steady=todo)
+                                   permissions=harness.Permissions(rules=rules, ask=ask), history=history, chat_mode=chat_mode, checks=checks, steady=todo, build=build)
     out(("Done: " if result["finished"] else "Stopped without finishing: ") + (result["summary"] or f"{result['turns']} steps used") )
     return result
 
@@ -340,7 +357,8 @@ def main(argv=None, input_fn=input):
     p.add_argument("--llama", default="http://127.0.0.1:8080", help="the llama-server running that model")
     p.add_argument("--workspace", default=".", help="the project folder (default: here)")
     p.add_argument("--yes", action="store_true", help="don't ask before edits and runs (git commits and unknown tools still ask)")
-    p.add_argument("--max-turns", type=int, default=12)
+    p.add_argument("--max-turns", type=int, default=None, help="steps per task (default 12, or 150 with --build)")
+    p.add_argument("--build", action="store_true", help="the long-build loop for multi-step projects: checkpoints, rollback, a step back when stuck (VryxCode 3)")
     p.add_argument("--context", type=int, default=32768, help="the context the server was started with (old steps are summarised near it)")
     p.add_argument("--allow", default="", help="more programs the model may run, comma separated (e.g. node,npm)")
     p.add_argument("--demo", action="store_true", help="a scripted run in a temporary folder: no model, shows the loop")
@@ -353,6 +371,8 @@ def main(argv=None, input_fn=input):
     if note:
         print(note)
     extra = [x for x in a.allow.split(",") if x.strip()]
+    if a.max_turns is None:
+        a.max_turns = BUILD_STEPS if a.build else 12
     if a.demo:
         workspace = tempfile.mkdtemp(prefix="vryxcode_demo_")
         print(f"demo: a scripted model builds a tiny project in {workspace}")
@@ -375,7 +395,7 @@ def main(argv=None, input_fn=input):
             if not tasks:
                 break
             task = tasks.pop(0)
-        run_task(task, generate, workspace, ask, a.max_turns, a.context, extra)
+        run_task(task, generate, workspace, ask, a.max_turns, a.context, extra, build=a.build)
     return 0
 
 

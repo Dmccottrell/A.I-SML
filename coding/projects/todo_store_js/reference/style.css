@@ -1,0 +1,2 @@
+body { font-family: system-ui, sans-serif; max-width: 480px; margin: 24px auto; padding: 0 16px; }
+li { display: flex; gap: 8px; align-items: center; padding: 4px 0; }
