@@ -153,7 +153,7 @@
       "size_mb": 1900,
       "sha256": "",
       "min_ram_gb": 4,
-      "context": 131072,
+      "context": 262144,
       "status": "preview",
       "supports_effort": false,
       "skills": [
@@ -162,7 +162,7 @@
       ],
       "pinned": false,
       "cost_weight": 1,
-      "context_tested": 131072,
+      "context_tested": 262144,
       "kv_kb_per_token": 6,
       "weights_mb": 1900,
       "tokenizer": "checkpoints/dev/open/flare-3/tokenizer/tokenizer.json",
@@ -188,7 +188,7 @@
       "whats_new": {
         "vs": "flare-2.5",
         "points": [
-          "Remembers 16 times more of a conversation: 128K tokens tested, instead of 8K, so long chats and long documents stay in view.",
+          "Remembers 32 times more of a conversation: 256K tokens tested, instead of 8K, so long chats and whole documents stay in view.",
           "Built on a newer, bigger base (Qwen3.5 2B instead of Qwen2.5 1.5B), with a hybrid design that stays quick on long text.",
           "Drafts ahead with a built-in guess-ahead head, so replies can come out faster."
         ],
@@ -196,7 +196,7 @@
           [
             "Memory (context window, tested)",
             "8K",
-            "128K"
+            "256K"
           ],
           [
             "Common sense (HellaSwag)",
@@ -209,7 +209,8 @@
             null
           ]
         ]
-      }
+      },
+      "cache_bits": 8
     },
     {
       "id": "equinox-2", "lookup": "when_needed",
@@ -321,7 +322,7 @@
       "size_mb": 6860,
       "sha256": "",
       "min_ram_gb": 10,
-      "context": 131072,
+      "context": 262144,
       "status": "preview",
       "supports_effort": true,
       "skills": [
@@ -331,7 +332,7 @@
       ],
       "pinned": false,
       "cost_weight": 5,
-      "context_tested": 131072,
+      "context_tested": 262144,
       "kv_kb_per_token": 8,
       "weights_mb": 6860,
       "sampling": {
@@ -358,7 +359,7 @@
       "whats_new": {
         "vs": "solstice-2",
         "points": [
-          "Remembers 4 times more of a conversation: 128K tokens tested, instead of 32K, so long chats and long documents stay in view.",
+          "Remembers 8 times more of a conversation: 256K tokens tested, instead of 32K, so long chats and whole documents stay in view.",
           "Looks at pictures itself: no separate picture reader is needed.",
           "Built on a newer, stronger base (Qwen3.5 9B instead of Qwen3 8B), with a hybrid design that stays quick on long text.",
           "Scores higher on common sense: 75.3% on HellaSwag, up from 73.6%.",
@@ -373,7 +374,7 @@
           [
             "Memory (context window, tested)",
             "32K",
-            "128K"
+            "256K"
           ],
           [
             "Reads pictures itself",
@@ -386,7 +387,8 @@
             "16/16"
           ]
         ]
-      }
+      },
+      "cache_bits": 8
     },
     {
       "id": "apogee-2", "lookup": "when_needed",

@@ -1,5 +1,6 @@
 """Publishing a model: preview for admins, publish or schedule for everyone, the older version moving to Other models, updates that keep the version."""
 import os, sys; sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), os.pardir)); import emvryx_paths  # noqa: E402,F401
+import json
 import time
 import unittest
 
@@ -80,7 +81,7 @@ class Server(Base):
         super().setUp()
         self.state.manifest["models"] = [m for m in self.state.manifest["models"] if m["status"] != "preview"]     # the real Emvryx 3 previews would outrank the test's Flare 2.6
         base = next(m for m in self.state.manifest["models"] if m["id"] == "flare-2.5")
-        new = dict(base, id="flare-2.6", version=2.6, status="preview", tagline="Faster")
+        new = dict(base, id="flare-2.6", version=2.6, status="preview", tagline="Faster", whats_new={"vs": "flare-2.5", "points": ["Faster."]})
         self.state.manifest["models"].append(new)
         MANIFEST["models"][1]["status"] = "preview"
 
@@ -92,8 +93,10 @@ class Server(Base):
         all_, cards = self.cards(self.owner)
         self.assertIn("flare-2.6", cards)
         self.assertEqual(all_["flare-2.6"]["badge"], "Preview")
+        self.assertEqual(all_["flare-2.6"]["whats_new"]["points"], ["Faster."])      # the owner and admins see it while it is in preview
         sam, cards = self.cards(self.sam)
         self.assertNotIn("flare-2.6", sam)
+        self.assertNotIn("Faster.", json.dumps(self.sam.call("GET", "/api/state")[1]))     # nobody else, anywhere, until it is published
         self.assertEqual(self.sam.call("GET", "/api/admin/models")[0], 404)           # admin pages do not exist for ordinary people
         s, j = self.owner.call("POST", "/api/admin/models", {"id": "flare-2.6", "publish": "now", "skip_checks": True})      # (the safety checks have their own tests)
         self.assertEqual(s, 200, j)
@@ -104,6 +107,8 @@ class Server(Base):
         self.assertEqual(self.state.flags.version(), "1.0.0")
         s, j = self.sam.call("GET", "/api/whats-new")
         self.assertEqual([r["model"] for r in j["releases"]], ["Flare 2.6"])
+        self.assertIn("Faster.", j["releases"][0]["notes"])                           # the "What's new" points go out with the publish, not before
+        self.assertEqual(sam["flare-2.6"]["whats_new"]["points"], ["Faster."])
         self.assertEqual(j["releases"][0]["kind"], "model-new")
 
     def test_schedule_update_and_errors_over_the_api(self):
