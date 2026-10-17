@@ -6,6 +6,8 @@ WHAT THIS FILE DOES
     * Publishing it (now, or at a chosen time) makes it live for everyone. The older versions of that model then simply move to "Other models" (the app lists
       the newest version of a name as its card and the rest as older ones), so nothing is deleted and they stay usable.
     * An update that keeps the version number (a small fix) is recorded as a release without publishing anything.
+    * "Record an update" says by itself what changed: the model's entry in models.json (window, settings, skills ...) and its model file are compared with
+      how they were when it was published or last updated (`changes`), and that text is the release note unless the owner writes another.
     * The choices are kept in models_state.json in the data folder (not in models.json, so updating the code never overwrites them). Both kinds of release go
       into the same release history as the feature releases (flags.py), but a model release does not change the app's version.
 """
@@ -15,6 +17,37 @@ import threading
 import time
 
 
+def _k(n):
+    return f"{n // 1024}K" if isinstance(n, int) and n >= 1024 else str(n)
+
+
+# what "Record an update" looks at, and how a change is described: (field, name, how a value reads)
+TRACKED = (("context_tested", "Memory (context window)", _k), ("cache_bits", "Chat memory", lambda v: f"{v}-bit" if v else "16-bit"),
+           ("mtp", "Guess-ahead drafting", lambda v: "on" if v else "off"), ("max_reply_tokens", "Longest reply", lambda v: f"{v} tokens"),
+           ("efforts", "Thinking levels", lambda v: ", ".join(v or []) or "none"), ("skills", "Skills", lambda v: ", ".join(v or []) or "none"),
+           ("sampling", "Answer settings", None), ("tagline", "Description", lambda v: f"\"{v}\""), ("lookup", "Looking things up", str))
+
+
+def fingerprint(model, file_sig=None):
+    """What a model is right now, for spotting what an update changed."""
+    out = {k: model.get(k) for k, _, _ in TRACKED}
+    out["file"] = file_sig
+    return out
+
+
+def describe_changes(old, new):
+    """The changes between two fingerprints, in words ("Memory (context window): 128K -> 256K. New model file (retrained or re-exported).")."""
+    lines = []
+    for k, name, show in TRACKED:
+        a, b = old.get(k), new.get(k)
+        if a == b:
+            continue
+        lines.append(f"{name}: updated" if show is None else f"{name}: {show(a)} \u2192 {show(b)}")
+    if old.get("file") and new.get("file") and old["file"] != new["file"]:
+        lines.append("New model file (retrained or re-exported)")
+    return ". ".join(lines) + ("." if lines else "")
+
+
 def whats_new_note(model, most=3):
     """The first few "what is better" points from models.json "whats_new", for the release note when the person publishing writes none."""
     points = [str(p).strip() for p in ((model.get("whats_new") or {}).get("points") or []) if str(p).strip()]
@@ -22,14 +55,15 @@ def whats_new_note(model, most=3):
 
 
 class ModelPublisher:
-    def __init__(self, path=None, flags=None, clock=time.time, guard=None):
+    def __init__(self, path=None, flags=None, clock=time.time, guard=None, file_sig=None):
         self.path, self.flags, self.clock, self.lock, self.guard = path, flags, clock, threading.Lock(), guard      # guard(model_id) -> (ok, why): the safety checks
-        self.data = {"live": {}, "scheduled": {}, "failed": {}}
+        self.file_sig = file_sig or (lambda model_id: None)                  # file_sig(model_id) -> a short id of the model file (size and time), to notice a new one
+        self.data = {"live": {}, "scheduled": {}, "failed": {}, "seen": {}}
         if path and os.path.exists(path):
             try:
                 with open(path, encoding="utf-8") as f:
                     got = json.load(f)
-                for k in ("live", "scheduled", "failed"):
+                for k in ("live", "scheduled", "failed", "seen"):
                     if isinstance(got.get(k), dict):
                         self.data[k] = got[k]
             except (OSError, ValueError):
@@ -77,6 +111,7 @@ class ModelPublisher:
         move = f" {self._label(older[0])} moves to Other models and stays usable." if older else ""
         with self.lock:
             self.data["live"][model_id] = {"at": at or self.clock(), "by": by, **({"checks_skipped": True} if (self.guard and skip_checks) else {})}
+            self.data["seen"][model_id] = fingerprint(model, self.file_sig(model_id))      # what it was when it went live: later updates are compared with this
             self.data["scheduled"].pop(model_id, None)
             self.data["failed"].pop(model_id, None)
             self._save()
@@ -119,10 +154,27 @@ class ModelPublisher:
                         self.data["failed"][mid] = {"at": now, "why": str(e)}
                         self._save()
 
+    def changes(self, model):
+        """What changed in a live model since it was published or last updated, in words ("" when nothing did). The first look at a model that went live
+        before this was kept only remembers how it is now."""
+        now = fingerprint(model, self.file_sig(model["id"]))
+        before = self.data["seen"].get(model["id"])
+        if before is None:
+            with self.lock:
+                self.data["seen"][model["id"]] = now
+                self._save()
+            return ""
+        return describe_changes(before, now)
+
     def record_update(self, manifest, model_id, notes, by=""):
+        """Record an update that keeps the version. With no notes, the note is what changed (see `changes`)."""
         model = next((m for m in manifest["models"] if m["id"] == model_id), None)
         if not model or self.status_of(model) in ("off", "planned", "preview"):
             raise ValueError("choose a model that is live")
-        if not str(notes or "").strip():
-            raise ValueError("say what changed")
+        notes = str(notes or "").strip() or self.changes(model)
+        if not notes:
+            raise ValueError("nothing has changed since the last update: say what changed")
         self.flags.record_model_release(model_id, self._label(model), "model-update", by, notes, model.get("tagline", ""))
+        with self.lock:
+            self.data["seen"][model_id] = fingerprint(model, self.file_sig(model_id))
+            self._save()

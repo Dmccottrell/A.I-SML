@@ -127,7 +127,7 @@ class AppState(StateAccounts, StateSettings, StateApps, StatePC, StateCode, Stat
         self.code = code_sessions.CodeManager(data_dir, quotas=code_sandbox.Quotas(self.security))       # VryxCode sessions (projects live under <data>/code/)
         self.secrets = secret_box.SecretBox(data_dir, require=self.security["require_encryption"])
         self.github = github_link.Store(data_dir, self.secrets)  # connected GitHub accounts (tokens encrypted, files mode 600)
-        self.models_pub = model_publish.ModelPublisher(os.path.join(data_dir, "models_state.json") if data_dir else None, None, guard=self.guard_ok)
+        self.models_pub = model_publish.ModelPublisher(os.path.join(data_dir, "models_state.json") if data_dir else None, None, guard=self.guard_ok, file_sig=self.model_file_sig)
         self.flags = flags.Flags(os.path.join(data_dir, "flags.json") if data_dir else None)
         self.models_pub.flags = self.flags
         self.updater = updater.Updater(HERE, busy=self.busy)                         # Admin > PC > Update now (owner only)

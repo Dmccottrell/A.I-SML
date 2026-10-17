@@ -168,6 +168,35 @@ class CompactRule(unittest.TestCase):
             self.assertIn("context", kinds)
 
 
+class RecordUpdateSaysWhatChanged(unittest.TestCase):
+    def test_changes_are_filled_in_and_used_as_the_note(self):
+        sig = {"v": "100:1"}
+        m2 = dict(model("sol-2", "Solstice", 2), context_tested=131072, mtp=False)
+        manifest = {"models": [m2]}
+        fl = F.Flags()
+        mp = MP.ModelPublisher(flags=fl, file_sig=lambda mid: sig["v"])
+        self.assertEqual(mp.changes(m2), "")                                   # the first look only remembers how it is
+        with self.assertRaises(ValueError):
+            mp.record_update(manifest, "sol-2", "")                             # nothing changed and nothing written
+        m2.update(context_tested=262144, cache_bits=8, mtp=True)
+        sig["v"] = "200:2"
+        text = mp.changes(m2)
+        self.assertIn("Memory (context window): 128K \u2192 256K", text)
+        self.assertIn("Chat memory: 16-bit \u2192 8-bit", text)
+        self.assertIn("Guess-ahead drafting: off \u2192 on", text)
+        self.assertIn("New model file", text)
+        mp.record_update(manifest, "sol-2", "", by="owner")                     # no note written: what changed is the note
+        self.assertEqual(fl.releases()[0]["notes"], text)
+        self.assertEqual(mp.changes(m2), "")                                   # recorded: nothing new since
+
+    def test_publishing_sets_the_starting_point(self):
+        m3 = dict(model("sol-3", "Solstice", 3), status="preview", context_tested=131072)
+        mp = MP.ModelPublisher(flags=F.Flags())
+        mp.publish({"models": [m3]}, "sol-3")
+        m3["context_tested"] = 262144
+        self.assertEqual(mp.changes(m3), "Memory (context window): 128K \u2192 256K.")
+
+
 class CompactRoute(AppBase):
     def test_owner_can_compact_and_others_cannot_see_the_button_yet(self):
         s, j = self.owner.call("POST", "/api/chats", {})
@@ -181,6 +210,16 @@ class CompactRoute(AppBase):
         self.assertTrue(any(m.get("ctx") for m in j["messages"]))                # the meter comes back with the chat
         s, j = self.sam.call("POST", "/api/chats", {})
         self.assertEqual(self.sam.call("POST", f"/api/chats/{j['id']}/compact", {"model": "ember-2"})[0], 404)   # behind the flag
+
+    def test_a_chat_from_before_the_meter_is_measured_when_opened(self):
+        s, j = self.owner.call("POST", "/api/chats", {})
+        cid = j["id"]
+        st = self.state.store("owner")
+        st.add(cid, "user", "hello there")
+        st.add(cid, "assistant", "hi, how can I help?", "ember-2", "done")
+        s, j = self.owner.call("GET", f"/api/chats/{cid}")
+        self.assertGreater(j["ctx"]["used"], 0)
+        self.assertGreater(j["ctx"]["window"], 0)
 
 
 
@@ -206,7 +245,7 @@ if HAVE_BROWSER:
                     page.goto(f"http://127.0.0.1:{self.port}/")
                     ready(page)
                     self.assertTrue(page.evaluate("S.state.features.context_meter"))              # the owner sees it while it is in testing
-                    self.assertTrue(page.is_hidden("#ctxBtn"))                                    # nothing to show before the first reply
+                    eventually(lambda: self.assertEqual(page.inner_text("#ctxBtn"), "0%"))          # a new chat shows an empty ring straight away
                     page.fill("#input", "hello there")
                     page.click("#send")
                     eventually(lambda: self.assertTrue(page.is_visible("#ctxBtn")), 30)
