@@ -538,7 +538,7 @@ class ChatStore:
 # ------------------------------------------------------------------ one message, start to finish
 def run_turn(tok, store, chat_id, backend, model, window, max_new, user_text=None, stop=None, save_every=8,
              keep_notes=1, notes=None, limiter=None, user=None, effort="balanced", clock=time.time,
-             pacer=None, auto_compact=True, summarize=None, style_hint="", user_docs=None, think=False, pictures=None):
+             pacer=None, auto_compact=True, summarize=None, style_hint="", user_docs=None, think=False, pictures=None, on_compact=None):
     """Answer one message. Adds the user's message (if given), streams the reply while saving it, and returns
     {"text", "reason", "forgotten_messages"}. If the model fails mid-reply, what was written is kept (marked
     partial) and the AppError is re-raised, so the screen can offer "Continue".
@@ -553,12 +553,13 @@ def run_turn(tok, store, chat_id, backend, model, window, max_new, user_text=Non
     hidden from the answer (strip_think below) and counts toward `max_new`.
     `pictures` (base64 strings) go to a model that can look at pictures itself (an Emvryx 3 model run with its mmproj): they are placed just before the question.
     `pacer` (chat_polish.paced, with the time of sending) makes the reply appear after a short pause and write out
-    steadily. `auto_compact` shortens a chat that fills the model's memory (chat_polish.compact_chat).
+    steadily. `auto_compact` shortens a chat that fills the model's memory (chat_polish.compact_chat); `on_compact()` is called as that starts.
+    The result's "context" says how full the model's memory is after this reply (the page's memory meter); it is also kept on the reply as its "ctx" mark.
     """
     user_row = store.add(chat_id, "user", user_text, docs=user_docs) if user_text is not None else None
     folded = 0
     if auto_compact:
-        folded = chat_polish.compact_chat(tok, store, chat_id, window, max_new, summarize=summarize, keep_notes=keep_notes)
+        folded = chat_polish.compact_chat(tok, store, chat_id, window, max_new, summarize=summarize, keep_notes=keep_notes, on_start=on_compact)
     history = store.history(chat_id)
     asked = history[-1]["content"] if history and history[-1]["role"] == "user" else ""     # where the pictures go (before any hint is added)
     if style_hint and history and history[-1]["role"] == "user":      # asked for only this once: the saved chat keeps the plain question
@@ -608,8 +609,17 @@ def run_turn(tok, store, chat_id, backend, model, window, max_new, user_text=Non
         cut = out_tokens >= max_new - 2
     if cut:
         store.set_flag(chat_id, row, "cut", True)
+    ctx = context_meter(len(ids) + len(tok.encode(guard.text, allow_special=False)) if guard.text else len(ids), window, max_new)
+    store.set_flag(chat_id, row, "ctx", ctx)
     return {"text": guard.text, "reason": guard.reason, "forgotten_messages": report["forgotten_messages"],
-            "message_id": row, "compacted_messages": folded, "cut": cut}
+            "message_id": row, "compacted_messages": folded, "cut": cut, "context": ctx}
+
+
+def context_meter(used, window, max_new, trigger=0.8):
+    """How full the model's memory (context window) is, for the meter by the message box: tokens used, the window, the share used, and when the
+    older messages will be summarized (chat_polish.compact_chat starts at `trigger` of the room left after the reply's share)."""
+    used, window = max(0, int(used)), max(1, int(window))
+    return {"used": used, "window": window, "pct": round(min(100.0, 100.0 * used / window), 1), "compact_at": int(trigger * max(64, window - max_new))}
 
 
 def _settle(limiter, res, backend, tok, ids, text, effort, clock, failed=False):

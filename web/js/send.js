@@ -42,6 +42,9 @@ async function send(regen, mode) {
       } else if (ev === 'memory') {
         const bits = [...(data.saved || []).map((t) => t.replace(/^The user\W?s? ?/i, '').replace(/\.$/, '')), ...(data.forgot ? ['forgot ' + data.forgot + (data.forgot === 1 ? ' thing' : ' things')] : [])];
         if (bits.length) $('thread').append(el('div', {class: 'note', style: 'align-self:flex-start', title: 'Open Memory in the menu to see or change what is kept'}, '\ud83d\udcd6 Memory updated' + (bits.length ? ': ' + bits.join('; ') : '')));
+      } else if (ev === 'compacting') {             // the chat is near the model's memory limit: the older messages are being summarized first
+        S.compacting = true; renderCtx(null, true);
+        if (S.state.features && S.state.features.context_meter) $('thread').insertBefore(el('div', {class: 'note', id: 'compactNote'}, 'Summarizing earlier messages to make room\u2026'), think);
       } else if (ev === 'loading') {   // the model is still starting: the normal thinking words carry on (no extra message)
       } else if (ev === 'piece') {
         if (!aiWrap) { think._stop(); think.remove(); const m = curModel(); aiBubble = el('div', {class: 'bubble'}); const note = S.autoNote ? el('span', {title: S.autoNote.reason}, ' \u00b7 Auto chose ' + S.autoNote.effort[0].toUpperCase() + S.autoNote.effort.slice(1)) : null;
@@ -50,6 +53,8 @@ async function send(regen, mode) {
         got += data.t; aiBubble.replaceChildren(bullets(got), el('span', {class: 'cursor'}, '▍')); scrollDown();
       } else if (ev === 'done') {
         finished = true; S.title = data.title || S.title; S.state.usage = data.usage; renderUsage(data.usage); popTokens(before, data.usage);
+        const cn = $('compactNote'); if (cn) cn.remove();
+        S.compacting = false; if (data.context) renderCtx(data.context);
         if (data.compacted) $('thread').insertBefore(el('div', {class: 'note'}, 'Earlier messages were summarized to save room'), aiWrap);
       } else if (ev === 'error') { throw Object.assign(new Error(data.message), {info: data, status: data.http}); }
     };
@@ -64,7 +69,7 @@ async function send(regen, mode) {
     if (e.name === 'AbortError') { if (S.resume) lost = true; }
     else if (e.message !== 'login') { if (e instanceof TypeError || /network|fetch|load failed|terminated|connection/i.test(e.message || '')) lost = true; else errCard = errorCard(e); }
   } finally {
-    think._stop && think._stop(); think.remove(); S.busy = false; S.abort = null; S.resume = false;
+    think._stop && think._stop(); think.remove(); S.busy = false; S.compacting = false; S.abort = null; S.resume = false;
   }
   if (lost) return followReply();   // the reply keeps being written on the server: show it when it is ready
     try { const r = await api('/api/chats/' + S.chatId); if (r.ok) { const c = await r.json(); S.messages = c.messages; S.title = c.title; } } catch (e) {}

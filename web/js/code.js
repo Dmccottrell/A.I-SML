@@ -46,7 +46,7 @@ function envInfo() {
     ...C.info.environments.map((e) => el('div', {class: 'opt', style: 'cursor:default'}, el('span', {class: 'sicon', style: 'width:36px;height:36px;border-radius:10px;background:var(--surface2);display:grid;place-items:center'}, icon(ENV_ICON(e.id))),
       el('span', {class: 'grow'}, el('b', {}, e.name + (e.available ? '' : ' \u00b7 not available')), el('small', {}, e.note))))], 'Close');
 }
-function resetWork() { C.todo = []; C.events = []; renderTodo(); if (typeof OUT !== 'undefined') { OUT.items = []; OUT.pending = null; if (OUT.open) outRender(); } }
+function resetWork() { C.todo = []; C.events = []; C.ctx = null; if ($('codeCtx')) $('codeCtx').hidden = true; renderTodo(); if (typeof OUT !== 'undefined') { OUT.items = []; OUT.pending = null; if (OUT.open) outRender(); } }
 function newSession() {
   C.view = 'session'; $('code').classList.remove('home'); $('codeTitle').textContent = 'VryxCode'; C.sid = null; C.saved = false; C.checkpoints = []; C.seen = 0; C.last = null; C.pvAuto = false;
   $('codeIn').replaceChildren(); $('codeGo').hidden = false; $('codeStop').hidden = true; resetWork(); renderCodeBar(); emptyFeed(); refreshFiles(); $('codeTask').focus();

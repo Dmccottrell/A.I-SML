@@ -108,6 +108,13 @@ svg .core { fill: var(--core); stroke: var(--sun); stroke-width: 3; transition: 
 .card textarea { width: 100%; background: transparent; border: 0; outline: none; resize: none; color: var(--text); font: inherit; max-height: 160px; padding: 0; }
 .tools { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
 .tools .left { display: flex; align-items: center; gap: 8px; min-width: 0; flex-wrap: wrap; }
+/* the memory meter (feature flag context_meter): a ring that fills as the model's memory fills; red near the point where older messages get summarized */
+.ctx { --c: var(--accent); width: 36px; height: 36px; border-radius: 50%; border: 0; padding: 0; flex-shrink: 0; font-size: 10px; font-weight: 700; color: var(--muted); cursor: pointer;
+  background: radial-gradient(var(--surface) 57%, transparent 59%), conic-gradient(var(--c) calc(var(--p, 0) * 1%), var(--line) 0); }
+.ctx.near { --c: var(--danger); color: var(--danger); } .ctx.busy { animation: ctxPulse 1.2s ease-in-out infinite; }
+@keyframes ctxPulse { 50% { opacity: .45; } } @media (prefers-reduced-motion: reduce) { .ctx.busy { animation: none; } }
+.ctxbar { height: 8px; border-radius: 99px; background: var(--line); overflow: hidden; margin: 6px 12px; } .ctxbar > div { height: 100%; background: var(--accent); }
+.ctxrow { display: flex; justify-content: space-between; gap: 12px; padding: 4px 12px; font-size: 14px; } .ctxrow span:last-child { color: var(--muted); }
 .pill { background: var(--surface2); border: 1px solid var(--line); border-radius: 12px; padding: 6px 10px; min-height: 44px; display: flex; align-items: center; gap: 6px; font-weight: 600; }
 .pill.plain { background: transparent; color: var(--muted); font-weight: 500; font-size: 14px; }
 .send { background: var(--accent); color: var(--onaccent); border: 0; border-radius: 12px; width: 44px; height: 44px; font-size: 20px; font-weight: 700; flex-shrink: 0; }
@@ -600,6 +607,7 @@ body:not(.vxn) .vx-hero, body:not(.vxn) .vx-dots { display: none; }   /* the new
         <div class="menu" id="modelMenu" hidden></div>
         <div class="menu" id="effortMenu" hidden></div>
         <div class="menu" id="attachMenu" hidden style="width:min(300px,100%)"></div>
+        <div class="menu" id="ctxMenu" hidden style="width:min(340px,100%);left:auto;right:0"></div>
         <div class="card">
           <label class="sr" for="input">Message</label>
           <div class="attached" id="attached" hidden></div>
@@ -610,6 +618,7 @@ body:not(.vxn) .vx-hero, body:not(.vxn) .vx-dots { display: none; }   /* the new
               <button class="pill" id="modelBtn" aria-haspopup="true" aria-label="Choose model"></button>
               <button class="pill plain" id="effortBtn" aria-haspopup="true" aria-label="Choose effort"></button>
             </div>
+            <button class="ctx" id="ctxBtn" hidden aria-haspopup="true" aria-label="Memory used"></button>
             <button class="send" id="send" aria-label="Send">&uarr;</button>
           </div>
         </div>
@@ -674,12 +683,14 @@ body:not(.vxn) .vx-hero, body:not(.vxn) .vx-dots { display: none; }   /* the new
           <div class="menu" id="codeModelMenu" hidden style="top:auto;bottom:100%;left:0;right:auto;margin:0 0 10px"></div>
           <div class="menu" id="codeEnvMenu" hidden style="top:auto;bottom:100%;left:0;right:auto;margin:0 0 10px"></div>
           <div class="menu" id="codeModeMenu" hidden style="top:auto;bottom:100%;left:0;right:auto;margin:0 0 10px"></div>
+          <div class="menu" id="codeCtxMenu" hidden style="top:auto;bottom:100%;left:auto;right:0;margin:0 0 10px;width:min(340px,100%)"></div>
           <div class="menu suggest" id="codeSuggest" hidden style="top:auto;bottom:100%;left:0;right:auto;margin:0 0 10px;width:min(440px,100%)"></div>
           <div class="card">
             <label class="sr" for="codeTask">Task</label>
             <textarea id="codeTask" rows="2" maxlength="8000" placeholder="Ask, answer, or tell VryxCode what to build or fix"></textarea>
             <div class="tools">
               <div class="left"><button class="pill" id="codeModelBtn" aria-haspopup="true" aria-label="Choose model"></button><button class="pill plain" id="codeEnv" aria-haspopup="true" aria-label="Where it runs"></button><button class="pill plain" id="codeAuto" aria-pressed="false">Auto-approve: off</button></div>
+              <button class="ctx" id="codeCtx" hidden aria-haspopup="true" aria-label="Memory used"></button>
               <button class="send" id="codeGo" aria-label="Run">&uarr;</button>
               <button class="send stop" id="codeStop" aria-label="Stop" hidden>&#9632;</button>
             </div>

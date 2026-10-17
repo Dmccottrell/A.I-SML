@@ -284,8 +284,23 @@ function diffNode(preview) {
   const lines = String(preview || '').split('\n').slice(1); if (!lines.length) return null;
   return el('div', {class: 'cc-diff'}, ...lines.map((l) => el('div', {class: /^\s*\+ /.test(l) ? 'add' : /^\s*- /.test(l) ? 'del' : 'hdr'}, l.replace(/^(\s*)([+-]) /, '$2 '))));
 }
+// the memory meter (feature flag context_meter): how full the model's memory is in this session, and when older steps get folded
+function codeCtx(c, folding) {
+  const b = $('codeCtx'); if (c) C.ctx = c; c = C.ctx;
+  b.hidden = !(S.state && S.state.features && S.state.features.context_meter) || !c; if (b.hidden) return;
+  b.style.setProperty('--p', Math.min(100, c.pct)); b.classList.toggle('near', c.used >= c.compact_at * 0.9); b.classList.toggle('busy', !!folding);
+  b.textContent = Math.round(c.pct) + '%'; b.setAttribute('aria-label', 'Memory ' + Math.round(c.pct) + '% used, ' + kTok(c.used) + ' of ' + kTok(c.window) + ' tokens');
+  if (folding) setTimeout(() => b.classList.remove('busy'), 2500);
+}
+$('codeCtx').onclick = () => {
+  const m = $('codeCtxMenu'); if (!m.hidden || !C.ctx) { m.hidden = true; return; }
+  m.replaceChildren(...ctxMenuNodes(C.ctx, ['Folds at', 'When the session gets near the limit, VryxCode folds its older steps into a short "Earlier steps" list so it can keep building. Your files and this log are unchanged.']));
+  m.hidden = false;
+};
+document.addEventListener('click', (e) => { if (!e.target.closest('#codeCtx, #codeCtxMenu')) $('codeCtxMenu').hidden = true; });
 function cEvent(e) {
   const feed = $('codeIn'); C.events.push(e);
+  if (e.kind === 'context') { codeCtx(e); return; }
   if (e.kind === 'model') { feed.append(el('div', {class: 'note', style: 'align-self:center;margin:6px auto'}, 'Now using ' + modelName(e.model) + (e.previous ? ' (was ' + modelName(e.previous) + ')' : ''))); C.last = null; return; }
   if (e.kind === 'note' || (e.kind === 'user' && e.auto)) { if (e.kind === 'note') feed.append(el('div', {class: 'note', style: 'align-self:center;margin:6px auto;max-width:92%'}, '\u21bb ' + e.text)); C.last = null; return; }
   if (e.kind === 'user') { feed.append(el('div', {class: 'cc-user'}, el('span', {class: 'ember'}), el('span', {}, (e.plan ? '[Plan] ' : '') + e.text))); C.last = null; return; }
@@ -323,7 +338,7 @@ function cEvent(e) {
     feed.append(el('div', {class: 'cc-tool no'}, el('div', {class: 'cc-head'}, el('span', {class: 'cc-verb'}, 'Retrying'), el('span', {class: 'cc-arg'}, [e.limit ? 'The reply ran out of room while the model was writing, so VryxCode asked it to send smaller parts' : 'That step was garbled, so VryxCode asked the model to send it again', e.secs != null ? Math.round(e.secs) + 's' : ''].filter(Boolean).join('  \u00b7  ')))));
     C.last = null; return;
   }
-  if (e.kind === 'compacted') { feed.append(el('div', {class: 'cc-say', style: 'color:var(--muted);font-size:13px'}, 'The conversation was getting long, so VryxCode folded its older steps into a short "Earlier steps" list to save room. The files and this log are unchanged.')); C.last = null; return; }
+  if (e.kind === 'compacted') { codeCtx(null, true); feed.append(el('div', {class: 'cc-say', style: 'color:var(--muted);font-size:13px'}, 'The conversation was getting long, so VryxCode folded its older steps into a short "Earlier steps" list to save room. The files and this log are unchanged.' + (e.steps ? ' (' + e.steps + ' steps folded)' : ''))); C.last = null; return; }
   if (e.kind === 'queued') { feed.append(el('div', {class: 'cc-say', style: 'color:var(--muted);font-size:14px'}, 'Waiting in the queue' + (e.position ? ' (#' + e.position + ')' : '') + '. It starts by itself when your current session finishes.')); return; }
   if (e.kind === 'language') { feed.append(el('div', {class: 'cc-say', style: 'color:var(--muted);font-size:14px'}, e.text)); return; }
   if (e.kind === 'rewind') { feed.append(el('div', {class: 'cc-end stop'}, el('span', {class: 'mark'}, '\u21b6'), el('span', {}, 'Rewound the files to before: ' + (e.label || 'message ' + e.turn)))); C.last = null; return; }

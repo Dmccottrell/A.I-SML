@@ -173,9 +173,10 @@ def extractive_summary(messages, max_chars=1200):
     return SUMMARY_MARK + "\n" + "\n".join(lines)
 
 
-def compact_chat(tok, store, chat_id, window, max_new, keep=4, trigger=0.8, summarize=None, keep_notes=1):
+def compact_chat(tok, store, chat_id, window, max_new, keep=4, trigger=0.8, summarize=None, keep_notes=1, on_start=None):
     """If the chat fills more than `trigger` of the room for the prompt, replace the older messages with a summary.
     `summarize(messages) -> text` may use the model; if it fails or returns nothing, the extractive summary is used.
+    `on_start()` is called just before the folding starts (the page shows "Summarizing earlier messages" while it runs).
     Returns how many messages were folded into the summary (0 = nothing to do)."""
     msgs = [m for m in store.messages(chat_id) if m["status"] != "compacted"]
     if len(msgs) <= keep + 1:
@@ -189,6 +190,8 @@ def compact_chat(tok, store, chat_id, window, max_new, keep=4, trigger=0.8, summ
         old.pop()
     if len(old) < 2:
         return 0
+    if on_start:
+        on_start()
     text = None
     if summarize:
         try:
