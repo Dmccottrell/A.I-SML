@@ -144,6 +144,27 @@ grown model has a pilot and the long-memory check (32K, 64K, 128K), and falls ba
 | **Native tool calls** | **planned for the 3.1 lessons:** chat tools (search, calculator, memory, pictures) taught in Qwen's own `<tool_call>` format instead of ours, so tool use is as reliable as Qwen trained it; VryxCode already reads both |
 | 201 languages | works already; the Emvryx voice in other languages would need lessons in them (not planned yet) |
 
+## Picture conversations (decided Oct 17, 2026)
+Goal: replies to a picture that feel like Claude's or ChatGPT's (the style, not their words: their outputs are never used as lessons).
+**Now (in the app):** a model that sees pictures gets a short playbook with each picture (`app/documents.py` `PICTURE_PLAYBOOK`): open by showing it got
+the picture, in the person's tone; add something they did not say (meaning, context, an honest take) in 2 to 4 sentences; fit the kind of picture (news or
+a post, an error or code, homework or a form, a chart, a photo, a meme, a product); one short question only when natural; never read out the text or
+cite file names. Later messages keep the picture and answer what was just said first.
+**Lessons 4 (so the habit is learned, not told):** about 1,500 picture conversations, each 1 to 3 turns:
+| Kind | Share | What a good reply does |
+|---|---|---|
+| Screenshots of posts and news | 25% | reacts, adds context, gives a take |
+| Errors, code, settings screens | 20% | names the problem, gives the fix |
+| Homework, forms, bills, receipts | 15% | helps with the actual task |
+| Charts and tables | 10% | the main takeaway, then a detail |
+| Photos (food, places, things, people's stuff) | 15% | comments on what stands out, useful tips |
+| Memes and jokes | 5% | gets the joke, plays along |
+| Follow-ups ("I'm excited", "what should I do?") | 10% | answers the person first, uses the picture only if it helps |
+Pictures come from the owner's own screenshots (with permission) and openly licensed sets (licence checked per set, like the general lessons). The
+teacher must be able to see pictures: Qwen3.6 27B if its vision works in llama.cpp (check first), otherwise a Qwen3.5 model with its picture reader.
+The judge step scores each reply on the playbook above; replies that list or transcribe the picture are rejected. A new check, the **picture chat
+check** (20 pictures, judged), guards it before publishing.
+
 ## Later: Apogee 3.5
 Grow Apogee 3 again to about **14B** (the most that fits the 4070 with 128K; 64K comfortable), train on **Lessons 4.5** (Lessons 4 plus what the app's
 reports and approvals teach) with a second round of DPO and more thinking lessons. Expected about **50 to 52**; before it, write a harder test

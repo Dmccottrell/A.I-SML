@@ -139,6 +139,7 @@ class InChat(Base):
         self.assertEqual(j["title"], "Picture")
         text = self.state_backend.prompts[-1]["prompt_string"]
         self.assertIn("You can see it", text)                                # react to it like a person who can see it ...
+        self.assertIn("Fit the kind of picture", text)                       # the playbook: react, add something, fit the kind of picture
         self.assertNotIn("Answer from the document", text)                   # ... not like a document to quote from
         self.assertNotIn("Read me any text", text)
         self.assertEqual(self.ask(self.sam, cid, "")[0], 400)                # the picture went already: nothing new to send
