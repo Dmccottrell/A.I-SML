@@ -53,6 +53,16 @@ class WrongServer(AppError):
                          "Check the address in Settings > Online mode.")
 
 
+class ModelRefused(AppError):
+    """The model's own server (llama-server) turned the request down (HTTP 400): it is the right server, the request was not something it could take."""
+    code = "model_refused"
+
+    def __init__(self, reason=""):
+        self.reason = reason
+        super().__init__("The model couldn't take that message" + (f": {reason}" if reason else "") + ".",
+                         "Try again. If it keeps happening with a picture, send the picture again or pick another model.")
+
+
 class DownloadInterrupted(AppError):
     code = "download_interrupted"
 

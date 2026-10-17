@@ -31,6 +31,18 @@ class ModelRunner:
         self.lock = threading.Lock()
         atexit.register(self.stop)
 
+    def drop_draft(self, model_id):
+        """Stop using guess-ahead for this model (it refused a request with it, e.g. one with a picture) and unload it, so the next load is plain.
+        True when that changed anything (so trying again is worth it)."""
+        if model_id not in self.draft_ahead or model_id in self.no_draft:
+            return False
+        self.no_draft.add(model_id)
+        print(f"({model_id}: a request was refused with guess-ahead on; loading it without)", flush=True)
+        with self.lock:
+            if self.model_id == model_id:
+                self.stop()
+        return True
+
     def projector(self, model_id):
         """The model's own picture reader (an "mmproj" .gguf) when one sits in the same folder as its .gguf, else None. Emvryx 3 (Qwen3.5) models can look
         at pictures themselves with it; the export step (scripts/export_projector.py) puts it there."""
