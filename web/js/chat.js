@@ -253,7 +253,7 @@ $('modelBtn').onclick = () => {
   const news = featureOn('whats_new') ? S.state.models.cards.filter((c) => c.whats_new) : [];
   if (news.length) { m.append(el('div', {class: 'head'}, 'WHAT\u2019S NEW'));
     for (const c of news) m.append(el('button', {class: 'opt', onclick: (ev) => { ev.stopPropagation(); whatsNew(c); }}, logo(30, false, c.name),
-      el('span', {class: 'grow'}, el('b', {}, 'What\u2019s new in ' + mname(c)), el('small', {}, c.whats_new.points[0] || '')), '\u203a')); }
+      el('span', {class: 'grow'}, el('b', {}, 'What\u2019s new in ' + mname(c)), el('small', {}, 'What is better than the version before')), '\u203a')); }
   m.hidden = false;
 };
 // What is better in a new model than the version before it (models.json "whats_new", feature flag whats_new): the points, then the measured numbers side by side
