@@ -74,6 +74,9 @@ class InChat(Base):
         D._ocr = self.saved_ocr
         super().tearDown()
 
+    def sam_who(self):
+        return self.state.who(self.sam_key)
+
     def add_picture(self, who, name="shot.png"):
         s, j = who.call("POST", "/api/documents", {"name": name, "data": base64.b64encode(png()).decode()})
         self.assertEqual(s, 200, j)
@@ -86,6 +89,12 @@ class InChat(Base):
         ev = self.ask(self.sam, cid, "Did he say this?")[2]
         notes = [d for e, d in ev if e == "notes"]
         self.assertEqual(notes[0]["ocr"], 1)                          # no vision helper: only the words were read, and the page says so
+        sent = self.state_backend.prompts[-1]
+        text = sent["prompt_string"] if isinstance(sent, dict) else self.state.tok_for(self.state.pick_model(self.sam_who(), "flare-2")).decode(sent)
+        self.assertIn("Words in the picture", text)                    # a picture is never a document, even when only its words are read
+        self.assertNotIn("Document:", text)
+        self.assertNotIn("shot.png", text)
+        self.assertNotIn("Answer from the document", text)
         msgs = self.sam.call("GET", f"/api/chats/{cid}")[1]["messages"]
         self.assertEqual([d["id"] for d in msgs[0]["docs"]], [did])  # shown with the message that carried it
         ev2 = self.ask(self.sam, cid, "And the second part?")[2]

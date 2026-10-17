@@ -115,10 +115,12 @@ def start_turn(state, who, chat_id, text, model_id, effort, regenerate=False, re
     sent_before = store.sent_docs(chat_id)                     # pictures and files that went with an earlier message: only new ones go with this one
     if attached:
         seen_by_model = state.sees(model)                      # a model that looks at pictures itself gets them as pictures, not as a document to quote from
-        papers = [d["name"] for d in attached if not (seen_by_model and d["kind"] in documents.IMAGE_KINDS)]
+        papers = [d["name"] for d in attached if d["kind"] not in documents.IMAGE_KINDS]     # a picture is never a document, whatever reads it
         if papers:
             skill_hint = (skill_hint + "\n\n" if skill_hint else "") + documents.hint(papers)
-        if len(papers) < len(attached):
+        if len(papers) < len(attached) and not seen_by_model:
+            skill_hint = (skill_hint + "\n\n" if skill_hint else "") + documents.picture_words_hint()
+        elif len(papers) < len(attached):
             earlier = not any(d["kind"] in documents.IMAGE_KINDS and d["id"] not in sent_before for d in attached)
             skill_hint = (skill_hint + "\n\n" if skill_hint else "") + documents.picture_hint(picture_only, earlier=earlier and not regenerate)
     timing = {}

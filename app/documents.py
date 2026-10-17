@@ -300,6 +300,11 @@ def notes_for(library, doc_ids, question, budget=8000):
     per = max(1500, budget // len(docs))
     notes = []
     for _, info, text in docs:
+        if info.get("kind") in IMAGE_KINDS:                    # a picture is not a document: its words go in as what the picture says, with no file name to cite
+            words = text.replace("[Text read from a picture]", "").strip()
+            if words and not words.startswith(PICTURE_ONLY):
+                notes.append({"title": "Words in the picture", "text": words[:per]})
+            continue
         pieces = chunks(text)
         idx = pick(pieces, question, per)
         whole = len(idx) == len(pieces)
@@ -336,6 +341,12 @@ def picture_hint(only_picture=False, earlier=False):
     lead = ("[The person shared a picture with no message. You can see it.\n" if only_picture else
             "[The person shared a picture and said something about it. You can see it. Answer what they said first, using what you see.\n")
     return lead + PICTURE_PLAYBOOK + "]"
+
+
+def picture_words_hint():
+    """For a model that cannot see pictures: it only gets the words read from the picture, and must still talk about it as a picture."""
+    return ("[The person shared a picture. You cannot see it, but the notes hold the words in it. Talk about it as their picture, never as a document or file, "
+            "and reply like a friend: react first, then add something useful. Do not repeat its text, and never add sources or file names in brackets.]")
 
 
 def hint(names):
