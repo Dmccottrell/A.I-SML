@@ -256,9 +256,10 @@ def start_turn(state, who, chat_id, text, model_id, effort, regenerate=False, re
                                   on_compact=lambda: q.put(("compacting", True)), style_hint=first_hint)
             try:
                 r = first(backend)
-            except ModelRefused:
+            except ModelRefused as e:
                 # A model with guess-ahead on can turn down a message with a picture: load it without guess-ahead and answer the same message once more.
-                if not (seen_pictures and state.runner and state.runner.drop_draft(model["id"])):
+                # (Not for a prompt it could not read: that is not about guess-ahead, and reloading would only cost time.)
+                if "tokeniz" in e.reason.lower() or not (seen_pictures and state.runner and state.runner.drop_draft(model["id"])):
                     raise
                 msgs = [m for m in store.messages(chat_id) if m["status"] != "compacted"]
                 if msgs and msgs[-1]["role"] == "assistant" and not msgs[-1]["content"]:

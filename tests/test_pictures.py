@@ -216,6 +216,44 @@ class Refusals(unittest.TestCase):
             srv.shutdown()
             srv.server_close()
 
+    def test_pictures_use_the_servers_own_marker(self):
+        import http.server
+        import json
+        import threading
+        import app_engine as E
+        got = []
+
+        class H(http.server.BaseHTTPRequestHandler):
+            def do_GET(self):
+                body = json.dumps({"media_marker": "<__media_x7__>"}).encode()
+                self.send_response(200)
+                self.send_header("Content-Length", str(len(body)))
+                self.end_headers()
+                self.wfile.write(body)
+
+            def do_POST(self):
+                got.append(json.loads(self.rfile.read(int(self.headers["Content-Length"]))))
+                body = b'data: {"content": "ok", "stop": true}\n\n'
+                self.send_response(200)
+                self.send_header("Content-Length", str(len(body)))
+                self.end_headers()
+                self.wfile.write(body)
+
+            def log_message(self, *a):
+                pass
+
+        srv = http.server.ThreadingHTTPServer(("127.0.0.1", 0), H)
+        threading.Thread(target=srv.serve_forever, daemon=True).start()
+        try:
+            llama = E.LlamaServer(f"http://127.0.0.1:{srv.server_address[1]}")
+            self.assertEqual(list(llama.stream({"prompt_string": "a <__media__>\nWhat is this?", "multimodal_data": ["AAAA"]}, 5)), ["ok"])
+            self.assertEqual(got[0]["prompt"]["prompt_string"], "a <__media_x7__>\nWhat is this?")
+            list(llama.stream([1, 2, 3], 5))                                 # plain text: untouched
+            self.assertEqual(got[1]["prompt"], [1, 2, 3])
+        finally:
+            srv.shutdown()
+            srv.server_close()
+
     def test_drop_draft_only_once_and_only_when_it_was_on(self):
         import app_runner as R
         r = R.ModelRunner(None, {})
