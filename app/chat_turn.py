@@ -46,7 +46,7 @@ def compact_now(state, who, chat_id, model_id):
     return {"folded": folded, "context": ctx}
 
 
-def start_turn(state, who, chat_id, text, model_id, effort, regenerate=False, regen_mode=None, cont=False, pace=None, extra_notes=None, extra_hint=""):
+def start_turn(state, who, chat_id, text, model_id, effort, regenerate=False, regen_mode=None, cont=False, pace=None, extra_notes=None, extra_hint="", picture_only=False):
     """Begin a reply in a worker thread. Returns (queue, stop_event); the queue yields ("piece", text), then
     ("done", result) or ("error", exception). With effort "auto" the level is chosen from the message (effort_router);
     the page is told which one in `decision`. The API passes pace=False (no show of thinking), extra_notes (facts the app sends) and extra_hint (the app's instructions)."""
@@ -110,7 +110,12 @@ def start_turn(state, who, chat_id, text, model_id, effort, regenerate=False, re
     library = state.docs_for(who["user"])
     attached = [d for d in (library.info(i) for i in store.docs(chat_id)) if d]     # documents attached to this chat: their passages go in as notes
     if attached:
-        skill_hint = (skill_hint + "\n\n" if skill_hint else "") + documents.hint([d["name"] for d in attached])
+        seen_by_model = state.sees(model)                      # a model that looks at pictures itself gets them as pictures, not as a document to quote from
+        papers = [d["name"] for d in attached if not (seen_by_model and d["kind"] in documents.IMAGE_KINDS)]
+        if papers:
+            skill_hint = (skill_hint + "\n\n" if skill_hint else "") + documents.hint(papers)
+        if len(papers) < len(attached):
+            skill_hint = (skill_hint + "\n\n" if skill_hint else "") + documents.picture_hint(picture_only)
 
     sent_before = store.sent_docs(chat_id)                     # pictures and files that went with an earlier message: only new ones go with this one
     timing = {}
@@ -145,7 +150,7 @@ def start_turn(state, who, chat_id, text, model_id, effort, regenerate=False, re
             if chat_id >= 0 and state.get_settings(who["user"])["memory"]:         # what the app knows about this person: the same for every model
                 memory = state.memory_for(who["user"])
                 if text:
-                    learned = memory.learn(text)
+                    learned = memory.learn("" if text in (documents.PICTURE_ONLY_TEXT, documents.FILE_ONLY_TEXT) else text)
                     if learned["saved"] or learned["forgot"]:
                         q.put(("memory", learned))
                 asked = text
@@ -301,7 +306,7 @@ def start_turn(state, who, chat_id, text, model_id, effort, regenerate=False, re
             if found and found["asked"] and text:
                 state.remember_lookup(who["user"], chat_id, r["message_id"], text, found)
             if text and store.title(chat_id) == "New chat":
-                store.set_title(chat_id, " ".join(text.split())[:48] or "New chat")
+                store.set_title(chat_id, "Picture" if picture_only else attached[0]["name"][:48] if text == documents.FILE_ONLY_TEXT and attached else (" ".join(text.split())[:48] or "New chat"))
             q.put(("done", r))
             if state.verbose:                                  # numbers only, never any text
                 end = time.monotonic()

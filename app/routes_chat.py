@@ -11,6 +11,7 @@ import regen_modes
 import usage_limits as U
 from app_shared import EFFORTS, MAX_TEXT, error_payload
 import chat_turn
+import documents
 from chat_turn import start_turn
 
 
@@ -215,8 +216,14 @@ class RoutesChat:
             return self._send(404, {"code": "not_found", "message": "That chat is gone."})
         text = str(body.get("text", "")).strip()
         regenerate = bool(body.get("regenerate"))
-        if not regenerate and not text:
-            return self._send(400, {"code": "empty", "message": "Type a message first."})
+        picture_only = False
+        if not regenerate and not text:                       # only a picture (or file), no words: send it as it is, like other chat apps
+            new = set(store.docs(cid)) - store.sent_docs(cid)
+            if not new:
+                return self._send(400, {"code": "empty", "message": "Type a message first."})
+            lib = st.docs_for(who["user"])
+            picture_only = any((lib.info(i) or {}).get("kind") in documents.IMAGE_KINDS for i in new)
+            text = documents.PICTURE_ONLY_TEXT if picture_only else documents.FILE_ONLY_TEXT
         if len(text) > MAX_TEXT:
             return self._send(400, {"code": "too_long", "message": "That message is too long. Please shorten it."})
         if st.cfg.get("gaming"):                              # Gaming mode: a plain "resting" answer at once, nothing is saved or counted
@@ -224,7 +231,7 @@ class RoutesChat:
             return self._send(status, payload, headers=headers)
         try:
             q, stop, model, win, decision = start_turn(st, who, cid, text, str(body.get("model", "")), str(body.get("effort", "balanced")),
-                                             regenerate, body.get("regen_mode") or None, cont=bool(body.get("continue")))
+                                             regenerate, body.get("regen_mode") or None, cont=bool(body.get("continue")), picture_only=picture_only)
         except ValueError as e:
             return self._send(400, {"code": "bad_option", "message": str(e)})
         except KeyError:
