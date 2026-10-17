@@ -10,6 +10,7 @@ import app_links
 import regen_modes
 import usage_limits as U
 from app_shared import EFFORTS, MAX_TEXT, error_payload
+import chat_turn
 from chat_turn import start_turn
 
 
@@ -53,7 +54,14 @@ class RoutesChat:
                  "cut": bool((m.get("flags") or {}).get("cut")), "fb": (m.get("flags") or {}).get("fb", ""), "ctx": (m.get("flags") or {}).get("ctx"),
                  "docs": [{"id": d["id"], "name": d["name"], "kind": d["kind"]} for d in (lib.info(i) for i in m.get("docs") or []) if d]}
                 for m in store.messages(cid) if not (m["status"] == "compacted" and not m["content"])]
-        self._send(200, {"id": cid, "title": store.title(cid), "private": cid < 0, "skill": store.skill(cid), "messages": msgs, **store.meta(cid),
+        ctx = None
+        if msgs and not any(m["ctx"] for m in msgs) and self.state.flags.on("context_meter", who):     # a chat from before the meter: measure it now
+            last = next((m["model_id"] for m in reversed(msgs) if m["role"] == "assistant" and m["model_id"]), None)
+            try:
+                ctx = chat_turn.meter_for(self.state, who, cid, last) if last else None
+            except Exception:                                  # noqa: BLE001 - a model that is gone or not ready: the meter appears after the next reply
+                ctx = None
+        self._send(200, {"id": cid, "title": store.title(cid), "private": cid < 0, "skill": store.skill(cid), "messages": msgs, "ctx": ctx, **store.meta(cid),
                          "generating": (who["user"], cid) in self.state.stops,
                          "docs": [d for d in (self.state.docs_for(who["user"]).info(i) for i in store.docs(cid)) if d]})
 

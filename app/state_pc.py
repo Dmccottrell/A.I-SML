@@ -94,6 +94,15 @@ class StatePC:
         except OSError:
             return ""
 
+    def model_file_sig(self, model_id):
+        """A short id of the model's file on this computer (size and time), so "Record an update" notices a new one. None when there is none."""
+        path = (getattr(self.runner, "files", None) or {}).get(model_id) if self.runner else None
+        try:
+            st = os.stat(path) if path else None
+        except OSError:
+            return None
+        return f"{st.st_size}:{int(st.st_mtime)}" if st else None
+
     def guard_ok(self, model_id):
         """(True, "") when this model's latest safety checks passed (and the model file has not changed since); otherwise (False, why)."""
         rec = self.guards.load(model_id)
@@ -196,7 +205,7 @@ class StatePC:
                             "scheduled": mp.scheduled(m["id"]), "live": mp.data["live"].get(m["id"]), "replaces": f"{olds[0]['name']} {olds[0]['version']:g}" if (preview and olds) else None,
                             "available": bool(self.runner.available(m["id"])) if self.runner else True,
                             "guard": model_guard.public(self.guards.load(m["id"]), self.guard_run if (self.guard_run and self.guard_run["state"] == "running" and self.guard_run["model_id"] == m["id"]) else None),
-                            "schedule_failed": mp.data["failed"].get(m["id"])})
+                            "schedule_failed": mp.data["failed"].get(m["id"]), "changes": "" if preview else mp.changes(m)})
         return {"models": out, "keep_older": int(self.manifest.get("keep_older_versions", 6)), "checks_running": bool(self.guard_run and self.guard_run["state"] == "running"),
                 "releases": [r for r in self.flags.releases() if str(r.get("kind", "")).startswith("model")]}
 

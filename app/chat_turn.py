@@ -20,18 +20,26 @@ from app_errors import AppError, ModelTooBig
 from app_shared import CONTINUE_HINT, EFFORTS, OPEN_EFFORTS, TEMPERATURE
 
 
+def _meter_parts(state, who, model_id):
+    model = state.pick_model(who, model_id)
+    window = state.window_for(who, model)["window"]
+    caps = OPEN_EFFORTS if model.get("open") else EFFORTS
+    return state.tok_for(model), window, min(caps["balanced"], max(32, window // 2), model.get("max_reply_tokens", caps["balanced"]))
+
+
+def meter_for(state, who, chat_id, model_id):
+    """The memory meter for a chat as it is now (for a chat from before the meter, or right after Compact now)."""
+    tok, window, max_new = _meter_parts(state, who, model_id)
+    return E.context_meter(E.chat.context_report(tok, state.store(who["user"]).history(chat_id), window, reserve=max_new)["used"], window, max_new)
+
+
 def compact_now(state, who, chat_id, model_id):
     """The "Compact now" button: shorten this chat at once (the same summary the automatic one makes). Returns {"folded", "context"}; folded is 0 when
     the chat is too short to have anything old enough to fold. The new meter reading is kept on the last reply, so it shows when the chat is opened again."""
     store = state.store(who["user"])
-    model = state.pick_model(who, model_id)
-    tok = state.tok_for(model)
-    window = state.window_for(who, model)["window"]
-    caps = OPEN_EFFORTS if model.get("open") else EFFORTS
-    max_new = min(caps["balanced"], max(32, window // 2), model.get("max_reply_tokens", caps["balanced"]))
+    tok, window, max_new = _meter_parts(state, who, model_id)
     folded = chat_polish.compact_chat(tok, store, chat_id, window, max_new, force=True)
-    used = E.chat.context_report(tok, store.history(chat_id), window, reserve=max_new)["used"]
-    ctx = E.context_meter(used, window, max_new)
+    ctx = meter_for(state, who, chat_id, model_id)
     last = next((m for m in reversed(store.messages(chat_id)) if m["role"] == "assistant" and m["status"] != "compacted"), None)
     if last:
         store.set_flag(chat_id, last["id"], "ctx", ctx)

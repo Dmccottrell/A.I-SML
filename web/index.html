@@ -123,6 +123,7 @@ svg .core { fill: var(--core); stroke: var(--sun); stroke-width: 3; transition: 
 .menu { position: absolute; left: 0; bottom: 100%; margin-bottom: 10px; width: min(440px, 100%); background: var(--surface); border: 1px solid var(--line); border-radius: 20px; padding: 12px; display: flex; flex-direction: column; gap: 6px; z-index: 20; animation: rise .2s ease both; }
 .regen { align-self: stretch; max-width: 420px; background: var(--surface); border: 1px solid var(--line); border-radius: 18px; padding: 10px; display: flex; flex-direction: column; gap: 6px; animation: rise .2s ease both; }
 .regen .head { font-size: 12px; font-weight: 600; letter-spacing: .1em; color: var(--muted); padding: 4px 6px; }
+#modelMenu, #effortMenu, #ctxMenu { max-height: min(72vh, calc(100dvh - 190px)); overflow-y: auto; overscroll-behavior: contain; }   /* a long list scrolls instead of running off the top of the screen */
 .menu .head { font-size: 12px; font-weight: 600; letter-spacing: .1em; color: var(--muted); padding: 4px 6px; }
 .opt { text-align: left; background: transparent; border: 1px solid var(--line); border-radius: 14px; padding: 10px 14px; min-height: 44px; display: flex; align-items: center; gap: 12px; }
 .opt.sel { border-color: var(--accent); }

@@ -61,18 +61,18 @@ async function admPreviews(body) {
     el('small', {}, f.changed ? 'Live since ' + admDate(f.changed.at) + ' (' + f.changed.by + ').' : 'Live for everyone.'),
     el('div', {class: 'adm-acts'}, sxBtn('Pull back to admins', () => { if (confirm('Take "' + f.title + '" away from everyone and keep it for admins?')) save({id: f.id, audience: 'admins'}); }, 'bad')));
   const draw = () => {
-    const ready2 = j.flags.filter((f) => f.audience !== 'everyone' && f.audience !== 'off');
+    const ready2 = j.flags.filter((f) => f.audience !== 'everyone' && f.audience !== 'off'), appRel = j.releases.filter((r) => !String(r.kind || '').startsWith('model'));
     body.replaceChildren(
       el('div', {class: 'adm-card'}, el('h3', {}, '\u{1F9EA} Feature previews'),
-        el('p', {}, 'New features can ship to the live app visible only to you first. Publish here once you are happy with one, so everyone starts seeing it too.'),
+        el('p', {}, 'App updates: new features ship to the live app visible only to you and your admins first. Publish here once you are happy with one, so everyone starts seeing it too. New model versions are published under Models.'),
         el('div', {class: 'adm-row'}, el('span', {style: 'color:var(--muted)'}, 'Current version: v' + j.version),
           sxBtn('Publish all', () => { if (!ready2.length) return toast('Nothing is waiting to publish.'); releaseDialog('Publish ' + ready2.length + ' feature' + (ready2.length === 1 ? '' : 's') + ' to everyone', j.version, 'Publish all now', (kind, notes) => save({publish: 'all', kind, notes})); }, ready2.length ? 'primary' : '')),
         sxSeg([['preview', 'In preview (' + prev.length + ')'], ['published', 'Published (' + pub.length + ')']], view, (v) => { view = ADM.view = v; draw(); }),
         ...(view === 'preview' ? (prev.length ? prev.map(previewCard) : [el('p', {}, 'Nothing is in preview. New features appear here until you publish them.')])
                               : (pub.length ? pub.map(pubCard) : [el('p', {}, 'Nothing has been published yet.')]))),
-      el('div', {class: 'adm-card'}, el('h3', {}, '\u{1F4CB} Release history'), el('p', {}, 'Every version published so far, with what went live in each one.'),
-        ...(j.releases.length ? j.releases.map((r) => el('div', {class: 'adm-sub'}, el('div', {class: 'adm-row'}, el('span', {}, el('b', {}, relTitle(r)), ' ', el('span', {class: 'adm-tag'}, REL_KIND[r.kind] || r.kind)), el('small', {}, admDate(r.at))),
-          ...(r.model ? [] : r.items.map((i) => el('small', {}, '\u2022 ' + i.title + ': ' + i.desc))), r.notes ? el('small', {}, r.notes) : null, el('small', {}, 'Published by ' + r.by))) : [el('p', {}, 'No releases yet.')])));
+      el('div', {class: 'adm-card'}, el('h3', {}, '\u{1F4CB} App release history'), el('p', {}, 'Every app version published so far, with what went live in each one. Model versions and their updates are under Models.'),
+        ...(appRel.length ? appRel.map((r) => el('div', {class: 'adm-sub'}, el('div', {class: 'adm-row'}, el('span', {}, el('b', {}, relTitle(r)), ' ', el('span', {class: 'adm-tag'}, REL_KIND[r.kind] || r.kind)), el('small', {}, admDate(r.at))),
+          ...r.items.map((i) => el('small', {}, '\u2022 ' + i.title + ': ' + i.desc)), r.notes ? el('small', {}, r.notes) : null, el('small', {}, 'Published by ' + r.by))) : [el('p', {}, 'No app releases yet.')])));
   };
   draw();
 }
@@ -117,9 +117,10 @@ async function admModels(body) {
         el('p', {}, 'Rule of thumb: a new version when the training lessons change (Flare 2.5 to 2.6); otherwise it is an update and the version stays (record it below). The app’s own version does not change.'),
         el('h3', {style: 'font-size:16px'}, 'In preview (' + prev.length + ')'),
         ...(prev.length ? prev.map(previewCard) : [el('p', {}, 'No model is waiting. A new build appears here once it is added to the model list with the status “preview”.')])),
-      el('div', {class: 'adm-card'}, el('h3', {}, 'Live models'), el('p', {}, 'Made a small fix that keeps the same version? Record an update so it shows in the history and in What’s new.'),
+      el('div', {class: 'adm-card'}, el('h3', {}, 'Live models'), el('p', {}, 'Made a change that keeps the same version (a new window, new settings, a re-exported file)? Record an update so it shows in the history and in What’s new. What changed is filled in for you.'),
         ...live.map((m) => el('div', {class: 'adm-sub'}, el('div', {class: 'adm-row'}, el('b', {}, m.label, m.live ? ' ' : '', m.live ? el('span', {class: 'adm-tag on'}, 'Published ' + admDate(m.live.at)) : null),
-          sxBtn('Record an update', () => { const n = prompt('What changed in ' + m.label + '? (shown to everyone in What’s new)'); if (n && n.trim()) save({id: m.id, record_update: true, notes: n.trim()}); })), el('small', {}, m.tagline),
+          sxBtn('Record an update', () => { const n = prompt('What changed in ' + m.label + '? (shown to everyone in What’s new; filled in from what was updated, change it if you like)', m.changes || ''); if (n && n.trim()) save({id: m.id, record_update: true, notes: n.trim()}); }, m.changes ? 'primary' : '')), el('small', {}, m.tagline),
+          m.changes ? el('small', {style: 'color:var(--accenttext)'}, 'Changed since the last update: ' + m.changes) : null,
           m.guard && m.guard.state !== 'none' ? guardBox(m) : null))),
       el('div', {class: 'adm-card'}, el('h3', {}, 'Model release history'),
         ...(j.releases.length ? j.releases.map((r) => el('div', {class: 'adm-sub'}, el('div', {class: 'adm-row'}, el('span', {}, el('b', {}, relTitle(r)), ' ', el('span', {class: 'adm-tag'}, REL_KIND[r.kind] || r.kind)), el('small', {}, admDate(r.at))), r.notes ? el('small', {}, r.notes) : null, el('small', {}, 'By ' + r.by))) : [el('p', {}, 'No model releases yet.')])));

@@ -8,7 +8,7 @@ async function newChat(isPrivate, skill, docs) {
 async function openChat(id) {
   if (S.busy) return;
   const r = await api('/api/chats/' + id); if (!r.ok) return load();
-  const c = await r.json(); S.chatId = c.id; S.messages = c.messages; S.title = c.title; S.private = c.private; S.skill = c.skill || ''; S.docs = c.docs || [];
+  const c = await r.json(); S.chatId = c.id; S.messages = c.messages; S.title = c.title; S.private = c.private; S.skill = c.skill || ''; S.docs = c.docs || []; S.chatCtx = c.ctx || null;
   remember(); document.body.classList.remove('menu-open'); renderThread(true); renderAttached(); renderChats();
   if (c.generating) followReply();
 }
@@ -202,11 +202,16 @@ function closeMenus() { $('modelMenu').hidden = true; $('effortMenu').hidden = t
 // ---------------------------------------------------------------- the memory meter (feature flag context_meter)
 // How full the model's memory (context window) is after the last reply, and when the older messages will be summarized to make room.
 const kTok = (n) => (n >= 1000 ? (n / 1000).toFixed(n >= 100000 ? 0 : 1).replace(/\.0$/, '') + 'K' : String(n));
-function lastCtx() { for (let i = S.messages.length - 1; i >= 0; i--) if (S.messages[i].ctx) return S.messages[i].ctx; return null; }
+function lastCtx() {   // the last reply's reading; for a chat from before the meter the server measures it; a new chat starts empty
+  for (let i = S.messages.length - 1; i >= 0; i--) if (S.messages[i].ctx) return S.messages[i].ctx;
+  if (S.messages.length) return S.chatCtx || null;
+  const w = S.state && S.state.window && S.state.window.window; if (!w) return null;
+  return {used: 0, window: w, pct: 0, compact_at: Math.floor(Math.min(0.75 * Math.max(64, w - 1024), 96000))};
+}
 function renderCtx(ctx, busy) {
   const b = $('ctxBtn'), on = !!(S.state && S.state.features && S.state.features.context_meter);
   ctx = ctx || lastCtx(); S.ctx = ctx;
-  b.hidden = !on || !ctx || S.chatId == null; if (b.hidden) return;
+  b.hidden = !on || !ctx; if (b.hidden) return;
   b.style.setProperty('--p', Math.min(100, ctx.pct)); b.classList.toggle('near', ctx.used >= ctx.compact_at * 0.9); b.classList.toggle('busy', !!busy);
   b.textContent = Math.round(ctx.pct) + '%';
   b.setAttribute('aria-label', busy ? 'Summarizing earlier messages to make room' : 'Memory ' + Math.round(ctx.pct) + '% used, ' + kTok(ctx.used) + ' of ' + kTok(ctx.window) + ' tokens');
@@ -234,6 +239,7 @@ async function compactChat() {   // "Compact now": summarize the older messages 
 }
 $('ctxBtn').onclick = () => {
   const open = !$('ctxMenu').hidden; closeMenus(); if (open || !S.ctx) return;
+  if (!S.messages.length) { $('ctxMenu').replaceChildren(...ctxMenuNodes(S.ctx, ['Summarizes at', 'This chat is empty. As it grows, the ring fills; near the limit the older messages are summarized so the chat can keep going.'])); $('ctxMenu').hidden = false; return; }
   $('ctxMenu').replaceChildren(...ctxMenuNodes(S.ctx, ['Summarizes at', 'When the chat gets near the limit, the older messages are summarized so the chat can keep going and answers stay sharp. You still see every message.'], S.busy ? null : compactChat));
   $('ctxMenu').hidden = false;
 };
@@ -247,7 +253,7 @@ $('modelBtn').onclick = () => {
   const news = featureOn('whats_new') ? S.state.models.cards.filter((c) => c.whats_new) : [];
   if (news.length) { m.append(el('div', {class: 'head'}, 'WHAT\u2019S NEW'));
     for (const c of news) m.append(el('button', {class: 'opt', onclick: (ev) => { ev.stopPropagation(); whatsNew(c); }}, logo(30, false, c.name),
-      el('span', {class: 'grow'}, el('b', {}, 'What\u2019s new in ' + mname(c)), el('small', {}, c.whats_new.points[0] || '')), '\u203a')); }
+      el('span', {class: 'grow'}, el('b', {}, 'What\u2019s new in ' + mname(c)), el('small', {}, 'What is better than the version before')), '\u203a')); }
   m.hidden = false;
 };
 // What is better in a new model than the version before it (models.json "whats_new", feature flag whats_new): the points, then the measured numbers side by side
