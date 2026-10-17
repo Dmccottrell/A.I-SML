@@ -204,9 +204,10 @@ function closeMenus() { $('modelMenu').hidden = true; $('effortMenu').hidden = t
 const kTok = (n) => (n >= 1000 ? (n / 1000).toFixed(n >= 100000 ? 0 : 1).replace(/\.0$/, '') + 'K' : String(n));
 function lastCtx() {   // the last reply's reading; for a chat from before the meter the server measures it; a new chat starts empty
   for (let i = S.messages.length - 1; i >= 0; i--) if (S.messages[i].ctx) return S.messages[i].ctx;
-  if (S.messages.length) return S.chatCtx || null;
+  if (S.messages.length && S.chatCtx) return S.chatCtx;
   const w = S.state && S.state.window && S.state.window.window; if (!w) return null;
-  return {used: 0, window: w, pct: 0, compact_at: Math.floor(Math.min(0.75 * Math.max(64, w - 1024), 96000))};
+  const used = Math.round(S.messages.reduce((n, m) => n + String(m.content || '').length, 0) / 3.5);   // an estimate until the next reply measures it exactly
+  return {used, window: w, pct: Math.min(100, Math.round(1000 * used / w) / 10), compact_at: Math.floor(Math.min(0.75 * Math.max(64, w - 1024), 96000))};
 }
 function renderCtx(ctx, busy) {
   const b = $('ctxBtn'), on = !!(S.state && S.state.features && S.state.features.context_meter);
