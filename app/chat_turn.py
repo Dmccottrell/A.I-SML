@@ -33,6 +33,9 @@ def meter_for(state, who, chat_id, model_id):
     return E.context_meter(E.chat.context_report(tok, state.store(who["user"]).history(chat_id), window, reserve=max_new)["used"], window, max_new)
 
 
+MAX_PICTURES = 3          # at most this many of the chat's pictures go to a model that sees them, with each message
+
+
 def compact_now(state, who, chat_id, model_id):
     """The "Compact now" button: shorten this chat at once (the same summary the automatic one makes). Returns {"folded", "context"}; folded is 0 when
     the chat is too short to have anything old enough to fold. The new meter reading is kept on the last reply, so it shows when the chat is opened again."""
@@ -109,15 +112,15 @@ def start_turn(state, who, chat_id, text, model_id, effort, regenerate=False, re
         skill_hint = (skill_hint + "\n\n" if skill_hint else "") + extra_hint
     library = state.docs_for(who["user"])
     attached = [d for d in (library.info(i) for i in store.docs(chat_id)) if d]     # documents attached to this chat: their passages go in as notes
+    sent_before = store.sent_docs(chat_id)                     # pictures and files that went with an earlier message: only new ones go with this one
     if attached:
         seen_by_model = state.sees(model)                      # a model that looks at pictures itself gets them as pictures, not as a document to quote from
         papers = [d["name"] for d in attached if not (seen_by_model and d["kind"] in documents.IMAGE_KINDS)]
         if papers:
             skill_hint = (skill_hint + "\n\n" if skill_hint else "") + documents.hint(papers)
         if len(papers) < len(attached):
-            skill_hint = (skill_hint + "\n\n" if skill_hint else "") + documents.picture_hint(picture_only)
-
-    sent_before = store.sent_docs(chat_id)                     # pictures and files that went with an earlier message: only new ones go with this one
+            earlier = not any(d["kind"] in documents.IMAGE_KINDS and d["id"] not in sent_before for d in attached)
+            skill_hint = (skill_hint + "\n\n" if skill_hint else "") + documents.picture_hint(picture_only, earlier=earlier and not regenerate)
     timing = {}
 
     def timed(stream):
@@ -176,7 +179,7 @@ def start_turn(state, who, chat_id, text, model_id, effort, regenerate=False, re
                     if d["kind"] not in documents.IMAGE_KINDS:
                         continue
                     pictures["read"] += 1
-                    if own_eyes and (d["id"] not in sent_before or not text):        # new pictures (all of them on Regenerate) go to the model as they are
+                    if own_eyes and len(seen_pictures) < MAX_PICTURES:                # it keeps seeing the chat's pictures on later messages too (like other chat apps), not their words as a document
                         img = library.image(d["id"])
                         if img:
                             seen_pictures.append(base64.b64encode(img[0]).decode("ascii"))
