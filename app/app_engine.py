@@ -615,11 +615,11 @@ def run_turn(tok, store, chat_id, backend, model, window, max_new, user_text=Non
             "message_id": row, "compacted_messages": folded, "cut": cut, "context": ctx}
 
 
-def context_meter(used, window, max_new, trigger=0.8):
+def context_meter(used, window, max_new):
     """How full the model's memory (context window) is, for the meter by the message box: tokens used, the window, the share used, and when the
-    older messages will be summarized (chat_polish.compact_chat starts at `trigger` of the room left after the reply's share)."""
+    older messages will be summarized (chat_polish.compact_point: 75% of the room left after the reply's share, at most 96K)."""
     used, window = max(0, int(used)), max(1, int(window))
-    return {"used": used, "window": window, "pct": round(min(100.0, 100.0 * used / window), 1), "compact_at": int(trigger * max(64, window - max_new))}
+    return {"used": used, "window": window, "pct": round(min(100.0, 100.0 * used / window), 1), "compact_at": chat_polish.compact_point(window, max_new)}
 
 
 def _settle(limiter, res, backend, tok, ids, text, effort, clock, failed=False):
