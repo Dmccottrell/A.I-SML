@@ -292,14 +292,24 @@ async function chooseModel(c) {
   wash(); applyTheme(); renderComposer(); renderThread(false); warmModel(); await refreshUsage();
 }
 const input = $('input');
-input.addEventListener('input', () => { input.style.height = 'auto'; input.style.height = Math.min(160, input.scrollHeight) + 'px'; });
+// The message box is a rich text box so the phone keyboard can paste a screenshot into it; it reads and writes as plain text (input.value) like a textarea did.
+Object.defineProperty(input, 'value', {
+  get() { return (input.innerText || '').replace(/\u00a0/g, ' ').replace(/\n$/, ''); },
+  set(v) { input.textContent = v == null ? '' : String(v); if (document.activeElement === input) { const r = document.createRange(); r.selectNodeContents(input); r.collapse(false); const sel = getSelection(); sel.removeAllRanges(); sel.addRange(r); } }});
+input.addEventListener('paste', (e) => {           // pictures are attached (documents.js); anything else goes in as plain text, never as formatting
+  if (imageFilesFrom(e.clipboardData).length) return;
+  e.preventDefault(); const t = (e.clipboardData && e.clipboardData.getData('text/plain')) || '';
+  if (t) document.execCommand('insertText', false, t.slice(0, Math.max(0, 20000 - input.value.length)));
+});
+input.addEventListener('drop', (e) => { if (!(e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files.length)) { e.preventDefault(); const t = e.dataTransfer && e.dataTransfer.getData('text/plain'); if (t) document.execCommand('insertText', false, t); } });
+input.addEventListener('input', () => { if (!input.textContent && input.innerHTML) input.innerHTML = ''; if (input.value.length > 20000) input.value = input.value.slice(0, 20000); });   // :empty shows the placeholder again
 input.addEventListener('keydown', (e) => { if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) { e.preventDefault(); send(); } });
 $('send').onclick = () => (S.busy ? stop() : send());
 $('plus').onclick = () => {
   const open = !$('attachMenu').hidden; closeMenus(); if (open) return;
   const m = $('attachMenu'); const row = (icon, title, sub, fn) => el('button', {class: 'opt', onclick: () => { closeMenus(); fn(); }}, el('span', {style: 'font-size:20px;width:26px;text-align:center'}, icon), el('span', {class: 'grow'}, el('b', {}, title), el('small', {}, sub)));
   m.replaceChildren(row('\ud83d\udcc4', 'Upload files', 'PDF, Word, text', () => pickMany({accept: DOC_ACCEPT})),
-    row('\ud83d\uddbc\ufe0f', 'Photos or screenshots', 'Its words are read', () => pickMany({accept: 'image/*'})),
+    row('\ud83d\uddbc\ufe0f', 'Photos or screenshots', 'Attach a picture to your message', () => pickMany({accept: 'image/*'})),
     row('\ud83d\udcc1', 'Upload a folder', 'Every file inside', () => pickMany({folder: true})),
     row('\ud83d\udcda', 'Your documents', 'Pick ones you added before', openAttach));
   m.hidden = false;

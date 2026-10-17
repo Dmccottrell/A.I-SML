@@ -106,6 +106,10 @@ svg .core { fill: var(--core); stroke: var(--sun); stroke-width: 3; transition: 
 .attached .chip.pic { padding: 4px; border-radius: 14px; } .thumb { width: 64px; height: 64px; object-fit: cover; border-radius: 10px; display: block; } .msg .pics { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 6px; justify-content: flex-end; } .msg .pics img { max-width: 220px; max-height: 220px; border-radius: 14px; display: block; cursor: zoom-in; } .msg .pics .chip { min-height: 30px; padding: 2px 10px; }
 .attached .chip span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 52vw; }
 .card textarea { width: 100%; background: transparent; border: 0; outline: none; resize: none; color: var(--text); font: inherit; max-height: 160px; padding: 0; }
+/* the message box is a rich text box (not a textarea) so the phone keyboard offers a fresh screenshot to paste, like other chat apps; it only ever holds plain text */
+.card .ce { width: 100%; min-height: 1.5em; max-height: 160px; overflow-y: auto; outline: none; color: var(--text); font: inherit; white-space: pre-wrap; overflow-wrap: anywhere; cursor: text; }
+.card .ce:empty::before { content: attr(data-placeholder); color: var(--muted); pointer-events: none; }
+@media (pointer: coarse) { .card .ce { font-size: 16px; } }
 .tools { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
 .tools .left { display: flex; align-items: center; gap: 8px; min-width: 0; flex-wrap: wrap; }
 /* the memory meter (feature flag context_meter): a ring that fills as the model's memory fills; red near the point where older messages get summarized */
@@ -612,7 +616,7 @@ body:not(.vxn) .vx-hero, body:not(.vxn) .vx-dots { display: none; }   /* the new
         <div class="card">
           <label class="sr" for="input">Message</label>
           <div class="attached" id="attached" hidden></div>
-          <textarea id="input" rows="1" placeholder="Message Emvryx..." maxlength="20000"></textarea>
+          <div id="input" class="ce" contenteditable="true" role="textbox" aria-multiline="true" aria-label="Message" data-placeholder="Message Emvryx..." enterkeyhint="send" spellcheck="true"></div>
           <div class="tools">
             <div class="left">
               <button class="pill plain" id="plus" aria-label="Add files or photos" title="Add files or photos" aria-haspopup="true" style="width:44px;justify-content:center;font-size:22px">+</button>

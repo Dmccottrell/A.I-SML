@@ -16,7 +16,7 @@ import lookup_auto
 import effort_router
 import regen_modes
 import usage_limits as U
-from app_errors import AppError, ModelTooBig
+from app_errors import AppError, ModelRefused, ModelTooBig
 from app_shared import CONTINUE_HINT, EFFORTS, OPEN_EFFORTS, TEMPERATURE
 
 
@@ -245,12 +245,26 @@ def start_turn(state, who, chat_id, text, model_id, effort, regenerate=False, re
                 t = regen_modes.sampling_for(backend.sampling.get("temperature", 0.8), mode)
                 backend.sampling = dict(backend.sampling, temperature=round(min(bounds[1], max(bounds[0], t)), 2))   # never outside the model's safe range
             prior_reply = next((m["content"] for m in reversed(store.messages(chat_id)) if m["role"] == "assistant"), "")      # to notice a reply that is only a copy of this one
-            r = E.run_turn(tok, store, chat_id, backend, counted_model, window, max_new, pictures=seen_pictures or None, user_text=text, stop=stop, notes=notes or None,
-                           user_docs=[d["id"] for d in attached if d["id"] not in sent_before] if text else None,
-                           limiter=state.limiter, user=who["user"], effort=effort, clock=state.clock, pacer=pacer, think=think, on_compact=lambda: q.put(("compacting", True)),
-                           style_hint="\n\n".join(h for h in (skill_hint, regen_modes.get(mode)["hint"] if regenerate else "",
-                                                    "" if regenerate else (chat_polish.answer_hint(text, next((m["content"] for m in reversed(store.messages(chat_id)) if m["role"] == "assistant"), ""))
-                                                                                 or chat_polish.follow_up_hint(text, any(m["role"] == "assistant" for m in store.messages(chat_id))))) if h))
+            first_hint = "\n\n".join(h for h in (skill_hint, regen_modes.get(mode)["hint"] if regenerate else "",
+                                                  "" if regenerate else (chat_polish.answer_hint(text, next((m["content"] for m in reversed(store.messages(chat_id)) if m["role"] == "assistant"), ""))
+                                                                               or chat_polish.follow_up_hint(text, any(m["role"] == "assistant" for m in store.messages(chat_id))))) if h)
+
+            def first(backend, again=False):
+                return E.run_turn(tok, store, chat_id, backend, counted_model, window, max_new, pictures=seen_pictures or None, user_text=None if again else text, stop=stop,
+                                  notes=notes or None, user_docs=None if again else ([d["id"] for d in attached if d["id"] not in sent_before] if text else None),
+                                  limiter=state.limiter, user=who["user"], effort=effort, clock=state.clock, pacer=pacer, think=think,
+                                  on_compact=lambda: q.put(("compacting", True)), style_hint=first_hint)
+            try:
+                r = first(backend)
+            except ModelRefused:
+                # A model with guess-ahead on can turn down a message with a picture: load it without guess-ahead and answer the same message once more.
+                if not (seen_pictures and state.runner and state.runner.drop_draft(model["id"])):
+                    raise
+                msgs = [m for m in store.messages(chat_id) if m["status"] != "compacted"]
+                if msgs and msgs[-1]["role"] == "assistant" and not msgs[-1]["content"]:
+                    store.remove_message(chat_id, msgs[-1]["id"])
+                q.put(("loading", model["name"]))
+                r = first(state.backend_for(model, text or "", window), again=True)
             if text and not canned and not regenerate and not stop.is_set() and r.get("reason") in ("done", None) and chat_polish.is_repeat(r["text"], prior_reply):
                 # A small model answered its own last message again. Take that reply back and ask once more, firmly, a little less predictably.
                 msgs = [m for m in store.messages(chat_id) if m["status"] != "compacted"]

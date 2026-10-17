@@ -29,7 +29,7 @@ from safe_db import SafeDB
 
 import chat
 import chat_polish
-from app_errors import AppError, BadKey, ModelTooBig, PcUnreachable, ReplyInterrupted, WrongServer
+from app_errors import AppError, BadKey, ModelRefused, ModelTooBig, PcUnreachable, ReplyInterrupted, WrongServer
 
 MAX_REPLY_CHARS = 8000          # ~2,000 tokens: a reply longer than the whole memory is a loop, not an answer
 
@@ -685,6 +685,8 @@ class LlamaServer:
         except urllib.error.HTTPError as e:
             if e.code in (401, 403):
                 raise BadKey()
+            if e.code == 400 and path == "/completion":            # llama-server said no to this request (e.g. a picture it cannot take): say why
+                raise ModelRefused(_refusal(e))
             raise WrongServer(f"HTTP {e.code}")
         except (urllib.error.URLError, OSError):
             raise PcUnreachable()
@@ -704,6 +706,17 @@ class LlamaServer:
                     return
         finally:
             r.close()
+
+
+def _refusal(err):
+    """llama-server's own reason for a refused request ({"error": {"message": ...}}), short; "" when it gave none."""
+    try:
+        body = json.loads(err.read(4000).decode("utf-8", "replace") or "{}")
+        e = body.get("error", body)
+        msg = e.get("message", "") if isinstance(e, dict) else str(e)
+    except (ValueError, OSError, AttributeError):
+        return ""
+    return " ".join(str(msg).split())[:200]
 
 
 def test_connection(base_url, key=None, timeout=5):

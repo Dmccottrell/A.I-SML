@@ -251,9 +251,18 @@ if HAVE_BROWSER:
                     squashed = page.evaluate("[...document.querySelectorAll('#modelMenu .opt')].filter((b) => b.scrollHeight > b.clientHeight + 1).length")
                     self.assertEqual(squashed, 0)                                                 # every row is tall enough for its words (none spill onto the next)
                     page.click("#modelBtn")
+                    self.assertEqual(page.get_attribute("#input", "contenteditable"), "true")      # a rich box, so the phone keyboard offers a fresh screenshot to paste
+                    page.click("#input")
+                    page.evaluate("""() => { const d = new DataTransfer(); d.setData('text/html', '<b>bold</b>'); d.setData('text/plain', 'pasted words');
+                                            document.getElementById('input').dispatchEvent(new ClipboardEvent('paste', {clipboardData: d, bubbles: true, cancelable: true})); }""")
+                    self.assertEqual(page.evaluate("document.getElementById('input').value"), "pasted words")    # pasted as plain text, never formatting
+                    self.assertEqual(page.evaluate("document.querySelectorAll('#input b').length"), 0)
+                    page.evaluate("document.getElementById('input').value = ''")
                     page.fill("#input", "hello there")
                     page.click("#send")
-                    eventually(lambda: self.assertTrue(page.is_visible("#ctxBtn")), 30)
+                    eventually(lambda: self.assertTrue(page.evaluate("S.messages.length >= 2 && !S.busy && S.messages.some((m) => m.ctx)")), 30)   # the reply is in, with its meter reading
+                    self.assertTrue(page.is_visible("#ctxBtn"))
+                    self.assertEqual(page.evaluate("document.getElementById('input').value"), "")     # emptied after sending
                     self.assertRegex(page.inner_text("#ctxBtn"), r"^\d+%$")
                     self.assertEqual(page.evaluate("document.documentElement.scrollWidth <= innerWidth"), True)   # no sideways scrolling on a phone
                     page.click("#ctxBtn")

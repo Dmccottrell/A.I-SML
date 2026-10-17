@@ -53,7 +53,7 @@ async function addFiles(list) {
   const files = list.filter((f) => { const p = f.webkitRelativePath || f.name; if (SKIP_DIRS.test(p) || /(^|\/)\.[^/]+$/.test(p)) return false; return true; });
   let n = 0;
   for (const f of files) {
-    n++; note.textContent = (f.type && f.type.startsWith('image/') ? 'Reading the picture ' : 'Reading ') + n + ' of ' + files.length + '...';
+    n++; note.textContent = (f.type && f.type.startsWith('image/') ? 'Adding the picture' : 'Adding') + (files.length > 1 ? ' ' + n + ' of ' + files.length : '') + '\u2026';
     const g = await shrinkImage(f);
     if (g.size > 10e6) { skipped.push(f.name + ' (over 10 MB)'); continue; }
     try {

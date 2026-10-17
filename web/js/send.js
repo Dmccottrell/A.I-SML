@@ -18,7 +18,7 @@ async function send(regen, mode) {
   if (!S.chatId) { const r = await post('/api/chats', {private: S.private, skill: S.skill, docs: S.docs.map((d) => d.id)}); if (!r.ok) return; S.chatId = (await r.json()).id; remember(); }
   S.busy = true; S.stick = true; S.contNow = S.cont === true; S.cont = false; renderComposer(); closeMenus();
   if (regen === true) { const last = S.messages[S.messages.length - 1]; if (last && last.role === 'assistant') S.messages.pop(); }
-  else { S.messages.push({id: 'u' + Date.now(), role: 'user', content: text, docs: pendingDocs.map((d) => ({id: d.id, name: d.name, kind: d.kind}))}); input.value = ''; input.style.height = 'auto'; renderAttached(); }
+  else { S.messages.push({id: 'u' + Date.now(), role: 'user', content: text, docs: pendingDocs.map((d) => ({id: d.id, name: d.name, kind: d.kind}))}); input.value = ''; renderAttached(); }
   renderThread(); const before = S.lastUsage;
   const think = thinkingNode(); $('thread').append(think); scrollDown(true);
   let aiBubble = null, aiWrap = null, got = '', errCard = null, looked = null, lost = false, finished = false;

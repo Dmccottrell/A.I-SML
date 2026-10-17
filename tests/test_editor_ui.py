@@ -243,7 +243,7 @@ class EditorUi(Base):
                         wait_for(lambda: anon.evaluate("document.body.classList.contains('ml') && !!document.getElementById('cssModern')"), 10)
                         self.assertTrue(anon.is_visible("#auth"))                                       # the sign-in screen, in the modern look
                         page.click(".ml-ideas button >> nth=0")
-                        self.assertIn("vaccines", page.input_value("#input"))
+                        self.assertIn("vaccines", page.evaluate("document.getElementById('input').value"))
                     self.assertEqual(errors, [])
             finally:
                 b.close()
