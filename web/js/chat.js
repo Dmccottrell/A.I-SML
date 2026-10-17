@@ -166,6 +166,7 @@ function renderThread(jump) {
   const last = [...S.messages].reverse().find((m) => m.role === 'assistant');
   S.messages.forEach((m) => t.append(bubble(m, last && m.id === last.id && m === S.messages[S.messages.length - 1])));
   if (jump !== false) scrollDown(true);
+  renderCtx(null, S.compacting);
 }
 function scrollDown(force) { const s = $('scroll'); if (force || S.stick) s.scrollTop = s.scrollHeight; }
 $('scroll').addEventListener('scroll', () => { const s = $('scroll'); S.stick = s.scrollHeight - s.scrollTop - s.clientHeight < 60; $('down').classList.toggle('show', !S.stick); });
@@ -194,9 +195,36 @@ function renderComposer() {
   const ef = S.state.efforts.find((e) => e.id === S.effort) || S.state.efforts.find((e) => e.id === 'balanced');
   const shown = S.effort === 'auto' && S.autoNote ? 'Auto \u00b7 ' + S.autoNote.effort[0].toUpperCase() + S.autoNote.effort.slice(1) : ef.name;
   $('effortBtn').replaceChildren(shown, el('span', {}, '▾'));
+  renderCtx(null, S.compacting);
   const s = $('send'); s.className = 'send' + (S.busy ? ' stop' : ''); s.innerHTML = S.busy ? '&#9632;' : '&uarr;'; s.setAttribute('aria-label', S.busy ? 'Stop' : 'Send');
 }
-function closeMenus() { $('modelMenu').hidden = true; $('effortMenu').hidden = true; $('attachMenu').hidden = true; }
+function closeMenus() { $('modelMenu').hidden = true; $('effortMenu').hidden = true; $('attachMenu').hidden = true; $('ctxMenu').hidden = true; }
+// ---------------------------------------------------------------- the memory meter (feature flag context_meter)
+// How full the model's memory (context window) is after the last reply, and when the older messages will be summarized to make room.
+const kTok = (n) => (n >= 1000 ? (n / 1000).toFixed(n >= 100000 ? 0 : 1).replace(/\.0$/, '') + 'K' : String(n));
+function lastCtx() { for (let i = S.messages.length - 1; i >= 0; i--) if (S.messages[i].ctx) return S.messages[i].ctx; return null; }
+function renderCtx(ctx, busy) {
+  const b = $('ctxBtn'), on = !!(S.state && S.state.features && S.state.features.context_meter);
+  ctx = ctx || lastCtx(); S.ctx = ctx;
+  b.hidden = !on || !ctx || S.chatId == null; if (b.hidden) return;
+  b.style.setProperty('--p', Math.min(100, ctx.pct)); b.classList.toggle('near', ctx.used >= ctx.compact_at * 0.9); b.classList.toggle('busy', !!busy);
+  b.textContent = Math.round(ctx.pct) + '%';
+  b.setAttribute('aria-label', busy ? 'Summarizing earlier messages to make room' : 'Memory ' + Math.round(ctx.pct) + '% used, ' + kTok(ctx.used) + ' of ' + kTok(ctx.window) + ' tokens');
+}
+function ctxMenuNodes(c, how) {   // the meter's details (the chat and VryxCode share them)
+  const left = Math.max(0, c.compact_at - c.used);
+  return [el('div', {class: 'head'}, 'MEMORY (CONTEXT WINDOW)'),
+    el('div', {class: 'ctxbar'}, el('div', {style: 'width:' + Math.min(100, c.pct) + '%'})),
+    el('div', {class: 'ctxrow'}, el('b', {}, Math.round(c.pct) + '% used'), el('span', {}, kTok(c.used) + ' of ' + kTok(c.window) + ' tokens')),
+    el('div', {class: 'ctxrow'}, el('span', {}, 'Free'), el('span', {}, kTok(Math.max(0, c.window - c.used)))),
+    el('div', {class: 'ctxrow'}, el('span', {}, how[0]), el('span', {}, kTok(c.compact_at) + (left ? ' (' + kTok(left) + ' to go)' : ' (next step)'))),
+    el('div', {class: 'head', style: 'text-transform:none;letter-spacing:0;font-weight:400'}, how[1])];
+}
+$('ctxBtn').onclick = () => {
+  const open = !$('ctxMenu').hidden; closeMenus(); if (open || !S.ctx) return;
+  $('ctxMenu').replaceChildren(...ctxMenuNodes(S.ctx, ['Summarizes at', 'When the chat gets near the limit, the older messages are summarized so the chat can keep going. You still see every message.']));
+  $('ctxMenu').hidden = false;
+};
 $('modelBtn').onclick = () => {
   const open = !$('modelMenu').hidden; closeMenus(); if (open) return;
   const m = $('modelMenu'); m.replaceChildren(el('div', {class: 'head'}, 'SELECT MODEL'));
@@ -204,8 +232,25 @@ $('modelBtn').onclick = () => {
     logo(30, false, c.name), el('span', {class: 'grow'}, el('b', {}, mname(c)), el('small', {}, c.tagline || '')), el('small', {style: 'text-align:right'}, c.badge));
   for (const c of S.state.models.cards) m.append(row(c));
   if ((S.state.models.other || []).length) { m.append(el('div', {class: 'head'}, 'OTHER MODELS')); for (const c of S.state.models.other) m.append(row(c)); }
+  const news = featureOn('whats_new') ? S.state.models.cards.filter((c) => c.whats_new) : [];
+  if (news.length) { m.append(el('div', {class: 'head'}, 'WHAT\u2019S NEW'));
+    for (const c of news) m.append(el('button', {class: 'opt', onclick: (ev) => { ev.stopPropagation(); whatsNew(c); }}, logo(30, false, c.name),
+      el('span', {class: 'grow'}, el('b', {}, 'What\u2019s new in ' + mname(c)), el('small', {}, c.whats_new.points[0] || '')), '\u203a')); }
   m.hidden = false;
 };
+// What is better in a new model than the version before it (models.json "whats_new", feature flag whats_new): the points, then the measured numbers side by side
+function whatsNew(c) {
+  const w = c.whats_new, all = [...S.state.models.cards, ...(S.state.models.other || [])], old = all.find((x) => x.id === w.vs);
+  const oldName = old ? mname(old) : String(w.vs || 'the last version').replace(/-/g, ' ').replace(/^\w/, (x) => x.toUpperCase());
+  const cell = (v, cls) => el('td', {style: 'padding:6px 8px;text-align:right' + (cls ? ';' + cls : '')}, v == null ? 'being measured' : v);
+  const m = $('modelMenu'); m.replaceChildren(el('div', {class: 'head'}, 'WHAT\u2019S NEW IN ' + mname(c).toUpperCase()),
+    el('div', {style: 'padding:0 6px;color:var(--muted);font-size:14px'}, 'Compared with ' + oldName + (c.preview ? '. In preview: only you and your admins see it until you publish it.' : '.')),
+    el('ul', {style: 'margin:4px 0;padding-left:22px;display:flex;flex-direction:column;gap:6px'}, ...w.points.map((t) => el('li', {}, t))),
+    (w.scores || []).length ? el('table', {style: 'width:100%;border-collapse:collapse;font-size:14px'},
+      el('tr', {style: 'color:var(--muted)'}, el('td', {style: 'padding:6px 8px'}, ''), cell(oldName), cell(mname(c), 'font-weight:700;color:var(--text)')),
+      ...w.scores.map((r) => el('tr', {style: 'border-top:1px solid var(--line)'}, el('td', {style: 'padding:6px 8px'}, r[0]), cell(r[1], 'color:var(--muted)'), cell(r[2], 'font-weight:700')))) : '',
+    el('button', {class: 'chip', style: 'align-self:flex-start;margin-top:6px', onclick: (ev) => { ev.stopPropagation(); closeMenus(); $('modelBtn').click(); }}, '\u2039 Back to models'));
+}
 $('effortBtn').onclick = () => {
   const open = !$('effortMenu').hidden; closeMenus(); if (open) return;
   const m = $('effortMenu'); m.replaceChildren(el('div', {class: 'head'}, 'HOW MUCH SHOULD IT THINK?'));

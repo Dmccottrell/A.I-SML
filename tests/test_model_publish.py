@@ -78,6 +78,7 @@ class Server(Base):
 
     def setUp(self):
         super().setUp()
+        self.state.manifest["models"] = [m for m in self.state.manifest["models"] if m["status"] != "preview"]     # the real Emvryx 3 previews would outrank the test's Flare 2.6
         base = next(m for m in self.state.manifest["models"] if m["id"] == "flare-2.5")
         new = dict(base, id="flare-2.6", version=2.6, status="preview", tagline="Faster")
         self.state.manifest["models"].append(new)
@@ -119,6 +120,7 @@ class Server(Base):
         self.assertEqual(self.sam.call("POST", "/api/admin/models", {"id": "flare-2.6", "publish": "now"})[0], 403)
 
     def test_only_the_newest_six_older_versions_are_kept_in_other_models(self):
+        self.state.manifest["models"] = [m for m in self.state.manifest["models"] if m["status"] != "preview"]     # the real Emvryx 3 previews would outrank the test's Flare 2.6
         base = next(m for m in self.state.manifest["models"] if m["id"] == "flare-2.5")
         for i in range(1, 9):
             self.state.manifest["models"].append(dict(base, id=f"flare-old-{i}", version=2.0 + i / 100, status="stable"))

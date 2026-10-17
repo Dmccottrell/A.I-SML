@@ -140,6 +140,78 @@
       ]
     },
     {
+      "id": "flare-3", "lookup": "when_needed",
+      "name": "Flare",
+      "version": 3,
+      "generation": 2,
+      "open": true,
+      "base": "Qwen3.5-2B",
+      "tagline": "Fastest: quick, simple answers",
+      "tier": "Lite",
+      "where": "device",
+      "file": "flare-3.q4_k_m.gguf",
+      "size_mb": 1900,
+      "sha256": "",
+      "min_ram_gb": 4,
+      "context": 131072,
+      "status": "preview",
+      "supports_effort": false,
+      "skills": [
+        "study",
+        "teacher"
+      ],
+      "pinned": false,
+      "cost_weight": 1,
+      "context_tested": 131072,
+      "kv_kb_per_token": 6,
+      "weights_mb": 1900,
+      "tokenizer": "checkpoints/dev/open/flare-3/tokenizer/tokenizer.json",
+      "local_gguf": [
+        "export/open/flare-3/my-ai-q4_k_m.gguf",
+        "export/open/flare-3/my-ai-q8_0.gguf",
+        "export/open/flare-3/my-ai-f16.gguf"
+      ],
+      "sampling": {
+        "temperature": 0.7,
+        "top_k": 20,
+        "top_p": 0.8,
+        "min_p": 0.05,
+        "repeat_penalty": 1.05,
+        "repeat_last_n": 64
+      },
+      "max_reply_tokens": 1536,
+      "temperature_bounds": [
+        0.2,
+        0.9
+      ],
+      "mtp": true,
+      "whats_new": {
+        "vs": "flare-2.5",
+        "points": [
+          "Remembers 16 times more of a conversation: 128K tokens tested, instead of 8K, so long chats and long documents stay in view.",
+          "Built on a newer, bigger base (Qwen3.5 2B instead of Qwen2.5 1.5B), with a hybrid design that stays quick on long text.",
+          "Drafts ahead with a built-in guess-ahead head, so replies can come out faster."
+        ],
+        "scores": [
+          [
+            "Memory (context window, tested)",
+            "8K",
+            "128K"
+          ],
+          [
+            "Common sense (HellaSwag)",
+            "65.3%",
+            null
+          ],
+          [
+            "Identity test",
+            "16/16",
+            null
+          ]
+        ]
+      }
+    },
+    {
       "id": "equinox-2", "lookup": "when_needed",
       "name": "Equinox",
       "version": 2,
@@ -234,6 +306,87 @@
         "export/open/solstice-2/my-ai-f16.gguf"
       ],
       "vryxcode": true
+    },
+    {
+      "id": "solstice-3", "lookup": "when_needed",
+      "name": "Solstice",
+      "version": 3,
+      "generation": 2,
+      "open": true,
+      "base": "Qwen3.5-9B",
+      "tagline": "Stronger: harder questions and long writing",
+      "tier": "Pro",
+      "where": "online",
+      "file": "solstice-3.q4_k_m.gguf",
+      "size_mb": 6860,
+      "sha256": "",
+      "min_ram_gb": 10,
+      "context": 131072,
+      "status": "preview",
+      "supports_effort": true,
+      "skills": [
+        "study",
+        "teacher",
+        "coding"
+      ],
+      "pinned": false,
+      "cost_weight": 5,
+      "context_tested": 131072,
+      "kv_kb_per_token": 8,
+      "weights_mb": 6860,
+      "sampling": {
+        "temperature": 0.7,
+        "top_k": 40,
+        "top_p": 0.95,
+        "min_p": 0.05,
+        "repeat_penalty": 1.05,
+        "repeat_last_n": 64
+      },
+      "max_reply_tokens": 4096,
+      "temperature_bounds": [
+        0.2,
+        1.0
+      ],
+      "tokenizer": "checkpoints/dev/open/solstice-3/tokenizer/tokenizer.json",
+      "local_gguf": [
+        "export/open/solstice-3/my-ai-q4_k_m.gguf",
+        "export/open/solstice-3/my-ai-q8_0.gguf",
+        "export/open/solstice-3/my-ai-f16.gguf"
+      ],
+      "vryxcode": true,
+      "mtp": true,
+      "whats_new": {
+        "vs": "solstice-2",
+        "points": [
+          "Remembers 4 times more of a conversation: 128K tokens tested, instead of 32K, so long chats and long documents stay in view.",
+          "Looks at pictures itself: no separate picture reader is needed.",
+          "Built on a newer, stronger base (Qwen3.5 9B instead of Qwen3 8B), with a hybrid design that stays quick on long text.",
+          "Scores higher on common sense: 75.3% on HellaSwag, up from 73.6%.",
+          "Drafts ahead with a built-in guess-ahead head, so replies can come out faster."
+        ],
+        "scores": [
+          [
+            "Common sense (HellaSwag)",
+            "73.6%",
+            "75.3%"
+          ],
+          [
+            "Memory (context window, tested)",
+            "32K",
+            "128K"
+          ],
+          [
+            "Reads pictures itself",
+            "No",
+            "Yes"
+          ],
+          [
+            "Identity test",
+            "16/16",
+            "16/16"
+          ]
+        ]
+      }
     },
     {
       "id": "apogee-2", "lookup": "when_needed",

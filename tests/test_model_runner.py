@@ -196,8 +196,8 @@ class ThroughTheApp(Base):
         self.build(A.demo_tokenizer())
         cards = {m["id"]: m for m in self.owner.call("GET", "/api/state")[1]["models"]["cards"]}
         self.assertEqual(cards["ember-2"]["state"], "ready")
-        self.assertEqual(cards["flare-2.5"]["state"], "missing")
-        self.assertEqual(cards["flare-2.5"]["badge"], "Not on this computer")
+        self.assertEqual(cards["flare-3"]["state"], "missing")                       # the owner sees Flare 3 (in preview) as the Flare card
+        self.assertEqual(cards["flare-3"]["badge"], "Not on this computer")
         self.assertEqual(self.owner.call("GET", "/api/state")[1]["model"], "ember-2")      # the one that can run is preselected
         self.assertFalse(self.owner.call("GET", "/api/state")[1]["demo"])
 

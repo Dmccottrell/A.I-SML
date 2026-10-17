@@ -91,6 +91,12 @@ def clip(text, limit=MAX_EVENT_TEXT):
     return text if len(text) <= limit else text[:limit] + f"\n... ({len(text) - limit} more characters)"
 
 
+def context_meter(used, window, fold=0.7):
+    """How full the model's memory is for the meter by the task box: harness.run_agent folds the older steps at `fold` of the window."""
+    used, window = max(0, int(used)), max(1, int(window))
+    return {"used": used, "window": window, "pct": round(min(100.0, 100.0 * used / window), 1), "compact_at": int(fold * window)}
+
+
 def _folded_steps(messages):
     """How many old steps are listed under "Earlier steps" in the task message (harness.compact puts them there); 0 when nothing was folded."""
     first = next((m for m in messages if m.get("role") == "user"), None)
@@ -303,6 +309,8 @@ class Session:
             if seen.get("folded") == 0 and folded > 0:                               # the first time this turn that old steps were folded into the "Earlier steps" list to save room
                 self.emit("compacted", steps=folded)
             seen["folded"] = folded
+            if self.context_tokens:                                                    # the memory meter on the page (feature flag context_meter)
+                self.emit("context", **context_meter(harness.estimate_tokens(messages), self.context_tokens))
             self.live_messages = messages
             if self.stop.is_set():
                 raise Stopped()

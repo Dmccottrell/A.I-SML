@@ -110,8 +110,8 @@ class GenerationOrder(unittest.TestCase):
 class VryxCodeModels(unittest.TestCase):
     def test_only_equinox_and_above_are_offered_vryxcode(self):
         got = {e["id"]: bool(e.get("vryxcode")) for e in json.load(open("models.json", encoding="utf-8"))["models"]}
-        self.assertEqual({k for k, v in got.items() if v}, {"equinox-2", "solstice-2", "apogee-2"})
-        for small in ("ember-2", "flare-2", "flare-2.5"):
+        self.assertEqual({k for k, v in got.items() if v}, {"equinox-2", "solstice-2", "solstice-3", "apogee-2"})
+        for small in ("ember-2", "flare-2", "flare-2.5", "flare-3"):
             self.assertFalse(got[small])
 
     def test_the_plan_names_the_same_models(self):

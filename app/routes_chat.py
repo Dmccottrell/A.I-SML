@@ -50,7 +50,7 @@ class RoutesChat:
             return self._send(404, {"code": "not_found", "message": "That chat is gone."})
         lib = self.state.docs_for(who["user"])
         msgs = [{"id": m["id"], "role": m["role"], "content": m["content"], "model_id": m["model_id"], "status": m["status"],
-                 "cut": bool((m.get("flags") or {}).get("cut")), "fb": (m.get("flags") or {}).get("fb", ""),
+                 "cut": bool((m.get("flags") or {}).get("cut")), "fb": (m.get("flags") or {}).get("fb", ""), "ctx": (m.get("flags") or {}).get("ctx"),
                  "docs": [{"id": d["id"], "name": d["name"], "kind": d["kind"]} for d in (lib.info(i) for i in m.get("docs") or []) if d]}
                 for m in store.messages(cid) if not (m["status"] == "compacted" and not m["content"])]
         self._send(200, {"id": cid, "title": store.title(cid), "private": cid < 0, "skill": store.skill(cid), "messages": msgs, **store.meta(cid),
@@ -264,13 +264,16 @@ class RoutesChat:
                     emit("notes", val)
                 elif kind == "memory":
                     emit("memory", val)
+                elif kind == "compacting":
+                    emit("compacting", {})
                 elif kind == "piece":
                     emit("piece", {"t": val})
                 elif kind == "done":
                     snap = st.usage_snapshot(who, model, decision["effort"])
                     emit("done", {"reason": val["reason"], "compacted": val["compacted_messages"],
                                   "forgotten": val["forgotten_messages"], "message_id": val["message_id"],
-                                  "title": store.title(cid), "usage": snap, "effort": decision["effort"], "auto": decision["auto"], "cut": bool(val.get("cut"))})
+                                  "title": store.title(cid), "usage": snap, "effort": decision["effort"], "auto": decision["auto"], "cut": bool(val.get("cut")),
+                                  "context": val.get("context")})
                     return
                 else:
                     status, headers, payload = error_payload(val)

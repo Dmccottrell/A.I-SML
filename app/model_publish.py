@@ -15,6 +15,12 @@ import threading
 import time
 
 
+def whats_new_note(model, most=3):
+    """The first few "what is better" points from models.json "whats_new", for the release note when the person publishing writes none."""
+    points = [str(p).strip() for p in ((model.get("whats_new") or {}).get("points") or []) if str(p).strip()]
+    return "".join(" " + p for p in points[:most])
+
+
 class ModelPublisher:
     def __init__(self, path=None, flags=None, clock=time.time, guard=None):
         self.path, self.flags, self.clock, self.lock, self.guard = path, flags, clock, threading.Lock(), guard      # guard(model_id) -> (ok, why): the safety checks
@@ -75,7 +81,7 @@ class ModelPublisher:
             self.data["failed"].pop(model_id, None)
             self._save()
         if self.flags:
-            self.flags.record_model_release(model_id, self._label(model), "model-new", by, (notes or "").strip() or f"{self._label(model)} is here.{move}", model.get("tagline", ""))
+            self.flags.record_model_release(model_id, self._label(model), "model-new", by, (notes or "").strip() or f"{self._label(model)} is here.{whats_new_note(model)}{move}", model.get("tagline", ""))
         return self._label(model)
 
     def schedule(self, manifest, model_id, at, by=""):

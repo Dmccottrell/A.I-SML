@@ -16,11 +16,14 @@ import time
 AUDIENCES = ("off", "owner", "admins", "everyone")
 AUDIENCE_NAMES = {"off": "Off", "owner": "Owner", "admins": "Admins", "everyone": "Everyone"}
 
-# id, what the owner sees, what it does, and where it starts. New features start with the owner and the admins.
+# id, what the owner sees, what it does, and where it starts. New features start with the owner and the admins, never with everyone: the owner publishes
+# each one when it is ready (tests/test_release_gate.py fails if a flag starts at "everyone"). New models do the same through "status": "preview".
 FLAGS = [
     {"id": "welcome_tour", "title": "Welcome tour", "desc": "The animated introduction and walk-through people see the first time they sign in (and can replay in Settings).", "default": "admins"},
     {"id": "violet_theme", "title": "Violet look", "desc": "The whole chat app and the sign-in screen in electric violet instead of amber: buttons, the message box, glows and the Emvryx logo. Each model's logo keeps its own colour.", "default": "admins"},
     {"id": "modern_look", "title": "Modern look", "desc": "A newer look for the main chat: a floating glass sidebar and composer, the model speaking straight on the page, soft glow in the model's own colour, and ideas to try on the empty chat. Switch it off to go back.", "default": "admins"},
+    {"id": "context_meter", "title": "Memory meter", "desc": "A ring by the message box (in chats and in VryxCode) that shows how full the model's memory (context window) is, with the details on a tap, and a \"Summarizing earlier messages\" line while a long chat is shortened to make room.", "default": "admins"},
+    {"id": "whats_new", "title": "What's new in each model", "desc": "A \"What's new\" page for each new model, from the model picker: what is better than the version before, side by side with the measured numbers. The same points go into the release note when the model is published.", "default": "admins"},
     {"id": "vryxcode_update", "title": "VryxCode update", "desc": "The new VryxCode look: electric violet, the \"What should we build?\" home with starter templates and the phone-notification box, glass panels and the floating editor. Switch it off to get the earlier VryxCode look back. (The new tools, like keep or undo per file, search and second opinions, stay available.)", "default": "admins"},
 ]
 BY_ID = {f["id"]: f for f in FLAGS}
