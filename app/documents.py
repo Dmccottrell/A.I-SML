@@ -300,6 +300,11 @@ def notes_for(library, doc_ids, question, budget=8000):
     per = max(1500, budget // len(docs))
     notes = []
     for _, info, text in docs:
+        if info.get("kind") in IMAGE_KINDS:                    # a picture is not a document: its words go in as what the picture says, with no file name to cite
+            words = text.replace("[Text read from a picture]", "").strip()
+            if words and not words.startswith(PICTURE_ONLY):
+                notes.append({"title": "Words in the picture", "text": words[:per]})
+            continue
         pieces = chunks(text)
         idx = pick(pieces, question, per)
         whole = len(idx) == len(pieces)
@@ -315,18 +320,33 @@ PICTURE_ONLY_TEXT = "(sent a picture)"        # what is saved when only a pictur
 FILE_ONLY_TEXT = "(sent a file)"              # ...and when only a file is sent (the model then sums it up)
 
 
+PICTURE_PLAYBOOK = (
+    "How to reply, the way a friend who can see the picture would:\n"
+    "- Open by showing you got it, in their tone: name what it is and react (\"Caleb's back!\", \"Oof, that error\"). No \"The picture shows\".\n"
+    "- Then add something they did not say: what it means, useful context, or your honest take. Two to four short sentences, not a list.\n"
+    "- Fit the kind of picture: news or a post: react and add context. An error or code: say what is wrong and how to fix it. Homework, a form "
+    "or a bill: help with it. A chart: the main takeaway. A photo: comment on what stands out. A meme: get the joke. A product: what to know before buying.\n"
+    "- End with one short question or next step only when it fits naturally.\n"
+    "- Do not read out or list its text, do not describe the phone screen around it, and never add sources or file names in brackets.")
+
+
 def picture_hint(only_picture=False, earlier=False):
-    """The instruction for a model that looks at the picture itself: react like a person who can see it, not like a text reader quoting a document.
-    `earlier`: the picture came with an earlier message, and the person is now just talking: answer them first."""
+    """The instruction for a model that looks at the picture itself: answer like Claude or ChatGPT do with a picture (react, add value, fit the
+    kind of picture), not like a text reader quoting a document. `earlier`: the picture came with an earlier message, and the person is now just
+    talking: answer what they said first."""
     if earlier:
-        lead = ("[Earlier in this chat the person shared the picture you can see here. Now reply to what they just said, the way a friend would: react to it "
-                "first (share their excitement, answer their question, give your take), and bring in the picture only if it helps. ")
-    elif only_picture:
-        lead = "[The person shared a picture with no message. You can see it. React to it the way a friend who can see it would: say what it is and what you think of it. "
-    else:
-        lead = "[The person shared a picture and said something about it. You can see it. Reply to what they said, the way a friend who can see it would. "
-    return lead + ("Talk normally and keep it short. Do not repeat or read out its text, do not list everything in it, and never add sources or file names "
-                   "in brackets like (Document: ...).]")
+        return ("[Earlier in this chat the person shared the picture you can see here. Now reply to what they just said, like a friend: react to it first "
+                "(share their excitement, answer their question, give your take), and bring in the picture only where it helps. Keep it short and natural. "
+                "Do not repeat the picture's text and never add sources or file names in brackets.]")
+    lead = ("[The person shared a picture with no message. You can see it.\n" if only_picture else
+            "[The person shared a picture and said something about it. You can see it. Answer what they said first, using what you see.\n")
+    return lead + PICTURE_PLAYBOOK + "]"
+
+
+def picture_words_hint():
+    """For a model that cannot see pictures: it only gets the words read from the picture, and must still talk about it as a picture."""
+    return ("[The person shared a picture. You cannot see it, but the notes hold the words in it. Talk about it as their picture, never as a document or file, "
+            "and reply like a friend: react first, then add something useful. Do not repeat its text, and never add sources or file names in brackets.]")
 
 
 def hint(names):
