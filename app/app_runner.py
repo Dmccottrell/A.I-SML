@@ -26,6 +26,7 @@ class ModelRunner:
         self.last_used = time.time()                            # the last time a message needed the model (idle unload looks at this)
         self.loaded_at = None
         self.draft_ahead = set()                                # model ids whose built-in "guess ahead" head (Qwen3.5 MTP) is used: models.json "mtp": true
+        self.kv8 = set()                                        # model ids whose chat memory is kept in 8 bits (models.json "cache_bits": 8): half the memory, so 256K fits a 12 GB card
         self.no_draft = set()                                   # ...and those it failed for (an older llama-server, or a file without the head): loaded plainly
         self.lock = threading.Lock()
         atexit.register(self.stop)
@@ -132,6 +133,8 @@ class ModelRunner:
             proj = self.projector(model_id)
             if proj:
                 cmd += ["--mmproj", proj]                       # it can look at pictures itself (no separate picture reader)
+            if model_id in self.kv8:
+                cmd += ["-ctk", "q8_0", "-ctv", "q8_0"]         # the same setting scripts/long_check.py --kv8 passed with
             drafting = model_id in self.draft_ahead and model_id not in self.no_draft
             if drafting:
                 cmd += ["--spec-type", "draft-mtp"]             # the model guesses a few words ahead and checks them in one go: same answers, faster

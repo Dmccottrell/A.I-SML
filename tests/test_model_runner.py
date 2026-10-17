@@ -143,15 +143,17 @@ class Runner(unittest.TestCase):
         log = os.path.join(self.tmp.name, "argv.txt")
         recording = FAKE.replace("t0 = time.time()", "open(" + repr(log) + ", 'a').write(' '.join(a) + chr(10)); t0 = time.time()", 1)
         r = A.ModelRunner(write_fake(self.tmp.name, recording.format(py=sys.executable), "rec"), self.files, start_timeout=20)
-        r.draft_ahead = {"ember-2"}
+        r.draft_ahead, r.kv8 = {"ember-2"}, {"ember-2"}
         try:
             r.ensure("ember-2", 1024)
-            r.ensure("flare-2", 1024)                                       # a model without the flag is started plainly
+            r.ensure("flare-2", 1024)                                       # a model without the flags is started plainly
         finally:
             r.stop()
         lines = open(log).read().splitlines()
         self.assertIn("--spec-type draft-mtp", lines[0])
+        self.assertIn("-ctk q8_0 -ctv q8_0", lines[0])                       # 8-bit chat memory (models.json "cache_bits": 8)
         self.assertNotIn("--spec-type", lines[1])
+        self.assertNotIn("-ctk", lines[1])
         refusing = FAKE.replace("t0 = time.time()", "t0 = time.time()\nif '--spec-type' in a: sys.exit(1)", 1)    # an older llama-server
         r = A.ModelRunner(write_fake(self.tmp.name, refusing.format(py=sys.executable), "old"), self.files, start_timeout=20)
         r.draft_ahead = {"ember-2"}

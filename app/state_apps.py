@@ -26,6 +26,8 @@ class StateApps:
         else:
             m["state"], m["badge"] = "ready", "Preview" if m.get("preview") else "Beta" if m["status"] == "beta" else "Ready"
         m["older"] = False
+        if m.get("preview") and not who.get("admin"):              # a model's "What's new" goes out only when the owner publishes the model
+            m.pop("whats_new", None)
         return m
 
     def catalog(self, who):
