@@ -315,11 +315,18 @@ PICTURE_ONLY_TEXT = "(sent a picture)"        # what is saved when only a pictur
 FILE_ONLY_TEXT = "(sent a file)"              # ...and when only a file is sent (the model then sums it up)
 
 
-def picture_hint(only_picture=False):
-    """The instruction for a model that looks at the picture itself: react to it like a person who can see it, not like a text reader."""
-    return ("[The person shared a picture" + (" with no message" if only_picture else "") + ". You can see it. Respond the way a friend who can see it would: "
-            + ("say what it is and react to it, and pick up on what they probably want to talk about. " if only_picture else "answer what they said, using what is in the picture. ")
-            + "Talk normally. Do not read out all of its text, list everything in it, or describe the phone screen around it, unless they ask.]")
+def picture_hint(only_picture=False, earlier=False):
+    """The instruction for a model that looks at the picture itself: react like a person who can see it, not like a text reader quoting a document.
+    `earlier`: the picture came with an earlier message, and the person is now just talking: answer them first."""
+    if earlier:
+        lead = ("[Earlier in this chat the person shared the picture you can see here. Now reply to what they just said, the way a friend would: react to it "
+                "first (share their excitement, answer their question, give your take), and bring in the picture only if it helps. ")
+    elif only_picture:
+        lead = "[The person shared a picture with no message. You can see it. React to it the way a friend who can see it would: say what it is and what you think of it. "
+    else:
+        lead = "[The person shared a picture and said something about it. You can see it. Reply to what they said, the way a friend who can see it would. "
+    return lead + ("Talk normally and keep it short. Do not repeat or read out its text, do not list everything in it, and never add sources or file names "
+                   "in brackets like (Document: ...).]")
 
 
 def hint(names):

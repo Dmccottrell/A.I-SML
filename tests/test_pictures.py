@@ -119,7 +119,11 @@ class InChat(Base):
         self.assertEqual(text.count("<__media__>"), 1)
         self.assertLess(text.index("<__media__>"), text.rindex("What does this code print?"))     # the picture comes just before the question
         self.ask(self.sam, cid, "And why?")
-        self.assertIsInstance(self.state_backend.prompts[-1], list)      # a later message without a new picture is plain text again
+        later = self.state_backend.prompts[-1]                          # a later message: the model still sees the picture (not its words as a document) ...
+        self.assertIsInstance(later, dict)
+        self.assertEqual(later["prompt_string"].count("<__media__>"), 1)
+        self.assertIn("reply to what they just said", later["prompt_string"])   # ... and is told to answer what was just said first
+        self.assertNotIn("Text read from a picture", later["prompt_string"])
 
     def test_a_picture_alone_is_sent_as_it_is_and_answered_like_a_person_would(self):
         import documents as D2
