@@ -311,6 +311,17 @@ def notes_for(library, doc_ids, question, budget=8000):
     return notes
 
 
+PICTURE_ONLY_TEXT = "(sent a picture)"        # what is saved when only a picture is sent; the page shows just the picture
+FILE_ONLY_TEXT = "(sent a file)"              # ...and when only a file is sent (the model then sums it up)
+
+
+def picture_hint(only_picture=False):
+    """The instruction for a model that looks at the picture itself: react to it like a person who can see it, not like a text reader."""
+    return ("[The person shared a picture" + (" with no message" if only_picture else "") + ". You can see it. Respond the way a friend who can see it would: "
+            + ("say what it is and react to it, and pick up on what they probably want to talk about. " if only_picture else "answer what they said, using what is in the picture. ")
+            + "Talk normally. Do not read out all of its text, list everything in it, or describe the phone screen around it, unless they ask.]")
+
+
 def hint(names):
     """The instruction for the model while documents are attached (never saved in the chat)."""
     shown = ", ".join(f'"{n}"' for n in names[:5])

@@ -13,8 +13,8 @@ function thinkingNode() {
 async function send(regen, mode) {
   if (S.busy) return;
   const sentNow = sentIds(), pendingDocs = S.docs.filter((d) => !sentNow.has(d.id));
-  let text = regen === true ? '' : input.value.trim(); if (regen !== true && !text && pendingDocs.length) text = pendingDocs.some(isPic) ? 'What is in this picture? Read me any text in it.' : 'Summarize this.';
-  if (regen !== true && !text) return;
+  let text = regen === true ? '' : input.value.trim();     // a picture or file alone is sent as it is (no made-up question); the model reacts to it
+  if (regen !== true && !text && !pendingDocs.length) return;
   if (!S.chatId) { const r = await post('/api/chats', {private: S.private, skill: S.skill, docs: S.docs.map((d) => d.id)}); if (!r.ok) return; S.chatId = (await r.json()).id; remember(); }
   S.busy = true; S.stick = true; S.contNow = S.cont === true; S.cont = false; renderComposer(); closeMenus();
   if (regen === true) { const last = S.messages[S.messages.length - 1]; if (last && last.role === 'assistant') S.messages.pop(); }
@@ -50,7 +50,7 @@ async function send(regen, mode) {
         if (!aiWrap) { think._stop(); think.remove(); const m = curModel(); aiBubble = el('div', {class: 'bubble'}); const note = S.autoNote ? el('span', {title: S.autoNote.reason}, ' \u00b7 Auto chose ' + S.autoNote.effort[0].toUpperCase() + S.autoNote.effort.slice(1)) : null;
         aiWrap = el('div', {class: 'msg ai'}, el('div', {class: 'meta'}, logo(14, false, m ? m.name : 'brand'), mname(m), note), aiBubble); $('thread').append(aiWrap);
           const line = lookupLine(looked); if (line) aiWrap.insertBefore(line, aiBubble); }
-        got += data.t; aiBubble.replaceChildren(bullets(got), el('span', {class: 'cursor'}, '▍')); scrollDown();
+        got += data.t; aiBubble.replaceChildren(richText(got), el('span', {class: 'cursor'}, '▍')); scrollDown();
       } else if (ev === 'done') {
         finished = true; S.title = data.title || S.title; S.state.usage = data.usage; renderUsage(data.usage); popTokens(before, data.usage);
         const cn = $('compactNote'); if (cn) cn.remove();

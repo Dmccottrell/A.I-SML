@@ -121,6 +121,24 @@ class InChat(Base):
         self.ask(self.sam, cid, "And why?")
         self.assertIsInstance(self.state_backend.prompts[-1], list)      # a later message without a new picture is plain text again
 
+    def test_a_picture_alone_is_sent_as_it_is_and_answered_like_a_person_would(self):
+        import documents as D2
+        self.state.seeing = {m["id"] for m in self.state.manifest["models"]}
+        cid = self.new_chat(self.sam)
+        self.assertEqual(self.ask(self.sam, cid, "")[0], 400)                # nothing to send
+        did = self.add_picture(self.sam)
+        self.sam.call("POST", f"/api/chats/{cid}/docs", {"ids": [did]})
+        ev = self.ask(self.sam, cid, "")[2]                                   # no words, only the picture
+        self.assertTrue(any(e == "done" for e, _ in ev), ev)
+        j = self.sam.call("GET", f"/api/chats/{cid}")[1]
+        self.assertEqual(j["messages"][0]["content"], D2.PICTURE_ONLY_TEXT)  # the page shows just the picture for this
+        self.assertEqual(j["title"], "Picture")
+        text = self.state_backend.prompts[-1]["prompt_string"]
+        self.assertIn("You can see it", text)                                # react to it like a person who can see it ...
+        self.assertNotIn("Answer from the document", text)                   # ... not like a document to quote from
+        self.assertNotIn("Read me any text", text)
+        self.assertEqual(self.ask(self.sam, cid, "")[0], 400)                # the picture went already: nothing new to send
+
     def test_a_picture_refused_with_guess_ahead_is_answered_after_reloading_without_it(self):
         import app_engine as E
         from app_errors import ModelRefused

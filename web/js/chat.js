@@ -41,9 +41,15 @@ async function delChat(c) {
 
 // ---------------------------------------------------------------- thread
 const bullets = (t) => String(t || '').replace(/^(\s*)[-*] (?=\S)/gm, '$1\u2022 ');      // "- item" lines show as real bullet points (Copy keeps the plain text)
+function richText(t) {   // **bold** and "# heading" lines show as bold text instead of stars and hashes (Copy keeps the plain text)
+  const f = document.createDocumentFragment();
+  bullets(t).replace(/^#{1,4} +(.+)$/gm, '**$1**').split(/(\*\*[^*\n]+\*\*)/g).forEach((p) => { if (p) f.append(/^\*\*[^*\n]+\*\*$/.test(p) ? el('b', {}, p.slice(2, -2)) : p); });
+  return f;
+}
+const ONLY_SENT = ['(sent a picture)', '(sent a file)'];   // saved for a picture or file sent without words (documents.PICTURE_ONLY_TEXT, FILE_ONLY_TEXT): only it is shown
 function bubble(m, last) {
   if (m.role === 'user' && m.content.startsWith(SUMMARY_MARK)) return el('div', {class: 'note'}, 'Earlier messages were summarized to save room');
-  if (m.role === 'user') return el('div', {class: 'msg user'}, (m.docs && m.docs.length) ? el('div', {class: 'pics'}, ...m.docs.map((d) => isPic(d) ? el('img', {src: picUrl(d), alt: d.name, onclick: () => window.open(picUrl(d), '_blank', 'noopener')}) : el('span', {class: 'chip', title: d.name}, '\ud83d\udcc4 ' + d.name))) : '', m.content ? el('div', {class: 'bubble'}, m.content) : '', (S.chatId != null && !S.busy && typeof m.id === 'number' && m.content) ? el('div', {class: 'acts'}, el('button', {class: 'chip', title: 'Change this message and ask again', onclick: (e) => editMessage(m, e.currentTarget.closest('.msg'))}, 'Edit')) : '');
+  if (m.role === 'user') return el('div', {class: 'msg user'}, (m.docs && m.docs.length) ? el('div', {class: 'pics'}, ...m.docs.map((d) => isPic(d) ? el('img', {src: picUrl(d), alt: d.name, onclick: () => window.open(picUrl(d), '_blank', 'noopener')}) : el('span', {class: 'chip', title: d.name}, '\ud83d\udcc4 ' + d.name))) : '', m.content && !ONLY_SENT.includes(m.content) ? el('div', {class: 'bubble'}, m.content) : '', (S.chatId != null && !S.busy && typeof m.id === 'number' && m.content && !ONLY_SENT.includes(m.content)) ? el('div', {class: 'acts'}, el('button', {class: 'chip', title: 'Change this message and ask again', onclick: (e) => editMessage(m, e.currentTarget.closest('.msg'))}, 'Edit')) : '');
   const model = allModels().find((c) => c.id === m.model_id);
   const meta = el('div', {class: 'meta'}, logo(14, false, model ? model.name : 'brand'), mname(model) + (m.status === 'partial' ? ' · stopped' : ''));
   const acts = el('div', {class: 'acts'}, el('button', {class: 'chip', onclick: (e) => { navigator.clipboard && navigator.clipboard.writeText(m.content); e.target.textContent = 'Copied'; setTimeout(() => e.target.textContent = 'Copy', 1500); }}, 'Copy'));
@@ -58,7 +64,7 @@ function bubble(m, last) {
   if (S.chatId != null && S.chatId >= 0 && m.status === 'done') more.push([m.fb ? 'Reported (thanks)' : 'Report a problem\u2026', (btn) => reportAnswer(m, btn)]);
   if (last && !S.busy) acts.append(el('button', {class: 'chip', 'aria-haspopup': 'true', onclick: (e) => regenMenu(e.currentTarget)}, 'Regenerate \u25be'));
   if (more.length) acts.append(el('button', {class: 'chip', 'aria-haspopup': 'true', 'aria-label': 'More actions', title: 'More', onclick: (e) => moreMenu(e.currentTarget, more)}, '\u22ef'));
-  return el('div', {class: 'msg ai', 'data-id': m.id}, meta, el('div', {class: 'bubble'}, bullets(m.content)), acts);
+  return el('div', {class: 'msg ai', 'data-id': m.id}, meta, el('div', {class: 'bubble'}, richText(m.content)), acts);
 }
 function moreMenu(btn, items) {   // a small menu of the less-used answer actions
   document.querySelectorAll('.chatmenu').forEach((x) => x.remove());
