@@ -666,6 +666,9 @@ class FakeBackend:
             yield word + " "
 
 
+_MARKERS = {}          # llama-server address -> its picture place-holder (LlamaServer.media_marker)
+
+
 class LlamaServer:
     """llama.cpp's llama-server over HTTP. The app builds the prompt (token ids) itself and uses the raw
     /completion endpoint, because our chat format isn't the template stored in the .gguf (docs/APP_SPEC.md)."""
@@ -691,8 +694,25 @@ class LlamaServer:
         except (urllib.error.URLError, OSError):
             raise PcUnreachable()
 
+    def media_marker(self):
+        """The place-holder this llama-server wants for one picture. Newer builds choose their own (GET /props "media_marker"), so a fixed <__media__>
+        no longer matches and the request fails with "Failed to tokenize prompt". Asked once per running server."""
+        if self.base not in _MARKERS:
+            marker = MEDIA_MARKER
+            try:
+                with self._request("/props") as r:
+                    marker = json.load(r).get("media_marker") or MEDIA_MARKER
+            except (AppError, ValueError, OSError):
+                pass
+            _MARKERS[self.base] = marker
+        return _MARKERS[self.base]
+
     def stream(self, ids, max_new):
         prompt = ids if isinstance(ids, dict) else list(ids)       # token ids, or {"prompt_string", "multimodal_data"} when pictures go with it
+        if isinstance(prompt, dict) and prompt.get("multimodal_data"):
+            marker = self.media_marker()
+            if marker != MEDIA_MARKER:
+                prompt = dict(prompt, prompt_string=prompt["prompt_string"].replace(MEDIA_MARKER, marker))
         r = self._request("/completion", {"prompt": prompt, "n_predict": max_new, "stream": True, **self.sampling})
         try:
             for line in r:
