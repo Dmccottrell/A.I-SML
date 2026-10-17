@@ -426,3 +426,35 @@ class LongMemory(unittest.TestCase):
         self.assertFalse(LC.verdict({65536: {"found": 2, "total": 3}})[0])
         self.assertFalse(LC.verdict({131072: {"error": "out of memory", "found": 0, "total": 3}})[0])
         self.assertFalse(LC.verdict({})[0])
+
+    def test_past_128k_with_8bit_memory_and_the_picture_reader(self):
+        import long_check as LC
+        seen = []
+
+        def start(bin_, cand, ctx):
+            seen.append((ctx, list(cand["args"])))
+            return object()
+        fake = {"start_server": start, "stop_server": lambda p: None, "smi_used_gb": lambda: 9.5,
+                "needle_test": lambda cand, ctx: {"found": 3 if ctx < 262144 else 2, "total": 3, "prefill_s": 30.0}}
+        real = {k: getattr(LC.B, k) for k in fake}
+        old = os.getcwd()
+        with tempfile.TemporaryDirectory() as d:
+            os.makedirs(os.path.join(d, "export", "open", "flare-3"))
+            open(os.path.join(d, "export", "open", "flare-3", "mmproj.gguf"), "w").close()
+            os.chdir(d)
+            try:
+                for k, v in fake.items():
+                    setattr(LC.B, k, v)
+                with contextlib.redirect_stdout(io.StringIO()):
+                    LC.main(["--model", "flare-3", "--llama-bin", "x", "--sizes", "131072,196608,262144", "--kv8"])
+                with open(os.path.join("logs", "flare-3-long-128-192-256.md"), encoding="utf-8") as f:
+                    text = f.read()
+            finally:
+                for k, v in real.items():
+                    setattr(LC.B, k, v)
+                os.chdir(old)
+        self.assertEqual([c for c, _ in seen], [131072, 196608, 262144])
+        self.assertIn("-ctk", seen[0][1])
+        self.assertIn("--mmproj", seen[0][1])
+        self.assertIn("Largest window that passed: 192K with 8-bit chat memory", text)
+        self.assertIn("9.5 GB on the card", text)
