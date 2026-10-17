@@ -246,6 +246,11 @@ if HAVE_BROWSER:
                     ready(page)
                     self.assertTrue(page.evaluate("S.state.features.context_meter"))              # the owner sees it while it is in testing
                     eventually(lambda: self.assertEqual(page.inner_text("#ctxBtn"), "0%"))          # a new chat shows an empty ring straight away
+                    page.click("#modelBtn")                                                       # the model list scrolls instead of running off the screen
+                    self.assertGreaterEqual(page.evaluate("document.getElementById('modelMenu').getBoundingClientRect().top"), 0)
+                    squashed = page.evaluate("[...document.querySelectorAll('#modelMenu .opt')].filter((b) => b.scrollHeight > b.clientHeight + 1).length")
+                    self.assertEqual(squashed, 0)                                                 # every row is tall enough for its words (none spill onto the next)
+                    page.click("#modelBtn")
                     page.fill("#input", "hello there")
                     page.click("#send")
                     eventually(lambda: self.assertTrue(page.is_visible("#ctxBtn")), 30)

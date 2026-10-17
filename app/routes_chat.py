@@ -59,8 +59,10 @@ class RoutesChat:
             last = next((m["model_id"] for m in reversed(msgs) if m["role"] == "assistant" and m["model_id"]), None)
             try:
                 ctx = chat_turn.meter_for(self.state, who, cid, last) if last else None
-            except Exception:                                  # noqa: BLE001 - a model that is gone or not ready: the meter appears after the next reply
+            except Exception as e:                             # noqa: BLE001 - a model that is gone or not ready: the page estimates until the next reply
                 ctx = None
+                if self.state.verbose:
+                    print(f"(memory meter: could not measure chat {cid}: {type(e).__name__})", flush=True)
         self._send(200, {"id": cid, "title": store.title(cid), "private": cid < 0, "skill": store.skill(cid), "messages": msgs, "ctx": ctx, **store.meta(cid),
                          "generating": (who["user"], cid) in self.state.stops,
                          "docs": [d for d in (self.state.docs_for(who["user"]).info(i) for i in store.docs(cid)) if d]})
