@@ -173,8 +173,18 @@ def extractive_summary(messages, max_chars=1200):
     return SUMMARY_MARK + "\n" + "\n".join(lines)
 
 
-def compact_chat(tok, store, chat_id, window, max_new, keep=4, trigger=0.8, summarize=None, keep_notes=1, on_start=None):
-    """If the chat fills more than `trigger` of the room for the prompt, replace the older messages with a summary.
+COMPACT_SHARE = 0.75        # a chat is shortened at 75% of the room for the prompt...
+COMPACT_CAP = 96_000        # ...or at 96K tokens, whichever comes first: past ~100K these models reason less sharply and every re-read is slow
+
+
+def compact_point(window, max_new, share=COMPACT_SHARE, cap=COMPACT_CAP):
+    """The number of tokens at which a chat gets shortened (the memory meter shows it too)."""
+    return int(min(share * max(64, window - max_new), cap))
+
+
+def compact_chat(tok, store, chat_id, window, max_new, keep=4, trigger=COMPACT_SHARE, summarize=None, keep_notes=1, on_start=None, cap=COMPACT_CAP, force=False):
+    """If the chat fills more than `trigger` of the room for the prompt (or `cap` tokens), replace the older messages with a summary.
+    `force=True` (the "Compact now" button) shortens it whatever its size, as long as there is something old enough to fold.
     `summarize(messages) -> text` may use the model; if it fails or returns nothing, the extractive summary is used.
     `on_start()` is called just before the folding starts (the page shows "Summarizing earlier messages" while it runs).
     Returns how many messages were folded into the summary (0 = nothing to do)."""
@@ -183,7 +193,7 @@ def compact_chat(tok, store, chat_id, window, max_new, keep=4, trigger=0.8, summ
         return 0
     history = [{"role": m["role"], "content": m["content"]} for m in msgs if m["content"]]
     r = chat.context_report(tok, history, window, reserve=max_new, keep_notes=keep_notes)
-    if r["used"] + r["forgotten"] <= trigger * r["limit"]:
+    if not force and r["used"] + r["forgotten"] <= compact_point(window, max_new, trigger, cap):
         return 0
     old = msgs[:-keep]
     while old and old[-1]["role"] == "user":            # never leave a question without its answer in the kept part

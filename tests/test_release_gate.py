@@ -9,6 +9,7 @@ import code_sessions as CS
 import flags as F
 import model_publish as MP
 import models as M
+from tests.test_app_server import Base as AppBase
 from tests.test_context_meter import make_tok
 
 ROOT = os.path.join(os.path.dirname(os.path.abspath(__file__)), os.pardir)
@@ -65,10 +66,11 @@ class MemoryMeter(unittest.TestCase):
     def test_meter_numbers(self):
         c = E.context_meter(8192, 32768, 4096)
         self.assertEqual((c["used"], c["window"], c["pct"]), (8192, 32768, 25.0))
-        self.assertEqual(c["compact_at"], int(0.8 * (32768 - 4096)))
+        self.assertEqual(c["compact_at"], int(0.75 * (32768 - 4096)))
         self.assertEqual(E.context_meter(99999, 1000, 100)["pct"], 100.0)
         v = CS.context_meter(700, 1000)
-        self.assertEqual((v["pct"], v["compact_at"]), (70.0, 700))
+        self.assertEqual((v["pct"], v["compact_at"]), (70.0, 750))
+        self.assertEqual(CS.context_meter(1, 262144)["compact_at"], 96_000)
 
     def test_reply_reports_and_keeps_the_meter(self):
         store = E.ChatStore()
@@ -103,8 +105,84 @@ class MemoryMeter(unittest.TestCase):
         self.assertGreater(r["compacted_messages"], 0)
 
 
-if __name__ == "__main__":
-    unittest.main()
+def fill(st, cid, n=12):
+    for i in range(n):
+        st.add(cid, "user", f"question number {i} about fractions and decimals and more")
+        st.add(cid, "assistant", f"answer number {i} that explains the idea in a few friendly words")
+
+
+class CompactRule(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.tok = make_tok()
+        for t in ("<|user|>", "<|assistant|>", "<|endoftext|>"):
+            cls.tok.special.setdefault(t, len(cls.tok.special) + 10_000)
+
+    def test_75_percent_or_96k_whichever_comes_first(self):
+        self.assertEqual(P.compact_point(262144, 4096), 96_000)                # a 256K window: 96K, not 190K
+        self.assertEqual(P.compact_point(131072, 4096), 95_232)
+        self.assertEqual(P.compact_point(32768, 4096), 21_504)                 # a small window: 75% comes first
+        import harness
+        self.assertEqual((harness.fold_point(262144), harness.fold_point(32768)), (96_000, 24_576))
+
+    def test_compact_now_folds_a_chat_that_is_not_full_yet(self):
+        st = E.ChatStore()
+        cid = st.new_chat()
+        fill(st, cid)
+        self.assertEqual(P.compact_chat(self.tok, st, cid, 32768, 1000), 0)     # far from full: the automatic one leaves it
+        self.assertGreater(P.compact_chat(self.tok, st, cid, 32768, 1000, force=True), 10)
+        self.assertTrue(st.history(cid)[0]["content"].startswith(P.SUMMARY_MARK))
+        short = E.ChatStore()
+        c2 = short.new_chat()
+        fill(short, c2, 2)
+        self.assertEqual(P.compact_chat(self.tok, short, c2, 32768, 1000, force=True), 0)   # nothing old enough to fold
+
+    def test_vryxcode_fold_now_keeps_the_pinned_note(self):
+        import harness
+        head = "build a shop\n\n" + harness.PINNED_HEAD + "\nChecklist: [ ] cart"
+        msgs = [{"role": "system", "content": "sys"}, {"role": "user", "content": head}]
+        for i in range(10):
+            msgs += [{"role": "assistant", "content": '{"tool": "read_file", "args": {"path": "a%d.py"}}' % i}, {"role": "user", "content": "ok"}]
+        out = harness.fold_now(msgs)
+        self.assertLess(len(out), len(msgs))
+        self.assertIn("Checklist: [ ] cart", out[1]["content"])
+        self.assertIn("Earlier steps", out[1]["content"])
+
+    def test_vryxcode_button_folds_now_between_messages_and_waits_while_working(self):
+        import tempfile
+        with tempfile.TemporaryDirectory() as d:
+            s = CS.Session("s1", "owner", "demo", "task", "solstice-3", d)
+            s.context_tokens = 32768
+            s.state = "working"
+            self.assertEqual(s.compact_now(), {"when": "next_step"})
+            self.assertTrue(s.want_compact)
+            s.state, s.want_compact = "done", False
+            self.assertEqual(s.compact_now(), {"when": "now", "folded": 0})        # no conversation yet
+            s.history = [{"role": "system", "content": "sys"}, {"role": "user", "content": "task"}]
+            for i in range(10):
+                s.history += [{"role": "assistant", "content": '{"tool": "run", "args": {"command": "ls"}}'}, {"role": "user", "content": "ok"}]
+            r = s.compact_now()
+            self.assertGreater(r["folded"], 0)
+            kinds = [e["kind"] for e in s.events]
+            self.assertIn("compacted", kinds)
+            self.assertIn("context", kinds)
+
+
+class CompactRoute(AppBase):
+    def test_owner_can_compact_and_others_cannot_see_the_button_yet(self):
+        s, j = self.owner.call("POST", "/api/chats", {})
+        cid = j["id"]
+        fill(self.state.store("owner"), cid)
+        s, j = self.owner.call("POST", f"/api/chats/{cid}/compact", {"model": "ember-2"})
+        self.assertEqual(s, 200, j)
+        self.assertGreater(j["folded"], 0)
+        self.assertIn("compact_at", j["context"])
+        s, j = self.owner.call("GET", f"/api/chats/{cid}")
+        self.assertTrue(any(m.get("ctx") for m in j["messages"]))                # the meter comes back with the chat
+        s, j = self.sam.call("POST", "/api/chats", {})
+        self.assertEqual(self.sam.call("POST", f"/api/chats/{j['id']}/compact", {"model": "ember-2"})[0], 404)   # behind the flag
+
+
 
 
 try:
@@ -137,8 +215,15 @@ if HAVE_BROWSER:
                     page.click("#ctxBtn")
                     self.assertIn("MEMORY (CONTEXT WINDOW)", page.inner_text("#ctxMenu"))
                     self.assertIn("tokens", page.inner_text("#ctxMenu"))
+                    page.click("#compactNow")                                                    # Compact now: one exchange is too short to fold
+                    eventually(lambda: self.assertIn("Nothing old enough", page.inner_text("#thread")), 15)
+                    self.assertTrue(page.is_visible("#ctxBtn"))
                     page.reload()                                                                 # it comes back with the chat
                     ready(page)
                     eventually(lambda: self.assertTrue(page.is_visible("#ctxBtn")), 15)
                 finally:
                     b.close()
+
+
+if __name__ == "__main__":
+    unittest.main()

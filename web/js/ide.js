@@ -294,7 +294,14 @@ function codeCtx(c, folding) {
 }
 $('codeCtx').onclick = () => {
   const m = $('codeCtxMenu'); if (!m.hidden || !C.ctx) { m.hidden = true; return; }
-  m.replaceChildren(...ctxMenuNodes(C.ctx, ['Folds at', 'When the session gets near the limit, VryxCode folds its older steps into a short "Earlier steps" list so it can keep building. Your files and this log are unchanged.']));
+  m.replaceChildren(...ctxMenuNodes(C.ctx, ['Folds at', 'When the session gets near the limit, VryxCode folds its older steps into a short "Earlier steps" list so it can keep building. Your files and this log are unchanged.'], async () => {
+    let j = {};
+    try { const r = await post('/api/code/sessions/' + C.sid + '/compact', {}); j = await r.json().catch(() => ({})); } catch (e) { /* shown below */ }
+    m.hidden = true;
+    if (j.when === 'next_step') { $('codeIn').append(el('div', {class: 'cc-say', style: 'color:var(--muted);font-size:13px'}, 'VryxCode will fold its older steps before its next step.')); scrollCode(); }
+    else if (j.when === 'now' && !j.folded) { $('codeIn').append(el('div', {class: 'cc-say', style: 'color:var(--muted);font-size:13px'}, 'Nothing old enough to fold yet.')); scrollCode(); }
+    poll();
+  }));
   m.hidden = false;
 };
 document.addEventListener('click', (e) => { if (!e.target.closest('#codeCtx, #codeCtxMenu')) $('codeCtxMenu').hidden = true; });
@@ -338,7 +345,7 @@ function cEvent(e) {
     feed.append(el('div', {class: 'cc-tool no'}, el('div', {class: 'cc-head'}, el('span', {class: 'cc-verb'}, 'Retrying'), el('span', {class: 'cc-arg'}, [e.limit ? 'The reply ran out of room while the model was writing, so VryxCode asked it to send smaller parts' : 'That step was garbled, so VryxCode asked the model to send it again', e.secs != null ? Math.round(e.secs) + 's' : ''].filter(Boolean).join('  \u00b7  ')))));
     C.last = null; return;
   }
-  if (e.kind === 'compacted') { codeCtx(null, true); feed.append(el('div', {class: 'cc-say', style: 'color:var(--muted);font-size:13px'}, 'The conversation was getting long, so VryxCode folded its older steps into a short "Earlier steps" list to save room. The files and this log are unchanged.' + (e.steps ? ' (' + e.steps + ' steps folded)' : ''))); C.last = null; return; }
+  if (e.kind === 'compacted') { codeCtx(null, true); feed.append(el('div', {class: 'cc-say', style: 'color:var(--muted);font-size:13px'}, (e.manual ? 'As you asked, VryxCode folded' : 'The conversation was getting long, so VryxCode folded') + ' its older steps into a short "Earlier steps" list to save room. The files and this log are unchanged.' + (e.steps ? ' (' + e.steps + ' steps folded)' : ''))); C.last = null; return; }
   if (e.kind === 'queued') { feed.append(el('div', {class: 'cc-say', style: 'color:var(--muted);font-size:14px'}, 'Waiting in the queue' + (e.position ? ' (#' + e.position + ')' : '') + '. It starts by itself when your current session finishes.')); return; }
   if (e.kind === 'language') { feed.append(el('div', {class: 'cc-say', style: 'color:var(--muted);font-size:14px'}, e.text)); return; }
   if (e.kind === 'rewind') { feed.append(el('div', {class: 'cc-end stop'}, el('span', {class: 'mark'}, '\u21b6'), el('span', {}, 'Rewound the files to before: ' + (e.label || 'message ' + e.turn)))); C.last = null; return; }

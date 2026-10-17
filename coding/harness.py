@@ -762,6 +762,22 @@ def describe_step(call_text, result):
                                         first.startswith("error") else "")
 
 
+FOLD_SHARE, FOLD_CAP = 0.75, 96_000      # old steps are folded at 75% of the window or at 96K tokens, whichever comes first (sharper and quicker than a full window)
+
+
+def fold_point(context_tokens):
+    return int(min(FOLD_SHARE * context_tokens, FOLD_CAP))
+
+
+def fold_now(messages, keep=6):
+    """The "Compact now" button: fold the older steps at once, keeping a long build's pinned "Where you are" note. Returns the new messages."""
+    head = next((m["content"] for m in messages if m["role"] == "user"), "")
+    pinned = ""
+    if PINNED_HEAD in head:
+        pinned = PINNED_HEAD + head.split(PINNED_HEAD, 1)[1].split("\n\nEarlier steps", 1)[0]
+    return compact(messages, keep=keep, pinned=pinned)[0]
+
+
 def compact(messages, keep=4, pinned=""):
     """Shorten a long conversation: the system message and the task stay, the last `keep` messages stay, and
     everything between becomes an "Earlier steps" list inside the task message. Returns (messages, dropped).
@@ -965,7 +981,7 @@ def run_agent(task, generate, sandbox, max_turns=8, system=None, project=True, h
     if build and "rollback" not in sandbox.extra_tools:
         sandbox.register_tool("rollback", lambda: checkpoints.restore())
     for turn in range(1, max_turns + 1):
-        if context_tokens and estimate_tokens(messages) > context_tokens * 0.7:
+        if context_tokens and estimate_tokens(messages) > fold_point(context_tokens):
             if build:
                 messages, dropped = compact(messages, keep=12, pinned=progress_note(plan_items, written, last_test, checkpoints.step))
             else:

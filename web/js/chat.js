@@ -211,18 +211,30 @@ function renderCtx(ctx, busy) {
   b.textContent = Math.round(ctx.pct) + '%';
   b.setAttribute('aria-label', busy ? 'Summarizing earlier messages to make room' : 'Memory ' + Math.round(ctx.pct) + '% used, ' + kTok(ctx.used) + ' of ' + kTok(ctx.window) + ' tokens');
 }
-function ctxMenuNodes(c, how) {   // the meter's details (the chat and VryxCode share them)
+function ctxMenuNodes(c, how, compact) {   // the meter's details (the chat and VryxCode share them); `compact` runs the "Compact now" button
   const left = Math.max(0, c.compact_at - c.used);
   return [el('div', {class: 'head'}, 'MEMORY (CONTEXT WINDOW)'),
     el('div', {class: 'ctxbar'}, el('div', {style: 'width:' + Math.min(100, c.pct) + '%'})),
     el('div', {class: 'ctxrow'}, el('b', {}, Math.round(c.pct) + '% used'), el('span', {}, kTok(c.used) + ' of ' + kTok(c.window) + ' tokens')),
     el('div', {class: 'ctxrow'}, el('span', {}, 'Free'), el('span', {}, kTok(Math.max(0, c.window - c.used)))),
     el('div', {class: 'ctxrow'}, el('span', {}, how[0]), el('span', {}, kTok(c.compact_at) + (left ? ' (' + kTok(left) + ' to go)' : ' (next step)'))),
-    el('div', {class: 'head', style: 'text-transform:none;letter-spacing:0;font-weight:400'}, how[1])];
+    el('div', {class: 'head', style: 'text-transform:none;letter-spacing:0;font-weight:400'}, how[1]),
+    compact ? el('button', {class: 'btn small', id: 'compactNow', style: 'align-self:flex-start;margin:2px 6px 4px', onclick: (ev) => { ev.stopPropagation(); ev.currentTarget.disabled = true; ev.currentTarget.textContent = 'Compacting\u2026'; compact(); }}, 'Compact now') : ''];
+}
+async function compactChat() {   // "Compact now": summarize the older messages of this chat at once
+  if (S.busy || S.chatId == null) return;
+  S.compacting = true; renderCtx(null, true);
+  let j = {};
+  try { const r = await post('/api/chats/' + S.chatId + '/compact', {model: S.model}); j = await r.json().catch(() => ({})); if (!r.ok) throw new Error(j.message || 'Could not compact.'); }
+  catch (e) { S.compacting = false; closeMenus(); renderCtx(); $('thread').append(el('div', {class: 'note'}, e.message)); scrollDown(true); return; }
+  S.compacting = false; closeMenus();
+  try { const r = await api('/api/chats/' + S.chatId); if (r.ok) { const c = await r.json(); S.messages = c.messages; } } catch (e) { /* the meter below still updates */ }
+  renderThread(false); renderCtx(j.context);
+  $('thread').append(el('div', {class: 'note'}, j.folded ? 'Earlier messages were summarized to save room (' + j.folded + ' folded). You still see every message.' : 'Nothing old enough to summarize yet.')); scrollDown(true);
 }
 $('ctxBtn').onclick = () => {
   const open = !$('ctxMenu').hidden; closeMenus(); if (open || !S.ctx) return;
-  $('ctxMenu').replaceChildren(...ctxMenuNodes(S.ctx, ['Summarizes at', 'When the chat gets near the limit, the older messages are summarized so the chat can keep going. You still see every message.']));
+  $('ctxMenu').replaceChildren(...ctxMenuNodes(S.ctx, ['Summarizes at', 'When the chat gets near the limit, the older messages are summarized so the chat can keep going and answers stay sharp. You still see every message.'], S.busy ? null : compactChat));
   $('ctxMenu').hidden = false;
 };
 $('modelBtn').onclick = () => {

@@ -20,6 +20,24 @@ from app_errors import AppError, ModelTooBig
 from app_shared import CONTINUE_HINT, EFFORTS, OPEN_EFFORTS, TEMPERATURE
 
 
+def compact_now(state, who, chat_id, model_id):
+    """The "Compact now" button: shorten this chat at once (the same summary the automatic one makes). Returns {"folded", "context"}; folded is 0 when
+    the chat is too short to have anything old enough to fold. The new meter reading is kept on the last reply, so it shows when the chat is opened again."""
+    store = state.store(who["user"])
+    model = state.pick_model(who, model_id)
+    tok = state.tok_for(model)
+    window = state.window_for(who, model)["window"]
+    caps = OPEN_EFFORTS if model.get("open") else EFFORTS
+    max_new = min(caps["balanced"], max(32, window // 2), model.get("max_reply_tokens", caps["balanced"]))
+    folded = chat_polish.compact_chat(tok, store, chat_id, window, max_new, force=True)
+    used = E.chat.context_report(tok, store.history(chat_id), window, reserve=max_new)["used"]
+    ctx = E.context_meter(used, window, max_new)
+    last = next((m for m in reversed(store.messages(chat_id)) if m["role"] == "assistant" and m["status"] != "compacted"), None)
+    if last:
+        store.set_flag(chat_id, last["id"], "ctx", ctx)
+    return {"folded": folded, "context": ctx}
+
+
 def start_turn(state, who, chat_id, text, model_id, effort, regenerate=False, regen_mode=None, cont=False, pace=None, extra_notes=None, extra_hint=""):
     """Begin a reply in a worker thread. Returns (queue, stop_event); the queue yields ("piece", text), then
     ("done", result) or ("error", exception). With effort "auto" the level is chosen from the message (effort_router);

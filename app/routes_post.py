@@ -5,6 +5,7 @@ import os, sys; sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(
 import re
 import threading
 import time
+import chat_turn
 import data_tools
 import app_skills
 import export_doc
@@ -249,6 +250,19 @@ class RoutesPost:
             return self._send(200, {"url": "/s/" + token, "shares": self.state.shares.list(who["user"])})
         if path == "/api/chats/archive-all":                  # Settings > Data controls: clear the list but keep everything remembered
             return self._send(200, {"archived": self.state.store(who["user"]).archive_all()})
+        m = re.fullmatch(r"/api/chats/(-?\d+)/compact", path)
+        if m:                                                   # the "Compact now" button by the memory meter (feature flag context_meter)
+            cid, store = int(m.group(1)), self.state.store(who["user"])
+            if not self.state.flags.on("context_meter", who):
+                return self._send(404, {"code": "not_found", "message": "Not found."})
+            if not store.exists(cid):
+                return self._send(404, {"code": "not_found", "message": "That chat is gone."})
+            if (who["user"], cid) in self.state.stops:
+                return self._send(409, {"code": "busy", "message": "Wait for the reply to finish, then compact."})
+            try:
+                return self._send(200, chat_turn.compact_now(self.state, who, cid, str(body.get("model", ""))))
+            except KeyError:
+                return self._send(400, {"code": "bad_model", "message": "That model isn't available."})
         m = re.fullmatch(r"/api/chats/(-?\d+)/(pin|folder|branch|archive)", path)
         if m:
             cid, what, store = int(m.group(1)), m.group(2), self.state.store(who["user"])

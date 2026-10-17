@@ -91,10 +91,10 @@ def clip(text, limit=MAX_EVENT_TEXT):
     return text if len(text) <= limit else text[:limit] + f"\n... ({len(text) - limit} more characters)"
 
 
-def context_meter(used, window, fold=0.7):
-    """How full the model's memory is for the meter by the task box: harness.run_agent folds the older steps at `fold` of the window."""
+def context_meter(used, window):
+    """How full the model's memory is for the meter by the task box: harness.run_agent folds the older steps at harness.fold_point (75%, at most 96K)."""
     used, window = max(0, int(used)), max(1, int(window))
-    return {"used": used, "window": window, "pct": round(min(100.0, 100.0 * used / window), 1), "compact_at": int(fold * window)}
+    return {"used": used, "window": window, "pct": round(min(100.0, 100.0 * used / window), 1), "compact_at": harness.fold_point(window)}
 
 
 def _folded_steps(messages):
@@ -156,6 +156,7 @@ class Session:
         self.live = None                               # what the model is doing right now (not part of `events`, which only record finished steps)
         self.history = None                            # the whole conversation so far, so a follow-up message continues it
         self.live_messages = None                      # the conversation as it grows during a turn (kept if the turn is stopped)
+        self.want_compact = False                      # "Compact now" pressed while a turn runs: fold before the next step
         self.generate, self.max_turns, self.context_tokens, self.extra_programs = None, 12, None, ()
         self.turns_run = 0
         self.build = False                              # the long-build loop (a VryxCode 3 model): set by CodeManager.start / revive / switch_model
@@ -248,6 +249,24 @@ class Session:
             self.cv.notify_all()
             return True
 
+    def compact_now(self):
+        """The "Compact now" button. While it works, the fold happens before the next step ("next_step"); between messages the remembered conversation is
+        folded at once (the number of steps folded, 0 when there is nothing old enough)."""
+        if self.state in ("starting", "working", "asking"):
+            self.want_compact = True
+            return {"when": "next_step"}
+        if not self.history:
+            return {"when": "now", "folded": 0}
+        new = harness.fold_now(self.history)
+        if len(new) >= len(self.history):
+            return {"when": "now", "folded": 0}
+        self.history = new
+        steps = _folded_steps(new)
+        self.emit("compacted", steps=steps, manual=True)
+        if self.context_tokens:
+            self.emit("context", **context_meter(harness.estimate_tokens(new), self.context_tokens))
+        return {"when": "now", "folded": steps}
+
     def request_stop(self):
         if self.state == "queued":                       # never started: take it out of the queue
             self.state = "stopped"
@@ -305,9 +324,15 @@ class Session:
         seen = {"n": 0}
 
         def call(messages):
+            manual = False
+            if self.want_compact:                                                     # "Compact now" was pressed while it worked: fold before this step
+                self.want_compact = False
+                new = harness.fold_now(messages)
+                manual = len(new) < len(messages)
+                messages[:] = new                                                     # the same list the loop keeps using
             folded = _folded_steps(messages)
-            if seen.get("folded") == 0 and folded > 0:                               # the first time this turn that old steps were folded into the "Earlier steps" list to save room
-                self.emit("compacted", steps=folded)
+            if (seen.get("folded") == 0 and folded > 0) or manual:                   # the first time this turn that old steps were folded into the "Earlier steps" list to save room
+                self.emit("compacted", steps=folded, **({"manual": True} if manual else {}))
             seen["folded"] = folded
             if self.context_tokens:                                                    # the memory meter on the page (feature flag context_meter)
                 self.emit("context", **context_meter(harness.estimate_tokens(messages), self.context_tokens))

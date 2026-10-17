@@ -429,6 +429,11 @@ class RoutesCode:
             if m:
                 ok = st.code.get(user, m.group(1)).respond(int(body.get("id", -1)), body.get("allow"), body.get("always"))
                 return self._send(200, {"ok": ok})
+            m = re.fullmatch(r"/api/code/sessions/([\w-]+)/compact", path)
+            if m:                                                # "Compact now" by the memory meter (feature flag context_meter)
+                if not st.flags.on("context_meter", who):
+                    return self._send(404, {"code": "not_found", "message": "Not found."})
+                return self._send(200, st.code.get(user, m.group(1)).compact_now())
             m = re.fullmatch(r"/api/code/sessions/([\w-]+)/stop", path)
             if m:
                 st.code.get(user, m.group(1)).request_stop()
