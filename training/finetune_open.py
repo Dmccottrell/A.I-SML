@@ -63,6 +63,18 @@ def grown_params(model, growth):
     return [(n, p) for n, p in model.named_parameters() if rx.search(n) and "lora_" not in n]
 
 
+def choose_grow_rank(card_gb):
+    """The new layers' LoRA rank for the card: 256 needs about 6 GB more (400 million trainable numbers and their optimizer state), which a 24 GB
+    card does not have next to a 12B model (Apogee 3 ran out of memory on the 3090 at 256)."""
+    return 256 if card_gb >= 40 else 64
+
+
+def fast_layer_kernels():
+    """True when flash-linear-attention (Qwen3.5's fast-layer kernels) is installed."""
+    import importlib.util
+    return importlib.util.find_spec("fla") is not None
+
+
 def grown_skip_modules(growth):
     """The modules 4-bit loading must leave alone: lm_head and the new layers. Each new layer is given twice, because transformers versions read the
     list differently: newer ones as patterns (".*\\.layers\\.13\\."), older ones as plain text found in the name ("language_model.layers.13.").
@@ -328,7 +340,8 @@ def main(argv=None):
     p.add_argument("--merge", action="store_true", help="write the merged Hugging Face folder from the saved adapter and exit")
     p.add_argument("--seed", type=int, default=1337)
     p.add_argument("--no_grad_checkpoint", action="store_true")
-    p.add_argument("--grow_rank", type=int, default=256, help="a grown model (grow_qwen.py): LoRA rank of the new layers")
+    p.add_argument("--grow_rank", type=int, default=None, help="a grown model (grow_qwen.py): LoRA rank of the new layers "
+                                                                 "(default: 256 on a 40 GB+ card, 64 on a smaller one such as a 24 GB 3090)")
     p.add_argument("--grow_full", action="store_true", help="a grown model: train the new layers fully (8-bit Adam; needs about 40 GB of graphics memory)")
     a = p.parse_args(argv)
     import open_models
@@ -353,11 +366,15 @@ def main(argv=None):
     growth = grow_qwen.read_growth(a.model)
     if a.grow_full and not growth:
         sys.exit("--grow_full is only for a grown model (a folder made by training/grow_qwen.py)")
+    import torch
+    card_gb = torch.cuda.get_device_properties(0).total_memory / 1e9 if torch.cuda.is_available() else 0.0
     if growth:
+        a.grow_rank = a.grow_rank or choose_grow_rank(card_gb)
         print(f"grown model: {growth['base_layers']} -> {growth['layers']} layers; new layers {growth['new_layers']} "
               + ("trained fully" if a.grow_full else f"at LoRA rank {a.grow_rank}") + f", the rest at rank {a.rank}")
-
-    import torch
+    if card_gb and not fast_layer_kernels():
+        print("note: flash-linear-attention is not installed, so Qwen3.5's fast layers use the slow reference code, which also needs far more "
+              "card memory. Install it first: pip install -U flash-linear-attention")
     if a.merge:
         if not os.path.isdir(os.path.join(a.out, "adapter")):
             sys.exit(f"no adapter in {a.out}/adapter - train first (python training/finetune_open.py)")

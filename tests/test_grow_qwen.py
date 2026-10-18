@@ -114,6 +114,12 @@ class Grow(unittest.TestCase):
         with torch.no_grad():                                                                            # LoRA starts at zero: still identical
             self.assertEqual((self.base(input_ids=self.x).logits - model(input_ids=self.x).logits).abs().max().item(), 0.0)
 
+    def test_grow_rank_fits_the_card(self):
+        import finetune_open as FO
+        self.assertEqual(FO.choose_grow_rank(24.0), 64)          # RTX 3090 / 4090: 256 ran out of memory
+        self.assertEqual(FO.choose_grow_rank(80.0), 256)
+        self.assertIn(FO.fast_layer_kernels(), (True, False))
+
     def test_new_layers_are_kept_out_of_4_bits_by_old_and_new_transformers(self):
         import finetune_open as FO
         from transformers.quantizers.quantizers_utils import should_convert_module
