@@ -30,6 +30,14 @@ def build_steps(model):
         return vryxcode.BUILD_STEPS
 
 
+def effort_turns(model, effort, default_turns):
+    """(build_steps, turns) for a session at this effort: a long-build model's own budget scaled, or the usual budget scaled; effort None = as before."""
+    steps = build_steps(model)
+    if not effort:
+        return steps, None
+    return (vryxcode.effort_steps(steps, effort), None) if steps else (None, vryxcode.effort_steps(default_turns, effort))
+
+
 def clip_line(text, n=80):
     text = " ".join(str(text).split())
     return text if len(text) <= n else text[:n - 1] + "\u2026"
@@ -114,7 +122,9 @@ class RoutesCode:
                 return self._send(200, {"allowed": allowed, "why_not": why, "sandbox": st.code.sandbox.get("mode", "none"),
                                         "usage": self._code_usage(who, None), "models": st.code_models(who), "projects": st.code.projects(user),
                                         "running": run.id if run else None, "project": run.project if run else None, "environments": st.code.environments(who["admin"]),
-                                        "browser_check": browser_check.available()})
+                                        "browser_check": browser_check.available(),
+                                        "effort": {"auto": vryxcode.pick_auto(st.code_models(who)), "levels": [{"id": k, "name": k.title(), "note": v["note"]} for k, v in vryxcode.EFFORTS.items()]}
+                                        if st.flags.on("vryxcode_effort", who) else None})
             if path == "/api/code/templates":
                 return self._send(200, {"templates": templates.list_templates()})
             if path == "/api/code/sessions":
@@ -243,8 +253,20 @@ class RoutesCode:
         cut = max(0, len(diff) - code_review.DEFAULT_LIMIT)
         return code_review.review_prompt(diff[:code_review.DEFAULT_LIMIT], files, cut, f"pull request {ref[0]}/{ref[1]}#{ref[2]}" + (f" ({title})" if title else ""))
 
-    def _pick_code_model(self, st, who, model_id):
-        """The model dict VryxCode (a session, or the editor's edit and explain) runs on: an outside coding model, or an Emvryx model flagged for coding and ready."""
+    def _effort(self, st, who, body):
+        """The effort picked in VryxCode, or None while the feature flag vryxcode_effort is off for this person (then the model picker works as before)."""
+        if not st.flags.on("vryxcode_effort", who):
+            return None
+        effort = str(body.get("effort") or "balanced")
+        return effort if effort in vryxcode.EFFORTS else "balanced"
+
+    def _pick_code_model(self, st, who, model_id, effort=None):
+        """The model dict VryxCode (a session, or the editor's edit and explain) runs on: an outside coding model, or an Emvryx model flagged for coding and ready.
+        With the feature flag vryxcode_effort there is no picker: VryxCode picks by itself (VryxCode 3, then Apogee 3, see vryxcode.pick_auto)."""
+        if st.flags.on("vryxcode_effort", who):
+            model_id = vryxcode.pick_auto(st.code_models(who))
+            if not model_id:
+                raise code_sessions.CodeError("No coding model is ready right now.", "Try again in a minute, or ask the owner to start one.")
         coder = st.coder(model_id)
         if coder:                                            # an outside coding model: labelled as such, costs like its plan_like model
             cstate, cbadge = st._coder_state(coder, who)
@@ -261,7 +283,7 @@ class RoutesCode:
         if model["state"] != "ready":
             raise code_sessions.CodeError(f"{model['name']} {model['version']:g} isn't ready: {model['badge']}.")
         model["limiter_key"] = model["name"].lower()
-        return model
+        return dict(model, effort=effort) if effort else model
 
     def _edit_selection(self, st, who, body):
         """The editor's "Edit this selection" / "Explain this": one model call about a selected part of one file. Changes nothing; counted like a coding step."""
@@ -363,7 +385,9 @@ class RoutesCode:
                 allowed, why = st.code_allowed(who)
                 if not allowed:
                     raise code_sessions.CodeError(why, "Ask the owner about VryxCode access.")
-                model = self._pick_code_model(st, who, str(body.get("model", "")))
+                effort = self._effort(st, who, body)
+                model = self._pick_code_model(st, who, str(body.get("model", "")), effort)
+                steps, turns = effort_turns(model, effort, st.code.max_turns)
                 project = st.code.check_name(body.get("project"))
                 generate, meter, tools, identity = self._code_kit(st, user, model, project)
                 task = body.get("task")
@@ -375,7 +399,7 @@ class RoutesCode:
                 s, note = st.code.start(user, project, task, model["id"], generate, bool(body.get("auto_edits")),
                                         int(model.get("context_tested") or 8192), meter, outside=bool(model.get("outside")), tools=tools, identity=identity,
                                         env=str(body.get("env") or "local"), plan=bool(body.get("plan")), owner=who["admin"], queue=bool(body.get("queue")),
-                                        model_text=second, build_steps=build_steps(model))
+                                        model_text=second, build_steps=steps, turns=turns)
                 if body.get("notify") and who["owner"]:                        # the phone notification is the owner's (it goes to their ntfy topic)
                     s.notify, s.on_notify = True, st.code_notify
                 return self._send(200, {"id": s.id, "note": note, "queued": s.state == "queued", "position": st.code.queue_position(user, s.id)})
@@ -403,17 +427,26 @@ class RoutesCode:
                     sess = st.code.get(user, m.group(1))
                     sess.send(body.get("text") or "Review these changes", plan=True, model_text=self._review_prompt(st, user, m.group(1), review))
                     return self._send(200, {"ok": True})
-                sid, want = m.group(1), str(body.get("model") or "")
+                sid, want, effort = m.group(1), str(body.get("model") or ""), self._effort(st, who, body)
                 if sid not in st.code.sessions:                          # an older session (from the history, e.g. after a restart): it comes back to life and carries on
                     meta = st.code.saved(user, sid)["meta"]
-                    model = self._pick_code_model(st, who, want or meta["model"])
+                    model = self._pick_code_model(st, who, want or meta["model"], effort)
                     generate, meter, tools, identity = self._code_kit(st, user, model, meta["project"])
-                    sess = st.code.revive(user, sid, model["id"], generate, int(model.get("context_tested") or 8192), meter, tools=tools, identity=identity, owner=who["admin"], build_steps=build_steps(model),
-                                           auto_edits=bool(body.get("auto_edits")))
+                    steps, turns = effort_turns(model, effort, st.code.max_turns)
+                    sess = st.code.revive(user, sid, model["id"], generate, int(model.get("context_tested") or 8192), meter, tools=tools, identity=identity, owner=who["admin"], build_steps=steps,
+                                           auto_edits=bool(body.get("auto_edits")), turns=turns)
                     revived = True
                 else:
                     sess, revived = st.code.get(user, sid), False
-                    if want and want != sess.model_id:                   # another model takes over the same conversation
+                    if effort:                                           # no picker: the model VryxCode picks, at the effort picked for this message
+                        model = self._pick_code_model(st, who, "", effort)
+                        generate, meter, tools, identity = self._code_kit(st, user, model, sess.project)
+                        steps, turns = effort_turns(model, effort, st.code.max_turns)
+                        if model["id"] != sess.model_id:                 # e.g. Apogee 3 was added since this session started
+                            sess.switch_model(model["id"], generate, int(model.get("context_tested") or 8192), meter, build_steps=steps, default_turns=turns or st.code.max_turns)
+                        else:
+                            sess.set_effort(generate, steps or turns)
+                    elif want and want != sess.model_id:                 # another model takes over the same conversation
                         model = self._pick_code_model(st, who, want)
                         generate, meter, tools, identity = self._code_kit(st, user, model, sess.project)
                         sess.switch_model(model["id"], generate, int(model.get("context_tested") or 8192), meter, build_steps=build_steps(model), default_turns=st.code.max_turns)

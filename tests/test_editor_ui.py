@@ -166,6 +166,33 @@ class EditorUi(Base):
             finally:
                 b.close()
 
+    def test_with_the_effort_flag_there_is_no_model_picker_only_effort(self):
+        self.state.flags.set_audience("vryxcode_update", "owner", "test")
+        self.state.flags.data["audiences"]["vryxcode_effort"] = "owner"
+        from playwright.sync_api import sync_playwright
+        with sync_playwright() as p:
+            b = p.chromium.launch(executable_path=find_browser())
+            try:
+                page = b.new_context(viewport={"width": 1200, "height": 850}, extra_http_headers={"Authorization": "Bearer " + self.state.owner_key()}).new_page()
+                errors = []
+                page.on("pageerror", lambda e: errors.append(str(e)))
+                page.goto(f"http://127.0.0.1:{self.port}/")
+                ready(page)
+                page.evaluate("document.querySelectorAll('.tour').forEach((e) => e.remove())")
+                vryx_on(page)
+                page.evaluate("openCode()")
+                page.wait_for_selector("#vxTpls button", state="visible")
+                self.assertRegex(page.inner_text("#vxModel"), "Effort\\s+Balanced")
+                self.assertNotRegex(page.inner_text("#vxModel"), "Equinox|Solstice|Apogee")
+                page.click("#vxModel")
+                self.assertEqual([t.split("\n")[0] for t in page.locator("#vxModelMenu button").all_inner_texts()], ["Quick", "Balanced", "Deep"])
+                page.click("#vxModelMenu button:has-text('Deep')")
+                self.assertRegex(page.inner_text("#vxModel"), "Deep")
+                self.assertEqual(page.evaluate("C.effort"), "deep")
+                self.assertEqual(errors, [])
+            finally:
+                b.close()
+
     def test_templates_notify_box_search_map_and_the_changes_panel(self):
         self.state.flags.set_audience("vryxcode_update", "owner", "test")
         from playwright.sync_api import sync_playwright

@@ -46,7 +46,7 @@ class StateCode:
         """The models VryxCode can use for this person: flagged "vryxcode", and ready to run here."""
         cat = self.catalog(who)
         out = [{"id": m["id"], "name": m["name"], "version": m["version"], "state": m["state"], "badge": m["badge"],
-                "label": f"{m['name']} {m['version']:g}", "outside": False, "note": vryxcode.ELIGIBLE_NOTE.get(m["id"], "")}
+                "label": f"{m['name']} {m['version']:g}", "outside": False, "note": vryxcode.ELIGIBLE_NOTE.get(m["id"], ""), "build": bool(m.get("vryxcode_build"))}
                for m in cat["cards"] + cat["other"] if m.get("vryxcode")]
         for c in self.manifest.get("coders", []):
             state, badge = self._coder_state(c, who)
@@ -154,4 +154,6 @@ class StateCode:
             url = self.llama_url
         else:
             raise code_sessions.CodeError("No model is attached to this server.", "Start it with --gguf or --llama (see docs/VRYXCODE.md).")
+        if vryxcode.EFFORTS.get(model.get("effort"), {}).get("think") and model.get("think") == "empty":    # Deep on a Qwen3.5 model: it reasons before each step
+            return vryxcode.LlamaChat(url, temperature=0.6, max_tokens=max(1024, min(8192, ctx // 2)), thinking=True)
         return vryxcode.LlamaChat(url, max_tokens=max(1024, min(4096, ctx // 3)))     # room for a whole file in one reply (1,024 cut a page of 100 lines off in the middle)
