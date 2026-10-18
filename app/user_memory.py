@@ -21,7 +21,7 @@ import time
 
 MAX_FACTS = 100
 MAX_FACT_CHARS = 200
-TITLE = "What you know about the user"
+TITLE = "What you know about the user (the person you are talking to: speak to them as you)"
 
 SENSITIVE = re.compile(r"\b(pass(word|code|phrase)|pin\b|credit card|debit card|card number|cvv|ssn|social security|api[ -]?key|secret|token|private key|"
                        r"bank account|routing number)\b|\d{6,}|[\w.+-]+@[\w-]+\.[\w.]+|\+?\d[\d\s().-]{8,}\d", re.I)

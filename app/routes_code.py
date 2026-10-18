@@ -48,7 +48,8 @@ class RoutesCode:
         coder = st.coder(model_id)
         name = coder.get("plan_like", "solstice") if coder else next((m["name"] for m in st.manifest["models"] if m["id"] == model_id), "Equinox").lower()
         snap = st.limiter.snapshot(who["user"], name, "balanced", st.clock())
-        return {"status": snap["status"], "exempt": snap["exempt"], "tank_pct": round(snap["tank"]["pct"]), "week_pct": round(snap["week"]["pct_left"]),
+        left_pct = min(snap["tank"]["pct"], snap["week"]["pct_left"])   # the same figure as the chat's usage bar: the lower of the 6-hour tank and the week
+        return {"status": snap["status"], "exempt": snap["exempt"], "tank_pct": round(left_pct), "week_pct": round(snap["week"]["pct_left"]),
                 "steps_left": snap["can_send"], "plan": snap["plan"]}
 
     def api_code_git(self, who, body):

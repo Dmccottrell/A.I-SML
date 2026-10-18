@@ -374,12 +374,14 @@ svg .core { fill: var(--core); stroke: var(--sun); stroke-width: 3; transition: 
   .code .top2 .menu { position: fixed; left: 12px; right: 12px; top: 64px; width: auto; max-height: calc(100dvh - 90px); overflow-y: auto; margin: 0; }
   .menu { max-width: calc(100vw - 24px); }
 }
-.code .top2 .chip { display: inline-flex; align-items: center; gap: 6px; } .code .top2 .chip svg { flex-shrink: 0; }
+.code .top2 .chip { display: inline-flex; align-items: center; gap: 6px; } .code .top2 .chip svg { flex-shrink: 0; } .code .top2 #codeFilesBtn .num { display: none; }
 #codeEnv, #codeAuto, #codeModelBtn { white-space: nowrap; }
 @media (max-width: 520px) {
   .code .top2 #codePreviewBtn .lab, .code .top2 #codeFilesBtn .lab { display: none; }
   .code .top2 #codePreviewBtn, .code .top2 #codeFilesBtn { width: 38px; padding: 0; justify-content: center; flex-shrink: 0; }
-  .code .top2 #codeFilesBtn { width: auto; padding: 0 8px; gap: 3px; } .code .top2 #codeFilesBtn .lab { display: inline; font-size: 12px; }
+  .code .top2 #codeFilesBtn { width: auto; padding: 0 8px; gap: 3px; } .code .top2 #codeFilesBtn .num { display: inline; font-size: 12px; font-weight: 600; }
+  .code:not(.home) .top2 .title { display: none; }          /* in a session on a phone the top bar keeps only what is used: back, project, +, preview, files */
+  .code .top2 { gap: 6px; } .code .top2 .chip.plus, .code .top2 #codePreviewBtn { width: 36px; min-width: 36px; padding: 0; justify-content: center; }
   #codeEnv .lab { display: none; } #codeEnv { padding: 6px 10px; } #codeAuto { padding: 6px 8px; font-size: 13px; }
   #codeModelBtn { padding: 6px 8px; max-width: 46vw; overflow: hidden; text-overflow: ellipsis; }
 }

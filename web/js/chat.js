@@ -307,6 +307,21 @@ input.addEventListener('paste', (e) => {           // pictures are attached (doc
   e.preventDefault(); const t = (e.clipboardData && e.clipboardData.getData('text/plain')) || '';
   if (t) document.execCommand('insertText', false, t.slice(0, Math.max(0, 20000 - input.value.length)));
 });
+input.addEventListener('beforeinput', (e) => {     // a picture the phone keyboard inserts (its "Paste" with a screenshot) arrives here on some browsers
+  const files = e.dataTransfer ? imageFilesFrom(e.dataTransfer) : [];
+  if (files.length) { e.preventDefault(); addFiles(files); }
+});
+new MutationObserver(() => {                       // ...and on others as an <img> put straight into the box: take it out and attach the picture instead
+  for (const img of [...input.querySelectorAll('img')]) {
+    const src = img.getAttribute('src') || ''; img.remove();
+    const asFile = (b) => addFiles([new File([b], 'screenshot-' + Date.now() + '.' + ((b.type.split('/')[1] || 'png').replace('jpeg', 'jpg')), {type: b.type || 'image/png'})]);
+    const m = /^data:(image\/[a-z0-9.+-]+);base64,(.*)$/i.exec(src);
+    if (m) { const bin = atob(m[2]); const a = new Uint8Array(bin.length); for (let i = 0; i < bin.length; i++) a[i] = bin.charCodeAt(i); asFile(new Blob([a], {type: m[1]})); }
+    else if (src.startsWith('blob:')) {               // the page's own rules do not allow fetching it: draw it instead
+      const pic = new Image(); pic.onload = () => { const c = document.createElement('canvas'); c.width = pic.naturalWidth; c.height = pic.naturalHeight; c.getContext('2d').drawImage(pic, 0, 0); c.toBlob((b) => b && asFile(b), 'image/png'); }; pic.src = src;
+    }
+  }
+}).observe(input, {childList: true, subtree: true});
 input.addEventListener('drop', (e) => { if (!(e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files.length)) { e.preventDefault(); const t = e.dataTransfer && e.dataTransfer.getData('text/plain'); if (t) document.execCommand('insertText', false, t); } });
 input.addEventListener('input', () => { if (!input.textContent && input.innerHTML) input.innerHTML = ''; if (input.value.length > 20000) input.value = input.value.slice(0, 20000); });   // :empty shows the placeholder again
 input.addEventListener('keydown', (e) => { if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) { e.preventDefault(); send(); } });

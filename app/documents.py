@@ -328,25 +328,28 @@ PICTURE_PLAYBOOK = (
     "or a bill: help with it. A chart: the main takeaway. A photo: comment on what stands out. A meme: get the joke. A product: what to know before buying.\n"
     "- End with one short question or next step only when it fits naturally.\n"
     "- Do not read out or list its text, do not describe the phone screen around it, and never add sources or file names in brackets.")
+TALK_TO_THEM = ("Talk to the user directly as \"you\". If you know their name, it is the name of the person you are talking to: never talk about them as "
+                "someone else, and never guess what they will say. Plain, natural sentences.")
 
 
 def picture_hint(only_picture=False, earlier=False):
     """The instruction for a model that looks at the picture itself: answer like Claude or ChatGPT do with a picture (react, add value, fit the
-    kind of picture), not like a text reader quoting a document. `earlier`: the picture came with an earlier message, and the person is now just
+    kind of picture), not like a text reader quoting a document. `earlier`: the picture came with an earlier message, and the user is now just
     talking: answer what they said first."""
     if earlier:
-        return ("[Earlier in this chat the person shared the picture you can see here. Now reply to what they just said, like a friend: react to it first "
-                "(share their excitement, answer their question, give your take), and bring in the picture only where it helps. Keep it short and natural. "
-                "Do not repeat the picture's text and never add sources or file names in brackets.]")
-    lead = ("[The person shared a picture with no message. You can see it.\n" if only_picture else
-            "[The person shared a picture and said something about it. You can see it. Answer what they said first, using what you see.\n")
-    return lead + PICTURE_PLAYBOOK + "]"
+        return ("[Earlier in this chat the user you are talking with shared the picture you can see here. Now reply to what they just said, like a friend: "
+                "react to it first (share their excitement, answer their question, give your take), and bring in the picture only where it helps. Keep it short. "
+                "Do not repeat the picture's text and never add sources or file names in brackets. " + TALK_TO_THEM + "]")
+    lead = ("[The user you are talking with sent you a picture with no message. You can see it.\n" if only_picture else
+            "[The user you are talking with sent you a picture and said something about it. You can see it. Answer what they said first, using what you see.\n")
+    return lead + PICTURE_PLAYBOOK + "\n" + TALK_TO_THEM + "]"
 
 
 def picture_words_hint():
     """For a model that cannot see pictures: it only gets the words read from the picture, and must still talk about it as a picture."""
-    return ("[The person shared a picture. You cannot see it, but the notes hold the words in it. Talk about it as their picture, never as a document or file, "
-            "and reply like a friend: react first, then add something useful. Do not repeat its text, and never add sources or file names in brackets.]")
+    return ("[The user you are talking with sent you a picture. You cannot see it, but the notes hold the words in it. Talk about it as their picture, never "
+            "as a document or file, and reply like a friend: react first, then add something useful. Do not repeat its text, and never add sources or file "
+            "names in brackets. " + TALK_TO_THEM + "]")
 
 
 def hint(names):
