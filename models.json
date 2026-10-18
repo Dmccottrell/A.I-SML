@@ -171,20 +171,7 @@
         "export/open/flare-3/my-ai-q8_0.gguf",
         "export/open/flare-3/my-ai-f16.gguf"
       ],
-      "sampling": {
-        "temperature": 0.7,
-        "top_k": 20,
-        "top_p": 0.8,
-        "min_p": 0.0,
-        "presence_penalty": 1.5,
-        "repeat_penalty": 1.0,
-        "repeat_last_n": 64
-      },
       "max_reply_tokens": 1536,
-      "temperature_bounds": [
-        0.2,
-        1.0
-      ],
       "mtp": true,
       "whats_new": {
         "vs": "flare-2.5",
@@ -212,15 +199,7 @@
         ]
       },
       "cache_bits": 8,
-      "think": "empty",
-      "sampling_think": {
-        "temperature": 1.0,
-        "top_k": 20,
-        "top_p": 0.95,
-        "min_p": 0.0,
-        "presence_penalty": 1.5,
-        "repeat_penalty": 1.0
-      }
+      "think": "empty"
     },
     {
       "id": "equinox-2", "lookup": "when_needed",
@@ -269,6 +248,82 @@
         "export/open/equinox-2/my-ai-f16.gguf"
       ],
       "vryxcode": true
+    },
+    {
+      "id": "equinox-3", "lookup": "when_needed",
+      "name": "Equinox",
+      "version": 3,
+      "generation": 2,
+      "open": true,
+      "base": "Qwen3.5-4B",
+      "tagline": "Everyday work and homework: the one to leave loaded, quick to switch to",
+      "tier": "Standard",
+      "where": "device",
+      "file": "equinox-3.q4_k_m.gguf",
+      "size_mb": 3300,
+      "sha256": "",
+      "min_ram_gb": 6,
+      "context": 131072,
+      "status": "preview",
+      "supports_effort": true,
+      "skills": [
+        "study",
+        "teacher",
+        "coding"
+      ],
+      "pinned": false,
+      "cost_weight": 2,
+      "context_tested": 131072,
+      "kv_kb_per_token": 24,
+      "weights_mb": 3300,
+      "max_reply_tokens": 3072,
+      "tokenizer": "checkpoints/dev/open/equinox-3/tokenizer/tokenizer.json",
+      "local_gguf": [
+        "export/open/equinox-3/my-ai-q4_k_m.gguf",
+        "export/open/equinox-3/my-ai-q8_0.gguf",
+        "export/open/equinox-3/my-ai-f16.gguf"
+      ],
+      "vryxcode": true,
+      "mtp": true,
+      "cache_bits": 8,
+      "think": "empty",
+      "whats_new": {
+        "vs": "equinox-2",
+        "points": [
+          "Remembers 4 times more of a conversation: 128K tokens tested, instead of 32K, so long chats and long documents stay in view.",
+          "Looks at pictures itself: no separate picture reader is needed.",
+          "Built on a newer base (Qwen3.5 4B instead of Qwen3 4B), with a hybrid design that stays quick on long text.",
+          "Thinks before hard questions in Deep: 95.7% on the thinking test, and 99.3% when it answers straight away.",
+          "Drafts ahead with a built-in guess-ahead head, so replies can come out faster."
+        ],
+        "scores": [
+          [
+            "Common sense (HellaSwag)",
+            "69.1%",
+            "70.5%"
+          ],
+          [
+            "Memory (context window, tested)",
+            "32K",
+            "128K"
+          ],
+          [
+            "Reads pictures itself",
+            "No",
+            "Yes"
+          ],
+          [
+            "Identity test",
+            "16/16",
+            "16/16"
+          ],
+          [
+            "Thinking test",
+            "not measured",
+            "95.7%"
+          ]
+        ]
+      }
     },
     {
       "id": "solstice-2", "lookup": "when_needed",
@@ -345,20 +400,7 @@
       "context_tested": 262144,
       "kv_kb_per_token": 30,
       "weights_mb": 6860,
-      "sampling": {
-        "temperature": 0.7,
-        "top_k": 20,
-        "top_p": 0.8,
-        "min_p": 0.0,
-        "presence_penalty": 1.5,
-        "repeat_penalty": 1.0,
-        "repeat_last_n": 64
-      },
       "max_reply_tokens": 4096,
-      "temperature_bounds": [
-        0.2,
-        1.0
-      ],
       "tokenizer": "checkpoints/dev/open/solstice-3/tokenizer/tokenizer.json",
       "local_gguf": [
         "export/open/solstice-3/my-ai-q4_k_m.gguf",
@@ -400,15 +442,7 @@
         ]
       },
       "cache_bits": 8,
-      "think": "empty",
-      "sampling_think": {
-        "temperature": 1.0,
-        "top_k": 20,
-        "top_p": 0.95,
-        "min_p": 0.0,
-        "presence_penalty": 1.5,
-        "repeat_penalty": 1.0
-      }
+      "think": "empty"
     },
     {
       "id": "apogee-2", "lookup": "when_needed",
