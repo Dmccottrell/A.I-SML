@@ -318,6 +318,65 @@ class Chain(unittest.TestCase):
         self.assertEqual(conv[0][-4:-2], ["--outfile", "export/open/flare-3/my-ai-f16.gguf"] if os.sep == "/" else conv[0][-4:-2])
         self.assertEqual(conv[1][-1], "Q4_K_M")
 
+    def test_apogee_grows_first_and_uploads_only_when_asked(self):
+        steps = [s for m, s in CH.plan(["apogee-3"], Args())]
+        self.assertEqual(steps[:3], ["lessons", "grow", "pilot"])
+        self.assertNotIn("upload", steps)
+        self.assertNotIn("grow", [s for m, s in CH.plan(["solstice-3"], Args())])              # only a grown model has a grow step
+        self.assertEqual(CH.plan(["apogee-3"], Args(upload="me/backup"))[-1], ("apogee-3", "upload"))
+        grow = CH.step_command("grow", "apogee-3", Args())
+        self.assertEqual(grow[grow.index("--base") + 1:grow.index("--base") + 4], ["Qwen/Qwen3.5-9B", "--add", "12"])
+        self.assertEqual(CH.step_command("upload", "apogee-3", Args()), ["@upload", "apogee-3"])
+        self.assertEqual(CH.HOME_MODELS, ("flare-3", "equinox-3", "solstice-3"))               # the PC never starts Apogee 3 by default
+
+    def test_batch_overrides_reach_pilot_and_train(self):
+        a = Args(batch_tokens=1024, grad_accum=64)
+        train = CH.step_command("train", "apogee-3", a)
+        self.assertEqual(train[train.index("--batch_tokens") + 1], "1024")
+        self.assertEqual(train[-4:], ["--model", "apogee-3", "--data", "data/v3/chat_3x.jsonl"])
+        pilot = CH.step_command("pilot", "apogee-3", a)
+        self.assertEqual(pilot[pilot.index("--") + 1:], ["--batch_tokens", "1024", "--grad_accum", "64"])
+        self.assertNotIn("--", CH.step_command("pilot", "apogee-3", Args()))
+
+    def test_quantize_path_follows_the_system(self):
+        quant = CH.convert_commands("apogee-3", Args(llama_cpp="/workspace/llama.cpp"))[1][0]
+        want = ("build", "bin", "Release", "llama-quantize") if os.name == "nt" else ("build", "bin", "llama-quantize")
+        self.assertEqual(quant, os.path.join("/workspace/llama.cpp", *want))
+
+    def test_upload_sends_what_get_model_needs_to_a_private_repo(self):
+        import get_model
+        calls = []
+
+        class FakeApi:
+            def create_repo(self, repo, private=False, exist_ok=False):
+                calls.append(("create", repo, private))
+
+            def upload_folder(self, repo_id, folder_path, path_in_repo, allow_patterns=None):
+                calls.append(("folder", path_in_repo, tuple(allow_patterns or ())))
+
+            def upload_file(self, **kw):
+                calls.append(("file", kw["path_in_repo"]))
+        try:
+            import huggingface_hub
+        except ImportError:
+            self.skipTest("huggingface_hub is not installed")
+        real = huggingface_hub.HfApi
+        huggingface_hub.HfApi = FakeApi
+        try:
+            with tempfile.TemporaryDirectory() as d:
+                self.assertEqual(CH.upload("apogee-3", Args(upload="me/backup"), os.path.join(d, "log.txt")), 0)
+        finally:
+            huggingface_hub.HfApi = real
+        self.assertEqual(calls[0], ("create", "me/backup", True))
+        folder = [c for c in calls if c[0] == "folder" and c[1] == "apogee-3"][0]
+        import fnmatch
+        sent = ["apogee-3/" + f for f in ("my-ai-q4_k_m.gguf", "my-ai-f16.gguf", "mmproj.gguf", "my-ai/tokenizer.json", "my-ai/model-00001.safetensors")
+                if any(fnmatch.fnmatch(f, p) for p in folder[2])]
+        self.assertEqual([dest for _, dest in get_model.plan(sent, "apogee-3")],
+                         [os.path.join("export", "open", "apogee-3", "my-ai-q4_k_m.gguf"), os.path.join("export", "open", "apogee-3", "mmproj.gguf"),
+                          os.path.join("checkpoints", "dev", "open", "apogee-3", "tokenizer", "tokenizer.json")])
+        self.assertNotIn("apogee-3/my-ai-f16.gguf", sent)                                     # the 16-bit files stay on the rented card
+
     def test_state_is_saved_and_loaded_and_pause_waits(self):
         with tempfile.TemporaryDirectory() as d:
             p = os.path.join(d, "s.json")
@@ -392,7 +451,7 @@ class Eyes(unittest.TestCase):
     def test_the_chain_ends_with_the_eyes_step(self):
         import argparse
         a = argparse.Namespace(llama_cpp="C:/llama.cpp", llama_bin="C:/llama/llama-server.exe")
-        self.assertEqual(CH.STEPS[-2:], ("eyes", "long"))
+        self.assertEqual(CH.STEPS[-3:], ("eyes", "long", "upload"))
         cmd = CH.step_command("eyes", "flare-3", a)
         self.assertIn(os.path.join("scripts", "export_projector.py"), cmd)
         self.assertEqual(cmd[cmd.index("--model") + 1], "flare-3")
