@@ -378,6 +378,8 @@ def main(argv=None):
     growth = grow_qwen.read_growth(a.model)
     if a.grow_full and not growth:
         sys.exit("--grow_full is only for a grown model (a folder made by training/grow_qwen.py)")
+    os.environ.setdefault("PYTORCH_CUDA_ALLOC_CONF", "expandable_segments:True")   # before torch starts: no memory lost to fragmentation (Apogee 3 on the 3090
+                                                                                    # failed with 5.3 GB "reserved but unallocated" while needing 2 MB more)
     import torch
     card_gb = torch.cuda.get_device_properties(0).total_memory / 1e9 if torch.cuda.is_available() else 0.0
     if growth:
