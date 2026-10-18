@@ -63,6 +63,28 @@ def grown_params(model, growth):
     return [(n, p) for n, p in model.named_parameters() if rx.search(n) and "lora_" not in n]
 
 
+def match_new_layer_dtypes(model, growth, dtype, torch):
+    """Make the new layers of a grown model behave like the 4-bit old ones after prepare_model_for_kbit_training: their weight matrices (Linear) at
+    `dtype` (16 bits: half the memory), everything else (norms, the fast layers' conv1d, A_log, dt_bias) left as the preparation set it, and each Linear
+    turning what comes in into its own type first, as a 4-bit layer does. Without that the first new layer stops with "expected mat1 and mat2 to have
+    the same dtype, but got: float != BFloat16". Returns how many Linear layers were set."""
+    import re
+    rx = re.compile(grown_layer_re(growth))
+
+    def to_weight_type(mod, args):
+        return tuple(a.to(mod.weight.dtype) if torch.is_tensor(a) and a.is_floating_point() else a for a in args)
+
+    n = 0
+    for name, mod in model.named_modules():
+        if isinstance(mod, torch.nn.Linear) and rx.search(name + ".") and "lora_" not in name:
+            mod.weight.data = mod.weight.data.to(dtype)
+            if mod.bias is not None:
+                mod.bias.data = mod.bias.data.to(dtype)
+            mod.register_forward_pre_hook(to_weight_type)
+            n += 1
+    return n
+
+
 def plain_name(name):
     """A parameter name without PEFT's wrapping, as in the merged model."""
     for pre in ("base_model.model.",):
@@ -367,9 +389,8 @@ def main(argv=None):
                                                    # the new layers of a grown model stay in 16 bits: their zeroed outputs would not survive 4-bit rounding, and --grow_full trains them
                                                    **({"llm_int8_skip_modules": ["lm_head"] + [rf".*\.layers\.{j}\." for j in growth["new_layers"]]} if growth else {})))
         model = prepare_model_for_kbit_training(model, use_gradient_checkpointing=not a.no_grad_checkpoint)
-        if growth:                                  # prepare_model_for_kbit_training turns 16-bit weights into 32-bit: keep the new layers at 16 bits (half the memory)
-            for _, q in grown_params(model, growth):
-                q.data = q.data.to(dtype)
+        if growth:                                  # prepare_model_for_kbit_training turns 16-bit weights into 32-bit: the new layers' matrices back to 16 bits (half the memory)
+            print(f"new layers: {match_new_layer_dtypes(model, growth, dtype, torch)} weight matrices at {dtype}, taking any input type")
     else:
         model = open_models.load_lm(a.model, dtype=dtype).to(device)
     model.config.use_cache = False
