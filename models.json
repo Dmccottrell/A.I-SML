@@ -175,14 +175,15 @@
         "temperature": 0.7,
         "top_k": 20,
         "top_p": 0.8,
-        "min_p": 0.05,
-        "repeat_penalty": 1.05,
+        "min_p": 0.0,
+        "presence_penalty": 1.5,
+        "repeat_penalty": 1.0,
         "repeat_last_n": 64
       },
       "max_reply_tokens": 1536,
       "temperature_bounds": [
         0.2,
-        0.9
+        1.0
       ],
       "mtp": true,
       "whats_new": {
@@ -211,7 +212,15 @@
         ]
       },
       "cache_bits": 8,
-      "think": "empty"
+      "think": "empty",
+      "sampling_think": {
+        "temperature": 1.0,
+        "top_k": 20,
+        "top_p": 0.95,
+        "min_p": 0.0,
+        "presence_penalty": 1.5,
+        "repeat_penalty": 1.0
+      }
     },
     {
       "id": "equinox-2", "lookup": "when_needed",
@@ -338,10 +347,11 @@
       "weights_mb": 6860,
       "sampling": {
         "temperature": 0.7,
-        "top_k": 40,
-        "top_p": 0.95,
-        "min_p": 0.05,
-        "repeat_penalty": 1.05,
+        "top_k": 20,
+        "top_p": 0.8,
+        "min_p": 0.0,
+        "presence_penalty": 1.5,
+        "repeat_penalty": 1.0,
         "repeat_last_n": 64
       },
       "max_reply_tokens": 4096,
@@ -390,7 +400,15 @@
         ]
       },
       "cache_bits": 8,
-      "think": "empty"
+      "think": "empty",
+      "sampling_think": {
+        "temperature": 1.0,
+        "top_k": 20,
+        "top_p": 0.95,
+        "min_p": 0.0,
+        "presence_penalty": 1.5,
+        "repeat_penalty": 1.0
+      }
     },
     {
       "id": "apogee-2", "lookup": "when_needed",
