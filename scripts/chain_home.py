@@ -1,13 +1,17 @@
 """
 chain_home.py - Train Flare 3, Equinox 3 and Solstice 3 one after another on THIS PC (the RTX 4070), and stop to tell you if anything goes wrong.
+Apogee 3 (the grown 9B) runs the same way on a rented card (Linux; --models apogee-3, see below).
 
     python scripts/chain_home.py --dry-run                          # print the plan and what each step would run; changes nothing
     python scripts/chain_home.py --models flare-3 --keep 0.4 --llama-cpp ..\\llama.cpp --stop-app
     python scripts/chain_home.py --models flare-3 equinox-3 solstice-3 --llama-cpp ..\\llama.cpp --stop-app --restart-app
+    python scripts/chain_home.py --models apogee-3 --skip lessons --lessons lessons/chat_3x.jsonl --llama-cpp /workspace/llama.cpp \\
+        --upload Dmccottrell/aisml-checkpoints --ntfy <topic>                  # a rented Linux card: llama-server and llama-quantize from build/bin
 
 Steps for each model (each is remembered in logs\\chain_home_state.json, so running the same command again carries on where it stopped):
   lessons   once: data_prep/format_lessons_3x.py (style filter, de-duplicate, keep a spread share, optionally mix in general lessons with --general).
             If you already ran scripts/emvryx3_prepare.py, use --skip lessons so its finished file (--lessons) is used as it is.
+  grow      only Apogee 3: training/grow_qwen.py makes Qwen3.5 9B 12 layers deeper (skipped when the grown folder is already finished)
   pilot     3 steps: memory and speed (skipped when logs\\<model>-pilot.txt already says it finished)
   train     training/finetune_open.py (it also resumes by itself after Ctrl+C or a restart)
   merge     writes the full model folder from the saved adapter
@@ -19,6 +23,8 @@ Steps for each model (each is remembered in logs\\chain_home_state.json, so runn
             Passed: the app sends pictures straight to the model. Failed: the file is set aside and the separate picture reader is used, as before.
   long      scripts/long_check.py: a code hidden deep in 32K, 64K and 128K of text must be found by the trained model (logs\\<model>-long.md, and a phone
             message). Passed: its window can be 128K in the app. Failed: that model is retrained with some long lessons before it is published.
+  upload    only with --upload REPO: the 4-bit model, picture reader, tokenizer, adapter and logs to that PRIVATE Hugging Face repo, under <model>/
+            (on the PC: python scripts/get_model.py <model>).
 
 PAUSE: create an empty file called PAUSE in this folder and the chain waits before its next step (training itself you stop with Ctrl+C: run the same
 command later to resume). The graphics card is shared with the Emvryx app and games: --gaming switches Gaming mode on for the whole run (the app unloads its model and says it is resting; it is switched off again at the end), or --stop-app
@@ -31,14 +37,29 @@ import subprocess
 import time
 import urllib.request
 
-MODELS = ("flare-3", "equinox-3", "solstice-3")
-STEPS = ("lessons", "pilot", "train", "merge", "convert", "exam", "identity", "think", "eyes", "long")
+MODELS = ("flare-3", "equinox-3", "solstice-3", "apogee-3")
+HOME_MODELS = MODELS[:3]                                                         # what runs when --models is not given (Apogee 3 is for a rented card)
+STEPS = ("lessons", "grow", "pilot", "train", "merge", "convert", "exam", "identity", "think", "eyes", "long", "upload")
 PY = sys.executable
+UPLOAD_PATTERNS = ("*q4_k_m.gguf", "mmproj*.gguf", "my-ai/tokenizer*", "my-ai/vocab.json", "my-ai/merges.txt", "my-ai/special_tokens_map.json",
+                   "my-ai/chat_template*", "my-ai/generation_config.json", "my-ai/config.json")     # what scripts/get_model.py brings to the PC (not the 16-bit files)
 
 
 def paths(model):
     base = os.path.join("export", "open", model, "my-ai")
     return {"export": base, "f16": base + "-f16.gguf", "gguf": base + "-q4_k_m.gguf", "pilot_log": os.path.join("logs", f"{model}-pilot.txt")}
+
+
+def grown(model):
+    """The apogee-3 style preset (a base made deeper by training/grow_qwen.py), or None."""
+    import open_models
+    cfg = open_models.PRESETS.get(model, {})
+    return cfg if cfg.get("grown_from") else None
+
+
+def batch_args(a):
+    out = ["--batch_tokens", str(a.batch_tokens)] if getattr(a, "batch_tokens", None) else []
+    return out + (["--grad_accum", str(a.grad_accum)] if getattr(a, "grad_accum", None) else [])
 
 
 def step_command(step, model, a):
@@ -47,10 +68,14 @@ def step_command(step, model, a):
         cmd = [PY, os.path.join("data_prep", "format_lessons_3x.py"), "--out", a.lessons, "--keep", str(a.keep)]
         cmd += ["--general", a.general, "--general-share", str(getattr(a, "general_share", 0.3))] if getattr(a, "general", None) else []
         return cmd + (["--thinking", a.thinking, "--thinking-share", str(a.thinking_share)] if a.thinking else [])
+    if step == "grow":                                                            # Apogee 3: Qwen3.5 9B made 12 layers deeper (no graphics card needed)
+        cfg = grown(model)
+        return [PY, os.path.join("training", "grow_qwen.py"), "--base", cfg["grown_from"], "--add", str(cfg["grow_add"]), "--out", cfg["hf"]]
     if step == "pilot":
-        return [PY, os.path.join("scripts", "emvryx3_pilot.py"), "--models", model, "--data", a.lessons]
+        cmd = [PY, os.path.join("scripts", "emvryx3_pilot.py"), "--models", model, "--data", a.lessons]
+        return cmd + (["--"] + batch_args(a) if batch_args(a) else [])
     if step == "train":
-        return [PY, os.path.join("training", "finetune_open.py"), "--model", model, "--data", a.lessons]
+        return [PY, os.path.join("training", "finetune_open.py")] + batch_args(a) + ["--model", model, "--data", a.lessons]
     if step == "merge":
         return [PY, os.path.join("training", "finetune_open.py"), "--model", model, "--merge"]
     if step == "convert":
@@ -67,23 +92,53 @@ def step_command(step, model, a):
         return cmd + (["--llama-bin", a.llama_bin] if a.llama_bin else [])
     if step == "long":                                                            # long memory kept after training: 32K, 64K, 128K (never stops the chain)
         return [PY, os.path.join("scripts", "long_check.py"), "--model", model, "--llama-bin", a.llama_bin or "llama-server"]    # without --llama-bin: the one on PATH
+    if step == "upload":
+        return ["@upload", model]
     raise ValueError(step)
+
+
+def llama_tool(a, name):
+    """A llama.cpp program from --llama-cpp: build\\bin\\Release\\<name>.exe on Windows, build/bin/<name> on Linux (a rented card)."""
+    parts = ("build", "bin", "Release", name) if os.name == "nt" else ("build", "bin", name)
+    return os.path.join(a.llama_cpp or "", *parts)
 
 
 def convert_commands(model, a):
     p = paths(model)
     conv = os.path.join(a.llama_cpp, "convert_hf_to_gguf.py") if a.llama_cpp else "convert_hf_to_gguf.py"
-    quant = a.quantize_bin or os.path.join(a.llama_cpp or "", "build", "bin", "Release", "llama-quantize")
+    quant = a.quantize_bin or llama_tool(a, "llama-quantize")
     return [[PY, conv, p["export"], "--outfile", p["f16"], "--outtype", "f16"], [quant, p["f16"], p["gguf"], "Q4_K_M"]]
 
 
 def plan(models, a):
-    """[(model, step)] in the order they run (lessons once, at the front)."""
+    """[(model, step)] in the order they run (lessons once, at the front; grow only for a grown model; upload only with --upload)."""
     steps = [s for s in STEPS if (not a.only or s in a.only) and s not in (a.skip or [])]
     out = [("all", "lessons")] if "lessons" in steps else []
     for m in models:
-        out += [(m, s) for s in steps if s != "lessons"]
+        out += [(m, s) for s in steps if s != "lessons" and (s != "grow" or grown(m)) and (s != "upload" or getattr(a, "upload", None))]
     return out
+
+
+def upload(model, a, log):
+    """The 4-bit model, its picture reader, tokenizer, adapter and test results to the private backup (scripts/get_model.py brings them to the PC)."""
+    import glob
+    from huggingface_hub import HfApi
+    api = HfApi()
+    api.create_repo(a.upload, private=True, exist_ok=True)                       # never makes it public; an existing repo is left as it is
+    sent = []
+    export = os.path.dirname(paths(model)["export"])
+    api.upload_folder(repo_id=a.upload, folder_path=export, path_in_repo=model, allow_patterns=list(UPLOAD_PATTERNS))
+    sent.append(export)
+    adapter = os.path.join("checkpoints", "dev", "open", model, "adapter")
+    if os.path.isdir(adapter):
+        api.upload_folder(repo_id=a.upload, folder_path=adapter, path_in_repo=f"{model}/adapter")
+        sent.append(adapter)
+    for f in glob.glob(os.path.join("logs", f"{model}-*")):
+        api.upload_file(repo_id=a.upload, path_or_fileobj=f, path_in_repo=f"{model}/logs/{os.path.basename(f)}")
+        sent.append(f)
+    with open(log, "a", encoding="utf-8") as f:
+        f.write("uploaded to " + a.upload + ": " + ", ".join(sent) + "\n")
+    return 0
 
 
 def load_state(path):
@@ -200,12 +255,14 @@ def run_step(model, step, a):
         return 0, log
     if cmd[0] == "@think":
         return run_think(model, a, log), log
+    if cmd[0] == "@upload":
+        return upload(model, a, log), log
     return run_logged(cmd, log), log
 
 
 def main(argv=None):
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("--models", nargs="+", default=list(MODELS), choices=MODELS)
+    ap.add_argument("--models", nargs="+", default=list(HOME_MODELS), choices=MODELS)
     ap.add_argument("--only", nargs="+", choices=STEPS, help="run only these steps")
     ap.add_argument("--skip", nargs="+", choices=STEPS, help="leave these steps out")
     ap.add_argument("--lessons", default=os.path.join("data", "v3", "chat_3x.jsonl"))
@@ -226,7 +283,13 @@ def main(argv=None):
     ap.add_argument("--state", default=os.path.join("logs", "chain_home_state.json"))
     ap.add_argument("--dry-run", action="store_true")
     ap.add_argument("--ntfy", default=None, help="an ntfy.sh topic for the phone messages (instead of setting NTFY_TOPIC)")
+    ap.add_argument("--batch-tokens", type=int, default=None, help="tokens per micro-batch for pilot and train (default: the preset's)")
+    ap.add_argument("--grad-accum", type=int, default=None, help="micro-batches per step for pilot and train (default: the preset's)")
+    ap.add_argument("--upload", default=None, metavar="REPO", help="after the tests, send the finished model to this PRIVATE Hugging Face repo "
+                    "(hf auth login first), e.g. Dmccottrell/aisml-checkpoints")
     a = ap.parse_args(argv)
+    if not a.llama_bin and a.llama_cpp and os.path.exists(llama_tool(a, "llama-server")):
+        a.llama_bin = llama_tool(a, "llama-server")                               # the llama-server built beside llama-quantize
     if a.ntfy:
         os.environ["NTFY_TOPIC"] = a.ntfy
 
@@ -236,7 +299,8 @@ def main(argv=None):
         for model, step in todo:
             done = state.get(model, {}).get(step)
             cmd = step_command(step, model if model != "all" else MODELS[0], a)
-            shown = ("convert: " + " && ".join(" ".join(c) for c in convert_commands(model, a))) if cmd[0] == "@convert" else (f"think: thinking_check against {paths(model)['gguf']}" if cmd[0] == "@think" else " ".join(cmd))
+            shown = ("convert: " + " && ".join(" ".join(c) for c in convert_commands(model, a))) if cmd[0] == "@convert" else (f"think: thinking_check against {paths(model)['gguf']}" if cmd[0] == "@think" else
+                     f"upload: export/open/{model} (4-bit, picture reader, tokenizer), adapter and logs -> {a.upload}/{model}" if cmd[0] == "@upload" else " ".join(cmd))
             print(f"{'[done] ' if done else '       '}{model:<10} {step:<9} {shown}")
         return 0
     if a.gaming:
@@ -252,6 +316,10 @@ def main(argv=None):
                 continue
             wait_while_paused()
             if step == "pilot" and os.path.exists(paths(model)["pilot_log"]) and "pilot done" in open(paths(model)["pilot_log"], encoding="utf-8", errors="replace").read():
+                state.setdefault(model, {})[step] = "already done"
+                save_state(a.state, state)
+                continue
+            if step == "grow" and os.path.exists(os.path.join(grown(model)["hf"], "emvryx_growth.json")):   # written last: the grow finished (by hand or here)
                 state.setdefault(model, {})[step] = "already done"
                 save_state(a.state, state)
                 continue

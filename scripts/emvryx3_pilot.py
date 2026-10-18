@@ -14,7 +14,7 @@ import re
 import subprocess
 import time
 
-MODELS = ("flare-3", "equinox-3", "solstice-3")
+MODELS = ("flare-3", "equinox-3", "solstice-3", "apogee-3")
 FIT_OK_GB, FIT_TIGHT_GB = 10.8, 11.6          # peak memory the pilot saw: under the first is comfortable, under the second is tight, over it will not fit a 12 GB card
 HOME_FACTOR = 1.0                              # the pilot already runs on the real card, so no scaling is needed
 
@@ -100,7 +100,7 @@ def main(argv=None):
         i = argv.index("--")
         argv, extra = argv[:i], argv[i + 1:]
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("--models", nargs="+", default=list(MODELS), choices=MODELS)
+    ap.add_argument("--models", nargs="+", default=list(MODELS[:3]), choices=MODELS)
     ap.add_argument("--from-logs", action="store_true")
     ap.add_argument("--logs", default="logs")
     ap.add_argument("--data", default=os.path.join("data", "v3", "chat.jsonl"))

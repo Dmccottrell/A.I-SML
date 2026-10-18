@@ -32,7 +32,8 @@ def folder(model):
 
 def base_id(model):
     import open_models
-    return open_models.PRESETS[model]["hf"]
+    cfg = open_models.PRESETS[model]
+    return cfg.get("grown_from") or cfg["hf"]                                   # a grown model (Apogee 3) sees with its base's picture reader
 
 
 def make_command(model, llama_cpp, base_dir):
