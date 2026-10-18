@@ -67,7 +67,7 @@ class Questions(unittest.TestCase):
         qs = [FQ.from_row({"question": "What is 2+2?"}, "a"), FQ.from_row({"question": "what is 2 + 2 ?"}, "b"), FQ.from_row({"question": "Why is the sky blue?"}, "c")]
         self.assertEqual(len(FQ.dedupe(qs)), 3 - 0 if FQ.norm(qs[0]["question"]) != FQ.norm(qs[1]["question"]) else 2)
         self.assertEqual(FQ.parse_questions('Here: ["One question?", "Another one here?"]'), ["One question?", "Another one here?"])
-        self.assertEqual(len(FQ.AREAS), 20)
+        self.assertEqual(len(FQ.AREAS), 21)
 
 
 class Factory(unittest.TestCase):

@@ -165,6 +165,13 @@ teacher must be able to see pictures: Qwen3.6 27B if its vision works in llama.c
 The judge step scores each reply on the playbook above; replies that list or transcribe the picture are rejected. A new check, the **picture chat
 check** (20 pictures, judged), guards it before publishing.
 
+## Casual typing (decided Oct 18, 2026)
+People write the way they text: "Sometimes I overtime ya know", "ngl", "idk", misspellings, voice-to-text mistakes, half-finished thoughts.
+**Lessons 4:** a new factory area, **casual** (about 1,000 lessons): messages like these, often a feeling or opinion rather than a question; a good
+reply works out the meaning, answers it naturally as "you", never corrects spelling and never says it did not understand when the meaning can be
+guessed. The messy-typing copies (`data_prep/typo_lessons.py`) now also use slang ("gonna", "ngl", "idk", "rn") and casual endings ("ya know",
+"lol", "fr"). **Now (in the app):** a message that reads as slang gets a short hint to go by what is meant (`chat_turn.CASUAL_HINT`).
+
 ## Later: Apogee 3.5
 Grow Apogee 3 again to about **14B** (the most that fits the 4070 with 128K; 64K comfortable), train on **Lessons 4.5** (Lessons 4 plus what the app's
 reports and approvals teach) with a second round of DPO and more thinking lessons. Expected about **50 to 52**; before it, write a harder test

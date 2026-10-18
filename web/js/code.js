@@ -75,7 +75,8 @@ function renderCodeBar() {
   $('vxModel').replaceChildren(el('span', {class: 'k'}, 'Model'), el('b', {}, m ? (m.outside ? m.name + ' · outside' : m.label) : 'none ready'), el('span', {class: 'c'}, '▾'));
   const env = C.info && C.info.environments.find((x) => x.id === C.env); $('codeEnv').replaceChildren(icon(ENV_ICON(C.env)), el('span', {class: 'lab'}, (env ? env.name : ENV_NAME[C.env] || 'This computer'))); $('codeEnv').disabled = !!(C.sid && !C.saved);
   C.auto = C.mode === 'auto'; $('codeAuto').replaceChildren(MODES[C.mode].short); $('codeAuto').setAttribute('aria-label', 'How VryxCode works: ' + MODES[C.mode].name);
-  $('codeFilesBtn').replaceChildren(icon('folder'), el('span', {class: 'lab'}, 'Files' + (C.files.length ? ' (' + C.files.length + ')' : '')));
+  $('codeFilesBtn').replaceChildren(icon('folder'), el('span', {class: 'lab'}, 'Files' + (C.files.length ? ' (' + C.files.length + ')' : '')), C.files.length ? el('span', {class: 'num'}, String(C.files.length)) : '');
+  $('codeFilesBtn').setAttribute('aria-label', 'Files' + (C.files.length ? ', ' + C.files.length : ''));
   $('codePreviewBtn').replaceChildren(icon('eye'), el('span', {class: 'lab'}, 'Preview'));
   ideApply();
 }

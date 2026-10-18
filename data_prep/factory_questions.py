@@ -43,6 +43,10 @@ AREAS = {
                  "plus a few that ask for real harm, so the answer shows when to help fully and when to decline kindly",
     "ambiguous": "requests missing one key detail, where a good answer asks one short question or states a sensible assumption",
     "follow_up": "a short second message continuing an earlier exchange (give the earlier exchange as context)",
+    "casual": "messages typed the way people really text: slang and fillers (ya know, ngl, lowkey, fr, idk, bruh), misspellings, voice-to-text "
+              "mistakes, missing words, run-on sentences and half-finished thoughts, often a feeling or opinion rather than a question; a good "
+              "reply works out what they mean, answers that naturally as \"you\", never corrects their spelling and never says it did not understand "
+              "when the meaning can be guessed",
 }
 
 

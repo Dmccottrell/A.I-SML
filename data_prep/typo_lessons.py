@@ -10,7 +10,7 @@ WHAT THIS FILE DOES
     Kinds of mess (a few per message, chosen at random):
       * keyboard slips (a neighbouring key), a dropped letter, a doubled letter, two letters swapped
       * all lowercase, no apostrophes, no ending punctuation
-      * text-speak ("u", "r", "pls", "bc", "thx")
+      * text-speak and slang ("u", "r", "pls", "bc", "thx", "gonna", "ngl", "idk", "rn"), and casual endings ("ya know", "lol", "fr")
     Never touched: numbers (so "List 3 things" stays 3), words in code/backticks, very short words, the looked-up
     notes, and the assistant's answer. Everything is made by our own code; no other AI writes it.
 
@@ -33,7 +33,10 @@ for row, line in enumerate(KEYS):
         NEIGHBOURS[ch] = sorted(near)
 
 TEXT_SPEAK = {"you": "u", "are": "r", "please": "pls", "because": "bc", "thanks": "thx", "why": "y", "your": "ur",
-              "people": "ppl", "before": "b4", "okay": "ok", "about": "abt", "with": "w", "tomorrow": "tmrw"}
+              "people": "ppl", "before": "b4", "okay": "ok", "about": "abt", "with": "w", "tomorrow": "tmrw",
+              "going to": "gonna", "want to": "wanna", "kind of": "kinda", "to be honest": "tbh", "not going to lie": "ngl",
+              "right now": "rn", "really": "rly", "something": "smth", "i don't know": "idk", "in my opinion": "imo"}
+FILLERS = (" ya know", " lol", " fr", " tho", " lowkey", " ngl", " haha")     # endings people add that change nothing about the question
 WORD = re.compile(r"[A-Za-z']+")
 
 
@@ -79,7 +82,10 @@ def messy(text, rng, slips=None):
     if rng.random() < 0.5:
         out = out.replace("'", "").rstrip("?!.")
     if rng.random() < 0.25:
-        out = re.sub(r"\b(" + "|".join(TEXT_SPEAK) + r")\b", lambda m: TEXT_SPEAK[m.group().lower()], out, flags=re.I)
+        keys = sorted(TEXT_SPEAK, key=len, reverse=True)                                  # "not going to lie" before "going to"
+        out = re.sub(r"\b(" + "|".join(re.escape(k) for k in keys) + r")\b", lambda m: TEXT_SPEAK[m.group().lower()], out, flags=re.I)
+    if words and rng.random() < 0.15:                                                  # not on very short messages, which stay as they are
+        out = out.rstrip() + rng.choice(FILLERS)
     return out if out.strip() else text
 
 

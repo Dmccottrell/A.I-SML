@@ -4,6 +4,7 @@ chat_turn.py - One chat turn: look things up, build the prompt, run the model an
 import os, sys; sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), os.pardir)); import emvryx_paths  # noqa: E402,F401  (the code folders become importable)
 import base64
 import queue
+import re
 import threading
 import time
 import app_engine as E
@@ -33,6 +34,10 @@ def meter_for(state, who, chat_id, model_id):
     return E.context_meter(E.chat.context_report(tok, state.store(who["user"]).history(chat_id), window, reserve=max_new)["used"], window, max_new)
 
 
+CASUAL = re.compile(r"\b(?:ya know|y'?know|ngl|tbh|fr|lowkey|highkey|idk|imo|bruh|gonna|wanna|kinda|sorta|lol|lmao|smh|tho|rn|u|ur)\b", re.I)
+CASUAL_HINT = ("[They are typing casually (slang, short forms or typos). Work out what they mean and answer that, talking to them as \"you\" "
+               "in a relaxed, natural way. Never correct their spelling, never say you did not understand when the meaning can be guessed, and never "
+               "talk about them as someone else.]")
 MAX_PICTURES = 3          # at most this many of the chat's pictures go to a model that sees them, with each message
 
 
@@ -110,6 +115,8 @@ def start_turn(state, who, chat_id, text, model_id, effort, regenerate=False, re
                                          CONTINUE_HINT if cont else "") if h)   # the person's own preference, then the chat's skill (Study helper ...), then "continue": extra instructions for the model only
     if extra_hint:
         skill_hint = (skill_hint + "\n\n" if skill_hint else "") + extra_hint
+    if text and CASUAL.search(text):                          # "Sometimes I overtime ya know": read what they mean, as a friend would
+        skill_hint = (skill_hint + "\n\n" if skill_hint else "") + CASUAL_HINT
     library = state.docs_for(who["user"])
     attached = [d for d in (library.info(i) for i in store.docs(chat_id)) if d]     # documents attached to this chat: their passages go in as notes
     sent_before = store.sent_docs(chat_id)                     # pictures and files that went with an earlier message: only new ones go with this one

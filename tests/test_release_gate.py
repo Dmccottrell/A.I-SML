@@ -197,6 +197,26 @@ class RecordUpdateSaysWhatChanged(unittest.TestCase):
         self.assertEqual(mp.changes(m3), "Memory (context window): 128K \u2192 256K.")
 
 
+class CasualTyping(unittest.TestCase):
+    def test_slang_is_noticed_and_lessons_use_it(self):
+        import random
+        import chat_turn
+        import typo_lessons
+        for said in ("Sometimes I overtime ya know", "ngl that was good", "idk what to do rn", "u up?"):
+            self.assertTrue(chat_turn.CASUAL.search(said), said)
+        for said in ("What is the capital of France?", "Write a poem about rain"):
+            self.assertFalse(chat_turn.CASUAL.search(said), said)
+        self.assertIn("never say you did not understand", chat_turn.CASUAL_HINT)
+        seen = " ".join(typo_lessons.messy("I am not going to lie, I really want to know about this right now", random.Random(i)) for i in range(200))
+        for slang in ("ngl", "wanna", "rn", "abt"):
+            self.assertIn(slang, seen)
+        self.assertTrue(any(f.strip() in seen for f in typo_lessons.FILLERS))
+
+    def test_memory_note_says_who_the_user_is(self):
+        import user_memory
+        self.assertIn("speak to them as you", user_memory.TITLE)
+
+
 class CompactRoute(AppBase):
     def test_owner_can_compact_and_others_cannot_see_the_button_yet(self):
         s, j = self.owner.call("POST", "/api/chats", {})
@@ -259,6 +279,14 @@ if HAVE_BROWSER:
                                             document.getElementById('input').dispatchEvent(new ClipboardEvent('paste', {clipboardData: d, bubbles: true, cancelable: true})); }""")
                     self.assertEqual(page.evaluate("document.getElementById('input').value"), "pasted words")    # pasted as plain text, never formatting
                     self.assertEqual(page.evaluate("document.querySelectorAll('#input b').length"), 0)
+                    import documents as DOCS
+                    saved_ocr, DOCS._ocr = DOCS._ocr, (lambda b: ([[[[0, 0], [5, 0], [5, 5], [0, 5]], "hi", 0.9]], None))
+                    self.addCleanup(setattr, DOCS, "_ocr", saved_ocr)
+                    png = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg=="
+                    page.evaluate("(p) => { const i = document.createElement('img'); i.src = 'data:image/png;base64,' + p; document.getElementById('input').append(i); }", png)
+                    eventually(lambda: self.assertEqual(page.evaluate("S.docs.length"), 1), 15)        # a picture the keyboard drops into the box is attached, not left in the text
+                    self.assertEqual(page.evaluate("document.querySelectorAll('#input img').length"), 0)
+                    page.evaluate("setDocs([])")
                     page.evaluate("document.getElementById('input').value = ''")
                     page.fill("#input", "hello there")
                     page.click("#send")
