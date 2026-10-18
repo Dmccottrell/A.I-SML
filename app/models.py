@@ -38,6 +38,9 @@ def load_manifest(path=MANIFEST_PATH, include_archived=False):
     problems = check(manifest)
     if problems:
         raise ValueError("models.json: " + "; ".join(problems))
+    for m in manifest["models"]:                    # an Emvryx 3 model (Qwen3.5) was trained with an empty thinking block after every question: the app must add it too
+        if m.get("open") and str(m.get("base", "")).startswith("Qwen3.5"):
+            m.setdefault("think", "empty")
     if not include_archived:
         for m in manifest["models"]:
             if m.get("archived"):

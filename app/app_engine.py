@@ -113,7 +113,19 @@ def until_stopped(pieces, stop):
 
 def strip_think(pieces, open_tag="<think>", close_tag="</think>"):
     """Drop a model's hidden reasoning (Qwen3 writes <think>...</think> before its answer) from a stream of text pieces, even when a
-    tag is split across pieces. Text after the closing tag has its leading blank space removed. An unfinished block is dropped."""
+    tag is split across pieces. The answer never starts with blank space, also when the blank lines after the closing tag arrive in a
+    later piece (that showed as an empty gap at the top of Emvryx 3 replies). An unfinished block is dropped."""
+    begun = False
+    for out in _strip_think(pieces, open_tag, close_tag):
+        if not begun:
+            out = out.lstrip()
+            if not out:
+                continue
+            begun = True
+        yield out
+
+
+def _strip_think(pieces, open_tag, close_tag):
     buf, inside, started = "", False, False
     for piece in pieces:
         buf += piece
