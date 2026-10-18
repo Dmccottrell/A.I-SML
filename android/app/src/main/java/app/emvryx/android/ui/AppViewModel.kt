@@ -15,6 +15,7 @@ import app.emvryx.android.data.ChatSummary
 import app.emvryx.android.data.ModelCard
 import app.emvryx.android.data.OfflineException
 import app.emvryx.android.data.ReplyEvent
+import app.emvryx.android.data.Usage
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
@@ -28,8 +29,8 @@ sealed interface Screen {
 
 enum class SignInWay { Password, Key }
 
-/** One bubble on the chat screen. [streaming] is the reply still being written. */
-data class Bubble(val key: Long, val mine: Boolean, val text: String, val streaming: Boolean = false, val cut: Boolean = false)
+/** One bubble on the chat screen. [streaming] is the reply still being written; [model] is the id of the model that wrote it. */
+data class Bubble(val key: Long, val mine: Boolean, val text: String, val streaming: Boolean = false, val cut: Boolean = false, val model: String = "")
 
 class AppViewModel(app: Application) : AndroidViewModel(app) {
     private val session = (app as EmvryxApp).session
@@ -71,8 +72,17 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     private var replyJob: Job? = null
     private var nextKey = -1L
 
-    val models: List<ModelCard> get() = state?.models?.all.orEmpty().filter { it.ready }
+    var usage by mutableStateOf<Usage?>(null)
+        private set
+
+    /** Every model this person has (not ready ones are shown greyed, as on the website) */
+    val models: List<ModelCard> get() = state?.models?.all.orEmpty()
     val currentModel: ModelCard? get() = models.firstOrNull { it.id == model }
+
+    fun modelById(id: String): ModelCard? = models.firstOrNull { it.id == id }
+
+    /** Auto is always there; otherwise a model may list the levels it offers */
+    fun effortAllowed(id: String) = id == "auto" || currentModel?.efforts?.contains(id) ?: true
 
     init {
         start()
@@ -177,23 +187,30 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     private suspend fun loadState() {
-        val s = api.state()
+        val s = api.state(model.ifEmpty { null })
         state = s
         chats = s.chats
-        if (model.isEmpty() || models.none { it.id == model }) model = s.model
+        usage = s.usage
+        if (model.isEmpty() || models.none { it.id == model && it.ready }) model = s.model
     }
 
+    /** The chat list and the usage line (the usage figure depends on the model and effort picked) */
     fun refreshChats() {
         viewModelScope.launch {
             runCatching { api.state(model) }.onSuccess {
                 state = it
                 chats = it.chats
+                usage = it.usage
             }
         }
     }
 
     fun pickModel(id: String) {
+        val m = modelById(id) ?: return
+        if (!m.ready) return
         model = id
+        if (effort != "auto" && m.efforts != null && effort !in m.efforts) effort = "balanced"
+        refreshChats()
     }
 
     fun pickEffort(id: String) {
@@ -217,7 +234,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
                 chatId = c.id
                 title = c.title
                 bubbles.clear()
-                bubbles.addAll(c.messages.map { Bubble(it.id, it.role == "user", it.content, cut = it.status == "partial" && !c.generating) })
+                bubbles.addAll(c.messages.map { Bubble(it.id, it.role == "user", it.content, cut = it.status == "partial" && !c.generating, model = it.modelId) })
                 c.messages.lastOrNull { it.role == "assistant" && it.modelId.isNotEmpty() }?.let { m ->
                     if (models.any { it.id == m.modelId }) model = m.modelId
                 }
@@ -231,19 +248,31 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     fun send(text: String) {
         val words = text.trim()
         if (words.isEmpty() || streaming) return
+        bubbles.add(Bubble(nextKey--, mine = true, text = words))
+        reply(words, regenerate = false)
+    }
+
+    /** Write the last reply again, with the model and effort picked now */
+    fun regenerate() {
+        if (streaming || chatId == null) return
+        val last = bubbles.lastOrNull() ?: return
+        if (!last.mine) bubbles.removeAt(bubbles.lastIndex)
+        reply("", regenerate = true)
+    }
+
+    private fun reply(words: String, regenerate: Boolean) {
         notice = null
         streaming = true
         working = "Thinking…"
-        bubbles.add(Bubble(nextKey--, mine = true, text = words))
         val replyKey = nextKey--
-        bubbles.add(Bubble(replyKey, mine = false, text = "", streaming = true))
+        bubbles.add(Bubble(replyKey, mine = false, text = "", streaming = true, model = model))
         replyJob = viewModelScope.launch {
             try {
                 val id = chatId ?: api.newChat().also { chatId = it }
-                api.send(id, words, model, effort).collect { ev ->
+                api.send(id, words, model, effort, regenerate).collect { ev ->
                     when (ev) {
                         is ReplyEvent.Thinking -> working = "Thinking…"
-                        is ReplyEvent.Loading -> working = "Loading ${models.firstOrNull { it.id == ev.model }?.name ?: "the model"}…"
+                        is ReplyEvent.Loading -> working = "Loading ${modelById(ev.model)?.fullName ?: "the model"}…"
                         is ReplyEvent.Compacting -> working = "Tidying up the chat's memory…"
                         is ReplyEvent.Piece -> {
                             working = null

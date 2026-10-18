@@ -66,8 +66,11 @@ class ApiClient(private val session: SessionStore) {
     }
 
     /** Sends one message and streams the reply. Refusals (limits, a model that is not available) throw [ApiException] before anything streams. */
-    fun send(chatId: Long, text: String, model: String, effort: String): Flow<ReplyEvent> = flow {
-        val body = buildJsonObject { put("text", text); put("model", model); put("effort", effort) }
+    fun send(chatId: Long, text: String, model: String, effort: String, regenerate: Boolean = false): Flow<ReplyEvent> = flow {
+        val body = buildJsonObject {
+            put("text", text); put("model", model); put("effort", effort)
+            if (regenerate) put("regenerate", true)          // write the last reply again (api_send in app/routes_chat.py)
+        }
         val call = stream.newCall(request("/api/chats/$chatId/send", body))
         val response = try {
             call.execute()

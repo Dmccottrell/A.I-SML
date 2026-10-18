@@ -70,7 +70,7 @@ object Markdown {
                 }
                 s[i] == '`' && s.indexOf('`', i + 1) > i + 1 -> {
                     val end = s.indexOf('`', i + 1)
-                    withStyle(SpanStyle(fontFamily = FontFamily.Monospace, background = Emvryx.surface2, color = Emvryx.accentText)) {
+                    withStyle(SpanStyle(fontFamily = FontFamily.Monospace, background = Emvryx.surface2, color = Emvryx.text)) {
                         append(s.substring(i + 1, end))
                     }
                     i = end + 1

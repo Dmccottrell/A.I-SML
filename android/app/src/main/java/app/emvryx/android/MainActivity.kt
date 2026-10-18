@@ -21,16 +21,20 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge(SystemBarStyle.dark(android.graphics.Color.TRANSPARENT), SystemBarStyle.dark(android.graphics.Color.TRANSPARENT))
-        setContent {
-            EmvryxTheme {
-                Surface(color = MaterialTheme.colorScheme.background) { Root() }   // gives every screen the light text colour
-            }
-        }
+        setContent { Root() }
     }
 }
 
 @Composable
 private fun Root(vm: AppViewModel = viewModel()) {
+    // the chat follows the chosen model's colours; sign-in and the "off" page are Emvryx amber (web/js/core.js applyTheme)
+    EmvryxTheme(model = if (vm.screen == Screen.Chat) vm.currentModel?.name else null) {
+        Surface(color = MaterialTheme.colorScheme.background) { Screens(vm) }   // gives every screen the light text colour
+    }
+}
+
+@Composable
+private fun Screens(vm: AppViewModel) {
     when (val s = vm.screen) {
         Screen.Starting -> StartingScreen()
         is Screen.Off -> OffScreen(s, onRetry = vm::start, onChangeServer = vm::changeServer)

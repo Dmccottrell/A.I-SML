@@ -24,11 +24,49 @@ data class LoginReply(
 data class ModelCard(
     val id: String,
     val name: String,
+    val version: Double? = null,
     val tagline: String = "",
     val state: String = "",
-    @SerialName("supports_effort") val supportsEffort: Boolean = false,
+    val badge: String = "",
+    val efforts: List<String>? = null,       // when set, only these (plus Auto) can be picked
 ) {
     val ready get() = state == "ready"
+
+    /** "Flare 2.5", "Solstice 2": the name with its version, as the website shows it (core.js mname) */
+    val fullName: String
+        get() = version?.let { v -> name + " " + (if (v % 1.0 == 0.0) v.toLong().toString() else v.toString()) } ?: name
+}
+
+@Serializable
+data class Tank(val pct: Double = 100.0)
+
+@Serializable
+data class Week(@SerialName("pct_left") val pctLeft: Double = 100.0)
+
+/** The usage line under the message box (app usage_snapshot; web/js/chat.js renderUsage) */
+@Serializable
+data class Usage(
+    val exempt: Boolean = false,
+    @SerialName("can_send") val canSend: Int = 0,
+    val tank: Tank = Tank(),
+    val week: Week = Week(),
+) {
+    val fraction get() = if (exempt) 1.0 else minOf(tank.pct, week.pctLeft) / 100.0
+
+    val label: String
+        get() = when {
+            exempt -> "Usage: no limit (owner)"
+            canSend <= 0 -> "Usage: out for now"
+            else -> "Usage: ${percent(fraction)} · about ${"%,d".format(java.util.Locale.US, canSend)} messages left"
+        }
+
+    companion object {
+        /** Near full, one decimal, so a small message is visible (chat.js pctText) */
+        fun percent(frac: Double): String {
+            val p = frac * 100
+            return (if (p >= 99.95) "100" else if (p >= 90) "%.1f".format(java.util.Locale.US, p) else Math.round(p).toString()) + "%"
+        }
+    }
 }
 
 @Serializable
@@ -64,8 +102,12 @@ data class AppState(
     val model: String = "",
     val efforts: List<Effort> = emptyList(),
     val chats: List<ChatSummary> = emptyList(),
+    val usage: Usage? = null,
     val gaming: Boolean = false,
-)
+) {
+    /** "Pro plan" */
+    val planName get() = plan.replaceFirstChar { it.uppercase() } + " plan"
+}
 
 @Serializable
 data class Message(
