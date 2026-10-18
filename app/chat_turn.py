@@ -261,6 +261,8 @@ def start_turn(state, who, chat_id, text, model_id, effort, regenerate=False, re
             if regenerate and hasattr(backend, "sampling"):
                 t = regen_modes.sampling_for(backend.sampling.get("temperature", 0.8), mode)
                 backend.sampling = dict(backend.sampling, temperature=round(min(bounds[1], max(bounds[0], t)), 2))   # never outside the model's safe range
+            if think and model.get("sampling_think") and hasattr(backend, "sampling"):     # Deep on an Emvryx 3 model: the settings Qwen gives for thinking
+                backend.sampling = dict(backend.sampling, **model["sampling_think"])
             prior_reply = next((m["content"] for m in reversed(store.messages(chat_id)) if m["role"] == "assistant"), "")      # to notice a reply that is only a copy of this one
             first_hint = "\n\n".join(h for h in (skill_hint, regen_modes.get(mode)["hint"] if regenerate else "",
                                                   "" if regenerate else (chat_polish.answer_hint(text, next((m["content"] for m in reversed(store.messages(chat_id)) if m["role"] == "assistant"), ""))
@@ -282,7 +284,10 @@ def start_turn(state, who, chat_id, text, model_id, effort, regenerate=False, re
                 if msgs and msgs[-1]["role"] == "assistant" and not msgs[-1]["content"]:
                     store.remove_message(chat_id, msgs[-1]["id"])
                 q.put(("loading", model["name"]))
-                r = first(state.backend_for(model, text or "", window), again=True)
+                again = state.backend_for(model, text or "", window)
+                if hasattr(backend, "sampling") and hasattr(again, "sampling"):
+                    again.sampling = dict(backend.sampling)                          # the same settings as the first try
+                r = first(again, again=True)
             if text and not canned and not regenerate and not stop.is_set() and r.get("reason") in ("done", None) and chat_polish.is_repeat(r["text"], prior_reply):
                 # A small model answered its own last message again. Take that reply back and ask once more, firmly, a little less predictably.
                 msgs = [m for m in store.messages(chat_id) if m["status"] != "compacted"]

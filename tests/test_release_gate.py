@@ -205,6 +205,15 @@ class Emvryx3Models(unittest.TestCase):
                 self.assertEqual(m.get("think"), "empty", m["id"])          # without it the prompt is not what they learned, and Deep never thinks
         self.assertEqual(M.load_manifest(os.path.join(ROOT, "models.json"))["models"][0].get("think"), None)   # the older models are untouched
 
+    def test_qwen35_models_use_qwens_own_settings(self):
+        by_id = {m["id"]: m for m in M.load_manifest(os.path.join(ROOT, "models.json"))["models"]}
+        for mid in ("flare-3", "solstice-3"):
+            m = by_id[mid]
+            self.assertEqual((m["sampling"]["temperature"], m["sampling"]["top_p"], m["sampling"]["top_k"], m["sampling"]["presence_penalty"]), (0.7, 0.8, 20, 1.5))
+            self.assertEqual((m["sampling_think"]["temperature"], m["sampling_think"]["top_p"], m["sampling_think"]["top_k"]), (1.0, 0.95, 20))
+            lo, hi = m["temperature_bounds"]
+            self.assertTrue(lo <= m["sampling"]["temperature"] <= hi and lo <= m["sampling_think"]["temperature"] <= hi)
+
     def test_no_blank_gap_at_the_top_of_a_reply(self):
         for pieces in (["<think>", "\n\n</think>", "\n\n", "Hello"], ["\n\nHello"], ["<thi", "nk>x</th", "ink>", "\n", "\nHello"]):
             self.assertEqual("".join(E.strip_think(iter(pieces))), "Hello", pieces)
@@ -234,6 +243,32 @@ class CasualTyping(unittest.TestCase):
     def test_memory_note_says_who_the_user_is(self):
         import user_memory
         self.assertIn("speak to them as you", user_memory.TITLE)
+
+
+class DeepUsesThinkingSettings(AppBase):
+    def test_deep_sends_the_thinking_settings_and_quick_does_not(self):
+        import app_engine
+        sent = []
+
+        class Recording(app_engine.FakeBackend):
+            def stream(self, ids, max_new):
+                sent.append(dict(self.sampling))
+                return super().stream(ids, max_new)
+
+        model = next(m for m in self.state.manifest["models"] if m["id"] == "flare-2")
+        model.update(think="empty", open=True, sampling={"temperature": 0.7, "top_p": 0.8}, sampling_think={"temperature": 1.0, "top_p": 0.95})
+        model.pop("efforts", None)
+        self.state.backend_factory = lambda m, q: Object(Recording())
+        cid = self.new_chat(self.owner)
+        self.ask(self.owner, cid, "hello there", effort="deep")
+        self.ask(self.owner, cid, "and again", effort="quick")
+        self.assertEqual((sent[0]["temperature"], sent[0]["top_p"]), (1.0, 0.95))
+        self.assertEqual(sent[1]["top_p"], 0.8)
+
+
+def Object(backend):
+    backend.sampling = {"temperature": 0.7, "top_p": 0.8}
+    return backend
 
 
 class CompactRoute(AppBase):
