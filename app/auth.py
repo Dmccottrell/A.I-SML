@@ -46,7 +46,7 @@ def device_label(user_agent):
     ua = str(user_agent or "")
     os_ = next((n for p, n in (("iPhone", "iPhone"), ("iPad", "iPad"), ("Android", "Android"), ("Windows", "Windows"), ("Macintosh", "Mac"),
                                ("CrOS", "Chromebook"), ("Linux", "Linux")) if p in ua), "an unknown device")
-    br = next((n for p, n in (("Edg/", "Edge"), ("OPR/", "Opera"), ("Firefox/", "Firefox"), ("Chrome/", "Chrome"), ("Safari/", "Safari")) if p in ua), "A browser")
+    br = next((n for p, n in (("Emvryx-Android/", "The Emvryx app"), ("Edg/", "Edge"), ("OPR/", "Opera"), ("Firefox/", "Firefox"), ("Chrome/", "Chrome"), ("Safari/", "Safari")) if p in ua), "A browser")
     return f"{br} on {os_}"
 
 

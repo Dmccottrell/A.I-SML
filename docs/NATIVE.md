@@ -32,7 +32,7 @@ Decision (Oct 2026): both apps are built natively, like the big AI apps: **Kotli
 - **Connected-to indicator** (your PC or on this phone) and the "Emvryx is off" state as data, not just a page.
 
 ## Status
-Planned, not started. Start later, in this order: write `NATIVE_API.md` and the server pieces (cloud), then set up Android Studio and Claude Code on the Windows PC, then the Mac for iPhone. Having the Mac means both apps can be built, run and checked locally.
+**Android started (Oct 2026), in [`android/`](../android/README.md).** Steps 2 and 3 below work against today's server, using the same session cookie and endpoints as the website: sign-in, "Emvryx is off", chat with streamed replies, model and effort pickers, and history. Checked on the emulator against the demo server. `NATIVE_API.md` (`/api/v1/...` for apps) is still to write. The app is a thin client, so it can move onto that API when it exists. The iPhone app has not been started.
 
 ## Order of work
 1. (cloud) `NATIVE_API.md` and the server pieces above, with tests.
@@ -43,4 +43,4 @@ Planned, not started. Start later, in this order: write `NATIVE_API.md` and the 
 6. Later: on-phone model (llama.cpp) for both.
 
 ## Decisions still open
-Lowest Android version (suggest 10), package name (`app.emvryx.android`), Play Store listing or `.apk` only, violet or amber, ~~and whether you have or want a Mac~~ (decided: the owner has a Mac, so the iPhone app can be built and tested locally).
+~~Lowest Android version, package name, violet or amber~~ (used the suggestions: Android 10, `app.emvryx.android`, violet; easy to change in `android/app/build.gradle.kts` and `ui/theme/Theme.kt`), Play Store listing or `.apk` only, ~~and whether you have or want a Mac~~ (decided: the owner has a Mac, so the iPhone app can be built and tested locally).
