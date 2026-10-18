@@ -207,7 +207,7 @@ class Emvryx3Models(unittest.TestCase):
 
     def test_qwen35_models_use_qwens_own_settings(self):
         by_id = {m["id"]: m for m in M.load_manifest(os.path.join(ROOT, "models.json"))["models"]}
-        for mid in ("flare-3", "solstice-3"):
+        for mid in [m for m in by_id if str(by_id[m].get("base", "")).startswith("Qwen3.5")]:      # every version 3 model
             m = by_id[mid]
             self.assertEqual((m["sampling"]["temperature"], m["sampling"]["top_p"], m["sampling"]["top_k"], m["sampling"]["presence_penalty"]), (0.7, 0.8, 20, 1.5))
             self.assertEqual((m["sampling_think"]["temperature"], m["sampling_think"]["top_p"], m["sampling_think"]["top_k"]), (1.0, 0.95, 20))

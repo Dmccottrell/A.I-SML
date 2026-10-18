@@ -65,7 +65,7 @@ class SamplingSettings(unittest.TestCase):
     """Small models turn to nonsense when hot, so every model keeps Auto temperature inside its own range."""
 
     def models(self):
-        return json.load(open("models.json", encoding="utf-8"))["models"]
+        return M.load_manifest("models.json", include_archived=True)["models"]     # as the app sees them (version 3 models get the Qwen3.5 settings there)
 
     def test_every_model_has_its_own_sampling_and_range(self):
         for entry in self.models():
@@ -110,7 +110,7 @@ class GenerationOrder(unittest.TestCase):
 class VryxCodeModels(unittest.TestCase):
     def test_only_equinox_and_above_are_offered_vryxcode(self):
         got = {e["id"]: bool(e.get("vryxcode")) for e in json.load(open("models.json", encoding="utf-8"))["models"]}
-        self.assertEqual({k for k, v in got.items() if v}, {"equinox-2", "solstice-2", "solstice-3", "apogee-2"})
+        self.assertEqual({k for k, v in got.items() if v}, {"equinox-2", "equinox-3", "solstice-2", "solstice-3", "apogee-2"})
         for small in ("ember-2", "flare-2", "flare-2.5", "flare-3"):
             self.assertFalse(got[small])
 

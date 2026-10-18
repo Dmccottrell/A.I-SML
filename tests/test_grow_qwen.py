@@ -114,6 +114,25 @@ class Grow(unittest.TestCase):
         with torch.no_grad():                                                                            # LoRA starts at zero: still identical
             self.assertEqual((self.base(input_ids=self.x).logits - model(input_ids=self.x).logits).abs().max().item(), 0.0)
 
+    def test_grow_rank_fits_the_card(self):
+        import finetune_open as FO
+        self.assertEqual(FO.choose_grow_rank(24.0), 64)          # RTX 3090 / 4090: 256 ran out of memory
+        self.assertEqual(FO.choose_grow_rank(80.0), 256)
+        self.assertIn(FO.fast_layer_kernels(), (True, False))
+
+    def test_new_layers_are_kept_out_of_4_bits_by_old_and_new_transformers(self):
+        import finetune_open as FO
+        from transformers.quantizers.quantizers_utils import should_convert_module
+        skip = FO.grown_skip_modules(self.record)
+        j, old_j = self.record["new_layers"][0], 0
+        new_name, old_name = f"model.language_model.layers.{j}.mlp.down_proj", f"model.language_model.layers.{old_j}.mlp.down_proj"
+        self.assertFalse(should_convert_module(new_name, skip))                        # newer transformers: patterns
+        self.assertTrue(should_convert_module(old_name, skip))
+        old_style = lambda name: not any((k + "." in name) or k == name or k in name for k in skip)    # older transformers: plain text in the name
+        self.assertFalse(old_style(new_name))
+        self.assertTrue(old_style(old_name))
+        self.assertTrue(old_style(f"model.language_model.layers.{j}0.mlp.down_proj") or j * 10 in self.record["new_layers"])   # layer 3 is not layer 30
+
     def test_new_layers_in_16_bits_next_to_32_bit_layers_still_run(self):
         """The rented-card failure: after prepare_model_for_kbit_training the model is 32-bit except the new layers, and setting the new layers
         wholesale to bfloat16 stopped with "expected mat1 and mat2 to have the same dtype". match_new_layer_dtypes keeps them running."""
@@ -131,6 +150,10 @@ class Grow(unittest.TestCase):
         mods = dict(fixed.named_modules())
         self.assertEqual(mods[f"model.language_model.layers.{j}.mlp.down_proj"].weight.dtype, torch.bfloat16)   # half the memory for the big matrices
         self.assertEqual(mods["model.language_model.layers.0.mlp.down_proj"].weight.dtype, torch.float32)       # the rest untouched
+        lin = mods[f"model.language_model.layers.{j}.linear_attn.in_proj_qkv"]
+        self.assertEqual(lin(torch.randn(1, 3, lin.in_features)).dtype, torch.float32)        # hands on the type that came in, like a 4-bit layer
+        conv = mods[f"model.language_model.layers.{j}.linear_attn.conv1d"]
+        self.assertEqual(conv.weight.dtype, torch.float32)                                     # the parts after it keep the preparation's type
         model = get_peft_model(fixed, FO.grown_lora_config(LoraConfig, self.record, rank=4, grow_rank=16, full=False))
         model.train()
         loss = model(input_ids=self.x, labels=self.x).loss                      # a training step runs, forward and backward

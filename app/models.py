@@ -28,6 +28,9 @@ WHERE = ("device", "online")
 STATUS = ("stable", "beta", "planned", "off", "preview")
 REQUIRED = ("id", "name", "version", "where", "file", "size_mb", "min_ram_gb", "context", "status")
 MANIFEST_PATH = "models.json"
+# Qwen's recommended settings for Qwen3.5, used by every version 3 model unless its models.json entry says otherwise:
+QWEN35_SAMPLING = {"temperature": 0.7, "top_k": 20, "top_p": 0.8, "min_p": 0.0, "presence_penalty": 1.5, "repeat_penalty": 1.0, "repeat_last_n": 64}
+QWEN35_SAMPLING_THINK = {"temperature": 1.0, "top_k": 20, "top_p": 0.95, "min_p": 0.0, "presence_penalty": 1.5, "repeat_penalty": 1.0}       # Deep, thinking
 
 
 def load_manifest(path=MANIFEST_PATH, include_archived=False):
@@ -38,9 +41,12 @@ def load_manifest(path=MANIFEST_PATH, include_archived=False):
     problems = check(manifest)
     if problems:
         raise ValueError("models.json: " + "; ".join(problems))
-    for m in manifest["models"]:                    # an Emvryx 3 model (Qwen3.5) was trained with an empty thinking block after every question: the app must add it too
+    for m in manifest["models"]:                    # every Emvryx 3 model (Qwen3.5 base) runs as Qwen3.5 is meant to run
         if m.get("open") and str(m.get("base", "")).startswith("Qwen3.5"):
-            m.setdefault("think", "empty")
+            m.setdefault("think", "empty")          # it was trained with an empty thinking block after every question: the app must add it too
+            m.setdefault("sampling", dict(QWEN35_SAMPLING))
+            m.setdefault("sampling_think", dict(QWEN35_SAMPLING_THINK))
+            m.setdefault("temperature_bounds", [0.2, 1.0])
     if not include_archived:
         for m in manifest["models"]:
             if m.get("archived"):

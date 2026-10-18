@@ -63,24 +63,57 @@ def grown_params(model, growth):
     return [(n, p) for n, p in model.named_parameters() if rx.search(n) and "lora_" not in n]
 
 
+def choose_grow_rank(card_gb):
+    """The new layers' LoRA rank for the card: 256 needs about 6 GB more (400 million trainable numbers and their optimizer state), which a 24 GB
+    card does not have next to a 12B model (Apogee 3 ran out of memory on the 3090 at 256)."""
+    return 256 if card_gb >= 40 else 64
+
+
+def fast_layer_kernels():
+    """True when flash-linear-attention (Qwen3.5's fast-layer kernels) is installed."""
+    import importlib.util
+    return importlib.util.find_spec("fla") is not None
+
+
+def grown_skip_modules(growth):
+    """The modules 4-bit loading must leave alone: lm_head and the new layers. Each new layer is given twice, because transformers versions read the
+    list differently: newer ones as patterns (".*\\.layers\\.13\\."), older ones as plain text found in the name ("language_model.layers.13.").
+    With only the pattern, an older transformers squashed the new layers into 4 bits too."""
+    out = ["lm_head"]
+    for j in growth["new_layers"]:
+        out += [rf".*\.layers\.{j}\.", f"language_model.layers.{j}."]
+    return out
+
+
 def match_new_layer_dtypes(model, growth, dtype, torch):
     """Make the new layers of a grown model behave like the 4-bit old ones after prepare_model_for_kbit_training: their weight matrices (Linear) at
     `dtype` (16 bits: half the memory), everything else (norms, the fast layers' conv1d, A_log, dt_bias) left as the preparation set it, and each Linear
-    turning what comes in into its own type first, as a 4-bit layer does. Without that the first new layer stops with "expected mat1 and mat2 to have
+    turning what comes in into its own type and its result back into the type that came in, exactly as a 4-bit layer does (a 16-bit result handed to
+    the 32-bit conv1d after it stopped the second run on the 3090). Without that the first new layer stops with "expected mat1 and mat2 to have
     the same dtype, but got: float != BFloat16". Returns how many Linear layers were set."""
     import re
     rx = re.compile(grown_layer_re(growth))
 
-    def to_weight_type(mod, args):
+    def to_weight_type(mod, args):                    # in: what comes in becomes the weight's type (remember what it was) ...
+        first = next((a for a in args if torch.is_tensor(a) and a.is_floating_point()), None)
+        mod._emvryx_in_dtype = first.dtype if first is not None else None
         return tuple(a.to(mod.weight.dtype) if torch.is_tensor(a) and a.is_floating_point() else a for a in args)
+
+    def back_to_input_type(mod, args, out):          # ... out: the result goes back to that type, exactly as a 4-bit layer hands it on
+        dt = getattr(mod, "_emvryx_in_dtype", None)
+        return out.to(dt) if dt is not None and torch.is_tensor(out) and out.dtype != dt else out
 
     n = 0
     for name, mod in model.named_modules():
         if isinstance(mod, torch.nn.Linear) and rx.search(name + ".") and "lora_" not in name:
+            if "4bit" in type(mod).__name__ or not mod.weight.is_floating_point():
+                raise SystemExit(f"{name} was loaded in 4 bits, but the new layers must stay 16-bit (their zeroed outputs do not survive 4-bit rounding). "
+                                 "This transformers did not take the skip list: update it (pip install -U transformers) and run again.")
             mod.weight.data = mod.weight.data.to(dtype)
             if mod.bias is not None:
                 mod.bias.data = mod.bias.data.to(dtype)
             mod.register_forward_pre_hook(to_weight_type)
+            mod.register_forward_hook(back_to_input_type)
             n += 1
     return n
 
@@ -307,7 +340,8 @@ def main(argv=None):
     p.add_argument("--merge", action="store_true", help="write the merged Hugging Face folder from the saved adapter and exit")
     p.add_argument("--seed", type=int, default=1337)
     p.add_argument("--no_grad_checkpoint", action="store_true")
-    p.add_argument("--grow_rank", type=int, default=256, help="a grown model (grow_qwen.py): LoRA rank of the new layers")
+    p.add_argument("--grow_rank", type=int, default=None, help="a grown model (grow_qwen.py): LoRA rank of the new layers "
+                                                                 "(default: 256 on a 40 GB+ card, 64 on a smaller one such as a 24 GB 3090)")
     p.add_argument("--grow_full", action="store_true", help="a grown model: train the new layers fully (8-bit Adam; needs about 40 GB of graphics memory)")
     a = p.parse_args(argv)
     import open_models
@@ -332,11 +366,15 @@ def main(argv=None):
     growth = grow_qwen.read_growth(a.model)
     if a.grow_full and not growth:
         sys.exit("--grow_full is only for a grown model (a folder made by training/grow_qwen.py)")
+    import torch
+    card_gb = torch.cuda.get_device_properties(0).total_memory / 1e9 if torch.cuda.is_available() else 0.0
     if growth:
+        a.grow_rank = a.grow_rank or choose_grow_rank(card_gb)
         print(f"grown model: {growth['base_layers']} -> {growth['layers']} layers; new layers {growth['new_layers']} "
               + ("trained fully" if a.grow_full else f"at LoRA rank {a.grow_rank}") + f", the rest at rank {a.rank}")
-
-    import torch
+    if card_gb and not fast_layer_kernels():
+        print("note: flash-linear-attention is not installed, so Qwen3.5's fast layers use the slow reference code, which also needs far more "
+              "card memory. Install it first: pip install -U flash-linear-attention")
     if a.merge:
         if not os.path.isdir(os.path.join(a.out, "adapter")):
             sys.exit(f"no adapter in {a.out}/adapter - train first (python training/finetune_open.py)")
@@ -387,7 +425,7 @@ def main(argv=None):
             quantization_config=BitsAndBytesConfig(load_in_4bit=True, bnb_4bit_quant_type="nf4", bnb_4bit_use_double_quant=True,
                                                    bnb_4bit_compute_dtype=dtype,
                                                    # the new layers of a grown model stay in 16 bits: their zeroed outputs would not survive 4-bit rounding, and --grow_full trains them
-                                                   **({"llm_int8_skip_modules": ["lm_head"] + [rf".*\.layers\.{j}\." for j in growth["new_layers"]]} if growth else {})))
+                                                   **({"llm_int8_skip_modules": grown_skip_modules(growth)} if growth else {})))
         model = prepare_model_for_kbit_training(model, use_gradient_checkpointing=not a.no_grad_checkpoint)
         if growth:                                  # prepare_model_for_kbit_training turns 16-bit weights into 32-bit: the new layers' matrices back to 16 bits (half the memory)
             print(f"new layers: {match_new_layer_dtypes(model, growth, dtype, torch)} weight matrices at {dtype}, taking any input type")
