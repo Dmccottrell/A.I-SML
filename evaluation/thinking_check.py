@@ -25,7 +25,7 @@ def run(server, n, seed, label, ask=RP.ask, modes=(True, False)):
     problems = RP.make_problems(n, seed)
     out = {"label": label, "n": n, "seed": seed, "modes": {}}
     for thinking in modes:
-        right, toks, errors, t0 = 0, 0, 0, time.time()
+        right, toks, errors, t0, wrong = 0, 0, 0, time.time(), []
         by_kind = {}
         for p in problems:
             try:
@@ -35,6 +35,9 @@ def run(server, n, seed, label, ask=RP.ask, modes=(True, False)):
                 continue
             ok = RP.check_answer(p, r["answer"])
             right += ok
+            if not ok and len(wrong) < 12:                      # what it got wrong, to tell bad thinking from a scoring slip ("rounded to 2 places")
+                wrong.append({"kind": p["kind"], "question": p["question"][:300], "expected": p["answer"], "got": RP.last_number(r["answer"]),
+                              "answer_end": r["answer"][-300:], "thinking_tokens": r["tokens"]})
             toks += r["tokens"]
             k = by_kind.setdefault(p["kind"], [0, 0])
             k[0] += ok
@@ -42,7 +45,7 @@ def run(server, n, seed, label, ask=RP.ask, modes=(True, False)):
         done = n - errors
         out["modes"]["thinking" if thinking else "direct"] = {
             "accuracy": round(100 * right / max(1, done), 1), "answered": done, "errors": errors, "avg_tokens": round(toks / max(1, done)),
-            "seconds": round(time.time() - t0), "by_kind": {k: round(100 * v[0] / v[1], 1) for k, v in by_kind.items()}}
+            "seconds": round(time.time() - t0), "by_kind": {k: round(100 * v[0] / v[1], 1) for k, v in by_kind.items()}, "wrong": wrong}
     return out
 
 
@@ -88,6 +91,9 @@ def main(argv=None):
         json.dump(res, f, indent=2)
     for mode, m in res["modes"].items():
         print(f"{mode}: {m['accuracy']}% of {m['answered']} ({m['avg_tokens']} tokens each, {m['seconds']} s) {m['by_kind']}")
+    for mode, m in res["modes"].items():
+        for w in m.get("wrong", [])[:4]:
+            print(f"  {mode} wrong ({w['kind']}): expected {w['expected']}, read {w['got']} from: ...{' '.join(w['answer_end'].split())[-140:]}")
     print("saved", path)
     return 0
 
