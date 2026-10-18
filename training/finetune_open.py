@@ -66,13 +66,20 @@ def grown_params(model, growth):
 def match_new_layer_dtypes(model, growth, dtype, torch):
     """Make the new layers of a grown model behave like the 4-bit old ones after prepare_model_for_kbit_training: their weight matrices (Linear) at
     `dtype` (16 bits: half the memory), everything else (norms, the fast layers' conv1d, A_log, dt_bias) left as the preparation set it, and each Linear
-    turning what comes in into its own type first, as a 4-bit layer does. Without that the first new layer stops with "expected mat1 and mat2 to have
+    turning what comes in into its own type and its result back into the type that came in, exactly as a 4-bit layer does (a 16-bit result handed to
+    the 32-bit conv1d after it stopped the second run on the 3090). Without that the first new layer stops with "expected mat1 and mat2 to have
     the same dtype, but got: float != BFloat16". Returns how many Linear layers were set."""
     import re
     rx = re.compile(grown_layer_re(growth))
 
-    def to_weight_type(mod, args):
+    def to_weight_type(mod, args):                    # in: what comes in becomes the weight's type (remember what it was) ...
+        first = next((a for a in args if torch.is_tensor(a) and a.is_floating_point()), None)
+        mod._emvryx_in_dtype = first.dtype if first is not None else None
         return tuple(a.to(mod.weight.dtype) if torch.is_tensor(a) and a.is_floating_point() else a for a in args)
+
+    def back_to_input_type(mod, args, out):          # ... out: the result goes back to that type, exactly as a 4-bit layer hands it on
+        dt = getattr(mod, "_emvryx_in_dtype", None)
+        return out.to(dt) if dt is not None and torch.is_tensor(out) and out.dtype != dt else out
 
     n = 0
     for name, mod in model.named_modules():
@@ -81,6 +88,7 @@ def match_new_layer_dtypes(model, growth, dtype, torch):
             if mod.bias is not None:
                 mod.bias.data = mod.bias.data.to(dtype)
             mod.register_forward_pre_hook(to_weight_type)
+            mod.register_forward_hook(back_to_input_type)
             n += 1
     return n
 

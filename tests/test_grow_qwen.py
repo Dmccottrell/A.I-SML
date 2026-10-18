@@ -131,6 +131,10 @@ class Grow(unittest.TestCase):
         mods = dict(fixed.named_modules())
         self.assertEqual(mods[f"model.language_model.layers.{j}.mlp.down_proj"].weight.dtype, torch.bfloat16)   # half the memory for the big matrices
         self.assertEqual(mods["model.language_model.layers.0.mlp.down_proj"].weight.dtype, torch.float32)       # the rest untouched
+        lin = mods[f"model.language_model.layers.{j}.linear_attn.in_proj_qkv"]
+        self.assertEqual(lin(torch.randn(1, 3, lin.in_features)).dtype, torch.float32)        # hands on the type that came in, like a 4-bit layer
+        conv = mods[f"model.language_model.layers.{j}.linear_attn.conv1d"]
+        self.assertEqual(conv.weight.dtype, torch.float32)                                     # the parts after it keep the preparation's type
         model = get_peft_model(fixed, FO.grown_lora_config(LoraConfig, self.record, rank=4, grow_rank=16, full=False))
         model.train()
         loss = model(input_ids=self.x, labels=self.x).loss                      # a training step runs, forward and backward
