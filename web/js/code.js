@@ -2,6 +2,9 @@
 // ---------------------------------------------------------------- VryxCode
 const C = {info: null, sid: null, seen: 0, timer: null, project: null, file: null, model: null, auto: false, last: null, files: [], view: 'home', filter: 'all', env: 'local', saved: false, checkpoints: [], sessions: [], pvAuto: false, mode: 'ask', prevMode: 'ask', todo: [], events: [], todoOpen: true};
 try { C.env = localStorage.getItem('emvryx_code_env') || 'local'; } catch (e) {}
+C.effort = 'balanced'; try { C.effort = localStorage.getItem('emvryx_code_effort') || 'balanced'; } catch (e) {}
+const oneModel = () => !!(C.info && C.info.effort);          // feature flag vryxcode_effort: no model picker, VryxCode picks the model and you pick the effort
+const effortName = () => { const l = oneModel() && C.info.effort.levels.find((x) => x.id === C.effort); return l ? l.name : 'Balanced'; };
 const cOn = () => !$('code').hidden;
 const cModel = () => (C.info ? C.info.models.find((m) => m.id === C.model) : null);
 async function openCode() {
@@ -9,6 +12,7 @@ async function openCode() {
   const r = await api('/api/code'); C.info = await r.json(); showUsage(C.info.usage);
   const usable = C.info.models.filter((m) => m.state === 'ready');
   if (!cModel() || cModel().state !== 'ready') C.model = (usable.find((m) => m.id === S.model) || usable[0] || C.info.models[0] || {}).id;
+  if (oneModel()) C.model = C.info.effort.auto || C.model;
   C.project = C.project || C.info.running && C.info.project || C.info.projects[0] || 'my-project';
   renderCodeBar(); showHome(); vxRenderTemplates(); vxNotifyInit();
 }
@@ -71,8 +75,13 @@ $('codeEnv').onclick = (e) => {
 function renderCodeBar() {
   $('codeProj').textContent = C.project + ' ▾';
   const m = cModel();
-  $('codeModelBtn').replaceChildren(m ? (m.outside ? m.name + ' · outside' : m.label) : 'No model', el('span', {style: 'color:var(--muted)'}, '▾'));
-  $('vxModel').replaceChildren(el('span', {class: 'k'}, 'Model'), el('b', {}, m ? (m.outside ? m.name + ' · outside' : m.label) : 'none ready'), el('span', {class: 'c'}, '▾'));
+  if (oneModel()) {
+    $('codeModelBtn').replaceChildren('Effort: ' + effortName(), el('span', {style: 'color:var(--muted)'}, '▾')); $('codeModelBtn').setAttribute('aria-label', 'Effort: ' + effortName());
+    $('vxModel').replaceChildren(el('span', {class: 'k'}, 'Effort'), el('b', {}, effortName()), el('span', {class: 'c'}, '▾')); $('vxModel').setAttribute('aria-label', 'Effort: ' + effortName());
+  } else {
+    $('codeModelBtn').replaceChildren(m ? (m.outside ? m.name + ' · outside' : m.label) : 'No model', el('span', {style: 'color:var(--muted)'}, '▾'));
+    $('vxModel').replaceChildren(el('span', {class: 'k'}, 'Model'), el('b', {}, m ? (m.outside ? m.name + ' · outside' : m.label) : 'none ready'), el('span', {class: 'c'}, '▾'));
+  }
   const env = C.info && C.info.environments.find((x) => x.id === C.env); $('codeEnv').replaceChildren(icon(ENV_ICON(C.env)), el('span', {class: 'lab'}, (env ? env.name : ENV_NAME[C.env] || 'This computer'))); $('codeEnv').disabled = !!(C.sid && !C.saved);
   C.auto = C.mode === 'auto'; $('codeAuto').replaceChildren(MODES[C.mode].short); $('codeAuto').setAttribute('aria-label', 'How VryxCode works: ' + MODES[C.mode].name);
   $('codeFilesBtn').replaceChildren(icon('folder'), el('span', {class: 'lab'}, 'Files' + (C.files.length ? ' (' + C.files.length + ')' : '')), C.files.length ? el('span', {class: 'num'}, String(C.files.length)) : '');
@@ -127,6 +136,11 @@ async function deleteProject() {
 }
 function modelMenu(e, m) {
   e.stopPropagation(); if (!m.hidden) { m.hidden = true; return; } closeCodeMenus();
+  if (oneModel()) {
+    m.replaceChildren(el('div', {class: 'head'}, 'EFFORT'), ...C.info.effort.levels.map((x) => el('button', {class: 'opt' + (x.id === C.effort ? ' sel' : ''),
+      onclick: () => { C.effort = x.id; try { localStorage.setItem('emvryx_code_effort', x.id); } catch (er) {} closeCodeMenus(); renderCodeBar(); }}, el('span', {class: 'grow'}, el('b', {}, x.name), el('small', {}, x.note)))));
+    m.hidden = false; return;
+  }
   m.replaceChildren(el('div', {class: 'head'}, 'WHICH MODEL SHOULD CODE?'), ...C.info.models.map((x) => el('button', {class: 'opt' + (x.id === C.model ? ' sel' : ''), disabled: x.state !== 'ready',
     onclick: () => { C.model = x.id; closeCodeMenus(); renderCodeBar(); }}, el('span', {class: 'grow'}, el('b', {}, x.label), el('small', {}, x.state === 'ready' ? (x.note || 'Ready') : x.badge)))));
   m.hidden = false;
@@ -187,7 +201,7 @@ function renderRealChanges(pane, list) {
   const kind = {new: 'New', changed: 'Changed', removed: 'Removed'};
   const others = ((C.info && C.info.models) || []).filter((m) => m.state === 'ready' && m.id !== C.model);
   pane.replaceChildren(el('div', {class: 'hint'}, list.length + (list.length === 1 ? ' file' : ' files') + ' changed since this session began. Keep what you like and undo the rest, one file at a time.'),
-    others.length && C.sid && !C.saved ? el('div', {class: 'second'}, el('span', {}, 'Second opinion:'), ...others.map((m) => el('button', {class: 'chip', title: 'Another model reads these changes and lists problems. It cannot change anything.', onclick: () => secondOpinion(m)}, m.label || m.name || m.id))) : '',
+    others.length && C.sid && !C.saved && !oneModel() ? el('div', {class: 'second'}, el('span', {}, 'Second opinion:'), ...others.map((m) => el('button', {class: 'chip', title: 'Another model reads these changes and lists problems. It cannot change anything.', onclick: () => secondOpinion(m)}, m.label || m.name || m.id))) : '',
     ...list.map((f) => el('details', {class: 'chg'}, el('summary', {}, el('span', {class: 'nm'}, f.path), el('span', {class: 'k ' + f.status}, kind[f.status]), f.add ? el('span', {class: 'a'}, '+' + f.add) : '', f.del ? el('span', {class: 'd'}, '\u2212' + f.del) : ''),
       el('pre', {}, ...f.diff.split('\n').filter((l) => !/^(---|\+\+\+)/.test(l)).map((l) => el('span', {class: l.startsWith('+') ? 'add' : l.startsWith('-') ? 'del' : ''}, l))),
       el('div', {class: 'acts'},

@@ -66,6 +66,24 @@ BUILD_NOTE = (" BUILDING SOMETHING BIGGER (several files or steps): work like a 
               "5) Follow every name in the request exactly (files, functions, classes, commands, output text): other code will rely on them. "
               "6) At the end run all the tests once more, then finish.")
 BUILD_STEPS = 150                  # steps per message in the long-build loop (a model's "vryxcode_steps" in models.json can set its own)
+# VryxCode's effort (feature flag vryxcode_effort: no model picker, only this): how many steps a message may take, and whether the model thinks first.
+EFFORTS = {"quick": {"steps": 0.5, "think": False, "note": "Small fixes and questions. Fewest steps, fastest."},
+           "balanced": {"steps": 1.0, "think": False, "note": "Most tasks. The usual number of steps."},
+           "deep": {"steps": 1.5, "think": True, "note": "Bigger builds and hard bugs. More steps, and it thinks before each one."}}
+
+
+def effort_steps(turns, effort):
+    """The step budget for a message at this effort (Quick about half, Deep half again more), between 6 and 400."""
+    return max(6, min(400, round(int(turns) * EFFORTS.get(effort, EFFORTS["balanced"])["steps"])))
+
+
+def pick_auto(models):
+    """The model VryxCode uses by itself (no picker): a model made for long builds (VryxCode 3) first, then Apogee 3; until one of them is ready,
+    the newest, biggest ready model (generation first, so Solstice 3 comes before Apogee 2). `models` is code_models(); outside models are never picked."""
+    ready = [m for m in models if not m.get("outside") and m.get("state") == "ready"]
+    family = lambda m: next((i for i, f in enumerate(("apogee", "solstice", "equinox")) if m["id"].startswith(f)), 9)
+    try_float = lambda v: float(v) if isinstance(v, (int, float)) or str(v).replace(".", "", 1).isdigit() else 0.0
+    return min(ready, key=lambda m: (not m.get("build"), m["id"] != "apogee-3", -try_float(m.get("version")), family(m)))["id"] if ready else None
 SAFE_RUNS = ("python -m unittest", "python3 -m unittest", "python -m pytest", "pytest")      # tests may run without asking
 ELIGIBLE_NOTE = {"equinox-2": "Equinox 2 is a small model: give it small tasks (one function, one file)."}
 

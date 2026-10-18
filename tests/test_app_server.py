@@ -98,6 +98,7 @@ class Base(unittest.TestCase):
         self.port = self.srv.server_address[1]
         threading.Thread(target=self.srv.serve_forever, daemon=True).start()
         self.state.live_net = OfflineNet()                       # tests never reach the real internet (a live sports score would change what the question looks up)
+        self.state.flags.data["audiences"]["vryxcode_effort"] = "off"   # VryxCode's model picker, as the tests written for it expect (tests/test_vryxcode_effort.py turns it on)
         self.owner = Client(self.port, self.state.owner_key())
         self.sam_key = self.state.add_user("sam", "free")
         self.sam = Client(self.port, self.sam_key)

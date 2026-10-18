@@ -513,6 +513,13 @@ class Session:
         self.build, self.max_turns = bool(build_steps), int(build_steps or default_turns)
         self.emit("model", model=model_id, previous=old)
 
+    def set_effort(self, generate, turns):
+        """Another effort for the next message (feature flag vryxcode_effort): its step budget and its model call (Deep thinks before each step)."""
+        with self.cv:
+            if self.state in ("starting", "working", "asking"):
+                raise CodeError("It is still working.", "Wait for it to finish, or press Stop, then change the effort.")
+        self.generate, self.max_turns = generate, int(turns)
+
     def catch_up(self, text):
         """For a session brought back from the history (the model's own memory of it is gone): what happened so far, then the new message."""
         lines = []
@@ -879,7 +886,7 @@ class CodeManager:
                                           pids=sb.get("pids", 128), runtime=sb.get("runtime"))
 
     def start(self, user, project, task, model_id, generate, auto_edits=False, context_tokens=None, meter=None, outside=False, tools=None, identity=None, env="local", plan=False, owner=False, queue=False, model_text=None,
-              build_steps=None):
+              build_steps=None, turns=None):
         task = str(task or "").strip()
         if not task:
             raise CodeError("Describe what to build or fix.")
@@ -917,7 +924,7 @@ class CodeManager:
             self.sessions[s.id], self.by_user[user] = s, s.id
             s._model_text = model_text                          # what the model gets instead of the line the person sees (a second opinion's diff)
             s.build = bool(build_steps)                         # a model made for long builds (VryxCode 3): the long-build loop and its own step budget
-            turns = int(build_steps or self.max_turns)
+            turns = int(build_steps or turns or self.max_turns)      # turns: the step budget of the effort picked (feature flag vryxcode_effort)
             s.on_idle = self._session_idle
             if busy:                                           # one model on one card: sessions wait their turn, so they never work on the same files at once
                 s.state, s.run_args = "queued", (generate, turns, context_tokens)
@@ -927,7 +934,7 @@ class CodeManager:
         threading.Thread(target=s.run, args=(generate, turns, context_tokens), daemon=True).start()
         return s, note
 
-    def revive(self, user, sid, model_id, generate, context_tokens, meter, tools=None, identity=None, owner=False, auto_edits=False, build_steps=None):
+    def revive(self, user, sid, model_id, generate, context_tokens, meter, tools=None, identity=None, owner=False, auto_edits=False, build_steps=None, turns=None):
         """Bring a session from the history back to life, so a new message carries on in it (same id, same feed, same Rewind points)."""
         with self.lock:
             if self.running(user):
@@ -946,7 +953,7 @@ class CodeManager:
             s.checkpoints = list(meta.get("checkpoints") or [])
             s.started = meta.get("started") or s.started
             s.turns_run = max([c.get("turn", 0) for c in s.checkpoints] + [sum(1 for e in s.events if e["kind"] in ("start", "user"))])
-            s.generate, s.max_turns, s.context_tokens = generate, int(build_steps or self.max_turns), context_tokens
+            s.generate, s.max_turns, s.context_tokens = generate, int(build_steps or turns or self.max_turns), context_tokens
             s.build = bool(build_steps)
             s.state = "done"
             s.on_idle = self._session_idle
