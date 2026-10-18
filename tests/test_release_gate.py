@@ -197,6 +197,25 @@ class RecordUpdateSaysWhatChanged(unittest.TestCase):
         self.assertEqual(mp.changes(m3), "Memory (context window): 128K \u2192 256K.")
 
 
+class Emvryx3Models(unittest.TestCase):
+    def test_qwen35_models_get_the_empty_thinking_block_they_were_trained_with(self):
+        manifest = M.load_manifest(os.path.join(ROOT, "models.json"), include_archived=True)
+        for m in manifest["models"]:
+            if str(m.get("base", "")).startswith("Qwen3.5"):
+                self.assertEqual(m.get("think"), "empty", m["id"])          # without it the prompt is not what they learned, and Deep never thinks
+        self.assertEqual(M.load_manifest(os.path.join(ROOT, "models.json"))["models"][0].get("think"), None)   # the older models are untouched
+
+    def test_no_blank_gap_at_the_top_of_a_reply(self):
+        for pieces in (["<think>", "\n\n</think>", "\n\n", "Hello"], ["\n\nHello"], ["<thi", "nk>x</th", "ink>", "\n", "\nHello"]):
+            self.assertEqual("".join(E.strip_think(iter(pieces))), "Hello", pieces)
+        self.assertEqual("".join(E.strip_think(iter(["Hi", "\n\nthere"]))), "Hi\n\nthere")   # blank lines inside an answer stay
+
+    def test_memory_numbers_match_the_long_memory_tests(self):
+        by_id = {m["id"]: m for m in M.load_manifest(os.path.join(ROOT, "models.json"))["models"]}
+        self.assertGreaterEqual(by_id["flare-3"]["kv_kb_per_token"], 16)       # 4.2 GB at 128K -> 5.3 GB at 256K (8-bit)
+        self.assertGreaterEqual(by_id["solstice-3"]["kv_kb_per_token"], 28)    # 9.7 GB at 128K -> 11.6 GB at 256K (8-bit)
+
+
 class CasualTyping(unittest.TestCase):
     def test_slang_is_noticed_and_lessons_use_it(self):
         import random

@@ -43,7 +43,7 @@ async function delChat(c) {
 const bullets = (t) => String(t || '').replace(/^(\s*)[-*] (?=\S)/gm, '$1\u2022 ');      // "- item" lines show as real bullet points (Copy keeps the plain text)
 function richText(t) {   // **bold** and "# heading" lines show as bold text instead of stars and hashes (Copy keeps the plain text)
   const f = document.createDocumentFragment();
-  bullets(t).replace(/^#{1,4} +(.+)$/gm, '**$1**').split(/(\*\*[^*\n]+\*\*)/g).forEach((p) => { if (p) f.append(/^\*\*[^*\n]+\*\*$/.test(p) ? el('b', {}, p.slice(2, -2)) : p); });
+  bullets(String(t || '').replace(/^\s+/, '')).replace(/^#{1,4} +(.+)$/gm, '**$1**').split(/(\*\*[^*\n]+\*\*)/g).forEach((p) => { if (p) f.append(/^\*\*[^*\n]+\*\*$/.test(p) ? el('b', {}, p.slice(2, -2)) : p); });
   return f;
 }
 const ONLY_SENT = ['(sent a picture)', '(sent a file)'];   // saved for a picture or file sent without words (documents.PICTURE_ONLY_TEXT, FILE_ONLY_TEXT): only it is shown
