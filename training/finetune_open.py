@@ -63,6 +63,16 @@ def grown_params(model, growth):
     return [(n, p) for n, p in model.named_parameters() if rx.search(n) and "lora_" not in n]
 
 
+def grown_skip_modules(growth):
+    """The modules 4-bit loading must leave alone: lm_head and the new layers. Each new layer is given twice, because transformers versions read the
+    list differently: newer ones as patterns (".*\\.layers\\.13\\."), older ones as plain text found in the name ("language_model.layers.13.").
+    With only the pattern, an older transformers squashed the new layers into 4 bits too."""
+    out = ["lm_head"]
+    for j in growth["new_layers"]:
+        out += [rf".*\.layers\.{j}\.", f"language_model.layers.{j}."]
+    return out
+
+
 def match_new_layer_dtypes(model, growth, dtype, torch):
     """Make the new layers of a grown model behave like the 4-bit old ones after prepare_model_for_kbit_training: their weight matrices (Linear) at
     `dtype` (16 bits: half the memory), everything else (norms, the fast layers' conv1d, A_log, dt_bias) left as the preparation set it, and each Linear
@@ -84,6 +94,9 @@ def match_new_layer_dtypes(model, growth, dtype, torch):
     n = 0
     for name, mod in model.named_modules():
         if isinstance(mod, torch.nn.Linear) and rx.search(name + ".") and "lora_" not in name:
+            if "4bit" in type(mod).__name__ or not mod.weight.is_floating_point():
+                raise SystemExit(f"{name} was loaded in 4 bits, but the new layers must stay 16-bit (their zeroed outputs do not survive 4-bit rounding). "
+                                 "This transformers did not take the skip list: update it (pip install -U transformers) and run again.")
             mod.weight.data = mod.weight.data.to(dtype)
             if mod.bias is not None:
                 mod.bias.data = mod.bias.data.to(dtype)
@@ -395,7 +408,7 @@ def main(argv=None):
             quantization_config=BitsAndBytesConfig(load_in_4bit=True, bnb_4bit_quant_type="nf4", bnb_4bit_use_double_quant=True,
                                                    bnb_4bit_compute_dtype=dtype,
                                                    # the new layers of a grown model stay in 16 bits: their zeroed outputs would not survive 4-bit rounding, and --grow_full trains them
-                                                   **({"llm_int8_skip_modules": ["lm_head"] + [rf".*\.layers\.{j}\." for j in growth["new_layers"]]} if growth else {})))
+                                                   **({"llm_int8_skip_modules": grown_skip_modules(growth)} if growth else {})))
         model = prepare_model_for_kbit_training(model, use_gradient_checkpointing=not a.no_grad_checkpoint)
         if growth:                                  # prepare_model_for_kbit_training turns 16-bit weights into 32-bit: the new layers' matrices back to 16 bits (half the memory)
             print(f"new layers: {match_new_layer_dtypes(model, growth, dtype, torch)} weight matrices at {dtype}, taking any input type")

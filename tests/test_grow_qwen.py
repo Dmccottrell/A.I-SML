@@ -114,6 +114,19 @@ class Grow(unittest.TestCase):
         with torch.no_grad():                                                                            # LoRA starts at zero: still identical
             self.assertEqual((self.base(input_ids=self.x).logits - model(input_ids=self.x).logits).abs().max().item(), 0.0)
 
+    def test_new_layers_are_kept_out_of_4_bits_by_old_and_new_transformers(self):
+        import finetune_open as FO
+        from transformers.quantizers.quantizers_utils import should_convert_module
+        skip = FO.grown_skip_modules(self.record)
+        j, old_j = self.record["new_layers"][0], 0
+        new_name, old_name = f"model.language_model.layers.{j}.mlp.down_proj", f"model.language_model.layers.{old_j}.mlp.down_proj"
+        self.assertFalse(should_convert_module(new_name, skip))                        # newer transformers: patterns
+        self.assertTrue(should_convert_module(old_name, skip))
+        old_style = lambda name: not any((k + "." in name) or k == name or k in name for k in skip)    # older transformers: plain text in the name
+        self.assertFalse(old_style(new_name))
+        self.assertTrue(old_style(old_name))
+        self.assertTrue(old_style(f"model.language_model.layers.{j}0.mlp.down_proj") or j * 10 in self.record["new_layers"])   # layer 3 is not layer 30
+
     def test_new_layers_in_16_bits_next_to_32_bit_layers_still_run(self):
         """The rented-card failure: after prepare_model_for_kbit_training the model is 32-bit except the new layers, and setting the new layers
         wholesale to bfloat16 stopped with "expected mat1 and mat2 to have the same dtype". match_new_layer_dtypes keeps them running."""
