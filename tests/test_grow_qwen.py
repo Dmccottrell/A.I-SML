@@ -114,6 +114,29 @@ class Grow(unittest.TestCase):
         with torch.no_grad():                                                                            # LoRA starts at zero: still identical
             self.assertEqual((self.base(input_ids=self.x).logits - model(input_ids=self.x).logits).abs().max().item(), 0.0)
 
+    def test_new_layers_in_16_bits_next_to_32_bit_layers_still_run(self):
+        """The rented-card failure: after prepare_model_for_kbit_training the model is 32-bit except the new layers, and setting the new layers
+        wholesale to bfloat16 stopped with "expected mat1 and mat2 to have the same dtype". match_new_layer_dtypes keeps them running."""
+        import finetune_open as FO
+        from peft import LoraConfig, get_peft_model
+        broken = self.load()
+        for _, q in FO.grown_params(broken, self.record):                       # what the old code did
+            q.data = q.data.to(torch.bfloat16)
+        with self.assertRaises(RuntimeError):
+            broken(input_ids=self.x)
+        fixed = self.load()
+        n = FO.match_new_layer_dtypes(fixed, self.record, torch.bfloat16, torch)
+        self.assertGreater(n, 0)
+        j = self.record["new_layers"][0]
+        mods = dict(fixed.named_modules())
+        self.assertEqual(mods[f"model.language_model.layers.{j}.mlp.down_proj"].weight.dtype, torch.bfloat16)   # half the memory for the big matrices
+        self.assertEqual(mods["model.language_model.layers.0.mlp.down_proj"].weight.dtype, torch.float32)       # the rest untouched
+        model = get_peft_model(fixed, FO.grown_lora_config(LoraConfig, self.record, rank=4, grow_rank=16, full=False))
+        model.train()
+        loss = model(input_ids=self.x, labels=self.x).loss                      # a training step runs, forward and backward
+        loss.backward()
+        self.assertTrue(torch.isfinite(loss))
+
     def test_full_training_of_the_new_layers_saves_and_merges(self):
         import finetune_open as FO
         from peft import LoraConfig, get_peft_model
