@@ -38,6 +38,12 @@ CASUAL = re.compile(r"\b(?:ya know|y'?know|ngl|tbh|fr|lowkey|highkey|idk|imo|bru
 CASUAL_HINT = ("[They are typing casually (slang, short forms or typos). Work out what they mean and answer that, talking to them as \"you\" "
                "in a relaxed, natural way. Never correct their spelling, never say you did not understand when the meaning can be guessed, and never "
                "talk about them as someone else.]")
+# House rules for the Emvryx 3 models until they are retrained on Lessons 4 (flag chat_house_rules): the habits the owner's tests found in Equinox 3
+# (Oct 19) - answering something else, claiming what the person never said, flattery, stacks of "!" and emoji, a "use this command" with no command
+HOUSE_HINT = ("[How to answer: answer exactly what was just asked, first and directly. Never claim something the person did not say or that you do not "
+              "know (for example that something is already installed). No praise or flattery, no emoji unless they use them, and at most one "
+              "exclamation mark. Only mention what you remember about them, or other people, when it helps with this message. When you mention a "
+              "command, a link or a setting, write it out exactly. If you are not sure of a fact, say so briefly.]")
 MAX_PICTURES = 3          # at most this many of the chat's pictures go to a model that sees them, with each message
 
 
@@ -115,6 +121,8 @@ def start_turn(state, who, chat_id, text, model_id, effort, regenerate=False, re
                                          CONTINUE_HINT if cont else "") if h)   # the person's own preference, then the chat's skill (Study helper ...), then "continue": extra instructions for the model only
     if extra_hint:
         skill_hint = (skill_hint + "\n\n" if skill_hint else "") + extra_hint
+    if model.get("think") == "empty" and state.flags.on("chat_house_rules", who):    # an Emvryx 3 model: the house rules on every message
+        skill_hint = (skill_hint + "\n\n" if skill_hint else "") + HOUSE_HINT
     if text and CASUAL.search(text):                          # "Sometimes I overtime ya know": read what they mean, as a friend would
         skill_hint = (skill_hint + "\n\n" if skill_hint else "") + CASUAL_HINT
     library = state.docs_for(who["user"])
