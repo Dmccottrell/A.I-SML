@@ -189,6 +189,11 @@ class StateCode:
             url = self.llama_url
         else:
             raise code_sessions.CodeError("No model is attached to this server.", "Start it with --gguf or --llama (see docs/VRYXCODE.md).")
-        if vryxcode.EFFORTS.get(model.get("effort"), {}).get("think") and model.get("think") == "empty":    # Deep on a Qwen3.5 model: it reasons before each step
-            return vryxcode.LlamaChat(url, temperature=0.6, max_tokens=max(1024, min(8192, ctx // 2)), thinking=True)
+        if model.get("effort") and model.get("think") == "empty":          # a Qwen3.5 model with the effort picker: Qwen's own coding settings
+            if vryxcode.EFFORTS.get(model["effort"], {}).get("think"):      # Deep: it reasons before each step, with room for the reasoning and the file
+                s = vryxcode.QWEN35_CODE_THINK
+                return vryxcode.LlamaChat(url, temperature=s["temperature"], max_tokens=max(1024, min(16384, ctx // 2)), thinking=True,
+                                          sampling={k: v for k, v in s.items() if k != "temperature"})
+            s = vryxcode.QWEN35_CODE
+            return vryxcode.LlamaChat(url, temperature=s["temperature"], max_tokens=max(1024, min(4096, ctx // 3)), sampling={k: v for k, v in s.items() if k != "temperature"})
         return vryxcode.LlamaChat(url, max_tokens=max(1024, min(4096, ctx // 3)))     # room for a whole file in one reply (1,024 cut a page of 100 lines off in the middle)

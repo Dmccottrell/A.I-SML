@@ -33,7 +33,12 @@ class Pick(unittest.TestCase):
         deep = StateCode.code_backend(fake, {"id": "solstice-3", "think": "empty", "effort": "deep", "context_tested": 32768})
         self.assertTrue(deep.thinking)
         self.assertGreater(deep.max_tokens, 4096)                                   # room for the thinking as well as the file
-        self.assertFalse(StateCode.code_backend(fake, {"id": "solstice-3", "think": "empty", "effort": "balanced"}).thinking)
+        self.assertEqual((deep.temperature, deep.sampling["top_p"], deep.sampling["top_k"], deep.sampling["presence_penalty"]), (0.6, 0.95, 20, 0.0))   # Qwen3.5 thinking, coding
+        bal = StateCode.code_backend(fake, {"id": "solstice-3", "think": "empty", "effort": "balanced", "context_tested": 32768})
+        self.assertFalse(bal.thinking)
+        self.assertEqual((bal.temperature, bal.sampling["top_p"], bal.sampling["top_k"]), (0.7, 0.8, 20))                        # Qwen3.5 without thinking
+        old = StateCode.code_backend(fake, {"id": "solstice-3", "think": "empty", "context_tested": 32768})                    # no effort flag: as before
+        self.assertEqual((old.temperature, old.sampling), (0.2, {}))
         self.assertFalse(StateCode.code_backend(fake, {"id": "solstice-2", "effort": "deep"}).thinking)
 
 
