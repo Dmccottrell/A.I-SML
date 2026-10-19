@@ -241,13 +241,57 @@ class Session:
         with self.cv:
             return list(self.events[after:]), self.state, self.pending
 
-    def respond(self, qid, allow, always=False):
+    def respond(self, qid, allow, always=False, choice=None):
         with self.cv:
             if not self.pending or self.pending["id"] != qid:
                 return False
-            self.answer = (bool(allow), bool(always))
+            if self.pending.get("tool") == "ask_user":           # a multiple-choice question: the answer is the option picked (or the person's own words)
+                text = clip(str(choice or "").strip(), 500)
+                if not text:
+                    return False
+                self.answer = ("choice", text)
+            else:
+                self.answer = (bool(allow), bool(always))
             self.cv.notify_all()
             return True
+
+    def ask_choice(self, question=None, options=None):
+        """The ask_user tool (the full agent): the person picks one of 2 to 4 options, or writes their own answer."""
+        question = clip(str(question or "").strip(), 400)
+        opts = [clip(str(o).strip(), 120) for o in (options if isinstance(options, list) else []) if str(o).strip()][:4]
+        if not question or len(opts) < 2:
+            raise harness.ToolError('ask_user needs a question and 2 to 4 options, like {"question": "Which database?", "options": ["SQLite", "PostgreSQL"]}')
+        qid = len(self.events)
+        with self.cv:
+            self.pending, self.answer, self.state = {"id": qid, "tool": "ask_user", "question": question, "options": opts}, None, "asking"
+        self.emit("choose", id=qid, question=question, options=opts)
+        self._tell("asking")
+        with self.cv:
+            while self.answer is None and not self.stop.is_set():
+                self.cv.wait(0.5)
+            answer = self.answer
+            self.pending, self.answer = None, None
+            if not self.stop.is_set():
+                self.state = "working"
+        if not answer or answer[0] != "choice":
+            raise harness.ToolError("the person stopped before answering")
+        self.emit("answer", id=qid, allow=True, choice=answer[1])
+        return f"The person chose: {answer[1]}"
+
+    STEER = "While you were working, the person added: "
+
+    def steer(self, text):
+        """A message typed while it works (the full agent): the model reads it before its next step, without stopping."""
+        text = str(text or "").strip()
+        if not text:
+            raise CodeError("Write a message first.")
+        if len(text) > 4000:
+            raise CodeError("That message is too long.", "Keep it under 4,000 characters.")
+        with self.cv:
+            if self.state not in ("starting", "working", "asking"):
+                raise CodeError("It is not working right now.", "Send it as a normal message.")
+            self._steers = getattr(self, "_steers", []) + [text]
+        self.emit("user", text=text, steer=True)
 
     def compact_now(self):
         """The "Compact now" button. While it works, the fold happens before the next step ("next_step"); between messages the remembered conversation is
@@ -350,6 +394,14 @@ class Session:
             if seen["n"] and messages and messages[-1]["role"] == "user":
                 self.emit("result", text=clip(RESULT_TAGS.sub("", messages[-1]["content"]).strip()))
                 self.check_limits()                                          # a step may have grown the project: check before going on
+            with self.cv:
+                steers, self._steers = getattr(self, "_steers", []), []
+            if steers:                                                       # typed while it worked: the model reads it now, after the last result
+                note = "\n\n".join(self.STEER + t for t in steers)
+                if messages and messages[-1]["role"] == "user":
+                    messages[-1] = dict(messages[-1], content=messages[-1]["content"] + "\n\n" + note)
+                else:
+                    messages.append({"role": "user", "content": note})
             seen["n"] += 1
             res = self.meter.reserve(messages) if self.meter else None       # raises U.LimitError when the plan has run out
             self.live = {"phase": "thinking", "since": time.time(), "text": "", "chunks": 0, "thinking": 0}
@@ -433,7 +485,8 @@ class Session:
         try:
             model_text, self._model_text = getattr(self, "_model_text", None), None
             result = vryxcode.run_task(model_text or self.expand(text), self.wrap(self.generate), self.workspace, self.ask, self.max_turns, self.context_tokens, self.extra_programs, lang_note=languages.note_for(lang),
-                                       out=lambda *_: None, tools=self.tools, git_identity=self.identity,
+                                       out=lambda *_: None, tools=dict(self.tools or {}, ask_user=self.ask_choice) if getattr(self, "full", False) else self.tools,
+                                       git_identity=self.identity,
                                        command_prefix=self.prefix, container=bool(self.prefix) and not self.remote, history=self.history, chat_mode=True, plan=plan, todo=True, remote=self.remote,
                                        build=getattr(self, "build", False), full=getattr(self, "full", False))
             self.history = result["messages"]

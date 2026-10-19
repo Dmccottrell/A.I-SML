@@ -88,7 +88,10 @@ READ_ONLY_PROGRAMS = {"ls", "cat", "head", "tail", "wc", "pwd", "echo", "grep", 
 FILE_PROGRAMS = {"mkdir", "touch", "mv", "cp"}         # with "Edit without asking" these run without a question too (as in Claude Code's accept-edits mode)
 FULL_TOOL_NOTE = (" YOUR TOOLS: read_file shows up to 2000 lines; edit_file(path, old, new, replace_all) replaces text exactly (replace_all=true changes every match); "
                   "glob(pattern) finds files (\"**/*.py\"); grep(pattern, path, glob) searches their text. run(command, timeout) runs a command; it may take 120 s, "
-                  "pass timeout (seconds, up to 600) for a longer one. KEEP GOING until the task is really done: run the code and the tests after each change, read every "
+                  "pass timeout (seconds, up to 600) for a longer one, or background=true for a server or watcher, then read it with command_output(id) and end it "
+                  "with stop_command(id). helper(task) gives a question to a helper with a fresh memory that only reads (\"find where the login is handled\") and "
+                  "returns its short answer: use it to look through a big project without filling your own memory. ask_user(question, options) asks the person to "
+                  "pick one of 2 to 4 options, only when you truly need their decision. KEEP GOING until the task is really done: run the code and the tests after each change, read every "
                   "error, fix it and run again. When something fails, find out why before changing more; if a way keeps failing, try another. Only stop to ask the person "
                   "when you truly need them.")
 SHELL_NOTE = (" run(command) is a real terminal in the project folder: pipes, && and cd inside one command all work (each command starts again in the project folder). "
@@ -185,6 +188,14 @@ def _limits():
     resource.setrlimit(resource.RLIMIT_FSIZE, (50 * 1024**2, 50 * 1024**2))  # files up to 50 MB
 
 
+def _limits_and_session():
+    """A background command on this computer: the same limits, in its own process group (so it can be stopped with everything it started)."""
+    os.setsid()
+    import resource
+    resource.setrlimit(resource.RLIMIT_AS, (2 * 1024**3, 2 * 1024**3))
+    resource.setrlimit(resource.RLIMIT_FSIZE, (50 * 1024**2, 50 * 1024**2))
+
+
 def _no_network_prefix():
     """['unshare', '-rn'] if this Linux machine lets us cut off the network, else []."""
     if sys.platform.startswith("linux") and shutil.which("unshare"):
@@ -207,6 +218,7 @@ class Sandbox:
         self.shell = self.full and bool(command_prefix) and bool(container or remote)
         if self.full:
             command_timeout, output_limit, max_read_lines = max(command_timeout, FULL_TIMEOUT), max(output_limit, FULL_OUTPUT), max(max_read_lines, FULL_READ_LINES)
+        self.bg, self.bg_dir = {}, None          # the full agent's background commands (a server, a watcher): id -> {"proc", "log", "read", "command", "name"}
         self.git_identity = tuple(git_identity)
         self.container = bool(container)         # True when command_prefix is a `docker run ...` (code_sandbox.docker_prefix): commands run inside it
         self.remote = bool(remote)               # True when command_prefix runs the command on another machine (cloud_run.py): its Python is not ours, and git stays here
@@ -219,6 +231,10 @@ class Sandbox:
         self.extra_tools = {}
 
     def close(self):
+        for job in list(self.bg.values()):                # background commands end with the reply that started them
+            self._kill(job)
+        if self.bg_dir:
+            shutil.rmtree(self.bg_dir, ignore_errors=True)
         if self.own_dir:
             shutil.rmtree(self.root, ignore_errors=True)
 
@@ -380,7 +396,79 @@ class Sandbox:
         out = (r.stdout + ("\n" + r.stderr if r.stderr else "")).strip()
         return cut(f"exit code {r.returncode}\n{out}" if out else f"exit code {r.returncode}", self.output_limit)
 
-    def run(self, command, timeout=None):
+    def _background(self, command, argv):
+        """Start a command that keeps running (a dev server, a watcher). Inside the container it gets a name so it can be stopped for sure."""
+        if self.remote:
+            raise ToolError("background commands do not work on the cloud machine: run it with a timeout instead")
+        if len([j for j in self.bg.values() if j["proc"].poll() is None]) >= 4:
+            raise ToolError("four background commands are already running: stop one with stop_command first")
+        jid = str(len(self.bg) + 1)
+        name = None
+        if self.container and argv[:2] == ["docker", "run"]:
+            name = f"vryx-bg-{os.getpid()}-{id(self)}-{jid}"
+            argv = argv[:2] + ["--name", name] + argv[2:]
+        self.bg_dir = self.bg_dir or tempfile.mkdtemp(prefix="vryx_bg_")
+        log = os.path.join(self.bg_dir, jid + ".log")
+        extra = {"start_new_session": True} if os.name != "nt" else {"creationflags": getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0)}
+        if sys.platform.startswith("linux") and not self.container:
+            extra["preexec_fn"] = _limits_and_session
+            extra.pop("start_new_session")
+        env = {"PATH": os.environ.get("PATH", ""), "PYTHONDONTWRITEBYTECODE": "1", "PYTHONIOENCODING": "utf-8", "PYTHONUNBUFFERED": "1"}
+        if os.name == "nt":
+            env["SYSTEMROOT"] = os.environ.get("SYSTEMROOT", "")
+        with open(log, "w", encoding="utf-8") as fh:
+            try:
+                proc = subprocess.Popen(argv, cwd=self.root, env=env, stdout=fh, stderr=subprocess.STDOUT, stdin=subprocess.DEVNULL, **extra)
+            except OSError as e:
+                raise ToolError(f"could not run it: {e}")
+        self.bg[jid] = {"proc": proc, "log": log, "read": 0, "command": command, "name": name}
+        return (f"started in the background as command {jid}. Read what it prints with command_output(id=\"{jid}\"); stop it with stop_command(id=\"{jid}\"). "
+                "It is stopped when this reply ends.")
+
+    def _job(self, id):
+        job = self.bg.get(str(id))
+        if not job:
+            raise ToolError(f"no background command {id!r}" + (f" (started: {', '.join(self.bg)})" if self.bg else " (none started)"))
+        return job
+
+    def command_output(self, id):
+        """What a background command printed since the last look, and whether it is still running."""
+        job = self._job(id)
+        with open(job["log"], encoding="utf-8", errors="replace") as fh:
+            fh.seek(job["read"])
+            new = fh.read()
+            job["read"] = fh.tell()
+        code = job["proc"].poll()
+        state = "still running" if code is None else f"finished, exit code {code}"
+        return f"command {id} ({job['command']}): {state}\n" + (cut(new, self.output_limit) if new.strip() else "(nothing new)")
+
+    def _kill(self, job):
+        p = job["proc"]
+        if job.get("name"):                                   # the container keeps running if only the docker client is killed
+            try:
+                subprocess.run(["docker", "kill", job["name"]], capture_output=True, timeout=20)
+            except (OSError, subprocess.SubprocessError):
+                pass
+        if p.poll() is None:
+            try:
+                if os.name == "nt":
+                    subprocess.run(["taskkill", "/F", "/T", "/PID", str(p.pid)], capture_output=True, timeout=10)
+                else:
+                    os.killpg(p.pid, 9)
+            except (OSError, subprocess.SubprocessError):
+                p.kill()
+        try:
+            p.wait(timeout=5)
+        except subprocess.TimeoutExpired:
+            pass
+
+    def stop_command(self, id):
+        self._kill(self._job(id))
+        return f"stopped command {id}"
+
+    def run(self, command, timeout=None, background=False):
+        if background and not self.full:
+            raise ToolError("run takes only a command here")
         limit = None
         if timeout is not None:
             if not self.full:
@@ -393,6 +481,8 @@ class Sandbox:
             command = str(command or "").strip()
             if not command:
                 raise ToolError("empty command")
+            if background:
+                return self._background(command, self.prefix + shell_argv(command))
             return self._exec(shell_argv(command), timeout=limit)
         try:
             argv = shlex.split(command)
@@ -408,6 +498,8 @@ class Sandbox:
             raise ToolError("run one program at a time: no &&, ||, |, ; or > (they are not understood here). The project folder is already the current folder.")
         if program in ("python", "python3") and not self.container and not self.remote:
             argv[0] = sys.executable                     # the same Python we are running (inside a container, or on a remote machine, that one's own python is used)
+        if background:
+            return self._background(command, self.prefix + argv)
         return self._exec(argv, timeout=limit)
 
     # ---------------------------------------------------------------- git (a safe subset)
@@ -486,7 +578,7 @@ class Sandbox:
         self.extra_tools[name] = function
 
     def builtin_names(self):
-        return ["list_files", "read_file", "write_file", "edit_file", "run", "git", "diagnostics", "finish"] + (["glob", "grep"] if self.full else [])
+        return ["list_files", "read_file", "write_file", "edit_file", "run", "git", "diagnostics", "finish"] + (["glob", "grep", "command_output", "stop_command"] if self.full else [])
 
     def call(self, name, args):
         """Run one tool. Returns (text for the model, whether the model said it is finished)."""
@@ -494,7 +586,8 @@ class Sandbox:
             return str(args.get("summary", "")), True
         tools = {"list_files": self.list_files, "read_file": self.read_file, "write_file": self.write_file,
                  "edit_file": self.edit_file, "run": self.run, "git": self.git, "diagnostics": self.diagnostics,
-                 **({"glob": self.glob, "grep": self.grep} if self.full else {}), **self.extra_tools}
+                 **({"glob": self.glob, "grep": self.grep, "command_output": self.command_output, "stop_command": self.stop_command} if self.full else {}),
+                 **self.extra_tools}
         if name not in tools:
             raise ToolError(f"unknown tool {name!r}. Tools: {', '.join(list(tools) + ['finish'])}")
         if not isinstance(args, dict):
@@ -828,7 +921,7 @@ class Permissions:
         if name in self.rules:
             return self.rules[name]
         return "allow" if name in ("list_files", "read_file", "write_file", "edit_file", "run", "diagnostics",
-                                   "finish", "glob", "grep") else "ask"
+                                   "finish", "glob", "grep", "command_output", "stop_command") else "ask"
 
     def check(self, name, args):
         """None if it may run, else the reason it may not (as the model sees it)."""

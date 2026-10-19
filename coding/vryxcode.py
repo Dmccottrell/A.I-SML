@@ -319,6 +319,28 @@ CHECK_PAGE_NOTE = (" check_page(path, width, height) opens a web page of this pr
                    "a plain <script> cannot run JSX tags like <div>.")
 
 
+HELPER_STEPS = 25
+HELPER_SYSTEM = ("You are a helper for VryxCode. Another agent gave you one question about the project in this folder. Look with your tools (list_files, read_file, "
+                 "glob, grep, and commands that only look), then answer in a few short lines: the files, functions and line numbers that matter, and what you found. "
+                 "You cannot change anything. " + harness.TOOL_PROMPT)
+
+
+def make_helper(generate, sandbox, context_tokens=None):
+    """The helper tool (a subagent, like Claude Code's): a question goes to a fresh conversation that can only look, and its short answer comes back, so a big
+    search does not fill the main conversation's memory."""
+    def helper(task=None, question=None):
+        task = str(task or question or "").strip()
+        if not task:
+            raise harness.ToolError("helper needs a task, like: find where the login form is handled")
+        perms = harness.Permissions(rules={"write_file": "deny", "edit_file": "deny", "git": "deny", "run": "ask"},
+                                    ask=lambda name, args: name == "run" and harness.read_only_command((args or {}).get("command", "")))
+        r = harness.run_agent(task, generate, sandbox, max_turns=HELPER_STEPS, system=HELPER_SYSTEM, project=False, permissions=perms,
+                              context_tokens=context_tokens, chat_mode=True, hooks=harness.Hooks())
+        answer = (r.get("summary") or "").strip()
+        return "Helper's answer: " + (harness.cut(answer, 3000) if answer else f"none (it used its {r.get('turns', 0)} steps without answering; ask a narrower question)")
+    return helper
+
+
 def make_todo():
     """The checklist tool: todo(items=[{"text", "done"}]). It only records the list (the page shows it); it changes nothing in the project."""
     def todo(items=None):
@@ -349,9 +371,9 @@ def run_task(task, generate, workspace, ask, max_turns=12, context_tokens=None, 
     build = (bool(build) or bool(full)) and not plan
     todo = todo or build
     programs = set(harness.ALLOWED_PROGRAMS) | set(extra_programs)
-    rules = {"write_file": "ask", "edit_file": "ask", "run": "ask"}
+    rules = {"write_file": "ask", "edit_file": "ask", "run": "ask", "helper": "allow", "ask_user": "allow"}
     if plan:
-        rules = {"write_file": "deny", "edit_file": "deny", "run": "deny", "git": "deny", "github": "deny"}
+        rules = {"write_file": "deny", "edit_file": "deny", "run": "deny", "git": "deny", "github": "deny", "helper": "allow", "ask_user": "allow"}
         if full:                                                  # as in Claude Code's plan mode: commands that only look may still run
             rules["run"] = "ask"
             ask = lambda name, args: name == "run" and harness.read_only_command((args or {}).get("command", ""))
@@ -370,7 +392,10 @@ def run_task(task, generate, workspace, ask, max_turns=12, context_tokens=None, 
             kw["command_timeout"] = 120                       # copying the project over and back takes a while
     with harness.Sandbox(workspace=workspace, allowed_programs=programs, **kw) as sandbox:
         for name, fn in (tools or {}).items():
-            sandbox.register_tool(name, fn)
+            if full or name != "ask_user":
+                sandbox.register_tool(name, fn)
+        if sandbox.full:                                          # the helper only looks, so Plan first may use it too
+            sandbox.register_tool("helper", make_helper(generate, sandbox, context_tokens))
         system = SYSTEM + (harness.FULL_TOOL_NOTE if sandbox.full else "") + (harness.SHELL_NOTE if sandbox.shell else "") + (GITHUB_TOOL_NOTE if "github" in (tools or {}) else "") + (CHECK_PAGE_NOTE if "check_page" in (tools or {}) else "") + (TODO_NOTE if todo else "") + (BUILD_NOTE if build else "") + (PLAN_NOTE if plan else "") + (lang_note or "")
         result = harness.run_agent(task, generate, sandbox, max_turns=max_turns, system=system, ask=ask, context_tokens=context_tokens,
                                    permissions=harness.Permissions(rules=rules, ask=ask), history=history, chat_mode=chat_mode, checks=checks, steady=todo, build=build)

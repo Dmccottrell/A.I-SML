@@ -2,6 +2,8 @@
 container or on the cloud machine."""
 import os, sys; sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), os.pardir)); import emvryx_paths  # noqa: E402,F401
 import tempfile
+import threading
+import time
 import unittest
 
 import harness
@@ -106,6 +108,78 @@ class Loop(unittest.TestCase):
             self.assertIn("glob(pattern)", system)
             self.assertNotIn("real terminal", system)               # no terminal on this computer, so it is not promised
             self.assertIn("rollback", system)                       # the long-build loop: checkpoints and rollback
+
+
+class Batch1(unittest.TestCase):
+    """Helpers (subagents), messages typed while it works, multiple-choice questions, background commands."""
+
+    def test_background_command_runs_reports_and_stops(self):
+        with tempfile.TemporaryDirectory() as d:
+            sb = harness.Sandbox(d, full=True)
+            out = sb.run('python -c "import time; print(\'up\', flush=True); time.sleep(60)"', background=True)
+            self.assertIn("command 1", out)
+            deadline = time.time() + 15
+            while "up" not in (seen := sb.command_output("1")) and time.time() < deadline:
+                time.sleep(0.2)
+            self.assertIn("up", seen)
+            self.assertIn("still running", seen)
+            sb.stop_command("1")
+            self.assertIn("finished", sb.command_output("1"))
+            sb.run('python -c "import time; time.sleep(60)"', background=True)
+            proc = sb.bg["2"]["proc"]
+            sb.close()                                                     # the end of the reply stops what is still running
+            self.assertIsNotNone(proc.poll())
+            with self.assertRaises(harness.ToolError):
+                harness.Sandbox(d).run("echo hi", background=True)     # only the full agent
+
+    def test_helper_only_looks_and_answers_briefly(self):
+        with tempfile.TemporaryDirectory() as d:
+            sb = harness.Sandbox(d, full=True)
+            sb.write_file("auth/login.py", "def check_password(user, pw):\n    return pw == 'x'\n")
+            replies = iter(['<|tool_call|>{"name": "write_file", "args": {"path": "evil.py", "content": "x"}}<|end_tool_call|>',
+                            '<|tool_call|>{"name": "grep", "args": {"pattern": "def check_password"}}<|end_tool_call|>',
+                            "The password check is in auth/login.py line 1, check_password()."])
+            helper = vryxcode.make_helper(lambda messages: next(replies), sb)
+            answer = helper(task="where is the password checked?")
+            self.assertIn("auth/login.py line 1", answer)
+            self.assertFalse(os.path.exists(os.path.join(d, "evil.py")))      # a helper cannot change anything
+
+    def session(self, d):
+        s = Session("s1", "u", "p", "t", "m", d)
+        s.full, s.state = True, "working"
+        return s
+
+    def test_a_message_typed_while_it_works_is_read_before_the_next_step(self):
+        with tempfile.TemporaryDirectory() as d:
+            s = self.session(d)
+            s.steer("use Flask, not FastAPI")
+            seen = []
+            call = s.wrap(lambda messages: seen.append([dict(m) for m in messages]) or FINISH)
+            call([{"role": "user", "content": "build an API"}])
+            self.assertIn(Session.STEER + "use Flask, not FastAPI", seen[0][-1]["content"])
+            self.assertEqual([e for e in s.events if e["kind"] == "user"][-1]["steer"], True)
+            call([{"role": "user", "content": "next"}])
+            self.assertNotIn(Session.STEER, seen[1][-1]["content"])          # read once
+            s.state = "done"
+            with self.assertRaises(Exception):
+                s.steer("too late")
+
+    def test_multiple_choice_question(self):
+        with tempfile.TemporaryDirectory() as d:
+            s = self.session(d)
+            with self.assertRaises(harness.ToolError):
+                s.ask_choice("Which database?", ["SQLite"])                   # needs 2 to 4 options
+            got = {}
+            t = threading.Thread(target=lambda: got.update(r=s.ask_choice("Which database?", ["SQLite", "PostgreSQL"])))
+            t.start()
+            deadline = time.time() + 5
+            while not s.pending and time.time() < deadline:
+                time.sleep(0.05)
+            self.assertEqual(s.pending["options"], ["SQLite", "PostgreSQL"])
+            self.assertFalse(s.respond(s.pending["id"], True))                # a yes/no is not an answer to this
+            self.assertTrue(s.respond(s.pending["id"], None, choice="SQLite"))
+            t.join(5)
+            self.assertEqual(got["r"], "The person chose: SQLite")
 
 
 class Api(Base):
