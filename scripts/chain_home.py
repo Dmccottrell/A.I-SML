@@ -131,7 +131,7 @@ def upload(model, a, log):
     sent.append(export)
     adapter = os.path.join("checkpoints", "dev", "open", model, "adapter")
     if os.path.isdir(adapter):
-        api.upload_folder(repo_id=a.upload, folder_path=adapter, path_in_repo=f"{model}/adapter")
+        api.upload_folder(repo_id=a.upload, folder_path=adapter, path_in_repo=f"{model}/adapter", ignore_patterns=["README.md"])   # its model card names a local base path, which the Hub refuses
         sent.append(adapter)
     for f in glob.glob(os.path.join("logs", f"{model}-*")):
         api.upload_file(repo_id=a.upload, path_or_fileobj=f, path_in_repo=f"{model}/logs/{os.path.basename(f)}")

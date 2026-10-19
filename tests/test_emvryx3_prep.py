@@ -351,7 +351,7 @@ class Chain(unittest.TestCase):
             def create_repo(self, repo, private=False, exist_ok=False):
                 calls.append(("create", repo, private))
 
-            def upload_folder(self, repo_id, folder_path, path_in_repo, allow_patterns=None):
+            def upload_folder(self, repo_id, folder_path, path_in_repo, allow_patterns=None, ignore_patterns=None):
                 calls.append(("folder", path_in_repo, tuple(allow_patterns or ())))
 
             def upload_file(self, **kw):
