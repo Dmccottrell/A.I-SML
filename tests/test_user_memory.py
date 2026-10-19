@@ -165,6 +165,19 @@ class Relevance(Base):
         self.ask(self.sam, self.new_chat(self.sam), "what is my name?")
         self.assertIn("Darryl", tok.decode(Relevance.backend.prompts[-1]))
 
+    def test_only_the_facts_about_this_message_go_with_it(self):
+        """'I need to download it' is about the person but not about their friend: the friend stays out, so the model does not bring her up"""
+        m = U.Memory()
+        m.add("The user's name is Darryl.", "name")
+        m.add("Julia is the user's friend, who is learning to code.")
+        m.add("The user uses Node.js for their projects.")
+        note = m.note("i need to download it")["text"]
+        self.assertIn("Darryl", note)
+        self.assertNotIn("Julia", note)
+        self.assertIn("Node.js", m.note("how do I update my node.js?")["text"])
+        self.assertIn("Julia", m.note("what do you remember about me?")["text"])
+        self.assertIn("Julia", m.note("my friend julia wants to learn python")["text"])
+
     def test_note_with_no_question_is_always_built_and_is_capped(self):
         m = U.Memory()
         for i in range(60):

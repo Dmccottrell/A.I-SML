@@ -102,6 +102,7 @@ class Base(unittest.TestCase):
         self.state.flags.data["audiences"]["vryxcode_full_agent"] = "off"   # ...and its usual agent (tests/test_full_agent.py turns the Claude Code-style one on)
         self.state.flags.data["audiences"]["model_tours"] = "off"   # a model welcome tour must never cover a click (tests/test_model_tours.py turns it on)
         self.state.flags.data["audiences"]["vryxcode_tour"] = "off"   # ...and neither must the VryxCode tour
+        self.state.flags.data["audiences"]["chat_house_rules"] = "off"   # tests that read the exact prompt expect no house rules (tests/test_house_rules.py turns them on)
         self.owner = Client(self.port, self.state.owner_key())
         self.sam_key = self.state.add_user("sam", "free")
         self.sam = Client(self.port, self.sam_key)

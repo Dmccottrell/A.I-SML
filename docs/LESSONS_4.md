@@ -193,6 +193,29 @@ Order on a rental (teacher on port 8099; a model to probe on 8100, e.g. `llama-s
 `questions` and `maths` and `tools`, `feedback` (if there are reports), `clean`, `probe` for each model, `selfcheck` for each model, `run --focus`,
 `student-pairs`, `quality`, `review`, `export`. The teacher (about 17 GB) and one model at a time (2 to 7 GB) fit the 5090 together.
 
+## Making it fast (Oct 19, 2026, after the first rented run)
+The first run on a rented RTX 5090 kept about 130 lessons in roughly 3 hours: every question got 3 full drafts and 3 judgings (plus rewrites) from the
+27B teacher whatever happened, the factory ran 3 questions at once on a teacher set up for 4, and the VryxCode project maker shared the same teacher
+(the two hours with almost no new lessons). Now:
+- **Stop at the first strong draft.** A draft that passes every check and scores at least `STRONG_AVG` (8.5) is kept without more drafts. About
+  `PAIR_RATE` (45%) of the questions, always the same ones, get one more draft to look for a "better than" pair, which keeps the planned 30,000 to
+  50,000 pairs per 100,000 lessons. Most questions now take 1 or 2 teacher answers and 1 or 2 judgings instead of 3 and 3.
+- **8 at once.** The teacher runs with `--parallel 8 -c 131072 -ctk q8_0 -ctv q8_0` (16K of memory per answer) and the factory with `--workers 8`
+  (the new default).
+- **The Constitution is read once.** The judge uses the same system message as the drafts and every request asks llama-server to keep it
+  (`cache_prompt`), so the shared start is not re-read on every call. The judge can only reply with JSON (`response_format`), so no replies are retried.
+- **Guess-ahead** (`--spec-type draft-mtp`) when the llama.cpp build has it; the script falls back to a plain start when it does not.
+- **Nothing else on the teacher while lessons are written.** The VryxCode projects get their own time afterwards (`PROJECT_MIN`).
+- **It measures itself.** The progress line and `data/v4/progress.json` say lessons per hour and words written per question; the phone gets the count
+  every 30 minutes. After the first half hour of a run, multiply: that is what the rest will cost.
+
+The next rental is one command (`scripts/vast_lessons4.sh`):
+```
+cd /workspace/A.I-SML && git pull && HOURS=6 nohup bash scripts/vast_lessons4.sh > /workspace/lessons4.log 2>&1 &
+```
+Set `HOURS` from the balance (hours it can pay for, minus half an hour for the finishing steps and the save). It brings back what is already in the
+backup first, so it carries on from the last run.
+
 ## Later: Apogee 3.5
 Grow Apogee 3 again to about **14B** (the most that fits the 4070 with 128K; 64K comfortable), train on **Lessons 4.5** (Lessons 4 plus what the app's
 reports and approvals teach) with a second round of DPO and more thinking lessons. Expected about **50 to 52**; before it, write a harder test

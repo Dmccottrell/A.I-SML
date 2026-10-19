@@ -4,7 +4,8 @@ lesson_factory.py - Lessons 4: careful, checked answers in one Emvryx voice, plu
 WHAT THIS FILE DOES
     For every question (factory_questions.py), an open teacher model running on this PC (llama-server, OpenAI-style API) is given the Emvryx
     Constitution (docs/EMVRYX_CONSTITUTION.md) and then:
-      1. drafts     writes several different answers (hard questions are reasoned through first, in hidden thinking)
+      1. drafts     writes an answer, and more only when needed (hard questions are reasoned through first, in hidden thinking): it stops at the
+                    first strong draft, except on about PAIR_RATE of the questions, which get a second draft to look for a "better than" pair
       2. checks     each draft is checked where it can be PROVED (factory_checks.py): the voice rules, the known answer, code that must parse and
                     pass its tests
       3. judge      each draft that passed is scored against the Constitution (helpful, correct, honest, voice, safe; 1 to 10) with a list of problems
@@ -16,7 +17,7 @@ WHAT THIS FILE DOES
     allows it (Qwen3.5 27B, Apache 2.0, on the RTX 5090 is the plan).
 
 USE
-    llama-server -m Qwen3.5-27B-Q4_K_M.gguf -ngl 99 -c 32768 --parallel 8 --jinja --port 8099          # the teacher (5090)
+    llama-server -m <teacher>.gguf -ngl 99 -c 131072 --parallel 8 -fa on -ctk q8_0 -ctv q8_0 --jinja --port 8099   # the teacher (5090; 16K per slot)
     python data_prep/lesson_factory.py questions --teacher http://127.0.0.1:8099 --per 40           # 40 questions per area and level
     python data_prep/lesson_factory.py maths --n 3000                                               # exact maths with known answers
     python data_prep/lesson_factory.py import data\\open\\gsm8k.jsonl --source gsm8k --area maths    # questions from an open dataset (licence read first)
@@ -44,20 +45,31 @@ OUT = os.path.join("data", "v4")
 CONSTITUTION = os.path.join(emvryx_paths.ROOT, "docs", "EMVRYX_CONSTITUTION.md")
 SCORES = ("helpful", "correct", "honest", "voice", "safe")
 PASS_EACH, PASS_AVG, PAIR_GAP = 7, 8.0, 1.5
+STRONG_AVG = 8.5            # a draft this good (and passing every check) needs no more drafts
+PAIR_RATE = 0.45            # share of questions that get one extra draft, to look for a "better than" pair (30,000 to 50,000 pairs per 100,000 lessons)
 
 
 # ------------------------------------------------------------------ the teacher
 class Teacher:
-    """An OpenAI-style chat server (llama-server --jinja). chat() -> {"answer", "thinking"}."""
+    """An OpenAI-style chat server (llama-server --jinja). chat() -> {"answer", "thinking"}. Counts the calls and the words written (tokens), for
+    the speed line in run's progress."""
 
     def __init__(self, url, timeout=900):
         self.url, self.timeout = url.rstrip("/"), timeout
+        self.calls, self.tokens, self.lock = 0, 0, threading.Lock()
 
-    def chat(self, messages, temperature=0.7, max_tokens=2500, thinking=False):
-        body = {"messages": messages, "temperature": temperature, "max_tokens": max_tokens, "chat_template_kwargs": {"enable_thinking": bool(thinking)}}
+    def chat(self, messages, temperature=0.7, max_tokens=2500, thinking=False, json_mode=False):
+        body = {"messages": messages, "temperature": temperature, "max_tokens": max_tokens, "chat_template_kwargs": {"enable_thinking": bool(thinking)},
+                "cache_prompt": True}                                       # the shared start (the Constitution) is read once per slot, not every call
+        if json_mode:
+            body["response_format"] = {"type": "json_object"}               # the judge can only reply with JSON: no unreadable replies to retry
         req = urllib.request.Request(self.url + "/v1/chat/completions", json.dumps(body).encode("utf-8"), {"Content-Type": "application/json"})
         with urllib.request.urlopen(req, timeout=self.timeout) as r:
-            msg = json.loads(r.read())["choices"][0]["message"]
+            reply = json.loads(r.read())
+        msg = reply["choices"][0]["message"]
+        with self.lock:
+            self.calls += 1
+            self.tokens += int((reply.get("usage") or {}).get("completion_tokens") or 0)
         answer, reasoning = msg.get("content") or "", msg.get("reasoning_content") or ""
         if not reasoning and "</think>" in answer:
             reasoning, answer = answer.split("</think>", 1)
@@ -95,11 +107,13 @@ def judge_prompt(q, answer, constitution):
     ctx = "".join(f"\n{m['role'].upper()}: {m['content']}" for m in q.get("messages", []))
     notes = f"\nReference notes the answer must agree with:\n{q['notes']}\n" if q.get("notes") else ""
     known = f"\nThe known correct answer is: {q['answer']}\n" if q.get("answer") not in (None, "") else ""
-    return [{"role": "system", "content": "You are a strict reviewer of an AI assistant's answers. Judge them by this constitution:\n\n" + constitution},
-            {"role": "user", "content": f"Earlier conversation:{ctx or ' (none)'}\n\nQUESTION:\n{q['question']}\n{notes}{known}\nANSWER TO JUDGE:\n{answer}\n\n"
+    # the same system message as the drafts, so llama-server reuses the Constitution it already read; the reviewing job is in the user message
+    return [{"role": "system", "content": system_prompt(constitution)},
+            {"role": "user", "content": "[Review task: act as a strict reviewer of an answer, judged by the constitution above.]\n\n"
+             f"Earlier conversation:{ctx or ' (none)'}\n\nQUESTION:\n{q['question']}\n{notes}{known}\nANSWER TO JUDGE:\n{answer}\n\n"
              "Score the answer from 1 to 10 on each of: helpful (meets the person's real goal), correct (no errors, no invented facts), honest "
              "(calibrated, says what it does not know), voice (the constitution's voice: friendly, relaxed, answer first, right length), safe "
-             "(helps with legitimate requests, declines only real harm, kindly). List every concrete problem. Reply with JSON only: "
+             "(helps with legitimate requests, declines only real harm, kindly). List every concrete problem, briefly. Reply with JSON only: "
              '{"helpful": n, "correct": n, "honest": n, "voice": n, "safe": n, "problems": ["..."]}'}]
 
 
@@ -135,6 +149,7 @@ def make_lesson(q, teacher, constitution, drafts=3, rounds=2):
     sysmsg = {"role": "system", "content": system_prompt(constitution)}
     think = q.get("level") == "hard"                  # the teacher reasons first on hard questions; medium ones get short reasoning written for them below
     cands = []
+    want_pair = wants_pair(q)
     for i in range(drafts):
         try:
             r = teacher.chat([sysmsg] + conversation(q), temperature=0.6 + 0.2 * i, thinking=think)
@@ -144,6 +159,10 @@ def make_lesson(q, teacher, constitution, drafts=3, rounds=2):
         r["check"] = FC.check(q, r["answer"])
         r["scores"] = judge(q, r["answer"], teacher, constitution) if r["check"]["ok"] else None
         cands.append(r)
+        # Most questions are answered well first time: stop as soon as one draft is strong, unless this question is one picked for a pair and
+        # nothing to compare it with exists yet (then one more draft). This is most of the speed: 1 or 2 drafts instead of always 3.
+        if any(strong(c) for c in cands) and (not want_pair or sum(1 for c in cands if c["answer"]) >= 2):
+            break
     if not any(c["answer"] for c in cands):
         return {"lesson": None, "pair": None, "thinking": None, "why": "no draft"}
     rank = lambda c: (c["check"]["ok"], c["scores"]["avg"] if c["scores"] else 0, len(c["check"]["checked"]))
@@ -188,6 +207,17 @@ def make_lesson(q, teacher, constitution, drafts=3, rounds=2):
     return {"lesson": lesson, "pair": pair, "thinking": thinking, "why": ""}
 
 
+def strong(c):
+    """A draft good enough to keep without trying more: every check passed and the judge scored it well."""
+    return bool(c["check"]["ok"] and passes(c["scores"]) and c["scores"]["avg"] >= STRONG_AVG)
+
+
+def wants_pair(q):
+    """About PAIR_RATE of the questions, the same ones on every run (so a resumed run makes the same choice): those get a second draft to compare."""
+    import zlib
+    return zlib.crc32(str(q.get("id", q.get("question", ""))).encode("utf-8")) % 1000 < PAIR_RATE * 1000
+
+
 def short_reasoning(q, answer, teacher):
     """For a medium question: the few steps that reach the proved answer, as brief hidden reasoning (a thinking lesson that does not overthink)."""
     try:
@@ -200,7 +230,7 @@ def short_reasoning(q, answer, teacher):
 def judge(q, answer, teacher, constitution):
     for _ in range(2):                                                            # a reply that is not JSON gets one more try
         try:
-            s = parse_scores(teacher.chat(judge_prompt(q, answer, constitution), temperature=0.1, max_tokens=800)["answer"])
+            s = parse_scores(teacher.chat(judge_prompt(q, answer, constitution), temperature=0.1, max_tokens=600, json_mode=True)["answer"])
         except Exception:                                                         # noqa: BLE001
             s = None
         if s:
@@ -262,12 +292,27 @@ def run(questions, teacher, out, constitution, drafts=3, rounds=2, workers=4, li
             counts["thinking"] += 1
         n = counts["kept"] + counts["dropped"]
         if n % 25 == 0:
-            left = (time.time() - start) / n * (len(todo) - n)
-            log(f"{n}/{len(todo)}: kept {counts['kept']}, dropped {counts['dropped']}, pairs {counts['pairs']}, thinking {counts['thinking']}, about {left / 3600:.1f} h left")
+            took = time.time() - start
+            left = took / n * (len(todo) - n)
+            per = getattr(teacher, "tokens", 0) // max(1, n)
+            log(f"{n}/{len(todo)}: kept {counts['kept']}, dropped {counts['dropped']}, pairs {counts['pairs']}, thinking {counts['thinking']}, "
+                f"{n / max(took, 1) * 3600:.0f} an hour, {per} words written per question, about {left / 3600:.1f} h left")
+            write_progress(out, counts, n, len(todo), took, per)
 
     with ThreadPoolExecutor(max_workers=max(1, workers)) as pool:
         list(pool.map(one, todo))
+    n = counts["kept"] + counts["dropped"]
+    write_progress(out, counts, n, len(todo), time.time() - start, getattr(teacher, "tokens", 0) // max(1, n))
     return counts
+
+
+def write_progress(out, counts, done, total, took, per):
+    """data/v4/progress.json: what the phone message and a quick check read (how far, how fast)."""
+    try:
+        with open(out.path("progress.json"), "w", encoding="utf-8") as f:
+            json.dump(dict(counts, done=done, total=total, per_hour=round(done / max(took, 1) * 3600), words_per_question=per, at=time.strftime("%H:%M")), f)
+    except OSError:
+        pass
 
 
 def write_review(out, n=30, seed=None):
@@ -343,7 +388,7 @@ def main(argv=None):
     ap.add_argument("--limit", type=int, default=None)
     ap.add_argument("--drafts", type=int, default=3)
     ap.add_argument("--rounds", type=int, default=2)
-    ap.add_argument("--workers", type=int, default=4, help="questions answered at once (match llama-server --parallel)")
+    ap.add_argument("--workers", type=int, default=8, help="questions answered at once (match llama-server --parallel; 8 keeps a 5090 busy)")
     ap.add_argument("--student", default=None, help="probe / selfcheck: an Emvryx model's llama-server, like http://127.0.0.1:8100")
     ap.add_argument("--name", default=None, help="probe / selfcheck: that model's name (flare-3, solstice-3 ...)")
     ap.add_argument("--samples", type=int, default=6, help="selfcheck: tries per question")
