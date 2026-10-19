@@ -491,6 +491,65 @@
         "export/open/apogee-2/my-ai-f16.gguf"
       ],
       "vryxcode": true
+    },
+    {
+      "id": "apogee-3", "lookup": "when_needed",
+      "name": "Apogee",
+      "version": 3,
+      "generation": 2,
+      "open": true,
+      "base": "Qwen3.5-9B, grown 12 layers deeper",
+      "tagline": "Strongest: your toughest questions, coding and long work",
+      "tier": "Max",
+      "where": "online",
+      "file": "apogee-3.q4_k_m.gguf",
+      "size_mb": 7900,
+      "sha256": "",
+      "min_ram_gb": 16,
+      "context": 81920,
+      "status": "preview",
+      "supports_effort": true,
+      "skills": [
+        "study",
+        "teacher",
+        "coding"
+      ],
+      "pinned": false,
+      "cost_weight": 10,
+      "context_tested": 81920,
+      "kv_kb_per_token": 32,
+      "weights_mb": 7900,
+      "max_reply_tokens": 4096,
+      "tokenizer": "checkpoints/dev/open/apogee-3/tokenizer/tokenizer.json",
+      "local_gguf": [
+        "export/open/apogee-3/my-ai-q4_k_m.gguf",
+        "export/open/apogee-3/my-ai-q8_0.gguf",
+        "export/open/apogee-3/my-ai-f16.gguf"
+      ],
+      "vryxcode": true,
+      "mtp": true,
+      "whats_new": {
+        "vs": "apogee-2",
+        "points": [
+          "Remembers far more of a conversation: 80K tokens on this PC, instead of 32K (it found a hidden code at 32K, 64K and 128K in its long-memory test).",
+          "Built on a newer, stronger base: Qwen3.5 9B made 12 layers deeper, instead of Qwen3 14B.",
+          "VryxCode's own model: when VryxCode shows only the effort, it uses Apogee 3."
+        ],
+        "scores": [
+          [
+            "Memory (context window, on this PC)",
+            "32K",
+            "80K"
+          ],
+          [
+            "Long-memory test (128K)",
+            "-",
+            "Passed 3/3"
+          ]
+        ]
+      },
+      "cache_bits": 8,
+      "think": "empty"
     }
   ],
   "keep_latest_per_name": 2,

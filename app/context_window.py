@@ -78,7 +78,7 @@ def pick(model, device, mode="everyday", plan_windows=None, cache_bits=None, max
     if mode not in ("everyday", "long", "remote"):
         raise ValueError("mode must be everyday, long or remote")
     bits = cache_bits or (8 if mode == "long" else 16)
-    tested = _floor_step(model.get("context_tested", STEPS[0])) or model.get("context_tested", STEPS[0])
+    tested = model.get("context_tested", STEPS[0])
     limits = {"model": tested}
     if plan_windows:
         limits["plan"] = plan_windows["long" if mode in ("long", "remote") else "everyday"]
@@ -91,7 +91,8 @@ def pick(model, device, mode="everyday", plan_windows=None, cache_bits=None, max
             limits["speed"] = s
     # the smallest limit decides; ties go to the order model, plan, mode, memory, speed
     why = min(limits, key=lambda k: limits[k])
-    window = _floor_step(limits[why])                 # 0 when even the smallest step doesn't fit
+    # 0 when even the smallest step doesn't fit. A model's own tested size is kept exactly (Apogee 3: 80K, between the 64K and 128K steps)
+    window = limits[why] if why == "model" and limits[why] >= STEPS[0] else _floor_step(limits[why])
     fits = window >= STEPS[0]
     return {"window": window, "limited_by": why, "reason": "limited by: " + LIMITED_BY[why], "mode": mode,
             "cache_bits": bits, "cache_mb": round(cache_mb(model, window, bits), 1), "fits": fits,

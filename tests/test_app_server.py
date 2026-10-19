@@ -171,7 +171,7 @@ class State(Base):
         names = [m["name"] for m in j["models"]["cards"]]
         self.assertEqual(names, ["Ember", "Flare", "Equinox", "Solstice", "Apogee"])
         self.assertEqual(j["models"]["cards"][0]["state"], "ready")
-        self.assertEqual([m["id"] for m in j["models"]["other"]], ["flare-2.5", "flare-2", "equinox-2", "solstice-2"])      # the owner sees Flare 3, Equinox 3 and Solstice 3 (in preview) as the cards; the older ones move to "Other models"
+        self.assertEqual([m["id"] for m in j["models"]["other"]], ["flare-2.5", "flare-2", "equinox-2", "solstice-2", "apogee-2"])      # the owner sees Flare 3, Equinox 3, Solstice 3 and Apogee 3 (in preview) as the cards; the older ones move to "Other models"
         self.assertEqual([e["id"] for e in j["efforts"]], ["auto", "quick", "balanced", "deep"])
         self.assertEqual(j["pause_by_effort"], {"quick": 0.5, "balanced": 1.2, "deep": 2.4})
         self.assertGreater(len(j["thinking_words"]), 5)
