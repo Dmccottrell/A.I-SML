@@ -132,7 +132,7 @@ async function load() {
   if (!S.skills.length) { try { S.skills = (await (await api('/api/skills')).json()).skills; } catch (e) {} }
   applyTheme(); renderAll();
   await restoreChat();
-  maybeTour(); checkWhatsNew(); restoreView();
+  maybeTour(); checkWhatsNew(); restoreView(); setTimeout(checkModelTour, 2500);
 }
 function renderAll() {
   const st = S.state;

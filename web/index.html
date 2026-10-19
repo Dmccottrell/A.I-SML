@@ -576,6 +576,10 @@ html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
 .tour .btns button { flex: 1; min-height: 52px; border-radius: 16px; font-weight: 700; font-size: 17px; border: 1px solid rgba(255,255,255,.16); background: rgba(255,255,255,.07); color: #eef0f6; }
 .tour .btns button.go { background: linear-gradient(135deg, #ff5c23, #f5a524); color: #1a0d05; border: 0; box-shadow: 0 10px 30px rgba(255,92,35,.35); }
 .tour .btns button[hidden] { display: none; }
+.tour .tstats { width: 100%; border-collapse: collapse; font-size: 15px; text-align: left; background: rgba(255,255,255,.05); border: 1px solid rgba(255,255,255,.12); border-radius: 16px; overflow: hidden; }
+.tour .tstats th, .tour .tstats td { padding: 9px 10px; border-top: 1px solid rgba(255,255,255,.08); } .tour .tstats tr:first-child th { border-top: 0; color: #7c849e; font-weight: 600; }
+.tour .tstats td:nth-child(2) { color: #8a92ac; text-align: right; } .tour .tstats th:not(:first-child) { text-align: right; } .tour .tstats .new { color: #ff8a3d; font-weight: 800; text-align: right; }
+.tour .tbig { position: relative; font: 800 64px/1 'Sora', sans-serif; letter-spacing: -0.03em; color: #ff8a3d; text-shadow: 0 6px 30px rgba(255,92,35,.45); }
 .tour .spark { position: absolute; width: 6px; height: 6px; border-radius: 50%; background: #ffd39b; animation: tourspark 3.4s ease-in-out infinite; opacity: 0; }
 @keyframes tourspark { 0% { transform: translateY(20px) scale(.4); opacity: 0; } 30% { opacity: 1; } 100% { transform: translateY(-120px) scale(1.2); opacity: 0; } }
 /* features and testing */

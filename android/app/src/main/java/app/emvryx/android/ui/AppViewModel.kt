@@ -107,6 +107,12 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     /** Auto is always there; otherwise a model may list the levels it offers */
     fun effortAllowed(id: String) = id == "auto" || currentModel?.efforts?.contains(id) ?: true
 
+    // ---- model welcome tours (declared before init: loading the state reads them)
+    var tour by mutableStateOf<ModelCard?>(null)
+        private set
+    private val toursSeen = mutableSetOf<String>()
+    private var tourChecked = false
+
     init {
         start()
     }
@@ -217,6 +223,28 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         chats = s.chats
         usage = s.usage
         if (model.isEmpty() || models.none { it.id == model && it.ready }) model = s.model
+        toursSeen.addAll(s.settings.modelToursSeen)
+        if (!tourChecked) {                                       // once per launch: the newest model this person has not toured yet
+            tourChecked = true
+            s.models.cards.filter { it.ready && it.tour.isNotEmpty() && it.id !in toursSeen }.maxByOrNull { it.version ?: 0.0 }?.let(::maybeTour)
+        }
+    }
+
+    // ---- model welcome tours (feature flag model_tours): "WELCOME to Flare 3", what only that model brings, then VryxCode for its models
+    fun maybeTour(card: ModelCard) {
+        if (flag("model_tours") && card.tour.isNotEmpty() && card.id !in toursSeen && tour == null) tour = card
+    }
+
+    /** Replay from the model picker, seen or not */
+    fun replayTour(card: ModelCard) {
+        if (card.tour.isNotEmpty()) tour = card
+    }
+
+    fun closeTour(use: Boolean) {
+        val card = tour ?: return
+        tour = null
+        if (toursSeen.add(card.id)) viewModelScope.launch { runCatching { api.modelTourSeen(card.id) } }
+        if (use && card.ready && model != card.id) pickModel(card.id)
     }
 
     /** The chat list and the usage line (the usage figure depends on the model and effort picked) */
@@ -236,6 +264,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         model = id
         if (effort != "auto" && m.efforts != null && effort !in m.efforts) effort = "balanced"
         refreshChats()
+        maybeTour(m)
     }
 
     fun pickEffort(id: String) {

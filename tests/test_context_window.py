@@ -32,6 +32,13 @@ class Pick(unittest.TestCase):
             r = C.pick(model(context_tested=tested), C.Device(16), "long")
             self.assertLessEqual(r["window"], tested)
 
+    def test_apogee_3_gets_its_80k(self):
+        """A tested size between two steps is kept exactly (Apogee 3 on the 4070: 80K with 8-bit chat memory), not rounded down to 64K"""
+        m = model("apogee-3")
+        self.assertEqual((m["context_tested"], m["cache_bits"], m["status"]), (81920, 8, "preview"))
+        r = C.pick(m, C.Device(32), "remote")
+        self.assertEqual((r["window"], r["limited_by"]), (81920, "model"))
+
     def test_memory_limits_an_8gb_phone(self):
         m = model(context_tested=262144)
         r = C.pick(m, C.Device(8), "long")

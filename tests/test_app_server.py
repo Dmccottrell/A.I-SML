@@ -100,6 +100,7 @@ class Base(unittest.TestCase):
         self.state.live_net = OfflineNet()                       # tests never reach the real internet (a live sports score would change what the question looks up)
         self.state.flags.data["audiences"]["vryxcode_effort"] = "off"   # VryxCode's model picker, as the tests written for it expect (tests/test_vryxcode_effort.py turns it on)
         self.state.flags.data["audiences"]["vryxcode_full_agent"] = "off"   # ...and its usual agent (tests/test_full_agent.py turns the Claude Code-style one on)
+        self.state.flags.data["audiences"]["model_tours"] = "off"   # a model welcome tour must never cover a click (tests/test_model_tours.py turns it on)
         self.owner = Client(self.port, self.state.owner_key())
         self.sam_key = self.state.add_user("sam", "free")
         self.sam = Client(self.port, self.sam_key)
@@ -171,7 +172,7 @@ class State(Base):
         names = [m["name"] for m in j["models"]["cards"]]
         self.assertEqual(names, ["Ember", "Flare", "Equinox", "Solstice", "Apogee"])
         self.assertEqual(j["models"]["cards"][0]["state"], "ready")
-        self.assertEqual([m["id"] for m in j["models"]["other"]], ["flare-2.5", "flare-2", "equinox-2", "solstice-2"])      # the owner sees Flare 3, Equinox 3 and Solstice 3 (in preview) as the cards; the older ones move to "Other models"
+        self.assertEqual([m["id"] for m in j["models"]["other"]], ["flare-2.5", "flare-2", "equinox-2", "solstice-2", "apogee-2"])      # the owner sees Flare 3, Equinox 3, Solstice 3 and Apogee 3 (in preview) as the cards; the older ones move to "Other models"
         self.assertEqual([e["id"] for e in j["efforts"]], ["auto", "quick", "balanced", "deep"])
         self.assertEqual(j["pause_by_effort"], {"quick": 0.5, "balanced": 1.2, "deep": 2.4})
         self.assertGreater(len(j["thinking_words"]), 5)

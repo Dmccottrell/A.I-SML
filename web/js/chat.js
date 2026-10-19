@@ -274,7 +274,8 @@ function whatsNew(c) {
     (w.scores || []).length ? el('table', {style: 'width:100%;border-collapse:collapse;font-size:14px'},
       el('tr', {style: 'color:var(--muted)'}, el('td', {style: 'padding:6px 8px'}, ''), cell(oldName), cell(mname(c), 'font-weight:700;color:var(--text)')),
       ...w.scores.map((r) => el('tr', {style: 'border-top:1px solid var(--line)'}, el('td', {style: 'padding:6px 8px'}, r[0]), cell(r[1], 'color:var(--muted)'), cell(r[2], 'font-weight:700')))) : '',
-    el('button', {class: 'chip', style: 'align-self:flex-start;margin-top:6px', onclick: (ev) => { ev.stopPropagation(); closeMenus(); $('modelBtn').click(); }}, '\u2039 Back to models'));
+    el('div', {class: 'row', style: 'gap:8px;margin-top:6px'}, el('button', {class: 'chip', onclick: (ev) => { ev.stopPropagation(); closeMenus(); $('modelBtn').click(); }}, '\u2039 Back to models'),
+      c.tour && featureOn('model_tours') ? el('button', {class: 'chip', onclick: (ev) => { ev.stopPropagation(); closeMenus(); openModelTour(c, true); }}, 'Take the tour \u203a') : ''));
 }
 $('effortBtn').onclick = () => {
   const open = !$('effortMenu').hidden; closeMenus(); if (open) return;
@@ -295,7 +296,7 @@ async function chooseModel(c) {
   closeMenus(); if (c.id === S.model) return;
   S.model = c.id; try { localStorage.setItem('emvryx_model', c.id); } catch (e) {}
   if (c.efforts && S.effort !== 'auto' && !c.efforts.includes(S.effort)) S.effort = 'balanced';
-  wash(); applyTheme(); renderComposer(); renderThread(false); warmModel(); await refreshUsage();
+  wash(); applyTheme(); renderComposer(); renderThread(false); warmModel(); maybeModelTour(c); await refreshUsage();
 }
 const input = $('input');
 // The message box is a rich text box so the phone keyboard can paste a screenshot into it; it reads and writes as plain text (input.value) like a textarea did.
