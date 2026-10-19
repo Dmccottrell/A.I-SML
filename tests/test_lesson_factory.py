@@ -18,7 +18,7 @@ class FakeTeacher:
     def __init__(self, drafts, scores=None, fixed="It costs $12.50: 5 notebooks at $2.50 each.", questions=None):
         self.drafts, self.scores, self.fixed, self.questions, self.calls = list(drafts), scores or {}, fixed, questions, []
 
-    def chat(self, messages, temperature=0.7, max_tokens=2500, thinking=False):
+    def chat(self, messages, temperature=0.7, max_tokens=2500, thinking=False, json_mode=False):
         last = messages[-1]["content"]
         self.calls.append((messages[0]["content"][:40], thinking))
         if "ANSWER TO JUDGE:" in last:
@@ -82,6 +82,38 @@ class Factory(unittest.TestCase):
         self.assertIn("answer matches the known answer", r["lesson"]["checked"])
         self.assertEqual(r["pair"]["rejected"], "Certainly! That's $15.")
         self.assertIn("right answer", r["pair"]["why"])
+
+    def test_a_strong_first_draft_needs_no_more(self):
+        """The speed-up: a question not picked for a pair stops at the first strong draft (1 draft and 1 judging, not 3 and 3)"""
+        q = next(dict(Q, id=f"solo{i}") for i in range(200) if not LF.wants_pair(dict(Q, id=f"solo{i}")))
+        t = FakeTeacher(["It costs $12.50 in total.", "That's $12.50.", "$12.50."])
+        r = LF.make_lesson(q, t, CONST, drafts=3)
+        self.assertEqual(r["lesson"]["messages"][-1]["content"], "It costs $12.50 in total.")
+        self.assertEqual(len(t.drafts), 2)                                       # two scripted drafts were never asked for
+
+    def test_a_pair_question_gets_one_more_draft_to_compare(self):
+        q = next(dict(Q, id=f"pair{i}") for i in range(200) if LF.wants_pair(dict(Q, id=f"pair{i}")))
+        t = FakeTeacher(["It costs $12.50 in total.", "Certainly! That's $15.", "$12.50."])
+        r = LF.make_lesson(q, t, CONST, drafts=3)
+        self.assertEqual(len(t.drafts), 1)
+        self.assertEqual(r["pair"]["rejected"], "Certainly! That's $15.")
+
+    def test_run_writes_its_progress_and_the_rental_script_is_valid(self):
+        import shutil
+        import subprocess
+        with tempfile.TemporaryDirectory() as d:
+            out = LF.Out(d)
+            LF.run([Q], FakeTeacher(["It costs $12.50 in total."]), out, CONST, drafts=1, workers=1, log=lambda *_: None)
+            with open(out.path("progress.json"), encoding="utf-8") as f:
+                p = json.load(f)
+            self.assertEqual((p["kept"], p["done"], p["total"]), (1, 1, 1))
+        if shutil.which("bash"):
+            script = os.path.join(os.path.dirname(os.path.abspath(__file__)), os.pardir, "scripts", "vast_lessons4.sh")
+            self.assertEqual(subprocess.run(["bash", "-n", script]).returncode, 0)
+
+    def test_about_the_planned_share_of_questions_get_a_pair_draft(self):
+        share = sum(LF.wants_pair({"id": f"q{i}"}) for i in range(4000)) / 4000
+        self.assertAlmostEqual(share, LF.PAIR_RATE, delta=0.04)
 
     def test_a_weak_answer_is_rewritten_until_it_passes(self):
         t = FakeTeacher(["It costs $12.50."], scores={"It costs $12.50.": WEAK})

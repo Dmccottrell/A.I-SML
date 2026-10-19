@@ -16,7 +16,7 @@ class Student:
     def __init__(self, table):
         self.table = {k: (list(v) if isinstance(v, list) else [v]) for k, v in table.items()}
 
-    def chat(self, messages, temperature=0.3, max_tokens=1500, thinking=False):
+    def chat(self, messages, temperature=0.3, max_tokens=1500, thinking=False, json_mode=False):
         q = messages[-1]["content"]
         for k, v in self.table.items():
             if k in q:
