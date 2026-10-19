@@ -14,7 +14,7 @@ class ModelTourJsonTest {
     @Test
     fun tourWhatsNewAndSeenList() {
         val s = json.decodeFromString<AppState>(
-            """{"user":"owner","settings":{"model_tours_seen":["flare-3"]},"features":{"model_tours":true},
+            """{"user":"owner","settings":{"model_tours_seen":["flare-3"],"vryx_tour_seen":1},"features":{"model_tours":true},
               "models":{"cards":[{"id":"solstice-3","name":"Solstice","version":3,"state":"ready","preview":true,"vryxcode":true,"context_tested":262144,
                 "tour":[{"art":"memory","title":"Remembers whole conversations","text":"256K tokens."}],
                 "whats_new":{"vs":"solstice-2","points":["a"],"scores":[["Common sense (HellaSwag)","73.6%","75.3%"],["Thinking test","not measured",null]]}}]}}""",
@@ -22,6 +22,7 @@ class ModelTourJsonTest {
         val c = s.models.cards.single()
         assertTrue(s.on("model_tours"))
         assertEquals(listOf("flare-3"), s.settings.modelToursSeen)
+        assertEquals(1, s.settings.vryxTourSeen)
         assertEquals("memory", c.tour.single().art)
         assertEquals(262144L, c.contextTested)
         assertTrue(c.preview && c.vryxcode)

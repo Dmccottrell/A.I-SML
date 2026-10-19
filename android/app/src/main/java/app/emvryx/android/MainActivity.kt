@@ -15,6 +15,7 @@ import androidx.compose.runtime.key
 import androidx.core.content.IntentCompat
 import androidx.lifecycle.lifecycleScope
 import app.emvryx.android.ui.ModelTour
+import app.emvryx.android.ui.VryxTour
 import app.emvryx.android.ui.AppViewModel
 import app.emvryx.android.ui.ChatScreen
 import app.emvryx.android.ui.CodeScreen
@@ -67,6 +68,7 @@ private fun Root(vm: AppViewModel, code: CodeViewModel) {
         Surface(color = MaterialTheme.colorScheme.background) {           // gives every screen the light text colour
             Screens(vm, code)
             vm.tour?.let { ModelTour(vm, it) }                            // a model's welcome tour covers whatever screen is showing
+            if (vm.vryxTour && vm.screen == Screen.Code) VryxTour(vm, close = vm::closeVryxTour)
         }
     }
 }

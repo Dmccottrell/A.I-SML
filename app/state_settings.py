@@ -77,7 +77,7 @@ class StateSettings:
             pass
 
     def get_settings(self, user):
-        s = {"window_mode": "everyday", "show_tokens": False, "web_search": "auto", "memory": True, "thinking_pause": "short", "live_data": True, "connected_apps": True, "tour_seen": 0, "tour_devices": {}, "whats_new_seq": -1, "model_tours_seen": []}
+        s = {"window_mode": "everyday", "show_tokens": False, "web_search": "auto", "memory": True, "thinking_pause": "short", "live_data": True, "connected_apps": True, "tour_seen": 0, "tour_devices": {}, "whats_new_seq": -1, "model_tours_seen": [], "vryx_tour_seen": 0}
         s.update(self.settings.get(user, {}))
         return s
 
@@ -106,6 +106,8 @@ class StateSettings:
             s["tour_seen"] = n
             if new.get("device") in ("desktop", "pwa", "mobile"):          # the tour shows once on each kind of device: a computer, the installed app, a phone's browser
                 s["tour_devices"] = dict(s.get("tour_devices") or {}, **{new["device"]: n})
+        if isinstance(new.get("vryx_tour_seen"), int) and not isinstance(new.get("vryx_tour_seen"), bool):     # the VryxCode tour: the version last seen
+            s["vryx_tour_seen"] = max(0, min(1000, new["vryx_tour_seen"]))
         mid = new.get("model_tour_seen")
         if isinstance(mid, str) and mid in {m["id"] for m in self.manifest["models"]}:   # a model's welcome tour, seen once (only real model ids are kept)
             seen = [x for x in (s.get("model_tours_seen") or []) if x != mid]

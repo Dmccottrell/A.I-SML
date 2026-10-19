@@ -94,6 +94,11 @@ class ApiClient(private val session: SessionStore) {
         post<JsonObject>("/api/settings", buildJsonObject { put("model_tour_seen", modelId) })
     }
 
+    /** The VryxCode tour was shown (the version seen) */
+    suspend fun vryxTourSeen(version: Int) {
+        post<JsonObject>("/api/settings", buildJsonObject { put("vryx_tour_seen", version) })
+    }
+
     suspend fun pin(chatId: Long, pinned: Boolean) {
         post<JsonObject>("/api/chats/$chatId/pin", buildJsonObject { put("pinned", pinned) })
     }

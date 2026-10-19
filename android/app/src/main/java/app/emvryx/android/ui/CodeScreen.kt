@@ -90,11 +90,15 @@ private val Green = Color(0xFF34D399)
 private val MODES = listOf("ask" to "Ask before editing", "auto" to "Edit without asking", "plan" to "Plan first")
 private val SLASH = listOf("/plan" to "Plan first: look and plan, change nothing", "/ask" to "Ask before editing", "/auto" to "Edit without asking",
                            "/new" to "Start a new session", "/memory" to "What VryxCode remembers about you", "/permissions" to "This project's permission rules",
-                           "/fixci" to "Fix what is failing on GitHub for this project")
+                           "/fixci" to "Fix what is failing on GitHub for this project", "/tour" to "Take the VryxCode tour again")
 
 @Composable
 fun CodeScreen(app: AppViewModel, vm: CodeViewModel) {
-    LaunchedEffect(app.state) { vm.suggestOn = app.flag("vryxcode_suggest") }
+    LaunchedEffect(app.state) {
+        vm.suggestOn = app.flag("vryxcode_suggest")
+        vm.onTour = app::replayVryxTour
+        app.maybeVryxTour()                                       // the VryxCode tour, the first time VryxCode opens (flag vryxcode_tour)
+    }
     LaunchedEffect(Unit) { vm.load() }
     BackHandler { if (vm.inSession) vm.backToList() else app.backToChat() }
     Column(Modifier.fillMaxSize().background(Emvryx.bg).imePadding()) {

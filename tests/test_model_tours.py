@@ -102,3 +102,39 @@ class TourUi(Base):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+@unittest.skipUnless(browser_check.available() and find_browser(), "needs the playwright package and a Chromium, Edge or Chrome")
+class VryxTourUi(TourUi):
+    def test_plays_the_first_time_vryxcode_opens_then_never_again(self):
+        self.state.flags.data["audiences"]["vryxcode_tour"] = "admins"
+        self.state.flags.data["audiences"]["vryxcode_suggest"] = "admins"
+        from playwright.sync_api import sync_playwright
+        with sync_playwright() as p:
+            b, page = self.page(p)
+            try:
+                page.evaluate("openCode()")
+                page.wait_for_selector(".tour.vxtour .slide.on h2")
+                self.assertEqual(page.inner_text(".tour .slide.on h2"), "WELCOME to VryxCode")
+                titles = page.evaluate("[...document.querySelectorAll('.tour .slide h2')].map((h) => h.textContent)")
+                self.assertIn("Pick a model", titles)                                  # the test base switches effort-only off
+                self.assertIn("Your next message, suggested", titles)
+                self.assertEqual(titles[-1], "Ready to build")
+                page.click(".tour .skip")
+                wait_for(lambda: page.evaluate("S.state.settings.vryx_tour_seen === 1"), 10)
+                page.evaluate("maybeVryxTour()")
+                page.wait_for_timeout(700)
+                self.assertEqual(page.locator(".tour.vxtour").count(), 0)
+            finally:
+                b.close()
+
+    def test_off_by_flag(self):
+        from playwright.sync_api import sync_playwright
+        with sync_playwright() as p:
+            b, page = self.page(p)
+            try:
+                page.evaluate("openCode()")
+                page.wait_for_timeout(1200)
+                self.assertEqual(page.locator(".tour.vxtour").count(), 0)
+            finally:
+                b.close()
