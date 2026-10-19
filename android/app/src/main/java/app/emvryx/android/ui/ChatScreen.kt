@@ -115,6 +115,14 @@ fun ChatScreen(vm: AppViewModel) {
     var menu by remember { mutableStateOf<Menu?>(null) }
     var editing by remember { mutableStateOf<Bubble?>(null) }
     var reporting by remember { mutableStateOf<Bubble?>(null) }
+    // the pickers live here, not in the menu: the menu closes as soon as one opens, and its result must still arrive
+    val context = LocalContext.current
+    val pickPicture = rememberLauncherForActivityResult(ActivityResultContracts.PickMultipleVisualMedia(3)) { uris ->
+        uris.forEach { u -> readPicked(context, u)?.let { (n, b) -> vm.attach(n, b) } }
+    }
+    val pickFile = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { u ->
+        u?.let { readPicked(context, it)?.let { (n, b) -> vm.attach(n, b) } }
+    }
     BackHandler(drawer.isOpen) { scope.launch { drawer.close() } }
     BackHandler(menu != null) { menu = null }
 
@@ -142,7 +150,10 @@ fun ChatScreen(vm: AppViewModel) {
                             Menu.Effort -> EffortMenu(vm) { menu = null }
                             Menu.Memory -> MemoryMenuBody(vm) { menu = null }
                             Menu.Regen -> RegenMenuBody(vm) { menu = null }
-                            Menu.Attach -> AttachMenu(vm) { menu = null }
+                            Menu.Attach -> AttachMenu(
+                                onPicture = { pickPicture.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) },
+                                onFile = { pickFile.launch(arrayOf("*/*")) },
+                            ) { menu = null }
                             null -> Unit
                         }
                     }
@@ -160,23 +171,16 @@ fun ChatScreen(vm: AppViewModel) {
 
 /** + by the message box: a picture from the phone, a photo, or a file (web/js/documents.js) */
 @Composable
-private fun AttachMenu(vm: AppViewModel, close: () -> Unit) {
-    val context = LocalContext.current
-    val pickPicture = rememberLauncherForActivityResult(ActivityResultContracts.PickMultipleVisualMedia(3)) { uris ->
-        uris.forEach { u -> readPicked(context, u)?.let { (n, b) -> vm.attach(n, b) } }
-    }
-    val pickFile = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { u ->
-        u?.let { readPicked(context, it)?.let { (n, b) -> vm.attach(n, b) } }
-    }
+private fun AttachMenu(onPicture: () -> Unit, onFile: () -> Unit, close: () -> Unit) {
     MenuHead("ADD TO YOUR MESSAGE")
-    Opt(selected = false, onClick = { pickPicture.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)); close() }) {
+    Opt(selected = false, onClick = { onPicture(); close() }) {
         Text("🖼", fontSize = 20.sp)
         Column(Modifier.weight(1f)) {
             Text("Picture or screenshot", fontWeight = FontWeight.Bold, fontSize = 16.sp)
             Text("Up to 3. Emvryx looks at it and answers.", color = Emvryx.muted, fontSize = 14.sp)
         }
     }
-    Opt(selected = false, onClick = { pickFile.launch(arrayOf("*/*")); close() }) {
+    Opt(selected = false, onClick = { onFile(); close() }) {
         Text("📄", fontSize = 20.sp)
         Column(Modifier.weight(1f)) {
             Text("File", fontWeight = FontWeight.Bold, fontSize = 16.sp)

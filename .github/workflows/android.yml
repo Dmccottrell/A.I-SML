@@ -24,13 +24,13 @@ jobs:
         working-directory: android
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-java@v4
+      - uses: actions/setup-java@v5
         with:
           distribution: temurin
           java-version: "17"
           cache: gradle
       - name: Unit tests and the debug app
-        run: ./gradlew --no-daemon testDebugUnitTest assembleDebug
+        run: chmod +x gradlew && ./gradlew --no-daemon testDebugUnitTest assembleDebug
       - uses: actions/upload-artifact@v4
         if: always()
         with:
