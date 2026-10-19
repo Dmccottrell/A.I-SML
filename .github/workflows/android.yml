@@ -51,6 +51,8 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 40
     steps:
+      - name: Free disk space (the emulator's phone storage needs several GB)
+        run: sudo rm -rf /usr/share/dotnet /opt/ghc /usr/local/share/boost /usr/local/lib/node_modules /opt/hostedtoolcache/CodeQL && df -h / | tail -1
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
@@ -87,6 +89,7 @@ jobs:
           target: google_apis
           profile: pixel_6
           disable-animations: true
+          disk-size: 2048M
           working-directory: android
           script: |
             chmod +x gradlew
