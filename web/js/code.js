@@ -254,6 +254,8 @@ const SLASH = [['plan', 'Plan first: look and plan, change nothing', () => setMo
   ['files', 'Browse the project files', () => showDrawer(true, 'files')], ['preview', 'Open the live preview', () => openPreview()], ['new', 'Start a new session', () => newSession()],
   ['picture', 'Attach a screenshot or picture (or paste one into the message box)', () => pickPictures()],
   ['memory', 'What VryxCode remembers about you (forget notes)', () => showMemory()],
+  ['fixci', 'Fix what is failing on GitHub for this project (reads the CI log)', () => fixCi()],
+  ['watchci', 'Watch this project\u2019s CI: fix new failures by itself (owner)', () => watchCi()],
   ['permissions', 'This project\u2019s saved permission rules (always allow / never allow)', () => showRules()],
   ['help', 'List these commands', () => note('fin', 'Commands', SLASH.map((x) => '/' + x[0] + ' \u2014 ' + x[1]).concat((C.cmds || []).map((x) => '/' + x.name + ' \u2014 ' + (x.about || 'this project\u2019s own command'))).join('\n') + '\n@filename \u2014 point at a file in your message')]];
 // ---- pictures sent with the next message (the full agent sees them), memory, saved permission rules, the project's own /commands
@@ -287,6 +289,20 @@ async function showRules() {
   m = dialog([el('h2', {}, 'Permission rules for ' + C.project), el('div', {style: 'color:var(--muted)'}, 'A rule is the start of a command (npm test) or a tool (write_file). "Never" wins. "Yes, and don\u2019t ask again" adds to "Always".'),
     ...list('allow', 'Always allow'), ...list('deny', 'Never allow'),
     el('div', {class: 'row'}, rule, el('button', {class: 'chip', onclick: () => change({add: {kind: 'allow', rule: rule.value}})}, 'Always'), el('button', {class: 'chip bad', onclick: () => change({add: {kind: 'deny', rule: rule.value}})}, 'Never'))], 'Close');
+}
+async function fixCi() {
+  const r = await post('/api/code/fixci', {project: C.project, model: C.model, effort: C.effort, env: C.env, notify: vxNotifyOn()}); const j = await r.json().catch(() => ({}));
+  if (!r.ok) { note('bad', 'Could not check CI', (j.message || '') + ' ' + (j.action || '')); return; }
+  if (!j.id) { note('fin', 'CI', j.message || 'Nothing is failing.'); return; }
+  if (C.view === 'home') newSession();
+  C.sid = j.id; C.saved = false; C.checkpoints = []; C.seen = 0; C.stopping = false; $('codeIn').replaceChildren(); poll();
+}
+async function watchCi() {
+  const on = !((C.info && C.info.ci_watch) || []).includes(C.project);
+  const r = await post('/api/code/ci-watch', {project: C.project, on, model: C.model}); const j = await r.json().catch(() => ({}));
+  if (!r.ok) { note('bad', 'Could not change Watch CI', (j.message || '') + ' ' + (j.action || '')); return; }
+  if (C.info) C.info.ci_watch = on ? (C.info.ci_watch || []).concat([C.project]) : (C.info.ci_watch || []).filter((p) => p !== C.project);
+  note('fin', on ? 'Watching CI' : 'Stopped watching CI', on ? 'Every few minutes VryxCode looks at GitHub. When a new commit fails, your phone is told and it starts fixing it. Pushing the fix still asks you.' : C.project + ' is no longer watched.');
 }
 async function loadCmds() { try { const r = await api('/api/code/commands?project=' + encodeURIComponent(C.project)); C.cmds = (await r.json()).commands || []; } catch (e) { C.cmds = []; } }
 let SUG = {items: [], at: -1};

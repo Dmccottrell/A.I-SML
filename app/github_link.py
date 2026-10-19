@@ -28,6 +28,7 @@ import tempfile
 import threading
 import time
 import urllib.error
+import urllib.parse
 import urllib.request
 
 API = "https://api.github.com"
@@ -204,9 +205,49 @@ def _urllib_http(method, url, headers, body):
         raise GitHubError("Could not reach GitHub.", "Check the server's internet connection and try again.")
 
 
+class _NoRedirect(urllib.request.HTTPRedirectHandler):
+    def redirect_request(self, *args, **kwargs):
+        return None                                   # the redirect comes back as an HTTPError with its Location: followed by hand, without the token
+
+
+def _log_get(url, token, limit):
+    """A GitHub Actions job log: GitHub answers with a short-lived link to the file, which is fetched WITHOUT the token (it must never leave github.com)."""
+    req = urllib.request.Request(url, headers={"Authorization": "Bearer " + token, "Accept": "application/vnd.github+json", "User-Agent": "Emvryx",
+                                               "X-GitHub-Api-Version": "2022-11-28"})
+    try:
+        with urllib.request.build_opener(_NoRedirect).open(req, timeout=30) as r:
+            return r.read(limit).decode("utf-8", "replace")
+    except urllib.error.HTTPError as e:
+        where = e.headers.get("Location") if e.code in (301, 302, 303, 307, 308) else None
+        if not where or urllib.parse.urlparse(where).scheme != "https":
+            raise GitHubError("GitHub did not give the log.", "The run may be too old, or the token may be missing the repo scope.")
+    except (urllib.error.URLError, OSError):
+        raise GitHubError("Could not reach GitHub.", "Check the server's internet connection and try again.")
+    try:
+        with urllib.request.urlopen(urllib.request.Request(where, headers={"User-Agent": "Emvryx"}), timeout=30) as r:
+            data = r.read()
+    except (urllib.error.URLError, OSError):
+        raise GitHubError("Could not download the log.", "Try again in a minute.")
+    return data[-limit:].decode("utf-8", "replace")
+
+
 class Api:
-    def __init__(self, token, http=None):
-        self.token, self.http = token, http or _urllib_http
+    def __init__(self, token, http=None, log_get=None):
+        self.token, self.http, self.log_get = token, http or _urllib_http, log_get or _log_get
+
+    def checks(self, owner, repo, ref):
+        """The checks (CI) of a branch or commit: {"sha", "failed": [{"id", "name", "summary", "actions"}], "pending", "total"}. Read-only."""
+        data = self._call("GET", f"/repos/{owner}/{repo}/commits/{urllib.parse.quote(str(ref), safe='')}/check-runs?per_page=100")
+        runs = [r for r in (data.get("check_runs") or []) if isinstance(r, dict)] if isinstance(data, dict) else []
+        failed = [{"id": int(r.get("id") or 0), "name": str(r.get("name") or "")[:120], "summary": str((r.get("output") or {}).get("summary") or "")[:2000],
+                   "actions": str((r.get("app") or {}).get("slug") or "") == "github-actions"}
+                  for r in runs if r.get("status") == "completed" and r.get("conclusion") in ("failure", "timed_out")]
+        return {"sha": str(runs[0].get("head_sha") or "") if runs else "", "failed": failed, "pending": any(r.get("status") != "completed" for r in runs),
+                "total": len(runs)}
+
+    def job_log(self, owner, repo, job_id, limit=60_000):
+        """The end of a GitHub Actions job's log (a check run of GitHub Actions has the job's id)."""
+        return self.log_get(f"{API}/repos/{owner}/{repo}/actions/jobs/{int(job_id)}/logs", self.token, limit)
 
     def _call(self, method, path, body=None):
         headers = {"Authorization": "Bearer " + self.token, "Accept": "application/vnd.github+json", "X-GitHub-Api-Version": "2022-11-28",
