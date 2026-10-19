@@ -29,6 +29,8 @@ class ModelRunner:
         self.kv8 = set()                                        # model ids whose chat memory is kept in 8 bits (models.json "cache_bits": 8): half the memory, so 256K fits a 12 GB card
         self.no_draft = set()                                   # ...and those it failed for (an older llama-server, or a file without the head): loaded plainly
         self.lock = threading.Lock()
+        self.manifest = None                                    # set by the app: lets a model downloaded while the app runs be found without a restart
+        self._looked = 0.0
         atexit.register(self.stop)
 
     def drop_draft(self, model_id):
@@ -53,6 +55,10 @@ class ModelRunner:
         return bool(self.projector(model_id))
 
     def available(self, model_id):
+        if model_id not in self.files and self.manifest and time.time() - self._looked > 10:     # downloaded since the app started (get_model.py): look again
+            self._looked = time.time()
+            for mid, path in discover_ggufs(self.manifest).items():
+                self.files.setdefault(mid, path)
         return model_id in self.files and os.path.exists(self.files[model_id]) and bool(self.bin)
 
     def ready(self, model_id, ctx):

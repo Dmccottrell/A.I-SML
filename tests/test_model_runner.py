@@ -296,3 +296,18 @@ class Names(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class LateDownload(unittest.TestCase):
+    def test_a_model_downloaded_while_the_app_runs_is_found(self):
+        """Oct 19: Apogee 3 was downloaded after the app started and stayed 'Not on this computer' until a restart"""
+        import app_runner
+        with tempfile.TemporaryDirectory() as d:
+            manifest = {"models": [{"id": "apogee-3", "local_gguf": [os.path.join(d, "my-ai-q4_k_m.gguf")]}]}
+            r = app_runner.ModelRunner(sys.executable, {})
+            r.manifest = manifest
+            self.assertFalse(r.available("apogee-3"))
+            with open(os.path.join(d, "my-ai-q4_k_m.gguf"), "wb") as f:
+                f.write(b"GGUF")
+            r._looked = 0                                                       # it looks again at most every 10 seconds
+            self.assertTrue(r.available("apogee-3"))
