@@ -89,6 +89,11 @@ class ApiClient(private val session: SessionStore) {
         post<JsonObject>("/api/chats/$chatId/messages/$messageId/feedback", buildJsonObject { put("kind", kind); put("note", note) })
     }
 
+    /** A model's welcome tour was shown: it does not play again on any device */
+    suspend fun modelTourSeen(modelId: String) {
+        post<JsonObject>("/api/settings", buildJsonObject { put("model_tour_seen", modelId) })
+    }
+
     suspend fun pin(chatId: Long, pinned: Boolean) {
         post<JsonObject>("/api/chats/$chatId/pin", buildJsonObject { put("pinned", pinned) })
     }

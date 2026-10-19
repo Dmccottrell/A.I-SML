@@ -29,6 +29,11 @@ data class ModelCard(
     val state: String = "",
     val badge: String = "",
     val efforts: List<String>? = null,       // when set, only these (plus Auto) can be picked
+    val preview: Boolean = false,
+    val vryxcode: Boolean = false,
+    @SerialName("context_tested") val contextTested: Long? = null,
+    val tour: List<TourSlide> = emptyList(),  // the model's welcome tour (models.json "tour"; feature flag model_tours)
+    @SerialName("whats_new") val whatsNew: WhatsNew? = null,
 ) {
     val ready get() = state == "ready"
 
@@ -36,6 +41,18 @@ data class ModelCard(
     val fullName: String
         get() = version?.let { v -> name + " " + (if (v % 1.0 == 0.0) v.toLong().toString() else v.toString()) } ?: name
 }
+
+/** One slide of a model's welcome tour: art is memory, eyes, fast, think, deeper, sense, code or logo */
+@Serializable
+data class TourSlide(val art: String = "logo", val title: String = "", val text: String = "")
+
+/** What is better than the version before (models.json "whats_new"): the points, and the measured numbers as [what, before, now] (null = still being measured) */
+@Serializable
+data class WhatsNew(val vs: String = "", val points: List<String> = emptyList(), val scores: List<List<String?>> = emptyList())
+
+/** The person's own settings the app reads (the rest stay on the website's Settings page) */
+@Serializable
+data class UserSettings(@SerialName("model_tours_seen") val modelToursSeen: List<String> = emptyList())
 
 @Serializable
 data class Tank(val pct: Double = 100.0)
@@ -112,6 +129,7 @@ data class AppState(
     val gaming: Boolean = false,
     @SerialName("regen_options") val regenOptions: List<RegenOption> = emptyList(),
     val features: Map<String, Boolean> = emptyMap(),        // the feature flags as they apply to this person (Admin > Previews)
+    val settings: UserSettings = UserSettings(),
 ) {
     /** "Pro plan" */
     val planName get() = plan.replaceFirstChar { it.uppercase() } + " plan"

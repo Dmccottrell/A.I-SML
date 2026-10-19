@@ -511,6 +511,17 @@ private fun ModelMenu(vm: AppViewModel, close: () -> Unit) {
             if (m.badge.isNotBlank()) Text(m.badge, color = Emvryx.muted, fontSize = 13.sp)
         }
     }
+    val tours = if (vm.flag("model_tours")) vm.models.filter { it.tour.isNotEmpty() } else emptyList()
+    if (tours.isNotEmpty()) {
+        MenuHead("TOURS")
+        tours.forEach { m ->
+            Opt(selected = false, onClick = { close(); vm.replayTour(m) }) {
+                Logo(Modifier.size(30.dp), kind = m.name)
+                Text("Take the tour of ${m.fullName}", Modifier.weight(1f), fontWeight = FontWeight.Bold, fontSize = 16.sp)
+                Text("›", color = Emvryx.muted, fontSize = 18.sp)
+            }
+        }
+    }
 }
 
 @Composable

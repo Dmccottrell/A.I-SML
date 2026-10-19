@@ -14,6 +14,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.key
 import androidx.core.content.IntentCompat
 import androidx.lifecycle.lifecycleScope
+import app.emvryx.android.ui.ModelTour
 import app.emvryx.android.ui.AppViewModel
 import app.emvryx.android.ui.ChatScreen
 import app.emvryx.android.ui.CodeScreen
@@ -63,7 +64,10 @@ class MainActivity : ComponentActivity() {
 private fun Root(vm: AppViewModel, code: CodeViewModel) {
     // the chat follows the chosen model's colours; sign-in and the "off" page are Emvryx amber (web/js/core.js applyTheme)
     EmvryxTheme(model = if (vm.screen == Screen.Chat) vm.currentModel?.name else null) {
-        Surface(color = MaterialTheme.colorScheme.background) { Screens(vm, code) }   // gives every screen the light text colour
+        Surface(color = MaterialTheme.colorScheme.background) {           // gives every screen the light text colour
+            Screens(vm, code)
+            vm.tour?.let { ModelTour(vm, it) }                            // a model's welcome tour covers whatever screen is showing
+        }
     }
 }
 

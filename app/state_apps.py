@@ -28,6 +28,7 @@ class StateApps:
         m["older"] = False
         if m.get("preview") and not who.get("admin"):              # a model's "What's new" goes out only when the owner publishes the model
             m.pop("whats_new", None)
+            m.pop("tour", None)
         return m
 
     def catalog(self, who):
