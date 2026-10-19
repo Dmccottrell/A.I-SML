@@ -112,6 +112,45 @@ function openModelTour(c, replay) {
     if (!skipped && !replay && c.state === 'ready' && S.model !== c.id) chooseModel(c);
   }, 'mtour');
 }
+// ---------------------------------------------------------------- the VryxCode tour (feature flag vryxcode_tour): the first time someone opens VryxCode, replay with /tour.
+// Only what is switched on for this person is shown (effort or models, the Claude Code-style agent, the suggested reply).
+const VRYX_TOUR_VERSION = 1;
+function vryxTourSlides() {
+  const chips = (list) => () => el('div', {class: 'art'}, el('div', {class: 'chips'}, ...list.map((t, k) => el('span', {class: 'rise', style: '--d:' + (k * 0.12) + 's'}, t))));
+  const term = (lines) => () => el('div', {class: 'art'}, el('div', {class: 'term'}, ...lines.map(([mark, t], k) => el('div', {class: 'rise' + (mark === '>' ? ' dim' : ''), style: '--d:' + (k * 0.3) + 's'}, mark === '>' ? '> ' + t : el('span', {class: 'ok'}, mark), mark === '>' ? '' : ' ' + t))));
+  const full = featureOn('vryxcode_full_agent'), k = 'VryxCode';
+  const out = [
+    {art: () => el('div', {class: 'art'}, el('div', {class: 'rings'}, el('i'), el('i'), el('i')), el('div', {class: 'tbig rise'}, '</>')), kicker: 'Your coding partner', title: 'WELCOME to VryxCode',
+      text: 'Describe what you want to build or fix. VryxCode plans it, writes the files, runs them and shows you the result.'},
+    {art: term([['>', 'A bill splitter with tip'], ['\u2713', 'Planned 3 steps'], ['\u2713', 'Wrote index.html, app.js'], ['\u2713', 'Opened the preview']]), kicker: k, title: 'Just describe it',
+      text: 'Type an idea, pick a starter template, or open one of your projects. Each piece of work is a session you can come back to.'},
+    featureOn('vryxcode_effort')
+      ? {art: chips(['Quick', 'Balanced', 'Deep']), kicker: k, title: 'Pick the effort', text: 'No models to choose: VryxCode uses its best one. Quick for small fixes, Balanced for most work, Deep thinks before every step.'}
+      : {art: chips(['Equinox', 'Solstice', 'Apogee']), kicker: k, title: 'Pick a model', text: 'Bigger models take on bigger jobs. Small ones are best for one function or one file.'},
+    {art: chips(['Ask', 'Auto', 'Plan first']), kicker: k, title: 'You stay in charge', text: 'Ask before every edit, let it edit on its own, or have it plan first and change nothing until you say go.'},
+    {art: term([['\u2713', 'Changed app.js'], ['!', 'Ran the tests: 1 failed'], ['\u2713', 'Fixed it'], ['\u2713', 'Ran the tests: all pass']]), kicker: k, title: full ? 'It keeps going until it works' : 'It checks its own work',
+      text: full ? 'After every change it runs the code and the tests and fixes what fails, for as many steps as it takes. Type while it works and it reads it before its next step.' : 'It runs what it wrote and fixes what breaks, one small step at a time.'},
+    {art: () => el('div', {class: 'art'}, el('div', {class: 'term'}, el('div', {class: 'rise'}, 'Allow this?'), el('div', {class: 'dim rise', style: '--d:.3s'}, '$ npm test'), el('div', {class: 'rise', style: '--d:.6s'}, el('span', {class: 'ok'}, 'Yes'), '   Yes, always   No'))),
+      kicker: k, title: 'It asks before anything risky', text: 'Running a command or changing files outside the plan needs your yes. "Always" remembers it for this project; /permissions shows the rules.'},
+    {art: chips(['Preview', 'Editor', 'Keep / Undo', 'Rewind']), kicker: k, title: 'See it, check it, undo it', text: 'Watch the result live in the preview, open the files in the editor, keep or undo each file it changed, or rewind to an earlier point.'},
+    {art: chips(['/plan', '/review', '/memory', '/fixci', '/help']), kicker: k, title: 'Slash commands', text: 'Type / for shortcuts: plan, review the changes, what it remembers, fix what fails on GitHub, and more. @ points at a file. Paste a screenshot to show it a problem.'},
+  ];
+  if (featureOn('vryxcode_suggest')) out.push({art: term([['>', 'Add a dark mode toggle'], ['Tab \u21e5', 'or swipe right to use it']]), kicker: k, title: 'Your next message, suggested',
+    text: 'When it finishes, the empty message box suggests what to say next. Press Tab, or swipe right on a phone, to fill it in.'});
+  out.push({art: () => el('div', {class: 'art'}, el('div', {class: 'rings'}, el('i'), el('i')), el('div', {class: 'tbig rise'}, '\u2713')), title: 'Ready to build', text: 'Type /tour any time to see this again.'});
+  return out;
+}
+function openVryxTour(replay) {
+  if (document.querySelector('.tour')) return;
+  runTour(vryxTourSlides(), 'Welcome to VryxCode', 'Start building', (skipped) => {
+    if (!replay) { try { post('/api/settings', {vryx_tour_seen: VRYX_TOUR_VERSION}); } catch (e) {} (S.state.settings || (S.state.settings = {})).vryx_tour_seen = VRYX_TOUR_VERSION; }
+    if (!skipped) { try { $(C.view === 'session' ? 'codeTask' : 'vxQuick').focus(); } catch (e) {} }
+  }, 'mtour vxtour');
+}
+function maybeVryxTour() {
+  if (featureOn('vryxcode_tour') && (((S.state || {}).settings || {}).vryx_tour_seen || 0) < VRYX_TOUR_VERSION) setTimeout(() => openVryxTour(false), 400);
+}
+
 // The first time someone picks a new model, or (once the app is open and nothing else is showing) the newest one they have not toured yet
 function maybeModelTour(c) { if (featureOn('model_tours') && c && c.tour && !tourSeen(c.id)) setTimeout(() => openModelTour(c, false), 250); }
 function checkModelTour() {

@@ -14,7 +14,7 @@ async function openCode() {
   if (!cModel() || cModel().state !== 'ready') C.model = (usable.find((m) => m.id === S.model) || usable[0] || C.info.models[0] || {}).id;
   if (oneModel()) C.model = C.info.effort.auto || C.model;
   C.project = C.project || C.info.running && C.info.project || C.info.projects[0] || 'my-project';
-  renderCodeBar(); showHome(); vxRenderTemplates(); vxNotifyInit();
+  renderCodeBar(); showHome(); vxRenderTemplates(); vxNotifyInit(); maybeVryxTour();
 }
 // ---- the Sessions list: where VryxCode opens, like a to-do list of everything it has worked on
 const ENV_NAME = {local: 'This computer', sandbox: 'Isolated sandbox', cloud: 'Cloud machine'};
@@ -257,6 +257,7 @@ const SLASH = [['plan', 'Plan first: look and plan, change nothing', () => setMo
   ['fixci', 'Fix what is failing on GitHub for this project (reads the CI log)', () => fixCi()],
   ['watchci', 'Watch this project\u2019s CI: fix new failures by itself (owner)', () => watchCi()],
   ['permissions', 'This project\u2019s saved permission rules (always allow / never allow)', () => showRules()],
+  ['tour', 'Take the VryxCode tour again', () => openVryxTour(true)],
   ['help', 'List these commands', () => note('fin', 'Commands', SLASH.map((x) => '/' + x[0] + ' \u2014 ' + x[1]).concat((C.cmds || []).map((x) => '/' + x.name + ' \u2014 ' + (x.about || 'this project\u2019s own command'))).join('\n') + '\n@filename \u2014 point at a file in your message')]];
 // ---- pictures sent with the next message (the full agent sees them), memory, saved permission rules, the project's own /commands
 C.pics = [];

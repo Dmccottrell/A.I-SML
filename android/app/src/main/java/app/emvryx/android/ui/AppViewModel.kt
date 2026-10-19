@@ -112,6 +112,9 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         private set
     private val toursSeen = mutableSetOf<String>()
     private var tourChecked = false
+    var vryxTour by mutableStateOf(false)                        // the VryxCode tour is showing (flag vryxcode_tour)
+        private set
+    private var vryxSeen = 0
 
     init {
         start()
@@ -224,6 +227,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         usage = s.usage
         if (model.isEmpty() || models.none { it.id == model && it.ready }) model = s.model
         toursSeen.addAll(s.settings.modelToursSeen)
+        vryxSeen = maxOf(vryxSeen, s.settings.vryxTourSeen)
         if (!tourChecked) {                                       // once per launch: the newest model this person has not toured yet
             tourChecked = true
             s.models.cards.filter { it.ready && it.tour.isNotEmpty() && it.id !in toursSeen }.maxByOrNull { it.version ?: 0.0 }?.let(::maybeTour)
@@ -233,6 +237,23 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     // ---- model welcome tours (feature flag model_tours): "WELCOME to Flare 3", what only that model brings, then VryxCode for its models
     fun maybeTour(card: ModelCard) {
         if (flag("model_tours") && card.tour.isNotEmpty() && card.id !in toursSeen && tour == null) tour = card
+    }
+
+    /** The first time VryxCode opens */
+    fun maybeVryxTour() {
+        if (flag("vryxcode_tour") && vryxSeen < VRYX_TOUR_VERSION && tour == null) vryxTour = true
+    }
+
+    fun replayVryxTour() {
+        vryxTour = true
+    }
+
+    fun closeVryxTour() {
+        vryxTour = false
+        if (vryxSeen < VRYX_TOUR_VERSION) {
+            vryxSeen = VRYX_TOUR_VERSION
+            viewModelScope.launch { runCatching { api.vryxTourSeen(VRYX_TOUR_VERSION) } }
+        }
     }
 
     /** Replay from the model picker, seen or not */
@@ -555,6 +576,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
 
     companion object {
         const val MAX_UPLOAD = 20_000_000
+        const val VRYX_TOUR_VERSION = 1                          // web/js/tour.js VRYX_TOUR_VERSION: raise both to show a changed tour again
 
         /** "chat.emvryx.app" -> "https://chat.emvryx.app"; null when it can't be an address. */
         fun normalise(input: String): String? {

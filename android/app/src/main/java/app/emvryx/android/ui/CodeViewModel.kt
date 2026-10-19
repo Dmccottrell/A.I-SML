@@ -68,6 +68,7 @@ class CodeViewModel(app: Application) : AndroidViewModel(app) {
     var env by mutableStateOf("local")
     var offer by mutableStateOf("")                   // the suggested reply after a finished turn (flag vryxcode_suggest), greyed in the empty box
     var suggestOn = false
+    var onTour: (() -> Unit)? = null                     // /tour: the VryxCode tour again
     val pictures = mutableStateListOf<String>()      // data: URLs sent with the next message (the full agent sees them)
     var commands by mutableStateOf<List<CodeCommand>>(emptyList())
         private set
@@ -250,6 +251,7 @@ class CodeViewModel(app: Application) : AndroidViewModel(app) {
             "/memory" -> showMemory()
             "/permissions" -> showRules()
             "/fixci" -> fixCi()
+            "/tour" -> onTour?.invoke()
             else -> return false
         }
         return true

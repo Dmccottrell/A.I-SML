@@ -52,7 +52,10 @@ data class WhatsNew(val vs: String = "", val points: List<String> = emptyList(),
 
 /** The person's own settings the app reads (the rest stay on the website's Settings page) */
 @Serializable
-data class UserSettings(@SerialName("model_tours_seen") val modelToursSeen: List<String> = emptyList())
+data class UserSettings(
+    @SerialName("model_tours_seen") val modelToursSeen: List<String> = emptyList(),
+    @SerialName("vryx_tour_seen") val vryxTourSeen: Int = 0,
+)
 
 @Serializable
 data class Tank(val pct: Double = 100.0)
