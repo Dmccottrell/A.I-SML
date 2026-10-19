@@ -264,7 +264,7 @@
       "size_mb": 3300,
       "sha256": "",
       "min_ram_gb": 6,
-      "context": 131072,
+      "context": 262144,
       "status": "preview",
       "supports_effort": true,
       "skills": [
@@ -274,7 +274,7 @@
       ],
       "pinned": false,
       "cost_weight": 2,
-      "context_tested": 131072,
+      "context_tested": 262144,
       "kv_kb_per_token": 24,
       "weights_mb": 3300,
       "max_reply_tokens": 3072,
@@ -288,11 +288,11 @@
       "mtp": true,
       "cache_bits": 8,
       "think": "empty",
-      "tour": [{"art": "memory", "title": "Remembers long chats", "text": "128K tokens: long chats and long documents stay in view, 4 times more than before."}, {"art": "eyes", "title": "Looks at your pictures", "text": "Send a photo or a screenshot and it reads it itself."}, {"art": "think", "title": "Thinks before hard questions", "text": "Pick Deep and it works the problem through first: 95.7% on the thinking test."}, {"art": "fast", "title": "Replies come out faster", "text": "It drafts a few words ahead and checks them all at once: the same answers, sooner."}],
+      "tour": [{"art": "memory", "title": "Remembers long chats", "text": "256K tokens: long chats and whole documents stay in view, 8 times more than before."}, {"art": "eyes", "title": "Looks at your pictures", "text": "Send a photo or a screenshot and it reads it itself."}, {"art": "think", "title": "Thinks before hard questions", "text": "Pick Deep and it works the problem through first: 95.7% on the thinking test."}, {"art": "fast", "title": "Replies come out faster", "text": "It drafts a few words ahead and checks them all at once: the same answers, sooner."}],
       "whats_new": {
         "vs": "equinox-2",
         "points": [
-          "Remembers 4 times more of a conversation: 128K tokens tested, instead of 32K, so long chats and long documents stay in view.",
+          "Remembers 8 times more of a conversation: 256K tokens instead of 32K (with compact 8-bit chat memory), so long chats and whole documents stay in view.",
           "Looks at pictures itself: no separate picture reader is needed.",
           "Built on a newer base, with a hybrid design that stays quick on long text.",
           "Thinks before hard questions in Deep: 95.7% on the thinking test, and 99.3% when it answers straight away.",
@@ -305,9 +305,9 @@
             "70.5%"
           ],
           [
-            "Memory (context window, tested)",
+            "Memory (context window)",
             "32K",
-            "128K"
+            "256K"
           ],
           [
             "Reads pictures itself",
@@ -531,27 +531,16 @@
       ],
       "vryxcode": true,
       "mtp": true,
-      "tour": [{"art": "memory", "title": "Remembers long work", "text": "80K tokens on this computer, 2.5 times more than before, and it passed the long-memory test all the way to 128K."}, {"art": "deeper", "title": "Deeper and stronger", "text": "A newer, stronger design made 12 layers deeper, for your toughest questions."}, {"art": "code", "title": "VryxCode's own model", "text": "When VryxCode shows only the effort, Apogee 3 is the model doing the work."}],
+      "tour": [{"art": "memory", "title": "Remembers long work", "text": "80K tokens on this computer, 2.5 times more than before, and it passed the long-memory test all the way to 128K."}, {"art": "deeper", "title": "Deeper and stronger", "text": "A newer, stronger design made 12 layers deeper, for your toughest questions."}, {"art": "sense", "title": "The sharpest Emvryx yet", "text": "75.4% on the HellaSwag common-sense test (just ahead of Solstice 3, the best Emvryx score so far) and 95.7% on maths and reasoning questions."}, {"art": "code", "title": "VryxCode's own model", "text": "When VryxCode shows only the effort, Apogee 3 is the model doing the work."}],
       "whats_new": {
         "vs": "apogee-2",
         "points": [
           "Remembers far more of a conversation: 80K tokens on this PC, instead of 32K (it found a hidden code at 32K, 64K and 128K in its long-memory test).",
           "Built on a newer, stronger base, made 12 layers deeper.",
-          "VryxCode's own model: when VryxCode shows only the effort, it uses Apogee 3."
+          "Scores 75.4% on common sense (HellaSwag), just ahead of Solstice 3 as the best Emvryx score so far, and 95.7% on the maths and reasoning test answering straight away.", "VryxCode's own model: when VryxCode shows only the effort, it uses Apogee 3."
         ],
-        "scores": [
-          [
-            "Memory (context window, on this PC)",
-            "32K",
-            "80K"
-          ],
-          [
-            "Long-memory test (128K)",
-            "-",
-            "Passed 3/3"
-          ]
-        ]
-      },
+        "scores": [["Common sense (HellaSwag)", "not measured", "75.4%"], ["Memory (context window, on this PC)", "32K", "80K"], ["Long-memory test (128K)", "not measured", "Passed 3/3"], ["Thinking test (Deep)", "not measured", "83.6%"], ["Maths and reasoning, answering straight away", "not measured", "95.7%"], ["Identity test", "16/16", "16/16"]]
+    },
       "cache_bits": 8,
       "think": "empty"
     }
