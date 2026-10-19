@@ -37,6 +37,7 @@ import urllib.request
 from concurrent.futures import ThreadPoolExecutor
 
 import factory_checks as FC
+import factory_plus as FP
 import factory_questions as FQ
 
 OUT = os.path.join("data", "v4")
@@ -78,7 +79,16 @@ def system_prompt(constitution):
 
 # ------------------------------------------------------------------ prompts
 def conversation(q):
-    return [m for m in q.get("messages", []) if m.get("role") in ("user", "assistant")] + [{"role": "user", "content": q["question"]}]
+    """What the teacher sees: the earlier messages, then the question (with the notes the app found, written in, for tool and picture questions)."""
+    return FP.FQ_conversation(q)
+
+
+def lesson_messages(q):
+    """The question as the lesson keeps it: the notes go with the message the way the app sends them, not written into the text."""
+    last = {"role": "user", "content": q["question"]}
+    if q.get("notes"):
+        last["notes"] = [{"title": {"picture": "The picture"}.get(q.get("tool"), "Notes"), "text": q["notes"]}]
+    return [m for m in q.get("messages", []) if m.get("role") in ("user", "assistant")] + [last]
 
 
 def judge_prompt(q, answer, constitution):
@@ -123,7 +133,7 @@ def passes(scores):
 def make_lesson(q, teacher, constitution, drafts=3, rounds=2):
     """Everything for one question: {"lesson", "pair", "thinking", "why"} (lesson None when nothing passed, with the reason)."""
     sysmsg = {"role": "system", "content": system_prompt(constitution)}
-    think = q.get("level") == "hard"
+    think = q.get("level") == "hard"                  # the teacher reasons first on hard questions; medium ones get short reasoning written for them below
     cands = []
     for i in range(drafts):
         try:
@@ -155,7 +165,7 @@ def make_lesson(q, teacher, constitution, drafts=3, rounds=2):
     if not (final["check"]["ok"] and passes(final["scores"])):
         why = "; ".join(final["check"]["problems"]) or ("scores " + json.dumps({k: final["scores"][k] for k in SCORES}) if final["scores"] else "could not be judged")
         return {"lesson": None, "pair": None, "thinking": None, "why": why[:400]}
-    convo = conversation(q)
+    convo = lesson_messages(q)
     lesson = {"messages": convo + [{"role": "assistant", "content": final["answer"]}], "kind": q.get("area", "general"), "level": q.get("level"),
               "source": "lessons4", "question_id": q["id"], "checked": final["check"]["checked"], "score": final["scores"]["avg"]}
     worst = min(cands, key=rank)
@@ -166,12 +176,25 @@ def make_lesson(q, teacher, constitution, drafts=3, rounds=2):
                 "why": "; ".join(worst["check"]["problems"][:3]) or f"scored {gap:.1f} lower"}
     thinking = None
     proved = any(c in final["check"]["checked"] for c in ("answer matches the known answer", "code passed its tests"))
-    if think and proved and 40 <= len(final.get("thinking", "")) <= 8000:
-        row = {"messages": convo[:-1] + [dict(convo[-1], thinking=True), {"role": "assistant", "content": "<think>\n" + final["thinking"] + "\n</think>\n\n" + final["answer"]}],
-               "kind": "thinking", "question_id": q["id"], "checked": final["check"]["checked"], "source": "lessons4"}
+    reasoning = final.get("thinking", "")
+    if proved and not reasoning and q.get("level") == "medium":            # a medium question: a short line of reasoning, written for the proved answer
+        reasoning = short_reasoning(q, final["answer"], teacher)
+    reasoning = FP.sized_thinking(q, reasoning, final["answer"], teacher) if proved and reasoning else None    # thinking sized to the question
+    if reasoning:
+        row = {"messages": convo[:-1] + [dict(convo[-1], thinking=True), {"role": "assistant", "content": "<think>\n" + reasoning + "\n</think>\n\n" + final["answer"]}],
+               "kind": "thinking", "level": q.get("level"), "question_id": q["id"], "checked": final["check"]["checked"], "source": "lessons4"}
         if FC.check(q, row["messages"][-1]["content"], thinking=True)["ok"]:
             thinking = row
     return {"lesson": lesson, "pair": pair, "thinking": thinking, "why": ""}
+
+
+def short_reasoning(q, answer, teacher):
+    """For a medium question: the few steps that reach the proved answer, as brief hidden reasoning (a thinking lesson that does not overthink)."""
+    try:
+        return teacher.chat([{"role": "user", "content": "Write the brief reasoning (3 to 6 short lines, under 1000 characters) that reaches this answer to the "
+                              f"question. Reasoning only.\n\nQUESTION:\n{q['question']}\n\nANSWER:\n{answer}"}], temperature=0.2, max_tokens=600)["answer"].strip()
+    except Exception:                                                         # noqa: BLE001
+        return ""
 
 
 def judge(q, answer, teacher, constitution):
@@ -211,8 +234,10 @@ class Out:
         return {r.get("question_id") for name in ("lessons.jsonl", "rejected.jsonl") for r in read_jsonl(self.path(name))}
 
 
-def run(questions, teacher, out, constitution, drafts=3, rounds=2, workers=4, limit=None, log=print):
+def run(questions, teacher, out, constitution, drafts=3, rounds=2, workers=4, limit=None, log=print, focus=False):
     done = out.done_ids()
+    if focus:                                       # the questions the models missed first (factory_plus.focus_order)
+        questions = FP.focus_order(questions, out)
     todo = [q for q in questions if q["id"] not in done][:limit or None]
     counts = {"kept": 0, "dropped": 0, "pairs": 0, "thinking": 0}
     start, tally = time.time(), threading.Lock()
@@ -304,7 +329,8 @@ def teacher_questions(teacher, per, areas=None, levels=FQ.LEVELS, batch=20, log=
 
 def main(argv=None):
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("command", choices=("questions", "maths", "import", "run", "review", "stats"))
+    ap.add_argument("command", choices=("questions", "maths", "import", "run", "review", "stats", "probe", "selfcheck", "student-pairs", "feedback",
+                                        "clean", "tools", "quality", "export"))
     ap.add_argument("path", nargs="?", help="import: the JSONL file")
     ap.add_argument("--out", default=OUT)
     ap.add_argument("--teacher", default="http://127.0.0.1:8099")
@@ -318,8 +344,43 @@ def main(argv=None):
     ap.add_argument("--drafts", type=int, default=3)
     ap.add_argument("--rounds", type=int, default=2)
     ap.add_argument("--workers", type=int, default=4, help="questions answered at once (match llama-server --parallel)")
+    ap.add_argument("--student", default=None, help="probe / selfcheck: an Emvryx model's llama-server, like http://127.0.0.1:8100")
+    ap.add_argument("--name", default=None, help="probe / selfcheck: that model's name (flare-3, solstice-3 ...)")
+    ap.add_argument("--samples", type=int, default=6, help="selfcheck: tries per question")
+    ap.add_argument("--focus", action="store_true", help="run: the questions the models missed first, and few of the ones they all get right")
+    ap.add_argument("--no-hellaswag", action="store_true", help="clean: skip HellaSwag (when it is not downloaded)")
     a = ap.parse_args(argv)
     out = Out(a.out)
+    if a.command in ("probe", "selfcheck") and not (a.student and a.name):
+        sys.exit(f"{a.command} needs --student URL and --name MODEL")
+    if a.command == "probe":
+        teacher, con = Teacher(a.teacher), constitution_text()
+        print(json.dumps(FP.probe(read_jsonl(out.path("questions.jsonl")), Teacher(a.student), out, a.name, lambda q, ans: judge(q, ans, teacher, con), a.workers, a.limit)))
+        return 0
+    if a.command == "selfcheck":
+        print(json.dumps(FP.selfcheck(read_jsonl(out.path("questions.jsonl")), Teacher(a.student), out, a.name, a.samples, a.workers, a.limit)))
+        return 0
+    if a.command == "student-pairs":
+        print(f"added {FP.student_pairs(out)} pairs from the models' own mistakes")
+        return 0
+    if a.command == "feedback":
+        if not a.path:
+            sys.exit("feedback needs the app's report export (feedback_export.jsonl)")
+        print(f"added {write_questions(out, FP.from_feedback(a.path))} questions from real use")
+        return 0
+    if a.command == "clean":
+        print(json.dumps(FP.clean_questions(out, hellaswag=not a.no_hellaswag)))
+        return 0
+    if a.command == "tools":
+        print(f"added {write_questions(out, FP.tool_questions(Teacher(a.teacher), a.per))} questions with tool notes and pictures")
+        return 0
+    if a.command == "export":
+        print(json.dumps(FP.export(out)) + f"  -> {out.path('train.jsonl')} and {out.path('pairs_all.jsonl')}")
+        return 0
+    if a.command == "quality":
+        print(json.dumps(FP.quality(out), indent=2))
+        print("wrote " + out.path("quality.md"))
+        return 0
     if a.command == "stats":
         print(json.dumps(stats(out), indent=2))
     elif a.command == "review":
@@ -336,7 +397,7 @@ def main(argv=None):
         qs = read_jsonl(out.path("questions.jsonl"))
         if not qs:
             sys.exit(f"no questions yet in {out.path('questions.jsonl')}: run the questions, maths or import command first")
-        counts = run(qs, Teacher(a.teacher), out, constitution_text(), a.drafts, a.rounds, a.workers, a.limit)
+        counts = run(qs, Teacher(a.teacher), out, constitution_text(), a.drafts, a.rounds, a.workers, a.limit, focus=a.focus)
         print(json.dumps(counts))
     return 0
 
