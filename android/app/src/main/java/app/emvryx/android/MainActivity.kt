@@ -11,6 +11,7 @@ import androidx.activity.viewModels
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.key
 import androidx.core.content.IntentCompat
 import androidx.lifecycle.lifecycleScope
 import app.emvryx.android.ui.AppViewModel
@@ -74,6 +75,6 @@ private fun Screens(vm: AppViewModel, code: CodeViewModel) {
         Screen.SignIn -> SignInScreen(vm)
         Screen.Chat -> ChatScreen(vm)
         Screen.Code -> CodeScreen(vm, code)
-        is Screen.Web -> WebScreen(vm, s.path, s.title)
+        is Screen.Web -> key(s.path) { WebScreen(vm, s.path, s.title) }      // a new page gets a new WebView (the old one would keep showing the last page)
     }
 }

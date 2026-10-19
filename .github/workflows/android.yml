@@ -92,6 +92,7 @@ jobs:
           profile: pixel_6
           disable-animations: true
           disk-size: 2048M
+          cores: 4
           working-directory: android
           script: |
             chmod +x gradlew

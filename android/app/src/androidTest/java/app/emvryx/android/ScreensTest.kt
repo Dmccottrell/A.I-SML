@@ -31,6 +31,7 @@ class ScreensTest {
         val key = InstrumentationRegistry.getArguments().getString("key").orEmpty()
         assumeTrue("no key: not the screenshot run", key.isNotEmpty())
         shell("mkdir -p $DIR")
+        shell("settings put global hide_error_dialogs 1")      // a slow CI emulator otherwise covers the pictures with "System UI isn't responding"
         lateinit var vm: AppViewModel
         lateinit var code: CodeViewModel
         rule.scenario.onActivity {
@@ -43,6 +44,7 @@ class ScreensTest {
         waitFor(20_000) { vm.screen == Screen.Chat }
         pause(2500)
         shot("02-chat-new")
+        main { vm.pickModel("ember-2") }                         // the smallest: the CI machine has little memory left beside the emulator
         main { vm.send("Write a short poem about the sea, please.") }
         waitFor(60_000) { !vm.streaming && vm.bubbles.size >= 2 }
         pause(2500)
@@ -54,10 +56,10 @@ class ScreensTest {
         pause(2000)
         shot("05-vryxcode-new-session")
         main { vm.open(Screen.Web("/#settings", "Settings")) }
-        pause(6000)
+        pause(15000)
         shot("06-settings-in-app")
         main { vm.open(Screen.Web("/#admin", "Admin")) }
-        pause(6000)
+        pause(15000)
         shot("07-admin-in-app")
         main { vm.backToChat() }
         pause(1500)
@@ -78,7 +80,11 @@ class ScreensTest {
     }
 
     /** The whole phone screen, as the shell's screencap sees it (status bar included) */
-    private fun shot(name: String) = shell("screencap -p $DIR/$name.png")
+    private fun shot(name: String) {
+        shell("am broadcast -a android.intent.action.CLOSE_SYSTEM_DIALOGS")
+        pause(500)
+        shell("screencap -p $DIR/$name.png")
+    }
 
     private fun shell(cmd: String) {
         instrumentation.uiAutomation.executeShellCommand(cmd).use { pfd ->
