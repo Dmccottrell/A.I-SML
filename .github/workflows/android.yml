@@ -1,0 +1,116 @@
+# Builds the Android app (android/) on every pull request that touches it: its unit tests, then a debug .apk you can install on your phone
+# (Actions > this run > Artifacts > emvryx-android-debug). The cloud session that writes the app cannot download Google's Android SDK, so this is
+# where it is compiled. Locally the same thing is: cd android && gradlew testDebugUnitTest assembleDebug
+name: android
+
+on:
+  push:
+    branches: [main]
+    paths: ["android/**", ".github/workflows/android.yml"]
+  pull_request:
+    paths: ["android/**", ".github/workflows/android.yml"]
+  workflow_dispatch:
+
+concurrency:
+  group: android-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    defaults:
+      run:
+        working-directory: android
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: "17"
+          cache: gradle
+      - name: Unit tests and the debug app
+        run: chmod +x gradlew && ./gradlew --no-daemon testDebugUnitTest assembleDebug
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: emvryx-android-debug
+          path: android/app/build/outputs/apk/debug/*.apk
+          if-no-files-found: ignore
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: android-test-reports
+          path: android/app/build/reports/
+          if-no-files-found: ignore
+
+  # Phone screenshots of the main screens: a demo Emvryx server (no model; a stand-in replies), an Android emulator with the app signed in to it,
+  # and app/src/androidTest/.../ScreensTest.kt walking through the screens. Artifacts > emvryx-android-screens.
+  screens:
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write                 # only to save the pictures under refs/screens/latest (not a branch), where a cloud session can fetch them
+    timeout-minutes: 40
+    steps:
+      - name: Free disk space (the emulator's phone storage needs several GB)
+        run: sudo rm -rf /usr/share/dotnet /opt/ghc /usr/local/share/boost /usr/local/lib/node_modules /opt/hostedtoolcache/CodeQL && df -h / | tail -1
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: "17"
+          cache: gradle
+      - name: Demo server
+        run: |
+          python -m pip install --upgrade pip
+          pip install torch --index-url https://download.pytorch.org/whl/cpu
+          pip install -r requirements.txt
+          python app_server.py --data .shots --add-user shots mega > user.txt
+          python app_server.py --data .shots --make-admin shots --plan mega --unlimited > /dev/null || true
+          KEY=$(sed -n 's/.*Key (shown once, not stored): //p' user.txt)
+          rm user.txt
+          echo "::add-mask::$KEY"
+          echo "SHOTS_KEY=$KEY" >> "$GITHUB_ENV"
+          nohup python app_server.py --data .shots --port 8000 > server.log 2>&1 &
+          for i in $(seq 1 60); do curl -sf http://127.0.0.1:8000/ > /dev/null && break; sleep 2; done
+      - name: Enable KVM
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+      - name: Screenshots on an emulator
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 34
+          arch: x86_64
+          target: google_apis
+          profile: pixel_6
+          disable-animations: true
+          disk-size: 2048M
+          cores: 4
+          working-directory: android
+          script: |
+            chmod +x gradlew
+            ./gradlew --no-daemon connectedDebugAndroidTest -Pandroid.testInstrumentationRunnerArguments.key=$SHOTS_KEY
+            adb pull /data/local/tmp/emvryx-screens ../screens || true
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: emvryx-android-screens
+          path: |
+            screens/
+            server.log
+          if-no-files-found: ignore
+      - name: Save the pictures where a cloud session can fetch them (git fetch origin refs/screens/latest)
+        if: always() && hashFiles('screens/*.png') != ''
+        run: |
+          cd screens
+          git init -q && git checkout -q -b screens
+          git -c user.name=emvryx-ci -c user.email=ci@emvryx.invalid add *.png
+          git -c user.name=emvryx-ci -c user.email=ci@emvryx.invalid commit -qm "Android screenshots for ${{ github.sha }}"
+          git push -qf "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}.git" HEAD:refs/screens/latest

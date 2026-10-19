@@ -32,7 +32,12 @@ Decision (Oct 2026): both apps are built natively, like the big AI apps: **Kotli
 - **Connected-to indicator** (your PC or on this phone) and the "Emvryx is off" state as data, not just a page.
 
 ## Status
-Planned, not started. Start later, in this order: write `NATIVE_API.md` and the server pieces (cloud), then set up Android Studio and Claude Code on the Windows PC, then the Mac for iPhone. Having the Mac means both apps can be built, run and checked locally.
+**Android, in [`android/`](../android/README.md).** Everything in the website is in the app: chat with pictures and files, Regenerate options, Continue,
+Report, edit and ask again, branch, pin, delete, search inside chats, the memory ring, Share to Emvryx, and VryxCode (sessions, the live feed, Effort,
+questions, messages while it works, screenshots, /commands) as native screens; Settings, Admin and the rest (skills, teacher mode, connected apps,
+files, the VryxCode editor and preview) open as the website's own pages inside the app, signed in with the same session. It is compiled and tested
+on GitHub for every change (`.github/workflows/android.yml`), with the `.apk` as a download. Still to do: push notifications, fingerprint lock,
+passkey and email-code sign-in, the on-phone model, and `NATIVE_API.md`. The iPhone app has not been started.
 
 ## Order of work
 1. (cloud) `NATIVE_API.md` and the server pieces above, with tests.
@@ -43,4 +48,4 @@ Planned, not started. Start later, in this order: write `NATIVE_API.md` and the 
 6. Later: on-phone model (llama.cpp) for both.
 
 ## Decisions still open
-Lowest Android version (suggest 10), package name (`app.emvryx.android`), Play Store listing or `.apk` only, violet or amber, ~~and whether you have or want a Mac~~ (decided: the owner has a Mac, so the iPhone app can be built and tested locally).
+~~Lowest Android version, package name, violet or amber~~ (used the suggestions: Android 10, `app.emvryx.android`, violet; easy to change in `android/app/build.gradle.kts` and `ui/theme/Theme.kt`), Play Store listing or `.apk` only, ~~and whether you have or want a Mac~~ (decided: the owner has a Mac, so the iPhone app can be built and tested locally).
