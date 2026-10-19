@@ -235,7 +235,7 @@ def build_one(project, generate, max_turns=None, context_tokens=None):
     os.makedirs(folder)
     try:
         result = V.run_task(project["prompt"], generate, folder, V.make_ask(True), max_turns or V.BUILD_STEPS, context_tokens, out=lambda *_: None,
-                            checks=True, build=True)
+                            checks=True, build=True, full=True)
         score = BP.hidden_check(project, folder)
     finally:
         shutil.rmtree(work, ignore_errors=True)
@@ -375,7 +375,7 @@ def make_fixes(projects, generate, out, per=3, max_turns=40, context_tokens=None
             try:
                 before = C.file_hashes(folder, tests)
                 prompt = FIX_PROMPT.format(tests=", ".join(tests), command="python -m unittest " + " ".join(t[:-3] for t in tests))
-                result = V.run_task(prompt, generate, folder, V.make_ask(True), max_turns, context_tokens, out=lambda *_: None, checks=True, build=True)
+                result = V.run_task(prompt, generate, folder, V.make_ask(True), max_turns, context_tokens, out=lambda *_: None, checks=True, build=True, full=True)
                 edited = C.file_hashes(folder, tests) != before or wrote_to(result, tests)
                 score = BP.hidden_check(p, folder)               # the hidden copies are what count, not the visible ones it could have changed
             finally:

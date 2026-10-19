@@ -30,8 +30,11 @@ def build_steps(model):
         return vryxcode.BUILD_STEPS
 
 
-def effort_turns(model, effort, default_turns):
-    """(build_steps, turns) for a session at this effort: a long-build model's own budget scaled, or the usual budget scaled; effort None = as before."""
+def effort_turns(model, effort, default_turns, full=False):
+    """(build_steps, turns) for a session at this effort: a long-build model's own budget scaled, or the usual budget scaled; effort None = as before.
+    The full agent (Claude Code-style) always gets the long-build loop with a budget big enough to keep going until the task is done."""
+    if full:
+        return vryxcode.effort_steps(vryxcode.FULL_STEPS, effort or "balanced", cap=vryxcode.FULL_STEPS_CAP), None
     steps = build_steps(model)
     if not effort:
         return steps, None
@@ -260,6 +263,11 @@ class RoutesCode:
         effort = str(body.get("effort") or "balanced")
         return effort if effort in vryxcode.EFFORTS else "balanced"
 
+    def _full(self, st, who, model):
+        """The Claude Code-style agent for this model: VryxCode 3 (a model made for long builds) always, the others with the feature flag vryxcode_full_agent.
+        Never an outside model. Its real terminal only ever runs inside the container or on the cloud machine (harness.Sandbox)."""
+        return bool(model) and not model.get("outside") and (bool(model.get("vryxcode_build")) or st.flags.on("vryxcode_full_agent", who))
+
     def _pick_code_model(self, st, who, model_id, effort=None):
         """The model dict VryxCode (a session, or the editor's edit and explain) runs on: an outside coding model, or an Emvryx model flagged for coding and ready.
         With the feature flag vryxcode_effort there is no picker: VryxCode picks by itself (VryxCode 3, then Apogee 3, see vryxcode.pick_auto)."""
@@ -387,7 +395,8 @@ class RoutesCode:
                     raise code_sessions.CodeError(why, "Ask the owner about VryxCode access.")
                 effort = self._effort(st, who, body)
                 model = self._pick_code_model(st, who, str(body.get("model", "")), effort)
-                steps, turns = effort_turns(model, effort, st.code.max_turns)
+                full = self._full(st, who, model)
+                steps, turns = effort_turns(model, effort, st.code.max_turns, full)
                 project = st.code.check_name(body.get("project"))
                 generate, meter, tools, identity = self._code_kit(st, user, model, project)
                 task = body.get("task")
@@ -399,7 +408,7 @@ class RoutesCode:
                 s, note = st.code.start(user, project, task, model["id"], generate, bool(body.get("auto_edits")),
                                         int(model.get("context_tested") or 8192), meter, outside=bool(model.get("outside")), tools=tools, identity=identity,
                                         env=str(body.get("env") or "local"), plan=bool(body.get("plan")), owner=who["admin"], queue=bool(body.get("queue")),
-                                        model_text=second, build_steps=steps, turns=turns)
+                                        model_text=second, build_steps=steps, turns=turns, full=full)
                 if body.get("notify") and who["owner"]:                        # the phone notification is the owner's (it goes to their ntfy topic)
                     s.notify, s.on_notify = True, st.code_notify
                 return self._send(200, {"id": s.id, "note": note, "queued": s.state == "queued", "position": st.code.queue_position(user, s.id)})
@@ -432,16 +441,17 @@ class RoutesCode:
                     meta = st.code.saved(user, sid)["meta"]
                     model = self._pick_code_model(st, who, want or meta["model"], effort)
                     generate, meter, tools, identity = self._code_kit(st, user, model, meta["project"])
-                    steps, turns = effort_turns(model, effort, st.code.max_turns)
+                    full = self._full(st, who, model)
+                    steps, turns = effort_turns(model, effort, st.code.max_turns, full)
                     sess = st.code.revive(user, sid, model["id"], generate, int(model.get("context_tested") or 8192), meter, tools=tools, identity=identity, owner=who["admin"], build_steps=steps,
-                                           auto_edits=bool(body.get("auto_edits")), turns=turns)
+                                           auto_edits=bool(body.get("auto_edits")), turns=turns, full=full)
                     revived = True
                 else:
-                    sess, revived = st.code.get(user, sid), False
+                    sess, revived, model = st.code.get(user, sid), False, None
                     if effort:                                           # no picker: the model VryxCode picks, at the effort picked for this message
                         model = self._pick_code_model(st, who, "", effort)
                         generate, meter, tools, identity = self._code_kit(st, user, model, sess.project)
-                        steps, turns = effort_turns(model, effort, st.code.max_turns)
+                        steps, turns = effort_turns(model, effort, st.code.max_turns, self._full(st, who, model))
                         if model["id"] != sess.model_id:                 # e.g. Apogee 3 was added since this session started
                             sess.switch_model(model["id"], generate, int(model.get("context_tested") or 8192), meter, build_steps=steps, default_turns=turns or st.code.max_turns)
                         else:
@@ -450,6 +460,10 @@ class RoutesCode:
                         model = self._pick_code_model(st, who, want)
                         generate, meter, tools, identity = self._code_kit(st, user, model, sess.project)
                         sess.switch_model(model["id"], generate, int(model.get("context_tested") or 8192), meter, build_steps=build_steps(model), default_turns=st.code.max_turns)
+                    full = self._full(st, who, model) if model else (getattr(sess, "full", False) or st.flags.on("vryxcode_full_agent", who))
+                    if full and not getattr(sess, "full", False):            # the flag was switched on since this session started: the next message works the new way
+                        sess.build, sess.max_turns = True, max(sess.max_turns, vryxcode.effort_steps(vryxcode.FULL_STEPS, effort or "balanced", cap=vryxcode.FULL_STEPS_CAP))
+                    sess.full = full
                 if "auto_edits" in body:
                     sess.auto_edits = bool(body.get("auto_edits"))             # the mode picked now applies to this message
                 if who["owner"]:

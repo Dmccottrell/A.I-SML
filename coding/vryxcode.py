@@ -72,9 +72,12 @@ EFFORTS = {"quick": {"steps": 0.5, "think": False, "note": "Small fixes and ques
            "deep": {"steps": 1.5, "think": True, "note": "Bigger builds and hard bugs. More steps, and it thinks before each one."}}
 
 
-def effort_steps(turns, effort):
-    """The step budget for a message at this effort (Quick about half, Deep half again more), between 6 and 400."""
-    return max(6, min(400, round(int(turns) * EFFORTS.get(effort, EFFORTS["balanced"])["steps"])))
+FULL_STEPS, FULL_STEPS_CAP = 500, 1000     # the full agent (Claude Code-style): it keeps going until the task is done, so the budget is only a safety net
+
+
+def effort_steps(turns, effort, cap=400):
+    """The step budget for a message at this effort (Quick about half, Deep half again more), between 6 and cap."""
+    return max(6, min(cap, round(int(turns) * EFFORTS.get(effort, EFFORTS["balanced"])["steps"])))
 
 
 def pick_auto(models):
@@ -335,18 +338,23 @@ def make_todo():
 
 
 def run_task(task, generate, workspace, ask, max_turns=12, context_tokens=None, extra_programs=(), out=print, tools=None, git_identity=None, command_prefix=None, container=False,
-             history=None, chat_mode=False, checks=True, plan=False, todo=False, remote=False, lang_note="", build=False):
+             history=None, chat_mode=False, checks=True, plan=False, todo=False, remote=False, lang_note="", build=False, full=False):
     """Run one task. Returns harness.run_agent's result (finished, summary, turns, messages).
     `tools` is {name: function(**args) -> text} of extra tools (the GitHub tool, run by the server, never by the sandbox).
     `plan` looks only (no edits, runs or git changes) and answers with a plan; `todo` adds the checklist tool the page shows as a to-do list.
     `build` is the long-build loop (VryxCode 3, harness.run_agent's build mode): checkpoints when the tests pass, the rollback tool, a step back after the
-    same failure, the checklist kept through folds. It implies `todo`."""
-    build = bool(build) and not plan
+    same failure, the checklist kept through folds. It implies `todo`.
+    `full` is the Claude Code-style agent (harness.FULL_TOOL_NOTE): glob, grep, 2,000-line reads, replace_all, commands up to 10 minutes, the long-build loop,
+    and a real terminal when the commands run in the container or on the cloud machine."""
+    build = (bool(build) or bool(full)) and not plan
     todo = todo or build
     programs = set(harness.ALLOWED_PROGRAMS) | set(extra_programs)
     rules = {"write_file": "ask", "edit_file": "ask", "run": "ask"}
     if plan:
         rules = {"write_file": "deny", "edit_file": "deny", "run": "deny", "git": "deny", "github": "deny"}
+        if full:                                                  # as in Claude Code's plan mode: commands that only look may still run
+            rules["run"] = "ask"
+            ask = lambda name, args: name == "run" and harness.read_only_command((args or {}).get("command", ""))
     tools = dict(tools or {})
     if todo:
         tools["todo"] = make_todo()
@@ -354,6 +362,8 @@ def run_task(task, generate, workspace, ask, max_turns=12, context_tokens=None, 
     if build:
         rules["rollback"] = "ask"                                 # it rewrites files, so it asks like an edit (--yes / Edit without asking: it just runs)
     kw = {"git_identity": git_identity} if git_identity else {}
+    if full:
+        kw["full"] = True
     if command_prefix:
         kw.update(command_prefix=command_prefix, container=container, remote=remote)
         if remote:
@@ -361,7 +371,7 @@ def run_task(task, generate, workspace, ask, max_turns=12, context_tokens=None, 
     with harness.Sandbox(workspace=workspace, allowed_programs=programs, **kw) as sandbox:
         for name, fn in (tools or {}).items():
             sandbox.register_tool(name, fn)
-        system = SYSTEM + (GITHUB_TOOL_NOTE if "github" in (tools or {}) else "") + (CHECK_PAGE_NOTE if "check_page" in (tools or {}) else "") + (TODO_NOTE if todo else "") + (BUILD_NOTE if build else "") + (PLAN_NOTE if plan else "") + (lang_note or "")
+        system = SYSTEM + (harness.FULL_TOOL_NOTE if sandbox.full else "") + (harness.SHELL_NOTE if sandbox.shell else "") + (GITHUB_TOOL_NOTE if "github" in (tools or {}) else "") + (CHECK_PAGE_NOTE if "check_page" in (tools or {}) else "") + (TODO_NOTE if todo else "") + (BUILD_NOTE if build else "") + (PLAN_NOTE if plan else "") + (lang_note or "")
         result = harness.run_agent(task, generate, sandbox, max_turns=max_turns, system=system, ask=ask, context_tokens=context_tokens,
                                    permissions=harness.Permissions(rules=rules, ask=ask), history=history, chat_mode=chat_mode, checks=checks, steady=todo, build=build)
     out(("Done: " if result["finished"] else "Stopped without finishing: ") + (result["summary"] or f"{result['turns']} steps used") )
