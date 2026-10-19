@@ -75,6 +75,12 @@ EFFORTS = {"quick": {"steps": 0.5, "think": False, "note": "Small fixes and ques
 FULL_STEPS, FULL_STEPS_CAP = 500, 1000     # the full agent (Claude Code-style): it keeps going until the task is done, so the budget is only a safety net
 
 
+# Qwen3.5's own recommended settings for coding (its model card): thinking for precise coding tasks, and no thinking. Presence penalty stays 0 without
+# thinking too: Qwen suggests 1.5 for chat, but it pushes a model away from repeating names, and code repeats names on purpose.
+QWEN35_CODE_THINK = {"temperature": 0.6, "top_p": 0.95, "top_k": 20, "min_p": 0.0, "presence_penalty": 0.0}
+QWEN35_CODE = {"temperature": 0.7, "top_p": 0.8, "top_k": 20, "min_p": 0.0, "presence_penalty": 0.0}
+
+
 def effort_steps(turns, effort, cap=400):
     """The step budget for a message at this effort (Quick about half, Deep half again more), between 6 and cap."""
     return max(6, min(cap, round(int(turns) * EFFORTS.get(effort, EFFORTS["balanced"])["steps"])))
@@ -125,8 +131,9 @@ class LlamaChat:
     `should_stop()` is asked every fifth of a second, also while the model is still reading the prompt and nothing has come back yet: when it says yes
     the connection is closed (llama-server stops writing when the client leaves) and Interrupted is raised, so Stop works at once."""
 
-    def __init__(self, url="http://127.0.0.1:8080", temperature=0.2, max_tokens=4096, timeout=600, thinking=False):
+    def __init__(self, url="http://127.0.0.1:8080", temperature=0.2, max_tokens=4096, timeout=600, thinking=False, sampling=None):
         self.url, self.temperature, self.max_tokens, self.timeout, self.thinking = url.rstrip("/"), temperature, max_tokens, timeout, thinking
+        self.sampling = dict(sampling or {})               # top_p, top_k, min_p, presence_penalty ... (the model's own recommended settings), sent with each step
         self.cut_off = False                               # True when the last reply stopped because it reached max_tokens (a long file does that)
         self.usage = None                                  # {"fresh_in", "cached_in", "out"} of the last call (the app counts it)
         self.on_delta = None                               # function(info) or None; info = {"text", "thinking_chars", "chunks"}
@@ -153,7 +160,7 @@ class LlamaChat:
         with_pictures = any(isinstance(m.get("content"), list) for m in messages)
         body = json.dumps({"model": "local", "messages": messages, "temperature": self.temperature, "max_tokens": self.max_tokens,
                            "stream": True, "stream_options": {"include_usage": True}, "cache_prompt": True,
-                           "chat_template_kwargs": {"enable_thinking": bool(self.thinking)}}).encode()
+                           "chat_template_kwargs": {"enable_thinking": bool(self.thinking)}, **self.sampling}).encode()
         box, out = {}, queue.Queue()
 
         def work():

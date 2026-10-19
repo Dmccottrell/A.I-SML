@@ -76,7 +76,7 @@ function renderCodeBar() {
   $('codeProj').textContent = C.project + ' ▾';
   const m = cModel();
   if (oneModel()) {
-    $('codeModelBtn').replaceChildren('Effort: ' + effortName(), el('span', {style: 'color:var(--muted)'}, '▾')); $('codeModelBtn').setAttribute('aria-label', 'Effort: ' + effortName());
+    $('codeModelBtn').replaceChildren(el('span', {}, effortName()), el('span', {style: 'color:var(--muted)'}, ' ▾')); $('codeModelBtn').setAttribute('aria-label', 'Effort: ' + effortName());
     $('vxModel').replaceChildren(el('span', {class: 'k'}, 'Effort'), el('b', {}, effortName()), el('span', {class: 'c'}, '▾')); $('vxModel').setAttribute('aria-label', 'Effort: ' + effortName());
   } else {
     $('codeModelBtn').replaceChildren(m ? (m.outside ? m.name + ' · outside' : m.label) : 'No model', el('span', {style: 'color:var(--muted)'}, '▾'));
@@ -149,7 +149,7 @@ $('codeModelBtn').onclick = (e) => modelMenu(e, $('codeModelMenu'));
 $('vxModel').onclick = (e) => modelMenu(e, $('vxModelMenu'));
 document.addEventListener('click', (e) => { if (cOn() && !e.target.closest('.menu')) closeCodeMenus(); });
 const MODES = {ask: {short: 'Ask', name: 'Ask before editing', note: 'It asks you before it changes a file or runs something.'},
-  auto: {short: 'Auto-edit', name: 'Edit without asking', note: 'It writes and edits files by itself. It still asks before anything riskier.'},
+  auto: {short: 'Auto', name: 'Edit without asking', note: 'It writes and edits files by itself. It still asks before anything riskier.'},
   plan: {short: 'Plan', name: 'Plan first', note: 'It only looks around and writes a plan. Nothing is changed until you tap Build it.'}};
 function setMode(m) { if (m === 'plan' && C.mode !== 'plan') C.prevMode = C.mode; C.mode = m; renderCodeBar(); }
 $('codeAuto').onclick = (e) => {

@@ -384,6 +384,8 @@ svg .core { fill: var(--core); stroke: var(--sun); stroke-width: 3; transition: 
   .code .top2 { gap: 6px; } .code .top2 .chip.plus, .code .top2 #codePreviewBtn { width: 36px; min-width: 36px; padding: 0; justify-content: center; }
   #codeEnv .lab { display: none; } #codeEnv { padding: 6px 10px; } #codeAuto { padding: 6px 8px; font-size: 13px; }
   #codeModelBtn { padding: 6px 8px; max-width: 46vw; overflow: hidden; text-overflow: ellipsis; }
+  #codeModelBtn { flex-shrink: 0; }                       /* the effort (or model) always shows in full; Auto-edit gives way */
+  #codeAuto { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 }
 /* ---- sign in / sign up */
 .auth { position: fixed; inset: 0; z-index: 60; background: var(--bg); display: grid; grid-template-columns: minmax(0, 1.05fr) minmax(0, 1fr); overflow-y: auto; }
