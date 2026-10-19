@@ -40,6 +40,7 @@ class Sessions(unittest.TestCase):
     def test_device_label_is_short(self):
         self.assertEqual(A.device_label("Mozilla/5.0 (iPhone; CPU iPhone OS 17) AppleWebKit Version/17 Safari/604"), "Safari on iPhone")
         self.assertEqual(A.device_label(""), "A browser on an unknown device")
+        self.assertEqual(A.device_label("Emvryx-Android/0.1 (Android 14; Pixel 8)"), "The Emvryx app on Android")     # android/ ApiClient
 
 
 class Pairing(unittest.TestCase):

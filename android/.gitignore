@@ -1,0 +1,15 @@
+# The repo's top .gitignore skips every data/ folder (datasets); the app's data/ package is code
+!app/src/main/java/app/emvryx/android/data/
+
+# Android Studio and Gradle leave these on your PC; they never go to GitHub
+.gradle/
+.kotlin/
+build/
+local.properties
+.idea/
+*.iml
+captures/
+# Signing keys stay off GitHub (see docs/NATIVE.md)
+*.jks
+*.keystore
+keystore.properties

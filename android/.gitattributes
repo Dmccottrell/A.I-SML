@@ -1,0 +1,4 @@
+# gradlew is a shell script: Windows line endings break it on Linux and macOS
+gradlew text eol=lf
+*.bat text eol=crlf
+*.jar binary
