@@ -313,7 +313,8 @@ function cEvent(e) {
   if (e.kind === 'user') { feed.append(el('div', {class: 'cc-user'}, el('span', {class: 'ember'}), el('span', {}, (e.plan ? '[Plan] ' : '') + e.text), e.steer ? el('small', {style: 'color:var(--muted);margin-left:6px'}, '(while it worked)') : '')); C.last = null; return; }
   if (e.kind === 'choose') {          // the full agent asks the person to pick: one tap answers, or they write their own
     const pick = (choice) => { if (!String(choice || '').trim()) return; post('/api/code/sessions/' + C.sid + '/answer', {id: e.id, choice}).then(() => poll()); };
-    const other = el('input', {type: 'text', placeholder: 'Or write your own answer', 'aria-label': 'Your own answer', style: 'flex:1;min-width:160px'});
+    const other = el('input', {type: 'text', placeholder: 'Or write your own answer', 'aria-label': 'Your own answer',
+      style: 'flex:1;min-width:160px;background:var(--surface2);color:var(--text);border:1px solid var(--line);border-radius:12px;padding:10px 12px;font:inherit'});
     other.addEventListener('keydown', (ev) => { if (ev.key === 'Enter') { ev.preventDefault(); pick(other.value); } });
     feed.append(el('div', {class: 'cc-ask', id: 'ask' + e.id}, el('div', {class: 'q'}, e.question),
       el('div', {class: 'row'}, ...(e.options || []).map((o) => el('button', {class: 'chip', onclick: () => pick(o)}, o))),
