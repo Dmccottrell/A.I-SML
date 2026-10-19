@@ -279,9 +279,17 @@ class Session:
 
     # ---- what the engine calls
     def ask(self, name, args):
-        if name == "run" and str(args.get("command", "")).strip().startswith(vryxcode.SAFE_RUNS):
-            return True
-        if self.auto_edits and name in ("write_file", "edit_file", "run", "rollback"):
+        full = getattr(self, "full", False)            # the Claude Code-style agent: its permission rules too
+        command = str(args.get("command", "")).strip() if name == "run" and isinstance(args, dict) else ""
+        if name == "run":
+            if full:
+                # only looks (ls, cat, git status, the tests), or only makes, moves or copies files in "Edit without asking", or "always allow" was said for this command
+                if (harness.read_only_command(command) or (self.auto_edits and harness.file_command(command))
+                        or "run:" + harness.command_key(command) in getattr(self, "_always", set())):
+                    return True
+            elif command.startswith(vryxcode.SAFE_RUNS):
+                return True
+        if self.auto_edits and name in (("write_file", "edit_file", "rollback") if full else ("write_file", "edit_file", "run", "rollback")):
             return True
         if name == "github" and str(args.get("action", "status")) == "status":
             return True                                  # only looking at the link
@@ -305,8 +313,8 @@ class Session:
             if not self.stop.is_set():
                 self.state = "working"
         allow, always = answer
-        if always and name != "github":
-            self._always = getattr(self, "_always", set()) | {name}
+        if always and name != "github":                  # the full agent remembers the command (npm test), not every command
+            self._always = getattr(self, "_always", set()) | {"run:" + harness.command_key(command) if full and name == "run" else name}
         self.emit("answer", id=qid, allow=allow)
         return allow
 
@@ -427,7 +435,7 @@ class Session:
             result = vryxcode.run_task(model_text or self.expand(text), self.wrap(self.generate), self.workspace, self.ask, self.max_turns, self.context_tokens, self.extra_programs, lang_note=languages.note_for(lang),
                                        out=lambda *_: None, tools=self.tools, git_identity=self.identity,
                                        command_prefix=self.prefix, container=bool(self.prefix) and not self.remote, history=self.history, chat_mode=True, plan=plan, todo=True, remote=self.remote,
-                                       build=getattr(self, "build", False))
+                                       build=getattr(self, "build", False), full=getattr(self, "full", False))
             self.history = result["messages"]
             report = None if self.stop.is_set() else self._page_proof()
             if report and PAGE_TROUBLE.search(report) and self._page_tries < PAGE_FIX_TRIES:
@@ -886,7 +894,7 @@ class CodeManager:
                                           pids=sb.get("pids", 128), runtime=sb.get("runtime"))
 
     def start(self, user, project, task, model_id, generate, auto_edits=False, context_tokens=None, meter=None, outside=False, tools=None, identity=None, env="local", plan=False, owner=False, queue=False, model_text=None,
-              build_steps=None, turns=None):
+              build_steps=None, turns=None, full=False):
         task = str(task or "").strip()
         if not task:
             raise CodeError("Describe what to build or fix.")
@@ -924,6 +932,7 @@ class CodeManager:
             self.sessions[s.id], self.by_user[user] = s, s.id
             s._model_text = model_text                          # what the model gets instead of the line the person sees (a second opinion's diff)
             s.build = bool(build_steps)                         # a model made for long builds (VryxCode 3): the long-build loop and its own step budget
+            s.full = bool(full)                                 # the Claude Code-style agent (VryxCode 3, feature flag vryxcode_full_agent)
             turns = int(build_steps or turns or self.max_turns)      # turns: the step budget of the effort picked (feature flag vryxcode_effort)
             s.on_idle = self._session_idle
             if busy:                                           # one model on one card: sessions wait their turn, so they never work on the same files at once
@@ -934,7 +943,7 @@ class CodeManager:
         threading.Thread(target=s.run, args=(generate, turns, context_tokens), daemon=True).start()
         return s, note
 
-    def revive(self, user, sid, model_id, generate, context_tokens, meter, tools=None, identity=None, owner=False, auto_edits=False, build_steps=None, turns=None):
+    def revive(self, user, sid, model_id, generate, context_tokens, meter, tools=None, identity=None, owner=False, auto_edits=False, build_steps=None, turns=None, full=False):
         """Bring a session from the history back to life, so a new message carries on in it (same id, same feed, same Rewind points)."""
         with self.lock:
             if self.running(user):
@@ -954,7 +963,7 @@ class CodeManager:
             s.started = meta.get("started") or s.started
             s.turns_run = max([c.get("turn", 0) for c in s.checkpoints] + [sum(1 for e in s.events if e["kind"] in ("start", "user"))])
             s.generate, s.max_turns, s.context_tokens = generate, int(build_steps or turns or self.max_turns), context_tokens
-            s.build = bool(build_steps)
+            s.build, s.full = bool(build_steps), bool(full)
             s.state = "done"
             s.on_idle = self._session_idle
             if meta.get("model") and meta["model"] != model_id:

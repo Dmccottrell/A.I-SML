@@ -76,6 +76,84 @@ GIT_READ_ONLY = {"status", "diff", "log", "show", "init"}
 GIT_BLOCKED_FLAGS = ("--git-dir", "--work-tree", "--exec-path", "--upload-pack", "--receive-pack",
                      "--namespace", "--super-prefix", "--config-env", "--output", "--ext-diff", "--textconv")
 PROJECT_FILES = ("VRYX.md", "EMVRYX.md", "AGENTS.md")
+
+# The full agent (VryxCode 3, and feature flag vryxcode_full_agent) works like Claude Code: files read 2,000 lines at a time, edit with replace_all, glob and grep,
+# commands up to 10 minutes, and a step budget big enough to keep going until the task is done. Its terminal is a REAL shell (pipes, &&, any program) ONLY inside
+# the isolated container or on the cloud machine: never on the computer that runs Emvryx, which is reachable from the internet (the safe program list stays there).
+FULL_TIMEOUT, FULL_MAX_TIMEOUT = 120, 600         # seconds a command may run: the default, and the most the model may ask for
+FULL_OUTPUT, FULL_READ_LINES, FULL_LINE_CHARS = 30_000, 2000, 2000
+SKIP_DIRS = {".git", "node_modules", "__pycache__", ".emvryx", ".venv", "venv", ".pytest_cache", ".worktrees", "dist", "build", ".next"}
+READ_ONLY_PROGRAMS = {"ls", "cat", "head", "tail", "wc", "pwd", "echo", "grep", "rg", "which", "whoami", "date", "sort", "uniq", "diff", "file", "stat",
+                      "tree", "du", "df", "find", "printf", "true"}
+FILE_PROGRAMS = {"mkdir", "touch", "mv", "cp"}         # with "Edit without asking" these run without a question too (as in Claude Code's accept-edits mode)
+FULL_TOOL_NOTE = (" YOUR TOOLS: read_file shows up to 2000 lines; edit_file(path, old, new, replace_all) replaces text exactly (replace_all=true changes every match); "
+                  "glob(pattern) finds files (\"**/*.py\"); grep(pattern, path, glob) searches their text. run(command, timeout) runs a command; it may take 120 s, "
+                  "pass timeout (seconds, up to 600) for a longer one. KEEP GOING until the task is really done: run the code and the tests after each change, read every "
+                  "error, fix it and run again. When something fails, find out why before changing more; if a way keeps failing, try another. Only stop to ask the person "
+                  "when you truly need them.")
+SHELL_NOTE = (" run(command) is a real terminal in the project folder: pipes, && and cd inside one command all work (each command starts again in the project folder). "
+              "It runs in an isolated sandbox with no internet, so nothing can be downloaded or installed.")
+
+
+def shell_argv(command):
+    """The argv that runs one terminal command inside the container or on the cloud machine."""
+    return ["sh", "-c", command]
+
+
+_SPLIT = re.compile(r"&&|\|\||;|\|")
+
+
+def command_words(command):
+    """[argv of each part] of a command joined with &&, ||, ; or |, or None when it cannot be read safely (quotes cut off, redirection, $(...) or backticks)."""
+    if re.search(r"[<>`\n]|\$\(", command):
+        return None
+    out = []
+    for part in _SPLIT.split(command):
+        try:
+            argv = shlex.split(part)
+        except ValueError:
+            return None
+        if not argv:
+            return None
+        out.append(argv)
+    return out
+
+
+def _read_only_part(argv):
+    prog = os.path.basename(argv[0]).lower()
+    if prog == "git":
+        return len(argv) > 1 and argv[1] in ("status", "diff", "log", "show")
+    if prog in ("python", "python3"):
+        return argv[1:3] in (["-m", "unittest"], ["-m", "pytest"])
+    if prog == "pytest":
+        return True
+    if prog == "find":
+        return not any(a in ("-exec", "-execdir", "-delete", "-ok", "-okdir", "-fprint", "-fprintf", "-fls") for a in argv)
+    return prog in READ_ONLY_PROGRAMS
+
+
+def read_only_command(command):
+    """True when every part of the command only looks (ls, cat, grep, git status ...) or runs the tests: it runs without a question, as in Claude Code."""
+    words = command_words(str(command or ""))
+    return bool(words) and all(_read_only_part(w) for w in words)
+
+
+def file_command(command):
+    """True when every part only looks or makes, moves or copies files (mkdir, touch, mv, cp): allowed without a question in "Edit without asking"."""
+    words = command_words(str(command or ""))
+    return bool(words) and all(_read_only_part(w) or os.path.basename(w[0]).lower() in FILE_PROGRAMS for w in words)
+
+
+def command_key(command):
+    """What "always allow" remembers for a command: its program and first word (npm test, python manage.py), like Claude Code's "don't ask again for npm test"."""
+    words = command_words(str(command or ""))
+    if not words:
+        try:
+            words = [shlex.split(str(command or "")) or [""]]
+        except ValueError:
+            words = [str(command or "").split()[:2] or [""]]
+    first = words[0]
+    return " ".join(first[:2] if len(first) > 1 and not first[1].startswith("-") else first[:1])
 HOOKS_FILE = os.path.join(".emvryx", "hooks.json")
 
 # Shown to the model at the start of a coding session (and in every coding lesson), so it knows the tools
@@ -122,7 +200,13 @@ class Sandbox:
     """One workspace folder plus the tools that work inside it."""
 
     def __init__(self, workspace=None, command_timeout=20, output_limit=1500, max_read_lines=80,
-                 command_prefix=None, allowed_programs=ALLOWED_PROGRAMS, git_identity=("Emvryx agent", "agent@localhost"), container=False, remote=False):
+                 command_prefix=None, allowed_programs=ALLOWED_PROGRAMS, git_identity=("Emvryx agent", "agent@localhost"), container=False, remote=False,
+                 full=False):
+        self.full = bool(full)                   # the Claude Code-style tools: bigger reads and output, replace_all, glob, grep, longer commands
+        # ...and a real terminal, but ONLY when commands already run inside the container or on the cloud machine (never on this computer)
+        self.shell = self.full and bool(command_prefix) and bool(container or remote)
+        if self.full:
+            command_timeout, output_limit, max_read_lines = max(command_timeout, FULL_TIMEOUT), max(output_limit, FULL_OUTPUT), max(max_read_lines, FULL_READ_LINES)
         self.git_identity = tuple(git_identity)
         self.container = bool(container)         # True when command_prefix is a `docker run ...` (code_sandbox.docker_prefix): commands run inside it
         self.remote = bool(remote)               # True when command_prefix runs the command on another machine (cloud_run.py): its Python is not ours, and git stays here
@@ -183,7 +267,8 @@ class Sandbox:
         end = min(len(lines), int(end) if end else start + self.max_read_lines - 1, start + self.max_read_lines - 1)
         if start > len(lines):
             raise ToolError(f"{path!r} has only {len(lines)} lines")
-        out = "\n".join(f"{i}: {lines[i - 1]}" for i in range(start, end + 1))
+        long = FULL_LINE_CHARS if self.full else None
+        out = "\n".join(f"{i}: {lines[i - 1][:long] if long else lines[i - 1]}" for i in range(start, end + 1))
         more = f"\n[showing lines {start}-{end} of {len(lines)}]" if end < len(lines) or start > 1 else ""
         return cut(out, self.output_limit * 2) + more
 
@@ -206,7 +291,7 @@ class Sandbox:
             f.write(content)
         return f"{'added to' if append else 'wrote'} {self.rel(full)} ({len(content.splitlines())} lines)"
 
-    def edit_file(self, path, old, new):
+    def edit_file(self, path, old, new, replace_all=False):
         full = self.path(path)
         self._not_git_folder(full)
         if not os.path.isfile(full):
@@ -218,13 +303,57 @@ class Sandbox:
         n = text.count(old)
         if n == 0:
             raise ToolError(_not_found_hint(text, old, path))
-        if n > 1:
-            raise ToolError(f"the text in 'old' appears {n} times; include more surrounding lines so it matches once")
+        if n > 1 and not replace_all:
+            raise ToolError(f"the text in 'old' appears {n} times; include more surrounding lines so it matches once" + (", or pass replace_all=true to change every one" if self.full else ""))
         with open(full, "w", encoding="utf-8", newline="\n") as f:
-            f.write(text.replace(old, new, 1))
-        return f"edited {self.rel(full)}"
+            f.write(text.replace(old, new) if replace_all else text.replace(old, new, 1))
+        return f"edited {self.rel(full)}" + (f" ({n} places)" if replace_all and n > 1 else "")
 
-    def _exec(self, argv, extra_env=None, wrap=True):
+    def _files(self, path="."):
+        """Every file under path (relative names), skipping .git, node_modules, caches and the like."""
+        top = self.path(path)
+        for d, dirs, files in os.walk(top):
+            dirs[:] = sorted(x for x in dirs if x not in SKIP_DIRS)
+            for f in sorted(files):
+                yield self.rel(os.path.join(d, f))
+
+    def glob(self, pattern, path="."):
+        """Files whose path matches pattern ("**/*.py", "src/*.js"), newest first, up to 200."""
+        pattern = re.sub(r"^(\./)+", "", str(pattern or "").strip().replace("\\", "/")) or "*"
+        names = [n for n in self._files(path) if fnmatch.fnmatch(n, pattern) or fnmatch.fnmatch(n, pattern.replace("**/", "")) or
+                 ("/" not in pattern and fnmatch.fnmatch(n.rsplit("/", 1)[-1], pattern))]
+        names.sort(key=lambda n: -os.path.getmtime(os.path.join(self.root, n)))
+        if not names:
+            return "no files match"
+        return "\n".join(names[:200]) + (f"\n[{len(names) - 200} more]" if len(names) > 200 else "")
+
+    def grep(self, pattern, path=".", glob=None, ignore_case=False):
+        """Lines matching a regular expression in the project's text files: path:line: text, up to 200."""
+        try:
+            rx = re.compile(str(pattern), re.I if ignore_case else 0)
+        except re.error as e:
+            raise ToolError(f"that is not a valid regular expression: {e}")
+        full = self.path(path)
+        names = [self.rel(full)] if os.path.isfile(full) else list(self._files(path))
+        out = []
+        for n in names:
+            if glob and not (fnmatch.fnmatch(n, glob) or fnmatch.fnmatch(n.rsplit("/", 1)[-1], glob)):
+                continue
+            f = os.path.join(self.root, n)
+            try:
+                if os.path.getsize(f) > 2_000_000:
+                    continue
+                with open(f, encoding="utf-8") as fh:
+                    for i, line in enumerate(fh, 1):
+                        if rx.search(line):
+                            out.append(f"{n}:{i}: {line.rstrip()[:300]}")
+                            if len(out) >= 200:
+                                return "\n".join(out) + "\n[stopped at 200 matches: narrow the search]"
+            except (UnicodeDecodeError, OSError):
+                continue                                     # a picture or other binary file
+        return "\n".join(out) or "no matches"
+
+    def _exec(self, argv, extra_env=None, wrap=True, timeout=None):
         """Run argv in the workspace with the limits (time, output, memory, no network on Linux)."""
         env = {"PATH": os.environ.get("PATH", ""), "PYTHONDONTWRITEBYTECODE": "1", "PYTHONIOENCODING": "utf-8"}
         if os.name == "nt":
@@ -241,16 +370,30 @@ class Sandbox:
             command = (self.prefix if wrap else []) + argv
         try:
             r = subprocess.run(command, cwd=self.root, env=env, capture_output=True,
-                               text=True, encoding="utf-8", errors="replace", timeout=self.command_timeout,
+                               text=True, encoding="utf-8", errors="replace", timeout=timeout or self.command_timeout,
                                stdin=subprocess.DEVNULL, **kwargs)
         except subprocess.TimeoutExpired:
-            raise ToolError(f"the command took longer than {self.command_timeout} s and was stopped")
+            raise ToolError(f"the command took longer than {timeout or self.command_timeout} s and was stopped"
+                            + (". Pass a bigger timeout (seconds, up to 600) if it needs longer" if self.full else ""))
         except OSError as e:
             raise ToolError(f"could not run it: {e}")
         out = (r.stdout + ("\n" + r.stderr if r.stderr else "")).strip()
         return cut(f"exit code {r.returncode}\n{out}" if out else f"exit code {r.returncode}", self.output_limit)
 
-    def run(self, command):
+    def run(self, command, timeout=None):
+        limit = None
+        if timeout is not None:
+            if not self.full:
+                raise ToolError("run takes only a command here")
+            try:
+                limit = min(FULL_MAX_TIMEOUT, max(1, int(float(timeout))))
+            except (TypeError, ValueError):
+                raise ToolError("timeout is a number of seconds (up to 600)")
+        if self.shell:                                   # a real terminal: inside the container / on the cloud machine only (see __init__)
+            command = str(command or "").strip()
+            if not command:
+                raise ToolError("empty command")
+            return self._exec(shell_argv(command), timeout=limit)
         try:
             argv = shlex.split(command)
         except ValueError as e:
@@ -265,7 +408,7 @@ class Sandbox:
             raise ToolError("run one program at a time: no &&, ||, |, ; or > (they are not understood here). The project folder is already the current folder.")
         if program in ("python", "python3") and not self.container and not self.remote:
             argv[0] = sys.executable                     # the same Python we are running (inside a container, or on a remote machine, that one's own python is used)
-        return self._exec(argv)
+        return self._exec(argv, timeout=limit)
 
     # ---------------------------------------------------------------- git (a safe subset)
     def git(self, args):
@@ -343,7 +486,7 @@ class Sandbox:
         self.extra_tools[name] = function
 
     def builtin_names(self):
-        return ["list_files", "read_file", "write_file", "edit_file", "run", "git", "diagnostics", "finish"]
+        return ["list_files", "read_file", "write_file", "edit_file", "run", "git", "diagnostics", "finish"] + (["glob", "grep"] if self.full else [])
 
     def call(self, name, args):
         """Run one tool. Returns (text for the model, whether the model said it is finished)."""
@@ -351,7 +494,7 @@ class Sandbox:
             return str(args.get("summary", "")), True
         tools = {"list_files": self.list_files, "read_file": self.read_file, "write_file": self.write_file,
                  "edit_file": self.edit_file, "run": self.run, "git": self.git, "diagnostics": self.diagnostics,
-                 **self.extra_tools}
+                 **({"glob": self.glob, "grep": self.grep} if self.full else {}), **self.extra_tools}
         if name not in tools:
             raise ToolError(f"unknown tool {name!r}. Tools: {', '.join(list(tools) + ['finish'])}")
         if not isinstance(args, dict):
@@ -685,7 +828,7 @@ class Permissions:
         if name in self.rules:
             return self.rules[name]
         return "allow" if name in ("list_files", "read_file", "write_file", "edit_file", "run", "diagnostics",
-                                   "finish") else "ask"
+                                   "finish", "glob", "grep") else "ask"
 
     def check(self, name, args):
         """None if it may run, else the reason it may not (as the model sees it)."""
@@ -1080,7 +1223,7 @@ def run_agent(task, generate, sandbox, max_turns=8, system=None, project=True, h
             if not done:
                 key = (name, json.dumps(args, sort_keys=True, default=str), str(result)[:300])     # the same step with the same result again
                 repeats[key] = repeats.get(key, 0) + 1
-                if repeats[key] >= REPEAT_STOP_AT:
+                if repeats[key] >= (REPEAT_STOP_AT * 2 if sandbox.full else REPEAT_STOP_AT):      # the full agent keeps trying longer before it gives up
                     return {"finished": False, "turns": turn, "messages": messages, "episodes": episodes, "stopped": "stuck",
                             "summary": f"The model kept repeating the same step ({name}) without making progress, so it was stopped. "
                                        "Try a more specific task, or pick Solstice or the Qwen coder."}
