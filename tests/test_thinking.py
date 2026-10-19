@@ -82,7 +82,8 @@ class DeepThinking(unittest.TestCase):
         root = os.path.dirname(os.path.abspath(A.__file__))
         src = "".join(open(f, encoding="utf-8").read() for f in [A.__file__] + sorted(glob.glob(os.path.join(root, "app", "*.py"))))      # the server is split over several files
         self.assertIn('think = effort == "deep" and model.get("think") == "empty"', src)
-        self.assertEqual(src.count("pacer=pacer, think=think,"), 3)
+        self.assertEqual(src.count("pacer=pacer, think=think,"), 2)              # the first answer and a repeat-retry; the second answer from looked-up notes never thinks
+        self.assertEqual(src.count("pacer=pacer, think=False,"), 1)
 
 
 class ThinkBudget(unittest.TestCase):
