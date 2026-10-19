@@ -129,3 +129,15 @@ class Retired(unittest.TestCase):
         self.assertNotIn("ember-2", [c["id"] for c in cards])
         kept = M.load_manifest(os.path.join(ROOT, "models.json"), include_archived=True)
         self.assertEqual({x["id"]: x["status"] for x in kept["models"]}["ember-2"], "beta")    # the entry and its files are still there
+
+
+class NoOutsideNames(unittest.TestCase):
+    def test_the_app_never_shows_qwen(self):
+        """What people read in the app (taglines, What's new, VryxCode's messages) never names the base model family"""
+        for m in json.load(open("models.json", encoding="utf-8"))["models"]:
+            shown = [m.get("tagline", ""), m.get("name", "")] + [str(x) for x in (m.get("whats_new") or {}).get("points", [])]
+            shown += [str(c) for row in (m.get("whats_new") or {}).get("scores", []) for c in row]
+            for text in shown:
+                self.assertNotIn("qwen", text.lower(), f"{m['id']}: {text}")
+        harness = open(os.path.join("coding", "harness.py"), encoding="utf-8").read()
+        self.assertNotIn("Qwen coder", harness)

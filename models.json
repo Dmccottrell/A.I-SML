@@ -177,7 +177,7 @@
         "vs": "flare-2.5",
         "points": [
           "Remembers 32 times more of a conversation: 256K tokens tested, instead of 8K, so long chats and whole documents stay in view.",
-          "Built on a newer, bigger base (Qwen3.5 2B instead of Qwen2.5 1.5B), with a hybrid design that stays quick on long text.",
+          "Built on a newer, bigger base, with a hybrid design that stays quick on long text.",
           "Drafts ahead with a built-in guess-ahead head, so replies can come out faster."
         ],
         "scores": [
@@ -292,7 +292,7 @@
         "points": [
           "Remembers 4 times more of a conversation: 128K tokens tested, instead of 32K, so long chats and long documents stay in view.",
           "Looks at pictures itself: no separate picture reader is needed.",
-          "Built on a newer base (Qwen3.5 4B instead of Qwen3 4B), with a hybrid design that stays quick on long text.",
+          "Built on a newer base, with a hybrid design that stays quick on long text.",
           "Thinks before hard questions in Deep: 95.7% on the thinking test, and 99.3% when it answers straight away.",
           "Drafts ahead with a built-in guess-ahead head, so replies can come out faster."
         ],
@@ -414,7 +414,7 @@
         "points": [
           "Remembers 8 times more of a conversation: 256K tokens tested, instead of 32K, so long chats and whole documents stay in view.",
           "Looks at pictures itself: no separate picture reader is needed.",
-          "Built on a newer, stronger base (Qwen3.5 9B instead of Qwen3 8B), with a hybrid design that stays quick on long text.",
+          "Built on a newer, stronger base, with a hybrid design that stays quick on long text.",
           "Scores higher on common sense: 75.3% on HellaSwag, up from 73.6%.",
           "Drafts ahead with a built-in guess-ahead head, so replies can come out faster."
         ],
@@ -532,7 +532,7 @@
         "vs": "apogee-2",
         "points": [
           "Remembers far more of a conversation: 80K tokens on this PC, instead of 32K (it found a hidden code at 32K, 64K and 128K in its long-memory test).",
-          "Built on a newer, stronger base: Qwen3.5 9B made 12 layers deeper, instead of Qwen3 14B.",
+          "Built on a newer, stronger base, made 12 layers deeper.",
           "VryxCode's own model: when VryxCode shows only the effort, it uses Apogee 3."
         ],
         "scores": [

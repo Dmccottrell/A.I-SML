@@ -1363,14 +1363,14 @@ def run_agent(task, generate, sandbox, max_turns=8, system=None, project=True, h
             if bad_calls >= BAD_CALL_LIMIT:
                 return {"finished": False, "turns": turn, "messages": messages, "episodes": episodes, "stopped": "bad_call",
                         "summary": "The model kept sending a tool call that could not be read, so it was stopped instead of looping. This usually means the file was too big "
-                                   "to write in one go. Ask for it in smaller parts (for example the page first, then the styles, then the script), or pick Solstice or the Qwen coder."}
+                                   "to write in one go. Ask for it in smaller parts (for example the page first, then the styles, then the script), or pick Solstice or Apogee."}
             no_call = no_call + 1 if str(e).startswith("no tool call found") else 0
             no_call_total += 1 if str(e).startswith("no tool call found") else 0
             if no_call >= NO_CALL_LIMIT or no_call_total >= NO_CALL_TOTAL:
                 said = " ".join(reply.split())[:300]
                 return {"finished": False, "turns": turn, "messages": messages, "episodes": episodes, "stopped": "no_tool",
                         "summary": f'The model kept answering in words instead of using its tools, so nothing was done. It said: "{said}" '
-                                   "Try a specific task (for example: create hello.py that prints a greeting, with a test), or pick Solstice or the Qwen coder."}
+                                   "Try a specific task (for example: create hello.py that prints a greeting, with a test), or pick Solstice or Apogee."}
         else:
             no_call = 0
             bad_calls = 0
@@ -1387,7 +1387,7 @@ def run_agent(task, generate, sandbox, max_turns=8, system=None, project=True, h
                 if repeats[key] >= (REPEAT_STOP_AT * 2 if sandbox.full else REPEAT_STOP_AT):      # the full agent keeps trying longer before it gives up
                     return {"finished": False, "turns": turn, "messages": messages, "episodes": episodes, "stopped": "stuck",
                             "summary": f"The model kept repeating the same step ({name}) without making progress, so it was stopped. "
-                                       "Try a more specific task, or pick Solstice or the Qwen coder."}
+                                       "Try a more specific task, or pick Solstice or Apogee."}
                 if repeats[key] >= REPEAT_HINT_AT:
                     result = str(result) + ("\nNote: you already did exactly this and got the same result. Do something different now. "
                                            "If the folder is empty, create the file you need with write_file and test it; do not ask the user anything.")
