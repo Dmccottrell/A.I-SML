@@ -53,12 +53,12 @@ function envInfo() {
 function resetWork() { C.todo = []; C.events = []; C.ctx = null; if ($('codeCtx')) $('codeCtx').hidden = true; renderTodo(); if (typeof OUT !== 'undefined') { OUT.items = []; OUT.pending = null; if (OUT.open) outRender(); } }
 function newSession() {
   C.view = 'session'; $('code').classList.remove('home'); $('codeTitle').textContent = 'VryxCode'; C.sid = null; C.saved = false; C.checkpoints = []; C.seen = 0; C.last = null; C.pvAuto = false;
-  $('codeIn').replaceChildren(); $('codeGo').hidden = false; $('codeStop').hidden = true; resetWork(); renderCodeBar(); emptyFeed(); refreshFiles(); $('codeTask').focus();
+  $('codeIn').replaceChildren(); $('codeGo').hidden = false; $('codeStop').hidden = true; resetWork(); renderCodeBar(); emptyFeed(); refreshFiles(); loadCmds(); C.pics = []; renderPics(); $('codeTask').focus();
 }
 function openSession(m) {
   C.view = 'session'; $('code').classList.remove('home'); $('codeTitle').textContent = 'VryxCode'; C.sid = m.id; C.project = m.project; C.saved = false; C.checkpoints = m.checkpoints || []; C.pvAuto = false;
   if (C.info.models.some((x) => x.id === m.model && x.state === 'ready')) C.model = m.model;
-  C.seen = 0; C.last = null; $('codeIn').replaceChildren(); resetWork(); C.chatKey = C.project + '|' + C.model; renderCodeBar(); refreshFiles(); poll();
+  C.seen = 0; C.last = null; $('codeIn').replaceChildren(); resetWork(); C.chatKey = C.project + '|' + C.model; renderCodeBar(); refreshFiles(); loadCmds(); C.pics = []; renderPics(); poll();
 }
 $('codeNew').onclick = newSession;
 $('codeFilter').onclick = (e) => {
@@ -252,13 +252,50 @@ const SLASH = [['plan', 'Plan first: look and plan, change nothing', () => setMo
   ['second', 'Ask another model to check what this session changed (read-only)', () => showDrawer(true, 'changes')],
   ['changes', 'See what this session changed (the Changes list)', () => showDrawer(true, 'changes')], ['rewind', 'Put the files back to an earlier point', () => showDrawer(true, 'rewind')],
   ['files', 'Browse the project files', () => showDrawer(true, 'files')], ['preview', 'Open the live preview', () => openPreview()], ['new', 'Start a new session', () => newSession()],
-  ['help', 'List these commands', () => note('fin', 'Commands', SLASH.map((x) => '/' + x[0] + ' \u2014 ' + x[1]).join('\n') + '\n@filename \u2014 point at a file in your message')]];
+  ['picture', 'Attach a screenshot or picture (or paste one into the message box)', () => pickPictures()],
+  ['memory', 'What VryxCode remembers about you (forget notes)', () => showMemory()],
+  ['permissions', 'This project\u2019s saved permission rules (always allow / never allow)', () => showRules()],
+  ['help', 'List these commands', () => note('fin', 'Commands', SLASH.map((x) => '/' + x[0] + ' \u2014 ' + x[1]).concat((C.cmds || []).map((x) => '/' + x.name + ' \u2014 ' + (x.about || 'this project\u2019s own command'))).join('\n') + '\n@filename \u2014 point at a file in your message')]];
+// ---- pictures sent with the next message (the full agent sees them), memory, saved permission rules, the project's own /commands
+C.pics = [];
+function renderPics() {
+  let row = $('codePics');
+  if (!row) { row = el('div', {id: 'codePics', class: 'row', style: 'gap:6px;flex-wrap:wrap;margin:4px 0'}); $('codeTask').before(row); }
+  row.replaceChildren(...C.pics.map((p, i) => el('span', {class: 'chip'}, el('img', {src: p, alt: 'Picture ' + (i + 1), style: 'height:28px;border-radius:4px;vertical-align:middle;margin-right:4px'}),
+    el('button', {class: 'del', 'aria-label': 'Remove picture ' + (i + 1), onclick: () => { C.pics.splice(i, 1); renderPics(); }}, '\u00d7'))));
+  row.hidden = !C.pics.length;
+}
+function addPicture(file) {
+  if (!file || !/^image\/(png|jpe?g|webp|gif)$/.test(file.type) || C.pics.length >= 3) return;
+  if (file.size > 5 * 1024 * 1024) { note('bad', 'Picture too big', 'Pictures can be up to 5 MB.'); return; }
+  const rd = new FileReader(); rd.onload = () => { C.pics.push(String(rd.result)); renderPics(); }; rd.readAsDataURL(file);
+}
+function pickPictures() { const f = el('input', {type: 'file', accept: 'image/png,image/jpeg,image/webp,image/gif', multiple: true}); f.onchange = () => Array.from(f.files || []).forEach(addPicture); f.click(); }
+$('codeTask').addEventListener('paste', (e) => { const files = Array.from((e.clipboardData && e.clipboardData.files) || []).filter((f) => f.type.startsWith('image/')); if (files.length) { e.preventDefault(); files.forEach(addPicture); } });
+async function showMemory() {
+  const r = await api('/api/code/memory'); const j = await r.json().catch(() => ({notes: []}));
+  let m; const forget = async (i) => { await post('/api/code/memory', {forget: i}); m.remove(); showMemory(); };
+  m = dialog([el('h2', {}, 'What VryxCode remembers'), el('div', {style: 'color:var(--muted)'}, 'Short notes it saved about you and how you like to work. It reads them at the start of every session.'),
+    ...(j.notes.length ? j.notes.map((n, i) => el('div', {class: 'opt', style: 'cursor:default'}, el('span', {class: 'grow'}, n), el('button', {class: 'chip', onclick: () => forget(i)}, 'Forget'))) : [el('div', {}, 'Nothing yet.')])],
+    'Close', j.notes.length ? el('button', {class: 'btn', type: 'button', onclick: () => { if (confirm('Forget everything VryxCode remembers about you?')) forget(null); }}, 'Forget all') : null);
+}
+async function showRules() {
+  const q = '?project=' + encodeURIComponent(C.project); const r = await api('/api/code/rules' + q); const j = await r.json().catch(() => ({allow: [], deny: []}));
+  let m; const change = async (body) => { const x = await post('/api/code/rules', Object.assign({project: C.project}, body)); const k = await x.json().catch(() => ({})); if (!x.ok) { note('bad', 'Could not save', k.message || ''); return; } m.remove(); showRules(); };
+  const rule = el('input', {type: 'text', placeholder: 'npm test, git push, write_file ...', 'aria-label': 'Rule', style: 'flex:1'});
+  const list = (kind, title) => [el('b', {}, title), ...(j[kind].length ? j[kind].map((x) => el('div', {class: 'opt', style: 'cursor:default'}, el('code', {class: 'grow'}, x), el('button', {class: 'chip', onclick: () => change({remove: x})}, 'Remove'))) : [el('div', {style: 'color:var(--muted)'}, 'None.')])];
+  m = dialog([el('h2', {}, 'Permission rules for ' + C.project), el('div', {style: 'color:var(--muted)'}, 'A rule is the start of a command (npm test) or a tool (write_file). "Never" wins. "Yes, and don\u2019t ask again" adds to "Always".'),
+    ...list('allow', 'Always allow'), ...list('deny', 'Never allow'),
+    el('div', {class: 'row'}, rule, el('button', {class: 'chip', onclick: () => change({add: {kind: 'allow', rule: rule.value}})}, 'Always'), el('button', {class: 'chip bad', onclick: () => change({add: {kind: 'deny', rule: rule.value}})}, 'Never'))], 'Close');
+}
+async function loadCmds() { try { const r = await api('/api/code/commands?project=' + encodeURIComponent(C.project)); C.cmds = (await r.json()).commands || []; } catch (e) { C.cmds = []; } }
 let SUG = {items: [], at: -1};
 function suggest() {
   const t = $('codeTask'), box = $('codeSuggest'), pos = t.selectionStart, before = t.value.slice(0, pos);
   let items = [];
   const sl = /^\/(\w*)$/.exec(before);
-  if (sl) items = SLASH.filter((x) => x[0].startsWith(sl[1].toLowerCase())).map((x) => ({label: '/' + x[0], sub: x[1], run: () => { t.value = ''; closeCodeMenus(); x[2](); }}));
+  if (sl) items = SLASH.filter((x) => x[0].startsWith(sl[1].toLowerCase())).map((x) => ({label: '/' + x[0], sub: x[1], run: () => { t.value = ''; closeCodeMenus(); x[2](); }}))
+    .concat((C.cmds || []).filter((x) => x.name.startsWith(sl[1].toLowerCase()) && !SLASH.some((y) => y[0] === x.name)).map((x) => ({label: '/' + x.name, sub: x.about || 'this project\u2019s own command', run: () => { t.value = '/' + x.name + ' '; closeCodeMenus(); t.focus(); }})));
   else { const at = /(?:^|\s)@([\w./-]*)$/.exec(before);
     if (at) { const q = at[1].toLowerCase(); items = C.files.filter((f) => f.toLowerCase().includes(q)).slice(0, 8).map((f) => ({label: '@' + f, sub: '', run: () => { const start = before.length - at[1].length - 1; t.value = t.value.slice(0, start) + '@' + f + ' ' + t.value.slice(pos); closeCodeMenus(); t.focus(); }})); } }
   SUG = {items, at: items.length ? 0 : -1};

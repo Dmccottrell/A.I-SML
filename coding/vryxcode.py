@@ -112,6 +112,10 @@ class NoInfill(Exception):
     """This model's llama-server cannot fill in the middle (the model has no fill-in-the-middle tokens)."""
 
 
+class _PicturesRefused(Exception):
+    """The model server could not take the pictures (no picture reader loaded)."""
+
+
 class LlamaChat:
     """A llama-server (llama.cpp) chat endpoint: the server applies the model's own chat template.
 
@@ -129,7 +133,24 @@ class LlamaChat:
         self.should_stop = None                            # function() -> bool, or None
 
     def __call__(self, messages):
+        """One reply. `self.pictures` = (mark, [data: URLs]): the message holding mark is sent with those pictures; a server that cannot see pictures
+        (no picture reader loaded) refuses them, and the step is sent again without them, with a line saying so."""
+        pics = getattr(self, "pictures", None)
+        if pics and any(m.get("role") == "user" and isinstance(m.get("content"), str) and pics[0] in m["content"] for m in messages):
+            mark, urls = pics
+            seen = [dict(m, content=[{"type": "text", "text": m["content"]}] + [{"type": "image_url", "image_url": {"url": u}} for u in urls])
+                    if m.get("role") == "user" and isinstance(m.get("content"), str) and mark in m["content"] else m for m in messages]
+            try:
+                return self._call(seen)
+            except _PicturesRefused:
+                self.pictures = None
+                messages = [dict(m, content=m["content"].replace(mark, "[The person attached pictures, but this model cannot see pictures: ask them to describe it.]"))
+                            if m.get("role") == "user" and isinstance(m.get("content"), str) and mark in m["content"] else m for m in messages]
+        return self._call(messages)
+
+    def _call(self, messages):
         self.cut_off = False
+        with_pictures = any(isinstance(m.get("content"), list) for m in messages)
         body = json.dumps({"model": "local", "messages": messages, "temperature": self.temperature, "max_tokens": self.max_tokens,
                            "stream": True, "stream_options": {"include_usage": True}, "cache_prompt": True,
                            "chat_template_kwargs": {"enable_thinking": bool(self.thinking)}}).encode()
@@ -162,6 +183,8 @@ class LlamaChat:
                         _hang_up(box["r"])
                     raise Interrupted()
         if kind == "error":
+            if with_pictures and isinstance(val, urllib.error.HTTPError) and val.code in (400, 415, 422, 500, 501):
+                raise _PicturesRefused()
             if isinstance(val, OSError):
                 raise SystemExit(f"can't reach the model at {self.url} ({val}). Start llama-server first (see the top of vryxcode.py).")
             raise val
@@ -319,6 +342,7 @@ CHECK_PAGE_NOTE = (" check_page(path, width, height) opens a web page of this pr
                    "a plain <script> cannot run JSX tags like <div>.")
 
 
+FULL_ONLY_TOOLS = {"ask_user", "remember", "web_search", "fetch_page"}       # given to the full agent only
 HELPER_STEPS = 25
 HELPER_SYSTEM = ("You are a helper for VryxCode. Another agent gave you one question about the project in this folder. Look with your tools (list_files, read_file, "
                  "glob, grep, and commands that only look), then answer in a few short lines: the files, functions and line numbers that matter, and what you found. "
@@ -371,9 +395,11 @@ def run_task(task, generate, workspace, ask, max_turns=12, context_tokens=None, 
     build = (bool(build) or bool(full)) and not plan
     todo = todo or build
     programs = set(harness.ALLOWED_PROGRAMS) | set(extra_programs)
-    rules = {"write_file": "ask", "edit_file": "ask", "run": "ask", "helper": "allow", "ask_user": "allow"}
+    rules = {"write_file": "ask", "edit_file": "ask", "run": "ask", "helper": "allow", "ask_user": "allow", "remember": "allow", "web_search": "allow",
+             "fetch_page": "ask"}                                 # opening a page asks first (an address can carry data out), as in Claude Code
     if plan:
-        rules = {"write_file": "deny", "edit_file": "deny", "run": "deny", "git": "deny", "github": "deny", "helper": "allow", "ask_user": "allow"}
+        rules = {"write_file": "deny", "edit_file": "deny", "run": "deny", "git": "deny", "github": "deny", "helper": "allow", "ask_user": "allow",
+                 "web_search": "allow", "remember": "deny", "fetch_page": "deny"}
         if full:                                                  # as in Claude Code's plan mode: commands that only look may still run
             rules["run"] = "ask"
             ask = lambda name, args: name == "run" and harness.read_only_command((args or {}).get("command", ""))
@@ -392,7 +418,7 @@ def run_task(task, generate, workspace, ask, max_turns=12, context_tokens=None, 
             kw["command_timeout"] = 120                       # copying the project over and back takes a while
     with harness.Sandbox(workspace=workspace, allowed_programs=programs, **kw) as sandbox:
         for name, fn in (tools or {}).items():
-            if full or name != "ask_user":
+            if full or name not in FULL_ONLY_TOOLS:
                 sandbox.register_tool(name, fn)
         if sandbox.full:                                          # the helper only looks, so Plan first may use it too
             sandbox.register_tool("helper", make_helper(generate, sandbox, context_tokens))

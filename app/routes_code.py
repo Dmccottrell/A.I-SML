@@ -15,6 +15,8 @@ import vryxcode
 import github_link
 import code_preview
 import browser_check
+import code_extras
+import code_web
 import usage_limits as U
 from app_errors import AppError
 from app_shared import Cancelled
@@ -128,6 +130,12 @@ class RoutesCode:
                                         "browser_check": browser_check.available(),
                                         "effort": {"auto": vryxcode.pick_auto(st.code_models(who)), "levels": [{"id": k, "name": k.title(), "note": v["note"]} for k, v in vryxcode.EFFORTS.items()]}
                                         if st.flags.on("vryxcode_effort", who) else None})
+            if path == "/api/code/memory":                     # what VryxCode remembers about this person (the full agent's remember tool)
+                return self._send(200, {"notes": code_extras.read_memory(st.code.base(user))})
+            if path == "/api/code/rules":                      # a project's saved permission rules (kept outside the project)
+                return self._send(200, code_extras.load_rules(code_extras.rules_path(st.code.base(user), st.code.check_name(arg("project")))))
+            if path == "/api/code/commands":                   # a project's own slash commands (.vryx/commands/<name>.md)
+                return self._send(200, {"commands": code_extras.list_commands(st.code.project_path(user, st.code.check_name(arg("project"))))})
             if path == "/api/code/templates":
                 return self._send(200, {"templates": templates.list_templates()})
             if path == "/api/code/sessions":
@@ -212,6 +220,7 @@ class RoutesCode:
                 if hasattr(fn, "on_delta"):
                     fn.on_delta = getattr(generate, "on_delta", None)     # live progress for the page's "working" line
                     fn.should_stop = getattr(generate, "should_stop", None)     # Stop works while it is still reading the prompt
+                    fn.pictures = getattr(generate, "pictures", None)           # screenshots sent with the message (the full agent)
                 try:
                     reply = fn(messages)
                 except SystemExit as e:
@@ -238,6 +247,7 @@ class RoutesCode:
                 tools = {"github": st.github_tool(user, project)}
         if browser_check.available():                                  # needs the playwright package: pip install playwright
             tools = dict(tools or {}, check_page=st.browser_tool(user, project))
+        tools = dict(tools or {}, **code_web.make_tools())             # documentation lookup: only the full agent gets these (vryxcode.FULL_ONLY_TOOLS)
         return generate, meter, tools, identity
 
     def _review_prompt(self, st, user, sid, review):
@@ -408,7 +418,7 @@ class RoutesCode:
                 s, note = st.code.start(user, project, task, model["id"], generate, bool(body.get("auto_edits")),
                                         int(model.get("context_tested") or 8192), meter, outside=bool(model.get("outside")), tools=tools, identity=identity,
                                         env=str(body.get("env") or "local"), plan=bool(body.get("plan")), owner=who["admin"], queue=bool(body.get("queue")),
-                                        model_text=second, build_steps=steps, turns=turns, full=full)
+                                        model_text=second, build_steps=steps, turns=turns, full=full, pictures=body.get("images"))
                 if body.get("notify") and who["owner"]:                        # the phone notification is the owner's (it goes to their ntfy topic)
                     s.notify, s.on_notify = True, st.code_notify
                 return self._send(200, {"id": s.id, "note": note, "queued": s.state == "queued", "position": st.code.queue_position(user, s.id)})
@@ -468,7 +478,11 @@ class RoutesCode:
                     sess.auto_edits = bool(body.get("auto_edits"))             # the mode picked now applies to this message
                 if who["owner"]:
                     sess.notify, sess.on_notify = bool(body.get("notify")), st.code_notify
-                sess.send(body.get("text"), plan=bool(body.get("plan")), model_text=sess.catch_up(body.get("text")) if revived else None)
+                text = body.get("text")
+                if getattr(sess, "full", False) and body.get("images"):    # screenshots sent with the message: the model sees them this turn
+                    mark = sess.attach_pictures(body.get("images"))
+                    text = (str(text or "").strip() + "\n\n" + mark).strip() if mark else text
+                sess.send(text, plan=bool(body.get("plan")), model_text=sess.catch_up(text) if revived else None)
                 return self._send(200, {"ok": True, "revived": revived})
             m = re.fullmatch(r"/api/code/sessions/([\w-]+)/reject", path)
             if m:                                                # undo one file of what a session changed
@@ -513,6 +527,23 @@ class RoutesCode:
                 if not allowed:
                     raise code_sessions.CodeError(why, "Ask the owner about VryxCode access.")
                 return self._send(200, st.code.save_file(user, body.get("project"), body.get("path"), body.get("text")))
+            if path == "/api/code/memory":                     # forget one note ({"forget": 2}) or all of them ({"forget": null})
+                idx = body.get("forget")
+                try:
+                    notes = code_extras.forget(st.code.base(user), None if idx is None else int(idx))
+                except (TypeError, ValueError):
+                    raise code_sessions.CodeError("Pick a note to forget.")
+                return self._send(200, {"notes": notes})
+            if path == "/api/code/rules":                      # {"project", "add": {"kind": "allow" | "deny", "rule": "npm test"}} or {"project", "remove": "npm test"}
+                where = code_extras.rules_path(st.code.base(user), st.code.check_name(body.get("project")))
+                try:
+                    if isinstance(body.get("add"), dict):
+                        rules = code_extras.add_rule(where, str(body["add"].get("kind", "")), body["add"].get("rule"))
+                    else:
+                        rules = code_extras.remove_rule(where, str(body.get("remove") or ""))
+                except ValueError as e:
+                    raise code_sessions.CodeError(str(e))
+                return self._send(200, rules)
             if path == "/api/code/init":
                 project = st.code.check_name(body.get("project"))
                 return self._send(200, st.code.init_instructions(user, project))
