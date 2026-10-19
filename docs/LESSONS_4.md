@@ -172,6 +172,27 @@ reply works out the meaning, answers it naturally as "you", never corrects spell
 guessed. The messy-typing copies (`data_prep/typo_lessons.py`) now also use slang ("gonna", "ngl", "idk", "rn") and casual endings ("ya know",
 "lol", "fr"). **Now (in the app):** a message that reads as slang gets a short hint to go by what is meant (`chat_turn.CASUAL_HINT`).
 
+## Making Lessons 4 much better than Lessons 3 (decided Oct 19, 2026; `data_prep/factory_plus.py`)
+Lessons 3 taught mostly what the models already knew, in mixed voices, with nothing checked. On top of the factory above:
+
+| | What it does | Command |
+|---|---|---|
+| 1 Teach what they miss | each model (a "student" on its own llama-server) answers the questions; proved right or wrong where possible, judged otherwise. `run --focus` answers the missed ones first and only 15% of the ones every model gets right | `probe --student URL --name flare-3`, then `run --focus` |
+| 2 Their own mistakes as pairs | a model's wrong answer paired with the checked lesson for the same question (preference training on its real habits) | `student-pairs` |
+| 3 The model checks itself | 6 tries on questions with a provable answer; the shortest one proved right becomes a lesson in its own voice, plus a pass/fail pair | `selfcheck --student URL --name flare-3` |
+| 4 Thinking sized to the question | short reasoning (under 1,200 characters) for medium questions, up to 4,000 for hard ones; longer reasoning is condensed by the teacher; easy questions answer straight away (Solstice 3 thought too long) | automatic in `run` |
+| 5 Real use | the app's reports (Admin > Feedback > export) become questions: only the person's question, never the old answer or who sent it | `feedback feedback_export.jsonl` |
+| 6 Tests kept out | questions sharing 8 words in a row with a test question (the eval sheets, the thinking check, HellaSwag) are dropped, so scores stay honest | `clean` |
+| 7 Near-duplicates | the same question in other words is dropped (MinHash), not just exact copies | `clean` |
+| 8 Tools and pictures | questions that come with what the app looked up (weather, a web page, a calculation, a memory) and replies to a picture from its description, so the lessons show using them; the notes go with the message the way the app sends them | `tools --per 20` |
+| 9 Quality report | pass rate, judge scores, proved right, style problems, lengths, thinking length, coverage by area: quality.md for every batch | `quality` |
+| 10 The owner reads a sample | 30 random lessons to read (`review.md`) | `review --n 30` |
+| Training files | train.jsonl (checked lessons + self-checked + thinking) and pairs_all.jsonl (every kind of pair) | `export` |
+
+Order on a rental (teacher on port 8099; a model to probe on 8100, e.g. `llama-server -m export/open/flare-3/my-ai-q4_k_m.gguf -ngl 99 -c 8192 --parallel 4 --port 8100`):
+`questions` and `maths` and `tools`, `feedback` (if there are reports), `clean`, `probe` for each model, `selfcheck` for each model, `run --focus`,
+`student-pairs`, `quality`, `review`, `export`. The teacher (about 17 GB) and one model at a time (2 to 7 GB) fit the 5090 together.
+
 ## Later: Apogee 3.5
 Grow Apogee 3 again to about **14B** (the most that fits the 4070 with 128K; 64K comfortable), train on **Lessons 4.5** (Lessons 4 plus what the app's
 reports and approvals teach) with a second round of DPO and more thinking lessons. Expected about **50 to 52**; before it, write a harder test

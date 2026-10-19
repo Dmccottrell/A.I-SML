@@ -26,6 +26,10 @@ class FakeTeacher:
             return {"answer": json.dumps(self.scores.get(answer, GOOD)), "thinking": ""}
         if "[A draft answer follows" in last:
             return {"answer": self.fixed, "thinking": ""}
+        if last.startswith("Write the brief reasoning"):                      # short reasoning for a medium question's thinking lesson
+            return {"answer": "Five notebooks at 2.50 each: 5 times 2.50 is 12.50.", "thinking": ""}
+        if "Rewrite the reasoning so it keeps" in last:                         # long reasoning condensed to the level's budget
+            return {"answer": "Short: multiply five by 2.50, then check the total.", "thinking": ""}
         if last.startswith("Write ") and "questions" in last:
             return {"answer": json.dumps(self.questions or []), "thinking": ""}
         d = self.drafts.pop(0) if self.drafts else {"answer": "", "thinking": ""}
