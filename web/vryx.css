@@ -218,3 +218,5 @@ body.vx #dialogs input:focus { outline: 2px solid var(--accent); outline-offset:
 .code .vx-model:hover { border-color: var(--accent); background: var(--vx-soft); }
 .code .vx-model .k { color: var(--muted); } .code .vx-model b { font-weight: 600; color: var(--accenttext); } .code .vx-model .c { color: var(--muted); }
 .code #vxModelMenu { top: calc(100% + 8px); bottom: auto; left: 0; right: auto; width: min(360px, 86vw); z-index: 40; }
+/* the suggested reply (flag vryxcode_suggest): greyed text in the empty box; Tab or a swipe right fills it in */
+#codeTask.offer::placeholder { color: var(--muted); opacity: .85; }

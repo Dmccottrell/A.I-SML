@@ -306,6 +306,7 @@ $('codeCtx').onclick = () => {
 };
 document.addEventListener('click', (e) => { if (!e.target.closest('#codeCtx, #codeCtxMenu')) $('codeCtxMenu').hidden = true; });
 function cEvent(e) {
+  if (e.kind === 'user' || e.kind === 'start') offerReply('');          // a new message: the last suggestion no longer fits
   const feed = $('codeIn'); C.events.push(e);
   if (e.kind === 'context') { codeCtx(e); return; }
   if (e.kind === 'model') { feed.append(el('div', {class: 'note', style: 'align-self:center;margin:6px auto'}, 'Now using ' + modelName(e.model) + (e.previous ? ' (was ' + modelName(e.previous) + ')' : ''))); C.last = null; return; }
@@ -373,6 +374,7 @@ function cEvent(e) {
       feed.append(renderMessage(e.summary || 'Done.', e.finished));
       if (e.report) feed.append(reportCard(e.report));
       if (e.plan) feed.append(el('div', {class: 'plan-actions'}, el('button', {class: 'btn small', onclick: () => { setMode(C.prevMode === 'plan' ? 'ask' : C.prevMode); $('codeTask').value = 'Go ahead and build it as planned.'; $('codeGo').click(); }}, 'Build it'), el('button', {class: 'chip', onclick: () => { $('codeTask').value = 'Change the plan: '; $('codeTask').focus(); }}, 'Change the plan')));
+      if (e.finished || e.plan) offerReply(e.plan ? 'Go ahead and build it as planned.' : (e.next || [])[0]);
       if (e.next && e.next.length) feed.append(el('div', {class: 'cc-next'}, el('span', {class: 'lead'}, 'Suggested next:'),
         ...e.next.map((t) => el('button', {class: 'chip', onclick: () => { $('codeTask').value = t; $('codeGo').click(); }}, t))));
       return;
@@ -452,7 +454,7 @@ async function poll() {
   const old = document.getElementById('codeLive'); if (old) old.remove();      // the live line sits below the newest step, so take it out while steps are added
   for (const e of j.events) cEvent(e); C.seen += j.events.length;
   C.saved = !!j.saved; C.state = j.state; C.checkpoints = j.checkpoints || C.checkpoints || [];
-  $('codeTask').placeholder = 'Ask, answer, or tell VryxCode what to build or fix';
+  $('codeTask').placeholder = C.offer || 'Ask, answer, or tell VryxCode what to build or fix';
   if (j.events.some((e) => e.kind === 'result' || e.kind === 'end' || e.kind === 'rewind')) refreshFiles().then(() => livePreview(j.events));
   if (j.events.length && !$('codeDrawer').hidden && C.tab !== 'files') showDrawer(true, C.tab);
   renderLive(j.live, j.state);
@@ -465,6 +467,7 @@ async function poll() {
 }
 $('codeGo').onclick = async () => {
   const task = $('codeTask').value.trim(); if ((!task && !C.startTemplate) || !C.model) return;
+  offerReply('');
   if (C.sid && C.live && C.full) {     // it is working: the message is read before its next step, without stopping it
     const r = await post('/api/code/sessions/' + C.sid + '/steer', {text: task}); const j = await r.json().catch(() => ({}));
     if (r.ok) { $('codeTask').value = ''; poll(); return; }

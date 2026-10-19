@@ -53,7 +53,7 @@ function envInfo() {
 function resetWork() { C.todo = []; C.events = []; C.ctx = null; if ($('codeCtx')) $('codeCtx').hidden = true; renderTodo(); if (typeof OUT !== 'undefined') { OUT.items = []; OUT.pending = null; if (OUT.open) outRender(); } }
 function newSession() {
   C.view = 'session'; $('code').classList.remove('home'); $('codeTitle').textContent = 'VryxCode'; C.sid = null; C.saved = false; C.checkpoints = []; C.seen = 0; C.last = null; C.pvAuto = false;
-  $('codeIn').replaceChildren(); $('codeGo').hidden = false; $('codeStop').hidden = true; resetWork(); renderCodeBar(); emptyFeed(); refreshFiles(); loadCmds(); C.pics = []; renderPics(); $('codeTask').focus();
+  offerReply(''); $('codeIn').replaceChildren(); $('codeGo').hidden = false; $('codeStop').hidden = true; resetWork(); renderCodeBar(); emptyFeed(); refreshFiles(); loadCmds(); C.pics = []; renderPics(); $('codeTask').focus();
 }
 function openSession(m) {
   C.view = 'session'; $('code').classList.remove('home'); $('codeTitle').textContent = 'VryxCode'; C.sid = m.id; C.project = m.project; C.saved = false; C.checkpoints = m.checkpoints || []; C.pvAuto = false;
@@ -319,6 +319,22 @@ function suggest() {
   box.replaceChildren(...items.map((x, i) => el('button', {class: 'opt' + (i === 0 ? ' hi' : ''), onmousedown: (e) => e.preventDefault(), onclick: x.run}, el('code', {}, x.label), x.sub ? el('span', {class: 'grow'}, el('small', {}, x.sub)) : '')));
   box.hidden = false;
 }
+// The suggested reply (flag vryxcode_suggest): after a finished turn the empty message box shows what to say next, greyed out, as Claude does.
+// Tab, or a swipe right across the box on a phone, fills it in; typing anything else ignores it, and sending clears it.
+function offerReply(text) {
+  C.offer = (S.state && S.state.features && S.state.features.vryxcode_suggest && text) ? String(text).slice(0, 200) : '';
+  const t = $('codeTask'); t.placeholder = C.offer || 'Ask, answer, or tell VryxCode what to build or fix'; t.classList.toggle('offer', !!C.offer);
+}
+function takeOffer() {
+  const t = $('codeTask'); if (!C.offer || t.value) return false;
+  t.value = C.offer; offerReply(''); t.focus(); t.setSelectionRange(t.value.length, t.value.length); suggest(); return true;
+}
+$('codeTask').addEventListener('keydown', (e) => { if (e.key === 'Tab' && !e.shiftKey && $('codeSuggest').hidden && takeOffer()) e.preventDefault(); });
+(() => {
+  let x0 = null, y0 = 0;
+  $('codeTask').addEventListener('touchstart', (e) => { const p = e.touches[0]; x0 = e.touches.length === 1 ? p.clientX : null; y0 = p.clientY; }, {passive: true});
+  $('codeTask').addEventListener('touchend', (e) => { const p = e.changedTouches[0]; if (x0 != null && p.clientX - x0 > 60 && Math.abs(p.clientY - y0) < 40) takeOffer(); x0 = null; }, {passive: true});
+})();
 $('codeTask').addEventListener('input', suggest);
 $('codeTask').addEventListener('keydown', (e) => { if (!$('codeSuggest').hidden && SUG.items.length && (e.key === 'Tab' || (e.key === 'Enter' && !e.shiftKey && !e.ctrlKey && !e.metaKey))) { e.preventDefault(); SUG.items[SUG.at].run(); } else if (e.key === 'Escape') $('codeSuggest').hidden = true; });
 $('codeFilesBtn').onclick = () => showDrawer($('codeDrawer').hidden);

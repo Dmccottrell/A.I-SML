@@ -7,6 +7,8 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -58,7 +60,16 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.input.key.type
+import androidx.compose.ui.input.pointer.PointerEventPass
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -69,6 +80,7 @@ import app.emvryx.android.data.strings
 import app.emvryx.android.ui.theme.Emvryx
 import app.emvryx.android.ui.theme.Mono
 import kotlinx.serialization.json.JsonObject
+import kotlin.math.abs
 
 // VryxCode's screens on a phone, in its electric violet (web/vryx.css): the sessions list, and one session's work feed with the message box.
 private val Violet = Color(0xFF8B5CF6)
@@ -82,6 +94,7 @@ private val SLASH = listOf("/plan" to "Plan first: look and plan, change nothing
 
 @Composable
 fun CodeScreen(app: AppViewModel, vm: CodeViewModel) {
+    LaunchedEffect(app.state) { vm.suggestOn = app.flag("vryxcode_suggest") }
     LaunchedEffect(Unit) { vm.load() }
     BackHandler { if (vm.inSession) vm.backToList() else app.backToChat() }
     Column(Modifier.fillMaxSize().background(Emvryx.bg).imePadding()) {
@@ -294,7 +307,10 @@ private fun ChoiceCard(vm: CodeViewModel, q: JsonObject) {
 @Composable
 private fun CodeComposer(vm: CodeViewModel) {
     val context = LocalContext.current
-    var text by remember { mutableStateOf("") }
+    var field by remember { mutableStateOf(TextFieldValue("")) }
+    val text = field.text
+    val fill = { t: String -> field = TextFieldValue(t, TextRange(t.length)) }
+    val takeOffer = { if (text.isEmpty() && vm.offer.isNotEmpty()) { fill(vm.offer); vm.offer = ""; true } else false }
     var menu by remember { mutableStateOf<String?>(null) }
     val pick = rememberLauncherForActivityResult(ActivityResultContracts.PickMultipleVisualMedia(3)) { uris ->
         uris.forEach { u -> readPicked(context, u)?.let { (n, b) -> vm.addPicture(n, b) } }
@@ -309,7 +325,7 @@ private fun CodeComposer(vm: CodeViewModel) {
             val items = SLASH.filter { it.first.startsWith(text.lowercase()) } + vm.commands.map { "/" + it.name to it.about.ifBlank { "This project's own command" } }
                 .filter { it.first.startsWith(text.lowercase()) }
             items.take(8).forEach { (c, about) ->
-                Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp)).clickable { text = "$c " }.padding(6.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp)).clickable { fill("$c ") }.padding(6.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                     Text(c, style = Mono, color = Violet)
                     Text(about, color = Emvryx.muted, fontSize = 13.sp, maxLines = 2)
                 }
@@ -318,11 +334,12 @@ private fun CodeComposer(vm: CodeViewModel) {
         if (vm.pictures.isNotEmpty()) FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
             vm.pictures.forEachIndexed { i, _ -> Chip("🖼 Picture ${i + 1} ×", { vm.pictures.removeAt(i) }) }
         }
-        Box(Modifier.fillMaxWidth().heightIn(min = 24.dp, max = 160.dp)) {
-            if (text.isEmpty()) Text(if (vm.working && vm.full) "Tell it something while it works…" else "Ask, answer, or tell VryxCode what to build or fix",
+        // the suggested reply (flag vryxcode_suggest): greyed in the empty box; a swipe right across the box, or Tab on a keyboard, fills it in
+        Box(Modifier.fillMaxWidth().heightIn(min = 24.dp, max = 160.dp).swipeRight { takeOffer() }) {
+            if (text.isEmpty()) Text(vm.offer.ifEmpty { if (vm.working && vm.full) "Tell it something while it works…" else "Ask, answer, or tell VryxCode what to build or fix" },
                 color = Emvryx.muted, style = MaterialTheme.typography.bodyLarge)
-            BasicTextField(text, { text = it }, Modifier.fillMaxWidth(), textStyle = MaterialTheme.typography.bodyLarge.copy(color = Emvryx.text),
-                cursorBrush = SolidColor(Violet))
+            BasicTextField(field, { field = it }, Modifier.fillMaxWidth().onPreviewKeyEvent { it.key == Key.Tab && it.type == KeyEventType.KeyDown && takeOffer() },
+                textStyle = MaterialTheme.typography.bodyLarge.copy(color = Emvryx.text), cursorBrush = SolidColor(Violet))
         }
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
             IconButton({ pick.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) }, Modifier.size(40.dp)) {
@@ -359,11 +376,25 @@ private fun CodeComposer(vm: CodeViewModel) {
             if (!vm.working || vm.full) Box(
                 Modifier.size(42.dp).clip(RoundedCornerShape(12.dp)).background(Violet).clickable(enabled = text.isNotBlank() || vm.pictures.isNotEmpty()) {
                     vm.send(text)
-                    text = ""
+                    fill("")
                 },
                 contentAlignment = Alignment.Center,
             ) { Text("↑", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 20.sp) }
         }
+    }
+}
+
+/** A swipe to the right across this area (watched before the text box sees it, so typing and selecting still work) */
+private fun Modifier.swipeRight(onSwipe: () -> Unit): Modifier = pointerInput(Unit) {
+    awaitEachGesture {
+        val down = awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial)
+        var last = down.position
+        while (true) {
+            val change = awaitPointerEvent(PointerEventPass.Initial).changes.firstOrNull { it.id == down.id } ?: break
+            last = change.position
+            if (!change.pressed) break
+        }
+        if (last.x - down.position.x > 60.dp.toPx() && abs(last.y - down.position.y) < 40.dp.toPx()) onSwipe()
     }
 }
 
