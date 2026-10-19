@@ -130,6 +130,8 @@ class AppState(StateAccounts, StateSettings, StateApps, StatePC, StateCode, Stat
         self.models_pub = model_publish.ModelPublisher(os.path.join(data_dir, "models_state.json") if data_dir else None, None, guard=self.guard_ok, file_sig=self.model_file_sig)
         self.flags = flags.Flags(os.path.join(data_dir, "flags.json") if data_dir else None)
         self.models_pub.flags = self.flags
+        if data_dir and os.path.exists(os.path.join(data_dir, "ci_watch.json")):
+            self.ci_watcher()                                  # VryxCode's "Watch CI" carries on after a restart
         self.updater = updater.Updater(HERE, busy=self.busy)                         # Admin > PC > Update now (owner only)
         self.guard_sheet = os.path.join(HERE, "eval", "everyday.jsonl")            # the safety checks a new model must pass before it can be published
         self.guards = model_guard.GuardStore(os.path.join(data_dir, "guard") if data_dir else None)

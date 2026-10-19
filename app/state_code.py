@@ -116,6 +116,41 @@ class StateCode:
         import notify
         threading.Thread(target=notify.send, args=(topic, text, "VryxCode"), daemon=True).start()
 
+    # ---- CI: /fixci and "Watch CI" (app/code_ci.py)
+    def ci_failures(self, user, project):
+        """(owner, repo, branch, sha, failed) for the project's GitHub branch; raises CodeError when it is not linked to GitHub."""
+        import code_ci
+        g = self.git_for(user, project)
+        try:
+            remote, branch = g.remote(), g.branch()
+        except github_link.GitHubError as e:
+            raise code_sessions.CodeError(e.message, e.action)
+        if not remote or remote[0] == "local" or not branch:
+            raise code_sessions.CodeError("This project is not linked to a GitHub repository.", "Link it first (Project > GitHub), push it, then try again.")
+        try:
+            sha, failed = code_ci.failures(self.github_api(user), remote[0], remote[1], branch)
+        except github_link.GitHubError as e:
+            raise code_sessions.CodeError(e.message, e.action)
+        return remote[0], remote[1], branch, sha, failed
+
+    def ci_watcher(self):
+        """The CI watcher (created once; it resumes the watches saved in ci_watch.json)."""
+        if getattr(self, "_ci", None) is None:
+            import code_ci
+            import routes_code
+
+            def look(who, project):
+                return self.ci_failures(who["user"], project)[3:]
+
+            def notify(who, text):
+                topic = str(self.security.get("alert_ntfy_topic") or "")
+                if topic and who.get("owner"):
+                    import notify as ntfy
+                    threading.Thread(target=ntfy.send, args=(topic, text, "VryxCode"), daemon=True).start()
+            self._ci = code_ci.Watcher(os.path.join(self.data_dir, "ci_watch.json") if self.data_dir else None, look,
+                                       lambda who, project, model, sha, failed: routes_code.start_fix(self, who, project, model), notify)
+        return self._ci
+
     def browser_tool(self, user, project):
         """The `check_page` tool the model may call: a hidden browser opens a page of the project, clicks around and audits it (coding/browser_check.py)."""
         def check_page(path="", width=390, height=844):

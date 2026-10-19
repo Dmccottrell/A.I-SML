@@ -82,7 +82,12 @@ PROJECT_FILES = ("VRYX.md", "EMVRYX.md", "AGENTS.md")
 # the isolated container or on the cloud machine: never on the computer that runs Emvryx, which is reachable from the internet (the safe program list stays there).
 FULL_TIMEOUT, FULL_MAX_TIMEOUT = 120, 600         # seconds a command may run: the default, and the most the model may ask for
 FULL_OUTPUT, FULL_READ_LINES, FULL_LINE_CHARS = 30_000, 2000, 2000
-SKIP_DIRS = {".git", "node_modules", "__pycache__", ".emvryx", ".venv", "venv", ".pytest_cache", ".worktrees", "dist", "build", ".next"}
+SKIP_DIRS = {".git", "node_modules", "__pycache__", ".emvryx", ".vryx", ".venv", "venv", ".pytest_cache", ".worktrees", "dist", "build", ".next"}
+# Packages for the sandbox (which has no internet): the Emvryx server downloads them from the official registry WITHOUT running any of their code
+# (Python: wheels only, never a setup.py; npm: --ignore-scripts), and they are installed inside the offline container from the project folder.
+PIP_NAME = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,80}(\[[A-Za-z0-9,._-]{1,60}\])?((==|>=|<=|~=|!=|<|>)[A-Za-z0-9.*+!-]{1,40}(,(==|>=|<=|~=|!=|<|>)[A-Za-z0-9.*+!-]{1,40})*)?$")
+NPM_NAME = re.compile(r"^(@[a-z0-9][a-z0-9._-]{0,60}/)?[a-z0-9][a-z0-9._-]{0,80}(@[A-Za-z0-9.^~*-]{1,40})?$")     # no < > or spaces: npm runs through the shell on Windows
+PY_DEPS, WHEELS = ".vryx/pydeps", ".vryx/wheels"
 READ_ONLY_PROGRAMS = {"ls", "cat", "head", "tail", "wc", "pwd", "echo", "grep", "rg", "which", "whoami", "date", "sort", "uniq", "diff", "file", "stat",
                       "tree", "du", "df", "find", "printf", "true"}
 FILE_PROGRAMS = {"mkdir", "touch", "mv", "cp"}         # with "Edit without asking" these run without a question too (as in Claude Code's accept-edits mode)
@@ -97,7 +102,8 @@ FULL_TOOL_NOTE = (" YOUR TOOLS: read_file shows up to 2000 lines; edit_file(path
                   "error, fix it and run again. When something fails, find out why before changing more; if a way keeps failing, try another. Only stop to ask the person "
                   "when you truly need them.")
 SHELL_NOTE = (" run(command) is a real terminal in the project folder: pipes, && and cd inside one command all work (each command starts again in the project folder). "
-              "It runs in an isolated sandbox with no internet, so nothing can be downloaded or installed.")
+              "It runs in an isolated sandbox with no internet: pip install and npm install do not work there. To get a package use "
+              "install(manager=\"pip\" or \"npm\", packages=[\"name\"]) (the person is asked first); Python packages are then found by themselves.")
 
 
 def shell_argv(command):
@@ -476,6 +482,55 @@ class Sandbox:
         self._kill(self._job(id))
         return f"stopped command {id}"
 
+    def _container_python(self):
+        """The container's Python version ("3.12"), asked once."""
+        if not getattr(self, "_py_version", None):
+            out = self._exec(["python3", "-c", "import sys; print('%d.%d' % sys.version_info[:2])"])
+            m = re.search(r"\b(3\.\d+)\b", out)
+            self._py_version = m.group(1) if m else "3.12"
+        return self._py_version
+
+    def install(self, manager=None, packages=None):
+        """install(manager="pip" | "npm", packages=[...]): packages for the sandbox, which has no internet (see PIP_NAME above). Only by name from the official
+        registry: no links, paths or options. Python packages that come only as source (no wheel) cannot be installed this way."""
+        if not self.shell or self.remote:
+            raise ToolError("install works in the isolated sandbox only. On this computer, ask the person to install it.")
+        manager = str(manager or "").lower().strip()
+        pkgs = packages if isinstance(packages, list) else str(packages or "").split()
+        pkgs = [str(p).strip() for p in pkgs if str(p).strip()]
+        rx = {"pip": PIP_NAME, "npm": NPM_NAME}.get(manager)
+        if not rx:
+            raise ToolError('install needs manager "pip" or "npm"')
+        if not pkgs or len(pkgs) > 10 or not all(rx.match(p) for p in pkgs):
+            raise ToolError("give 1 to 10 package names from the registry (like requests or flask==3.0.3, or lodash@4), with no links, paths or options")
+        if manager == "pip":
+            dest = os.path.join(self.root, *WHEELS.split("/"))
+            os.makedirs(dest, exist_ok=True)
+            got = self._host([sys.executable, "-m", "pip", "download", "--only-binary=:all:", "--dest", dest, "--python-version", self._container_python(),
+                              "--implementation", "cp", "--platform", "manylinux2014_x86_64", "--platform", "manylinux_2_28_x86_64",
+                              "--platform", "musllinux_1_2_x86_64", "--disable-pip-version-check", "--quiet"] + pkgs)
+            if not got.startswith("exit code 0"):
+                return "the download failed (a package may have no ready-made wheel for Linux, or the name is wrong):\n" + got
+            return self._exec(["python3", "-m", "pip", "install", "--no-index", "--find-links", "/work/" + WHEELS, "--target", "/work/" + PY_DEPS,
+                               "--disable-pip-version-check", "--no-warn-script-location", "--quiet", "--upgrade"] + pkgs, timeout=300) + \
+                f"\n(installed into {PY_DEPS}: commands here find it by themselves)"
+        if not shutil.which("npm"):
+            raise ToolError("npm is not installed on the Emvryx server, so npm packages cannot be fetched")
+        out = self._host(["npm", "install", "--ignore-scripts", "--no-audit", "--no-fund", "--save"] + pkgs, shell=os.name == "nt")
+        return out + "\n(no install scripts were run: a package that needs to build something on install may not work)"
+
+    def _host(self, argv, shell=False):
+        """A download on the Emvryx server itself (the registry only, with arguments checked above)."""
+        try:
+            r = subprocess.run(argv if not shell else subprocess.list2cmdline(argv), cwd=self.root, capture_output=True, text=True, encoding="utf-8",
+                               errors="replace", timeout=300, stdin=subprocess.DEVNULL, shell=shell)
+        except subprocess.TimeoutExpired:
+            raise ToolError("the download took longer than 5 minutes and was stopped")
+        except OSError as e:
+            raise ToolError(f"could not download: {e}")
+        out = (r.stdout + ("\n" + r.stderr if r.stderr else "")).strip()
+        return cut(f"exit code {r.returncode}\n{out}" if out else f"exit code {r.returncode}", self.output_limit)
+
     def run(self, command, timeout=None, background=False):
         if background and not self.full:
             raise ToolError("run takes only a command here")
@@ -491,9 +546,11 @@ class Sandbox:
             command = str(command or "").strip()
             if not command:
                 raise ToolError("empty command")
+            deps = os.path.isdir(os.path.join(self.root, *PY_DEPS.split("/")))
             if background:
-                return self._background(command, self.prefix + shell_argv(command))
-            return self._exec(shell_argv(command), timeout=limit)
+                pre = self.prefix[:-1] + ["-e", "PYTHONPATH=/work/" + PY_DEPS, self.prefix[-1]] if deps and self.container else self.prefix
+                return self._background(command, pre + shell_argv(command))
+            return self._exec(shell_argv(command), {"PYTHONPATH": "/work/" + PY_DEPS} if deps and self.container else None, timeout=limit)
         try:
             argv = shlex.split(command)
         except ValueError as e:
@@ -588,7 +645,7 @@ class Sandbox:
         self.extra_tools[name] = function
 
     def builtin_names(self):
-        return ["list_files", "read_file", "write_file", "edit_file", "run", "git", "diagnostics", "finish"] + (["glob", "grep", "command_output", "stop_command"] if self.full else [])
+        return ["list_files", "read_file", "write_file", "edit_file", "run", "git", "diagnostics", "finish"] + (["glob", "grep", "command_output", "stop_command", "install"] if self.full else [])
 
     def call(self, name, args):
         """Run one tool. Returns (text for the model, whether the model said it is finished)."""
@@ -596,7 +653,8 @@ class Sandbox:
             return str(args.get("summary", "")), True
         tools = {"list_files": self.list_files, "read_file": self.read_file, "write_file": self.write_file,
                  "edit_file": self.edit_file, "run": self.run, "git": self.git, "diagnostics": self.diagnostics,
-                 **({"glob": self.glob, "grep": self.grep, "command_output": self.command_output, "stop_command": self.stop_command} if self.full else {}),
+                 **({"glob": self.glob, "grep": self.grep, "command_output": self.command_output, "stop_command": self.stop_command, "install": self.install}
+                    if self.full else {}),
                  **self.extra_tools}
         if name not in tools:
             raise ToolError(f"unknown tool {name!r}. Tools: {', '.join(list(tools) + ['finish'])}")

@@ -15,6 +15,7 @@ import vryxcode
 import github_link
 import code_preview
 import browser_check
+import code_ci
 import code_extras
 import code_web
 import usage_limits as U
@@ -41,6 +42,24 @@ def effort_turns(model, effort, default_turns, full=False):
     if not effort:
         return steps, None
     return (vryxcode.effort_steps(steps, effort), None) if steps else (None, vryxcode.effort_steps(default_turns, effort))
+
+
+def start_fix(st, who, project, model_id=""):
+    """Start a "fix CI" session from the server itself (the CI watcher), the way the Start button does: queued when one is running, the phone told."""
+    owner, repo, branch, sha, failed = st.ci_failures(who["user"], project)
+    if not failed:
+        return None
+    effort = RoutesCode._effort(st, who, {})
+    model = RoutesCode._pick_code_model(st, who, model_id, effort)
+    full = RoutesCode._full(st, who, model)
+    steps, turns = effort_turns(model, effort, st.code.max_turns, full)
+    generate, meter, tools, identity = RoutesCode._code_kit(st, who["user"], model, project)
+    s, _ = st.code.start(who["user"], project, code_ci.fix_task(owner, repo, branch, sha, failed), model["id"], generate, False,
+                         int(model.get("context_tested") or 8192), meter, outside=bool(model.get("outside")), tools=tools, identity=identity,
+                         owner=who["admin"], queue=True, build_steps=steps, turns=turns, full=full)
+    if who.get("owner"):
+        s.notify, s.on_notify = True, st.code_notify
+    return s
 
 
 def clip_line(text, n=80):
@@ -128,6 +147,7 @@ class RoutesCode:
                                         "usage": self._code_usage(who, None), "models": st.code_models(who), "projects": st.code.projects(user),
                                         "running": run.id if run else None, "project": run.project if run else None, "environments": st.code.environments(who["admin"]),
                                         "browser_check": browser_check.available(),
+                                        "ci_watch": sorted(k.split("|", 1)[1] for k in st.ci_watcher().items if k.split("|", 1)[0] == user) if who["owner"] else [],
                                         "effort": {"auto": vryxcode.pick_auto(st.code_models(who)), "levels": [{"id": k, "name": k.title(), "note": v["note"]} for k, v in vryxcode.EFFORTS.items()]}
                                         if st.flags.on("vryxcode_effort", who) else None})
             if path == "/api/code/memory":                     # what VryxCode remembers about this person (the full agent's remember tool)
@@ -201,7 +221,8 @@ class RoutesCode:
         except code_sessions.CodeError as e:
             self._code_error(e)
 
-    def _code_kit(self, st, user, model, project):
+    @staticmethod
+    def _code_kit(st, user, model, project):
         """What a session needs to work with this model in this project: the model call, the usage meter, its tools (GitHub, the browser check) and the git name."""
         box = {}
 
@@ -266,19 +287,22 @@ class RoutesCode:
         cut = max(0, len(diff) - code_review.DEFAULT_LIMIT)
         return code_review.review_prompt(diff[:code_review.DEFAULT_LIMIT], files, cut, f"pull request {ref[0]}/{ref[1]}#{ref[2]}" + (f" ({title})" if title else ""))
 
-    def _effort(self, st, who, body):
+    @staticmethod
+    def _effort(st, who, body):
         """The effort picked in VryxCode, or None while the feature flag vryxcode_effort is off for this person (then the model picker works as before)."""
         if not st.flags.on("vryxcode_effort", who):
             return None
         effort = str(body.get("effort") or "balanced")
         return effort if effort in vryxcode.EFFORTS else "balanced"
 
-    def _full(self, st, who, model):
+    @staticmethod
+    def _full(st, who, model):
         """The Claude Code-style agent for this model: VryxCode 3 (a model made for long builds) always, the others with the feature flag vryxcode_full_agent.
         Never an outside model. Its real terminal only ever runs inside the container or on the cloud machine (harness.Sandbox)."""
         return bool(model) and not model.get("outside") and (bool(model.get("vryxcode_build")) or st.flags.on("vryxcode_full_agent", who))
 
-    def _pick_code_model(self, st, who, model_id, effort=None):
+    @staticmethod
+    def _pick_code_model(st, who, model_id, effort=None):
         """The model dict VryxCode (a session, or the editor's edit and explain) runs on: an outside coding model, or an Emvryx model flagged for coding and ready.
         With the feature flag vryxcode_effort there is no picker: VryxCode picks by itself (VryxCode 3, then Apogee 3, see vryxcode.pick_auto)."""
         if st.flags.on("vryxcode_effort", who):
@@ -399,6 +423,22 @@ class RoutesCode:
                 body = {"project": old.project, "task": "Second opinion on: " + clip_line(old.task), "model": body.get("model"), "plan": True, "queue": True, "notify": body.get("notify")}
                 second = prompt
                 path = "/api/code/start"
+            if path == "/api/code/fixci":                      # /fixci: the failing checks of the project's GitHub branch become the task of a new session
+                project = st.code.check_name(body.get("project"))
+                owner, repo, branch, sha, failed = st.ci_failures(user, project)
+                if not failed:
+                    return self._send(200, {"ok": False, "message": f"Nothing is failing on GitHub for {branch}" + (f" ({sha[:7]})." if sha else ". No checks have run yet.")})
+                body = dict(body, project=project, task=code_ci.fix_task(owner, repo, branch, sha, failed), queue=True, plan=False, template=None)
+                path = "/api/code/start"
+            if path == "/api/code/ci-watch":                   # "Watch CI" (owner): look every few minutes, start a fix when a new commit fails
+                if not who["owner"]:
+                    raise code_sessions.CodeError("Only the owner can turn on Watch CI.")
+                project = st.code.check_name(body.get("project"))
+                on = bool(body.get("on"))
+                if on:
+                    st.ci_failures(user, project)                       # linked to GitHub, and the checks can be read
+                st.ci_watcher().set(who, project, on, str(body.get("model") or ""))
+                return self._send(200, {"watching": on})
             if path == "/api/code/start":
                 allowed, why = st.code_allowed(who)
                 if not allowed:
