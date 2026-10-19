@@ -16,6 +16,7 @@ android {
         versionCode = 1
         versionName = "0.1.0"
         buildConfigField("String", "DEFAULT_SERVER", "\"https://chat.emvryx.app\"")
+        testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
     buildTypes {
@@ -59,4 +60,7 @@ dependencies {
     debugImplementation(libs.androidx.compose.ui.tooling)
 
     testImplementation(libs.junit)
+    androidTestImplementation(libs.androidx.test.ext.junit)
+    androidTestImplementation(libs.androidx.test.runner)
+    androidTestImplementation(libs.androidx.test.rules)
 }
