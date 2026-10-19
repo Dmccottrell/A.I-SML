@@ -93,20 +93,49 @@ data class ChatSummary(
     val pinned: Boolean = false,
 )
 
+/** "Regenerate" with a choice of how the new answer should differ (app/regen_modes.py) */
+@Serializable
+data class RegenOption(val id: String, val label: String, val blurb: String = "")
+
 @Serializable
 data class AppState(
     val user: String,
     val plan: String = "",
     val demo: Boolean = false,
+    val owner: Boolean = false,
+    val admin: Boolean = false,
     val models: Catalog = Catalog(),
     val model: String = "",
     val efforts: List<Effort> = emptyList(),
     val chats: List<ChatSummary> = emptyList(),
     val usage: Usage? = null,
     val gaming: Boolean = false,
+    @SerialName("regen_options") val regenOptions: List<RegenOption> = emptyList(),
+    val features: Map<String, Boolean> = emptyMap(),        // the feature flags as they apply to this person (Admin > Previews)
 ) {
     /** "Pro plan" */
     val planName get() = plan.replaceFirstChar { it.uppercase() } + " plan"
+
+    fun on(flag: String) = features[flag] == true
+}
+
+/** How full the model's memory (context window) is: the ring by the message box (feature flag context_meter) */
+@Serializable
+data class Ctx(
+    val used: Long = 0,
+    val window: Long = 1,
+    val pct: Double = 0.0,
+    @SerialName("compact_at") val compactAt: Long = 0,
+)
+
+/** A picture or file attached to a chat (app/documents.py) */
+@Serializable
+data class DocInfo(val id: Long, val name: String = "", val kind: String = "") {
+    val picture get() = kind.lowercase() in PICTURE_KINDS                       // documents.IMAGE_KINDS: the extension without the dot
+
+    companion object {
+        val PICTURE_KINDS = setOf("png", "jpg", "jpeg", "webp", "bmp", "gif", "heic")
+    }
 }
 
 @Serializable
@@ -116,6 +145,10 @@ data class Message(
     val content: String = "",
     @SerialName("model_id") val modelId: String = "",
     val status: String = "done",
+    val cut: Boolean = false,
+    val fb: String = "",
+    val ctx: Ctx? = null,
+    val docs: List<DocInfo> = emptyList(),
 )
 
 @Serializable
@@ -124,7 +157,25 @@ data class Chat(
     val title: String = "New chat",
     val messages: List<Message> = emptyList(),
     val generating: Boolean = false,
+    val ctx: Ctx? = null,
+    val pinned: Boolean = false,
+    val docs: List<DocInfo> = emptyList(),
 )
+
+@Serializable
+data class SearchHit(val id: Long, val title: String = "", val snippet: String = "")
+
+@Serializable
+data class SearchReply(val results: List<SearchHit> = emptyList())
+
+@Serializable
+data class DocsReply(val docs: List<DocInfo> = emptyList())
+
+@Serializable
+data class BranchReply(val id: Long, val title: String = "")
+
+@Serializable
+data class CompactReply(val folded: Int = 0, val context: Ctx? = null)
 
 @Serializable
 data class NewChat(val id: Long)

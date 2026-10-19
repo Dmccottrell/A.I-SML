@@ -12,7 +12,10 @@ import app.emvryx.android.EmvryxApp
 import app.emvryx.android.data.ApiException
 import app.emvryx.android.data.AppState
 import app.emvryx.android.data.ChatSummary
+import app.emvryx.android.data.Ctx
+import app.emvryx.android.data.DocInfo
 import app.emvryx.android.data.ModelCard
+import app.emvryx.android.data.SearchHit
 import app.emvryx.android.data.OfflineException
 import app.emvryx.android.data.ReplyEvent
 import app.emvryx.android.data.Usage
@@ -25,12 +28,16 @@ sealed interface Screen {
     data class Off(val resting: Boolean, val server: String) : Screen
     data object SignIn : Screen
     data object Chat : Screen
+    data object Code : Screen
+    /** A page of the website inside the app, signed in with the same session: Settings, Admin, or everything else the app has no screen for. */
+    data class Web(val path: String, val title: String) : Screen
 }
 
 enum class SignInWay { Password, Key }
 
 /** One bubble on the chat screen. [streaming] is the reply still being written; [model] is the id of the model that wrote it. */
-data class Bubble(val key: Long, val mine: Boolean, val text: String, val streaming: Boolean = false, val cut: Boolean = false, val model: String = "")
+data class Bubble(val key: Long, val mine: Boolean, val text: String, val streaming: Boolean = false, val cut: Boolean = false, val model: String = "",
+                  val id: Long = 0, val docs: List<DocInfo> = emptyList(), val fb: String = "")
 
 class AppViewModel(app: Application) : AndroidViewModel(app) {
     private val session = (app as EmvryxApp).session
@@ -75,6 +82,22 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     var usage by mutableStateOf<Usage?>(null)
         private set
 
+    // ---- pictures and files waiting to go with the next message, the memory ring, search, and things shared from other apps
+    val attached = mutableStateListOf<DocInfo>()
+    var uploading by mutableStateOf(false)
+        private set
+    var ctx by mutableStateOf<Ctx?>(null)
+        private set
+    var hits by mutableStateOf<List<SearchHit>?>(null)
+        private set
+    var draft by mutableStateOf("")                      // text shared from another app, put in the message box
+    private var searchJob: Job? = null
+    private var pendingShare: Pair<String?, List<Pair<String, ByteArray>>>? = null     // shared from another app before it was ready
+    private var chatDocIds: List<Long> = emptyList()     // all of this chat's pictures and files (sent ones too: the model keeps seeing them)
+
+    fun flag(name: String) = state?.on(name) == true
+    val isAdmin get() = state?.admin == true || state?.owner == true
+
     /** Every model this person has (not ready ones are shown greyed, as on the website) */
     val models: List<ModelCard> get() = state?.models?.all.orEmpty()
     val currentModel: ModelCard? get() = models.firstOrNull { it.id == model }
@@ -109,6 +132,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
                 }
                 loadState()
                 screen = Screen.Chat
+                applyShare()
             } catch (e: OfflineException) {
                 screen = Screen.Off(resting = false, server = url)
             } catch (e: ApiException) {
@@ -172,6 +196,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         loadState()
         newChat()
         screen = Screen.Chat
+        applyShare()
     }
 
     fun signOut() {
@@ -222,7 +247,160 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         chatId = null
         title = "New chat"
         bubbles.clear()
+        attached.clear()
+        chatDocIds = emptyList()
+        ctx = null
         notice = null
+    }
+
+    fun open(screen: Screen) {
+        this.screen = screen
+    }
+
+    /** Back from VryxCode or a website page to the chat */
+    fun backToChat() {
+        screen = Screen.Chat
+        refreshChats()
+    }
+
+    // ---- pictures and files
+    /** Uploads a picture or file and attaches it to this chat (a new chat is made first if needed); it goes with the next message. */
+    fun attach(name: String, bytes: ByteArray) {
+        if (bytes.size > MAX_UPLOAD) {
+            notice = "That file is too big to send (the limit is ${MAX_UPLOAD / 1_000_000} MB)."
+            return
+        }
+        uploading = true
+        notice = null
+        viewModelScope.launch {
+            try {
+                val id = chatId ?: api.newChat().also { chatId = it }
+                val doc = api.upload(name, bytes)
+                chatDocIds = api.setChatDocs(id, (chatDocIds + doc.id).distinct()).map { it.id }     // every file of the chat stays with it
+                attached.add(doc)
+            } catch (e: Exception) {
+                if (!handleSignedOut(e)) notice = describe(e)
+            } finally {
+                uploading = false
+            }
+        }
+    }
+
+    fun unattach(doc: DocInfo) {
+        val id = chatId ?: return
+        attached.remove(doc)
+        chatDocIds = chatDocIds - doc.id
+        viewModelScope.launch { runCatching { api.setChatDocs(id, chatDocIds) } }
+    }
+
+    suspend fun pictureBytes(id: Long): ByteArray? = api.picture(id)
+
+    /** Something shared to Emvryx from another app: its text goes in the box, pictures are attached. Kept until the app is signed in and ready. */
+    fun incoming(text: String?, files: List<Pair<String, ByteArray>>) {
+        pendingShare = text to files
+        if (screen == Screen.Chat || screen == Screen.Code || screen is Screen.Web) applyShare()
+    }
+
+    private fun applyShare() {
+        val (text, files) = pendingShare ?: return
+        pendingShare = null
+        screen = Screen.Chat
+        newChat()
+        if (!text.isNullOrBlank()) draft = text
+        files.forEach { (name, bytes) -> attach(name, bytes) }
+    }
+
+    // ---- chat list: pin, delete, search
+    fun pin(c: ChatSummary) {
+        viewModelScope.launch { runCatching { api.pin(c.id, !c.pinned) }; refreshChats() }
+    }
+
+    fun delete(c: ChatSummary) {
+        viewModelScope.launch {
+            runCatching { api.deleteChat(c.id) }
+            if (chatId == c.id) newChat()
+            refreshChats()
+        }
+    }
+
+    /** Searches every chat's words on the server (titles are matched on the phone as you type) */
+    fun search(q: String) {
+        searchJob?.cancel()
+        if (q.isBlank()) {
+            hits = null
+            return
+        }
+        searchJob = viewModelScope.launch {
+            kotlinx.coroutines.delay(250)
+            runCatching { api.search(q.trim()) }.onSuccess { hits = it }
+        }
+    }
+
+    // ---- one answer: report it, start a new chat from it, ask again after an edit
+    fun report(b: Bubble, kind: String, note: String) {
+        val id = chatId ?: return
+        viewModelScope.launch {
+            try {
+                api.report(id, b.id, kind, note)
+                update(b.key) { it.copy(fb = kind) }
+                notice = null
+            } catch (e: Exception) {
+                if (!handleSignedOut(e)) notice = describe(e)
+            }
+        }
+    }
+
+    fun branch(b: Bubble) {
+        val id = chatId ?: return
+        viewModelScope.launch {
+            try {
+                openChat(api.branch(id, b.id).id)
+                refreshChats()
+            } catch (e: Exception) {
+                if (!handleSignedOut(e)) notice = describe(e)
+            }
+        }
+    }
+
+    /** Change what you asked: the answers after it are forgotten and it is asked again */
+    fun edit(b: Bubble, text: String) {
+        val id = chatId ?: return
+        if (streaming || text.isBlank()) return
+        viewModelScope.launch {
+            try {
+                api.editMessage(id, b.id, text.trim())
+                val c = api.chat(id)
+                showChat(c)
+                if (bubbles.lastOrNull()?.mine == true) reply("", regenerate = true)
+            } catch (e: Exception) {
+                if (!handleSignedOut(e)) notice = describe(e)
+            }
+        }
+    }
+
+    /** The answer stopped at its length limit: carry on from there */
+    fun continueReply() {
+        if (streaming || chatId == null) return
+        bubbles.add(Bubble(nextKey--, mine = true, text = "Continue"))
+        reply("Continue", regenerate = false, cont = true)
+    }
+
+    // ---- the memory ring (feature flag context_meter)
+    fun compact() {
+        val id = chatId ?: return
+        if (streaming) return
+        working = "Summarizing earlier messages…"
+        viewModelScope.launch {
+            try {
+                val r = api.compact(id, model)
+                r.context?.let { ctx = it }
+                notice = if (r.folded > 0) null else "There was nothing to summarize yet."
+            } catch (e: Exception) {
+                if (!handleSignedOut(e)) notice = describe(e)
+            } finally {
+                working = null
+            }
+        }
     }
 
     fun openChat(id: Long) {
@@ -231,10 +409,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         viewModelScope.launch {
             try {
                 val c = api.chat(id)
-                chatId = c.id
-                title = c.title
-                bubbles.clear()
-                bubbles.addAll(c.messages.map { Bubble(it.id, it.role == "user", it.content, cut = it.status == "partial" && !c.generating, model = it.modelId) })
+                showChat(c)
                 c.messages.lastOrNull { it.role == "assistant" && it.modelId.isNotEmpty() }?.let { m ->
                     if (models.any { it.id == m.modelId }) model = m.modelId
                 }
@@ -245,22 +420,39 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
+    private fun showChat(c: app.emvryx.android.data.Chat) {
+        chatId = c.id
+        title = c.title
+        bubbles.clear()
+        bubbles.addAll(c.messages.map {
+            Bubble(it.id, it.role == "user", it.content, cut = (it.cut || it.status == "partial") && !c.generating, model = it.modelId, id = it.id,
+                   docs = it.docs, fb = it.fb)
+        })
+        ctx = c.ctx ?: c.messages.lastOrNull { it.ctx != null }?.ctx
+        val sent = c.messages.flatMap { it.docs }.map { it.id }.toSet()
+        chatDocIds = c.docs.map { it.id }
+        attached.clear()
+        attached.addAll(c.docs.filter { it.id !in sent })               // attached but not sent yet
+    }
+
     fun send(text: String) {
         val words = text.trim()
-        if (words.isEmpty() || streaming) return
-        bubbles.add(Bubble(nextKey--, mine = true, text = words))
+        if ((words.isEmpty() && attached.isEmpty()) || streaming) return
+        bubbles.add(Bubble(nextKey--, mine = true, text = words, docs = attached.toList()))
+        attached.clear()
+        draft = ""
         reply(words, regenerate = false)
     }
 
-    /** Write the last reply again, with the model and effort picked now */
-    fun regenerate() {
+    /** Write the last reply again, with the model and effort picked now; [mode] is how it should differ (Regenerate options) */
+    fun regenerate(mode: String? = null) {
         if (streaming || chatId == null) return
         val last = bubbles.lastOrNull() ?: return
         if (!last.mine) bubbles.removeAt(bubbles.lastIndex)
-        reply("", regenerate = true)
+        reply("", regenerate = true, mode = mode)
     }
 
-    private fun reply(words: String, regenerate: Boolean) {
+    private fun reply(words: String, regenerate: Boolean, mode: String? = null, cont: Boolean = false) {
         notice = null
         streaming = true
         working = "Thinking…"
@@ -269,7 +461,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         replyJob = viewModelScope.launch {
             try {
                 val id = chatId ?: api.newChat().also { chatId = it }
-                api.send(id, words, model, effort, regenerate).collect { ev ->
+                api.send(id, words, model, effort, regenerate, mode, cont).collect { ev ->
                     when (ev) {
                         is ReplyEvent.Thinking -> working = "Thinking…"
                         is ReplyEvent.Loading -> working = "Loading ${modelById(ev.model)?.fullName ?: "the model"}…"
@@ -296,6 +488,9 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
                 streaming = false
                 working = null
                 refreshChats()
+                chatId?.let { id ->                          // the saved messages: their ids (edit, report), pictures and the memory ring
+                    runCatching { api.chat(id) }.onSuccess { c -> if (!streaming && chatId == c.id) showChat(c) }
+                }
             }
         }
     }
@@ -330,6 +525,8 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     companion object {
+        const val MAX_UPLOAD = 20_000_000
+
         /** "chat.emvryx.app" -> "https://chat.emvryx.app"; null when it can't be an address. */
         fun normalise(input: String): String? {
             var s = input.trim().trimEnd('/')

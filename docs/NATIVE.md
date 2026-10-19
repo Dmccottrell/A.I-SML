@@ -32,7 +32,12 @@ Decision (Oct 2026): both apps are built natively, like the big AI apps: **Kotli
 - **Connected-to indicator** (your PC or on this phone) and the "Emvryx is off" state as data, not just a page.
 
 ## Status
-**Android started (Oct 2026), in [`android/`](../android/README.md).** Steps 2 and 3 below work against today's server, using the same session cookie and endpoints as the website: sign-in, "Emvryx is off", chat with streamed replies, model and effort pickers, and history. Checked on the emulator against the demo server. `NATIVE_API.md` (`/api/v1/...` for apps) is still to write. The app is a thin client, so it can move onto that API when it exists. The iPhone app has not been started.
+**Android, in [`android/`](../android/README.md).** Everything in the website is in the app: chat with pictures and files, Regenerate options, Continue,
+Report, edit and ask again, branch, pin, delete, search inside chats, the memory ring, Share to Emvryx, and VryxCode (sessions, the live feed, Effort,
+questions, messages while it works, screenshots, /commands) as native screens; Settings, Admin and the rest (skills, teacher mode, connected apps,
+files, the VryxCode editor and preview) open as the website's own pages inside the app, signed in with the same session. It is compiled and tested
+on GitHub for every change (`.github/workflows/android.yml`), with the `.apk` as a download. Still to do: push notifications, fingerprint lock,
+passkey and email-code sign-in, the on-phone model, and `NATIVE_API.md`. The iPhone app has not been started.
 
 ## Order of work
 1. (cloud) `NATIVE_API.md` and the server pieces above, with tests.

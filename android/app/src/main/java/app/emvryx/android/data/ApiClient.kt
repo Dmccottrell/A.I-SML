@@ -10,8 +10,10 @@ import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
+import kotlinx.serialization.json.putJsonArray
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Request
@@ -65,11 +67,93 @@ class ApiClient(private val session: SessionStore) {
         post<JsonObject>("/api/chats/$id/stop", JsonObject(emptyMap()))
     }
 
-    /** Sends one message and streams the reply. Refusals (limits, a model that is not available) throw [ApiException] before anything streams. */
-    fun send(chatId: Long, text: String, model: String, effort: String, regenerate: Boolean = false): Flow<ReplyEvent> = flow {
+    // ---- chat: pictures and files, edit, report, pin, delete, branch, search, compact (the same calls as web/js/chat.js and core.js)
+
+    /** A picture or file for the chat: uploaded once (POST /api/documents), then attached with [setChatDocs]. */
+    suspend fun upload(name: String, bytes: ByteArray): DocInfo =
+        post("/api/documents", buildJsonObject { put("name", name); put("data", android.util.Base64.encodeToString(bytes, android.util.Base64.NO_WRAP)) })
+
+    suspend fun setChatDocs(chatId: Long, ids: List<Long>): List<DocInfo> =
+        post<DocsReply>("/api/chats/$chatId/docs", buildJsonObject { putJsonArray("ids") { ids.forEach { add(JsonPrimitive(it)) } } }).docs
+
+    /** The bytes of a picture someone sent (GET /api/documents/{id}/image), for the thread */
+    suspend fun picture(id: Long): ByteArray? = withContext(Dispatchers.IO) {
+        runCatching { http.newCall(Request.Builder().url("$base/api/documents/$id/image").get().build()).execute().use { if (it.isSuccessful) it.body?.bytes() else null } }.getOrNull()
+    }
+
+    suspend fun editMessage(chatId: Long, messageId: Long, text: String) {
+        post<JsonObject>("/api/chats/$chatId/messages/$messageId/edit", buildJsonObject { put("text", text) })
+    }
+
+    suspend fun report(chatId: Long, messageId: Long, kind: String, note: String) {
+        post<JsonObject>("/api/chats/$chatId/messages/$messageId/feedback", buildJsonObject { put("kind", kind); put("note", note) })
+    }
+
+    suspend fun pin(chatId: Long, pinned: Boolean) {
+        post<JsonObject>("/api/chats/$chatId/pin", buildJsonObject { put("pinned", pinned) })
+    }
+
+    suspend fun deleteChat(chatId: Long) {
+        delete<JsonObject>("/api/chats/$chatId")
+    }
+
+    suspend fun branch(chatId: Long, messageId: Long): BranchReply = post("/api/chats/$chatId/branch", buildJsonObject { put("message_id", messageId) })
+
+    suspend fun search(q: String): List<SearchHit> = get<SearchReply>("/api/chats/search?q=" + java.net.URLEncoder.encode(q, "UTF-8")).results
+
+    suspend fun compact(chatId: Long, model: String): CompactReply = post("/api/chats/$chatId/compact", buildJsonObject { put("model", model) })
+
+    // ---- VryxCode (app/routes_code.py): the same calls as web/js/code.js and ide.js
+
+    suspend fun codeInfo(): CodeInfo = get("/api/code")
+
+    suspend fun codeSessions(): List<CodeSessionRow> = get<CodeSessions>("/api/code/sessions").sessions
+
+    suspend fun codeView(id: String, after: Int): CodeView = get("/api/code/sessions/$id?after=$after")
+
+    suspend fun codeStart(body: JsonObject): CodeStarted = post("/api/code/start", body)
+
+    suspend fun codeMessage(id: String, body: JsonObject): CodeStarted = post("/api/code/sessions/$id/message", body)
+
+    suspend fun codeSteer(id: String, text: String) {
+        post<JsonObject>("/api/code/sessions/$id/steer", buildJsonObject { put("text", text) })
+    }
+
+    suspend fun codeAnswer(id: String, question: Int, allow: Boolean, always: Boolean = false, choice: String? = null) {
+        post<JsonObject>("/api/code/sessions/$id/answer", buildJsonObject {
+            put("id", question); put("allow", allow); put("always", always); if (choice != null) put("choice", choice)
+        })
+    }
+
+    suspend fun codeStop(id: String) {
+        post<JsonObject>("/api/code/sessions/$id/stop", JsonObject(emptyMap()))
+    }
+
+    suspend fun codeFixCi(body: JsonObject): CodeStarted = post("/api/code/fixci", body)
+
+    suspend fun codeMemory(): CodeMemory = get("/api/code/memory")
+
+    suspend fun codeForget(index: Int?): CodeMemory = post("/api/code/memory", buildJsonObject { put("forget", index?.let { JsonPrimitive(it) } ?: kotlinx.serialization.json.JsonNull) })
+
+    suspend fun codeRules(project: String): CodeRules = get("/api/code/rules?project=" + java.net.URLEncoder.encode(project, "UTF-8"))
+
+    suspend fun codeRule(project: String, add: Pair<String, String>? = null, remove: String? = null): CodeRules = post("/api/code/rules", buildJsonObject {
+        put("project", project)
+        if (add != null) put("add", buildJsonObject { put("kind", add.first); put("rule", add.second) }) else put("remove", remove ?: "")
+    })
+
+    suspend fun codeCommands(project: String): List<CodeCommand> =
+        get<CodeCommands>("/api/code/commands?project=" + java.net.URLEncoder.encode(project, "UTF-8")).commands
+
+    /** Sends one message and streams the reply. Refusals (limits, a model that is not available) throw [ApiException] before anything streams.
+     *  [regenMode] is how a regenerated answer should differ (Regenerate options); [cont] carries on an answer that stopped at its length limit. */
+    fun send(chatId: Long, text: String, model: String, effort: String, regenerate: Boolean = false, regenMode: String? = null,
+             cont: Boolean = false): Flow<ReplyEvent> = flow {
         val body = buildJsonObject {
             put("text", text); put("model", model); put("effort", effort)
             if (regenerate) put("regenerate", true)          // write the last reply again (api_send in app/routes_chat.py)
+            if (regenMode != null) put("regen_mode", regenMode)
+            if (cont) put("continue", true)
         }
         val call = stream.newCall(request("/api/chats/$chatId/send", body))
         val response = try {
@@ -103,6 +187,13 @@ class ApiClient(private val session: SessionStore) {
     private suspend inline fun <reified T> post(path: String, body: JsonObject): T = withContext(Dispatchers.IO) {
         call(request(path, body))
     }
+
+    private suspend inline fun <reified T> delete(path: String): T = withContext(Dispatchers.IO) {
+        call(Request.Builder().url(base + path).delete().build())
+    }
+
+    /** The server address the in-app pages open (Settings, Admin, the full website) */
+    val server: String? get() = session.serverUrl?.trimEnd('/')
 
     private fun request(path: String, body: JsonObject) =
         Request.Builder().url(base + path).post(body.toString().toRequestBody(JSON)).build()

@@ -25,6 +25,9 @@ class SessionStore(context: Context) {
 
     fun forget() = prefs.edit().remove(KEY_COOKIE).apply()
 
+    /** The session cookie as a Set-Cookie line, for the in-app website pages (WebView), so they open signed in */
+    fun cookieLine(): String? = session()?.toString()
+
     private fun session(): Cookie? {
         val base = serverUrl?.toHttpUrlOrNull() ?: return null
         val raw = prefs.getString(KEY_COOKIE, null) ?: return null

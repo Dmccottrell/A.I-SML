@@ -1,0 +1,45 @@
+# Builds the Android app (android/) on every pull request that touches it: its unit tests, then a debug .apk you can install on your phone
+# (Actions > this run > Artifacts > emvryx-android-debug). The cloud session that writes the app cannot download Google's Android SDK, so this is
+# where it is compiled. Locally the same thing is: cd android && gradlew testDebugUnitTest assembleDebug
+name: android
+
+on:
+  push:
+    branches: [main]
+    paths: ["android/**", ".github/workflows/android.yml"]
+  pull_request:
+    paths: ["android/**", ".github/workflows/android.yml"]
+  workflow_dispatch:
+
+concurrency:
+  group: android-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    defaults:
+      run:
+        working-directory: android
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+          cache: gradle
+      - name: Unit tests and the debug app
+        run: ./gradlew --no-daemon testDebugUnitTest assembleDebug
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: emvryx-android-debug
+          path: android/app/build/outputs/apk/debug/*.apk
+          if-no-files-found: ignore
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: android-test-reports
+          path: android/app/build/reports/
+          if-no-files-found: ignore

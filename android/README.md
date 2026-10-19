@@ -2,14 +2,25 @@
 
 The native Android app: Kotlin + Jetpack Compose (the plan is in [docs/NATIVE.md](../docs/NATIVE.md)). It is a client of your Emvryx server, the same one the website talks to, so the PC must be on.
 
-**What works (milestone 1):**
+**What works:**
 - Sign in with a password (with the two-step code if it is on) or a key. The session is kept encrypted on the phone and shows as "The Emvryx app on Android" in the website's Devices list.
 - "Emvryx is off right now" when the PC does not answer, and "Emvryx is resting" in Gaming mode, with Try again.
 - Chat with streamed replies, Stop, the model picker, and the effort picker for models that have one.
-- Chat history in the side drawer; new chat; sign out.
-- **Bold**, `code` and code blocks in replies.
+- **Pictures and files** (the + by the message box): pictures, screenshots and documents go with the message; a picture alone is sent as it is. Pictures show in the thread.
+- **Regenerate options** (Try again, Shorter, Simpler, More detail …), **Continue** an answer that stopped at its length limit, **Report** an answer, **New chat from here**.
+- Hold your message to **copy it or edit it and ask again**. Hold a chat in the list to **pin or delete** it. **Search** finds words inside chats too.
+- The **memory ring** with *Compact now* (when the owner's "Memory meter" switch is on for you).
+- **Share to Emvryx** from any app: text goes in the box, pictures and PDFs are attached to a new chat.
+- **VryxCode**: the sessions list, a session's live work feed, the message box with Effort (or the model), Ask / Auto / Plan and where it runs, "Allow this?"
+  and multiple-choice questions, typing to it while it works (with the "works like Claude Code" switch), screenshots, the /commands
+  (/plan, /ask, /auto, /new, /memory, /permissions, /fixci, and the project's own), and new projects.
+- **Everything else from the website opens inside the app, already signed in:** Settings, Admin (owners and admins), and the full website for skills,
+  teacher mode, connected apps, your files, sharing, the VryxCode editor, preview and file browser. Links to other sites open in the phone's browser.
 
-**Not yet:** pictures and files, editing or regenerating, Settings, usage, VryxCode, push notifications, share-to-Emvryx, fingerprint lock, passkey and email-code sign-in.
+**Not yet:** push notifications, fingerprint lock, passkey and email-code sign-in, the on-phone model.
+
+**Built on GitHub:** every pull request that changes `android/` is compiled and its tests run (`.github/workflows/android.yml`); the debug `.apk`
+is under the run's *Artifacts* (emvryx-android-debug), so it can be installed without Android Studio.
 
 ## Build and run (Windows)
 Android Studio supplies the SDK and Java. Open this `android/` folder in Android Studio and press Run. Or from a terminal:
@@ -33,5 +44,7 @@ The debug app is called `app.emvryx.android.debug`, so it installs next to a rel
 | `data/Sse.kt` | Turns the server-sent events into thinking / loading / piece / done / error |
 | `data/SessionStore.kt` | The server address and the `emvryx_session` cookie, kept in encrypted storage |
 | `ui/AppViewModel.kt` | Which screen is showing, sign-in, chats and sending |
-| `ui/*Screen.kt` | Sign-in, off, and chat screens |
+| `ui/*Screen.kt` | Sign-in, off, chat, VryxCode (`CodeScreen.kt`) and the in-app website pages (`WebScreen.kt`) |
+| `ui/ChatExtras.kt` | Pictures and files, the memory ring, Regenerate options, Report and Edit |
+| `ui/CodeViewModel.kt`, `data/Code.kt` | VryxCode: sessions, the polled work feed, questions, messages while it works |
 | `src/test/` | Unit tests for the event parser, the reply formatting, and server addresses |
