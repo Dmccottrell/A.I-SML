@@ -83,3 +83,46 @@ class DeepThinking(unittest.TestCase):
         src = "".join(open(f, encoding="utf-8").read() for f in [A.__file__] + sorted(glob.glob(os.path.join(root, "app", "*.py"))))      # the server is split over several files
         self.assertIn('think = effort == "deep" and model.get("think") == "empty"', src)
         self.assertEqual(src.count("pacer=pacer, think=think,"), 3)
+
+
+class ThinkBudget(unittest.TestCase):
+    """Deep: a model that would think on and on is stopped at its budget, the thinking is closed, and it answers from there (Oct 19: a minute and a
+    half of thinking on a simple percentage question)."""
+
+    class Rambler:
+        def __init__(self):
+            self.prompts = []
+
+        def stream(self, prompt, max_new):
+            self.prompts.append((prompt, max_new))
+            if len(self.prompts) == 1:
+                yield "<think>"
+                while True:
+                    yield "hmm, let me check that again. "
+            yield "No: it is 32% off, because 0.8 x 0.85 = 0.68."
+
+    class Tok:
+        def encode(self, text):
+            return [ord(c) for c in text]
+
+    def test_long_thinking_is_closed_and_the_answer_comes(self):
+        import app_engine as E
+        b = self.Rambler()
+        out = "".join(E.strip_think(E.think_budget(b, self.Tok(), [1, 2, 3], 1000)))
+        self.assertEqual(out, "No: it is 32% off, because 0.8 x 0.85 = 0.68.")
+        follow, rest = b.prompts[1]
+        self.assertEqual(follow[:3], [1, 2, 3])
+        self.assertIn("</think>", "".join(chr(c) for c in follow[3:]))
+        self.assertLess(rest, 1000)
+
+    def test_a_model_that_stops_thinking_by_itself_is_left_alone(self):
+        import app_engine as E
+
+        class Quick:
+            calls = 0
+
+            def stream(self, prompt, max_new):
+                Quick.calls += 1
+                yield from ("<think>", "short.", "</think>", "\n\nYes.")
+        self.assertEqual("".join(E.strip_think(E.think_budget(Quick(), self.Tok(), [1], 1000))), "Yes.")
+        self.assertEqual(Quick.calls, 1)
