@@ -111,6 +111,39 @@ def until_stopped(pieces, stop):
             close()
 
 
+THINK_SHARE, THINK_MAX = 0.4, 1600     # Deep: the hidden thinking may use 40% of the reply's room, never more than 1,600 tokens
+THINK_CLOSE = "\n\nThat is enough thinking: time to answer.\n</think>\n\n"
+
+
+def think_budget(backend, tok, prompt, max_new, chars_per_token=4):
+    """Deep on an Emvryx 3 model, with a limit on the hidden thinking. Small models can reason on and on about an easy question (a minute and a
+    half on the owner's RTX 4070, Oct 19) and even run out of room before answering. When the thinking passes its budget the stream is stopped,
+    the thinking is closed, and the model is asked to go on from there: it answers with what it has worked out (the answer is never lost)."""
+    budget = min(THINK_MAX, int(max_new * THINK_SHARE)) * chars_per_token
+    gen, said = backend.stream(prompt, max_new), ""
+    try:
+        for piece in gen:
+            said += piece
+            yield piece
+            if "</think>" in said:                                      # it finished thinking by itself: carry on as usual
+                yield from gen
+                return
+            if len(said) > budget:
+                break
+        else:
+            return
+    finally:
+        gen.close()                                                     # stops the request to llama-server
+    yield THINK_CLOSE
+    more = said + THINK_CLOSE
+    rest = max(64, max_new - len(said) // chars_per_token)
+    if isinstance(prompt, dict):
+        follow = dict(prompt, prompt_string=prompt["prompt_string"] + more)
+    else:
+        follow = list(prompt) + list(tok.encode(more))
+    yield from backend.stream(follow, rest)
+
+
 def strip_think(pieces, open_tag="<think>", close_tag="</think>"):
     """Drop a model's hidden reasoning (Qwen3 writes <think>...</think> before its answer) from a stream of text pieces, even when a
     tag is split across pieces. The answer never starts with blank space, also when the blank lines after the closing tag arrive in a
@@ -595,7 +628,8 @@ def run_turn(tok, store, chat_id, backend, model, window, max_new, user_text=Non
             raise
     row = store.add(chat_id, "assistant", "", model["id"], "partial")
     prompt = {"prompt_string": with_pictures(tok.decode(ids), asked, len(pictures)), "multimodal_data": list(pictures)} if pictures else ids
-    stream = strip_source(strip_think(until_stopped(backend.stream(prompt, max_new), stop)))
+    raw = think_budget(backend, tok, prompt, max_new) if think else backend.stream(prompt, max_new)
+    stream = strip_source(strip_think(until_stopped(raw, stop)))
     guard = Guard(pacer(stream) if pacer else stream, stop=stop, max_chars=max(MAX_REPLY_CHARS, int(max_new * 5)))   # a long answer is not a loop: room for what the model was allowed
     count = 0
     try:

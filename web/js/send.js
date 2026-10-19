@@ -1,10 +1,10 @@
 /* Sending a message and streaming the answer. */
 // ---------------------------------------------------------------- sending
 const clockText = (s) => (s < 1 ? '' : s < 60 ? s + 's' : Math.floor(s / 60) + 'm ' + String(s % 60).padStart(2, '0') + 's');
-function thinkingNode() {
+function thinkingNode(since) {    // since: when the message was sent (performance.now()), so the clock carries on instead of starting again
   const words = S.state.thinking_words, word = el('span', {class: 'word'}, words[0]), secs = el('span', {class: 'secs', 'aria-hidden': 'true'}); let i = 0;
   const node = el('div', {class: 'thinking', 'aria-label': 'Thinking'}, logo(34, true), word, el('span', {class: 'dots'}, ...'...'.split('').map((d) => el('span', {}, d))), secs);
-  const t0 = performance.now();
+  const t0 = since || performance.now();
   S.thinkTimer = setInterval(() => { i++; word.textContent = words[i % words.length]; word.style.animation = 'none'; void word.offsetWidth; word.style.animation = ''; }, S.state.think_switch_s * 1000);
   S.secTimer = setInterval(() => { secs.textContent = clockText(Math.floor((performance.now() - t0) / 1000)); }, 250);      // the seconds go up by one, never back
   node._stop = () => { clearInterval(S.thinkTimer); clearInterval(S.secTimer); S.thinkTimer = S.secTimer = null; };
@@ -18,9 +18,10 @@ async function send(regen, mode) {
   if (!S.chatId) { const r = await post('/api/chats', {private: S.private, skill: S.skill, docs: S.docs.map((d) => d.id)}); if (!r.ok) return; S.chatId = (await r.json()).id; remember(); }
   S.busy = true; S.stick = true; S.contNow = S.cont === true; S.cont = false; renderComposer(); closeMenus();
   if (regen === true) { const last = S.messages[S.messages.length - 1]; if (last && last.role === 'assistant') S.messages.pop(); }
-  else { S.messages.push({id: 'u' + Date.now(), role: 'user', content: text, docs: pendingDocs.map((d) => ({id: d.id, name: d.name, kind: d.kind}))}); input.value = ''; renderAttached(); }
+  else { S.pending = {id: 'u' + Date.now(), role: 'user', content: text, docs: pendingDocs.map((d) => ({id: d.id, name: d.name, kind: d.kind}))}; S.messages.push(S.pending); input.value = ''; renderAttached(); }
   renderThread(); const before = S.lastUsage;
-  const think = thinkingNode(); $('thread').append(think); scrollDown(true);
+  S.sentAt = performance.now();
+  const think = thinkingNode(S.sentAt); $('thread').append(think); scrollDown(true);
   let aiBubble = null, aiWrap = null, got = '', errCard = null, looked = null, lost = false, finished = false;
   S.abort = new AbortController();
   try {
@@ -72,6 +73,7 @@ async function send(regen, mode) {
     think._stop && think._stop(); think.remove(); S.busy = false; S.compacting = false; S.abort = null; S.resume = false;
   }
   if (lost) return followReply();   // the reply keeps being written on the server: show it when it is ready
+  S.pending = null; S.sentAt = null;
     try { const r = await api('/api/chats/' + S.chatId); if (r.ok) { const c = await r.json(); S.messages = c.messages; S.title = c.title; } } catch (e) {}
   renderThread(); if (errCard) { $('thread').append(errCard); scrollDown(true); if (!got && regen !== true) input.value = text; }
   renderComposer(); try { const q = new URLSearchParams({effort: S.effort, model: S.model}); const r = await api('/api/state?' + q); const st = await r.json(); S.state.chats = st.chats; S.state.usage = st.usage; renderChats(); renderUsage(st.usage); } catch (e) {}
@@ -80,17 +82,20 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 async function followReply() {   // the reply is still being written on the server (the app was closed or switched away from): watch it until it is done
   if (S.following || S.chatId == null) return;
   const id = S.chatId; S.following = true; S.busy = true; S.stick = true; renderComposer();
-  const think = thinkingNode(); let lastLen = -1;
+  const think = thinkingNode(S.sentAt); let lastLen = -1;
+  // while the model is still loading the server has not saved the question yet: keep showing it rather than letting it disappear
+  const withPending = (msgs, generating) => { const p = S.pending;
+    return generating && p && !msgs.some((m) => m.role === 'user' && m.content === p.content && msgs.indexOf(m) >= msgs.length - 2) ? [...msgs, p] : msgs; };
   try {
     for (let i = 0; i < 600; i++) {   // up to about 15 minutes
       let c; try { const r = await api('/api/chats/' + id); if (!r.ok) break; c = await r.json(); } catch (e) { if (e.message === 'login') break; await sleep(2000); continue; }
       if (id !== S.chatId) break;
       const len = JSON.stringify(c.messages).length;
-      if (len !== lastLen) { lastLen = len; S.messages = c.messages; S.title = c.title; renderThread(false); if (c.generating) $('thread').append(think); scrollDown(); }
+      if (len !== lastLen) { lastLen = len; S.messages = withPending(c.messages, c.generating); S.title = c.title; renderThread(false); if (c.generating) $('thread').append(think); scrollDown(); }
       if (!c.generating) break;
       await sleep(1200);
     }
-  } finally { think._stop && think._stop(); think.remove(); S.busy = false; S.following = false; }
+  } finally { think._stop && think._stop(); think.remove(); S.busy = false; S.following = false; S.pending = null; S.sentAt = null; }
   renderThread(); renderComposer();
   try { const q = new URLSearchParams({effort: S.effort, model: S.model}); const r = await api('/api/state?' + q); const st = await r.json(); S.state.chats = st.chats; S.state.usage = st.usage; renderChats(); renderUsage(st.usage); } catch (e) {}
 }
