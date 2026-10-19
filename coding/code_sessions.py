@@ -22,6 +22,7 @@ import threading
 import time
 import zipfile
 
+import code_extras
 import code_log
 import code_report
 import code_map
@@ -278,6 +279,32 @@ class Session:
         self.emit("answer", id=qid, allow=True, choice=answer[1])
         return f"The person chose: {answer[1]}"
 
+    def _tools_now(self):
+        """The extra tools this turn: the full agent adds the multiple-choice question and its memory."""
+        if not getattr(self, "full", False):
+            return self.tools
+        extra = {"ask_user": self.ask_choice}
+        if self.base:
+            extra["remember"] = lambda note=None: code_extras.remember(self.base, note)
+        return dict(self.tools or {}, **extra)
+
+    def _memory_note(self):
+        if not getattr(self, "full", False) or not self.base:
+            return ""
+        return code_extras.MEMORY_TOOL_NOTE + code_extras.memory_note(self.base)
+
+    PICTURE_MARK = "[The person attached {n} picture(s) to this message: look at them.]"
+
+    def attach_pictures(self, urls):
+        """Screenshots sent with the next message (the full agent): data: URLs of PNG, JPEG, WebP or GIF, up to 3, 5 MB each. Returns the line added to the message."""
+        good = [u for u in (urls or []) if isinstance(u, str) and re.match(r"^data:image/(png|jpe?g|webp|gif);base64,[A-Za-z0-9+/=]+$", u) and len(u) <= 7_000_000][:3]
+        if not good:
+            self._pictures = None
+            return ""
+        mark = self.PICTURE_MARK.format(n=len(good))
+        self._pictures = (mark, good)
+        return mark
+
     STEER = "While you were working, the person added: "
 
     def steer(self, text):
@@ -322,9 +349,20 @@ class Session:
             self.cv.notify_all()
 
     # ---- what the engine calls
+    def rules_path(self):
+        """This project's saved permission rules (the full agent), kept in the person's folder: None in a session without one (tests)."""
+        return code_extras.rules_path(self.base, self.project) if self.base else None
+
     def ask(self, name, args):
         full = getattr(self, "full", False)            # the Claude Code-style agent: its permission rules too
         command = str(args.get("command", "")).strip() if name == "run" and isinstance(args, dict) else ""
+        if full and self.rules_path() and name != "github":
+            verdict = code_extras.decide(self.rules_path(), name, harness.command_keys(command) if name == "run" else [])
+            if verdict == "deny":
+                self.emit("note", text="Not allowed by this project's rules: " + clip(command or name, 120))
+                return False
+            if verdict == "allow":
+                return True
         if name == "run":
             if full:
                 # only looks (ls, cat, git status, the tests), or only makes, moves or copies files in "Edit without asking", or "always allow" was said for this command
@@ -359,6 +397,12 @@ class Session:
         allow, always = answer
         if always and name != "github":                  # the full agent remembers the command (npm test), not every command
             self._always = getattr(self, "_always", set()) | {"run:" + harness.command_key(command) if full and name == "run" else name}
+            if full and allow and self.rules_path():        # ...and saves it for this project, like Claude Code's settings (Settings > the project's rules to undo)
+                for key in (harness.command_keys(command) if name == "run" else [name]):
+                    try:
+                        code_extras.add_rule(self.rules_path(), "allow", key)
+                    except (ValueError, OSError):
+                        pass
         self.emit("answer", id=qid, allow=allow)
         return allow
 
@@ -406,6 +450,7 @@ class Session:
             res = self.meter.reserve(messages) if self.meter else None       # raises U.LimitError when the plan has run out
             self.live = {"phase": "thinking", "since": time.time(), "text": "", "chunks": 0, "thinking": 0}
             try:
+                generate.pictures = getattr(self, "_pictures", None)     # screenshots sent with the message: the model sees them on every step of this turn
                 generate.on_delta = self._on_delta         # the model call reports its progress here (a plain function accepts the attribute too)
                 generate.should_stop = self.stop.is_set    # ...and asks here whether Stop was pressed
             except AttributeError:
@@ -484,8 +529,8 @@ class Session:
             self.emit("language", text=line, language=lang["name"], mode=lang["mode"])
         try:
             model_text, self._model_text = getattr(self, "_model_text", None), None
-            result = vryxcode.run_task(model_text or self.expand(text), self.wrap(self.generate), self.workspace, self.ask, self.max_turns, self.context_tokens, self.extra_programs, lang_note=languages.note_for(lang),
-                                       out=lambda *_: None, tools=dict(self.tools or {}, ask_user=self.ask_choice) if getattr(self, "full", False) else self.tools,
+            result = vryxcode.run_task(model_text or self.expand(text), self.wrap(self.generate), self.workspace, self.ask, self.max_turns, self.context_tokens, self.extra_programs, lang_note=languages.note_for(lang) + self._memory_note(),
+                                       out=lambda *_: None, tools=self._tools_now(),
                                        git_identity=self.identity,
                                        command_prefix=self.prefix, container=bool(self.prefix) and not self.remote, history=self.history, chat_mode=True, plan=plan, todo=True, remote=self.remote,
                                        build=getattr(self, "build", False), full=getattr(self, "full", False))
@@ -608,6 +653,7 @@ class Session:
             report = code_report.build_report(self.events, end=data)
         except Exception:                                 # the report is a convenience: never fail a turn over it
             report = None
+        self._pictures = None                              # the screenshots belong to the message that brought them
         self.emit("end", **data, **({"report": report} if report else {}))
 
     def _keep_history(self):
@@ -947,7 +993,7 @@ class CodeManager:
                                           pids=sb.get("pids", 128), runtime=sb.get("runtime"))
 
     def start(self, user, project, task, model_id, generate, auto_edits=False, context_tokens=None, meter=None, outside=False, tools=None, identity=None, env="local", plan=False, owner=False, queue=False, model_text=None,
-              build_steps=None, turns=None, full=False):
+              build_steps=None, turns=None, full=False, pictures=None):
         task = str(task or "").strip()
         if not task:
             raise CodeError("Describe what to build or fix.")
@@ -986,6 +1032,9 @@ class CodeManager:
             s._model_text = model_text                          # what the model gets instead of the line the person sees (a second opinion's diff)
             s.build = bool(build_steps)                         # a model made for long builds (VryxCode 3): the long-build loop and its own step budget
             s.full = bool(full)                                 # the Claude Code-style agent (VryxCode 3, feature flag vryxcode_full_agent)
+            mark = s.attach_pictures(pictures) if full and pictures else ""
+            if mark:                                            # screenshots sent with the task: the model is told, and sees them
+                s.task = task + "\n\n" + mark
             turns = int(build_steps or turns or self.max_turns)      # turns: the step budget of the effort picked (feature flag vryxcode_effort)
             s.on_idle = self._session_idle
             if busy:                                           # one model on one card: sessions wait their turn, so they never work on the same files at once
@@ -1046,7 +1095,9 @@ class CodeManager:
     MENTION = re.compile(r"(?<![\w@])@([\w][\w./-]{0,119})")
 
     def expand_mentions(self, user, project, text):
-        """The message for the model: each @path that is a file in the project gets its contents added (up to 5 files, 6 KB each), so the person can point at a file."""
+        """The message for the model: a /command of the project's own (.vryx/commands/<name>.md) becomes its text, and each @path that is a file in the
+        project gets its contents added (up to 5 files, 6 KB each), so the person can point at a file."""
+        text = code_extras.expand_command(self.project_path(user, project), text)
         out, seen = str(text), []
         for m in self.MENTION.finditer(str(text)):
             rel = m.group(1).rstrip(".,;:)")

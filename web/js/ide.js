@@ -470,14 +470,14 @@ $('codeGo').onclick = async () => {
     note('bad', 'Could not send', (j.message || '') + ' ' + (j.action || '')); return;
   }
   if (C.sid) {         // a session is open: this is its next message, whatever the model (a different model takes over the same conversation; an old session comes back to life)
-    const r = await post('/api/code/sessions/' + C.sid + '/message', {text: task, plan: C.mode === 'plan', notify: vxNotifyOn(), model: C.model, effort: C.effort, auto_edits: C.mode === 'auto'}); const j = await r.json().catch(() => ({}));
-    if (r.ok) { C.stopping = false; $('codeStop').disabled = false; $('codeTask').value = ''; C.chatKey = C.project + '|' + C.model; if (j.revived) { C.saved = false; C.seen = 0; $('codeIn').replaceChildren(); } poll(); return; }
+    const r = await post('/api/code/sessions/' + C.sid + '/message', {text: task, plan: C.mode === 'plan', notify: vxNotifyOn(), model: C.model, effort: C.effort, auto_edits: C.mode === 'auto', images: C.pics.length ? C.pics : undefined}); const j = await r.json().catch(() => ({}));
+    if (r.ok) { C.pics = []; renderPics(); C.stopping = false; $('codeStop').disabled = false; $('codeTask').value = ''; C.chatKey = C.project + '|' + C.model; if (j.revived) { C.saved = false; C.seen = 0; $('codeIn').replaceChildren(); } poll(); return; }
     if (r.status === 400 && /still working/i.test(j.message || '')) { note('bad', 'Still working', 'Press Stop first, or wait for it to finish.'); return; }
     note('bad', 'Could not send', (j.message || '') + ' ' + (j.action || '')); return;
   }
-  const r = await post('/api/code/start', {project: C.project, task, model: C.model, effort: C.effort, auto_edits: C.mode === 'auto', plan: C.mode === 'plan', env: C.env, queue: true, notify: vxNotifyOn(), template: C.startTemplate || undefined}); const j = await r.json(); C.startTemplate = null;
+  const r = await post('/api/code/start', {project: C.project, task, model: C.model, effort: C.effort, images: C.pics.length ? C.pics : undefined, auto_edits: C.mode === 'auto', plan: C.mode === 'plan', env: C.env, queue: true, notify: vxNotifyOn(), template: C.startTemplate || undefined}); const j = await r.json(); C.startTemplate = null;
   if (!r.ok) { note('bad', 'Could not start', j.message + ' ' + (j.action || '')); return; }
-  C.sid = j.id; C.saved = false; C.checkpoints = []; C.pvAuto = false; C.chatKey = C.project + '|' + C.model; C.seen = 0; C.stopping = false; $('codeStop').disabled = false; $('codeTask').value = ''; $('codeIn').replaceChildren(); poll();
+  C.pics = []; renderPics(); C.sid = j.id; C.saved = false; C.checkpoints = []; C.pvAuto = false; C.chatKey = C.project + '|' + C.model; C.seen = 0; C.stopping = false; $('codeStop').disabled = false; $('codeTask').value = ''; $('codeIn').replaceChildren(); poll();
 };
 // the preview follows the work: on a wide screen it opens beside the chat by itself and refreshes after each change; on a phone the Preview button lights up
 function livePreview(events) {
