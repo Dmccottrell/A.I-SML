@@ -57,6 +57,7 @@ async function send(regen, mode) {
         const cn = $('compactNote'); if (cn) cn.remove();
         S.compacting = false; if (data.context) renderCtx(data.context);
         if (data.compacted) $('thread').insertBefore(el('div', {class: 'note'}, 'Earlier messages were summarized to save room'), aiWrap);
+        if (data.timing && aiWrap) S.timing = data.timing;                  // the owner's speed line (shown under the reply once the chat is redrawn)
       } else if (ev === 'error') { throw Object.assign(new Error(data.message), {info: data, status: data.http}); }
     };
     for (;;) {
@@ -76,7 +77,19 @@ async function send(regen, mode) {
   S.pending = null; S.sentAt = null;
     try { const r = await api('/api/chats/' + S.chatId); if (r.ok) { const c = await r.json(); S.messages = c.messages; S.title = c.title; } } catch (e) {}
   renderThread(); if (errCard) { $('thread').append(errCard); scrollDown(true); if (!got && regen !== true) input.value = text; }
+  if (S.timing && !errCard) { $('thread').append(timingLine(S.timing)); scrollDown(); } S.timing = null;
   renderComposer(); try { const q = new URLSearchParams({effort: S.effort, model: S.model}); const r = await api('/api/state?' + q); const st = await r.json(); S.state.chats = st.chats; S.state.usage = st.usage; renderChats(); renderUsage(st.usage); } catch (e) {}
+}
+// Where the reply's time went, for the owner and admins only: "9.8s in all · looking it up 1.2s · loading the model 0s · first word at 6.1s"
+function timingLine(t) {
+  const sec = (x) => (x < 10 ? x.toFixed(1) : Math.round(x)) + 's';
+  const bits = [sec(t.total) + ' in all'];
+  if (t.lookup >= 0.3) bits.push('looking it up ' + sec(t.lookup));
+  if (t.load >= 0.3) bits.push('loading the model ' + sec(t.load));
+  bits.push('first word at ' + sec(t.first_word));
+  if (t.thought) bits.push('thought first (Deep)');
+  if (t.tries > 1) bits.push('answered twice (searched after "I don\u2019t know")');
+  return el('div', {class: 'note', style: 'align-self:flex-start;opacity:.75', title: 'Only you and your admins see this'}, '\u23f1 ' + bits.join(' \u00b7 '));
 }
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 async function followReply() {   // the reply is still being written on the server (the app was closed or switched away from): watch it until it is done

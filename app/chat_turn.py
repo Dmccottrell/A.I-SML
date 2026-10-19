@@ -43,7 +43,9 @@ CASUAL_HINT = ("[They are typing casually (slang, short forms or typos). Work ou
 HOUSE_HINT = ("[How to answer: answer exactly what was just asked, first and directly. Never claim something the person did not say or that you do not "
               "know (for example that something is already installed). No praise or flattery, no emoji unless they use them, and at most one "
               "exclamation mark. Only mention what you remember about them, or other people, when it helps with this message. When you mention a "
-              "command, a link or a setting, write it out exactly. If you are not sure of a fact, say so briefly.]")
+              "command, a link or a setting, write it out exactly. If you are not sure of a fact, say so briefly. Never talk about \"the notes\", "
+              "\"the search results\" or \"the provided information\": just answer, naming a source in a few words if it helps. When something has not "
+              "happened yet or does not exist, say that plainly and add what you do know (for example when the next one is).]")
 MAX_PICTURES = 3          # at most this many of the chat's pictures go to a model that sees them, with each message
 
 
@@ -159,7 +161,7 @@ def start_turn(state, who, chat_id, text, model_id, effort, regenerate=False, re
                 close()
 
     def work():
-        nonlocal skill_hint
+        nonlocal skill_hint, think
         try:
             if state.runner and not state.runner.ready(model["id"], window):
                 q.put(("loading", model["name"]))
@@ -261,7 +263,10 @@ def start_turn(state, who, chat_id, text, model_id, effort, regenerate=False, re
                 notes = [today] + list(notes or [])
             if mem_note:
                 notes = [mem_note] + list(notes or [])
+            if think and (live_notes or (found and found.get("asked") and (found.get("web") or found.get("wiki")))):
+                think = False          # Deep with looked-up facts: the answer is in the notes, so it answers from them at once instead of thinking at length first
             t_load = time.monotonic()
+            timing["lookup"], timing["thought"] = t_load - started, think      # everything before the model: notes, Wikipedia, the web, pictures
             backend = E.FakeBackend(canned) if canned else state.backend_for(model, text or "", window)     # may load the model the first time (can take a while)
             timing["load"] = time.monotonic() - t_load
             if decision["temperature"] is not None and hasattr(backend, "sampling"):
@@ -315,23 +320,29 @@ def start_turn(state, who, chat_id, text, model_id, effort, regenerate=False, re
             pretended = bool(text and not regenerate and chat_id >= 0 and state.web_fn is not None and web_mode_now not in ("off", "none")
                              and not (found and found.get("web")) and lookup_auto.pretends_to_search(r["text"]))      # it wrote "checking online" but no search ran: do the real one
             if not stop.is_set() and (((old_way or knowledge_first) and lookup_auto.gave_up(r["text"])) or pretended):     # never a second try after Stop
-                # The model said it doesn't know. Old way: the web has not been tried, so search it. Knowledge-first models (Qwen) had no notes yet:
+                # The model said it doesn't know. Old way: the web has not been tried, so search it. The second answer comes straight from the notes,
+                # without Deep's thinking again (thinking twice was most of the wait on looked-up questions). Knowledge-first models (Qwen) had no notes yet:
                 # look it up now. Then answer again (the second chance).
                 notes2, found2 = lookup_auto.gather(lookup_auto.search_query(text, earlier, force=pretended), state.wiki, state.web_fn, "always" if (old_way or pretended) else web_mode_now, private=(chat_id < 0 and knowledge_first),
                                                     max_notes=5 if window >= 6000 else 3, saved=state.saved_for(who["user"]),
                                                     now=state.clock(), force_web=True, force_notes=True)
                 if found2["web"] or (knowledge_first and (found2["wiki"] or found2["saved"])):
                     q.put(("notes", {k: v for k, v in found2.items() if k != "used"} | {"retry": True}))
+                    timing["tries"] = timing.get("tries", 1) + 1
                     msgs = [m for m in store.messages(chat_id) if m["status"] != "compacted"]
                     if msgs and msgs[-1]["role"] == "assistant":
                         store.remove_message(chat_id, msgs[-1]["id"])
                     r = E.run_turn(tok, store, chat_id, backend, counted_model, window, max_new, pictures=seen_pictures or None, user_text=None, stop=stop, notes=([mem_note] if mem_note else []) + list(notes2 or []),
-                                   limiter=state.limiter, user=who["user"], effort=effort, clock=state.clock, pacer=pacer, think=think, on_compact=lambda: q.put(("compacting", True)), style_hint=skill_hint)
+                                   limiter=state.limiter, user=who["user"], effort=effort, clock=state.clock, pacer=pacer, think=False, on_compact=lambda: q.put(("compacting", True)), style_hint=skill_hint)
                     found = found2
             if found and found["asked"] and text:
                 state.remember_lookup(who["user"], chat_id, r["message_id"], text, found)
             if text and store.title(chat_id) == "New chat":
                 store.set_title(chat_id, "Picture" if picture_only else attached[0]["name"][:48] if text == documents.FILE_ONLY_TEXT and attached else (" ".join(text.split())[:48] or "New chat"))
+            end = time.monotonic()                              # where the time went, for the owner and admins (shown under the reply)
+            r["timing"] = {"lookup": round(timing.get("lookup", 0), 1), "load": round(timing.get("load", 0), 1),
+                           "first_word": round(timing.get("first", end) - started, 1), "total": round(end - started, 1),
+                           "tries": timing.get("tries", 1), "thought": bool(timing.get("thought")), "chars": len(r.get("text") or "")}
             q.put(("done", r))
             if state.verbose:                                  # numbers only, never any text
                 end = time.monotonic()
