@@ -310,7 +310,16 @@ function cEvent(e) {
   if (e.kind === 'context') { codeCtx(e); return; }
   if (e.kind === 'model') { feed.append(el('div', {class: 'note', style: 'align-self:center;margin:6px auto'}, 'Now using ' + modelName(e.model) + (e.previous ? ' (was ' + modelName(e.previous) + ')' : ''))); C.last = null; return; }
   if (e.kind === 'note' || (e.kind === 'user' && e.auto)) { if (e.kind === 'note') feed.append(el('div', {class: 'note', style: 'align-self:center;margin:6px auto;max-width:92%'}, '\u21bb ' + e.text)); C.last = null; return; }
-  if (e.kind === 'user') { feed.append(el('div', {class: 'cc-user'}, el('span', {class: 'ember'}), el('span', {}, (e.plan ? '[Plan] ' : '') + e.text))); C.last = null; return; }
+  if (e.kind === 'user') { feed.append(el('div', {class: 'cc-user'}, el('span', {class: 'ember'}), el('span', {}, (e.plan ? '[Plan] ' : '') + e.text), e.steer ? el('small', {style: 'color:var(--muted);margin-left:6px'}, '(while it worked)') : '')); C.last = null; return; }
+  if (e.kind === 'choose') {          // the full agent asks the person to pick: one tap answers, or they write their own
+    const pick = (choice) => { if (!String(choice || '').trim()) return; post('/api/code/sessions/' + C.sid + '/answer', {id: e.id, choice}).then(() => poll()); };
+    const other = el('input', {type: 'text', placeholder: 'Or write your own answer', 'aria-label': 'Your own answer', style: 'flex:1;min-width:160px'});
+    other.addEventListener('keydown', (ev) => { if (ev.key === 'Enter') { ev.preventDefault(); pick(other.value); } });
+    feed.append(el('div', {class: 'cc-ask', id: 'ask' + e.id}, el('div', {class: 'q'}, e.question),
+      el('div', {class: 'row'}, ...(e.options || []).map((o) => el('button', {class: 'chip', onclick: () => pick(o)}, o))),
+      el('div', {class: 'row'}, other, el('button', {class: 'btn small', onclick: () => pick(other.value)}, 'Send'))));
+    return;
+  }
   if (e.kind === 'start') { feed.replaceChildren(el('div', {class: 'cc-user'}, el('span', {class: 'ember'}), el('span', {}, (e.plan ? '[Plan] ' : '') + e.task))); C.last = null; return; }
   if (e.kind === 'step') {
     const prose = String(e.raw || '').split(/<\|tool_call\|>|<tool_call>/)[0].trim();
@@ -449,11 +458,17 @@ async function poll() {
   if (j.events.length && atEnd) scrollCode();
   showUsage(j.usage);
   const live = ['starting', 'working', 'asking', 'queued'].includes(j.state);
-  $('codeGo').hidden = live; $('codeStop').hidden = !live; if (!live) { C.stopping = false; $('codeStop').disabled = false; }
+  C.full = !!j.full; C.live = live;
+  $('codeGo').hidden = live && !(C.full && j.state !== 'queued'); $('codeStop').hidden = !live;      // the full agent can be told something while it works if (!live) { C.stopping = false; $('codeStop').disabled = false; }
   if (live) C.timer = setTimeout(poll, j.state === 'asking' ? 1500 : 350);
 }
 $('codeGo').onclick = async () => {
   const task = $('codeTask').value.trim(); if ((!task && !C.startTemplate) || !C.model) return;
+  if (C.sid && C.live && C.full) {     // it is working: the message is read before its next step, without stopping it
+    const r = await post('/api/code/sessions/' + C.sid + '/steer', {text: task}); const j = await r.json().catch(() => ({}));
+    if (r.ok) { $('codeTask').value = ''; poll(); return; }
+    note('bad', 'Could not send', (j.message || '') + ' ' + (j.action || '')); return;
+  }
   if (C.sid) {         // a session is open: this is its next message, whatever the model (a different model takes over the same conversation; an old session comes back to life)
     const r = await post('/api/code/sessions/' + C.sid + '/message', {text: task, plan: C.mode === 'plan', notify: vxNotifyOn(), model: C.model, effort: C.effort, auto_edits: C.mode === 'auto'}); const j = await r.json().catch(() => ({}));
     if (r.ok) { C.stopping = false; $('codeStop').disabled = false; $('codeTask').value = ''; C.chatKey = C.project + '|' + C.model; if (j.revived) { C.saved = false; C.seen = 0; $('codeIn').replaceChildren(); } poll(); return; }

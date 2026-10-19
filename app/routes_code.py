@@ -186,7 +186,7 @@ class RoutesCode:
                 s = st.code.get(user, m.group(1))
                 events, state, pending = s.since(max(0, int(arg("after") or 0)))
                 return self._send(200, {"events": events, "state": state, "pending": pending, "task": s.task, "project": s.project, "model": s.model_id,
-                                        "env": s.env, "checkpoints": list(s.checkpoints),
+                                        "env": s.env, "checkpoints": list(s.checkpoints), "full": bool(getattr(s, "full", False)),
                                         "used": round(s.meter.counted) if s.meter else 0, "steps": s.meter.steps if s.meter else 0,
                                         "live": s.live_view(), "usage": self._code_usage(who, s.model_id)})
             return self._send(404, {"code": "not_found", "message": "Not found."})
@@ -475,8 +475,15 @@ class RoutesCode:
                 return self._send(200, st.code.reject_file(user, m.group(1), body.get("path")))
             m = re.fullmatch(r"/api/code/sessions/([\w-]+)/answer", path)
             if m:
-                ok = st.code.get(user, m.group(1)).respond(int(body.get("id", -1)), body.get("allow"), body.get("always"))
+                ok = st.code.get(user, m.group(1)).respond(int(body.get("id", -1)), body.get("allow"), body.get("always"), body.get("choice"))
                 return self._send(200, {"ok": ok})
+            m = re.fullmatch(r"/api/code/sessions/([\w-]+)/steer", path)
+            if m:                                                # typed while it works (the full agent): read before its next step
+                sess = st.code.get(user, m.group(1))
+                if not getattr(sess, "full", False):
+                    raise code_sessions.CodeError("It is still working.", "Wait for it to finish, or press Stop.")
+                sess.steer(body.get("text"))
+                return self._send(200, {"ok": True})
             m = re.fullmatch(r"/api/code/sessions/([\w-]+)/compact", path)
             if m:                                                # "Compact now" by the memory meter (feature flag context_meter)
                 if not st.flags.on("context_meter", who):
