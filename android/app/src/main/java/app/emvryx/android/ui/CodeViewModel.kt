@@ -14,7 +14,10 @@ import app.emvryx.android.data.CodeInfo
 import app.emvryx.android.data.CodeRules
 import app.emvryx.android.data.CodeSessionRow
 import app.emvryx.android.data.OfflineException
+import app.emvryx.android.data.bool
 import app.emvryx.android.data.int
+import app.emvryx.android.data.str
+import app.emvryx.android.data.strings
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
@@ -63,6 +66,8 @@ class CodeViewModel(app: Application) : AndroidViewModel(app) {
     var effort by mutableStateOf("balanced")
     var model by mutableStateOf("")
     var env by mutableStateOf("local")
+    var offer by mutableStateOf("")                   // the suggested reply after a finished turn (flag vryxcode_suggest), greyed in the empty box
+    var suggestOn = false
     val pictures = mutableStateListOf<String>()      // data: URLs sent with the next message (the full agent sees them)
     var commands by mutableStateOf<List<CodeCommand>>(emptyList())
         private set
@@ -103,6 +108,7 @@ class CodeViewModel(app: Application) : AndroidViewModel(app) {
         state = ""
         pending = null
         liveLine = null
+        offer = ""
         pictures.clear()
     }
 
@@ -140,6 +146,7 @@ class CodeViewModel(app: Application) : AndroidViewModel(app) {
                 try {
                     val v = api.codeView(id, seen)
                     events.addAll(v.events)
+                    v.events.forEach(::offerFrom)
                     seen += v.events.size
                     state = v.state
                     pending = v.pending
@@ -161,6 +168,7 @@ class CodeViewModel(app: Application) : AndroidViewModel(app) {
         if (words.isEmpty() && pictures.isEmpty()) return
         error = null
         if (words.startsWith("/") && runSlash(words)) return
+        offer = ""
         viewModelScope.launch {
             try {
                 val id = sid
@@ -179,6 +187,14 @@ class CodeViewModel(app: Application) : AndroidViewModel(app) {
             } catch (e: Exception) {
                 error = describe(e)
             }
+        }
+    }
+
+    /** What to suggest next, as the website does: "build it" after a plan, otherwise the first of the model's suggested next steps */
+    private fun offerFrom(e: JsonObject) {
+        when (e.str("kind")) {
+            "user", "start" -> offer = ""
+            "end" -> if (e.bool("finished") || e.bool("plan")) offer = if (!suggestOn) "" else if (e.bool("plan")) "Go ahead and build it as planned." else e.strings("next").firstOrNull().orEmpty().take(200)
         }
     }
 
