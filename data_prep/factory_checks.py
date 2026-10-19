@@ -137,12 +137,17 @@ def check_code(question, answer):
     return not problems, problems, checked
 
 
+STRICT = ("filler_opener", "flattery_opener", "exclamation_overload", "emoji_overload")
+
+
 def check(question, answer, thinking=False):
     """Everything that can be proved about one answer."""
     problems, checked = [], []
     row = {"messages": [{"role": "user", "content": question.get("question", "")}, {"role": "assistant", "content": answer or ""}],
            "kind": "thinking" if thinking else question.get("area", "")}
-    hard = [rid for rid, sev in style_check.check_lesson(row) if sev == "hard"]
+    # Lessons 4 holds the voice to more than the hard rules: the over-excited habits Lessons 3 taught (filler openers, flattery, a stack of "!" and
+    # emoji) make a draft fail too, so it is rewritten instead of kept
+    hard = [rid for rid, sev in style_check.check_lesson(row) if sev == "hard" or rid in STRICT]
     if hard:
         problems += [style_check.describe(r) for r in hard]
     else:

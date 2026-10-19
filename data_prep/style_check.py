@@ -26,6 +26,9 @@ SOFT = [
     ("filler_opener", re.compile(r"^\s*(certainly|sure|absolutely|of course|great question|i'd be happy to|i would be happy to)\b[!,.]?", re.I), "starts with a filler opener"),
     ("too_long", None, "a reply longer than 2,500 characters"),
     ("exclamation_overload", re.compile(r"!.*!.*!", re.S), "three or more exclamation marks"),
+    ("flattery_opener", re.compile(r"^\s*(?:\w+,\s*)?(?:you['’]?re (?:awesome|amazing|a (?:genius|star|legend))|great job|congrat(?:s|ulations)|what a (?:great|fantastic) question|love (?:this|that) question)\b", re.I),
+     "starts by flattering the person instead of answering"),
+    ("emoji_overload", re.compile("(?:[\U0001F300-\U0001FAFF\u2600-\u27BF].*){3,}", re.S), "three or more emoji"),
 ]
 MAX_REPLY = 2500
 

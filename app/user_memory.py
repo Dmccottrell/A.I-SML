@@ -135,6 +135,18 @@ def extract(message):
     return [(slot, fact) for slot, fact in found if not SENSITIVE.search(fact)]
 
 
+# asking about themselves or what is remembered: then everything remembered goes with the message
+ABOUT_THEM = re.compile(r"\b(remember|know about|about me|who am i|my name|my age|how old am i|where do i live|my job|what do i do for|my (?:wife|husband|"
+                        r"partner|girlfriend|boyfriend|friend|kids?|son|daughter|mum|mom|dad|family|pet|dog|cat|birthday|favou?rite))\b", re.I)
+STOP = set("that this with from have what when where which would could should there their about your they them then than been were will just like "
+           "into also some more very want need know make does doing help user users".split())
+
+
+def content_words(text):
+    """The words that carry meaning (4 letters or more, not common ones), with a plain plural folded: 'downloads' and 'download' match."""
+    return {w[:-1] if w.endswith("s") and len(w) > 4 else w for w in re.findall(r"[a-z][a-z0-9.+#-]{3,}", text.lower()) if w not in STOP}
+
+
 PERSONAL = re.compile(r"\b(my|me|mine|myself|i|i'm|i've|i'd|i'll|we|our|ours|us|remember|know about)\b", re.I)
 FORGET = re.compile(r"^(?:please )?(?:forget|delete|remove)(?: that| about| what you know about)? +(.{2,120})$", re.I)
 FORGET_ALL = re.compile(r"^(?:please )?(?:forget|delete|erase|clear) (?:everything|all|all of it|everything you know)(?: about me| you know about me)?[.!]?$", re.I)
@@ -169,8 +181,8 @@ class Memory:
 
     def list(self):
         with self.lock:
-            rows = self.db.execute("SELECT id, text, created FROM facts ORDER BY id").fetchall()
-        return [{"id": r[0], "text": r[1], "created": r[2]} for r in rows]
+            rows = self.db.execute("SELECT id, text, created, slot FROM facts ORDER BY id").fetchall()
+        return [{"id": r[0], "text": r[1], "created": r[2], "slot": r[3] or ""} for r in rows]
 
     def delete(self, fact_id):
         with self.lock:
@@ -218,8 +230,14 @@ class Memory:
         every message would make the models, which were taught to answer from their notes, say "the notes don't mention that" about ordinary questions."""
         if question is not None and not PERSONAL.search(question):
             return None
+        facts = self.list()
+        if question is not None and not ABOUT_THEM.search(question):
+            # "I need to download it" is about the person but not about what is remembered: only the facts that share a word with the message go
+            # (and their name), so the model does not work everything it knows (a friend's name, a hobby) into an unrelated answer
+            words = content_words(question)
+            facts = [f for f in facts if f["slot"] == "name" or content_words(f["text"]) & words]
         text = ""
-        for f in reversed(self.list()):                     # the newest facts first, as many as fit
+        for f in reversed(facts):                           # the newest facts first, as many as fit
             if len(text) + len(f["text"]) + 1 > max_chars:
                 break
             text = f["text"] + (" " + text if text else "")

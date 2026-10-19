@@ -58,6 +58,15 @@ class Checks(unittest.TestCase):
         self.assertIn("did not finish", FC.run_python("while True: pass", seconds=1)[1])
 
 
+class Voice(unittest.TestCase):
+    def test_over_excited_drafts_are_rewritten_not_kept(self):
+        """The habits seen in Equinox 3's answers (Oct 19): flattery first, a stack of '!' and emoji. A plain, direct answer passes."""
+        for bad in ("You\u2019re awesome for catching that! Node.js was already installed.", "Darryl, congrats on the Node.js setup! \U0001F680",
+                    "Here you go! It works! Have fun!", "Done \U0001F389 enjoy \U0001F604 bye \U0001F680", "Certainly! Here are the steps."):
+            self.assertFalse(FC.check({"question": "q"}, bad)["ok"], bad)
+        self.assertTrue(FC.check({"question": "q"}, "Download the installer from nodejs.org, run it, then type node -v to check.")["ok"])
+
+
 class Questions(unittest.TestCase):
     def test_importers_and_dedupe(self):
         gsm = FQ.from_row({"question": "Tom has 3 apples...", "answer": "He has 3+2=5 apples.\n#### 5"}, "gsm8k")
