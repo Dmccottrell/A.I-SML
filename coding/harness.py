@@ -1039,6 +1039,35 @@ def shorten_bad_reply(reply, keep=600):
     return reply if len(reply) <= keep else reply[:keep] + f"\n...[{len(reply) - keep} more characters of a tool call that could not be read]"
 
 
+def nearest_lines(root, path, old, show=12):
+    """vryxcode_fixes: the lines of `path` most like `old` (an edit that missed), numbered, so the model can copy the real text in its next step
+    instead of spending a step on read_file first. "" when the file cannot be read."""
+    import difflib
+    try:
+        full = os.path.realpath(os.path.join(root, str(path or "")))
+        if not full.startswith(os.path.realpath(root) + os.sep):
+            return ""
+        with open(full, encoding="utf-8", errors="replace") as f:
+            lines = f.read().split("\n")
+    except (OSError, ValueError):
+        return ""
+    want = [l.strip() for l in str(old or "").split("\n") if l.strip()]
+    if not want or not lines:
+        return ""
+    size = max(1, min(len(want), show))
+    best, at = -1.0, 0
+    for i in range(0, max(1, len(lines) - size + 1)):
+        score = difflib.SequenceMatcher(None, "\n".join(want[:size]), "\n".join(l.strip() for l in lines[i:i + size]), autojunk=False).quick_ratio()
+        if score > best:
+            best, at = score, i
+    lo, hi = max(0, at - 2), min(len(lines), at + size + 2)
+    return f"The closest lines in {path} now ({lo + 1}-{hi}):\n" + "\n".join(f"{n + 1}: {lines[n]}" for n in range(lo, hi)) + "\nCopy the text you want to change from these lines exactly (without the numbers)."
+
+
+SAME_ERROR = ("This is the same error as your last step, so trying it again will not work. Change your approach now: look at the error and the file again "
+              "(read_file), then make a different fix, or do the step another way.")
+
+
 def format_result(text):
     return f"<|tool_result|>{text}<|end_tool_result|>"
 
@@ -1360,6 +1389,8 @@ def run_agent(task, generate, sandbox, max_turns=8, system=None, project=True, h
     no_call, no_call_total, bad_calls, repeats = 0, 0, 0, {}        # replies with no tool call at all (the model is chatting, not working); steps repeated
     written, last_test, last_sig, same_fail = set(), "", None, 0     # a long build's progress (build mode)
     checkpoints = Checkpoints(sandbox.root) if build else None
+    fixes = bool(getattr(generate, "fixes", False))                  # vryxcode_fixes: nearest lines on a missed edit, a nudge on the same error twice, stop messages that fit
+    last_err, same_err = None, 0
     if build and "rollback" not in sandbox.extra_tools:
         sandbox.register_tool("rollback", lambda: checkpoints.restore())
     for turn in range(1, max_turns + 1):
@@ -1372,8 +1403,10 @@ def run_agent(task, generate, sandbox, max_turns=8, system=None, project=True, h
         reply = generate(messages)
         messages.append({"role": "assistant", "content": reply})
         done = False
+        called = None
         try:
             name, args = parse_tool_call(reply)
+            called = (name, args)
             if checks and name in ("write_file", "edit_file"):
                 problem = preview_check(sandbox.root, name, args)
                 if problem:
@@ -1451,6 +1484,15 @@ def run_agent(task, generate, sandbox, max_turns=8, system=None, project=True, h
                         continue
             result, done = f"error: {e}", False
             step_fails += 1
+            if fixes and called and called[0] == "edit_file" and isinstance(called[1], dict) and str(e).startswith(("the text in 'old' is not in", "the first line of 'old'")):
+                near = nearest_lines(sandbox.root, called[1].get("path"), called[1].get("old"))
+                if near:
+                    result += "\n" + near
+            sig = str(e)[:120]
+            same_err = same_err + 1 if fixes and sig == last_err else 0
+            last_err = sig
+            if same_err == 1 and not str(e).startswith(("no tool call found", "the tool call")):
+                result += "\n" + SAME_ERROR
             if steady and plan_items and step_fails >= 2:
                 result += "\n" + steady_note(plan_items, step_fails)
             bad_calls = bad_calls + 1 if str(e).startswith(("the tool call is not valid JSON", "the tool call was cut off")) else 0
@@ -1468,8 +1510,10 @@ def run_agent(task, generate, sandbox, max_turns=8, system=None, project=True, h
                 said = " ".join(reply.split())[:300]
                 return {"finished": False, "turns": turn, "messages": messages, "episodes": episodes, "stopped": "no_tool",
                         "summary": f'The model kept answering in words instead of using its tools, so nothing was done. It said: "{said}" '
-                                   "Try a specific task (for example: create hello.py that prints a greeting, with a test), or pick Solstice or Apogee."}
+                                   + ("Say exactly what to build or change (for example: add a Clear completed button to index.html), or switch the effort to Deep." if fixes else
+                                      "Try a specific task (for example: create hello.py that prints a greeting, with a test), or pick Solstice or Apogee.")}
         else:
+            last_err, same_err = None, 0
             no_call = 0
             bad_calls = 0
             step_fails = 0
@@ -1485,7 +1529,7 @@ def run_agent(task, generate, sandbox, max_turns=8, system=None, project=True, h
                 if repeats[key] >= (REPEAT_STOP_AT * 2 if sandbox.full else REPEAT_STOP_AT):      # the full agent keeps trying longer before it gives up
                     return {"finished": False, "turns": turn, "messages": messages, "episodes": episodes, "stopped": "stuck",
                             "summary": f"The model kept repeating the same step ({name}) without making progress, so it was stopped. "
-                                       "Try a more specific task, or pick Solstice or Apogee."}
+                                       + ("Say which part to change next, or switch the effort to Deep so it plans each step." if fixes else "Try a more specific task, or pick Solstice or Apogee.")}
                 if repeats[key] >= REPEAT_HINT_AT:
                     result = str(result) + ("\nNote: you already did exactly this and got the same result. Do something different now. "
                                            "If the folder is empty, create the file you need with write_file and test it; do not ask the user anything.")

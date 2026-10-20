@@ -492,6 +492,7 @@ class Session:
                     self.emit("retry", text=clip(prose, 400), why=clip(str(e), 200), limit=bool(getattr(generate, "cut_off", False)), **took)
                 # words with no tool call: if the turn ends on them they arrive as the "end" message, so no step is shown
             return reply
+        call.fixes = getattr(generate, "fixes", False)          # vryxcode_fixes reaches the agent loop (harness.run_agent reads it from the model call)
         return call
 
     def run(self, generate, max_turns, context_tokens, extra_programs=()):

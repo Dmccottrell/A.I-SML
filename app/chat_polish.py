@@ -30,6 +30,8 @@ PAUSE_MAX = 3.2
 PAUSE_SCALE = {"off": 0.0, "short": 0.4, "natural": 1.0}   # the person's setting: how much of that pause to keep (the models answer fast now)
 RATE_CPS = 90.0                 # characters per second when text arrives faster than this (about 22 words a second)
 MAX_LAG_S = 1.5
+FAST_PIECE_S = 0.02             # paced(adaptive=True): a piece that took less than this to arrive was already waiting
+FIXES_PAUSE_MAX = 0.6           # chat_fixes: the longest staged pause before the first word (a model that is slower is never made to wait longer)
 
 
 def pause_for(text, effort="balanced"):
@@ -101,6 +103,21 @@ def follow_up_hint(text, has_reply, max_words=10):
     return ""
 
 
+TITLE_FILLER = re.compile(r"^(?:(?:hey|hi|hello|yo|ok(?:ay)?|so|um+|uh+)\b[\s,!.]*|(?:can|could|would|will) (?:you|u)(?: please)?\s+|please\s+|i (?:want|need|would like) (?:you )?to\s+|"
+                          r"i'?d like (?:you )?to\s+|help me(?: to)?\s+|tell me\s+|quick question[\s,:]*|question[\s,:]+)+", re.I)
+
+
+def short_title(text, limit=48):
+    """chat_fixes: a chat list title like other assistants make: the request without "hey, can you please", its first sentence, at most `limit`
+    characters cut at a word, starting with a capital and without the question mark."""
+    t = " ".join(str(text or "").split())
+    t = TITLE_FILLER.sub("", t).strip() or t
+    t = re.split(r"(?<=[.!?])\s", t, maxsplit=1)[0].rstrip(" .!?,;:")
+    if len(t) > limit:
+        t = t[:limit].rsplit(" ", 1)[0].rstrip(" ,;:-") or t[:limit]
+    return (t[:1].upper() + t[1:]) if t else "New chat"
+
+
 def thinking_word(n):
     """The n-th label (0, 1, 2, ...): cycles through the list, so two in a row are never the same."""
     return THINKING_WORDS[n % len(THINKING_WORDS)]
@@ -122,13 +139,22 @@ def _bits(text):
 
 
 def paced(pieces, min_first_s=MIN_FIRST_S, rate_cps=RATE_CPS, max_lag_s=MAX_LAG_S, clock=time.monotonic,
-          sleep=time.sleep, start=None):
+          sleep=time.sleep, start=None, adaptive=False):
     """Yield the same text as `pieces`, but not before `min_first_s` after `start` (default: now) and no faster than
-    `rate_cps`, unless that would put the screen more than `max_lag_s` behind (then it catches up)."""
+    `rate_cps`, unless that would put the screen more than `max_lag_s` behind (then it catches up).
+    `adaptive` (flag chat_fixes): when the next piece was already waiting (the model writes faster than `rate_cps`), it is shown at once. Without
+    it a fast model's long answer took twice as long on screen as the model needed, because the waiting pieces were never counted as lag."""
     start = clock() if start is None else start
     due = None                                          # when the next bit may appear
+    it = iter(pieces)
     try:
-        for piece in pieces:
+        while True:
+            asked = clock()
+            try:
+                piece = next(it)
+            except StopIteration:
+                break
+            waiting = adaptive and due is not None and clock() - asked < FAST_PIECE_S and due > clock()     # it was already here: the screen is behind
             bits = list(_bits(piece))
             left = len(piece)                           # what is still waiting to be shown from this piece
             for bit in bits:
@@ -136,13 +162,15 @@ def paced(pieces, min_first_s=MIN_FIRST_S, rate_cps=RATE_CPS, max_lag_s=MAX_LAG_
                 if due is None:
                     due = start + min_first_s
                 wait = due - now
+                if waiting and due > start + min_first_s:
+                    wait = 0                            # catching up with a fast model (never before the first-word pause)
                 if wait > 0:
                     sleep(wait)
                     now = due
                 yield bit
                 left -= len(bit)
                 rate = max(rate_cps, left / max_lag_s)  # a big piece that is already here: catch up, never lag far behind
-                due = max(due, now) + len(bit) / rate
+                due = (now if waiting else max(due, now)) + len(bit) / rate
     finally:
         close = getattr(pieces, "close", None)
         if close:

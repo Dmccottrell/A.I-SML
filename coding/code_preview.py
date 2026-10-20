@@ -29,6 +29,17 @@ window.addEventListener('unhandledrejection',function(e){var r=e.reason;s('Unhan
 var ce=console.error;console.error=function(){s('console.error: '+[].slice.call(arguments).join(' '));ce.apply(console,arguments)};
 window.addEventListener('load',function(){try{parent.postMessage({vryxPreview:1,loaded:1},'*')}catch(e){}});})();</script>"""
 
+# vryxcode_fixes: the preview frame has an empty identity, so the browser refuses localStorage, sessionStorage and cookies there ("SecurityError: ...
+# the document is sandboxed"): a to-do list or a game that saves its score failed in the preview but worked when opened as a file. This puts a working
+# in-memory stand-in in their place, only where the real one is refused, before any of the page's own scripts run.
+STORAGE_SHIM = b"""<script>(function(){function mem(){var d={};return{getItem:function(k){k=String(k);return Object.prototype.hasOwnProperty.call(d,k)?d[k]:null},
+setItem:function(k,v){d[String(k)]=String(v)},removeItem:function(k){delete d[String(k)]},clear:function(){d={}},key:function(i){var a=Object.keys(d);return i<a.length?a[i]:null},
+get length(){return Object.keys(d).length}}}
+['localStorage','sessionStorage'].forEach(function(n){var ok=false;try{var s=window[n];s.setItem('__vx','1');s.removeItem('__vx');ok=true}catch(e){}
+if(!ok){try{Object.defineProperty(window,n,{value:mem(),configurable:true})}catch(e){}}});
+try{document.cookie}catch(e){var jar={};try{Object.defineProperty(document,'cookie',{configurable:true,get:function(){return Object.keys(jar).map(function(k){return k+'='+jar[k]}).join('; ')},
+set:function(v){var p=String(v).split(';')[0],i=p.indexOf('=');if(i>0)jar[p.slice(0,i).trim()]=p.slice(i+1)}})}catch(e){}}})();</script>"""
+
 # the policy every preview answer carries: an empty identity (no cookies, storage or same-origin access), and only this app may frame it
 PREVIEW_CSP = "sandbox allow-scripts allow-forms allow-popups allow-modals allow-pointer-lock; frame-ancestors 'self'"
 
@@ -39,20 +50,25 @@ class Previews:
     def __init__(self, clock=time.time):
         self.clock, self.tokens, self.lock = clock, {}, threading.Lock()
 
-    def make(self, user, folder):
+    def make(self, user, folder, fixes=False):
         with self.lock:
             now = self.clock()
             self.tokens = {t: v for t, v in self.tokens.items() if v["expires"] > now}
             while len(self.tokens) >= MAX_TOKENS:
                 self.tokens.pop(next(iter(self.tokens)))
             token = secrets.token_urlsafe(24)
-            self.tokens[token] = {"user": user, "folder": os.path.realpath(folder), "expires": now + TOKEN_SECONDS}
+            self.tokens[token] = {"user": user, "folder": os.path.realpath(folder), "expires": now + TOKEN_SECONDS, "fixes": bool(fixes)}
             return token
 
     def folder(self, token):
         with self.lock:
             v = self.tokens.get(token)
             return v["folder"] if v and v["expires"] > self.clock() else None
+
+    def fixes(self, token):
+        """True when the person who opened this preview has the VryxCode fixes (flag vryxcode_fixes)."""
+        with self.lock:
+            return bool((self.tokens.get(token) or {}).get("fixes"))
 
 
 def entry_page(folder):
@@ -90,18 +106,19 @@ HEAD_TAG = re.compile(rb"<head\b[^>]*>", re.I)                                 #
 ROOT_URL = re.compile(rb"""((?:\bsrc|\bhref|\baction|\bposter)\s*=\s*["'])/(?!/)([^"']*)""", re.I)       # src="/style.css": the page lives in a folder, not at the site's root, so "/" would miss the project
 
 
-def inject(html):
+def inject(html, fixes=False):
     """The reporter script added at the very top of an HTML page (after <head> when there is one), so it sees every error that follows.
     The page's own scripts get `crossorigin` (the frame has an empty identity, so its own files count as another site's: without it a browser hides the details of their errors)."""
     html = ROOT_URL.sub(lambda m: m.group(1) + (m.group(2) or b"./"), html)
     html = LOCAL_SCRIPT.sub(rb'<script crossorigin="anonymous"\1', html)
     m = HEAD_TAG.search(html)
+    first = REPORTER + (STORAGE_SHIM if fixes else b"")
     if m:
-        return html[:m.end()] + REPORTER + html[m.end():]
-    return REPORTER + html
+        return html[:m.end()] + first + html[m.end():]
+    return first + html
 
 
-def serve(folder, rel):
+def serve(folder, rel, fixes=False):
     """(status, content type, bytes) for one preview request."""
     full = resolve(folder, rel)
     if full is None:
@@ -110,7 +127,7 @@ def serve(folder, rel):
     with open(full, "rb") as f:
         data = f.read()
     if full.lower().endswith((".html", ".htm")):
-        return 200, "text/html; charset=utf-8", inject(data)
+        return 200, "text/html; charset=utf-8", inject(data, fixes)
     if ctype.startswith("text/") or ctype in ("application/javascript", "application/json", "image/svg+xml"):
         ctype += "; charset=utf-8" if "charset" not in ctype and ctype.startswith(("text/", "application/")) else ""
     return 200, ctype, data
