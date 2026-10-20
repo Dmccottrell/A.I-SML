@@ -78,6 +78,24 @@ svg .core { fill: var(--core); stroke: var(--sun); stroke-width: 3; transition: 
 .msg.ai { align-self: flex-start; max-width: 94%; }
 .msg.ai .bubble { background: var(--surface); border: 1px solid var(--line); border-radius: 18px 18px 18px 4px; padding: 14px 18px; }
 .bubble { white-space: pre-wrap; overflow-wrap: anywhere; }
+.bubble .md { white-space: normal; display: flex; flex-direction: column; gap: 10px; }
+.md p, .md li, .md td, .md th { white-space: pre-wrap; margin: 0; }
+.md ul, .md ol { margin: 0; padding-left: 1.4em; display: flex; flex-direction: column; gap: 4px; }
+.md li > ul, .md li > ol { margin-top: 4px; }
+.md .md-h { font-weight: 700; margin-top: 4px; }
+.md .md-h1 { font-size: 1.25em; } .md .md-h2 { font-size: 1.12em; } .md .md-h3, .md .md-h4 { font-size: 1.02em; }
+.md hr { border: 0; border-top: 1px solid var(--line); margin: 4px 0; width: 100%; }
+.md blockquote { margin: 0; padding: 2px 0 2px 12px; border-left: 3px solid var(--line); color: var(--muted); }
+.md a { color: var(--accenttext); text-decoration: underline; text-underline-offset: 2px; }
+.md .md-ic { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: .9em; background: var(--surface2); border: 1px solid var(--line); border-radius: 6px; padding: 1px 5px; }
+.md .md-code { border: 1px solid var(--line); border-radius: 12px; overflow: hidden; background: var(--bg); }
+.md .md-cbar { display: flex; justify-content: space-between; align-items: center; padding: 4px 6px 4px 12px; font-size: 12px; color: var(--muted); background: var(--surface2); }
+.md .md-copy { background: transparent; border: 1px solid var(--line); color: var(--muted); border-radius: 8px; padding: 3px 10px; font-size: 12px; min-height: 28px; }
+.md pre { margin: 0; padding: 12px; overflow-x: auto; white-space: pre; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 13.5px; line-height: 1.5; }
+.md .md-table { overflow-x: auto; max-width: 100%; }
+.md table { border-collapse: collapse; font-size: .95em; }
+.md th, .md td { border: 1px solid var(--line); padding: 6px 10px; text-align: left; vertical-align: top; }
+.md th { background: var(--surface2); font-weight: 600; }
 .meta { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--muted); }
 .acts { display: flex; gap: 6px; flex-wrap: wrap; }
 .chip { background: transparent; border: 1px solid var(--line); color: var(--muted); border-radius: 999px; padding: 6px 14px; min-height: 36px; font-size: 14px; }
@@ -740,6 +758,7 @@ body:not(.vxn) .vx-hero, body:not(.vxn) .vx-dots { display: none; }   /* the new
 
 <script src="/editor.js"></script>
 <script src="/js/core.js"></script>
+<script src="/js/markdown.js"></script>
 <script src="/js/tour.js"></script>
 <script src="/js/chat.js"></script>
 <script src="/js/documents.js"></script>

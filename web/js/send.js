@@ -51,7 +51,9 @@ async function send(regen, mode) {
         if (!aiWrap) { think._stop(); think.remove(); const m = curModel(); aiBubble = el('div', {class: 'bubble'}); const note = S.autoNote ? el('span', {title: S.autoNote.reason}, ' \u00b7 Auto chose ' + S.autoNote.effort[0].toUpperCase() + S.autoNote.effort.slice(1)) : null;
         aiWrap = el('div', {class: 'msg ai'}, el('div', {class: 'meta'}, logo(14, false, m ? m.name : 'brand'), mname(m), note), aiBubble); $('thread').append(aiWrap);
           const line = lookupLine(looked); if (line) aiWrap.insertBefore(line, aiBubble); }
-        got += data.t; aiBubble.replaceChildren(richText(got), el('span', {class: 'cursor'}, '▍')); scrollDown();
+        got += data.t;
+        if (!fixesOn()) { aiBubble.replaceChildren(richText(got), el('span', {class: 'cursor'}, '▍')); scrollDown(); }
+        else if (!S.paintDue) { S.paintDue = true; requestAnimationFrame(() => { S.paintDue = false; if (aiBubble) { aiBubble.replaceChildren(richText(got), el('span', {class: 'cursor'}, '▍')); scrollDown(); } }); }   // redrawn once a frame, not once a word: a long answer stays smooth
       } else if (ev === 'done') {
         finished = true; S.title = data.title || S.title; S.state.usage = data.usage; renderUsage(data.usage); popTokens(before, data.usage);
         const cn = $('compactNote'); if (cn) cn.remove();

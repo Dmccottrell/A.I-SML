@@ -95,13 +95,19 @@ def start_turn(state, who, chat_id, text, model_id, effort, regenerate=False, re
     mode = regen_mode if regenerate else None
     regen_modes.get(mode)                                      # an unknown option is a ValueError (a 400 for the page)
     caps = OPEN_EFFORTS if model.get("open") else EFFORTS
+    fixes = state.flags.on("chat_fixes", who)                  # the overnight chat fixes (flag chat_fixes) and the model's own part of them (models.json "fixes")
+    tuned = (model.get("fixes") or {}) if fixes else {}
     max_new = min(caps[effort], max(32, window // 2), model.get("max_reply_tokens", caps[effort]))
+    if tuned.get("reply_tokens", {}).get(effort):              # more room for a long answer, so it is not cut off and "Continue" is rarely needed
+        max_new = min(int(tuned["reply_tokens"][effort]), max(32, window // 2))
     if mode:
         max_new = min(regen_modes.length_for(max_new, mode), max(32, window // 2))
     pause = round(chat_polish.pause_for(question, effort) * chat_polish.PAUSE_SCALE[state.get_settings(who["user"])["thinking_pause"]], 2)   # fits the message, then the person's setting
+    if fixes:
+        pause = min(pause, chat_polish.FIXES_PAUSE_MAX)          # the models answer fast: a long staged pause only made replies feel slow
     decision["pause"] = pause
     bounds = tuple(model.get("temperature_bounds", effort_router.DEFAULT_BOUNDS))
-    base_temp = model.get("sampling", {}).get("temperature", TEMPERATURE["balanced"])
+    base_temp = (tuned.get("sampling") or model.get("sampling", {})).get("temperature", TEMPERATURE["balanced"])
     decision["temperature"] = None                             # None = keep the model's own setting
     if decision["auto"]:                                       # Auto also picks how adventurous the wording is
         decision["temperature"], decision["temperature_reason"] = effort_router.choose_temperature(question, base_temp, bounds)
@@ -150,7 +156,7 @@ def start_turn(state, who, chat_id, text, model_id, effort, regenerate=False, re
 
     def pacer(stream):
         stream = timed(stream)
-        gen = chat_polish.paced(stream, min_first_s=pause, start=started) if (state.pace if pace is None else pace) else stream
+        gen = chat_polish.paced(stream, min_first_s=pause, start=started, adaptive=fixes) if (state.pace if pace is None else pace) else stream
         try:
             for bit in gen:
                 q.put(("piece", bit))
@@ -269,13 +275,17 @@ def start_turn(state, who, chat_id, text, model_id, effort, regenerate=False, re
             timing["lookup"], timing["thought"] = t_load - started, think      # everything before the model: notes, Wikipedia, the web, pictures
             backend = E.FakeBackend(canned) if canned else state.backend_for(model, text or "", window, cancel=stop.is_set)     # may load the model the first time (can take a while); Stop ends the load
             timing["load"] = time.monotonic() - t_load
+            if tuned.get("sampling") and hasattr(backend, "sampling"):     # the settings the base model's makers give (no strong repeat penalty: it bent code and names)
+                backend.sampling = dict(backend.sampling, **tuned["sampling"])
+            if fixes and hasattr(backend, "timeout"):
+                backend.timeout = max(backend.timeout, 300)            # a very long chat can take minutes to read before the first word: that is not "can't reach the PC"
             if decision["temperature"] is not None and hasattr(backend, "sampling"):
                 backend.sampling = dict(backend.sampling, temperature=decision["temperature"])
             if regenerate and hasattr(backend, "sampling"):
                 t = regen_modes.sampling_for(backend.sampling.get("temperature", 0.8), mode)
                 backend.sampling = dict(backend.sampling, temperature=round(min(bounds[1], max(bounds[0], t)), 2))   # never outside the model's safe range
-            if think and model.get("sampling_think") and hasattr(backend, "sampling"):     # Deep on an Emvryx 3 model: the settings Qwen gives for thinking
-                backend.sampling = dict(backend.sampling, **model["sampling_think"])
+            if think and (tuned.get("sampling_think") or model.get("sampling_think")) and hasattr(backend, "sampling"):     # Deep on an Emvryx 3 model: the settings Qwen gives for thinking
+                backend.sampling = dict(backend.sampling, **(tuned.get("sampling_think") or model["sampling_think"]))
             prior_reply = next((m["content"] for m in reversed(store.messages(chat_id)) if m["role"] == "assistant"), "")      # to notice a reply that is only a copy of this one
             first_hint = "\n\n".join(h for h in (skill_hint, regen_modes.get(mode)["hint"] if regenerate else "",
                                                   "" if regenerate else (chat_polish.answer_hint(text, next((m["content"] for m in reversed(store.messages(chat_id)) if m["role"] == "assistant"), ""))
@@ -285,7 +295,7 @@ def start_turn(state, who, chat_id, text, model_id, effort, regenerate=False, re
                 return E.run_turn(tok, store, chat_id, backend, counted_model, window, max_new, pictures=seen_pictures or None, user_text=None if again else text, stop=stop,
                                   notes=notes or None, user_docs=None if again else ([d["id"] for d in attached if d["id"] not in sent_before] if text else None),
                                   limiter=state.limiter, user=who["user"], effort=effort, clock=state.clock, pacer=pacer, think=think,
-                                  on_compact=lambda: q.put(("compacting", True)), style_hint=first_hint)
+                                  on_compact=lambda: q.put(("compacting", True)), style_hint=first_hint, fixes=fixes)
             try:
                 r = first(backend)
             except ModelRefused as e:
@@ -311,7 +321,7 @@ def start_turn(state, who, chat_id, text, model_id, effort, regenerate=False, re
                                             repeat_penalty=max(1.3, backend.sampling.get("repeat_penalty", 1.15)))
                 r = E.run_turn(tok, store, chat_id, backend, counted_model, window, max_new, pictures=seen_pictures or None, user_text=None, stop=stop, notes=notes or None,
                                limiter=state.limiter, user=who["user"], effort=effort, clock=state.clock, pacer=pacer, think=think, on_compact=lambda: q.put(("compacting", True)),
-                               style_hint="\n\n".join(h for h in (skill_hint, chat_polish.repeat_hint(text)) if h))
+                               style_hint="\n\n".join(h for h in (skill_hint, chat_polish.repeat_hint(text)) if h), fixes=fixes)
             web_mode_now = state.get_settings(who["user"])["web_search"]
             knowledge_first = (model.get("lookup") == "when_needed" and found is not None and not found["asked"] and bool(text) and not regenerate
                                and web_mode_now != "none" and lookup_auto.wants_lookup(text))
@@ -333,7 +343,7 @@ def start_turn(state, who, chat_id, text, model_id, effort, regenerate=False, re
                     if msgs and msgs[-1]["role"] == "assistant":
                         store.remove_message(chat_id, msgs[-1]["id"])
                     r = E.run_turn(tok, store, chat_id, backend, counted_model, window, max_new, pictures=seen_pictures or None, user_text=None, stop=stop, notes=([mem_note] if mem_note else []) + list(notes2 or []),
-                                   limiter=state.limiter, user=who["user"], effort=effort, clock=state.clock, pacer=pacer, think=False, on_compact=lambda: q.put(("compacting", True)), style_hint=skill_hint)
+                                   limiter=state.limiter, user=who["user"], effort=effort, clock=state.clock, pacer=pacer, think=False, on_compact=lambda: q.put(("compacting", True)), style_hint=skill_hint, fixes=fixes)
                     found = found2
             if found and found["asked"] and text:
                 state.remember_lookup(who["user"], chat_id, r["message_id"], text, found)

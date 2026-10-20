@@ -65,10 +65,14 @@ def choose_model(models, model_id, ram_gb=None, pc_online=True, ask=None, when_p
 
 
 # ------------------------------------------------------------------ keeping a reply under control
-def is_looping(text, min_unit=4, max_unit=120, repeats=4):
-    """True if the text ends with the same piece repeated `repeats` times in a row (a stuck model)."""
+LOOP_SPAN = 240                  # chat_fixes: a repeat must cover this many characters before it counts as a loop
+
+def is_looping(text, min_unit=4, max_unit=120, repeats=4, min_span=0):
+    """True if the text ends with the same piece repeated `repeats` times in a row (a stuck model). With `min_span` a short piece must repeat
+    until the repeats cover that many characters: a table's "|---|---|---|---|", a line of "====" or four closing "</div>" are formatting, not a loop."""
     for n in range(min_unit, max_unit + 1):
-        if len(text) >= n * repeats and text[-n * repeats:] == text[-n:] * repeats:
+        times = max(repeats, -(-min_span // n)) if min_span else repeats
+        if len(text) >= n * times and text[-n * times:] == text[-n:] * times:
             return True
     return False
 
@@ -219,8 +223,9 @@ class Guard:
     side of the chat ("bleed"), or when `stop` is set (the Stop button). `reason` is then "length", "loop", "bleed" or
     "stopped"; "done" when the model ended by itself."""
 
-    def __init__(self, pieces, max_chars=MAX_REPLY_CHARS, stop=None):
+    def __init__(self, pieces, max_chars=MAX_REPLY_CHARS, stop=None, loop_span=0):
         self.pieces, self.max_chars, self.stop, self.reason, self.text = pieces, max_chars, stop, "done", ""
+        self.loop_span = loop_span                     # chat_fixes: LOOP_SPAN, so formatting is never taken for a loop
 
     def __iter__(self):
         try:
@@ -241,7 +246,7 @@ class Guard:
                 if len(self.text) >= self.max_chars:
                     self.reason = "length"
                     return
-                if is_looping(self.text[-self.max_chars:]):
+                if is_looping(self.text[-self.max_chars:], min_span=self.loop_span):
                     self.reason = "loop"
                     return
         finally:
@@ -583,7 +588,7 @@ class ChatStore:
 # ------------------------------------------------------------------ one message, start to finish
 def run_turn(tok, store, chat_id, backend, model, window, max_new, user_text=None, stop=None, save_every=8,
              keep_notes=1, notes=None, limiter=None, user=None, effort="balanced", clock=time.time,
-             pacer=None, auto_compact=True, summarize=None, style_hint="", user_docs=None, think=False, pictures=None, on_compact=None):
+             pacer=None, auto_compact=True, summarize=None, style_hint="", user_docs=None, think=False, pictures=None, on_compact=None, fixes=False):
     """Answer one message. Adds the user's message (if given), streams the reply while saving it, and returns
     {"text", "reason", "forgotten_messages"}. If the model fails mid-reply, what was written is kept (marked
     partial) and the AppError is re-raised, so the screen can offer "Continue".
@@ -600,6 +605,8 @@ def run_turn(tok, store, chat_id, backend, model, window, max_new, user_text=Non
     `pacer` (chat_polish.paced, with the time of sending) makes the reply appear after a short pause and write out
     steadily. `auto_compact` shortens a chat that fills the model's memory (chat_polish.compact_chat); `on_compact()` is called as that starts.
     The result's "context" says how full the model's memory is after this reply (the page's memory meter); it is also kept on the reply as its "ctx" mark.
+    `fixes` (flag chat_fixes): formatting is never taken for a loop (LOOP_SPAN), and llama-server's own counts are used for the plan, so the part of the
+    chat it still had in memory counts at the cached rate instead of all over again.
     """
     user_row = store.add(chat_id, "user", user_text, docs=user_docs) if user_text is not None else None
     folded = 0
@@ -628,9 +635,11 @@ def run_turn(tok, store, chat_id, backend, model, window, max_new, user_text=Non
             raise
     row = store.add(chat_id, "assistant", "", model["id"], "partial")
     prompt = {"prompt_string": with_pictures(tok.decode(ids), asked, len(pictures)), "multimodal_data": list(pictures)} if pictures else ids
+    if fixes and isinstance(backend, LlamaServer):
+        backend.count_cache, backend.usage = True, None              # this reply's own counts (both parts of a Deep reply add up)
     raw = think_budget(backend, tok, prompt, max_new) if think else backend.stream(prompt, max_new)
     stream = strip_source(strip_think(until_stopped(raw, stop)))
-    guard = Guard(pacer(stream) if pacer else stream, stop=stop, max_chars=max(MAX_REPLY_CHARS, int(max_new * 5)))   # a long answer is not a loop: room for what the model was allowed
+    guard = Guard(pacer(stream) if pacer else stream, stop=stop, max_chars=max(MAX_REPLY_CHARS, int(max_new * 5)), loop_span=LOOP_SPAN if fixes else 0)   # a long answer is not a loop: room for what the model was allowed
     count = 0
     try:
         for _ in guard:
@@ -722,6 +731,18 @@ class LlamaServer:
     def __init__(self, base_url="http://127.0.0.1:8080", key=None, timeout=60, **sampling):
         self.base, self.key, self.timeout = base_url.rstrip("/"), key, timeout
         self.sampling = {"temperature": 0.8, "top_k": 50, "repeat_penalty": 1.15, **sampling}
+        self.count_cache, self.usage = False, None      # count_cache (chat_fixes): usage = llama-server's own {"fresh_in", "cached_in", "out"} for the reply
+
+    def _note_usage(self, data):
+        """Add one request's counts from llama-server's last message: prompt_n is what it had to read, cache_n what it still had in memory."""
+        t = data.get("timings") or {}
+        if not t and "tokens_evaluated" not in data:
+            return
+        cached = int(t.get("cache_n", data.get("tokens_cached", 0)) or 0)
+        fresh = int(t["prompt_n"]) if "prompt_n" in t else max(0, int(data.get("tokens_evaluated", 0) or 0) - cached)
+        out = int(t.get("predicted_n", data.get("tokens_predicted", 0)) or 0)
+        u = self.usage or {"fresh_in": 0, "cached_in": 0, "out": 0}
+        self.usage = {"fresh_in": u["fresh_in"] + fresh, "cached_in": u["cached_in"] + cached, "out": u["out"] + out}
 
     def _request(self, path, body=None):
         headers = {"Content-Type": "application/json"}
@@ -769,6 +790,8 @@ class LlamaServer:
                 if data.get("content"):
                     yield data["content"]
                 if data.get("stop"):
+                    if self.count_cache:
+                        self._note_usage(data)
                     return
         finally:
             r.close()

@@ -414,7 +414,7 @@ class Handler(RoutesGet, RoutesPost, RoutesCode, RoutesAccount, RoutesAdmin, Rou
             folder = self.state.previews.folder(pv.group(1))
             if not folder:
                 return self._send(404, "This preview link has expired. Open Preview again.\n", "text/plain; charset=utf-8")
-            return self._send_preview(*code_preview.serve(folder, urllib.parse.unquote(pv.group(2))))
+            return self._send_preview(*code_preview.serve(folder, urllib.parse.unquote(pv.group(2)), fixes=self.state.previews.fixes(pv.group(1))))
         try:
             if self.get_public(path, qs) is not UNHANDLED:
                 return

@@ -324,6 +324,7 @@ function cEvent(e) {
   }
   if (e.kind === 'start') { feed.replaceChildren(el('div', {class: 'cc-user'}, el('span', {class: 'ember'}), el('span', {}, (e.plan ? '[Plan] ' : '') + e.task))); C.last = null; return; }
   if (e.kind === 'step') {
+    if (C.retry) { C.retry.classList.replace('run', 'ok'); const v = C.retry.querySelector('.cc-verb'); if (v) v.textContent = 'Fixed a step'; C.retry = null; }   // vryxcode_fixes: the step it retried went through
     const prose = String(e.raw || '').split(/<\|tool_call\|>|<tool_call>/)[0].trim();
     if (e.tool === 'todo') { try { C.todo = JSON.parse(String(e.preview).replace(/^todo /, '')).items || C.todo; } catch (x) { /* a very long list was shortened: keep the last good one */ } renderTodo(); C.last = null; return; }
     if (e.tool === 'finish') { if (prose) feed.append(el('div', {class: 'cc-say'}, prose)); C.last = null; return; }
@@ -352,6 +353,12 @@ function cEvent(e) {
     return;
   }
   if (e.kind === 'retry') {                     // the model's tool call could not be read: keep what it said and that it is trying again
+    if (S.state && S.state.features && S.state.features.vryxcode_fixes) {      // one line that counts the tries, instead of a red line for each
+      const why = e.limit ? 'The reply ran out of room, so VryxCode kept what it wrote and asked for the rest' : 'A step could not be read, so VryxCode asked for it again';
+      if (C.retry && C.retry.isConnected) { C.retry._n += 1; C.retry.querySelector('.cc-arg').textContent = why + '  \u00b7  ' + C.retry._n + ' tries'; }
+      else { if (e.text) feed.append(el('div', {class: 'cc-say'}, e.text)); C.retry = el('div', {class: 'cc-tool run'}, el('div', {class: 'cc-head'}, el('span', {class: 'cc-verb'}, 'Fixing a step'), el('span', {class: 'cc-arg'}, why))); C.retry._n = 1; feed.append(C.retry); }
+      C.last = null; return;
+    }
     if (e.text) feed.append(el('div', {class: 'cc-say'}, e.text));
     feed.append(el('div', {class: 'cc-tool no'}, el('div', {class: 'cc-head'}, el('span', {class: 'cc-verb'}, 'Retrying'), el('span', {class: 'cc-arg'}, [e.limit ? 'The reply ran out of room while the model was writing, so VryxCode kept what it wrote and asked for the rest' : 'That step was garbled, so VryxCode asked the model to send it again', e.secs != null ? Math.round(e.secs) + 's' : ''].filter(Boolean).join('  \u00b7  ')))));
     C.last = null; return;
@@ -369,6 +376,7 @@ function cEvent(e) {
     feed.append(node); return;
   }
   if (e.kind === 'end') {
+    if (C.retry) { C.retry.classList.replace('run', e.finished ? 'ok' : 'no'); C.retry = null; }
     if (e.finished || e.said) {                       // the model talking to the person: what it did, what to run, what it suggests
       if (e.finished) setTimeout(() => { if (!$('codePv').hidden) reloadPreview(); else if (!$('codePreviewBtn').disabled) $('codePreviewBtn').classList.add('pulse'); }, 700);     // the page changed: refresh it, or point at Preview
       feed.append(renderMessage(e.summary || 'Done.', e.finished));

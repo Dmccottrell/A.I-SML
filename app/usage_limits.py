@@ -97,6 +97,11 @@ class UsageStore:
             CREATE INDEX IF NOT EXISTS usage_user_at ON usage (user, at);
             CREATE TABLE IF NOT EXISTS tank (user TEXT PRIMARY KEY, level REAL, at REAL);
             CREATE TABLE IF NOT EXISTS holds (id INTEGER PRIMARY KEY, user TEXT, model TEXT, est REAL, at REAL);""")
+        try:                                                     # the tank size a window started with (a raised plan then counts at once, not after the window)
+            self.db.execute("ALTER TABLE tank ADD COLUMN cap REAL")
+            self.db.commit()
+        except Exception:                                        # noqa: BLE001 - the column is already there
+            pass
 
     def add_user(self, user, tier="free", tz_minutes=0, owner=False, overrides=None):
         self.db.execute("INSERT OR REPLACE INTO users VALUES (?, ?, ?, ?, ?)",
@@ -118,6 +123,11 @@ class UsageStore:
     def week_used(self, user, since):
         r = self.db.execute("SELECT COALESCE(SUM(counted), 0) FROM usage WHERE user = ? AND at >= ?", (user, since)).fetchone()
         return r[0]
+
+    def typical_cost(self, user, model, n=20):
+        """What this person's recent messages on this model really counted, on average (None with fewer than 3): for an honest "about N messages left"."""
+        rows = self.db.execute("SELECT counted FROM usage WHERE user = ? AND model = ? AND counted > 0 ORDER BY at DESC LIMIT ?", (user, model, n)).fetchall()
+        return sum(r[0] for r in rows) / len(rows) if len(rows) >= 3 else None
 
     def holds_total(self, user):
         return self.db.execute("SELECT COALESCE(SUM(est), 0) FROM holds WHERE user = ?", (user,)).fetchone()[0]
@@ -162,11 +172,12 @@ class Limiter:
 
     def _window(self, user, t, now):
         """(level, start, end) of the person's active window, or None when there is none (the tank is full)."""
-        r = self.store.db.execute("SELECT level, at FROM tank WHERE user = ?", (user,)).fetchone()
+        r = self.store.db.execute("SELECT level, at, cap FROM tank WHERE user = ?", (user,)).fetchone()
         if not r:
             return None
         end = r[1] + self.refill_hours(t) * 3600.0
-        return None if now >= end else (min(float(t["tank"]), r[0]), r[1], end)
+        level = r[0] + max(0.0, float(t["tank"]) - r[2]) if r[2] else r[0]      # the plan grew since the window started: the extra is there at once
+        return None if now >= end else (min(float(t["tank"]), level), r[1], end)
 
     def level_of(self, user, t, now):
         """The tank level right now in whichever mode is on."""
@@ -194,7 +205,7 @@ class Limiter:
         """Store the level after a request starts. In window mode the first spend starts the window."""
         if self.window_mode():
             w = self._window(user, t, now)
-            self.store.db.execute("INSERT OR REPLACE INTO tank VALUES (?, ?, ?)", (user, new_level, w[1] if w else now))
+            self.store.db.execute("INSERT OR REPLACE INTO tank (user, level, at, cap) VALUES (?, ?, ?, ?)", (user, new_level, w[1] if w else now, float(t["tank"])))
         else:
             self._set_tank(user, new_level, now)
 
@@ -203,8 +214,8 @@ class Limiter:
         if self.window_mode():
             w = self._window(user, t, now)
             if w:
-                self.store.db.execute("INSERT OR REPLACE INTO tank VALUES (?, ?, ?)",
-                                      (user, max(0.0, min(float(t["tank"]), w[0] + delta)), w[1]))
+                self.store.db.execute("INSERT OR REPLACE INTO tank (user, level, at, cap) VALUES (?, ?, ?, ?)",
+                                      (user, max(0.0, min(float(t["tank"]), w[0] + delta)), w[1], float(t["tank"])))
         else:
             level = self.tank_level(user, t["tank"], t["refill_per_hour"], now)
             self._set_tank(user, max(0.0, min(float(t["tank"]), level + delta)), now)
@@ -217,7 +228,7 @@ class Limiter:
         return min(float(cap), level + refill * max(0.0, now - at) / 3600.0)
 
     def _set_tank(self, user, level, now):
-        self.store.db.execute("INSERT OR REPLACE INTO tank VALUES (?, ?, ?)", (user, level, now))
+        self.store.db.execute("INSERT OR REPLACE INTO tank (user, level, at) VALUES (?, ?, ?)", (user, level, now))
 
     def _week(self, user, u, now):
         start = week_start(now, u["tz_minutes"], self.cfg["weekly_reset"], self.cfg["weekly_window"])
@@ -307,10 +318,13 @@ class Limiter:
             self.store.db.commit()
 
     # ---------------------------------------------------------------- what the screen shows
-    def snapshot(self, user, model_key, effort, now):
-        """Everything the Usage screen and the chat's usage line need, in plain numbers."""
+    def snapshot(self, user, model_key, effort, now, real=False):
+        """Everything the Usage screen and the chat's usage line need, in plain numbers. `real` (flag chat_fixes): "messages left" from what this
+        person's recent messages on this model really cost (long chats and big models cost more than a short one), never fewer than the plain rule."""
         u, t = self.effective(user)
         cost = self.message_cost(model_key, effort)
+        if real:
+            cost = max(cost, self.store.typical_cost(user, model_key) or 0)
         level = self.level_of(user, t, now)
         start, resets_at = self._week(user, u, now)
         used = self.store.week_used(user, start)
