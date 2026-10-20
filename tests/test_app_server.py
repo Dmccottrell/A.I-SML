@@ -187,8 +187,8 @@ class State(Base):
         self.assertEqual(j["usage"]["can_send"], 80)               # 40,000 / 500 on Flare, balanced
         self.state.set_plan("sam", "pro")
         j = self.sam.call("GET", "/api/state")[1]
-        self.assertEqual(j["usage"]["tank"]["cap"], 200000)
-        self.assertEqual(j["usage"]["can_send"], 400)
+        self.assertEqual(j["usage"]["tank"]["cap"], 1000000)
+        self.assertEqual(j["usage"]["can_send"], 2000)
 
     def test_plan_decides_which_models_are_open(self):
         cards = {m["name"]: m for m in self.sam.call("GET", "/api/state")[1]["models"]["cards"]}
