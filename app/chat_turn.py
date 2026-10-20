@@ -85,7 +85,7 @@ def start_turn(state, who, chat_id, text, model_id, effort, regenerate=False, re
     if effort == "auto":
         allowed = tuple(model.get("efforts", effort_router.ORDER))
         pct = 100.0 if who["owner"] else state.usage_snapshot(who, model, "balanced")["tank"]["pct"]
-        chosen, why = effort_router.choose_effort(question, allowed, pct)
+        chosen, why = effort_router.choose_effort(question, allowed, pct, strict=state.flags.on("chat_fixes", who))
         decision = {"effort": chosen, "auto": True, "reason": why}
         effort = chosen
     if effort not in model.get("efforts", effort_router.ORDER):    # a model lists the levels it offers (Ember has no Deep)
@@ -316,6 +316,15 @@ def start_turn(state, who, chat_id, text, model_id, effort, regenerate=False, re
                 if hasattr(backend, "sampling") and hasattr(again, "sampling"):
                     again.sampling = dict(backend.sampling)                          # the same settings as the first try
                 r = first(again, again=True)
+            if fixes and not canned and not stop.is_set() and not (r.get("text") or "").strip():
+                # Nothing came out (it spent the whole reply thinking, or stopped at once): take the empty reply back and answer straight away, once.
+                msgs = [m for m in store.messages(chat_id) if m["status"] != "compacted"]
+                if msgs and msgs[-1]["role"] == "assistant":
+                    store.remove_message(chat_id, msgs[-1]["id"])
+                timing["tries"] = timing.get("tries", 1) + 1
+                r = E.run_turn(tok, store, chat_id, backend, counted_model, window, max_new, pictures=seen_pictures or None, user_text=None, stop=stop, notes=notes or None,
+                               limiter=state.limiter, user=who["user"], effort=effort, clock=state.clock, pacer=pacer, think=False, on_compact=lambda: q.put(("compacting", True)),
+                               style_hint=first_hint, fixes=fixes)
             if text and not canned and not regenerate and not stop.is_set() and r.get("reason") in ("done", None) and chat_polish.is_repeat(r["text"], prior_reply):
                 # A small model answered its own last message again. Take that reply back and ask once more, firmly, a little less predictably.
                 msgs = [m for m in store.messages(chat_id) if m["status"] != "compacted"]

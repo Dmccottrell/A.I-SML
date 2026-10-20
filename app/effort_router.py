@@ -29,19 +29,27 @@ CAREFUL = re.compile(r"\b(step[- ]by[- ]step|explain why|think (hard|carefully|i
                      r"why does|why do|how does .* work|difference between)\b", re.I)
 
 
-def choose_effort(text, allowed=ORDER, tank_pct=100.0):
-    """(effort, reason) for this message. `allowed` are the levels the model offers; `tank_pct` how much usage is left."""
+# strict (flag chat_fixes): Deep thinks first, which is slow, so it is kept for what needs it. A range ("2020-2021", "10-15 minutes") is not a sum,
+# writing an email or a story needs no hidden reasoning, and a long pasted text is read just as well on Balanced.
+MATH_STRICT = re.compile(r"\d\s*[\+\*/^=×÷]\s*\d|\d\s+[-x]\s+\d|\d\s*x\s*\d|\b(solve|equation|calculate|derive|prove|integral|derivative|probability|"
+                         r"percent(age)? of|algebra|geometry|theorem|how much (?:is|are|does|do|will|would)|how many .* (?:if|when|each|per)|% off|discount|original price|"
+                         r"interest rate|average speed|how far|how fast|how long will it take)\b|\d\s*%[^?]*\?", re.I)
+WRITING = re.compile(r"\b(write (a|an|me a) (story|article|essay|report|speech|letter|email|poem)|essay|report|lesson plan)\b", re.I)
+
+
+def choose_effort(text, allowed=ORDER, tank_pct=100.0, strict=False):
+    """(effort, reason) for this message. `allowed` are the levels the model offers; `tank_pct` how much usage is left. `strict`: see MATH_STRICT."""
     t = (text or "").strip()
     words = len(t.split())
     questions = t.count("?")
     deep = []
     if CODE.search(t):
         deep.append("it has code or an error in it")
-    if MATH.search(t):
+    if (MATH_STRICT if strict else MATH).search(t):
         deep.append("it needs working out")
-    if CAREFUL.search(t):
+    if CAREFUL.search(t) and not (strict and WRITING.search(t) and not CAREFUL.search(WRITING.sub("", t))):
         deep.append("it asks for careful or detailed thinking")
-    if words > 120:
+    if words > 120 and not strict:
         deep.append("it is long")
     if questions >= 3:
         deep.append("it has several questions")

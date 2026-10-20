@@ -23,7 +23,8 @@ function reloadPreview() { if (!PV.url) return; PV.errors = []; PV.loaded = fals
 function fixPreviewErrors() {
   const list = PV.errors.slice(0, 6).map((m) => '- ' + m).join('\n');
   $('codePv').hidden = true;
-  $('codeTask').value = 'The preview of ' + PV.entry + ' shows these problems:\n' + list + '\nPlease fix them.';
+  $('codeTask').value = 'The preview of ' + PV.entry + ' shows these problems:\n' + list + (S.state && S.state.features && S.state.features.vryxcode_fixes
+    ? '\nFind the cause of each one in the files and fix it. Then open the page with check_page and keep fixing until it loads with no errors.' : '\nPlease fix them.');
   $('codeGo').click();
 }
 const PV_NOISE = /cloudflareinsights\.com|\/cdn-cgi\//;      // scripts the hosting adds to every page (not in the person's files): never something VryxCode can fix

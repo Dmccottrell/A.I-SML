@@ -327,10 +327,10 @@ function cEvent(e) {
     if (C.retry) { C.retry.classList.replace('run', 'ok'); const v = C.retry.querySelector('.cc-verb'); if (v) v.textContent = 'Fixed a step'; C.retry = null; }   // vryxcode_fixes: the step it retried went through
     const prose = String(e.raw || '').split(/<\|tool_call\|>|<tool_call>/)[0].trim();
     if (e.tool === 'todo') { try { C.todo = JSON.parse(String(e.preview).replace(/^todo /, '')).items || C.todo; } catch (x) { /* a very long list was shortened: keep the last good one */ } renderTodo(); C.last = null; return; }
-    if (e.tool === 'finish') { if (prose) feed.append(el('div', {class: 'cc-say'}, prose)); C.last = null; return; }
-    if (!e.tool) { feed.append(el('div', {class: 'cc-say'}, e.preview)); C.last = null; return; }
+    if (e.tool === 'finish') { if (prose) feed.append(vxSay(prose)); C.last = null; return; }
+    if (!e.tool) { feed.append(vxSay(e.preview)); C.last = null; return; }
     if (e.tool === 'run') outAgentStep(e); else OUT.pending = null;
-    if (prose) feed.append(el('div', {class: 'cc-say'}, prose));
+    if (prose) feed.append(vxSay(prose));
     const [name, arg, extra] = toolParts(e.preview, e.tool);
     const node = el('div', {class: 'cc-tool run'}, el('div', {class: 'cc-head'}, el('span', {class: 'cc-verb'}, name),
       el('span', {class: 'cc-arg'}, [arg, extra, e.secs != null ? Math.round(e.secs) + 's' : '', e.words ? fmt(e.words) + ' tokens' : ''].filter(Boolean).join('  \u00b7  '))));
@@ -409,7 +409,10 @@ function reportCard(e) {
   return card;
 }
 // a message from the model: paragraphs, `inline code`, and fenced blocks (commands to run) with a Copy button
+const vxFixes = () => !!(S.state && S.state.features && S.state.features.vryxcode_fixes);
+const vxSay = (t) => el('div', {class: 'cc-say'}, vxFixes() ? mdRender(t) : t);      // vryxcode_fixes: what VryxCode says, with real formatting (lists, bold, tables, code)
 function renderMessage(text, good) {
+  if (vxFixes()) return el('div', {class: 'cc-msg' + (good ? ' good' : '')}, mdRender(text));
   const box = el('div', {class: 'cc-msg' + (good ? ' good' : '')});
   const parts = String(text).split(/```/);
   parts.forEach((part, i) => {

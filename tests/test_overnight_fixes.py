@@ -248,5 +248,48 @@ class Formatting(Base):
         self.assertNotIn("<table>", html)
 
 
+class Auto(unittest.TestCase):
+    def test_deep_is_kept_for_real_working_out(self):
+        import effort_router as R
+        self.assertEqual(R.choose_effort("What happened in the 2020-2021 season?")[0], "deep")           # the old rule took a range for a sum
+        self.assertNotEqual(R.choose_effort("What happened in the 2020-2021 season?", strict=True)[0], "deep")
+        self.assertNotEqual(R.choose_effort("Write me an email to my boss asking for Friday off", strict=True)[0], "deep")
+        for t in ("A shirt is 20% off and costs $40. What was the original price?", "If a train goes 60 mph for 2.5 hours how far does it go?",
+                  "Explain why the sky is blue step by step", "Fix this error: TypeError: x is undefined"):
+            self.assertEqual(R.choose_effort(t, strict=True)[0], "deep", t)
+
+
+class Once(E.FakeBackend):
+    """Says nothing the first time, then answers."""
+    calls = 0
+
+    def stream(self, ids, max_new):
+        Once.calls += 1
+        if Once.calls == 1:
+            return iter([])
+        return super().stream(ids, max_new)
+
+
+class EmptyReply(Base):
+    factory = staticmethod(lambda model, question: Once("Here it is."))
+
+    def setUp(self):
+        super().setUp()
+        Once.calls = 0
+
+    def test_an_empty_reply_is_answered_again_once_with_the_fix(self):
+        self.state.flags.data["audiences"]["chat_fixes"] = "everyone"
+        cid = self.new_chat(self.sam)
+        self.ask(self.sam, cid, "hello there")
+        saved = self.sam.call("GET", f"/api/chats/{cid}")[1]["messages"]
+        self.assertEqual([m["role"] for m in saved], ["user", "assistant"])
+        self.assertIn("Here it is.", saved[-1]["content"])
+
+    def test_without_it_the_empty_reply_stays(self):
+        cid = self.new_chat(self.sam)
+        self.ask(self.sam, cid, "hello there")
+        self.assertEqual(Once.calls, 1)
+
+
 if __name__ == "__main__":
     unittest.main()

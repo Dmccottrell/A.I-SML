@@ -77,7 +77,7 @@ def is_looping(text, min_unit=4, max_unit=120, repeats=4, min_span=0):
     return False
 
 
-BLEED_MARKERS = ("<|user|>", "<|assistant|>", "<|system|>", "<|tool_result|>", "<|endoftext|>")
+BLEED_MARKERS = ("<|user|>", "<|assistant|>", "<|system|>", "<|tool_result|>", "<|endoftext|>", "<|im_start|>", "<|im_end|>")   # the last two: the Emvryx 3 models' own turn marks
 
 
 def cut_bleed(text):
