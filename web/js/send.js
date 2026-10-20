@@ -105,10 +105,10 @@ async function followReply() {   // the reply is still being written on the serv
       if (id !== S.chatId) break;
       const len = JSON.stringify(c.messages).length;
       if (len !== lastLen) { lastLen = len; S.messages = withPending(c.messages, c.generating); S.title = c.title; renderThread(false); if (c.generating) $('thread').append(think); scrollDown(); }
-      if (!c.generating) break;
+      if (!c.generating || S.stopFollow) break;
       await sleep(1200);
     }
-  } finally { think._stop && think._stop(); think.remove(); S.busy = false; S.following = false; S.pending = null; S.sentAt = null; }
+  } finally { think._stop && think._stop(); think.remove(); S.busy = false; S.following = false; S.pending = null; S.sentAt = null; S.stopFollow = false; }
   renderThread(); renderComposer();
   try { const q = new URLSearchParams({effort: S.effort, model: S.model}); const r = await api('/api/state?' + q); const st = await r.json(); S.state.chats = st.chats; S.state.usage = st.usage; renderChats(); renderUsage(st.usage); } catch (e) {}
 }
@@ -150,7 +150,17 @@ function errorCard(e) {
   }
   return card;
 }
-function stop() { if (S.chatId != null) post('/api/chats/' + S.chatId + '/stop').catch(() => {}); }
+// Stop: ask the server to stop, and if the page is still waiting a few seconds later (a model that is slow to let go), stop waiting here too
+function stop() {
+  if (S.chatId == null) return;
+  post('/api/chats/' + S.chatId + '/stop').catch(() => {});
+  const id = S.chatId;
+  setTimeout(() => {
+    if (!S.busy || S.chatId !== id) return;
+    S.stopFollow = true;                                   // a reply being followed after switching away: stop following it
+    if (S.abort) { S.resume = false; S.abort.abort(); }    // the live reply: end it on this side (what was written stays)
+  }, 6000);
+}
 function regenMenu(btn) {
   const wrap = btn.closest('.msg'), old = wrap.querySelector('.regen');
   if (old) { old.remove(); return; }

@@ -5,6 +5,7 @@ What changed, newest first. Measured numbers live in [BENCHMARKS.md](BENCHMARKS.
 ## October 2026 (late)
 
 ### Latest
+- **Stop really stops (Oct 20):** Stop pressed while a model is still loading ends the load ("Stopped before the answer started."), and if the page is still waiting 6 seconds after Stop it stops waiting by itself, keeping what was written. 1 new test.
 - **No second search when the model asks you something (Oct 20):** "I don't know which city you live in. Please tell me..." counted as "I don't know", so the app searched the web and answered all over again while the finished answer sat on screen. A question back to the person no longer starts a search.
 - **Less waiting for models (Oct 20):** Apogee 3 is always loaded at its VryxCode window (128K), so going from chat to VryxCode and back never reloads it; opening VryxCode starts loading Apogee 3 straight away, so the first task does not wait for it. 1 new test.
 - **VryxCode on Apogee 3 at 128K (Oct 20):** VryxCode gave every model 32K; a model can now have its own VryxCode window (models.json `code_context`), and Apogee 3 codes at 128K with 8-bit chat memory (chat stays at 80K). With effort-only VryxCode (the default for the owner and admins) Apogee 3 is the only model it uses once it is on the computer. 2 new tests.
