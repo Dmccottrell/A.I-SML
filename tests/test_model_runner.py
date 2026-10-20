@@ -311,3 +311,21 @@ class LateDownload(unittest.TestCase):
                 f.write(b"GGUF")
             r._looked = 0                                                       # it looks again at most every 10 seconds
             self.assertTrue(r.available("apogee-3"))
+
+
+class NoReloadBetweenChatAndCode(unittest.TestCase):
+    def test_a_model_is_loaded_at_its_vryxcode_window(self):
+        """Apogee 3 is always loaded at 128K, so going from chat (80K) to VryxCode (128K) and back never reloads it"""
+        import app_runner
+
+        class Running:
+            def poll(self):
+                return None
+        r = app_runner.ModelRunner(sys.executable, {})
+        r.min_ctx = {"apogee-3": 131072}
+        r.proc, r.model_id, r.ctx, r.url = Running(), "apogee-3", 131072, "http://127.0.0.1:9"
+        self.assertEqual(r.ensure("apogee-3", 8192), "http://127.0.0.1:9")               # chat asks for less: the 128K one is reused
+        r.ctx = 81920
+        with self.assertRaises(Exception):                                                 # loaded smaller: it must reload at 128K (no file here, so it fails)
+            r.ensure("apogee-3", 8192)
+        r.proc = None

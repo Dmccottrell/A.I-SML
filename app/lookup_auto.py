@@ -110,10 +110,17 @@ GAVE_UP_LATE = re.compile(r"\b(no specific information|(does|do|did) not (direct
                           r"(additional|more|further) information (would|will) (need|be needed)|not (enough|any) (information|details) (is |are )?(provided|available))\b", re.I)
 
 
+# the model asks the person for something only they know (where they live, which one they mean): searching the web cannot answer that
+ASKS_BACK = re.compile(r"\b(?:i don'?t know|i'?m not sure|i can'?t tell) (?:which|what|where|who|when|how many|your)\b[^.?!]{0,80}\b(?:you|your)\b|"
+                       r"\b(?:please )?(?:tell|let) me (?:know )?(?:which|what|where|the name|your)\b|\bwhich (?:city|town|one|country|state|place) (?:do )?you\b", re.I)
+
+
 def gave_up(reply):
     """True when the model's answer says it doesn't know (v3 is trained to say so when the notes don't cover the question). The "notes don't say" wording
     can come late in a longer answer ("Lamine Yamal is doing well. However, there is no specific information about this season..."), so those phrases are looked for further in."""
     reply = reply or ""
+    if ASKS_BACK.search(reply[:600]):          # "I don't know which city you live in. Tell me and I'll look it up": a question back, not a gap to search for
+        return False
     return bool(GAVE_UP.search(reply[:400]) or GAVE_UP_LATE.search(reply[:1500]))
 
 
