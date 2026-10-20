@@ -142,6 +142,10 @@ class RoutesCode:
         try:
             if path == "/api/code":
                 run = st.code.running(user)
+                if st.flags.on("vryxcode_effort", who) and not run:          # opening VryxCode starts loading its model, so the first task does not wait for it
+                    auto = vryxcode.pick_auto(st.code_models(who))
+                    if auto:
+                        st.warm(who, auto)
                 allowed, why = st.code_allowed(who)
                 return self._send(200, {"allowed": allowed, "why_not": why, "sandbox": st.code.sandbox.get("mode", "none"),
                                         "usage": self._code_usage(who, None), "models": st.code_models(who), "projects": st.code.projects(user),

@@ -30,6 +30,7 @@ class ModelRunner:
         self.no_draft = set()                                   # ...and those it failed for (an older llama-server, or a file without the head): loaded plainly
         self.lock = threading.Lock()
         self.manifest = None                                    # set by the app: lets a model downloaded while the app runs be found without a restart
+        self.min_ctx = {}                                       # model id -> the window it is always loaded with (its VryxCode window), so moving between chat and VryxCode never reloads it
         self._looked = 0.0
         atexit.register(self.stop)
 
@@ -138,6 +139,7 @@ class ModelRunner:
     def ensure(self, model_id, ctx, cancel=None):
         """The URL of a llama-server running this model with at least `ctx` tokens of memory. Starts it if needed.
         `cancel()` is asked while it loads: when it says yes the half-loaded server is stopped and Cancelled is raised."""
+        ctx = max(int(ctx), int(self.min_ctx.get(model_id, 0)))
         with self.lock:
             self.last_used = time.time()
             if self.proc and self.proc.poll() is None and self.model_id == model_id and (self.ctx or 0) >= ctx:
