@@ -306,12 +306,12 @@ class StatePC:
         separate picture reader that turns it into words first."""
         return model["id"] in self.seeing or bool(self.runner and self.runner.sees(model["id"]))
 
-    def backend_for(self, model, question, ctx=1024):
+    def backend_for(self, model, question, ctx=1024, cancel=None):
         if self.backend_factory:
             return self.backend_factory(model, question)
         sampling = {"temperature": TEMPERATURE["balanced"], **model.get("sampling", {})}   # a model's own tested settings win
         if self.runner:
-            return E.LlamaServer(self.runner.ensure(model["id"], ctx), None, timeout=120, **sampling)
+            return E.LlamaServer(self.runner.ensure(model["id"], ctx, cancel=cancel), None, timeout=120, **sampling)      # Stop while it loads ends the load
         if self.llama_url:
             return E.LlamaServer(self.llama_url, self.llama_key, **sampling)
         return DemoBackend(question)

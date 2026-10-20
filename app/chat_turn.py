@@ -18,7 +18,7 @@ import effort_router
 import regen_modes
 import usage_limits as U
 from app_errors import AppError, ModelRefused, ModelTooBig
-from app_shared import CONTINUE_HINT, EFFORTS, OPEN_EFFORTS, TEMPERATURE
+from app_shared import CONTINUE_HINT, EFFORTS, OPEN_EFFORTS, TEMPERATURE, Cancelled
 
 
 def _meter_parts(state, who, model_id):
@@ -267,7 +267,7 @@ def start_turn(state, who, chat_id, text, model_id, effort, regenerate=False, re
                 think = False          # Deep with looked-up facts: the answer is in the notes, so it answers from them at once instead of thinking at length first
             t_load = time.monotonic()
             timing["lookup"], timing["thought"] = t_load - started, think      # everything before the model: notes, Wikipedia, the web, pictures
-            backend = E.FakeBackend(canned) if canned else state.backend_for(model, text or "", window)     # may load the model the first time (can take a while)
+            backend = E.FakeBackend(canned) if canned else state.backend_for(model, text or "", window, cancel=stop.is_set)     # may load the model the first time (can take a while); Stop ends the load
             timing["load"] = time.monotonic() - t_load
             if decision["temperature"] is not None and hasattr(backend, "sampling"):
                 backend.sampling = dict(backend.sampling, temperature=decision["temperature"])
@@ -349,6 +349,8 @@ def start_turn(state, who, chat_id, text, model_id, effort, regenerate=False, re
                 first = timing.get("first", end) - started
                 sys.stderr.write(f"reply: {model['id']} load={timing.get('load', 0):.1f}s model_first_word={first:.1f}s "
                                  f"total={end - started:.1f}s chars={len(r['text'])} window={window}\n")
+        except Cancelled:                                       # Stop pressed while the model was still loading
+            q.put(("error", AppError("Stopped before the answer started.", "Send it again when you are ready.")))
         except BaseException as e:                              # sent to the page as an error event
             q.put(("error", e))
         finally:

@@ -40,3 +40,16 @@ class FastLookup(Base):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class StopWhileLoading(Base):
+    def factory(model, question):                                   # noqa: N805
+        from app_shared import Cancelled
+        raise Cancelled()                                           # what the runner raises when Stop is pressed while the model loads
+
+    factory = staticmethod(factory)
+
+    def test_stop_during_the_load_ends_with_a_clear_message(self):
+        s, _, got = self.ask(self.owner, self.new_chat(self.owner), "hello there")
+        messages = [got["message"]] if isinstance(got, dict) else [d["message"] for e, d in got if e == "error"]     # before or after the stream began
+        self.assertIn("Stopped before the answer started.", messages)
