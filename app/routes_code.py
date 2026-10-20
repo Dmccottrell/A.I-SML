@@ -81,8 +81,9 @@ class RoutesCode:
         name = coder.get("plan_like", "solstice") if coder else next((m["name"] for m in st.manifest["models"] if m["id"] == model_id), "Equinox").lower()
         snap = st.limiter.snapshot(who["user"], name, "balanced", st.clock())
         left_pct = min(snap["tank"]["pct"], snap["week"]["pct_left"])   # the same figure as the chat's usage bar: the lower of the 6-hour tank and the week
+        steps = int(min(snap["tank"]["left"], snap["week"]["left"]) // st.limiter.code_step_cost(name))
         return {"status": snap["status"], "exempt": snap["exempt"], "tank_pct": round(left_pct), "week_pct": round(snap["week"]["pct_left"]),
-                "steps_left": snap["can_send"], "plan": snap["plan"]}
+                "steps_left": steps, "plan": snap["plan"]}
 
     def api_code_git(self, who, body):
         """create_repo | link | clone | pull | push for a project, always started by the person (a button), never silently."""
@@ -258,7 +259,7 @@ class RoutesCode:
                 return reply
         snap = st.limiter.snapshot(user, model["limiter_key"], "balanced", st.clock())
         if not snap["exempt"] and snap["can_send"] < 1:
-            raise code_sessions.CodeError("Your usage has run out for now.", "Coding steps are counted like chat messages. Wait for the tank to refill or the week to reset.")
+            raise code_sessions.CodeError("Your usage has run out for now.", "Wait for the tank to refill or the week to reset.")
         meter = code_sessions.Meter(st.limiter, user, model["limiter_key"], st.clock)
         tools, identity = None, None
         if st.github.connected(user):
@@ -348,7 +349,7 @@ class RoutesCode:
         try:
             res = meter.reserve(messages)
         except U.LimitError as e:
-            raise code_sessions.CodeError(e.message, "Coding steps are counted like chat messages. Wait for the tank to refill.")
+            raise code_sessions.CodeError(e.message, "Wait for the tank to refill.")
         generate = None
         try:
             try:

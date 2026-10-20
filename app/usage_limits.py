@@ -142,6 +142,14 @@ class Limiter:
         t.update(u["overrides"])
         return u, t
 
+    def code_rate(self):
+        """What a VryxCode step counts compared with a chat message of the same size: every step sends the project again, so it counts less."""
+        return float(self.cfg.get("code_rate", 1))
+
+    def code_step_cost(self, model_key):
+        """A typical VryxCode step after the counting rules, for the "about N coding steps" line."""
+        return self.cfg.get("code_step_tokens", 6000) * self.weight(model_key) * self.code_rate()
+
     def message_cost(self, model_key, effort="balanced"):
         return self.cfg["message_tokens"] * self.weight(model_key) * self.cfg["effort"][effort]
 
@@ -259,11 +267,11 @@ class Limiter:
         with self.store.db.lock:                               # check-then-spend in one piece: two requests at once cannot both pass
             return self._settle(*a, **k)
 
-    def _settle(self, res, fresh_in, cached_in, out, effort, now):
-        """Replace the held estimate with what was really used. Returns the counted tokens."""
+    def _settle(self, res, fresh_in, cached_in, out, effort, now, rate=1.0):
+        """Replace the held estimate with what was really used. Returns the counted tokens. `rate`: VryxCode steps pass code_rate()."""
         if res is None:
             return 0.0
-        actual = counted_tokens(fresh_in, cached_in, out, self.weight(res["model"]), self.cfg["effort"][effort], self.cfg)
+        actual = counted_tokens(fresh_in, cached_in, out, self.weight(res["model"]), self.cfg["effort"][effort], self.cfg) * rate
         db = self.store.db
         if not res["exempt"]:
             u, t = self.effective(res["user"])
