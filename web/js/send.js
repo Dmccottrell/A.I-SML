@@ -53,7 +53,9 @@ async function send(regen, mode) {
           const line = lookupLine(looked); if (line) aiWrap.insertBefore(line, aiBubble); }
         got += data.t;
         if (!fixesOn()) { aiBubble.replaceChildren(richText(got), el('span', {class: 'cursor'}, '▍')); scrollDown(); }
-        else if (!S.paintDue) { S.paintDue = true; requestAnimationFrame(() => { S.paintDue = false; if (aiBubble) { aiBubble.replaceChildren(richText(got), el('span', {class: 'cursor'}, '▍')); scrollDown(); } }); }   // redrawn once a frame, not once a word: a long answer stays smooth
+        else if (!S.paintDue) { S.paintDue = true; requestAnimationFrame(() => { S.paintDue = false; if (aiBubble) { const md = richText(got), cur = el('span', {class: 'cursor'}, '▍'); let at = md.lastElementChild;
+          while (at && /^(UL|OL|LI)$/.test(at.tagName) && at.lastElementChild) at = at.lastElementChild;      // the cursor sits at the end of the text being written
+          (at && /^(P|LI)$/.test(at.tagName) ? at : md).append(cur); aiBubble.replaceChildren(md); scrollDown(); } }); }   // redrawn once a frame, not once a word: a long answer stays smooth
       } else if (ev === 'done') {
         finished = true; S.title = data.title || S.title; S.state.usage = data.usage; renderUsage(data.usage); popTokens(before, data.usage);
         const cn = $('compactNote'); if (cn) cn.remove();
