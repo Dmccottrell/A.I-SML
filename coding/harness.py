@@ -996,6 +996,49 @@ def _salvage_write(body):
     return "write_file", args
 
 
+_XML_PATH = re.compile(r"<parameter=(?:path|file_path|filepath|filename|file)>\n?(.*?)\n?</parameter>", re.S)
+_XML_CONTENT = re.compile(r"<parameter=(?:content|contents|text|code)>\n?")
+
+
+def salvage_cut_off(text):
+    """A write_file call cut off before its end (the reply ran out of room): {"path", "content", "append"} with the file text up to its last whole
+    line, or None. Keeping that part and asking for the rest with append=true moves the work forward, where sending the whole file again
+    would be cut off at the same place."""
+    start = max(text.rfind("<|tool_call|>"), text.rfind("<tool_call>"))
+    if start < 0:
+        return None
+    body = text[start:]
+    fn = XML_FUNCTION.search(body)
+    if fn:
+        p, c = _XML_PATH.search(body), _XML_CONTENT.search(body)
+        if TOOL_ALIASES.get(fn.group(1), fn.group(1)) != "write_file" or not p or not c or "</parameter>" in body[c.end():]:
+            return None
+        part, append = body[c.end():], bool(re.search(r"<parameter=append>\s*true", body))
+    else:
+        p, c = _WRITE_PATH.search(body), _WRITE_CONTENT.search(body)
+        if not _WRITE_NAME.search(body) or not p or not c:
+            return None
+        part = re.sub(r"\\(n|t|r|\"|\\)", lambda k: {"n": "\n", "t": "\t", "r": "\r", '"': '"', "\\": "\\"}[k.group(1)], body[c.end():])
+        append = bool(re.search(r'"append"\s*:\s*true', body[:c.start()]))
+    part = part[:part.rfind("\n") + 1]
+    if part.count("\n") < 3:
+        return None
+    return {"path": p.group(1).strip(), "content": part, "append": append}
+
+
+CUT_OFF_SAVED = ("Your reply ran out of room in the middle of {path}, so the first {n} lines were saved ({mode}). They end with:\n{tail}\n"
+                 "Send the rest now with write_file and append=true, starting right after that line, at most 80 lines per call. Do not send the start again.")
+BAD_CALL_RECOVER = ("Your last {n} tool calls could not be read, so change how you send them. Send one small step: read_file to look, or "
+                    "edit_file for a small change, or write_file with at most 60 lines (then append=true for the rest). The plainest form, "
+                    "with no escaping needed inside the file:\n<tool_call>\n<function=write_file>\n<parameter=path>\nindex.html\n</parameter>\n"
+                    "<parameter=content>\n...the file...\n</parameter>\n</function>\n</tool_call>")
+
+
+def shorten_bad_reply(reply, keep=600):
+    """A reply whose tool call could not be read, kept short in the conversation: the model should not copy it, and it should not fill the memory."""
+    return reply if len(reply) <= keep else reply[:keep] + f"\n...[{len(reply) - keep} more characters of a tool call that could not be read]"
+
+
 def format_result(text):
     return f"<|tool_result|>{text}<|end_tool_result|>"
 
@@ -1141,7 +1184,8 @@ def compact(messages, keep=4, pinned=""):
 
 THINK_TAGS = re.compile(r"<think>.*?</think>", re.S)
 NO_CALL_LIMIT = 3          # stop after this many replies in a row without a tool call, instead of using every step on the same answer
-BAD_CALL_LIMIT = 3         # ...and this many replies in a row whose tool call could not be read (a file too big to write in one go, say)
+BAD_CALL_LIMIT = 3         # ...this many replies in a row whose tool call could not be read: the model is told to change how it sends them
+BAD_CALL_STOP = 6          # ...and the run stops only at this many in a row
 NO_CALL_TOTAL = 5          # ...or this many in one run (a model that alternates "I can't" with the same tool call is stuck too)
 REPEAT_HINT_AT = 3         # the same step with the same result this many times: tell the model to try something else
 REPEAT_STOP_AT = 5         # ...and stop the run at this many
@@ -1389,12 +1433,32 @@ def run_agent(task, generate, sandbox, max_turns=8, system=None, project=True, h
                     messages.append({"role": "user", "content": CODE_NUDGE})
                     continue
                 return {"finished": False, "said": True, "summary": words, "turns": turn, "messages": messages, "episodes": episodes}
+            if str(e).startswith("the tool call was cut off"):
+                part = salvage_cut_off(reply)                            # keep what was written and ask for the rest, instead of starting the file again
+                if part and not permissions.check("write_file", part):
+                    try:
+                        sandbox.call("write_file", part)
+                    except ToolError:
+                        part = None
+                    if part:
+                        messages[-1]["content"] = shorten_bad_reply(reply, 1200)
+                        written.add(re.sub(r"^(\./)+", "", part["path"].replace("\\", "/")))
+                        web_unchecked = web_unchecked or part["path"].lower().endswith((".html", ".htm", ".css", ".js"))
+                        lines = part["content"].rstrip("\n").split("\n")
+                        messages.append({"role": "user", "content": format_result(CUT_OFF_SAVED.format(
+                            path=part["path"], n=len(lines), mode="added to the end" if part["append"] else "the file starts with them", tail="\n".join(lines[-3:])))})
+                        bad_calls, step_fails = 0, 0
+                        continue
             result, done = f"error: {e}", False
             step_fails += 1
             if steady and plan_items and step_fails >= 2:
                 result += "\n" + steady_note(plan_items, step_fails)
             bad_calls = bad_calls + 1 if str(e).startswith(("the tool call is not valid JSON", "the tool call was cut off")) else 0
-            if bad_calls >= BAD_CALL_LIMIT:
+            if bad_calls:
+                messages[-1]["content"] = shorten_bad_reply(reply)
+            if bad_calls == BAD_CALL_LIMIT:
+                result += "\n" + BAD_CALL_RECOVER.format(n=bad_calls)
+            if bad_calls >= BAD_CALL_STOP:
                 return {"finished": False, "turns": turn, "messages": messages, "episodes": episodes, "stopped": "bad_call",
                         "summary": "The model kept sending a tool call that could not be read, so it was stopped instead of looping. This usually means the file was too big "
                                    "to write in one go. Ask for it in smaller parts (for example the page first, then the styles, then the script), or try Deep, which has room for bigger files."}

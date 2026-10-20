@@ -70,8 +70,8 @@ Emvryx's own way to show and limit usage. It is counted in **tokens**, shown as 
 | Number | What it is | Example (private testers) |
 |---|---|---|
 | **1. The context window** | The most ONE request can hold: the model's working memory for a single message and its history. It is a cap per request, **not an allowance** | Everyday 8,192; Long up to 32,768 |
-| **2. The tank** | How much a person can use in one sitting. **A 6-hour window** (`refill_mode: "window"`, `refill_hours: 6` in `limits.json`): the first message starts the window, the tank only goes down while you chat, and it is full again exactly 6 hours after that first message, all at once (like a session). The Usage screen shows "Full again" with the time and how long is left. The older steady mode (`refill_mode: "steady"`, a "token bucket" that refills `refill_per_hour` every hour) is still available | Capacity 200,000 tokens per window on Pro (Free 40,000, Mega 800,000) | A person who runs out waits until the window ends (the message says when) or switches to a smaller model or one on their own device |
-| **3. The weekly ceiling** | The total of every chat in 7 days. A hard stop for heavy use | 1,000,000 tokens, resets Mon 4:00 AM |
+| **2. The tank** | How much a person can use in one sitting. **A 6-hour window** (`refill_mode: "window"`, `refill_hours: 6` in `limits.json`): the first message starts the window, the tank only goes down while you chat, and it is full again exactly 6 hours after that first message, all at once (like a session). The Usage screen shows "Full again" with the time and how long is left. The older steady mode (`refill_mode: "steady"`, a "token bucket" that refills `refill_per_hour` every hour) is still available | Capacity 1,000,000 tokens per window on Pro (Free 40,000, Mega 4,000,000) | A person who runs out waits until the window ends (the message says when) or switches to a smaller model or one on their own device |
+| **3. The weekly ceiling** | The total of every chat in 7 days. A hard stop for heavy use | 6,000,000 tokens on Pro (Free 150,000, Mega 30,000,000), resets Mon 4:00 AM |
 
 So **32,768 is not "32,000 every few hours"**. It only limits how big a single request may be. What a person may use over time is the tank (short term) and
 the weekly ceiling (long term). A message is allowed only if both have room; the smaller one wins.
@@ -91,7 +91,7 @@ Worked example (each turn: you write 150 tokens, Emvryx writes 350, so the chat 
 | A chat whose window is full at 32K, no caching | ~325,000 | ~32,500 per message |
 | The same full 32K chat, with caching | ~37,000 | ~3,700 per message |
 
-So under the 1,000,000 weekly ceiling a person gets roughly 2,000 short messages, or about 270 messages in a full 32K chat. **Long chats drain the allowance much faster**;
+So under Pro's 6,000,000 weekly ceiling a person gets roughly 12,000 short messages, or about 1,600 messages in a full 32K chat. **Long chats drain the allowance much faster**;
 the app says so, and the tank makes it visible. (Note: the total does NOT flatten at the window size. The window caps one request; the running total keeps
 growing with every message.)
 
@@ -117,8 +117,8 @@ device are free and unlimited in every tier, which is the selling point of the f
 
 | | **Free** | **Pro** | **Mega** |
 |---|---|---|---|
-| Tank (per 6-hour window) | 40,000 | 200,000 | 800,000 |
-| Weekly ceiling | 150,000 | 1,000,000 | 5,000,000 |
+| Tank (per 6-hour window) | 40,000 | 1,000,000 | 4,000,000 |
+| Weekly ceiling | 150,000 | 6,000,000 | 30,000,000 |
 | Roughly, in short messages (~500 counted each) | ~300 a week | ~2,000 a week | ~10,000 a week |
 | Models from the server | Ember, Flare, Equinox | All five (Ember, Flare, Equinox, Solstice, Apogee) | All five |
 | Context window (one request) | Everyday 8,192 | Everyday 8,192, Long up to 32,768 | Everyday 8,192, Long up to the longest the model passed (64K and up) |
@@ -126,7 +126,7 @@ device are free and unlimited in every tier, which is the selling point of the f
 | Who | Anyone, once the public version exists | Your private testers now; paying users later | Heavy users; you (the owner) are exempt from all limits |
 
 Free is limited to Flare and Equinox; Pro and Mega can use all four models, so the paid tiers differ in how much they can use, not in which models. Because model weights multiply the counted tokens (Ember 0.5, Flare 1, Equinox 2, Solstice 5, Apogee 10), the same weekly ceiling buys far fewer Apogee messages than Flare ones:
-5,000,000 on Mega is about 500,000 Apogee tokens. The limits live in one config file (`limits.json`: a block per tier, plus per-person overrides), so tiers can be added or
+30,000,000 on Mega is about 3,000,000 Apogee tokens. The limits live in one config file (`limits.json`: a block per tier, plus per-person overrides), so tiers can be added or
 changed without touching code. Pricing is not decided; the tiers only decide access and amounts. The owner screen has a tab for each tier.
 
 **How the server enforces it (details):**

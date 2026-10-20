@@ -353,7 +353,7 @@ function cEvent(e) {
   }
   if (e.kind === 'retry') {                     // the model's tool call could not be read: keep what it said and that it is trying again
     if (e.text) feed.append(el('div', {class: 'cc-say'}, e.text));
-    feed.append(el('div', {class: 'cc-tool no'}, el('div', {class: 'cc-head'}, el('span', {class: 'cc-verb'}, 'Retrying'), el('span', {class: 'cc-arg'}, [e.limit ? 'The reply ran out of room while the model was writing, so VryxCode asked it to send smaller parts' : 'That step was garbled, so VryxCode asked the model to send it again', e.secs != null ? Math.round(e.secs) + 's' : ''].filter(Boolean).join('  \u00b7  ')))));
+    feed.append(el('div', {class: 'cc-tool no'}, el('div', {class: 'cc-head'}, el('span', {class: 'cc-verb'}, 'Retrying'), el('span', {class: 'cc-arg'}, [e.limit ? 'The reply ran out of room while the model was writing, so VryxCode kept what it wrote and asked for the rest' : 'That step was garbled, so VryxCode asked the model to send it again', e.secs != null ? Math.round(e.secs) + 's' : ''].filter(Boolean).join('  \u00b7  ')))));
     C.last = null; return;
   }
   if (e.kind === 'compacted') { codeCtx(null, true); feed.append(el('div', {class: 'cc-say', style: 'color:var(--muted);font-size:13px'}, (e.manual ? 'As you asked, VryxCode folded' : 'The conversation was getting long, so VryxCode folded') + ' its older steps into a short "Earlier steps" list to save room. The files and this log are unchanged.' + (e.steps ? ' (' + e.steps + ' steps folded)' : ''))); C.last = null; return; }
