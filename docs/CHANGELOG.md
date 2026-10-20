@@ -5,6 +5,7 @@ What changed, newest first. Measured numbers live in [BENCHMARKS.md](BENCHMARKS.
 ## October 2026 (late)
 
 ### Latest
+- **VryxCode reads Apogee 3's steps (Oct 20):** Apogee 3 was stopped as "garbled" three times in a row. VryxCode now also reads tool calls written the way the Emvryx 3 models' base writes them (`<function=write_file><parameter=path>...`), where a file's quotes and line breaks need no escaping, and Balanced/Quick give a step 8,192 tokens (was 4,096) so a whole page fits. The stop message no longer tells you to pick Apogee when you are on Apogee. 3 new tests.
 - **Stop really stops (Oct 20):** Stop pressed while a model is still loading ends the load ("Stopped before the answer started."), and if the page is still waiting 6 seconds after Stop it stops waiting by itself, keeping what was written. 1 new test.
 - **No second search when the model asks you something (Oct 20):** "I don't know which city you live in. Please tell me..." counted as "I don't know", so the app searched the web and answered all over again while the finished answer sat on screen. A question back to the person no longer starts a search.
 - **Less waiting for models (Oct 20):** Apogee 3 is always loaded at its VryxCode window (128K), so going from chat to VryxCode and back never reloads it; opening VryxCode starts loading Apogee 3 straight away, so the first task does not wait for it. 1 new test.
