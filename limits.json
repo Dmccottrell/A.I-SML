@@ -1,10 +1,12 @@
 {
-  "note": "Usage limits per plan (docs/APP_SPEC.md, 'Usage and limits'). Amounts are starting values to tune against what the server can carry. refill_mode: 'window' = the tank is full again refill_hours after the first message of a window (default 6 hours); 'steady' = refills refill_per_hour every hour.",
+  "note": "Usage limits per plan (docs/APP_SPEC.md, 'Usage and limits'). Amounts are starting values to tune against what the server can carry. refill_mode: 'window' = the tank is full again refill_hours after the first message of a window (default 6 hours); 'steady' = refills refill_per_hour every hour. code_rate: a VryxCode step counts this share of a chat message of the same size (every step resends the project); code_step_tokens: a typical step, for 'about N coding steps'.",
   "weekly_reset": "mon 04:00",
   "weekly_window": "fixed",
   "refill_mode": "window",
   "refill_hours": 6,
   "message_tokens": 500,
+  "code_rate": 0.2,
+  "code_step_tokens": 6000,
   "multipliers": {
     "fresh_in": 1,
     "cached_in": 0.1,
