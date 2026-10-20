@@ -100,6 +100,19 @@ def check(model, llama_bin, port=8098, tries=2):
         server.terminate()
 
 
+def _app_llama_bin():
+    """The llama-server the app itself is started with (the --llama-bin in the scheduled task's command), when it can be found; else None."""
+    import glob
+    cuda = sorted(glob.glob(os.path.join(os.path.expanduser("~"), "Downloads", "llama-*-bin-win-cuda*", "llama-server.exe")))     # the CUDA build from llama.cpp's releases
+    if cuda:
+        return cuda[-1]
+    for path in (os.path.join("tools", "llama", "llama-server.exe"), os.path.join(os.path.expanduser("~"), "llama.cpp", "llama-server.exe"),
+                 os.path.join(os.path.expanduser("~"), "llama.cpp", "build", "bin", "Release", "llama-server.exe")):
+        if os.path.exists(path):
+            return path
+    return None
+
+
 def main(argv=None):
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--model", required=True)
@@ -108,6 +121,17 @@ def main(argv=None):
     ap.add_argument("--port", type=int, default=8098)
     a = ap.parse_args(argv)
     proj = os.path.join(folder(a.model), "mmproj.gguf")
+    if not os.path.exists(proj) and os.path.exists(proj + ".failed"):
+        os.replace(proj + ".failed", proj)                                      # a file set aside by an earlier run: check it again
+    if a.llama_cpp and not os.path.exists(os.path.join(a.llama_cpp, "convert_hf_to_gguf.py")) and not os.path.exists(proj):
+        print(f"There is no convert_hf_to_gguf.py in {a.llama_cpp}: give --llama-cpp the llama.cpp folder (the one with convert_hf_to_gguf.py in it).")
+        return 1
+    if a.llama_bin and not os.path.exists(a.llama_bin):
+        print(f"There is no llama-server at {a.llama_bin}: looking for it instead.")
+        a.llama_bin = None
+    if not a.llama_bin:
+        import shutil
+        a.llama_bin = shutil.which("llama-server") or shutil.which("llama-server.exe") or _app_llama_bin()
     if not os.path.exists(proj):
         from huggingface_hub import snapshot_download
         base_dir = snapshot_download(base_id(a.model))                             # already downloaded for training: read from the cache
@@ -120,9 +144,9 @@ def main(argv=None):
         return 0
     try:
         ok = check(a.model, a.llama_bin, a.port)
-    except Exception as e:                                                     # noqa: BLE001
-        print(f"The check could not run: {e}")
-        ok = False
+    except Exception as e:                                                     # noqa: BLE001 - it could not run: that says nothing about the file, so it stays
+        print(f"The check could not run ({e}). The picture reader is kept in place, unchecked: run this again with --llama-bin pointing at llama-server.exe.")
+        return 1
     if ok:
         print(f"{a.model} can see: pictures will go straight to it.")
     else:
