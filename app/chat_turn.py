@@ -71,6 +71,11 @@ def start_turn(state, who, chat_id, text, model_id, effort, regenerate=False, re
     the page is told which one in `decision`. The API passes pace=False (no show of thinking), extra_notes (facts the app sends) and extra_hint (the app's instructions)."""
     store = state.store(who["user"])
     model = state.pick_model(who, model_id)
+    photo_fix = state.flags.on("photo_fixes", who)
+    if photo_fix and not state.sees(model) and chat_id is not None:      # a photo goes to a model that looks at it itself, not to a words-only reading of it
+        lib = state.docs_for(who["user"])
+        if any((lib.info(i) or {}).get("kind") in documents.IMAGE_KINDS for i in store.docs(chat_id)):
+            model = state.eyes_for(who, model) or model                  # the answer is labelled with the model that wrote it
     if model["state"] == "too_big":
         raise ModelTooBig(model, state.ram_gb, None)
     if model["state"] != "ready":
@@ -150,7 +155,7 @@ def start_turn(state, who, chat_id, text, model_id, effort, regenerate=False, re
             skill_hint = (skill_hint + "\n\n" if skill_hint else "") + documents.picture_words_hint()
         elif len(papers) < len(attached):
             earlier = not any(d["kind"] in documents.IMAGE_KINDS and d["id"] not in sent_before for d in attached)
-            skill_hint = (skill_hint + "\n\n" if skill_hint else "") + documents.picture_hint(picture_only, earlier=earlier and not regenerate)
+            skill_hint = (skill_hint + "\n\n" if skill_hint else "") + documents.picture_hint(picture_only, earlier=earlier and not regenerate, accurate=photo_fix)
     timing = {}
 
     def timed(stream):
@@ -212,7 +217,7 @@ def start_turn(state, who, chat_id, text, model_id, effort, regenerate=False, re
                     if own_eyes and len(seen_pictures) < MAX_PICTURES:                # it keeps seeing the chat's pictures on later messages too (like other chat apps), not their words as a document
                         img = library.image(d["id"])
                         if img:
-                            seen_pictures.append(base64.b64encode(img[0]).decode("ascii"))
+                            seen_pictures.append(base64.b64encode(documents.picture_for_model(img[0]) if photo_fix else img[0]).decode("ascii"))
                             described.add(d["id"]); pictures["looked"] += 1
                             continue
                     img = library.image(d["id"]) if helper else None

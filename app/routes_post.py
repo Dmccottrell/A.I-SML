@@ -8,6 +8,7 @@ import time
 import chat_turn
 import data_tools
 import app_skills
+import documents
 import export_doc
 import teacher_mode
 import app_links
@@ -101,7 +102,12 @@ class RoutesPost:
             import base64
             try:
                 data = base64.b64decode(str(body.get("data", "")), validate=False)
-                return self._send(200, self.state.docs_for(who["user"]).add(str(body.get("name", "")), data, allow_picture=bool(self.state.vision and self.state.vision.available())))
+                name = str(body.get("name", ""))
+                eyes = bool(self.state.vision and self.state.vision.available())
+                if self.state.flags.on("photo_fixes", who):          # right way up, a format the models open, a sensible size; and a photo with no words is fine when a model can see
+                    name, data = documents.clean_picture(name, data)
+                    eyes = eyes or self.state.any_eyes()
+                return self._send(200, self.state.docs_for(who["user"]).add(name, data, allow_picture=eyes))
             except (ValueError, TypeError) as e:
                 return self._send(400, {"code": "bad_document", "message": str(e) if isinstance(e, ValueError) and not str(e).startswith("Incorrect padding") else "That file couldn't be read."})
         m = re.fullmatch(r"/api/chats/(-?\d+)/docs", path)
