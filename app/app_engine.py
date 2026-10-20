@@ -148,12 +148,12 @@ def think_budget(backend, tok, prompt, max_new, chars_per_token=4):
     yield from backend.stream(follow, rest)
 
 
-def strip_think(pieces, open_tag="<think>", close_tag="</think>"):
+def strip_think(pieces, open_tag="<think>", close_tag="</think>", inside=False):
     """Drop a model's hidden reasoning (Qwen3 writes <think>...</think> before its answer) from a stream of text pieces, even when a
     tag is split across pieces. The answer never starts with blank space, also when the blank lines after the closing tag arrive in a
     later piece (that showed as an empty gap at the top of Emvryx 3 replies). An unfinished block is dropped."""
     begun = False
-    for out in _strip_think(pieces, open_tag, close_tag):
+    for out in _strip_think(pieces, open_tag, close_tag, inside):
         if not begun:
             out = out.lstrip()
             if not out:
@@ -162,8 +162,8 @@ def strip_think(pieces, open_tag="<think>", close_tag="</think>"):
         yield out
 
 
-def _strip_think(pieces, open_tag, close_tag):
-    buf, inside, started = "", False, False
+def _strip_think(pieces, open_tag, close_tag, inside=False):
+    buf, started = "", False                                       # inside=True: the prompt already opened the thinking block (chat_fixes, Deep)
     for piece in pieces:
         buf += piece
         while True:
@@ -634,11 +634,14 @@ def run_turn(tok, store, chat_id, backend, model, window, max_new, user_text=Non
                 store.remove_message(chat_id, user_row)
             raise
     row = store.add(chat_id, "assistant", "", model["id"], "partial")
+    opened = bool(fixes and think and getattr(tok, "think", None) == "empty" and hasattr(tok, "_plain"))
+    if opened:                                                  # Deep on an Emvryx 3 model: the thinking block is opened for it, as its own template does, so its reasoning
+        ids = list(ids) + list(tok._plain("<think>\n"))           # is always inside the block (when it began without "<think>", the reasoning showed in the answer)
     prompt = {"prompt_string": with_pictures(tok.decode(ids), asked, len(pictures)), "multimodal_data": list(pictures)} if pictures else ids
     if fixes and isinstance(backend, LlamaServer):
         backend.count_cache, backend.usage = True, None              # this reply's own counts (both parts of a Deep reply add up)
     raw = think_budget(backend, tok, prompt, max_new) if think else backend.stream(prompt, max_new)
-    stream = strip_source(strip_think(until_stopped(raw, stop)))
+    stream = strip_source(strip_think(until_stopped(raw, stop), inside=opened))
     guard = Guard(pacer(stream) if pacer else stream, stop=stop, max_chars=max(MAX_REPLY_CHARS, int(max_new * 5)), loop_span=LOOP_SPAN if fixes else 0)   # a long answer is not a loop: room for what the model was allowed
     count = 0
     try:

@@ -46,6 +46,9 @@ HOUSE_HINT = ("[How to answer: answer exactly what was just asked, first and dir
               "command, a link or a setting, write it out exactly. If you are not sure of a fact, say so briefly. Never talk about \"the notes\", "
               "\"the search results\" or \"the provided information\": just answer, naming a source in a few words if it helps. When something has not "
               "happened yet or does not exist, say that plainly and add what you do know (for example when the next one is).]")
+# chat_fixes, Emvryx 3 models: how an answer is laid out, so it reads like other assistants' answers (the page shows Markdown; LaTeX showed as raw code)
+FORMAT_HINT = ("[Layout: answer at the length the question needs (a short question gets a short answer, with no preamble). Use Markdown: code in ``` blocks "
+               "with the language name, numbered lists for steps, a table only to compare several things. Write maths as plain text (3/4, x², √2, ×, ÷), never LaTeX.]")
 MAX_PICTURES = 3          # at most this many of the chat's pictures go to a model that sees them, with each message
 
 
@@ -131,6 +134,8 @@ def start_turn(state, who, chat_id, text, model_id, effort, regenerate=False, re
         skill_hint = (skill_hint + "\n\n" if skill_hint else "") + extra_hint
     if model.get("think") == "empty" and state.flags.on("chat_house_rules", who):    # an Emvryx 3 model: the house rules on every message
         skill_hint = (skill_hint + "\n\n" if skill_hint else "") + HOUSE_HINT
+    if fixes and model.get("think") == "empty":
+        skill_hint = (skill_hint + "\n\n" if skill_hint else "") + FORMAT_HINT
     if text and CASUAL.search(text):                          # "Sometimes I overtime ya know": read what they mean, as a friend would
         skill_hint = (skill_hint + "\n\n" if skill_hint else "") + CASUAL_HINT
     library = state.docs_for(who["user"])
@@ -348,7 +353,7 @@ def start_turn(state, who, chat_id, text, model_id, effort, regenerate=False, re
             if found and found["asked"] and text:
                 state.remember_lookup(who["user"], chat_id, r["message_id"], text, found)
             if text and store.title(chat_id) == "New chat":
-                store.set_title(chat_id, "Picture" if picture_only else attached[0]["name"][:48] if text == documents.FILE_ONLY_TEXT and attached else (" ".join(text.split())[:48] or "New chat"))
+                store.set_title(chat_id, "Picture" if picture_only else attached[0]["name"][:48] if text == documents.FILE_ONLY_TEXT and attached else (chat_polish.short_title(text) if fixes else (" ".join(text.split())[:48] or "New chat")))
             end = time.monotonic()                              # where the time went, for the owner and admins (shown under the reply)
             r["timing"] = {"lookup": round(timing.get("lookup", 0), 1), "load": round(timing.get("load", 0), 1),
                            "first_word": round(timing.get("first", end) - started, 1), "total": round(end - started, 1),

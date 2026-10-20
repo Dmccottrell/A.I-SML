@@ -103,6 +103,21 @@ def follow_up_hint(text, has_reply, max_words=10):
     return ""
 
 
+TITLE_FILLER = re.compile(r"^(?:(?:hey|hi|hello|yo|ok(?:ay)?|so|um+|uh+)\b[\s,!.]*|(?:can|could|would|will) (?:you|u)(?: please)?\s+|please\s+|i (?:want|need|would like) (?:you )?to\s+|"
+                          r"i'?d like (?:you )?to\s+|help me(?: to)?\s+|tell me\s+|quick question[\s,:]*|question[\s,:]+)+", re.I)
+
+
+def short_title(text, limit=48):
+    """chat_fixes: a chat list title like other assistants make: the request without "hey, can you please", its first sentence, at most `limit`
+    characters cut at a word, starting with a capital and without the question mark."""
+    t = " ".join(str(text or "").split())
+    t = TITLE_FILLER.sub("", t).strip() or t
+    t = re.split(r"(?<=[.!?])\s", t, maxsplit=1)[0].rstrip(" .!?,;:")
+    if len(t) > limit:
+        t = t[:limit].rsplit(" ", 1)[0].rstrip(" ,;:-") or t[:limit]
+    return (t[:1].upper() + t[1:]) if t else "New chat"
+
+
 def thinking_word(n):
     """The n-th label (0, 1, 2, ...): cycles through the list, so two in a row are never the same."""
     return THINKING_WORDS[n % len(THINKING_WORDS)]

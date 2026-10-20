@@ -7,6 +7,7 @@ const MD_NUMBER = /^(\s*)(\d{1,3})[.)]\s+(.*)$/;
 const MD_INLINE = /(`+)([^`]+?)\1|\*\*([^*\n]+?)\*\*|__([^_\n]+?)__|~~([^~\n]+?)~~|(?<![\w*])\*(?!\s)([^*\n]+?)(?<!\s)\*(?!\w)|(?<![\w_])_(?!\s)([^_\n]+?)(?<!\s)_(?![\w_])|\[([^\]\n]+)\]\((https?:\/\/[^\s)]+)\)|(https?:\/\/[^\s<>()]+[^\s<>().,;:!?'"])/g;
 
 function mdInline(text) {          // one line of text -> elements
+  text = text.split(/(`+[^`\n]*?`+)/).map((part, k) => (k % 2 ? part : mdMath(part))).join('');      // never inside `code`
   const f = document.createDocumentFragment(), re = new RegExp(MD_INLINE.source, 'g'); let at = 0, m;   // its own copy: bold inside a line is read by a nested call
   while ((m = re.exec(text))) {
     if (m.index > at) f.append(text.slice(at, m.index));
@@ -20,6 +21,16 @@ function mdInline(text) {          // one line of text -> elements
   }
   if (at < text.length) f.append(text.slice(at));
   return f;
+}
+const MD_MATH = [[/\\boxed\{([^{}]*)\}/g, '**$1**'], [/\\d?frac\{([^{}]+)\}\{([^{}]+)\}/g, (m, a, b) => (/^\w+$/.test(a) ? a : '(' + a + ')') + '/' + (/^\w+$/.test(b) ? b : '(' + b + ')')],
+  [/\\sqrt\{([^{}]+)\}/g, '\u221a($1)'], [/\\(?:text|mathrm|mathbf|operatorname)\{([^{}]*)\}/g, '$1'], [/\\times/g, '\u00d7'], [/\\cdot/g, '\u00b7'], [/\\div/g, '\u00f7'],
+  [/\\pm/g, '\u00b1'], [/\\leq?(?![a-z])/g, '\u2264'], [/\\geq?(?![a-z])/g, '\u2265'], [/\\neq?(?![a-z])/g, '\u2260'], [/\\approx/g, '\u2248'], [/\\pi(?![a-z])/g, '\u03c0'],
+  [/\\infty/g, '\u221e'], [/\\degree|\^\{?\\circ\}?/g, '\u00b0'], [/\^\{?2\}?(?![\d{])/g, '\u00b2'], [/\^\{?3\}?(?![\d{])/g, '\u00b3'], [/\\%/g, '%'], [/\\[,;:!]|\\q?quad/g, ' '],
+  [/\\left|\\right/g, ''], [/\\[()\[\]]|\$\$/g, '']];
+function mdMath(line) {          // the LaTeX a model writes for maths, as plain readable text (3/4, x\u00b2, \u221a(2), the boxed answer in bold)
+  if (!/\\[a-zA-Z()[\]%,;:!]|\$\$|\^/.test(line)) return line;
+  for (const [re, to] of MD_MATH) line = line.replace(re, to);
+  return line;
 }
 function mdCells(line) { return line.trim().replace(/^\|/, '').replace(/\|$/, '').split('|').map((c) => c.trim()); }
 function mdCode(code, lang) {

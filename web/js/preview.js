@@ -27,11 +27,12 @@ function fixPreviewErrors() {
   $('codeGo').click();
 }
 const PV_NOISE = /cloudflareinsights\.com|\/cdn-cgi\//;      // scripts the hosting adds to every page (not in the person's files): never something VryxCode can fix
+const PV_NOISE_FIXES = /ResizeObserver loop|^Script error\.?$|favicon\.ico|Download the React DevTools|\[HMR\]|\[vite\]/i;   // vryxcode_fixes: browser and tool chatter that is not a problem in the page
 window.addEventListener('message', (e) => {
   const f = $('pvFrame'); if (!f || e.source !== f.contentWindow) return;
   const d = e.data || {}; if (!d.vryxPreview) return;
   if (d.loaded) { PV.loaded = true; paintPv(); return; }
-  if (typeof d.msg === 'string' && !PV_NOISE.test(d.msg) && PV.errors.length < 10 && !PV.errors.includes(d.msg)) { PV.errors.push(d.msg); paintPv(); }
+  if (typeof d.msg === 'string' && !PV_NOISE.test(d.msg) && !(S.state && S.state.features && S.state.features.vryxcode_fixes && PV_NOISE_FIXES.test(d.msg)) && PV.errors.length < 10 && !PV.errors.includes(d.msg)) { PV.errors.push(d.msg); paintPv(); }
 });
 $('codePreviewBtn').onclick = openPreview; $('pvBack').onclick = () => { $('codePv').hidden = true; }; $('pvReload').onclick = reloadPreview;
 document.querySelectorAll('#codePv .pvbar [data-size]').forEach((b) => { b.onclick = () => setPvSize(b.dataset.size); });
