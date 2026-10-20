@@ -520,6 +520,7 @@
       "pinned": false,
       "cost_weight": 10,
       "context_tested": 81920,
+      "code_context": 131072,
       "kv_kb_per_token": 32,
       "weights_mb": 7900,
       "max_reply_tokens": 4096,

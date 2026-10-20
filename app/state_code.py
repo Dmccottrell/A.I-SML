@@ -182,7 +182,8 @@ class StateCode:
             return self.code_generate(model)
         if self.cfg.get("gaming"):
             raise code_sessions.CodeError("Emvryx is resting while the PC is being used for something else.", "Try again in a little while.")
-        ctx = min(int(model.get("context_tested") or 8192), 32768)
+        # 32K for coding, unless the model has its own VryxCode window (models.json "code_context": Apogee 3 has 128K, so a whole project fits)
+        ctx = int(model.get("code_context") or min(int(model.get("context_tested") or 8192), 32768))
         if self.runner:
             url = self.runner.ensure(model["id"], ctx, cancel=cancel)
         elif self.llama_url:
