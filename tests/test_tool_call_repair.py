@@ -81,5 +81,22 @@ class Loop(unittest.TestCase):
         self.assertTrue(r["finished"])
 
 
+
+class XmlCalls(unittest.TestCase):
+    """The Emvryx 3 models' base writes tool calls as <function=..><parameter=..> blocks (Oct 20: Apogee 3 in VryxCode was stopped as 'garbled' 3 times)"""
+
+    def test_a_whole_file_with_quotes_and_line_breaks(self):
+        page = '<!doctype html>\n<meta http-equiv="Content-Security-Policy" content="default-src \'self\'">\n<button class="big">Add</button>'
+        t = "Fixing the policy.\n<tool_call>\n<function=write_file>\n<parameter=path>\nindex.html\n</parameter>\n<parameter=content>\n" + page + "\n</parameter>\n</function>\n</tool_call>"
+        self.assertEqual(harness.parse_tool_call(t), ("write_file", {"path": "index.html", "content": page}))
+
+    def test_values_that_look_like_json_are_read_as_json(self):
+        t = "<tool_call>\n<function=write_file>\n<parameter=path>\na.py\n</parameter>\n<parameter=content>\nx = 1\n</parameter>\n<parameter=append>\ntrue\n</parameter>\n</function>\n</tool_call>"
+        self.assertEqual(harness.parse_tool_call(t), ("write_file", {"path": "a.py", "content": "x = 1", "append": True}))
+
+    def test_json_calls_still_work(self):
+        self.assertEqual(harness.parse_tool_call('<|tool_call|>{"name": "read_file", "args": {"path": "main.py"}}<|end_tool_call|>')[0], "read_file")
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -915,6 +915,37 @@ def normalize_call(name, args):
     return name, args
 
 
+XML_FUNCTION = re.compile(r"<function=([\w.\-]+)>", re.S)
+XML_PARAM = re.compile(r"<parameter=([\w.\-]+)>\n?(.*?)\n?</parameter>", re.S)
+
+
+def parse_xml_call(body):
+    """(name, args) from a tool call written the way the Emvryx 3 models' base writes it, or None:
+        <function=write_file>
+        <parameter=path>
+        index.html
+        </parameter>
+        <parameter=content>
+        ...the file, with real line breaks and quotes...
+        </parameter>
+        </function>
+    File text needs no escaping in this form, which is why big files come out whole. Values that look like JSON (true, 3, [..]) are read as JSON."""
+    fn = XML_FUNCTION.search(body or "")
+    if not fn:
+        return None
+    args = {}
+    for key, value in XML_PARAM.findall(body):
+        if key not in ("content", "text", "new_text", "old_text", "new_string", "old_string"):
+            v = value.strip()
+            try:
+                args[key] = json.loads(v) if v[:1] in "[{\"-0123456789" or v in ("true", "false", "null") else v
+            except ValueError:
+                args[key] = v
+        else:
+            args[key] = value
+    return fn.group(1), args
+
+
 def parse_tool_call(text):
     """The first tool call in the model's text -> (name, args). Raises ToolError if it can't be read."""
     m = TOOL_CALL.search(text) or QWEN_TOOL_CALL.search(text)
@@ -924,6 +955,9 @@ def parse_tool_call(text):
     if not m:
         raise ToolError('no tool call found. Write: <|tool_call|>{"name": "...", "args": {...}}<|end_tool_call|>')
     body = m.group(1)
+    xml = parse_xml_call(body)                                    # the newer Qwen-style form: <function=NAME><parameter=KEY>value</parameter>...</function>
+    if xml:
+        return normalize_call(*xml)
     for strict in (True, False):                                  # models often put raw line breaks inside the file text; strict=False accepts those
         try:
             call = json.loads(body, strict=strict)
@@ -1363,7 +1397,7 @@ def run_agent(task, generate, sandbox, max_turns=8, system=None, project=True, h
             if bad_calls >= BAD_CALL_LIMIT:
                 return {"finished": False, "turns": turn, "messages": messages, "episodes": episodes, "stopped": "bad_call",
                         "summary": "The model kept sending a tool call that could not be read, so it was stopped instead of looping. This usually means the file was too big "
-                                   "to write in one go. Ask for it in smaller parts (for example the page first, then the styles, then the script), or pick Solstice or Apogee."}
+                                   "to write in one go. Ask for it in smaller parts (for example the page first, then the styles, then the script), or try Deep, which has room for bigger files."}
             no_call = no_call + 1 if str(e).startswith("no tool call found") else 0
             no_call_total += 1 if str(e).startswith("no tool call found") else 0
             if no_call >= NO_CALL_LIMIT or no_call_total >= NO_CALL_TOTAL:
