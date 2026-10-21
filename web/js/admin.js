@@ -228,7 +228,14 @@ async function admPc(body) {
 async function admPeople(body) {
   const j = await (await api('/api/admin/users')).json(); const users = j.users, me = S.state.user, granter = S.state.granter;
   const out = el('div', {style: 'word-break:break-all;color:var(--muted);font-size:14px'});
-  const link = async (u) => { const r = await post('/api/admin/pairing', {user: u}); const k = await r.json(); out.textContent = 'One-time link for ' + u + ' (' + k.pair_minutes + ' minutes, works once): ' + location.origin + '/pair/' + k.pair; };
+  const link = async (u) => {   // shown in a box right away (it used to appear at the bottom of the whole list, out of sight on a phone)
+    const r = await post('/api/admin/pairing', {user: u}); const k = await r.json().catch(() => ({}));
+    if (!r.ok || !k.pair) return toast(k.message || 'The sign-in link could not be made.');
+    const url = location.origin + '/pair/' + k.pair, cp = el('button', {class: 'btn', onclick: (e) => admCopy(url, e.target)}, 'Copy link');
+    const share = navigator.share ? el('button', {class: 'btn ghost', onclick: () => navigator.share({title: 'Emvryx sign-in link', url}).catch(() => {})}, 'Share') : null;
+    dialog([el('h2', {}, 'Sign-in link for ' + u), el('p', {}, 'Send it privately. It works once, for ' + k.pair_minutes + ' minutes, and signs that device in as ' + u + '.'),
+      el('div', {style: 'word-break:break-all;color:var(--muted);font-size:14px;margin-bottom:8px'}, url), cp, share], 'Done');
+  };
   const resetPw = (u) => {
     const run = async () => { const r = await post('/api/admin/reset-password', {user: u.user}); const k = await r.json().catch(() => ({})); if (!r.ok) return toast(k.message || 'That did not work.');
       const cp = el('button', {class: 'btn ghost', onclick: (e) => admCopy(k.link, e.target)}, 'Copy');
