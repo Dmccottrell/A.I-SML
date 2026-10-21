@@ -2,6 +2,8 @@ package app.emvryx.android.ui
 
 import app.emvryx.android.data.CodeSessionRow
 import app.emvryx.android.data.bool
+import app.emvryx.android.data.int
+import app.emvryx.android.data.num
 import app.emvryx.android.data.str
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.doubleOrNull
@@ -51,8 +53,7 @@ sealed interface ReviewItem {
     data class Event(val e: JsonObject) : ReviewItem
 }
 
-private fun JsonObject.int(k: String) = this[k]?.let { runCatching { it.jsonPrimitive.intOrNull }.getOrNull() } ?: 0
-private fun JsonObject.num(k: String) = this[k]?.let { runCatching { it.jsonPrimitive.doubleOrNull }.getOrNull() } ?: 0.0
+
 private val BAD = Regex("^error|exit code [1-9]|Traceback|FAILED", RegexOption.MULTILINE)
 
 /** The events of a session as the review feed: quiet lines and file chips take in the result after them; a finished message adds its Done line */

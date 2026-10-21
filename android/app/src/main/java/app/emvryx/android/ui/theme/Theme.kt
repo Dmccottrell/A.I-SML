@@ -30,6 +30,10 @@ object Emvryx {
     /** Light or dark (the website's moon button). A snapshot state, so every screen that reads a colour redraws when it changes. */
     var light by mutableStateOf(false)
 
+    /** The website's two looks, switched on the server (Admin > Previews) and followed here: violet_theme and modern_look */
+    var violet by mutableStateOf(false)
+    var modern by mutableStateOf(false)
+
     val bg get() = if (light) Color(0xFFF7F8FC) else Color(0xFF07080D)
     val side get() = if (light) Color(0xFFEEF0F7) else Color(0xFF0A0B11)
     val surface get() = if (light) Color(0xFFFFFFFF) else Color(0xFF0F1119)
@@ -66,8 +70,20 @@ object Palettes {
     private val solsticeL = Palette(Color(0xFFF2A60C), Color(0xFF1F1400), Color(0xFF8A5A00), Color(0xFFD18A00), Color(0xFFFFE7A0), Color(0x21F2A60C))
     private val apogeeL = Palette(Color(0xFFA8D1F5), Color(0xFF06121F), Color(0xFF2A5F96), Color(0xFF4F8FC9), Color(0xFFF4F9FF), Color(0x2678AADC))
 
-    /** The palette for a model by its name (Flare, Solstice...); unknown names get Flare's, as on the website. */
-    fun forModel(name: String?, light: Boolean = false): Palette = when (name?.lowercase()) {
+    // the violet look (core.js VIOLET)
+    private val violetD = Palette(Color(0xFF8B5CF6), Color(0xFFFFFFFF), Color(0xFFA78BFA), Color(0xFF8B5CF6), Color(0xFFC4B5FD), Color(0x248B5CF6))
+    private val violetL = Palette(Color(0xFF7C3AED), Color(0xFFFFFFFF), Color(0xFF6D28D9), Color(0xFF7C3AED), Color(0xFF8B5CF6), Color(0x1F7C3AED))
+
+    /** The palette for a model by its name (Flare, Solstice...); unknown names get Flare's, as on the website. With the violet look the
+     *  whole app (buttons, the box, glows) is violet and a model keeps only its own logo colours, sun and core (core.js applyTheme). */
+    fun forModel(name: String?, light: Boolean = false, violet: Boolean = false): Palette {
+        val own = ownPalette(name, light)
+        if (!violet) return own
+        val v = if (light) violetL else violetD
+        return if (name.isNullOrEmpty()) v else own.copy(accent = v.accent, onAccent = v.onAccent, accentText = v.accentText, glow = v.glow)
+    }
+
+    private fun ownPalette(name: String?, light: Boolean): Palette = when (name?.lowercase()) {
         null, "" -> if (light) brandL else brand
         "ember" -> if (light) emberL else ember
         "equinox" -> if (light) equinoxL else equinox
@@ -117,7 +133,7 @@ private val type = Typography().run {
 /** [model] is the chosen model's name, or null for the Emvryx amber. Colours ease from one model to the next, like the website. */
 @Composable
 fun EmvryxTheme(model: String? = null, content: @Composable () -> Unit) {
-    val target = Palettes.forModel(model, Emvryx.light)
+    val target = Palettes.forModel(model, Emvryx.light, Emvryx.violet)
     val ease = tween<Color>(600)
     val accent by animateColorAsState(target.accent, ease, label = "accent")
     val onAccent by animateColorAsState(target.onAccent, ease, label = "onAccent")
