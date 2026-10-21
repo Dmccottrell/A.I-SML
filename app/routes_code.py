@@ -293,6 +293,25 @@ class RoutesCode:
         cut = max(0, len(diff) - code_review.DEFAULT_LIMIT)
         return code_review.review_prompt(diff[:code_review.DEFAULT_LIMIT], files, cut, f"pull request {ref[0]}/{ref[1]}#{ref[2]}" + (f" ({title})" if title else ""))
 
+    DOCS_EACH, DOCS_ALL = 12000, 30000          # characters of each attached document, and of all of them, that go to the model
+
+    @staticmethod
+    def _docs_note(st, who, ids):
+        """vryxcode_review: the text of documents from the person's library attached to a VryxCode message (an about-us page, brand guidelines, a spec), for the
+        model to read before it starts. "" without the flag or documents."""
+        if not ids or not st.flags.on("vryxcode_review", who) or not isinstance(ids, list):
+            return ""
+        lib, parts, used = st.docs_for(who["user"]), [], 0
+        for i in ids[:8]:
+            info = lib.info(i) if isinstance(i, int) else None
+            text = (lib.text(i) or "").strip() if info else ""
+            if not text or used >= RoutesCode.DOCS_ALL:
+                continue
+            text = text[:min(RoutesCode.DOCS_EACH, RoutesCode.DOCS_ALL - used)]
+            used += len(text)
+            parts.append(f"### {info['name']}\n{text}")
+        return ("\n\nDocuments the person attached (read them before you start, and follow what they say):\n\n" + "\n\n".join(parts)) if parts else ""
+
     @staticmethod
     def _effort(st, who, body):
         """The effort picked in VryxCode, or None while the feature flag vryxcode_effort is off for this person (then the model picker works as before)."""
@@ -461,6 +480,9 @@ class RoutesCode:
                         raise code_sessions.CodeError("That starter does not exist.", "Pick one from the list.")
                     templates.apply(st.code.project_path(user, project), body["template"])
                     task = templates.task_for(body["template"], task)
+                docs = self._docs_note(st, who, body.get("docs"))
+                if docs:                                                       # documents attached to the task: the model reads them first, the title stays the task
+                    second = (second or str(task or "")) + docs
                 s, note = st.code.start(user, project, task, model["id"], generate, bool(body.get("auto_edits")),
                                         int(model.get("context_tested") or 8192), meter, outside=bool(model.get("outside")), tools=tools, identity=identity,
                                         env=str(body.get("env") or "local"), plan=bool(body.get("plan")), owner=who["admin"], queue=bool(body.get("queue")),
@@ -528,7 +550,9 @@ class RoutesCode:
                 if getattr(sess, "full", False) and body.get("images"):    # screenshots sent with the message: the model sees them this turn
                     mark = sess.attach_pictures(body.get("images"))
                     text = (str(text or "").strip() + "\n\n" + mark).strip() if mark else text
-                sess.send(text, plan=bool(body.get("plan")), model_text=sess.catch_up(text) if revived else None)
+                docs = self._docs_note(st, who, body.get("docs"))
+                said = sess.catch_up(text) if revived else (sess.expand(str(text or "")) if docs else None)
+                sess.send(text, plan=bool(body.get("plan")), model_text=(said + docs) if docs else said)
                 return self._send(200, {"ok": True, "revived": revived})
             m = re.fullmatch(r"/api/code/sessions/([\w-]+)/reject", path)
             if m:                                                # undo one file of what a session changed

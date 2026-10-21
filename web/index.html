@@ -78,6 +78,23 @@ svg .core { fill: var(--core); stroke: var(--sun); stroke-width: 3; transition: 
 .msg.ai { align-self: flex-start; max-width: 94%; }
 .msg.ai .bubble { background: var(--surface); border: 1px solid var(--line); border-radius: 18px 18px 18px 4px; padding: 14px 18px; }
 .bubble { white-space: pre-wrap; overflow-wrap: anywhere; }
+/* vryxcode_review: Cursor-style review (grey lines, file chips, Done line, grouped list) */
+.code .cc-quiet { color: var(--muted); font-size: 13.5px; padding: 1px 2px; }
+.code .cc-quiet .arg { color: color-mix(in srgb, var(--muted) 70%, transparent); }
+.code .cc-quiet.no { color: var(--danger); }
+.code .cc-quiet .why, .code .cc-file .why { color: var(--danger); font-size: 12.5px; white-space: pre-wrap; }
+.code .cc-file { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; border: 1px solid var(--line); border-radius: 10px; padding: 7px 10px; margin: 4px 0; background: var(--surface); cursor: pointer; font-size: 14px; }
+.code .cc-file .nm { font-weight: 600; overflow-wrap: anywhere; }
+.code .cc-file .a, .code .cc-done .a, .vx-lines .a { color: #3fb950; font-variant-numeric: tabular-nums; }
+.code .cc-file .d, .code .cc-done .d, .vx-lines .d { color: #f85149; font-variant-numeric: tabular-nums; }
+.code .cc-file.run { opacity: .75; }
+.code .cc-file.no { border-color: var(--danger); }
+.code .cc-file .cc-diff { display: none; flex-basis: 100%; }
+.code .cc-file.open .cc-diff { display: block; }
+.code .cc-done { display: flex; flex-direction: column; gap: 2px; margin: 6px 0; }
+.code .cc-done .lead { color: var(--muted); font-size: 13.5px; }
+.vx-group { color: var(--muted); font-size: 12px; font-weight: 700; letter-spacing: .06em; margin: 14px 4px 6px; }
+.vx-lines { margin-right: 6px; font-size: 13px; }
 .bubble .md, .code .cc-say .md, .cc-msg .md { white-space: normal; display: flex; flex-direction: column; gap: 10px; }
 .md p, .md li, .md td, .md th { white-space: pre-wrap; margin: 0; }
 .md ul, .md ol { margin: 0; padding-left: 1.4em; display: flex; flex-direction: column; gap: 4px; }
