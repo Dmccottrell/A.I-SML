@@ -346,6 +346,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         val m = s.on("modern_look")
         if (Emvryx.violet != v) Emvryx.violet = v
         if (Emvryx.modern != m) Emvryx.modern = m
+        Emvryx.modelBar = s.on("model_bar")
         if (session.looks != (v to m)) session.looks = v to m
     }
 

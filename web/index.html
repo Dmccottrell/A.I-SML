@@ -93,6 +93,13 @@ svg .core { fill: var(--core); stroke: var(--sun); stroke-width: 3; transition: 
 .code .cc-file.open .cc-diff { display: block; }
 .code .cc-done { display: flex; flex-direction: column; gap: 2px; margin: 6px 0; }
 .code .cc-done .lead { color: var(--muted); font-size: 13.5px; }
+/* model_bar: the message box in the chosen model's own colour (the rest stays in the app's colours); a pulse in it when a model is picked */
+body.mbar.mbar:not(.vx) .composer .card { border-color: color-mix(in srgb, var(--mbar) 55%, var(--line)); box-shadow: 0 0 0 1px color-mix(in srgb, var(--mbar) 18%, transparent), 0 14px 40px -18px color-mix(in srgb, var(--mbar) 55%, transparent); transition: border-color .6s ease, box-shadow .6s ease; }
+body.mbar.mbar:not(.vx) .composer .card:focus-within { border-color: var(--mbar); box-shadow: 0 0 0 4px color-mix(in srgb, var(--mbar) 16%, transparent), 0 20px 54px -16px color-mix(in srgb, var(--mbar) 60%, transparent); }
+body.mbar.mbar:not(.vx) .composer .card.mbar-swap { animation: mbarSwap 1.2s ease-out; }
+body.mbar.mbar .wash { background: radial-gradient(circle, var(--core) 0%, var(--mbar) 30%, transparent 66%); }
+@keyframes mbarSwap { 0% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--mbar) 70%, transparent), 0 0 0 0 transparent; } 35% { box-shadow: 0 0 0 7px color-mix(in srgb, var(--mbar) 32%, transparent), 0 0 46px 6px color-mix(in srgb, var(--mbar) 45%, transparent); } 100% { box-shadow: 0 0 0 1px color-mix(in srgb, var(--mbar) 18%, transparent), 0 14px 40px -18px color-mix(in srgb, var(--mbar) 55%, transparent); } }
+@media (prefers-reduced-motion: reduce) { body.mbar.mbar:not(.vx) .composer .card.mbar-swap { animation: none; } }
 .vx-where { color: var(--muted); font-size: 13.5px; margin: 6px 2px 0; }
 .vx-where .link { background: none; border: 0; color: var(--accenttext); padding: 0; font: inherit; cursor: pointer; text-decoration: underline; }
 .vx-proj { margin: 10px 0 14px; }

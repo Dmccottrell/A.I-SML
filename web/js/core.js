@@ -106,10 +106,13 @@ function applyTheme() {
   // The violet look colours the whole app (buttons, the box, glows) violet; a chosen model keeps only its own logo colour (sun, core).
   const p = Object.assign({}, BASE[mode], vi ? (m ? Object.assign({}, own, {accent: v.accent, onaccent: v.onaccent, accenttext: v.accenttext, glow: v.glow}) : v) : own);
   for (const k in p) document.documentElement.style.setProperty('--' + k, p[k]);
+  document.documentElement.style.setProperty('--mbar', (m ? own : p).accent);              // model_bar: the message box wears the chosen model's own colour
+  document.documentElement.style.setProperty('--mbarglow', (m ? own : p).glow);
   document.querySelector('meta[name=theme-color]').content = p.bg;
   const on = (id) => !!(S.state && S.state.features && S.state.features[id]);
   if (!S.state) return;                                  // before sign-in nothing is known: keep what this device remembered
   applyLooks(on('modern_look'), on('vryxcode_update'));
+  document.body.classList.toggle('mbar', on('model_bar'));
   try { localStorage.setItem('emvryx_looks', JSON.stringify({ml: on('modern_look'), vxn: on('vryxcode_update'), vi: on('violet_theme')})); } catch (e) { /* the sign-in screen then shows the plain look first */ }
 }
 // two looks behind feature flags: their stylesheets are only loaded (and their classes only set) while the flag is on for this person, so off means exactly the earlier look.
@@ -120,7 +123,10 @@ function applyLooks(ml, vxn) {
   document.body.classList.toggle('vxn', !!vxn); sheet('cssVryx', '/vryx.css', vxn);
 }
 try { const k = JSON.parse(localStorage.getItem('emvryx_looks') || '{}'); if (k.ml || k.vxn) applyLooks(k.ml, k.vxn); } catch (e) { /* no memory of it: the plain look */ }
-function wash() { const w = el('div', {class: 'wash'}); document.body.append(w); setTimeout(() => w.remove(), 1100); }
+function wash() {
+  const w = el('div', {class: 'wash'}); document.body.append(w); setTimeout(() => w.remove(), 1100);
+  document.querySelectorAll('.composer .card').forEach((c) => { c.classList.remove('mbar-swap'); void c.offsetWidth; c.classList.add('mbar-swap'); setTimeout(() => c.classList.remove('mbar-swap'), 1300); });   // the box lights up in the new model's colour
+}
 
 // ---------------------------------------------------------------- load
 async function load() {
