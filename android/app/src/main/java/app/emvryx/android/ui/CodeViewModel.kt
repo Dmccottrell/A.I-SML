@@ -66,6 +66,7 @@ class CodeViewModel(app: Application) : AndroidViewModel(app) {
     var effort by mutableStateOf("balanced")
     var model by mutableStateOf("")
     var env by mutableStateOf("local")
+    var draft by mutableStateOf("")                   // a starting idea tapped on the home screen, put in the message box
     var offer by mutableStateOf("")                   // the suggested reply after a finished turn (flag vryxcode_suggest), greyed in the empty box
     var suggestOn = false
     var onTour: (() -> Unit)? = null                     // /tour: the VryxCode tour again

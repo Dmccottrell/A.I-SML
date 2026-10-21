@@ -49,7 +49,7 @@ import app.emvryx.android.ui.theme.Emvryx
  */
 @SuppressLint("SetJavaScriptEnabled")
 @Composable
-fun WebScreen(vm: AppViewModel, path: String, title: String) {
+fun WebScreen(vm: AppViewModel, path: String, title: String, run: String = "") {
     val app = androidx.compose.ui.platform.LocalContext.current.applicationContext as EmvryxApp
     val server = app.api.server ?: return
     var web by remember { mutableStateOf<WebView?>(null) }
@@ -78,6 +78,16 @@ fun WebScreen(vm: AppViewModel, path: String, title: String) {
                     settings.domStorageEnabled = true
                     settings.userAgentString = settings.userAgentString + " Emvryx-Android"
                     webViewClient = object : WebViewClient() {
+                        private var ran = false
+
+                        // open the part of the website this page is for (Skills, Documents, Memory ...) once it has loaded
+                        override fun onPageFinished(view: WebView, url: String) {
+                            if (run.isNotEmpty() && !ran) {
+                                ran = true
+                                view.evaluateJavascript("(function t(n){ if (typeof S !== 'undefined' && S.state) { $run } else if (n < 40) setTimeout(function(){ t(n + 1) }, 250) })(0)", null)
+                            }
+                        }
+
                         override fun shouldOverrideUrlLoading(view: WebView, request: WebResourceRequest): Boolean {
                             val u = request.url
                             val home = Uri.parse(server)

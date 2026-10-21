@@ -127,6 +127,7 @@ private fun TourPager(slides: List<Slide>, lastLabel: String, accent: Accent, c:
     BackHandler { if (i > 0) i-- else close(false) }
     Box(
         Modifier.fillMaxSize()
+            .background(Color(0xFF05060B))                         // solid first: the glow alone is see-through in the middle and the chat showed through
             .background(Brush.radialGradient(listOf(accent.glow, Color(0xFF05060B)), radius = 1400f))
             .clickable(enabled = true, onClick = {})                              // nothing behind the tour can be tapped
             .pointerInput(slides) {

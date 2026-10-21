@@ -5,3 +5,6 @@
     kotlinx.serialization.KSerializer serializer(...);
 }
 -keep,includedescriptorclasses class app.emvryx.android.**$$serializer { *; }
+
+# Tink (used by androidx.security-crypto for the encrypted session) refers to Error Prone's compile-time annotations, which are not shipped
+-dontwarn com.google.errorprone.annotations.**

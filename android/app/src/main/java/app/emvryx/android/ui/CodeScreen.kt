@@ -79,6 +79,8 @@ import app.emvryx.android.data.str
 import app.emvryx.android.data.strings
 import app.emvryx.android.ui.theme.Emvryx
 import app.emvryx.android.ui.theme.Mono
+import app.emvryx.android.ui.theme.Heading
+import androidx.compose.foundation.layout.widthIn
 import kotlinx.serialization.json.JsonObject
 import kotlin.math.abs
 
@@ -101,16 +103,28 @@ fun CodeScreen(app: AppViewModel, vm: CodeViewModel) {
     }
     LaunchedEffect(Unit) { vm.load() }
     BackHandler { if (vm.inSession) vm.backToList() else app.backToChat() }
+    var more by remember { mutableStateOf(false) }
     Column(Modifier.fillMaxSize().background(Emvryx.bg).imePadding()) {
         Column(Modifier.statusBarsPadding()) {
             Row(Modifier.fillMaxWidth().height(56.dp).padding(horizontal = 8.dp), verticalAlignment = Alignment.CenterVertically) {
                 IconButton(onClick = { if (vm.inSession) vm.backToList() else app.backToChat() }) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back", tint = Emvryx.text) }
-                Text(if (vm.inSession) "VryxCode" else "Code", fontWeight = FontWeight.SemiBold, fontSize = 18.sp, modifier = Modifier.weight(1f))
-                ProjectPill(vm)
-                Spacer(Modifier.width(6.dp))
-                TextButton({ app.open(Screen.Web("/", "VryxCode editor")) }) { Text("Editor", color = Violet) }
+                PwaIcon("code", Violet, 22.dp)
+                Spacer(Modifier.width(10.dp))
+                Text("VryxCode", fontFamily = Heading, fontWeight = FontWeight.SemiBold, fontSize = 19.sp, modifier = Modifier.weight(1f))
+                Box {
+                    IconButton(onClick = { more = true }) { Text("⋯", fontSize = 22.sp, color = Emvryx.text) }
+                    DropdownMenu(more, { more = false }, containerColor = Emvryx.surface) {
+                        DropdownMenuItem({ Text("Open the editor") }, { more = false; app.open(Screen.Web("/", "VryxCode editor", "openCode()")) },
+                            leadingIcon = { PwaIcon("doc", Emvryx.muted, 18.dp) })
+                        DropdownMenuItem({ Text("What VryxCode remembers") }, { more = false; vm.showMemory() },
+                            leadingIcon = { PwaIcon("brain", Emvryx.muted, 18.dp) })
+                        DropdownMenuItem({ Text("Take the tour again") }, { more = false; app.replayVryxTour() },
+                            leadingIcon = { PwaIcon("spark", Emvryx.muted, 18.dp) })
+                    }
+                }
             }
             HorizontalDivider(color = Emvryx.line)
+            if (vm.info?.allowed != false) ProjectRow(vm)                  // which project VryxCode works in, and + New project
         }
         vm.error?.let {
             Text(it, fontSize = 14.sp, modifier = Modifier.fillMaxWidth().background(Emvryx.surface).padding(12.dp))
@@ -123,12 +137,16 @@ fun CodeScreen(app: AppViewModel, vm: CodeViewModel) {
             Box(Modifier.weight(1f).fillMaxWidth()) { Feed(vm) }
             CodeComposer(vm)
         } else {
-            Box(Modifier.weight(1f).fillMaxWidth()) { SessionList(vm) }
-            Box(Modifier.fillMaxWidth().navigationBarsPadding().padding(16.dp)) {
-                Box(
-                    Modifier.fillMaxWidth().heightIn(min = 52.dp).clip(RoundedCornerShape(26.dp)).background(Violet).clickable { vm.newSession() },
-                    contentAlignment = Alignment.Center,
-                ) { Text("+ New session", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 17.sp) }
+            Box(Modifier.weight(1f).fillMaxWidth()) {
+                SessionList(vm)
+                Row(
+                    Modifier.align(Alignment.BottomEnd).navigationBarsPadding().padding(18.dp).heightIn(min = 52.dp).clip(CircleShape)
+                        .background(Violet).clickable { vm.newSession() }.padding(horizontal = 22.dp),
+                    verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    Text("+", color = Color.White, fontSize = 22.sp)
+                    Text("New session", color = Color.White, fontWeight = FontWeight.SemiBold, fontSize = 16.sp)
+                }
             }
         }
     }
@@ -136,19 +154,33 @@ fun CodeScreen(app: AppViewModel, vm: CodeViewModel) {
     vm.rules?.let { RulesDialog(vm) }
 }
 
+/** The project VryxCode works in: its name (tap to switch), and + New project */
 @Composable
-private fun ProjectPill(vm: CodeViewModel) {
+private fun ProjectRow(vm: CodeViewModel) {
     var open by remember { mutableStateOf(false) }
     var naming by remember { mutableStateOf(false) }
-    Box {
-        Text(vm.project + " ▾", fontSize = 14.sp, maxLines = 1, overflow = TextOverflow.Ellipsis,
-            modifier = Modifier.clip(CircleShape).border(1.dp, Emvryx.line, CircleShape).clickable { open = true }.padding(horizontal = 12.dp, vertical = 8.dp))
+    Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
+        Text("PROJECT", color = Emvryx.muted, fontSize = 11.sp, fontWeight = FontWeight.SemiBold, letterSpacing = 1.1.sp)
+        Spacer(Modifier.width(10.dp))
+        Box(Modifier.weight(1f)) {
+            Row(
+                Modifier.clip(CircleShape).background(Emvryx.surface).border(1.dp, Emvryx.line, CircleShape).clickable { open = true }
+                    .padding(horizontal = 12.dp, vertical = 7.dp),
+                verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                PwaIcon("folder", Violet, 16.dp)
+                Text(vm.project, fontSize = 14.sp, fontWeight = FontWeight.Medium, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Text("▾", color = Emvryx.muted, fontSize = 12.sp)
+            }
         DropdownMenu(open, { open = false }, containerColor = Emvryx.surface) {
             (vm.info?.projects.orEmpty() + vm.project).distinct().forEach { p ->
                 DropdownMenuItem({ Text(p) }, { vm.project = p; open = false; vm.newSession() })
             }
             DropdownMenuItem({ Text("+ New project") }, { naming = true; open = false })
         }
+        }
+        Text("+ New project", color = Violet, fontSize = 14.sp, fontWeight = FontWeight.Medium,
+            modifier = Modifier.clip(CircleShape).clickable { naming = true }.padding(horizontal = 10.dp, vertical = 7.dp))
     }
     if (naming) {
         var name by remember { mutableStateOf("") }
@@ -167,14 +199,51 @@ private fun ProjectPill(vm: CodeViewModel) {
 @Composable
 private fun SessionList(vm: CodeViewModel) {
     if (vm.sessions.isEmpty()) {
-        Column(Modifier.fillMaxSize().padding(24.dp), verticalArrangement = Arrangement.Center, horizontalAlignment = Alignment.CenterHorizontally) {
-            Text("What should we build?", fontWeight = FontWeight.Bold, fontSize = 28.sp)
-            Text("Describe it. VryxCode plans it, writes it, runs it and checks it.", color = Emvryx.muted, fontSize = 16.sp, modifier = Modifier.padding(top = 8.dp))
-        }
+        Welcome(vm, "Describe it. VryxCode plans it, writes it, runs it and checks it.")
         return
     }
-    LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+    LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 6.dp, bottom = 96.dp),
+        verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        item(key = "head") {
+            Text("SESSIONS · ${vm.sessions.size}", color = Emvryx.muted, fontSize = 11.sp, fontWeight = FontWeight.SemiBold, letterSpacing = 1.1.sp,
+                modifier = Modifier.padding(start = 4.dp, top = 6.dp))
+        }
         items(vm.sessions, key = { it.id }) { s -> SessionCard(s) { vm.openSession(s) } }
+    }
+}
+
+private val IDEAS = listOf(
+    "A to-do list app" to "Build a small to-do list web app: add, tick off and delete tasks, saved in the browser.",
+    "A landing page" to "Make a simple landing page for a bakery with a menu section and opening hours.",
+    "Fix a failing test" to "Run the tests in this project, find what fails and fix it.",
+)
+
+/** The empty home and a new session: the mark, the question, and a few ideas to start from (tap one to put it in the box) */
+@Composable
+private fun Welcome(vm: CodeViewModel, lead: String) {
+    Column(
+        Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 24.dp, vertical = 24.dp),
+        verticalArrangement = Arrangement.Center, horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
+        Box(Modifier.size(72.dp).clip(CircleShape).background(VioletSoft), contentAlignment = Alignment.Center) { PwaIcon("code", Violet, 36.dp) }
+        Text("What should we build?", fontFamily = Heading, fontWeight = FontWeight.SemiBold, fontSize = 28.sp,
+            textAlign = androidx.compose.ui.text.style.TextAlign.Center, modifier = Modifier.padding(top = 18.dp))
+        Text(lead, color = Emvryx.muted, fontSize = 15.sp, textAlign = androidx.compose.ui.text.style.TextAlign.Center, modifier = Modifier.padding(top = 8.dp))
+        Column(Modifier.padding(top = 22.dp).widthIn(max = 420.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            IDEAS.forEach { (name, task) ->
+                Row(
+                    Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(Emvryx.surface).border(1.dp, Emvryx.line, RoundedCornerShape(16.dp))
+                        .clickable { if (!vm.inSession) vm.newSession(); vm.draft = task }.padding(horizontal = 16.dp, vertical = 12.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Column(Modifier.weight(1f)) {
+                        Text(name, fontWeight = FontWeight.SemiBold, fontSize = 15.sp)
+                        Text(task, color = Emvryx.muted, fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    }
+                    Text("›", color = Emvryx.muted, fontSize = 20.sp)
+                }
+            }
+        }
     }
 }
 
@@ -184,14 +253,18 @@ private fun SessionCard(s: CodeSessionRow, onClick: () -> Unit) {
     Column(Modifier.fillMaxWidth().clip(shape).background(Emvryx.surface).border(1.dp, Emvryx.line, shape).clickable(onClick = onClick).padding(14.dp),
         verticalArrangement = Arrangement.spacedBy(4.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Text(when {
-                s.live && s.state == "asking" -> "!"
-                s.live -> "●"
-                s.state in setOf("failed", "interrupted") -> "✗"
-                else -> "✓"
-            }, color = if (s.live) Violet else Emvryx.muted, fontWeight = FontWeight.Bold, modifier = Modifier.width(22.dp))
+            val (dot, word) = when {
+                s.live && s.state == "asking" -> Color(0xFFF5A524) to "Needs you"
+                s.live -> Violet to "Working"
+                s.state == "queued" -> Emvryx.muted to "Queued"
+                s.state in setOf("failed", "interrupted") -> Emvryx.danger to "Stopped"
+                else -> Green to "Done"
+            }
+            Box(Modifier.size(8.dp).clip(CircleShape).background(dot))
+            Spacer(Modifier.width(8.dp))
             Text(s.title, fontWeight = FontWeight.SemiBold, fontSize = 16.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
-            Text(s.age, color = Emvryx.muted, fontSize = 13.sp)
+            Spacer(Modifier.width(8.dp))
+            Text(word + " · " + s.age, color = Emvryx.muted, fontSize = 12.sp)
         }
         Text(s.project + " · " + s.model + " · " + s.env, color = Emvryx.muted, fontSize = 13.sp, maxLines = 1)
         if (s.snippet.isNotBlank()) Text(s.snippet, color = Emvryx.muted, fontSize = 14.sp, maxLines = 2, overflow = TextOverflow.Ellipsis)
@@ -208,11 +281,7 @@ private fun Feed(vm: CodeViewModel) {
     val list = rememberLazyListState()
     LaunchedEffect(vm.events.size, vm.pending) { if (vm.events.isNotEmpty()) list.animateScrollToItem(vm.events.size) }
     if (vm.events.isEmpty() && vm.sid == null) {
-        Column(Modifier.fillMaxSize().padding(24.dp), verticalArrangement = Arrangement.Center) {
-            Text("What should we build?", fontWeight = FontWeight.Bold, fontSize = 28.sp)
-            Text("Describe one task. VryxCode works in its own project folder: it reads, edits, runs the tests and tries again, and asks before it " +
-                 "changes anything. Type / for commands.", color = Emvryx.muted, fontSize = 15.sp, modifier = Modifier.padding(top = 8.dp))
-        }
+        Welcome(vm, "Describe one task. VryxCode reads, edits, runs the tests and tries again in its own project folder, and asks before it changes anything. Type / for commands.")
         return
     }
     LazyColumn(Modifier.fillMaxSize(), state = list, contentPadding = PaddingValues(14.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -315,6 +384,7 @@ private fun CodeComposer(vm: CodeViewModel) {
     val text = field.text
     val fill = { t: String -> field = TextFieldValue(t, TextRange(t.length)) }
     val takeOffer = { if (text.isEmpty() && vm.offer.isNotEmpty()) { fill(vm.offer); vm.offer = ""; true } else false }
+    LaunchedEffect(vm.draft) { if (vm.draft.isNotEmpty()) { fill(vm.draft); vm.draft = "" } }      // an idea tapped on the welcome
     var menu by remember { mutableStateOf<String?>(null) }
     val pick = rememberLauncherForActivityResult(ActivityResultContracts.PickMultipleVisualMedia(3)) { uris ->
         uris.forEach { u -> readPicked(context, u)?.let { (n, b) -> vm.addPicture(n, b) } }

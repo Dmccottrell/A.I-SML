@@ -196,15 +196,15 @@ fun NoteBox(value: String, onChange: (String) -> Unit, placeholder: String, minH
     }
 }
 
-/** A row in the side panel that opens another part of Emvryx; [note] is the small grey word on the right ("Never saved") */
+/** A row in the side panel that opens another part of Emvryx (.link): the website's [icon], the name, and a small grey [note] ("Never saved") */
 @Composable
 fun SideLink(icon: String, label: String, note: String = "", onClick: () -> Unit) {
     Row(
-        Modifier.fillMaxWidth().heightIn(min = 44.dp).clip(RoundedCornerShape(12.dp)).clickable(onClick = onClick).padding(horizontal = 12.dp),
+        Modifier.fillMaxWidth().heightIn(min = 42.dp).clip(RoundedCornerShape(12.dp)).clickable(onClick = onClick).padding(horizontal = 12.dp),
         verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        Text(icon, fontSize = 18.sp)
-        Text(label, fontSize = 16.sp, modifier = Modifier.weight(1f))
+        PwaIcon(icon, Emvryx.muted)
+        Text(label, fontSize = 16.sp, fontWeight = FontWeight.Medium, modifier = Modifier.weight(1f))
         if (note.isNotBlank()) Text(note, color = Emvryx.muted, fontSize = 12.sp)
     }
 }

@@ -146,8 +146,10 @@ fun ChatScreen(vm: AppViewModel) {
         Column(Modifier.fillMaxSize().background(Emvryx.bg).accentWash(p.glow).imePadding()) {
             TopBar(vm, onMenu = {
                 menu = null
-                vm.refreshChats()
-                scope.launch { drawer.open() }
+                scope.launch {
+                    drawer.open()                                    // slide in first, then fetch: the list was already loaded
+                    vm.refreshChats()
+                }
             }, onSaveAs = { onSaveAs(vm.chatAsText()) })
             if (vm.state?.demo == true) DemoBanner()
             Box(Modifier.weight(1f).fillMaxWidth()) {
@@ -661,7 +663,6 @@ private fun Sidebar(vm: AppViewModel, onDone: () -> Unit, onFolder: (ChatSummary
                 Logo(Modifier.size(32.dp))
                 Spacer(Modifier.width(10.dp))
                 Text("Emvryx", fontFamily = Heading, fontWeight = FontWeight.SemiBold, fontSize = 20.sp, letterSpacing = (-0.4).sp, modifier = Modifier.weight(1f))
-                IconButton(onClick = vm::signOut) { Icon(Icons.AutoMirrored.Filled.ExitToApp, "Sign out", tint = Emvryx.muted) }
             }
             Box(
                 Modifier.fillMaxWidth().padding(start = 14.dp, end = 14.dp, top = 12.dp, bottom = 6.dp).heightIn(min = 46.dp)
@@ -683,9 +684,10 @@ private fun Sidebar(vm: AppViewModel, onDone: () -> Unit, onFolder: (ChatSummary
                         textStyle = MaterialTheme.typography.bodyMedium.copy(color = Emvryx.text, fontSize = 15.sp), cursorBrush = SolidColor(p.accent))
                 }
             }
-            val shown = vm.chats.filter { query.isBlank() || it.title.contains(query.trim(), ignoreCase = true) }
+            val shown = remember(vm.chats, query) { vm.chats.filter { query.isBlank() || it.title.contains(query.trim(), ignoreCase = true) } }
+            val grouped = remember(shown) { groups(shown) }
             LazyColumn(Modifier.weight(1f).padding(horizontal = 14.dp)) {
-                groups(shown).forEach { (label, rows) ->
+                grouped.forEach { (label, rows) ->
                     item(key = "label-$label") {
                         Text(label, color = Emvryx.muted.copy(alpha = 0.8f), fontSize = 11.sp, fontWeight = FontWeight.SemiBold, letterSpacing = 1.1.sp,
                             modifier = Modifier.padding(start = 6.dp, top = 14.dp, bottom = 2.dp))
@@ -710,31 +712,67 @@ private fun Sidebar(vm: AppViewModel, onDone: () -> Unit, onFolder: (ChatSummary
                 }
             }
             HorizontalDivider(color = Emvryx.line)
-            Column(Modifier.padding(horizontal = 8.dp, vertical = 6.dp)) {          // the rest of Emvryx, as in the website's menu
-                SideLink("🔒", "Private chat", "Never saved") { vm.newChat(private = true); onDone() }
-                SideLink("🗄", "Archived chats") { vm.loadArchived(); onDone() }
-                SideLink("⌨", "VryxCode") { vm.open(Screen.Code); onDone() }
-                SideLink("⚙", "Settings") { vm.open(Screen.Web("/#settings", "Settings")); onDone() }
-                if (vm.isAdmin) SideLink("🛡", "Admin") { vm.open(Screen.Web("/#admin", "Admin")); onDone() }
-                SideLink("◎", "Everything else (skills, teacher, apps, files)") { vm.open(Screen.Web("/", "Emvryx")); onDone() }
+            // the tools, as in the website's menu (tour.js renderLinks); Usage, Memory, Settings and Admin are under your name
+            Column(Modifier.padding(horizontal = 8.dp, vertical = 6.dp)) {
+                SideLink("lock", "Private chat", "Never saved") { vm.newChat(private = true); onDone() }
+                SideLink("code", "VryxCode") { vm.open(Screen.Code); onDone() }
+                SideLink("spark", "Skills") { vm.open(Screen.Web("/", "Skills", "openSkills()")); onDone() }
+                SideLink("pencil", "Teacher mode") { vm.open(Screen.Web("/", "Teacher mode", "newChat(false, 'teacher')")); onDone() }
+                SideLink("doc", "Documents") { vm.open(Screen.Web("/", "Documents", "openDocs()")); onDone() }
             }
             HorizontalDivider(color = Emvryx.line)
-            Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
-                val name = vm.state?.user.orEmpty()
-                Box(Modifier.size(34.dp).clip(CircleShape).background(p.accent), contentAlignment = Alignment.Center) {
-                    Text(name.take(1).uppercase(), color = p.onAccent, fontWeight = FontWeight.Bold)
-                }
-                Spacer(Modifier.width(10.dp))
-                Column(Modifier.weight(1f)) {
-                    Text(name, fontWeight = FontWeight.SemiBold)
-                    vm.state?.let { Text(it.planName, color = Emvryx.muted, fontSize = 14.sp) }
-                }
-                // the phone's fingerprint (or face, or screen lock) before Emvryx opens
-                Text(if (vm.lockOn) "🔒 Lock on" else "🔓 Lock off", fontSize = 13.sp, color = Emvryx.muted,
-                    modifier = Modifier.clip(RoundedCornerShape(10.dp)).clickable { vm.setLock(!vm.lockOn) }.padding(8.dp))
-            }
+            Account(vm, onDone)
         }
     }
+}
+
+/** Your name at the bottom of the menu; tapping it opens Usage, Memory, Settings (archived chats are under Data controls there),
+ *  Admin, the app lock and Sign out, as the website's account menu does (tour.js acctMenu) */
+@Composable
+private fun Account(vm: AppViewModel, onDone: () -> Unit) {
+    val p = LocalPalette.current
+    var open by remember { mutableStateOf(false) }
+    var usage by remember { mutableStateOf(false) }
+    val name = vm.state?.user.orEmpty()
+    Box {
+        Row(
+            Modifier.fillMaxWidth().clickable { open = !open }.padding(horizontal = 16.dp, vertical = 12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Box(Modifier.size(34.dp).clip(CircleShape).background(p.accent), contentAlignment = Alignment.Center) {
+                Text(name.take(1).uppercase(), color = p.onAccent, fontWeight = FontWeight.Bold)
+            }
+            Spacer(Modifier.width(10.dp))
+            Column(Modifier.weight(1f)) {
+                Text(name, fontWeight = FontWeight.SemiBold)
+                vm.state?.let { Text(it.planName, color = Emvryx.muted, fontSize = 14.sp) }
+            }
+            PwaIcon("chevron", Emvryx.muted, 18.dp)
+        }
+        DropdownMenu(open, { open = false }, containerColor = Emvryx.surface) {
+            AccountItem("chart", "Usage") { open = false; usage = true }
+            AccountItem("brain", "Memory") { open = false; vm.open(Screen.Web("/", "Memory", "openMemory()")); onDone() }
+            AccountItem("gear", "Settings") { open = false; vm.open(Screen.Web("/#settings", "Settings")); onDone() }
+            if (vm.isAdmin) AccountItem("shield", "Admin") { open = false; vm.open(Screen.Web("/#admin", "Admin")); onDone() }
+            AccountItem("lock", "App lock", if (vm.lockOn) "On" else "Off") { vm.setLock(!vm.lockOn) }     // fingerprint, face or screen lock
+            AccountItem("signout", "Sign out") { open = false; vm.signOut() }
+        }
+    }
+    if (usage) vm.usage?.let { UsageDialog(it) { usage = false } }
+}
+
+@Composable
+private fun AccountItem(icon: String, label: String, note: String = "", action: () -> Unit) {
+    DropdownMenuItem(
+        text = {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(label)
+                if (note.isNotBlank()) Text("   $note", color = Emvryx.muted, fontSize = 13.sp)
+            }
+        },
+        leadingIcon = { PwaIcon(icon, Emvryx.muted, 18.dp) },
+        onClick = action,
+    )
 }
 
 /** .row: the current chat has a soft fill and an accent edge on the left. Hold it to pin or delete it. */

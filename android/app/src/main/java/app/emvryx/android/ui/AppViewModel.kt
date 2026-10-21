@@ -35,8 +35,9 @@ sealed interface Screen {
     data object SignIn : Screen
     data object Chat : Screen
     data object Code : Screen
-    /** A page of the website inside the app, signed in with the same session: Settings, Admin, or everything else the app has no screen for. */
-    data class Web(val path: String, val title: String) : Screen
+    /** A page of the website inside the app, signed in with the same session: Settings, Admin, or everything else the app has no screen for.
+     *  [run] is the website's own call that opens a part of it once the page has loaded ("openSkills()", "openMemory()"). */
+    data class Web(val path: String, val title: String, val run: String = "") : Screen
 }
 
 enum class SignInWay { Password, Key, Email }
@@ -387,9 +388,10 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     fun refreshChats() {
         viewModelScope.launch {
             runCatching { api.state(model) }.onSuccess {
-                state = it
-                chats = it.chats
-                usage = it.usage
+                // only what changed is set, so an unchanged list does not redraw the screen (opening the menu stayed smooth)
+                if (it != state) state = it
+                if (it.chats != chats) chats = it.chats
+                if (it.usage != usage) usage = it.usage
             }
         }
     }
