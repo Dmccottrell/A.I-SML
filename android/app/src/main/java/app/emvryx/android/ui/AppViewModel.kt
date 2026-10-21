@@ -11,6 +11,12 @@ import app.emvryx.android.BuildConfig
 import app.emvryx.android.EmvryxApp
 import app.emvryx.android.data.ApiException
 import app.emvryx.android.data.AppState
+import app.emvryx.android.data.Briefing
+import app.emvryx.android.data.LookupNotes
+import app.emvryx.android.data.ShareRow
+import app.emvryx.android.data.Shares
+import app.emvryx.android.data.Timing
+import app.emvryx.android.ui.theme.Emvryx
 import app.emvryx.android.data.ChatSummary
 import app.emvryx.android.data.Ctx
 import app.emvryx.android.data.DocInfo
@@ -33,11 +39,16 @@ sealed interface Screen {
     data class Web(val path: String, val title: String) : Screen
 }
 
-enum class SignInWay { Password, Key }
+enum class SignInWay { Password, Key, Email }
 
-/** One bubble on the chat screen. [streaming] is the reply still being written; [model] is the id of the model that wrote it. */
+/** One bubble on the chat screen. [streaming] is the reply still being written; [model] is the id of the model that wrote it.
+ *  [notes]: what it looked up first; [timing]: where its time went (owner and admins); [memory]: what it remembered; [liked]: "Right" was pressed. */
 data class Bubble(val key: Long, val mine: Boolean, val text: String, val streaming: Boolean = false, val cut: Boolean = false, val model: String = "",
-                  val id: Long = 0, val docs: List<DocInfo> = emptyList(), val fb: String = "")
+                  val id: Long = 0, val docs: List<DocInfo> = emptyList(), val fb: String = "", val notes: LookupNotes? = null,
+                  val timing: Timing? = null, val memory: String? = null, val liked: String? = null, val autoNote: String? = null)
+
+/** A reply that did not come: the message, what to do, and for an empty tank a word about what is not counted (web/js/send.js errorCard) */
+data class Failure(val message: String, val action: String = "", val code: String = "", val later: String = "")
 
 class AppViewModel(app: Application) : AndroidViewModel(app) {
     private val session = (app as EmvryxApp).session
@@ -78,6 +89,33 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     var working by mutableStateOf<String?>(null)          // "Loading Solstice...", "Thinking..."
         private set
     var notice by mutableStateOf<String?>(null)           // a refusal or "off" message shown above the box
+        private set
+    var failure by mutableStateOf<Failure?>(null)         // the error card under the thread
+        private set
+    var isPrivate by mutableStateOf(false)                // a private chat: never saved, never listed, no memory
+        private set
+    var sentAt by mutableStateOf(0L)                      // when the message went (elapsedRealtime), for the thinking clock
+        private set
+    var following by mutableStateOf(false)                // watching a reply the server is still writing (the app was away)
+        private set
+    var briefing by mutableStateOf<Briefing?>(null)       // "Your day", once read
+        private set
+    var briefingBusy by mutableStateOf(false)
+        private set
+    var archivedChats by mutableStateOf<List<ChatSummary>?>(null)
+        private set
+    var shares by mutableStateOf<Shares?>(null)
+        private set
+    var shareUrl by mutableStateOf<String?>(null)
+        private set
+    var toast by mutableStateOf<String?>(null)            // a short message at the bottom ("Saved as a PDF")
+    var locked by mutableStateOf(session.lock)            // the fingerprint lock is showing
+        private set
+    var lockOn by mutableStateOf(session.lock)
+        private set
+    var emailOffered by mutableStateOf(false)             // this server can send sign-in codes by email
+        private set
+    var emailSentTo by mutableStateOf<String?>(null)      // a code was sent: now type it
         private set
 
     private var replyJob: Job? = null
@@ -121,7 +159,28 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     private var vryxSeen = 0
 
     init {
+        Emvryx.light = session.light
         start()
+    }
+
+    // ---- light or dark (the website's moon button)
+    fun toggleLight() {
+        Emvryx.light = !Emvryx.light
+        session.light = Emvryx.light
+    }
+
+    // ---- the fingerprint lock
+    fun setLock(on: Boolean) {
+        lockOn = on
+        session.lock = on
+    }
+
+    fun lockIfOn() {
+        if (lockOn) locked = true
+    }
+
+    fun unlocked() {
+        locked = false
     }
 
     /** Is the server there, and is this phone signed in? */
@@ -159,6 +218,57 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         screen = Screen.SignIn
     }
 
+    /** Which ways of signing in the server offers (email codes need the owner's mail set up) */
+    fun checkSignInOptions() {
+        if (session.serverUrl == null) return
+        viewModelScope.launch { runCatching { api.authOptions() }.onSuccess { emailOffered = it.email } }
+    }
+
+    /** "Email me a code": the server sends a 6-digit code if that email belongs to an account (it answers the same either way) */
+    fun sendEmailCode(email: String) {
+        val url = normalise(server) ?: return
+        session.serverUrl = url
+        val e = email.trim()
+        if (!e.contains('@')) {
+            signInError = "Type the email on your account."
+            return
+        }
+        signInBusy = true
+        signInError = null
+        viewModelScope.launch {
+            try {
+                api.emailCode(e)
+                emailSentTo = e
+            } catch (x: Exception) {
+                signInError = describe(x)
+            } finally {
+                signInBusy = false
+            }
+        }
+    }
+
+    fun signInWithEmailCode(code: String) {
+        val e = emailSentTo ?: return
+        signInBusy = true
+        signInError = null
+        viewModelScope.launch {
+            try {
+                val reply = api.emailSignIn(e, code.trim())
+                emailSentTo = null
+                if (reply.mfa) twoStepTicket = reply.ticket else afterSignIn()
+            } catch (x: Exception) {
+                signInError = describe(x)
+            } finally {
+                signInBusy = false
+            }
+        }
+    }
+
+    fun cancelEmailCode() {
+        emailSentTo = null
+        signInError = null
+    }
+
     fun signIn(way: SignInWay, id: String, secret: String) {
         val url = normalise(server) ?: run {
             signInError = "That address doesn't look right. It starts with https://"
@@ -173,6 +283,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
                 val reply = when (way) {
                     SignInWay.Password -> api.signInWithPassword(id.trim(), secret)
                     SignInWay.Key -> api.signInWithKey(secret.trim())
+                    SignInWay.Email -> return@launch                     // email codes go through sendEmailCode / signInWithEmailCode
                 }
                 if (reply.mfa) twoStepTicket = reply.ticket else afterSignIn()
             } catch (e: Exception) {
@@ -296,15 +407,141 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         effort = id
     }
 
-    fun newChat() {
+    /** A new chat; [private] makes it one that is never saved */
+    fun newChat(private: Boolean = false) {
         if (streaming) return
         chatId = null
-        title = "New chat"
+        isPrivate = private
+        title = if (private) "Private chat" else "New chat"
         bubbles.clear()
         attached.clear()
         chatDocIds = emptyList()
         ctx = null
         notice = null
+        failure = null
+    }
+
+    /** The memory ring's reading: the last reply's, else an estimate from the words so far (web/js/chat.js lastCtx) */
+    val shownCtx: Ctx?
+        get() {
+            ctx?.let { return it }
+            val w = state?.window?.window ?: return null
+            if (w <= 0) return null
+            val used = Math.round(bubbles.sumOf { it.text.length } / 3.5)
+            return Ctx(used, w, minOf(100.0, Math.round(1000.0 * used / w) / 10.0), minOf(0.75 * maxOf(64L, w - 1024), 96000.0).toLong())
+        }
+
+    // ---- the chat's menu and the answer's: Right, archive, folder, share a link, save as
+    fun like(b: Bubble) {
+        val id = chatId ?: return
+        viewModelScope.launch {
+            try {
+                val r = api.like(id, b.id)
+                update(b.key) { it.copy(liked = if (r.saved > 0) "Saved" else "Thanks") }
+            } catch (e: Exception) {
+                if (!handleSignedOut(e)) notice = describe(e)
+            }
+        }
+    }
+
+    fun archive(c: ChatSummary, on: Boolean = true) {
+        viewModelScope.launch {
+            runCatching { api.archive(c.id, on) }
+            if (on && chatId == c.id) newChat()
+            if (!on) loadArchived()
+            refreshChats()
+        }
+    }
+
+    fun archiveThis() {
+        val id = chatId ?: return
+        archive(ChatSummary(id, title), true)
+    }
+
+    fun loadArchived() {
+        viewModelScope.launch { archivedChats = runCatching { api.archived() }.getOrDefault(emptyList()) }
+    }
+
+    fun closeArchived() {
+        archivedChats = null
+    }
+
+    fun moveToFolder(c: ChatSummary, folder: String) {
+        viewModelScope.launch { runCatching { api.folder(c.id, folder.trim()) }; refreshChats() }
+    }
+
+    fun loadShares() {
+        shareUrl = null
+        viewModelScope.launch { shares = runCatching { api.shares() }.getOrNull() ?: Shares() }
+    }
+
+    fun makeShare(days: Int) {
+        val id = chatId ?: return
+        viewModelScope.launch {
+            try {
+                val r = api.share(id, days)
+                shareUrl = (api.server ?: "") + r.url
+                shares = shares?.copy(shares = r.shares)
+            } catch (e: Exception) {
+                if (!handleSignedOut(e)) toast = describe(e)
+            }
+        }
+    }
+
+    fun revokeShare(s: ShareRow) {
+        viewModelScope.launch { runCatching { api.revokeShare(s.id) }; shares = runCatching { api.shares() }.getOrNull() }
+    }
+
+    fun closeShares() {
+        shares = null
+        shareUrl = null
+    }
+
+    /** The whole chat as text, as the website's "Save as" makes it (chat.js chatAsText) */
+    fun chatAsText(): String = "# $title\n\n" + bubbles.filter { it.text.isNotBlank() && !it.text.startsWith(SUMMARY_MARK) }.joinToString("\n\n") {
+        (if (it.mine) "**You:** " else "**${modelById(it.model)?.fullName ?: "Emvryx"}:** ") + it.text
+    }
+
+    /** Makes the PDF / Word / Markdown file on the server and writes it where the person chose */
+    fun saveAs(uri: android.net.Uri, text: String, format: String) {
+        viewModelScope.launch {
+            try {
+                val bytes = api.exportDoc(text, format, title)
+                kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                    getApplication<Application>().contentResolver.openOutputStream(uri)?.use { it.write(bytes) }
+                }
+                toast = when (format) { "pdf" -> "Saved as a PDF."; "docx" -> "Saved as a Word file."; else -> "Saved." }
+            } catch (e: Exception) {
+                if (!handleSignedOut(e)) toast = describe(e)
+            }
+        }
+    }
+
+    // ---- "Your day" from the connected apps (nothing is read until it is asked for)
+    fun readMyDay() {
+        briefingBusy = true
+        viewModelScope.launch {
+            briefing = runCatching { api.briefing() }.getOrNull()
+            briefingBusy = false
+        }
+    }
+
+    fun planMyDay(text: String) {
+        briefing = null
+        send("Here is my day. Please give me a short plan: what to do first, and anything I should not forget.\n\n$text")
+    }
+
+    /** The next stronger model that is ready, for "Ask a stronger model" (chat.js strongerModel) */
+    fun strongerModel(modelId: String): ModelCard? {
+        val cur = modelById(modelId) ?: return null
+        fun rank(m: ModelCard) = MODEL_RANK.indexOf(m.name) + (m.version ?: 0.0) / 100
+        if (cur.name !in MODEL_RANK) return null
+        return models.filter { it.ready && it.name in MODEL_RANK && it.name != cur.name && rank(it) > rank(cur) }.minByOrNull(::rank)
+    }
+
+    fun askStronger(m: ModelCard) {
+        pickModel(m.id)
+        regenerate()
     }
 
     fun open(screen: Screen) {
@@ -467,20 +704,62 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
                 c.messages.lastOrNull { it.role == "assistant" && it.modelId.isNotEmpty() }?.let { m ->
                     if (models.any { it.id == m.modelId }) model = m.modelId
                 }
-                if (c.generating) notice = "Still writing this reply. Open the chat again in a moment to see the rest."
+                if (c.generating) follow()
             } catch (e: Exception) {
                 if (!handleSignedOut(e)) notice = describe(e)
             }
         }
     }
 
+    /** The reply is still being written on the server (the app was closed or switched away from): watch it until it is done (send.js followReply) */
+    fun follow() {
+        val id = chatId ?: return
+        if (following || streaming) return
+        following = true
+        streaming = true
+        if (sentAt == 0L) sentAt = android.os.SystemClock.elapsedRealtime()
+        replyJob = viewModelScope.launch {
+            try {
+                var last = ""
+                for (i in 0 until 750) {                         // about 15 minutes
+                    val c = try { api.chat(id) } catch (e: OfflineException) { kotlinx.coroutines.delay(2000); continue }
+                    if (chatId != id) break
+                    val sig = c.messages.joinToString { it.content.length.toString() + it.status } + c.generating
+                    if (sig != last) {
+                        last = sig
+                        showChat(c)
+                        val end = bubbles.lastOrNull()
+                        if (c.generating && (end == null || end.mine)) bubbles.add(Bubble(nextKey--, mine = false, text = "", streaming = true, model = model))
+                        else if (c.generating && end != null) bubbles[bubbles.lastIndex] = end.copy(streaming = true)
+                    }
+                    if (!c.generating) break
+                    kotlinx.coroutines.delay(1200)
+                }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                if (!handleSignedOut(e)) notice = describe(e)
+            } finally {
+                following = false
+                streaming = false
+                working = null
+                sentAt = 0L
+                chatId?.let { cid -> runCatching { api.chat(cid) }.onSuccess { if (chatId == it.id) showChat(it) } }
+                refreshChats()
+            }
+        }
+    }
+
     private fun showChat(c: app.emvryx.android.data.Chat) {
+        val kept = bubbles.filter { !it.mine && it.id > 0 }.associateBy { it.id }
         chatId = c.id
+        isPrivate = c.private
         title = c.title
         bubbles.clear()
         bubbles.addAll(c.messages.map {
+            val old = kept[it.id]                                  // what only this phone saw stays with the answer: what it looked up, its timing
             Bubble(it.id, it.role == "user", it.content, cut = (it.cut || it.status == "partial") && !c.generating, model = it.modelId, id = it.id,
-                   docs = it.docs, fb = it.fb)
+                   docs = it.docs, fb = it.fb, notes = old?.notes, timing = old?.timing, memory = old?.memory, liked = old?.liked, autoNote = old?.autoNote)
         })
         ctx = c.ctx ?: c.messages.lastOrNull { it.ctx != null }?.ctx
         val sent = c.messages.flatMap { it.docs }.map { it.id }.toSet()
@@ -508,46 +787,81 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
 
     private fun reply(words: String, regenerate: Boolean, mode: String? = null, cont: Boolean = false) {
         notice = null
+        failure = null
         streaming = true
-        working = "Thinking…"
+        working = null                                         // the thinking words show while nothing is written yet
+        sentAt = android.os.SystemClock.elapsedRealtime()
         val replyKey = nextKey--
         bubbles.add(Bubble(replyKey, mine = false, text = "", streaming = true, model = model))
+        var finished = false
+        var lost = false
+        var got = false
         replyJob = viewModelScope.launch {
             try {
-                val id = chatId ?: api.newChat().also { chatId = it }
+                val id = chatId ?: api.newChat(isPrivate).also { chatId = it }
                 api.send(id, words, model, effort, regenerate, mode, cont).collect { ev ->
                     when (ev) {
-                        is ReplyEvent.Thinking -> working = "Thinking…"
+                        is ReplyEvent.Thinking -> if (ev.auto) update(replyKey) {
+                            it.copy(autoNote = "Auto chose " + ev.effort.replaceFirstChar { c -> c.uppercase() })
+                        }
                         is ReplyEvent.Loading -> working = "Loading ${modelById(ev.model)?.fullName ?: "the model"}…"
-                        is ReplyEvent.Compacting -> working = "Tidying up the chat's memory…"
+                        is ReplyEvent.Compacting -> working = "Summarizing earlier messages to make room…"
+                        is ReplyEvent.Notes -> update(replyKey) { if (ev.notes.retry) it.copy(text = "", notes = ev.notes) else it.copy(notes = ev.notes) }
+                        is ReplyEvent.Memory -> {
+                            val bits = ev.saved.map { it.replace(USER_PREFIX, "").removeSuffix(".") } +
+                                (if (ev.forgot > 0) listOf("forgot ${ev.forgot} " + if (ev.forgot == 1) "thing" else "things") else emptyList())
+                            if (bits.isNotEmpty()) update(replyKey) { it.copy(memory = "📖 Memory updated: " + bits.joinToString("; ")) }
+                        }
                         is ReplyEvent.Piece -> {
                             working = null
+                            got = true
                             update(replyKey) { it.copy(text = it.text + ev.text) }
                         }
                         is ReplyEvent.Done -> {
+                            finished = true
                             ev.title?.let { title = it }
-                            update(replyKey) { it.copy(streaming = false, cut = ev.cut) }
+                            ev.usage?.let { usage = it }
+                            ev.context?.let { ctx = it }
+                            update(replyKey) { it.copy(streaming = false, cut = ev.cut, timing = ev.timing) }
                         }
-                        is ReplyEvent.Failed -> notice = listOf(ev.message, ev.action).filter { it.isNotBlank() }.joinToString(" ")
+                        is ReplyEvent.Failed -> failure = Failure(ev.message, ev.action, ev.code)
                         is ReplyEvent.Other -> Unit
                     }
                 }
+                if (!finished && failure == null) lost = true            // the line ended without "done": the phone dropped it, the reply carries on
             } catch (e: CancellationException) {
                 throw e
+            } catch (e: OfflineException) {
+                if (got) lost = true else failure = Failure(describe(e))
             } catch (e: Exception) {
-                if (!handleSignedOut(e)) notice = describe(e)
+                if (!handleSignedOut(e)) failure = failureOf(e)
             } finally {
                 update(replyKey) { it.copy(streaming = false) }
                 bubbles.removeAll { it.key == replyKey && it.text.isEmpty() }
                 streaming = false
                 working = null
-                refreshChats()
-                chatId?.let { id ->                          // the saved messages: their ids (edit, report), pictures and the memory ring
-                    runCatching { api.chat(id) }.onSuccess { c -> if (!streaming && chatId == c.id) showChat(c) }
+                sentAt = 0L
+                if (failure != null && !got && !regenerate && words.isNotBlank()) draft = words   // refused before a word: the message goes back in the box
+                if (lost && chatId != null) follow()
+                else {
+                    refreshChats()
+                    chatId?.let { id ->                          // the saved messages: their ids (edit, report), pictures and the memory ring
+                        runCatching { api.chat(id) }.onSuccess { c -> if (!streaming && chatId == c.id) showChat(c) }
+                    }
                 }
             }
         }
     }
+
+    /** A refusal before anything was written: the card says what happened and what to do (send.js errorCard) */
+    private fun failureOf(e: Exception): Failure {
+        if (e !is ApiException) return Failure(describe(e))
+        val later = if (e.code == "tank_empty" || e.code == "week_limit") "Models on your own device are not counted." else ""
+        return Failure(e.message, e.action, e.code, later)
+    }
+
+    /** The words that change while it thinks ("Thinking", "Pondering" ...), from the server */
+    val thinkingWords: List<String> get() = state?.thinkingWords.orEmpty().ifEmpty { listOf("Thinking") }
 
     fun stop() {
         val id = chatId ?: return
@@ -555,6 +869,10 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
             runCatching { api.stop(id) }      // the server stops writing; what was written so far is kept
             replyJob?.cancel()
         }
+    }
+
+    fun dismissFailure() {
+        failure = null
     }
 
     private fun update(key: Long, change: (Bubble) -> Bubble) {
@@ -591,6 +909,9 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
             if (BuildConfig.DEFAULT_SERVER.contains(EMULATOR_HOST) && !onEmulator()) PUBLIC_SERVER else BuildConfig.DEFAULT_SERVER
 
         const val MAX_UPLOAD = 20_000_000
+        const val SUMMARY_MARK = "[Earlier in this chat, shortened to save room]"
+        private val MODEL_RANK = listOf("Flare", "Equinox", "Solstice", "Apogee")   // small and quick to strong and slow
+        private val USER_PREFIX = Regex("^The user\\W?s? ?", RegexOption.IGNORE_CASE)
         const val VRYX_TOUR_VERSION = 1                          // web/js/tour.js VRYX_TOUR_VERSION: raise both to show a changed tour again
 
         /** "chat.emvryx.app" -> "https://chat.emvryx.app"; null when it can't be an address. */

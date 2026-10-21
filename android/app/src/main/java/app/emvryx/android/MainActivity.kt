@@ -3,16 +3,22 @@ package app.emvryx.android
 import android.content.Intent
 import android.net.Uri
 import android.os.Bundle
-import androidx.activity.ComponentActivity
+import android.os.SystemClock
 import androidx.activity.SystemBarStyle
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.viewModels
+import androidx.biometric.BiometricManager.Authenticators.BIOMETRIC_WEAK
+import androidx.biometric.BiometricManager.Authenticators.DEVICE_CREDENTIAL
+import androidx.biometric.BiometricPrompt
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.key
+import androidx.core.content.ContextCompat
 import androidx.core.content.IntentCompat
+import androidx.fragment.app.FragmentActivity
 import androidx.lifecycle.lifecycleScope
 import app.emvryx.android.ui.ModelTour
 import app.emvryx.android.ui.VryxTour
@@ -20,26 +26,57 @@ import app.emvryx.android.ui.AppViewModel
 import app.emvryx.android.ui.ChatScreen
 import app.emvryx.android.ui.CodeScreen
 import app.emvryx.android.ui.CodeViewModel
+import app.emvryx.android.ui.LockScreen
 import app.emvryx.android.ui.OffScreen
 import app.emvryx.android.ui.Screen
 import app.emvryx.android.ui.SignInScreen
 import app.emvryx.android.ui.StartingScreen
 import app.emvryx.android.ui.WebScreen
 import app.emvryx.android.ui.readPicked
+import app.emvryx.android.ui.theme.Emvryx
 import app.emvryx.android.ui.theme.EmvryxTheme
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
-class MainActivity : ComponentActivity() {
+// A FragmentActivity (still a ComponentActivity) because the fingerprint prompt needs one
+class MainActivity : FragmentActivity() {
     private val vm: AppViewModel by viewModels()
     private val code: CodeViewModel by viewModels()
+    private var leftAt = 0L
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        enableEdgeToEdge(SystemBarStyle.dark(android.graphics.Color.TRANSPARENT), SystemBarStyle.dark(android.graphics.Color.TRANSPARENT))
-        setContent { Root(vm, code) }
+        setContent {
+            LaunchedEffect(Emvryx.light) {                      // the clock and battery icons dark on the light look, light on the dark one
+                val bar = if (Emvryx.light) SystemBarStyle.light(android.graphics.Color.TRANSPARENT, android.graphics.Color.TRANSPARENT)
+                          else SystemBarStyle.dark(android.graphics.Color.TRANSPARENT)
+                enableEdgeToEdge(bar, bar)
+            }
+            Root(vm, code, onUnlock = ::unlock)
+        }
         if (savedInstanceState == null) shared(intent)
+    }
+
+    override fun onStop() {
+        super.onStop()
+        leftAt = SystemClock.elapsedRealtime()
+    }
+
+    override fun onStart() {
+        super.onStart()
+        if (leftAt > 0 && SystemClock.elapsedRealtime() - leftAt > LOCK_AFTER_MS) vm.lockIfOn()   // away more than a minute: ask again
+    }
+
+    /** The phone's own fingerprint, face or screen-lock check */
+    private fun unlock() {
+        val prompt = BiometricPrompt(this, ContextCompat.getMainExecutor(this), object : BiometricPrompt.AuthenticationCallback() {
+            override fun onAuthenticationSucceeded(result: BiometricPrompt.AuthenticationResult) = vm.unlocked()
+        })
+        prompt.authenticate(BiometricPrompt.PromptInfo.Builder()
+            .setTitle("Unlock Emvryx")
+            .setAllowedAuthenticators(BIOMETRIC_WEAK or DEVICE_CREDENTIAL)
+            .build())
     }
 
     override fun onNewIntent(intent: Intent) {
@@ -59,13 +96,21 @@ class MainActivity : ComponentActivity() {
             vm.incoming(text, files)
         }
     }
+
+    private companion object {
+        const val LOCK_AFTER_MS = 60_000L
+    }
 }
 
 @Composable
-private fun Root(vm: AppViewModel, code: CodeViewModel) {
+private fun Root(vm: AppViewModel, code: CodeViewModel, onUnlock: () -> Unit) {
     // the chat follows the chosen model's colours; sign-in and the "off" page are Emvryx amber (web/js/core.js applyTheme)
     EmvryxTheme(model = if (vm.screen == Screen.Chat) vm.currentModel?.name else null) {
         Surface(color = MaterialTheme.colorScheme.background) {           // gives every screen the light text colour
+            if (vm.locked) {
+                LockScreen(onUnlock)
+                return@Surface
+            }
             Screens(vm, code)
             vm.tour?.let { ModelTour(vm, it) }                            // a model's welcome tour covers whatever screen is showing
             if (vm.vryxTour && vm.screen == Screen.Code) VryxTour(vm, close = vm::closeVryxTour)

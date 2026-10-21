@@ -41,7 +41,7 @@ class SseParserTest {
                 ReplyEvent.Loading("solstice-2"),
                 ReplyEvent.Piece("Hello"),
                 ReplyEvent.Piece(" there"),
-                ReplyEvent.Done("Greetings", 7, false),
+                ReplyEvent.Done("Greetings", 7, false, usage = app.emvryx.android.data.Usage()),     // {"plan": "pro"}: the rest take their defaults
             ),
             events,
         )
@@ -69,6 +69,6 @@ class SseParserTest {
 
     @Test
     fun anUnknownEventIsPassedOnByName() {
-        assertEquals(listOf(ReplyEvent.Other("memory")), parse("event: memory\ndata: {\"used\": 3}\n"))
+        assertEquals(listOf(ReplyEvent.Other("something_new")), parse("event: something_new\ndata: {\"used\": 3}\n"))
     }
 }

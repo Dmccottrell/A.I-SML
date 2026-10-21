@@ -61,7 +61,56 @@ class ApiClient(private val session: SessionStore) {
 
     suspend fun chat(id: Long): Chat = get("/api/chats/$id")
 
-    suspend fun newChat(): Long = post<NewChat>("/api/chats", JsonObject(emptyMap())).id
+    /** A new chat; a private one is never saved, never listed and never uses memory (its id is below zero) */
+    suspend fun newChat(private: Boolean = false): Long =
+        post<NewChat>("/api/chats", if (private) buildJsonObject { put("private", true) } else JsonObject(emptyMap())).id
+
+    // ---- what the website's chat menus do (web/js/chat.js, core.js): archive, folders, share a link, save as, Right, Your day
+
+    suspend fun archive(chatId: Long, on: Boolean) {
+        post<JsonObject>("/api/chats/$chatId/archive", buildJsonObject { put("archived", on) })
+    }
+
+    suspend fun archived(): List<ChatSummary> = get<ChatList>("/api/chats/archived").chats
+
+    suspend fun folder(chatId: Long, folder: String) {
+        post<JsonObject>("/api/chats/$chatId/folder", buildJsonObject { put("folder", folder) })
+    }
+
+    suspend fun shares(): Shares = get("/api/shares")
+
+    suspend fun share(chatId: Long, days: Int): ShareMade = post("/api/chats/$chatId/share", buildJsonObject { put("days", days) })
+
+    suspend fun revokeShare(id: String) {
+        post<JsonObject>("/api/shares/revoke", buildJsonObject { put("id", id) })
+    }
+
+    /** "Right answer": keeps the notes it used, so it can answer this again offline (POST .../like) */
+    suspend fun like(chatId: Long, messageId: Long): LikeReply = post("/api/chats/$chatId/messages/$messageId/like", JsonObject(emptyMap()))
+
+    /** The text as a PDF, Word or Markdown file (POST /api/export-doc): the file's bytes */
+    suspend fun exportDoc(text: String, format: String, title: String): ByteArray = withContext(Dispatchers.IO) {
+        val body = buildJsonObject { put("text", text); put("format", format); put("title", title) }
+        val r = try {
+            http.newCall(request("/api/export-doc", body)).execute()
+        } catch (e: IOException) {
+            throw OfflineException(e)
+        }
+        r.use { if (!it.isSuccessful) throw error(it) else it.body?.bytes() ?: ByteArray(0) }
+    }
+
+    suspend fun briefing(): Briefing = get("/api/briefing")
+
+    // ---- sign in with a code sent by email (web/js/auth.js)
+
+    suspend fun authOptions(): AuthOptions = get("/api/auth-options")
+
+    suspend fun emailCode(email: String) {
+        post<JsonObject>("/api/login/email/start", buildJsonObject { put("email", email) })
+    }
+
+    suspend fun emailSignIn(email: String, code: String): LoginReply =
+        post("/api/login/email/verify", buildJsonObject { put("email", email); put("code", code) })
 
     suspend fun stop(id: Long) {
         post<JsonObject>("/api/chats/$id/stop", JsonObject(emptyMap()))
