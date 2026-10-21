@@ -41,7 +41,9 @@ async function delChat(c) {
 
 // ---------------------------------------------------------------- thread
 const bullets = (t) => String(t || '').replace(/^(\s*)[-*] (?=\S)/gm, '$1\u2022 ');      // "- item" lines show as real bullet points (Copy keeps the plain text)
-function richText(t) {   // **bold** and "# heading" lines show as bold text instead of stars and hashes (Copy keeps the plain text)
+const fixesOn = () => !!(S.state && S.state.features && S.state.features.chat_fixes);
+function richText(t) {   // **bold** and "# heading" lines show as bold text instead of stars and hashes (Copy keeps the plain text); with chat_fixes, full formatting (markdown.js)
+  if (fixesOn()) return mdRender(t);
   const f = document.createDocumentFragment();
   bullets(String(t || '').replace(/^\s+/, '')).replace(/^#{1,4} +(.+)$/gm, '**$1**').split(/(\*\*[^*\n]+\*\*)/g).forEach((p) => { if (p) f.append(/^\*\*[^*\n]+\*\*$/.test(p) ? el('b', {}, p.slice(2, -2)) : p); });
   return f;

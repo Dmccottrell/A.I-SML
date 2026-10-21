@@ -68,6 +68,76 @@ def ocr_image(data):
     return "\n".join(r[1] for r in rows)
 
 
+STORE_SIDE, MODEL_SIDE = 2048, 1536     # photo_fixes: the longest side kept, and the longest side a model looks at (more is slower and no more accurate)
+
+
+def _open_picture(data):
+    """A Pillow image of the picture, turned the right way up (phones save photos sideways with a note saying how to turn them). Raises ValueError."""
+    from PIL import Image, ImageOps
+    try:
+        import pillow_heif                                                   # iPhone photos (.heic), when the package is there
+        pillow_heif.register_heif_opener()
+    except ImportError:
+        pass
+    try:
+        img = Image.open(io.BytesIO(data))
+        img.load()
+        return ImageOps.exif_transpose(img), img.format
+    except Exception:
+        raise ValueError("I couldn't open that picture. Send it as a JPG or PNG (on an iPhone: Settings > Camera > Formats > Most Compatible).") from None
+
+
+def _encode(img, fmt, side):
+    """The picture as JPEG (photos) or PNG (screenshots and drawings, so small text stays sharp), at most `side` pixels on its longest side."""
+    from PIL import Image
+    if max(img.size) > side:
+        img = img.copy()
+        img.thumbnail((side, side), Image.LANCZOS)
+    keep_png = fmt == "PNG" or img.mode in ("P", "1", "LA")
+    if img.mode in ("RGBA", "LA", "P"):
+        img = img.convert("RGBA")
+        flat = Image.new("RGB", img.size, (255, 255, 255))
+        flat.paste(img, mask=img.split()[-1])                                 # see-through parts on white (a model reads a black background as part of the picture)
+        img = flat
+    elif img.mode != "RGB":
+        img = img.convert("RGB")
+    buf = io.BytesIO()
+    img.save(buf, "PNG", optimize=True) if keep_png else img.save(buf, "JPEG", quality=90)
+    return buf.getvalue(), ".png" if keep_png else ".jpg"
+
+
+def clean_picture(name, data):
+    """photo_fixes, at upload: (name, bytes) of a picture the models can open: right way up, JPEG or PNG (WebP, HEIC, BMP and GIF are converted;
+    the models' picture loader opens only JPEG, PNG, BMP and GIF), at most STORE_SIDE pixels. Anything else is returned unchanged."""
+    if _ext(name) not in IMAGE_EXTS:
+        return name, data
+    img, fmt = _open_picture(data)
+    if fmt in ("JPEG", "PNG") and max(img.size) <= STORE_SIDE and not _rotated(data):
+        return name, data
+    out, ext = _encode(img, fmt, STORE_SIDE)
+    return re.sub(r"\.[A-Za-z0-9]+$", "", name) + ext, out
+
+
+def _rotated(data):
+    """True when the photo carries a note to turn it (EXIF orientation other than 1)."""
+    try:
+        from PIL import Image
+        return Image.open(io.BytesIO(data)).getexif().get(0x0112, 1) not in (1, None)
+    except Exception:
+        return False
+
+
+def picture_for_model(data):
+    """photo_fixes, when a model looks at a picture: right way up, JPEG or PNG, at most MODEL_SIDE pixels. The bytes unchanged when Pillow cannot open them."""
+    try:
+        img, fmt = _open_picture(data)
+    except (ValueError, ImportError):
+        return data
+    if fmt in ("JPEG", "PNG") and max(img.size) <= MODEL_SIDE and not _rotated(data):
+        return data
+    return _encode(img, fmt, MODEL_SIDE)[0]
+
+
 def _ext(name):
     m = re.search(r"\.[A-Za-z0-9]+$", name or "")
     return m.group(0).lower() if m else ""
@@ -138,7 +208,12 @@ def extract_text(name, data, allow_picture=False):
                 parts.append(" | ".join(c.text.strip() for c in row.cells))
         text = "\n".join(parts)
     elif ext in IMAGE_EXTS:
-        text = ocr_image(data)
+        try:
+            text = ocr_image(data)
+        except ValueError:
+            if not allow_picture:
+                raise
+            text = ""                                                     # no text reader on this computer, but a model can look at the picture
         if not text.strip() and allow_picture:                       # no words, but the picture reader can look at it when it is asked about
             return PICTURE_ONLY
         if not text.strip():
@@ -332,17 +407,24 @@ TALK_TO_THEM = ("Talk to the user directly as \"you\". If you know their name, i
                 "someone else, and never guess what they will say. Plain, natural sentences.")
 
 
-def picture_hint(only_picture=False, earlier=False):
+PICTURE_ACCURACY = ("Be exact about the picture: say only what you can really see. Never make up names, numbers, brands, places or words that are not "
+                    "visible; when something is too small, blurry or cut off to be sure, say so in a few words instead of guessing. When they ask what it says "
+                    "or for the details, give them fully and copy any text word for word. Count things one by one before giving a number. A screenshot of an account, "
+                    "a balance, a bill, a schedule or a form: give every key number with its label exactly as shown (all the balances, dates and amounts), "
+                    "not a summary like \"a few days\". When several pictures are in the chat, answer about the one just sent.")
+
+
+def picture_hint(only_picture=False, earlier=False, accurate=False):
     """The instruction for a model that looks at the picture itself: answer like Claude or ChatGPT do with a picture (react, add value, fit the
     kind of picture), not like a text reader quoting a document. `earlier`: the picture came with an earlier message, and the user is now just
     talking: answer what they said first."""
     if earlier:
         return ("[Earlier in this chat the user you are talking with shared the picture you can see here. Now reply to what they just said, like a friend: "
                 "react to it first (share their excitement, answer their question, give your take), and bring in the picture only where it helps. Keep it short. "
-                "Do not repeat the picture's text and never add sources or file names in brackets. " + TALK_TO_THEM + "]")
+                "Do not repeat the picture's text and never add sources or file names in brackets. " + TALK_TO_THEM + (" " + PICTURE_ACCURACY if accurate else "") + "]")
     lead = ("[The user you are talking with sent you a picture with no message. You can see it.\n" if only_picture else
             "[The user you are talking with sent you a picture and said something about it. You can see it. Answer what they said first, using what you see.\n")
-    return lead + PICTURE_PLAYBOOK + "\n" + TALK_TO_THEM + "]"
+    return lead + PICTURE_PLAYBOOK + "\n" + (PICTURE_ACCURACY + "\n" if accurate else "") + TALK_TO_THEM + "]"
 
 
 def picture_words_hint():

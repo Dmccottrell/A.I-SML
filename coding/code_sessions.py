@@ -108,19 +108,25 @@ def _folded_steps(messages):
 
 class Meter:
     """Counts a coding session against the person's plan, step by step, exactly like chat messages (same tank, same week, same model weight).
-    Before each model call the likely cost is held; afterwards the real counts (from llama-server when it reports them) replace the hold."""
+    Before each model call the likely cost is held; afterwards the real counts (from llama-server when it reports them) replace the hold.
+    Steps count at limits.json code_rate, and the hold counts what the last step already sent as cached: each step resends the same project,
+    so counting it all as new text again emptied a Mega tank in a handful of Apogee steps."""
 
     def __init__(self, limiter, user, model_key, clock=time.time, max_new=1024, effort="balanced"):
         self.limiter, self.user, self.key, self.clock, self.max_new, self.effort = limiter, user, model_key, clock, max_new, effort
         self.counted = 0.0
         self.steps = 0
+        self.seen = 0                                      # tokens the last step sent and got back (llama-server keeps them cached)
 
     @staticmethod
     def tokens(messages):
         return sum(len(str(m.get("content", ""))) for m in messages) // 4 + 4 * len(messages)
 
     def reserve(self, messages):
-        est = (self.tokens(messages) + self.max_new) * self.limiter.weight(self.key) * self.limiter.cfg["effort"][self.effort]
+        total = self.tokens(messages)
+        cached = min(total, self.seen)
+        held = total - cached + cached * self.limiter.cfg["multipliers"]["cached_in"] + self.max_new
+        est = held * self.limiter.weight(self.key) * self.limiter.cfg["effort"][self.effort] * self.limiter.code_rate()
         return self.limiter.reserve(self.user, self.key, self.effort, est, self.clock())
 
     def cancel(self, res):
@@ -130,8 +136,9 @@ class Meter:
         u = getattr(generate, "usage", None) or {}
         fresh = u.get("fresh_in", self.tokens(messages))
         out = u.get("out", len(reply) // 4)
-        self.counted += self.limiter.settle(res, fresh, u.get("cached_in", 0), out, self.effort, self.clock())
+        self.counted += self.limiter.settle(res, fresh, u.get("cached_in", 0), out, self.effort, self.clock(), rate=self.limiter.code_rate())
         self.steps += 1
+        self.seen = self.tokens(messages) + len(reply) // 4
 
 
 class Session:
@@ -485,6 +492,7 @@ class Session:
                     self.emit("retry", text=clip(prose, 400), why=clip(str(e), 200), limit=bool(getattr(generate, "cut_off", False)), **took)
                 # words with no tool call: if the turn ends on them they arrive as the "end" message, so no step is shown
             return reply
+        call.fixes = getattr(generate, "fixes", False)          # vryxcode_fixes reaches the agent loop (harness.run_agent reads it from the model call)
         return call
 
     def run(self, generate, max_turns, context_tokens, extra_programs=()):

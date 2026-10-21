@@ -281,8 +281,8 @@ class StateAccounts:
         email they gave, and refusing it looked like a wrong password. The password is the proof; an email shared by two accounts is
         never guessed between. Email codes and recovery still need a verified email (user_by_email)."""
         rec = self.find_login(ident)
-        if rec is None and "@" in str(ident or ""):
-            em = auth.clean_email(str(ident).strip())
+        if not rec and "@" in str(ident or ""):                              # an email that was never confirmed: still the account's own email, and the password is still needed
+            em = auth.clean_email(ident)
             same = [u for u in self.users.values() if em and u.get("email") == em]
             rec = same[0] if len(same) == 1 else None
         if not rec or not rec.get("pw"):

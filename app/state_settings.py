@@ -119,6 +119,6 @@ class StateSettings:
     # ---- the numbers on screen
     def usage_snapshot(self, who, model, effort):
         key = model["name"].lower() if model else "flare"
-        snap = self.limiter.snapshot(who["user"], key, effort, self.clock())
+        snap = self.limiter.snapshot(who["user"], key, effort, self.clock(), real=self.flags.on("chat_fixes", who))
         snap["models"] = snap.pop("by_model")
         return snap

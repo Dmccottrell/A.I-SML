@@ -1,10 +1,10 @@
 /* Sending a message and streaming the answer. */
 // ---------------------------------------------------------------- sending
 const clockText = (s) => (s < 1 ? '' : s < 60 ? s + 's' : Math.floor(s / 60) + 'm ' + String(s % 60).padStart(2, '0') + 's');
-function thinkingNode() {
+function thinkingNode(since) {    // since: when the message was sent (performance.now()), so the clock carries on instead of starting again
   const words = S.state.thinking_words, word = el('span', {class: 'word'}, words[0]), secs = el('span', {class: 'secs', 'aria-hidden': 'true'}); let i = 0;
   const node = el('div', {class: 'thinking', 'aria-label': 'Thinking'}, logo(34, true), word, el('span', {class: 'dots'}, ...'...'.split('').map((d) => el('span', {}, d))), secs);
-  const t0 = performance.now();
+  const t0 = since || performance.now();
   S.thinkTimer = setInterval(() => { i++; word.textContent = words[i % words.length]; word.style.animation = 'none'; void word.offsetWidth; word.style.animation = ''; }, S.state.think_switch_s * 1000);
   S.secTimer = setInterval(() => { secs.textContent = clockText(Math.floor((performance.now() - t0) / 1000)); }, 250);      // the seconds go up by one, never back
   node._stop = () => { clearInterval(S.thinkTimer); clearInterval(S.secTimer); S.thinkTimer = S.secTimer = null; };
@@ -18,9 +18,10 @@ async function send(regen, mode) {
   if (!S.chatId) { const r = await post('/api/chats', {private: S.private, skill: S.skill, docs: S.docs.map((d) => d.id)}); if (!r.ok) return; S.chatId = (await r.json()).id; remember(); }
   S.busy = true; S.stick = true; S.contNow = S.cont === true; S.cont = false; renderComposer(); closeMenus();
   if (regen === true) { const last = S.messages[S.messages.length - 1]; if (last && last.role === 'assistant') S.messages.pop(); }
-  else { S.messages.push({id: 'u' + Date.now(), role: 'user', content: text, docs: pendingDocs.map((d) => ({id: d.id, name: d.name, kind: d.kind}))}); input.value = ''; renderAttached(); }
+  else { S.pending = {id: 'u' + Date.now(), role: 'user', content: text, docs: pendingDocs.map((d) => ({id: d.id, name: d.name, kind: d.kind}))}; S.messages.push(S.pending); input.value = ''; renderAttached(); }
   renderThread(); const before = S.lastUsage;
-  const think = thinkingNode(); $('thread').append(think); scrollDown(true);
+  S.sentAt = performance.now();
+  const think = thinkingNode(S.sentAt); $('thread').append(think); scrollDown(true);
   let aiBubble = null, aiWrap = null, got = '', errCard = null, looked = null, lost = false, finished = false;
   S.abort = new AbortController();
   try {
@@ -50,12 +51,17 @@ async function send(regen, mode) {
         if (!aiWrap) { think._stop(); think.remove(); const m = curModel(); aiBubble = el('div', {class: 'bubble'}); const note = S.autoNote ? el('span', {title: S.autoNote.reason}, ' \u00b7 Auto chose ' + S.autoNote.effort[0].toUpperCase() + S.autoNote.effort.slice(1)) : null;
         aiWrap = el('div', {class: 'msg ai'}, el('div', {class: 'meta'}, logo(14, false, m ? m.name : 'brand'), mname(m), note), aiBubble); $('thread').append(aiWrap);
           const line = lookupLine(looked); if (line) aiWrap.insertBefore(line, aiBubble); }
-        got += data.t; aiBubble.replaceChildren(richText(got), el('span', {class: 'cursor'}, '▍')); scrollDown();
+        got += data.t;
+        if (!fixesOn()) { aiBubble.replaceChildren(richText(got), el('span', {class: 'cursor'}, '▍')); scrollDown(); }
+        else if (!S.paintDue) { S.paintDue = true; requestAnimationFrame(() => { S.paintDue = false; if (aiBubble) { const md = richText(got), cur = el('span', {class: 'cursor'}, '▍'); let at = md.lastElementChild;
+          while (at && /^(UL|OL|LI)$/.test(at.tagName) && at.lastElementChild) at = at.lastElementChild;      // the cursor sits at the end of the text being written
+          (at && /^(P|LI)$/.test(at.tagName) ? at : md).append(cur); aiBubble.replaceChildren(md); scrollDown(); } }); }   // redrawn once a frame, not once a word: a long answer stays smooth
       } else if (ev === 'done') {
         finished = true; S.title = data.title || S.title; S.state.usage = data.usage; renderUsage(data.usage); popTokens(before, data.usage);
         const cn = $('compactNote'); if (cn) cn.remove();
         S.compacting = false; if (data.context) renderCtx(data.context);
         if (data.compacted) $('thread').insertBefore(el('div', {class: 'note'}, 'Earlier messages were summarized to save room'), aiWrap);
+        if (data.timing && aiWrap) S.timing = data.timing;                  // the owner's speed line (shown under the reply once the chat is redrawn)
       } else if (ev === 'error') { throw Object.assign(new Error(data.message), {info: data, status: data.http}); }
     };
     for (;;) {
@@ -72,25 +78,41 @@ async function send(regen, mode) {
     think._stop && think._stop(); think.remove(); S.busy = false; S.compacting = false; S.abort = null; S.resume = false;
   }
   if (lost) return followReply();   // the reply keeps being written on the server: show it when it is ready
+  S.pending = null; S.sentAt = null;
     try { const r = await api('/api/chats/' + S.chatId); if (r.ok) { const c = await r.json(); S.messages = c.messages; S.title = c.title; } } catch (e) {}
   renderThread(); if (errCard) { $('thread').append(errCard); scrollDown(true); if (!got && regen !== true) input.value = text; }
+  if (S.timing && !errCard) { $('thread').append(timingLine(S.timing)); scrollDown(); } S.timing = null;
   renderComposer(); try { const q = new URLSearchParams({effort: S.effort, model: S.model}); const r = await api('/api/state?' + q); const st = await r.json(); S.state.chats = st.chats; S.state.usage = st.usage; renderChats(); renderUsage(st.usage); } catch (e) {}
+}
+// Where the reply's time went, for the owner and admins only: "9.8s in all · looking it up 1.2s · loading the model 0s · first word at 6.1s"
+function timingLine(t) {
+  const sec = (x) => (x < 10 ? x.toFixed(1) : Math.round(x)) + 's';
+  const bits = [sec(t.total) + ' in all'];
+  if (t.lookup >= 0.3) bits.push('looking it up ' + sec(t.lookup));
+  if (t.load >= 0.3) bits.push('loading the model ' + sec(t.load));
+  bits.push('first word at ' + sec(t.first_word));
+  if (t.thought) bits.push('thought first (Deep)');
+  if (t.tries > 1) bits.push('answered twice (searched after "I don\u2019t know")');
+  return el('div', {class: 'note', style: 'align-self:flex-start;opacity:.75', title: 'Only you and your admins see this'}, '\u23f1 ' + bits.join(' \u00b7 '));
 }
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 async function followReply() {   // the reply is still being written on the server (the app was closed or switched away from): watch it until it is done
   if (S.following || S.chatId == null) return;
   const id = S.chatId; S.following = true; S.busy = true; S.stick = true; renderComposer();
-  const think = thinkingNode(); let lastLen = -1;
+  const think = thinkingNode(S.sentAt); let lastLen = -1;
+  // while the model is still loading the server has not saved the question yet: keep showing it rather than letting it disappear
+  const withPending = (msgs, generating) => { const p = S.pending;
+    return generating && p && !msgs.some((m) => m.role === 'user' && m.content === p.content && msgs.indexOf(m) >= msgs.length - 2) ? [...msgs, p] : msgs; };
   try {
     for (let i = 0; i < 600; i++) {   // up to about 15 minutes
       let c; try { const r = await api('/api/chats/' + id); if (!r.ok) break; c = await r.json(); } catch (e) { if (e.message === 'login') break; await sleep(2000); continue; }
       if (id !== S.chatId) break;
       const len = JSON.stringify(c.messages).length;
-      if (len !== lastLen) { lastLen = len; S.messages = c.messages; S.title = c.title; renderThread(false); if (c.generating) $('thread').append(think); scrollDown(); }
-      if (!c.generating) break;
+      if (len !== lastLen) { lastLen = len; S.messages = withPending(c.messages, c.generating); S.title = c.title; renderThread(false); if (c.generating) $('thread').append(think); scrollDown(); }
+      if (!c.generating || S.stopFollow) break;
       await sleep(1200);
     }
-  } finally { think._stop && think._stop(); think.remove(); S.busy = false; S.following = false; }
+  } finally { think._stop && think._stop(); think.remove(); S.busy = false; S.following = false; S.pending = null; S.sentAt = null; S.stopFollow = false; }
   renderThread(); renderComposer();
   try { const q = new URLSearchParams({effort: S.effort, model: S.model}); const r = await api('/api/state?' + q); const st = await r.json(); S.state.chats = st.chats; S.state.usage = st.usage; renderChats(); renderUsage(st.usage); } catch (e) {}
 }
@@ -132,7 +154,17 @@ function errorCard(e) {
   }
   return card;
 }
-function stop() { if (S.chatId != null) post('/api/chats/' + S.chatId + '/stop').catch(() => {}); }
+// Stop: ask the server to stop, and if the page is still waiting a few seconds later (a model that is slow to let go), stop waiting here too
+function stop() {
+  if (S.chatId == null) return;
+  post('/api/chats/' + S.chatId + '/stop').catch(() => {});
+  const id = S.chatId;
+  setTimeout(() => {
+    if (!S.busy || S.chatId !== id) return;
+    S.stopFollow = true;                                   // a reply being followed after switching away: stop following it
+    if (S.abort) { S.resume = false; S.abort.abort(); }    // the live reply: end it on this side (what was written stays)
+  }, 6000);
+}
 function regenMenu(btn) {
   const wrap = btn.closest('.msg'), old = wrap.querySelector('.regen');
   if (old) { old.remove(); return; }

@@ -1,4 +1,4 @@
-"""A model that sends a broken file-writing call: raw line breaks and unescaped quotes are repaired, half a file is never saved, and a model that cannot get it right is stopped instead of looping."""
+"""A model that sends a broken file-writing call: raw line breaks and unescaped quotes are repaired, a cut-off file keeps its whole lines and the rest is asked for, and a model that cannot get it right is told a new way, then stopped instead of looping."""
 import os, sys; sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), os.pardir)); import emvryx_paths  # noqa: E402,F401
 import tempfile
 import unittest
@@ -69,7 +69,7 @@ class Loop(unittest.TestCase):
             return call('{"name": "read_file", "args": {oops}')
         with harness.Sandbox(workspace=tempfile.mkdtemp()) as box:
             r = harness.run_agent("make a page", garbled, box, max_turns=20)
-        self.assertEqual(len(n), harness.BAD_CALL_LIMIT)
+        self.assertEqual(len(n), harness.BAD_CALL_STOP)
         self.assertEqual(r["stopped"], "bad_call")
         self.assertIn("smaller parts", r["summary"])
 
@@ -79,6 +79,73 @@ class Loop(unittest.TestCase):
         with harness.Sandbox(workspace=tempfile.mkdtemp()) as box:
             r = harness.run_agent("x", lambda m: next(replies), box, max_turns=20)
         self.assertTrue(r["finished"])
+
+
+
+class XmlCalls(unittest.TestCase):
+    """The Emvryx 3 models' base writes tool calls as <function=..><parameter=..> blocks (Oct 20: Apogee 3 in VryxCode was stopped as 'garbled' 3 times)"""
+
+    def test_a_whole_file_with_quotes_and_line_breaks(self):
+        page = '<!doctype html>\n<meta http-equiv="Content-Security-Policy" content="default-src \'self\'">\n<button class="big">Add</button>'
+        t = "Fixing the policy.\n<tool_call>\n<function=write_file>\n<parameter=path>\nindex.html\n</parameter>\n<parameter=content>\n" + page + "\n</parameter>\n</function>\n</tool_call>"
+        self.assertEqual(harness.parse_tool_call(t), ("write_file", {"path": "index.html", "content": page}))
+
+    def test_values_that_look_like_json_are_read_as_json(self):
+        t = "<tool_call>\n<function=write_file>\n<parameter=path>\na.py\n</parameter>\n<parameter=content>\nx = 1\n</parameter>\n<parameter=append>\ntrue\n</parameter>\n</function>\n</tool_call>"
+        self.assertEqual(harness.parse_tool_call(t), ("write_file", {"path": "a.py", "content": "x = 1", "append": True}))
+
+    def test_json_calls_still_work(self):
+        self.assertEqual(harness.parse_tool_call('<|tool_call|>{"name": "read_file", "args": {"path": "main.py"}}<|end_tool_call|>')[0], "read_file")
+
+
+class KeepsGoing(unittest.TestCase):
+    """Like Claude Code: a cut-off file keeps what was written and the rest is asked for, and unreadable calls change the approach before anything stops."""
+
+    def test_a_cut_off_xml_write_saves_the_whole_lines_and_asks_for_the_rest(self):
+        page = "".join(f"<p>{i}</p>\n" for i in range(40))
+        cut = "<tool_call>\n<function=write_file>\n<parameter=path>\nindex.html\n</parameter>\n<parameter=content>\n" + page + "<p>4"
+        rest = call('{"name": "write_file", "args": {"path": "index.html", "append": true, "content": "<p>40</p>\\n"}}')
+        replies = iter([cut, rest, call('{"name": "finish", "args": {"summary": "ok"}}')])
+        seen = []
+
+        def gen(m):
+            seen.append(m[-1]["content"])
+            return next(replies)
+        with harness.Sandbox(workspace=tempfile.mkdtemp()) as box:
+            r = harness.run_agent("make a page", gen, box, max_turns=10)
+            with open(os.path.join(box.root, "index.html")) as f:
+                text = f.read()
+        self.assertTrue(r["finished"])
+        self.assertEqual(text, page + "<p>40</p>\n")
+        self.assertIn("first 40 lines were saved", seen[1])
+        self.assertIn("append=true", seen[1])
+
+    def test_a_cut_off_json_write_is_saved_the_same_way(self):
+        part = harness.salvage_cut_off('<|tool_call|>{"name":"write_file","args":{"path":"a.js","content":"let a = 1;\\nlet b = \\"x\\";\\nlet c = 3;\\nlet d')
+        self.assertEqual(part, {"path": "a.js", "content": 'let a = 1;\nlet b = "x";\nlet c = 3;\n', "append": False})
+
+    def test_a_tiny_or_other_cut_off_call_is_not_saved(self):
+        self.assertIsNone(harness.salvage_cut_off('<|tool_call|>{"name":"write_file","args":{"path":"a.js","content":"x'))
+        self.assertIsNone(harness.salvage_cut_off('<|tool_call|>{"name":"run","args":{"command":"ls\\n\\n\\n\\n'))
+
+    def test_after_three_unreadable_calls_it_is_told_a_new_way_and_keeps_going(self):
+        replies = iter([call('{"name": "read_file", "args": {oops}')] * 3 + [call('{"name": "finish", "args": {"summary": "ok"}}')])
+        seen = []
+
+        def gen(m):
+            seen.append(m[-1]["content"])
+            return next(replies)
+        with harness.Sandbox(workspace=tempfile.mkdtemp()) as box:
+            r = harness.run_agent("x", gen, box, max_turns=20)
+        self.assertTrue(r["finished"])
+        self.assertIn("change how you send them", seen[3])
+
+    def test_long_unreadable_replies_are_kept_short_in_the_conversation(self):
+        bad = call('{"name": "read_file", "args": {oops ' + "x" * 5000 + "}")
+        replies = iter([bad, call('{"name": "finish", "args": {"summary": "ok"}}')])
+        with harness.Sandbox(workspace=tempfile.mkdtemp()) as box:
+            r = harness.run_agent("x", lambda m: next(replies), box, max_turns=5)
+        self.assertLess(max(len(m["content"]) for m in r["messages"] if m["role"] == "assistant"), 800)
 
 
 if __name__ == "__main__":

@@ -915,6 +915,37 @@ def normalize_call(name, args):
     return name, args
 
 
+XML_FUNCTION = re.compile(r"<function=([\w.\-]+)>", re.S)
+XML_PARAM = re.compile(r"<parameter=([\w.\-]+)>\n?(.*?)\n?</parameter>", re.S)
+
+
+def parse_xml_call(body):
+    """(name, args) from a tool call written the way the Emvryx 3 models' base writes it, or None:
+        <function=write_file>
+        <parameter=path>
+        index.html
+        </parameter>
+        <parameter=content>
+        ...the file, with real line breaks and quotes...
+        </parameter>
+        </function>
+    File text needs no escaping in this form, which is why big files come out whole. Values that look like JSON (true, 3, [..]) are read as JSON."""
+    fn = XML_FUNCTION.search(body or "")
+    if not fn:
+        return None
+    args = {}
+    for key, value in XML_PARAM.findall(body):
+        if key not in ("content", "text", "new_text", "old_text", "new_string", "old_string"):
+            v = value.strip()
+            try:
+                args[key] = json.loads(v) if v[:1] in "[{\"-0123456789" or v in ("true", "false", "null") else v
+            except ValueError:
+                args[key] = v
+        else:
+            args[key] = value
+    return fn.group(1), args
+
+
 def parse_tool_call(text):
     """The first tool call in the model's text -> (name, args). Raises ToolError if it can't be read."""
     m = TOOL_CALL.search(text) or QWEN_TOOL_CALL.search(text)
@@ -924,6 +955,9 @@ def parse_tool_call(text):
     if not m:
         raise ToolError('no tool call found. Write: <|tool_call|>{"name": "...", "args": {...}}<|end_tool_call|>')
     body = m.group(1)
+    xml = parse_xml_call(body)                                    # the newer Qwen-style form: <function=NAME><parameter=KEY>value</parameter>...</function>
+    if xml:
+        return normalize_call(*xml)
     for strict in (True, False):                                  # models often put raw line breaks inside the file text; strict=False accepts those
         try:
             call = json.loads(body, strict=strict)
@@ -960,6 +994,78 @@ def _salvage_write(body):
     if re.search(r'"append"\s*:\s*true', body[:c.start()] + body[c.end() + len(text):]):
         args["append"] = True                                     # a part of a bigger file must not replace what is already there
     return "write_file", args
+
+
+_XML_PATH = re.compile(r"<parameter=(?:path|file_path|filepath|filename|file)>\n?(.*?)\n?</parameter>", re.S)
+_XML_CONTENT = re.compile(r"<parameter=(?:content|contents|text|code)>\n?")
+
+
+def salvage_cut_off(text):
+    """A write_file call cut off before its end (the reply ran out of room): {"path", "content", "append"} with the file text up to its last whole
+    line, or None. Keeping that part and asking for the rest with append=true moves the work forward, where sending the whole file again
+    would be cut off at the same place."""
+    start = max(text.rfind("<|tool_call|>"), text.rfind("<tool_call>"))
+    if start < 0:
+        return None
+    body = text[start:]
+    fn = XML_FUNCTION.search(body)
+    if fn:
+        p, c = _XML_PATH.search(body), _XML_CONTENT.search(body)
+        if TOOL_ALIASES.get(fn.group(1), fn.group(1)) != "write_file" or not p or not c or "</parameter>" in body[c.end():]:
+            return None
+        part, append = body[c.end():], bool(re.search(r"<parameter=append>\s*true", body))
+    else:
+        p, c = _WRITE_PATH.search(body), _WRITE_CONTENT.search(body)
+        if not _WRITE_NAME.search(body) or not p or not c:
+            return None
+        part = re.sub(r"\\(n|t|r|\"|\\)", lambda k: {"n": "\n", "t": "\t", "r": "\r", '"': '"', "\\": "\\"}[k.group(1)], body[c.end():])
+        append = bool(re.search(r'"append"\s*:\s*true', body[:c.start()]))
+    part = part[:part.rfind("\n") + 1]
+    if part.count("\n") < 3:
+        return None
+    return {"path": p.group(1).strip(), "content": part, "append": append}
+
+
+CUT_OFF_SAVED = ("Your reply ran out of room in the middle of {path}, so the first {n} lines were saved ({mode}). They end with:\n{tail}\n"
+                 "Send the rest now with write_file and append=true, starting right after that line, at most 80 lines per call. Do not send the start again.")
+BAD_CALL_RECOVER = ("Your last {n} tool calls could not be read, so change how you send them. Send one small step: read_file to look, or "
+                    "edit_file for a small change, or write_file with at most 60 lines (then append=true for the rest). The plainest form, "
+                    "with no escaping needed inside the file:\n<tool_call>\n<function=write_file>\n<parameter=path>\nindex.html\n</parameter>\n"
+                    "<parameter=content>\n...the file...\n</parameter>\n</function>\n</tool_call>")
+
+
+def shorten_bad_reply(reply, keep=600):
+    """A reply whose tool call could not be read, kept short in the conversation: the model should not copy it, and it should not fill the memory."""
+    return reply if len(reply) <= keep else reply[:keep] + f"\n...[{len(reply) - keep} more characters of a tool call that could not be read]"
+
+
+def nearest_lines(root, path, old, show=12):
+    """vryxcode_fixes: the lines of `path` most like `old` (an edit that missed), numbered, so the model can copy the real text in its next step
+    instead of spending a step on read_file first. "" when the file cannot be read."""
+    import difflib
+    try:
+        full = os.path.realpath(os.path.join(root, str(path or "")))
+        if not full.startswith(os.path.realpath(root) + os.sep):
+            return ""
+        with open(full, encoding="utf-8", errors="replace") as f:
+            lines = f.read().split("\n")
+    except (OSError, ValueError):
+        return ""
+    want = [l.strip() for l in str(old or "").split("\n") if l.strip()]
+    if not want or not lines:
+        return ""
+    size = max(1, min(len(want), show))
+    best, at = -1.0, 0
+    for i in range(0, max(1, len(lines) - size + 1)):
+        score = difflib.SequenceMatcher(None, "\n".join(want[:size]), "\n".join(l.strip() for l in lines[i:i + size]), autojunk=False).quick_ratio()
+        if score > best:
+            best, at = score, i
+    lo, hi = max(0, at - 2), min(len(lines), at + size + 2)
+    return f"The closest lines in {path} now ({lo + 1}-{hi}):\n" + "\n".join(f"{n + 1}: {lines[n]}" for n in range(lo, hi)) + "\nCopy the text you want to change from these lines exactly (without the numbers)."
+
+
+SAME_ERROR = ("This is the same error as your last step, so trying it again will not work. Change your approach now: look at the error and the file again "
+              "(read_file), then make a different fix, or do the step another way.")
 
 
 def format_result(text):
@@ -1107,7 +1213,8 @@ def compact(messages, keep=4, pinned=""):
 
 THINK_TAGS = re.compile(r"<think>.*?</think>", re.S)
 NO_CALL_LIMIT = 3          # stop after this many replies in a row without a tool call, instead of using every step on the same answer
-BAD_CALL_LIMIT = 3         # ...and this many replies in a row whose tool call could not be read (a file too big to write in one go, say)
+BAD_CALL_LIMIT = 3         # ...this many replies in a row whose tool call could not be read: the model is told to change how it sends them
+BAD_CALL_STOP = 6          # ...and the run stops only at this many in a row
 NO_CALL_TOTAL = 5          # ...or this many in one run (a model that alternates "I can't" with the same tool call is stuck too)
 REPEAT_HINT_AT = 3         # the same step with the same result this many times: tell the model to try something else
 REPEAT_STOP_AT = 5         # ...and stop the run at this many
@@ -1282,6 +1389,8 @@ def run_agent(task, generate, sandbox, max_turns=8, system=None, project=True, h
     no_call, no_call_total, bad_calls, repeats = 0, 0, 0, {}        # replies with no tool call at all (the model is chatting, not working); steps repeated
     written, last_test, last_sig, same_fail = set(), "", None, 0     # a long build's progress (build mode)
     checkpoints = Checkpoints(sandbox.root) if build else None
+    fixes = bool(getattr(generate, "fixes", False))                  # vryxcode_fixes: nearest lines on a missed edit, a nudge on the same error twice, stop messages that fit
+    last_err, same_err = None, 0
     if build and "rollback" not in sandbox.extra_tools:
         sandbox.register_tool("rollback", lambda: checkpoints.restore())
     for turn in range(1, max_turns + 1):
@@ -1294,8 +1403,10 @@ def run_agent(task, generate, sandbox, max_turns=8, system=None, project=True, h
         reply = generate(messages)
         messages.append({"role": "assistant", "content": reply})
         done = False
+        called = None
         try:
             name, args = parse_tool_call(reply)
+            called = (name, args)
             if checks and name in ("write_file", "edit_file"):
                 problem = preview_check(sandbox.root, name, args)
                 if problem:
@@ -1355,23 +1466,54 @@ def run_agent(task, generate, sandbox, max_turns=8, system=None, project=True, h
                     messages.append({"role": "user", "content": CODE_NUDGE})
                     continue
                 return {"finished": False, "said": True, "summary": words, "turns": turn, "messages": messages, "episodes": episodes}
+            if str(e).startswith("the tool call was cut off"):
+                part = salvage_cut_off(reply)                            # keep what was written and ask for the rest, instead of starting the file again
+                if part and not permissions.check("write_file", part):
+                    try:
+                        sandbox.call("write_file", part)
+                    except ToolError:
+                        part = None
+                    if part:
+                        messages[-1]["content"] = shorten_bad_reply(reply, 1200)
+                        written.add(re.sub(r"^(\./)+", "", part["path"].replace("\\", "/")))
+                        web_unchecked = web_unchecked or part["path"].lower().endswith((".html", ".htm", ".css", ".js"))
+                        lines = part["content"].rstrip("\n").split("\n")
+                        messages.append({"role": "user", "content": format_result(CUT_OFF_SAVED.format(
+                            path=part["path"], n=len(lines), mode="added to the end" if part["append"] else "the file starts with them", tail="\n".join(lines[-3:])))})
+                        bad_calls, step_fails = 0, 0
+                        continue
             result, done = f"error: {e}", False
             step_fails += 1
+            if fixes and called and called[0] == "edit_file" and isinstance(called[1], dict) and str(e).startswith(("the text in 'old' is not in", "the first line of 'old'")):
+                near = nearest_lines(sandbox.root, called[1].get("path"), called[1].get("old"))
+                if near:
+                    result += "\n" + near
+            sig = str(e)[:120]
+            same_err = same_err + 1 if fixes and sig == last_err else 0
+            last_err = sig
+            if same_err == 1 and not str(e).startswith(("no tool call found", "the tool call")):
+                result += "\n" + SAME_ERROR
             if steady and plan_items and step_fails >= 2:
                 result += "\n" + steady_note(plan_items, step_fails)
             bad_calls = bad_calls + 1 if str(e).startswith(("the tool call is not valid JSON", "the tool call was cut off")) else 0
-            if bad_calls >= BAD_CALL_LIMIT:
+            if bad_calls:
+                messages[-1]["content"] = shorten_bad_reply(reply)
+            if bad_calls == BAD_CALL_LIMIT:
+                result += "\n" + BAD_CALL_RECOVER.format(n=bad_calls)
+            if bad_calls >= BAD_CALL_STOP:
                 return {"finished": False, "turns": turn, "messages": messages, "episodes": episodes, "stopped": "bad_call",
                         "summary": "The model kept sending a tool call that could not be read, so it was stopped instead of looping. This usually means the file was too big "
-                                   "to write in one go. Ask for it in smaller parts (for example the page first, then the styles, then the script), or pick Solstice or Apogee."}
+                                   "to write in one go. Ask for it in smaller parts (for example the page first, then the styles, then the script), or try Deep, which has room for bigger files."}
             no_call = no_call + 1 if str(e).startswith("no tool call found") else 0
             no_call_total += 1 if str(e).startswith("no tool call found") else 0
             if no_call >= NO_CALL_LIMIT or no_call_total >= NO_CALL_TOTAL:
                 said = " ".join(reply.split())[:300]
                 return {"finished": False, "turns": turn, "messages": messages, "episodes": episodes, "stopped": "no_tool",
                         "summary": f'The model kept answering in words instead of using its tools, so nothing was done. It said: "{said}" '
-                                   "Try a specific task (for example: create hello.py that prints a greeting, with a test), or pick Solstice or Apogee."}
+                                   + ("Say exactly what to build or change (for example: add a Clear completed button to index.html), or switch the effort to Deep." if fixes else
+                                      "Try a specific task (for example: create hello.py that prints a greeting, with a test), or pick Solstice or Apogee.")}
         else:
+            last_err, same_err = None, 0
             no_call = 0
             bad_calls = 0
             step_fails = 0
@@ -1387,7 +1529,7 @@ def run_agent(task, generate, sandbox, max_turns=8, system=None, project=True, h
                 if repeats[key] >= (REPEAT_STOP_AT * 2 if sandbox.full else REPEAT_STOP_AT):      # the full agent keeps trying longer before it gives up
                     return {"finished": False, "turns": turn, "messages": messages, "episodes": episodes, "stopped": "stuck",
                             "summary": f"The model kept repeating the same step ({name}) without making progress, so it was stopped. "
-                                       "Try a more specific task, or pick Solstice or Apogee."}
+                                       + ("Say which part to change next, or switch the effort to Deep so it plans each step." if fixes else "Try a more specific task, or pick Solstice or Apogee.")}
                 if repeats[key] >= REPEAT_HINT_AT:
                     result = str(result) + ("\nNote: you already did exactly this and got the same result. Do something different now. "
                                            "If the folder is empty, create the file you need with write_file and test it; do not ask the user anything.")

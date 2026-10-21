@@ -62,6 +62,8 @@ class Store(unittest.TestCase):
         for t in ("I don't know.", "The notes don't say who won.", "I'm not sure about that.", "I could not find it."):
             self.assertTrue(L.gave_up(t), t)
         self.assertFalse(L.gave_up("Springfield is the capital of Illinois."))
+        # a question back is not a gap to search for (Oct 20: Apogee 3 asked which city, and the app searched and answered all over again)
+        self.assertFalse(L.gave_up("I don't know which city you live in. Please tell me the name of your city, and I can look up its population for you."))
 
 
 class Server(Base):

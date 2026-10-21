@@ -290,7 +290,7 @@ class RoutesChat:
                     emit("done", {"reason": val["reason"], "compacted": val["compacted_messages"],
                                   "forgotten": val["forgotten_messages"], "message_id": val["message_id"],
                                   "title": store.title(cid), "usage": snap, "effort": decision["effort"], "auto": decision["auto"], "cut": bool(val.get("cut")),
-                                  "context": val.get("context")})
+                                  "context": val.get("context"), **({"timing": val.get("timing")} if (who.get("owner") or who.get("admin")) else {})})
                     return
                 else:
                     status, headers, payload = error_payload(val)

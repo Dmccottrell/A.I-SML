@@ -306,12 +306,32 @@ class StatePC:
         separate picture reader that turns it into words first."""
         return model["id"] in self.seeing or bool(self.runner and self.runner.sees(model["id"]))
 
-    def backend_for(self, model, question, ctx=1024):
+    def any_eyes(self):
+        """True when some model on this computer looks at pictures itself (an Emvryx 3 model with its mmproj file)."""
+        return bool(self.seeing) or bool(self.runner and any(self.runner.sees(mid) for mid in list(self.runner.files)))
+
+    def eyes_for(self, who, model):
+        """photo_fixes: the model that answers a message with a photo: this one when it can see, else the best ready model this person may use that can
+        (an Emvryx 3 model with its picture reader), else None."""
+        if self.sees(model):
+            return model
+        ranks = {"Flare": 1, "Equinox": 2, "Solstice": 3, "Apogee": 4}
+        seeing = []
+        for m in self.manifest["models"]:
+            try:
+                cand = self.pick_model(who, m["id"])
+            except Exception:                                    # noqa: BLE001 - not in this person's list
+                continue
+            if cand.get("state") == "ready" and self.sees(cand):
+                seeing.append(cand)
+        return max(seeing, key=lambda m: (ranks.get(m.get("name"), 0), m.get("version", 0)), default=None)
+
+    def backend_for(self, model, question, ctx=1024, cancel=None):
         if self.backend_factory:
             return self.backend_factory(model, question)
         sampling = {"temperature": TEMPERATURE["balanced"], **model.get("sampling", {})}   # a model's own tested settings win
         if self.runner:
-            return E.LlamaServer(self.runner.ensure(model["id"], ctx), None, timeout=120, **sampling)
+            return E.LlamaServer(self.runner.ensure(model["id"], ctx, cancel=cancel), None, timeout=120, **sampling)      # Stop while it loads ends the load
         if self.llama_url:
             return E.LlamaServer(self.llama_url, self.llama_key, **sampling)
         return DemoBackend(question)

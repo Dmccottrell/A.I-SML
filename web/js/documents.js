@@ -37,14 +37,16 @@ document.addEventListener('paste', (e) => {   // Ctrl+V or paste after taking a 
   e.preventDefault(); if (ev === 'drop' && e.dataTransfer.files.length) addFiles([...e.dataTransfer.files]);
 }));
 async function shrinkImage(f) {   // a phone photo is several MB: send a smaller copy (long side 2000 px), which uploads and reads much faster
-  if (!f.type || !f.type.startsWith('image/') || f.type === 'image/gif' || f.size < 400e3 || !window.createImageBitmap) return f;
+  const conv = !!(S.state && S.state.features && S.state.features.photo_fixes) && (/\.(webp|heic|heif|bmp|gif|avif)$/i.test(f.name || '') || /^image\/(webp|heic|heif|bmp|avif)$/.test(f.type || ''));   // photo_fixes: formats the models cannot open become JPEG
+  if (!conv && (!f.type || !f.type.startsWith('image/') || f.type === 'image/gif' || f.size < 400e3)) return f;
+  if (!window.createImageBitmap) return f;
   try {
     const bmp = await createImageBitmap(f); const k = Math.min(1, 2000 / Math.max(bmp.width, bmp.height));
-    if (k === 1 && f.size < 1.5e6) return f;
+    if (!conv && k === 1 && f.size < 1.5e6) return f;
     const c = document.createElement('canvas'); c.width = Math.round(bmp.width * k); c.height = Math.round(bmp.height * k);
     c.getContext('2d').drawImage(bmp, 0, 0, c.width, c.height);
     const blob = await new Promise((res) => c.toBlob(res, 'image/jpeg', 0.88));
-    return blob && blob.size < f.size ? new File([blob], f.name.replace(/\.[a-z0-9]+$/i, '') + '.jpg', {type: 'image/jpeg'}) : f;
+    return blob && (conv || blob.size < f.size) ? new File([blob], f.name.replace(/\.[a-z0-9]+$/i, '') + '.jpg', {type: 'image/jpeg'}) : f;
   } catch (e) { return f; }
 }
 async function addFiles(list) {

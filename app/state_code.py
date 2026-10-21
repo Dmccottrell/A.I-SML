@@ -182,7 +182,8 @@ class StateCode:
             return self.code_generate(model)
         if self.cfg.get("gaming"):
             raise code_sessions.CodeError("Emvryx is resting while the PC is being used for something else.", "Try again in a little while.")
-        ctx = min(int(model.get("context_tested") or 8192), 32768)
+        # 32K for coding, unless the model has its own VryxCode window (models.json "code_context": Apogee 3 has 128K, so a whole project fits)
+        ctx = int(model.get("code_context") or min(int(model.get("context_tested") or 8192), 32768))
         if self.runner:
             url = self.runner.ensure(model["id"], ctx, cancel=cancel)
         elif self.llama_url:
@@ -195,5 +196,5 @@ class StateCode:
                 return vryxcode.LlamaChat(url, temperature=s["temperature"], max_tokens=max(1024, min(16384, ctx // 2)), thinking=True,
                                           sampling={k: v for k, v in s.items() if k != "temperature"})
             s = vryxcode.QWEN35_CODE
-            return vryxcode.LlamaChat(url, temperature=s["temperature"], max_tokens=max(1024, min(4096, ctx // 3)), sampling={k: v for k, v in s.items() if k != "temperature"})
+            return vryxcode.LlamaChat(url, temperature=s["temperature"], max_tokens=max(1024, min(8192, ctx // 3)), sampling={k: v for k, v in s.items() if k != "temperature"})   # 8,192: a whole page in one step
         return vryxcode.LlamaChat(url, max_tokens=max(1024, min(4096, ctx // 3)))     # room for a whole file in one reply (1,024 cut a page of 100 lines off in the middle)

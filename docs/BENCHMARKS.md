@@ -11,6 +11,9 @@ Numbers marked "(memory)" are published figures I recalled, not ours. Nothing in
 | Equinox 2 | 69.1% (full, retrain; earlier 2,000-question sample 68.5% vs plain the 4B open base 64.8%) | 16/16 | not run | 24/30 (base 7) | not run |
 | Solstice 2 | 73.6% (2,000-question sample; plain the 8B open base 71.9%) | 16/16 | not run | 26/30 (base 9) | not run |
 | Apogee 2 | not run | 16/16 | not run | not run | not run |
+| Apogee 3 | 75.4% (2,000-question sample; plain grown base 74.5%) | 16/16 | not run | not run | not run |
+Apogee 3 (Oct 19, RTX 5090): thinking test 83.6% on Deep (140 questions, 282 tokens each) and 95.7% answering straight away (some "wrong" ones were right answers the checker misread, e.g. it read 2.0 from "80 km/h x 2 hours = 160 km"); long memory found 3/3 at 32K, 64K and 128K.
+
 Tools: `evaluation/exam.py` / `evaluation/exam_open.py` (HellaSwag), `evaluation/evaluate.py` / `evaluation/evaluate_open.py` (our sheets, `eval/*.jsonl`).
 
 **One script runs the quick versions of everything on the cloud machine: `bash scripts/bench_all.sh`** (rules sheets, quick core and code benchmarks for Flare 2.5, Equinox 2 and Solstice 2, then the VryxCode exercise test on an outside coding model, Solstice 2 and Equinox 2). Estimated 4 to 6 hours, about $2 to $3; `MAX_HOURS=4` sets a spending guard. It has not been run yet.

@@ -68,9 +68,9 @@ class Tank(unittest.TestCase):
     def test_starts_full_and_snapshot_numbers(self):
         _, L = make("pro")
         s = L.snapshot("sam", "flare", "balanced", NOW)
-        self.assertEqual(s["tank"]["messages_left"], 400)
-        self.assertEqual(s["week"]["messages_left"], 2000)
-        self.assertEqual(s["can_send"], 400)
+        self.assertEqual(s["tank"]["messages_left"], 2000)
+        self.assertEqual(s["week"]["messages_left"], 12000)
+        self.assertEqual(s["can_send"], 2000)
         self.assertEqual(s["status"], "Plenty left")
 
     def test_reserve_deducts_and_refills(self):
@@ -146,10 +146,10 @@ class Window(unittest.TestCase):
         r = L.reserve("sam", "flare", "balanced", 2000, NOW)
         L.settle(r, 300, 0, 200, "balanced", NOW + 60)
         _, t = L.effective("sam")
-        self.assertEqual(L.level_of("sam", t, NOW + 60), 200000 - 500)
+        self.assertEqual(L.level_of("sam", t, NOW + 60), 1000000 - 500)
         r2 = L.reserve("sam", "flare", "balanced", 5000, NOW + 120)
         L.cancel(r2, NOW + 130)
-        self.assertEqual(L.level_of("sam", t, NOW + 130), 200000 - 500)
+        self.assertEqual(L.level_of("sam", t, NOW + 130), 1000000 - 500)
         self.assertAlmostEqual(L.snapshot("sam", "flare", "balanced", NOW + 130)["tank"]["full_at"], NOW + 6 * 3600)
 
     def test_a_reply_that_finishes_after_the_window_ended_does_not_start_a_new_one(self):
@@ -163,7 +163,7 @@ class Window(unittest.TestCase):
         _, L = make("mega", cfg=CFG)
         tank = L.snapshot("sam", "flare", "balanced", NOW)["tank"]
         self.assertEqual((tank["mode"], tank["refill_hours"]), ("window", 6.0))
-        self.assertAlmostEqual(tank["refill_per_hour"], 800000 / 6)
+        self.assertAlmostEqual(tank["refill_per_hour"], 4000000 / 6)
 
     def test_a_person_can_have_their_own_window_length(self):
         _, L = make("free", cfg=CFG, overrides={"refill_hours": 2})
@@ -184,7 +184,7 @@ class Flow(unittest.TestCase):
         r = L.reserve("sam", "flare", "balanced", 2000, NOW)
         used = L.settle(r, 300, 0, 200, "balanced", NOW)
         self.assertEqual(used, 500)
-        self.assertEqual(L.tank_level("sam", 200000, 25000, NOW), 200000 - 500)
+        self.assertEqual(L.tank_level("sam", 1000000, 170000, NOW), 1000000 - 500)
         self.assertEqual(store.holds_total("sam"), 0)
         self.assertEqual(store.week_used("sam", U.week_start(NOW)), 500)
 
@@ -198,7 +198,7 @@ class Flow(unittest.TestCase):
         store, L = make("pro")
         r = L.reserve("sam", "flare", "balanced", 5000, NOW)
         L.cancel(r, NOW)
-        self.assertEqual(L.tank_level("sam", 200000, 25000, NOW), 200000)
+        self.assertEqual(L.tank_level("sam", 1000000, 170000, NOW), 1000000)
         self.assertEqual(store.week_used("sam", U.week_start(NOW)), 0)
         self.assertEqual(store.holds_total("sam"), 0)
 
@@ -228,9 +228,9 @@ class Flow(unittest.TestCase):
         L.reserve("sam", "flare", "balanced", 500, ts(2026, 10, 12, 5))
 
     def test_week_limit_is_not_the_tank_limit(self):
-        # Pro: tank 200,000 but only 1,000,000 a week: six full tanks used up in a day still stops at the week
+        # Pro: tank 1,000,000 but only 6,000,000 a week: six full tanks used up in a day still stops at the week
         store, L = make("pro")
-        store.db.execute("INSERT INTO usage (user, model, fresh_in, cached_in, out, counted, at) VALUES ('sam','flare',0,0,0,999900,?)", (NOW - 60,))
+        store.db.execute("INSERT INTO usage (user, model, fresh_in, cached_in, out, counted, at) VALUES ('sam','flare',0,0,0,5999900,?)", (NOW - 60,))
         s = L.snapshot("sam", "flare", "balanced", NOW)
         self.assertEqual(s["can_send"], 0 if s["week"]["left"] < 500 else s["can_send"])
         self.assertEqual(s["status"], "Almost out")
@@ -283,7 +283,7 @@ class Rules(unittest.TestCase):
             L.reserve("nobody", "flare", "balanced", 1, NOW)
 
     def test_plan_numbers_follow_the_plan(self):
-        for tier, want in (("free", 150000), ("pro", 1000000), ("mega", 5000000)):
+        for tier, want in (("free", 150000), ("pro", 6000000), ("mega", 30000000)):
             _, L = make(tier)
             self.assertEqual(L.snapshot("sam", "flare", "balanced", NOW)["week"]["cap"], want)
 
