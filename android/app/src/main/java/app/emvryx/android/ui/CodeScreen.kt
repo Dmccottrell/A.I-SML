@@ -98,6 +98,7 @@ private val SLASH = listOf("/plan" to "Plan first: look and plan, change nothing
 fun CodeScreen(app: AppViewModel, vm: CodeViewModel) {
     LaunchedEffect(app.state) {
         vm.suggestOn = app.flag("vryxcode_suggest")
+        vm.review = app.flag("vryxcode_review")
         vm.onTour = app::replayVryxTour
         app.maybeVryxTour()                                       // the VryxCode tour, the first time VryxCode opens (flag vryxcode_tour)
     }
@@ -204,11 +205,14 @@ private fun SessionList(vm: CodeViewModel) {
     }
     LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 6.dp, bottom = 96.dp),
         verticalArrangement = Arrangement.spacedBy(10.dp)) {
-        item(key = "head") {
-            Text("SESSIONS · ${vm.sessions.size}", color = Emvryx.muted, fontSize = 11.sp, fontWeight = FontWeight.SemiBold, letterSpacing = 1.1.sp,
-                modifier = Modifier.padding(start = 4.dp, top = 6.dp))
+        val groups = if (vm.review) sessionGroups(vm.sessions, vm.reviewed) else listOf("SESSIONS" to vm.sessions)
+        groups.forEach { (label, rows) ->
+            item(key = "head-$label") {
+                Text("$label · ${rows.size}", color = if (label == "READY FOR REVIEW") Violet else Emvryx.muted, fontSize = 11.sp,
+                    fontWeight = FontWeight.SemiBold, letterSpacing = 1.1.sp, modifier = Modifier.padding(start = 4.dp, top = 6.dp))
+            }
+            items(rows, key = { it.id }) { s -> SessionCard(s, vm.review) { vm.openSession(s) } }
         }
-        items(vm.sessions, key = { it.id }) { s -> SessionCard(s) { vm.openSession(s) } }
     }
 }
 
@@ -248,7 +252,7 @@ private fun Welcome(vm: CodeViewModel, lead: String) {
 }
 
 @Composable
-private fun SessionCard(s: CodeSessionRow, onClick: () -> Unit) {
+private fun SessionCard(s: CodeSessionRow, review: Boolean, onClick: () -> Unit) {
     val shape = RoundedCornerShape(16.dp)
     Column(Modifier.fillMaxWidth().clip(shape).background(Emvryx.surface).border(1.dp, Emvryx.line, shape).clickable(onClick = onClick).padding(14.dp),
         verticalArrangement = Arrangement.spacedBy(4.dp)) {
@@ -270,7 +274,14 @@ private fun SessionCard(s: CodeSessionRow, onClick: () -> Unit) {
         if (s.snippet.isNotBlank()) Text(s.snippet, color = Emvryx.muted, fontSize = 14.sp, maxLines = 2, overflow = TextOverflow.Ellipsis)
         val stats = listOfNotNull(if (s.steps > 0) "${s.steps} steps" else null, if (s.files > 0) "${s.files} files changed" else null,
                                   if (s.state == "queued") "Queued #${s.position}" else null, if (s.state == "asking") "Needs you" else null)
-        if (stats.isNotEmpty()) Text(stats.joinToString(" · "), color = if (s.state == "asking") Violet else Emvryx.muted, fontSize = 13.sp)
+        if (stats.isNotEmpty() || (review && (s.added > 0 || s.removed > 0))) Row(verticalAlignment = Alignment.CenterVertically) {
+            if (review && (s.added > 0 || s.removed > 0)) {                 // +52 −3, like Cursor
+                Text("+${s.added}", color = Green, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+                Text(" −${s.removed}", color = Emvryx.danger, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+                Spacer(Modifier.width(8.dp))
+            }
+            Text(stats.joinToString(" · "), color = if (s.state == "asking") Violet else Emvryx.muted, fontSize = 13.sp)
+        }
     }
 }
 
@@ -285,7 +296,17 @@ private fun Feed(vm: CodeViewModel) {
         return
     }
     LazyColumn(Modifier.fillMaxSize(), state = list, contentPadding = PaddingValues(14.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-        items(vm.events.size) { i -> EventRow(vm.events[i], vm.events) }
+        if (vm.review) {
+            val shown = reviewItems(vm.events)
+            items(shown.size) { i ->
+                when (val r = shown[i]) {
+                    is ReviewItem.Quiet -> QuietLine(r)
+                    is ReviewItem.File -> FileChip(r)
+                    is ReviewItem.Done -> DoneLine(r)
+                    is ReviewItem.Event -> EventRow(r.e, vm.events)
+                }
+            }
+        } else items(vm.events.size) { i -> EventRow(vm.events[i], vm.events) }
         item {
             val q = vm.pending
             when {
@@ -339,6 +360,61 @@ private fun EventRow(e: JsonObject, all: List<JsonObject>) {
     }
 }
 
+// ---------------------------------------------------------------- the review view (flag vryxcode_review), like Cursor's
+
+/** Looking around: a quiet grey line; a red mark and the first line of why when it went wrong */
+@Composable
+private fun QuietLine(r: ReviewItem.Quiet) {
+    Column(Modifier.padding(horizontal = 4.dp)) {
+        Text((if (r.bad) "✗ " else "") + r.text, color = if (r.bad) Emvryx.danger else Emvryx.muted, fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        if (r.why.isNotBlank()) Text(r.why, color = Emvryx.muted, fontSize = 12.sp, style = Mono, maxLines = 2)
+    }
+}
+
+/** A change: "📄 app/page.tsx  +52 −0"; tap it to see the lines */
+@Composable
+private fun FileChip(r: ReviewItem.File) {
+    var open by remember { mutableStateOf(false) }
+    val shape = RoundedCornerShape(12.dp)
+    Column(Modifier.fillMaxWidth().clip(shape).background(Emvryx.surface).border(1.dp, if (r.bad) Emvryx.danger.copy(alpha = 0.6f) else Emvryx.line, shape)
+        .clickable(enabled = r.diff.isNotEmpty()) { open = !open }.padding(horizontal = 12.dp, vertical = 10.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            PwaIcon("doc", Emvryx.muted, 16.dp)
+            Spacer(Modifier.width(8.dp))
+            Text(r.path, style = Mono, fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+            Text("+${r.add}", color = Green, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+            Text(" −${r.del}", color = Emvryx.danger, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+        }
+        if (r.why.isNotBlank()) Text(r.why, color = Emvryx.danger, fontSize = 12.sp, style = Mono, maxLines = 2)
+        if (open) Column(Modifier.padding(top = 8.dp).fillMaxWidth().clip(RoundedCornerShape(8.dp)).background(Emvryx.bg).horizontalScroll(rememberScrollState()).padding(8.dp)) {
+            r.diff.take(200).forEach { l ->
+                Text(l.text, style = Mono, fontSize = 12.sp, color = when (l.kind) { '+' -> Green; '-' -> Emvryx.danger; else -> Emvryx.muted })
+            }
+        }
+    }
+}
+
+/** The end of a message: "Changed 3 files  +60 −4" and each file */
+@Composable
+private fun DoneLine(r: ReviewItem.Done) {
+    val shape = RoundedCornerShape(14.dp)
+    Column(Modifier.fillMaxWidth().clip(shape).background(Emvryx.surface).border(1.dp, Emvryx.line, shape).padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text("Changed ${r.files.size} " + if (r.files.size == 1) "file" else "files", fontWeight = FontWeight.SemiBold, fontSize = 14.sp)
+            Spacer(Modifier.width(8.dp))
+            Text("+${r.add}", color = Green, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+            Text(" −${r.del}", color = Emvryx.danger, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+        }
+        r.files.forEach { (p, a, dl) ->
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(p, style = Mono, fontSize = 12.sp, color = Emvryx.muted, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+                Text("+$a", color = Green, fontSize = 12.sp)
+                Text(" −$dl", color = Emvryx.danger, fontSize = 12.sp)
+            }
+        }
+    }
+}
+
 /** "Allow this?": the change or command it wants to make, then Yes / Yes and don't ask again / No */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
@@ -389,6 +465,9 @@ private fun CodeComposer(vm: CodeViewModel) {
     val pick = rememberLauncherForActivityResult(ActivityResultContracts.PickMultipleVisualMedia(3)) { uris ->
         uris.forEach { u -> readPicked(context, u)?.let { (n, b) -> vm.addPicture(n, b) } }
     }
+    val pickDoc = rememberLauncherForActivityResult(ActivityResultContracts.OpenMultipleDocuments()) { uris ->
+        uris.take(8).forEach { u -> readPicked(context, u)?.let { (n, b) -> vm.addDoc(n, b) } }
+    }
     val shape = RoundedCornerShape(22.dp)
     Column(
         Modifier.fillMaxWidth().navigationBarsPadding().padding(12.dp).clip(shape).background(Emvryx.surface).border(1.dp, Violet.copy(alpha = 0.6f), shape)
@@ -405,8 +484,9 @@ private fun CodeComposer(vm: CodeViewModel) {
                 }
             }
         }
-        if (vm.pictures.isNotEmpty()) FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+        if (vm.pictures.isNotEmpty() || vm.docs.isNotEmpty()) FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
             vm.pictures.forEachIndexed { i, _ -> Chip("🖼 Picture ${i + 1} ×", { vm.pictures.removeAt(i) }) }
+            vm.docs.forEachIndexed { i, dc -> Chip("📄 ${dc.name} ×", { vm.docs.removeAt(i) }) }
         }
         // the suggested reply (flag vryxcode_suggest): greyed in the empty box; a swipe right across the box, or Tab on a keyboard, fills it in
         Box(Modifier.fillMaxWidth().heightIn(min = 24.dp, max = 160.dp).swipeRight { takeOffer() }) {
@@ -416,10 +496,18 @@ private fun CodeComposer(vm: CodeViewModel) {
                 textStyle = MaterialTheme.typography.bodyLarge.copy(color = Emvryx.text), cursorBrush = SolidColor(Violet))
         }
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-            IconButton({ pick.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) }, Modifier.size(40.dp)) {
-                Icon(Icons.Default.Add, "Add a screenshot", tint = Emvryx.muted)
+            Box {
+                IconButton({
+                    if (vm.review) menu = "add" else pick.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
+                }, Modifier.size(40.dp)) { Icon(Icons.Default.Add, "Add a screenshot or a document", tint = Emvryx.muted) }
+                DropdownMenu(menu == "add", { menu = null }, containerColor = Emvryx.surface) {
+                    DropdownMenuItem({ Text("Screenshot or picture") }, { menu = null; pick.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) })
+                    DropdownMenuItem({ Column { Text("Document"); Text("PDF, Word or text, like a spec. Read first.", color = Emvryx.muted, fontSize = 12.sp) } },
+                        { menu = null; pickDoc.launch(arrayOf("application/pdf", "application/vnd.openxmlformats-officedocument.wordprocessingml.document", "text/*", "application/json")) })
+                }
             }
-            Box(Modifier.weight(1f, fill = false)) {
+            Row(Modifier.weight(1f).horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {     // full names; scrolls only if they do not fit
+            Box {
                 val effortName = vm.info?.effort?.levels?.firstOrNull { it.id == vm.effort }?.name ?: "Balanced"
                 val label = if (vm.oneModel) effortName else vm.info?.models?.firstOrNull { it.id == vm.model }?.label ?: "Model"
                 SmallPill(label + " ▾") { menu = "pick" }
@@ -431,24 +519,24 @@ private fun CodeComposer(vm: CodeViewModel) {
                     }
                 }
             }
-            Box(Modifier.weight(1f, fill = false)) {
+            Box {
                 SmallPill(when (vm.mode) { "auto" -> "Auto"; "plan" -> "Plan"; else -> "Ask" } + " ▾") { menu = "mode" }
                 DropdownMenu(menu == "mode", { menu = null }, containerColor = Emvryx.surface) {
                     MODES.forEach { (id, name) -> DropdownMenuItem({ Text(name) }, { vm.mode = id; menu = null }) }
                 }
             }
-            if (vm.sid == null) Box(Modifier.weight(1f, fill = false)) {
+            if (vm.sid == null) Box {
                 SmallPill((vm.info?.environments?.firstOrNull { it.id == vm.env }?.name ?: "This computer") + " ▾") { menu = "env" }
                 DropdownMenu(menu == "env", { menu = null }, containerColor = Emvryx.surface) {
                     vm.info?.environments.orEmpty().forEach { e -> DropdownMenuItem({ Text(e.name) }, { vm.env = e.id; menu = null }, enabled = e.available) }
                 }
             }
-            Spacer(Modifier.weight(1f))
+            }
             if (vm.working) Box(Modifier.size(42.dp).clip(RoundedCornerShape(12.dp)).background(Emvryx.danger).clickable { vm.stop() }, contentAlignment = Alignment.Center) {
                 Box(Modifier.size(12.dp).background(Color.White))
             }
             if (!vm.working || vm.full) Box(
-                Modifier.size(42.dp).clip(RoundedCornerShape(12.dp)).background(Violet).clickable(enabled = text.isNotBlank() || vm.pictures.isNotEmpty()) {
+                Modifier.size(42.dp).clip(RoundedCornerShape(12.dp)).background(Violet).clickable(enabled = text.isNotBlank() || vm.pictures.isNotEmpty() || vm.docs.isNotEmpty()) {
                     vm.send(text)
                     fill("")
                 },

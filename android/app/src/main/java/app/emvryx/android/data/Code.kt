@@ -59,6 +59,9 @@ data class CodeSessionRow(
     val files: Int = 0,
     val env: String = "local",
     val position: Int = 0,
+    val added: Int = 0,                 // lines this session added and took away (flag vryxcode_review: +52 -3)
+    val removed: Int = 0,
+    val updated: Double = 0.0,          // when it last changed: Ready for review until it is opened after that
 ) {
     val live get() = state in setOf("starting", "working", "asking", "queued")
 }
