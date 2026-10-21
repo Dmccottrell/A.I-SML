@@ -298,6 +298,23 @@ class Flows(Base):
         self.assertEqual(self.anon().call("POST", "/api/login/password", {"id": "newbie", "password": "x"})[1],
                          self.anon().call("POST", "/api/login/password", {"id": "nobody-here", "password": "x"})[1])
 
+    def test_a_password_typed_in_the_key_box_is_explained(self):
+        st, j = self.anon().call("POST", "/api/login", {"key": "my password 123"})
+        self.assertEqual(st, 401)
+        self.assertIn("looks like a password", j["message"])
+        self.assertIn("Sign in with a password", j["action"])
+        st, j = self.anon().call("POST", "/api/login", {"key": "emvx_not_a_real_key"})
+        self.assertEqual(j["message"], "That key isn't right.")
+
+    def test_the_email_on_an_account_signs_in_even_before_it_is_confirmed(self):
+        self.owner_mode("open")
+        self.sign_up()
+        rec = self.state.user_record("newbie")
+        rec["email_verified"] = False                                    # set by an owner tool, never confirmed
+        self.assertIsNone(self.state.find_login("newbie@example.com"))
+        self.assertEqual(self.logged("newbie@example.com")[1], 200)
+        self.assertEqual(self.logged("newbie@example.com", "wrong password here")[1], 401)
+
     def test_an_account_gets_locked_for_password_guessing(self):
         self.owner_mode("open")
         self.sign_up()
