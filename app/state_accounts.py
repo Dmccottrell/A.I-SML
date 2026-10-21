@@ -276,8 +276,15 @@ class StateAccounts:
         return self.find_login(ident)
 
     def check_password(self, ident, password):
-        """The account when the password is right, else None (a missing account costs the same time as a wrong password)."""
+        """The account when the password is right, else None (a missing account costs the same time as a wrong password).
+        An email that was never verified also works here, with the password, when it belongs to exactly one account: people type the
+        email they gave, and refusing it looked like a wrong password. The password is the proof; an email shared by two accounts is
+        never guessed between. Email codes and recovery still need a verified email (user_by_email)."""
         rec = self.find_login(ident)
+        if rec is None and "@" in str(ident or ""):
+            em = auth.clean_email(str(ident).strip())
+            same = [u for u in self.users.values() if em and u.get("email") == em]
+            rec = same[0] if len(same) == 1 else None
         if not rec or not rec.get("pw"):
             accounts.burn_time(password)
             return None

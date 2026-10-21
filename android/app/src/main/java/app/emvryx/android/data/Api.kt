@@ -1,9 +1,29 @@
 package app.emvryx.android.data
 
+import kotlinx.serialization.KSerializer
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.descriptors.PrimitiveKind
+import kotlinx.serialization.descriptors.PrimitiveSerialDescriptor
+import kotlinx.serialization.encoding.Decoder
+import kotlinx.serialization.encoding.Encoder
+import kotlinx.serialization.json.JsonDecoder
+import kotlinx.serialization.json.booleanOrNull
+import kotlinx.serialization.json.jsonPrimitive
 
 // What the server sends back (app/routes_get.py, app/routes_chat.py). Only the fields the app uses; the rest is ignored.
+
+/** A yes/no the server sends as true/false in some places and 0/1 in others (a chat's "pinned": the list says false, the chat itself 0) */
+object FlexBool : KSerializer<Boolean> {
+    override val descriptor = PrimitiveSerialDescriptor("FlexBool", PrimitiveKind.BOOLEAN)
+
+    override fun deserialize(decoder: Decoder): Boolean {
+        val p = (decoder as? JsonDecoder)?.decodeJsonElement()?.jsonPrimitive ?: return decoder.decodeBoolean()
+        return p.booleanOrNull ?: ((p.content.toDoubleOrNull() ?: 0.0) != 0.0)
+    }
+
+    override fun serialize(encoder: Encoder, value: Boolean) = encoder.encodeBoolean(value)
+}
 
 @Serializable
 data class Status(
@@ -110,7 +130,7 @@ data class ChatSummary(
     val id: Long,
     val title: String = "New chat",
     val updated: Double = 0.0,
-    val pinned: Boolean = false,
+    @Serializable(with = FlexBool::class) val pinned: Boolean = false,
 )
 
 /** "Regenerate" with a choice of how the new answer should differ (app/regen_modes.py) */
@@ -179,7 +199,7 @@ data class Chat(
     val messages: List<Message> = emptyList(),
     val generating: Boolean = false,
     val ctx: Ctx? = null,
-    val pinned: Boolean = false,
+    @Serializable(with = FlexBool::class) val pinned: Boolean = false,    // GET /api/chats/{id} sends 0 or 1 (app_engine.meta)
     val docs: List<DocInfo> = emptyList(),
 )
 
