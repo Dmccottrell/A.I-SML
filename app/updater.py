@@ -10,6 +10,7 @@ WHAT THIS FILE DOES
 """
 import os
 import subprocess
+import tempfile
 import threading
 
 BRANCH = "main"
@@ -113,11 +114,23 @@ class Updater:
                     restarted = False
             return {"updated": True, "from": now["current"], "to": now["latest"], "changes": len(now["incoming"]), "restarting": restarted, "deps_changed": now["deps_changed"]}
 
-    def _restart_windows_task(self):
-        """Stop and start the 'Emvryx App' task from a separate one-off task, so the restart still happens after this app has been stopped."""
-        ps = (f"Start-Sleep 3; Stop-ScheduledTask -TaskName '{TASK}' -ErrorAction SilentlyContinue; "
-              "taskkill /F /IM llama-server.exe /T | Out-Null; Start-Sleep 3; "
-              f"Start-ScheduledTask -TaskName '{TASK}'; schtasks /Delete /TN 'EmvryxRestart' /F | Out-Null")
-        cmd = f'powershell -NoProfile -WindowStyle Hidden -Command "{ps}"'
+    @staticmethod
+    def restart_script(pid):
+        """The PowerShell the one-off restart task runs. Stopping the 'Emvryx App' task ends its cmd.exe but NOT the python server it started
+        (Oct 2026: updates were pulled but the server kept running the old code for a day), so the server itself (`pid`, this process) is
+        ended too; with the port free, the task starts it again on the new code."""
+        return (f"Start-Sleep 3; Stop-ScheduledTask -TaskName '{TASK}' -ErrorAction SilentlyContinue; "
+                f"Stop-Process -Id {int(pid)} -Force -ErrorAction SilentlyContinue; "
+                "taskkill /F /IM llama-server.exe /T | Out-Null; Start-Sleep 3; "
+                f"Start-ScheduledTask -TaskName '{TASK}'; schtasks /Delete /TN 'EmvryxRestart' /F | Out-Null")
+
+    def _restart_windows_task(self, script_dir=None):
+        """Stop and start the 'Emvryx App' task from a separate one-off task, so the restart still happens after this app has been stopped.
+        The steps go in a small .ps1 file and the task only runs that file: schtasks refuses a command longer than 261 characters, and the
+        steps written out in full were 298, so the restart task was never made and updates were pulled without the app ever restarting."""
+        path = os.path.join(script_dir or tempfile.gettempdir(), "emvryx_restart.ps1")
+        with open(path, "w", encoding="utf-8") as f:
+            f.write(self.restart_script(os.getpid()) + "\n")
+        cmd = f'powershell -NoProfile -WindowStyle Hidden -ExecutionPolicy Bypass -File "{path}"'
         self.runner(["schtasks", "/Create", "/TN", "EmvryxRestart", "/TR", cmd, "/SC", "ONCE", "/ST", "00:00", "/F"], capture_output=True, text=True, timeout=20, check=True)
         self.runner(["schtasks", "/Run", "/TN", "EmvryxRestart"], capture_output=True, text=True, timeout=20, check=True)
