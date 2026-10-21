@@ -278,6 +278,10 @@ class StateAccounts:
     def check_password(self, ident, password):
         """The account when the password is right, else None (a missing account costs the same time as a wrong password)."""
         rec = self.find_login(ident)
+        if not rec and "@" in str(ident or ""):                              # an email that was never confirmed: still the account's own email, and the password is still needed
+            em = auth.clean_email(ident)
+            same = [u for u in self.users.values() if em and u.get("email") == em]
+            rec = same[0] if len(same) == 1 else None
         if not rec or not rec.get("pw"):
             accounts.burn_time(password)
             return None

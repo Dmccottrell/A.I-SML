@@ -34,6 +34,9 @@ class RoutesPost:
                 return self._send(403, {"code": "app_key", "message": "This key is for an app, not a person.", "action": "Use POST /api/v1/ask."})
             if not who:
                 self._fail("bad key")
+                if not key.startswith("emvx_"):                          # a password typed in the access-key box (the Android app opens on that box)
+                    return self._send(401, {"code": "bad_key", "message": "That looks like a password, not an access key (keys start with emvx_).",
+                                            "action": "Tap \"Sign in with a password\" below and enter your name or email and password there."})
                 return self._send(401, {"code": "bad_key", "message": "That key isn't right.", "action": "Check it and try again."})
             if who["banned"]:
                 return self._send(403, {"code": "banned", "message": "This account has been turned off.", "action": "Ask the owner if you think that is a mistake."})
