@@ -52,7 +52,6 @@ class MainActivity : FragmentActivity() {
     private val vm: AppViewModel by viewModels()
     private val code: CodeViewModel by viewModels()
     private var leftAt = 0L
-    private val askAlerts = registerForActivityResult(androidx.activity.result.contract.ActivityResultContracts.RequestPermission()) { }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -79,7 +78,8 @@ class MainActivity : FragmentActivity() {
         val prefs = getSharedPreferences("alerts", MODE_PRIVATE)
         if (prefs.getBoolean("asked", false)) return
         prefs.edit().putBoolean("asked", true).apply()
-        askAlerts.launch(android.Manifest.permission.POST_NOTIFICATIONS)
+        // asked directly: FragmentActivity refuses the result launcher's large request codes for permissions ("Can only use lower 16 bits")
+        androidx.core.app.ActivityCompat.requestPermissions(this, arrayOf(android.Manifest.permission.POST_NOTIFICATIONS), ASK_ALERTS)
     }
 
     /** A notification tapped: open that VryxCode session or chat */
@@ -135,6 +135,7 @@ class MainActivity : FragmentActivity() {
 
     private companion object {
         const val LOCK_AFTER_MS = 60_000L
+        const val ASK_ALERTS = 7
     }
 }
 
