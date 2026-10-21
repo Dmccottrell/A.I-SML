@@ -409,7 +409,9 @@ TALK_TO_THEM = ("Talk to the user directly as \"you\". If you know their name, i
 
 PICTURE_ACCURACY = ("Be exact about the picture: say only what you can really see. Never make up names, numbers, brands, places or words that are not "
                     "visible; when something is too small, blurry or cut off to be sure, say so in a few words instead of guessing. When they ask what it says "
-                    "or for the details, give them fully and copy any text word for word. Count things one by one before giving a number.")
+                    "or for the details, give them fully and copy any text word for word. Count things one by one before giving a number. A screenshot of an account, "
+                    "a balance, a bill, a schedule or a form: give every key number with its label exactly as shown (all the balances, dates and amounts), "
+                    "not a summary like \"a few days\". When several pictures are in the chat, answer about the one just sent.")
 
 
 def picture_hint(only_picture=False, earlier=False, accurate=False):
