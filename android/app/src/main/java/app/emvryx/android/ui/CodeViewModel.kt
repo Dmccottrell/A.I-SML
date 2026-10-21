@@ -154,9 +154,13 @@ class CodeViewModel(app: Application) : AndroidViewModel(app) {
         val id = sid ?: return
         poller?.cancel()
         poller = viewModelScope.launch {
+            var fails = 0
             while (isActive) {
                 try {
                     val v = api.codeView(id, seen)
+                    fails = 0
+                    if (error != null && error == pollError) error = null      // the connection came back: the old warning goes
+                    pollError = null
                     events.addAll(v.events)
                     v.events.forEach(::offerFrom)
                     seen += v.events.size
@@ -166,13 +170,21 @@ class CodeViewModel(app: Application) : AndroidViewModel(app) {
                     liveLine = v.live?.let { l -> listOf(l["phase"], l["tool"], l["target"]).mapNotNull { (it as? JsonPrimitive)?.content }.filter { it.isNotBlank() }.joinToString(" · ") }
                     if (!v.working) break
                     delay(if (v.state == "asking") 1500 else 400)
+                } catch (e: kotlinx.coroutines.CancellationException) {
+                    throw e                                     // a newer check took over (after sending, opening a session): not a problem to show
                 } catch (e: Exception) {
-                    error = describe(e)
+                    fails += 1
+                    if (fails >= 3) {                           // one dropped answer on a phone network is normal: only say so when it keeps failing
+                        error = describe(e)
+                        pollError = error
+                    }
                     delay(3000)
                 }
             }
         }
     }
+
+    private var pollError: String? = null
 
     /** The send button: a new session, the next message, or (the full agent, while it works) a message it reads before its next step */
     fun send(text: String) {
