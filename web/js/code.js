@@ -31,6 +31,13 @@ async function renderHome() {
   $('codeFilter').textContent = (FILTERS.find((f) => f[0] === C.filter) || FILTERS[0])[1] + ' \u25be';
   const live = ['starting', 'working'], pick = (x) => C.filter === 'all' || (C.filter === 'running' && live.includes(x.state)) || (C.filter === 'queued' && x.state === 'queued') || (C.filter === 'needs' && x.state === 'asking') || (C.filter === 'done' && !live.includes(x.state) && !['asking', 'queued'].includes(x.state));
   const rows = C.sessions.filter(pick);
+  if (vxReviewOn() && C.filter === 'all' && rows.length) {        // vryxcode_review: Working, Ready for review (finished with changes you have not opened yet), Done
+    const seen = vxSeen(), busy = (x) => live.includes(x.state) || ['asking', 'queued'].includes(x.state);
+    const ready = (x) => !busy(x) && x.state === 'done' && (x.added || x.removed || x.files) && seen[x.id] !== x.updated;
+    const groups = [['Working', rows.filter(busy)], ['Ready for review', rows.filter(ready)], ['Done', rows.filter((x) => !busy(x) && !ready(x))]];
+    $('codeList').replaceChildren(...groups.filter(([, g]) => g.length).flatMap(([name, g]) => [el('div', {class: 'vx-group'}, name.toUpperCase() + ' ' + g.length), ...g.map(sessionCard)]));
+    return;
+  }
   $('codeList').replaceChildren(...(rows.length ? rows.map(sessionCard) : [el('div', {class: 'empty-list'}, C.sessions.length ? 'Nothing here with this filter.' : 'No sessions yet. Tap New session to start one. Everything VryxCode does is listed here, so you can come back to it, see what it changed, or rewind it.')]));
 }
 const modelName = (id) => { const x = ((C.info && C.info.models) || []).find((y) => y.id === id); return x ? (x.outside ? x.name : x.label) : (id || 'model'); };
@@ -40,10 +47,11 @@ function sessionCard(m) {
   const env = {id: m.env || 'local', name: ENV_NAME[m.env || 'local']};
   const badge = queued ? el('span', {class: 'badge'}, 'Queued' + (m.position ? ' \u00b7 #' + m.position : '')) : ask ? el('span', {class: 'badge ask'}, 'Needs you') : bad ? el('span', {class: 'badge bad'}, m.state === 'interrupted' ? 'Interrupted' : 'Failed') : m.state === 'stopped' ? el('span', {class: 'badge'}, 'Stopped') : '';
   const stats = [m.steps ? m.steps + (m.steps === 1 ? ' step' : ' steps') : '', m.files ? m.files + (m.files === 1 ? ' file' : ' files') + ' changed' : ''].filter(Boolean).join(' \u00b7 ');
+  const lines = vxReviewOn() && (m.added || m.removed) ? el('span', {class: 'vx-lines'}, el('span', {class: 'a'}, '+' + (m.added || 0)), ' ', el('span', {class: 'd'}, '\u2212' + (m.removed || 0))) : '';
   return el('div', {class: 'scard', role: 'button', tabindex: '0', onclick: () => openSession(m), onkeydown: (ev) => { if (ev.key === 'Enter') openSession(m); }},
     el('div', {class: 'top'}, el('span', {class: 'sicon'}, ic), el('div', {class: 'mid'}, el('div', {class: 't'}, m.title), el('div', {class: 'sub'}, icon(ENV_ICON(env.id)), el('span', {}, m.project + ' \u00b7 ' + modelName(m.model) + ' \u00b7 ' + env.name))), el('span', {class: 'age'}, m.age)),
     m.snippet ? el('div', {class: 'snip'}, m.snippet) : '',
-    el('div', {class: 'foot'}, badge, el('span', {}, stats), el('span', {class: 'grow'}), live || ask ? '' : el('button', {class: 'del', 'aria-label': 'Delete this session', onclick: async (ev) => { ev.stopPropagation(); if (!confirm('Delete this session from the list? Your files are kept.')) return; await post('/api/code/sessions/' + m.id + '/delete', {}); renderHome(); }}, '\u00d7')));
+    el('div', {class: 'foot'}, badge, lines, el('span', {}, stats), el('span', {class: 'grow'}), live || ask ? '' : el('button', {class: 'del', 'aria-label': 'Delete this session', onclick: async (ev) => { ev.stopPropagation(); if (!confirm('Delete this session from the list? Your files are kept.')) return; await post('/api/code/sessions/' + m.id + '/delete', {}); renderHome(); }}, '\u00d7')));
 }
 function envInfo() {
   dialog([el('h2', {}, 'Environments'), el('div', {style: 'color:var(--muted)'}, 'Where VryxCode runs the code it writes. Pick one when you start a session.'),
@@ -53,12 +61,16 @@ function envInfo() {
 function resetWork() { C.todo = []; C.events = []; C.ctx = null; if ($('codeCtx')) $('codeCtx').hidden = true; renderTodo(); if (typeof OUT !== 'undefined') { OUT.items = []; OUT.pending = null; if (OUT.open) outRender(); } }
 function newSession() {
   C.view = 'session'; $('code').classList.remove('home'); $('codeTitle').textContent = 'VryxCode'; C.sid = null; C.saved = false; C.checkpoints = []; C.seen = 0; C.last = null; C.pvAuto = false;
-  offerReply(''); $('codeIn').replaceChildren(); $('codeGo').hidden = false; $('codeStop').hidden = true; resetWork(); renderCodeBar(); emptyFeed(); refreshFiles(); loadCmds(); C.pics = []; renderPics(); $('codeTask').focus();
+  offerReply(''); $('codeIn').replaceChildren(); $('codeGo').hidden = false; $('codeStop').hidden = true; resetWork(); renderCodeBar(); emptyFeed(); refreshFiles(); loadCmds(); C.pics = []; C.docs = []; renderPics(); $('codeTask').focus();
 }
+const vxReviewOn = () => !!(S.state && S.state.features && S.state.features.vryxcode_review);
+function vxSeen() { try { return JSON.parse(localStorage.getItem('emvryx_vx_seen') || '{}') || {}; } catch (e) { return {}; } }
+function vxMarkSeen(m) { try { const s = vxSeen(); s[m.id] = m.updated; localStorage.setItem('emvryx_vx_seen', JSON.stringify(s)); } catch (e) { /* private window: it just stays in Ready for review */ } }
 function openSession(m) {
+  vxMarkSeen(m);
   C.view = 'session'; $('code').classList.remove('home'); $('codeTitle').textContent = 'VryxCode'; C.sid = m.id; C.project = m.project; C.saved = false; C.checkpoints = m.checkpoints || []; C.pvAuto = false;
   if (C.info.models.some((x) => x.id === m.model && x.state === 'ready')) C.model = m.model;
-  C.seen = 0; C.last = null; $('codeIn').replaceChildren(); resetWork(); C.chatKey = C.project + '|' + C.model; renderCodeBar(); refreshFiles(); loadCmds(); C.pics = []; renderPics(); poll();
+  C.seen = 0; C.last = null; $('codeIn').replaceChildren(); resetWork(); C.chatKey = C.project + '|' + C.model; renderCodeBar(); refreshFiles(); loadCmds(); C.pics = []; C.docs = []; renderPics(); poll();
 }
 $('codeNew').onclick = newSession;
 $('codeFilter').onclick = (e) => {
@@ -253,6 +265,7 @@ const SLASH = [['plan', 'Plan first: look and plan, change nothing', () => setMo
   ['changes', 'See what this session changed (the Changes list)', () => showDrawer(true, 'changes')], ['rewind', 'Put the files back to an earlier point', () => showDrawer(true, 'rewind')],
   ['files', 'Browse the project files', () => showDrawer(true, 'files')], ['preview', 'Open the live preview', () => openPreview()], ['new', 'Start a new session', () => newSession()],
   ['picture', 'Attach a screenshot or picture (or paste one into the message box)', () => pickPictures()],
+  ...(vxReviewOn() ? [['attach', 'Attach a document (PDF, Word or text, like brand guidelines or a spec) for VryxCode to read first', () => pickDocs()]] : []),
   ['memory', 'What VryxCode remembers about you (forget notes)', () => showMemory()],
   ['fixci', 'Fix what is failing on GitHub for this project (reads the CI log)', () => fixCi()],
   ['watchci', 'Watch this project\u2019s CI: fix new failures by itself (owner)', () => watchCi()],
@@ -261,12 +274,26 @@ const SLASH = [['plan', 'Plan first: look and plan, change nothing', () => setMo
   ['help', 'List these commands', () => note('fin', 'Commands', SLASH.map((x) => '/' + x[0] + ' \u2014 ' + x[1]).concat((C.cmds || []).map((x) => '/' + x.name + ' \u2014 ' + (x.about || 'this project\u2019s own command'))).join('\n') + '\n@filename \u2014 point at a file in your message')]];
 // ---- pictures sent with the next message (the full agent sees them), memory, saved permission rules, the project's own /commands
 C.pics = [];
+C.docs = [];                                   // vryxcode_review: documents attached to the next message ({id, name}), read by the model before it starts
 function renderPics() {
   let row = $('codePics');
   if (!row) { row = el('div', {id: 'codePics', class: 'row', style: 'gap:6px;flex-wrap:wrap;margin:4px 0'}); $('codeTask').before(row); }
   row.replaceChildren(...C.pics.map((p, i) => el('span', {class: 'chip'}, el('img', {src: p, alt: 'Picture ' + (i + 1), style: 'height:28px;border-radius:4px;vertical-align:middle;margin-right:4px'}),
-    el('button', {class: 'del', 'aria-label': 'Remove picture ' + (i + 1), onclick: () => { C.pics.splice(i, 1); renderPics(); }}, '\u00d7'))));
-  row.hidden = !C.pics.length;
+    el('button', {class: 'del', 'aria-label': 'Remove picture ' + (i + 1), onclick: () => { C.pics.splice(i, 1); renderPics(); }}, '\u00d7'))),
+    ...(C.docs || []).map((d, i) => el('span', {class: 'chip'}, '\u{1F4C4} ' + d.name, el('button', {class: 'del', 'aria-label': 'Remove ' + d.name, onclick: () => { C.docs.splice(i, 1); renderPics(); }}, '\u00d7'))));
+  row.hidden = !C.pics.length && !(C.docs || []).length;
+}
+function pickDocs() {   // a PDF, Word file or text file from this device, kept in your Documents and read by VryxCode with your next message
+  const f = el('input', {type: 'file', accept: '.pdf,.docx,.txt,.md,.markdown,.csv,.json,.html,.htm,.yaml,.yml', multiple: true});
+  f.onchange = async () => {
+    for (const file of Array.from(f.files || []).slice(0, 8)) {
+      if (file.size > 10e6) { note('bad', 'Too big', file.name + ' is over 10 MB.'); continue; }
+      const data = await new Promise((res) => { const rd = new FileReader(); rd.onload = () => res(String(rd.result).split(',')[1] || ''); rd.readAsDataURL(file); });
+      const r = await post('/api/documents', {name: file.name, data}); const j = await r.json().catch(() => ({}));
+      if (r.ok) { C.docs.push({id: j.id, name: j.name}); renderPics(); } else note('bad', 'Not attached', file.name + ': ' + (j.message || 'it could not be read.'));
+    }
+  };
+  f.click();
 }
 function addPicture(file) {
   if (!file || !/^image\/(png|jpe?g|webp|gif)$/.test(file.type) || C.pics.length >= 3) return;

@@ -272,6 +272,12 @@ function nowKind(l) {
   const k = TOOL_KIND[l.tool] || 'run';
   return k === 'run' && /unittest|pytest|\btest/i.test(l.target || '') ? 'test' : k;
 }
+const vxReview = () => !!(S.state && S.state.features && S.state.features.vryxcode_review);
+const QUIET_TOOLS = ['read_file', 'list_files', 'glob', 'grep', 'diagnostics', 'command_output', 'project_map', 'search_project', 'code_search', 'lookup_docs', 'memory'];
+function fileChip(path, add, del) {   // "app/page.tsx  +52 -0", like Cursor's
+  return el('div', {class: 'cc-file', role: 'button', tabindex: '0', title: 'Show the change'}, el('span', {class: 'ic'}, '\u{1F4C4}'), el('span', {class: 'nm'}, path || 'file'),
+    el('span', {class: 'a'}, '+' + (add || 0)), el('span', {class: 'd'}, '\u2212' + (del || 0)));
+}
 function toolParts(preview, tool) {   // "Wrote" + "main.py" + "2 lines"
   const first = String(preview || '').split('\n')[0];
   const w = /^write (\S+)(?: \((\d+) lines?\))?/.exec(first); if (w) return [DONE_VERB.write_file, w[1], w[2] ? w[2] + ' lines' : ''];
@@ -322,6 +328,7 @@ function cEvent(e) {
       el('div', {class: 'row'}, other, el('button', {class: 'btn small', onclick: () => pick(other.value)}, 'Send'))));
     return;
   }
+  if (e.kind === 'start' || e.kind === 'user') C.turnFiles = {};       // vryxcode_review: the files this message changed, for its Done line
   if (e.kind === 'start') { feed.replaceChildren(el('div', {class: 'cc-user'}, el('span', {class: 'ember'}), el('span', {}, (e.plan ? '[Plan] ' : '') + e.task))); C.last = null; return; }
   if (e.kind === 'step') {
     if (C.retry) { C.retry.classList.replace('run', 'ok'); const v = C.retry.querySelector('.cc-verb'); if (v) v.textContent = 'Fixed a step'; C.retry = null; }   // vryxcode_fixes: the step it retried went through
@@ -332,6 +339,15 @@ function cEvent(e) {
     if (e.tool === 'run') outAgentStep(e); else OUT.pending = null;
     if (prose) feed.append(vxSay(prose));
     const [name, arg, extra] = toolParts(e.preview, e.tool);
+    if (vxReview()) {                                 // like Cursor: looking is a quiet grey line, a change is a file chip
+      if (e.secs >= 2) feed.append(el('div', {class: 'cc-quiet'}, 'Thought ' + Math.round(e.secs) + 's'));
+      if (QUIET_TOOLS.includes(e.tool)) { const q = el('div', {class: 'cc-quiet'}, name + ' ', el('span', {class: 'arg'}, arg)); feed.append(q); C.last = q; return; }
+      if (e.tool === 'write_file' || e.tool === 'edit_file') {
+        const chip = fileChip(arg, e.add, e.del), d = diffNode(e.preview);
+        chip.classList.add('run'); if (d) { chip.append(d); chip.onclick = () => chip.classList.toggle('open'); }
+        chip._path = arg; chip._add = e.add || 0; chip._del = e.del || 0; feed.append(chip); C.last = chip; return;
+      }
+    }
     const node = el('div', {class: 'cc-tool run'}, el('div', {class: 'cc-head'}, el('span', {class: 'cc-verb'}, name),
       el('span', {class: 'cc-arg'}, [arg, extra, e.secs != null ? Math.round(e.secs) + 's' : '', e.words ? fmt(e.words) + ' tokens' : ''].filter(Boolean).join('  \u00b7  '))));
     const d = (e.tool === 'write_file' || e.tool === 'edit_file') ? diffNode(e.preview) : null; if (d) node.append(d);
@@ -339,6 +355,13 @@ function cEvent(e) {
   }
   if (e.kind === 'result') {
     outAgentResult(e);
+    if (C.last && (C.last.classList.contains('cc-quiet') || C.last.classList.contains('cc-file'))) {     // vryxcode_review: no output line, only a mark when it went wrong
+      const t = String(e.text || ''), bad = /^error|exit code [1-9]|Traceback|FAILED/m.test(t), node = C.last;
+      node.classList.remove('run'); node.classList.add(bad ? 'no' : 'ok');
+      if (bad) node.append(el('div', {class: 'why'}, t.split('\n')[0].slice(0, 200)));
+      else if (node._path) { const f = C.turnFiles[node._path] || {add: 0, del: 0}; f.add += node._add; f.del += node._del; C.turnFiles[node._path] = f; }
+      C.last = null; return;
+    }
     if (C.last) {
       const t = String(e.text || ''), bad = /^error|exit code [1-9]|Traceback|FAILED/m.test(t), lines = t.split('\n').filter((x) => x.trim());
       C.last.classList.remove('run'); C.last.classList.add(bad ? 'no' : 'ok');
@@ -380,6 +403,12 @@ function cEvent(e) {
     if (e.finished || e.said) {                       // the model talking to the person: what it did, what to run, what it suggests
       if (e.finished) setTimeout(() => { if (!$('codePv').hidden) reloadPreview(); else if (!$('codePreviewBtn').disabled) $('codePreviewBtn').classList.add('pulse'); }, 700);     // the page changed: refresh it, or point at Preview
       feed.append(renderMessage(e.summary || 'Done.', e.finished));
+      const changed = Object.entries(C.turnFiles || {});
+      if (vxReview() && e.finished && changed.length) {          // the Done line: every file this message changed, each one opens the change
+        const add = changed.reduce((n, [, f]) => n + f.add, 0), del = changed.reduce((n, [, f]) => n + f.del, 0);
+        feed.append(el('div', {class: 'cc-done'}, el('div', {class: 'lead'}, 'Changed ' + changed.length + (changed.length === 1 ? ' file' : ' files') + ' ', el('span', {class: 'a'}, '+' + add), ' ', el('span', {class: 'd'}, '\u2212' + del)),
+          ...changed.map(([p, f]) => { const c = fileChip(p, f.add, f.del); c.classList.add('ok'); c.onclick = () => { showDrawer(true, 'changes'); }; return c; })));
+      }
       if (e.report) feed.append(reportCard(e.report));
       if (e.plan) feed.append(el('div', {class: 'plan-actions'}, el('button', {class: 'btn small', onclick: () => { setMode(C.prevMode === 'plan' ? 'ask' : C.prevMode); $('codeTask').value = 'Go ahead and build it as planned.'; $('codeGo').click(); }}, 'Build it'), el('button', {class: 'chip', onclick: () => { $('codeTask').value = 'Change the plan: '; $('codeTask').focus(); }}, 'Change the plan')));
       if (e.finished || e.plan) offerReply(e.plan ? 'Go ahead and build it as planned.' : (e.next || [])[0]);
@@ -485,14 +514,14 @@ $('codeGo').onclick = async () => {
     note('bad', 'Could not send', (j.message || '') + ' ' + (j.action || '')); return;
   }
   if (C.sid) {         // a session is open: this is its next message, whatever the model (a different model takes over the same conversation; an old session comes back to life)
-    const r = await post('/api/code/sessions/' + C.sid + '/message', {text: task, plan: C.mode === 'plan', notify: vxNotifyOn(), model: C.model, effort: C.effort, auto_edits: C.mode === 'auto', images: C.pics.length ? C.pics : undefined}); const j = await r.json().catch(() => ({}));
-    if (r.ok) { C.pics = []; renderPics(); C.stopping = false; $('codeStop').disabled = false; $('codeTask').value = ''; C.chatKey = C.project + '|' + C.model; if (j.revived) { C.saved = false; C.seen = 0; $('codeIn').replaceChildren(); } poll(); return; }
+    const r = await post('/api/code/sessions/' + C.sid + '/message', {text: task, plan: C.mode === 'plan', notify: vxNotifyOn(), model: C.model, effort: C.effort, auto_edits: C.mode === 'auto', images: C.pics.length ? C.pics : undefined, docs: (C.docs || []).length ? C.docs.map((d) => d.id) : undefined}); const j = await r.json().catch(() => ({}));
+    if (r.ok) { C.pics = []; C.docs = []; renderPics(); C.stopping = false; $('codeStop').disabled = false; $('codeTask').value = ''; C.chatKey = C.project + '|' + C.model; if (j.revived) { C.saved = false; C.seen = 0; $('codeIn').replaceChildren(); } poll(); return; }
     if (r.status === 400 && /still working/i.test(j.message || '')) { note('bad', 'Still working', 'Press Stop first, or wait for it to finish.'); return; }
     note('bad', 'Could not send', (j.message || '') + ' ' + (j.action || '')); return;
   }
-  const r = await post('/api/code/start', {project: C.project, task, model: C.model, effort: C.effort, images: C.pics.length ? C.pics : undefined, auto_edits: C.mode === 'auto', plan: C.mode === 'plan', env: C.env, queue: true, notify: vxNotifyOn(), template: C.startTemplate || undefined}); const j = await r.json(); C.startTemplate = null;
+  const r = await post('/api/code/start', {project: C.project, task, model: C.model, effort: C.effort, images: C.pics.length ? C.pics : undefined, docs: (C.docs || []).length ? C.docs.map((d) => d.id) : undefined, auto_edits: C.mode === 'auto', plan: C.mode === 'plan', env: C.env, queue: true, notify: vxNotifyOn(), template: C.startTemplate || undefined}); const j = await r.json(); C.startTemplate = null;
   if (!r.ok) { note('bad', 'Could not start', j.message + ' ' + (j.action || '')); return; }
-  C.pics = []; renderPics(); C.sid = j.id; C.saved = false; C.checkpoints = []; C.pvAuto = false; C.chatKey = C.project + '|' + C.model; C.seen = 0; C.stopping = false; $('codeStop').disabled = false; $('codeTask').value = ''; $('codeIn').replaceChildren(); poll();
+  C.pics = []; C.docs = []; renderPics(); C.sid = j.id; C.saved = false; C.checkpoints = []; C.pvAuto = false; C.chatKey = C.project + '|' + C.model; C.seen = 0; C.stopping = false; $('codeStop').disabled = false; $('codeTask').value = ''; $('codeIn').replaceChildren(); poll();
 };
 // the preview follows the work: on a wide screen it opens beside the chat by itself and refreshes after each change; on a phone the Preview button lights up
 function livePreview(events) {
