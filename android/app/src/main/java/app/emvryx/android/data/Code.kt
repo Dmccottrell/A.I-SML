@@ -44,7 +44,21 @@ data class CodeInfo(
     val running: String? = null,
     val project: String? = null,
     @SerialName("ci_watch") val ciWatch: List<String> = emptyList(),
+    val usage: CodeUsage? = null,
 )
+
+/** VryxCode's usage in coding steps (app/routes_code.py _code_usage; web/js/ide.js showUsage): one step is one model call at Balanced */
+@Serializable
+data class CodeUsage(
+    val exempt: Boolean = false,
+    val plan: String = "",
+    @SerialName("tank_pct") val tankPct: Int = 100,
+    @SerialName("steps_left") val stepsLeft: Int = 0,
+) {
+    /** "Pro · 87% left · about 1,234 coding steps", or "Owner: no limits" */
+    val label get() = if (exempt) "Owner: no limits"
+        else plan.replaceFirstChar { it.uppercase() } + " · " + tankPct + "% left · about " + "%,d".format(stepsLeft) + " coding steps"
+}
 
 @Serializable
 data class CodeSessionRow(
@@ -81,6 +95,7 @@ data class CodeView(
     val model: String = "",
     val env: String = "local",
     val live: JsonObject? = null,
+    val usage: CodeUsage? = null,
 ) {
     val working get() = state in setOf("starting", "working", "asking", "queued")
 }
@@ -110,3 +125,5 @@ fun JsonObject.int(key: String): Int = (this[key] as? JsonPrimitive)?.content?.t
 
 fun JsonObject.strings(key: String): List<String> =
     runCatching { this[key]!!.jsonArray.map { it.jsonPrimitive.content } }.getOrDefault(emptyList())
+
+fun JsonObject.num(key: String): Double = (this[key] as? JsonPrimitive)?.content?.toDoubleOrNull() ?: 0.0

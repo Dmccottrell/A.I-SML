@@ -18,6 +18,7 @@ import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -75,6 +76,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import app.emvryx.android.data.CodeSessionRow
 import app.emvryx.android.data.bool
+import app.emvryx.android.data.int
+import app.emvryx.android.data.num
 import app.emvryx.android.data.str
 import app.emvryx.android.data.strings
 import app.emvryx.android.ui.theme.Emvryx
@@ -328,7 +331,13 @@ private fun EventRow(e: JsonObject, all: List<JsonObject>) {
         )
         "step" -> Column(Modifier.fillMaxWidth().clip(shape).background(Emvryx.surface).border(1.dp, Emvryx.line, shape).padding(12.dp),
             verticalArrangement = Arrangement.spacedBy(6.dp)) {
-            Text("● " + e.str("tool"), color = Green, fontWeight = FontWeight.SemiBold, fontSize = 14.sp)
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text("● " + e.str("tool"), color = Green, fontWeight = FontWeight.SemiBold, fontSize = 14.sp)
+                // how long the step took and the tokens it wrote, as on the website (ide.js: "3s · 1,234 tokens")
+                val took = listOfNotNull(e.num("secs").takeIf { e.containsKey("secs") }?.let { "${Math.round(it)}s" },
+                    e.int("words").takeIf { it > 0 }?.let { "%,d tokens".format(it) }).joinToString(" · ")
+                if (took.isNotEmpty()) Text("   $took", color = Emvryx.muted, fontSize = 13.sp)
+            }
             val preview = e.str("preview")
             if (preview.isNotBlank()) Text(preview.take(1500), style = Mono, color = Emvryx.muted,
                 modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp)).background(Emvryx.bg).horizontalScroll(rememberScrollState()).padding(10.dp))
@@ -469,8 +478,9 @@ private fun CodeComposer(vm: CodeViewModel) {
         uris.take(8).forEach { u -> readPicked(context, u)?.let { (n, b) -> vm.addDoc(n, b) } }
     }
     val shape = RoundedCornerShape(22.dp)
+    Column(Modifier.fillMaxWidth().navigationBarsPadding()) {
     Column(
-        Modifier.fillMaxWidth().navigationBarsPadding().padding(12.dp).clip(shape).background(Emvryx.surface).border(1.dp, Violet.copy(alpha = 0.6f), shape)
+        Modifier.fillMaxWidth().padding(start = 12.dp, end = 12.dp, top = 12.dp, bottom = 8.dp).clip(shape).background(Emvryx.surface).border(1.dp, Violet.copy(alpha = 0.6f), shape)
             .padding(12.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
@@ -543,6 +553,17 @@ private fun CodeComposer(vm: CodeViewModel) {
                 contentAlignment = Alignment.Center,
             ) { Text("↑", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 20.sp) }
         }
+    }
+    // the usage line under the box (index.html #codeUsage): plan, how much is left and about how many coding steps that is
+    vm.usage?.let { u ->
+        val low = !u.exempt && u.tankPct <= 20
+        Column(Modifier.fillMaxWidth().padding(bottom = 6.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(5.dp)) {
+            if (!u.exempt) Box(Modifier.width(200.dp).height(4.dp).clip(CircleShape).background(Emvryx.surface2)) {
+                Box(Modifier.fillMaxHeight().fillMaxWidth(u.tankPct.coerceIn(0, 100) / 100f).clip(CircleShape).background(if (low) Emvryx.danger else Violet))
+            }
+            Text(u.label, color = if (low) Emvryx.danger else Emvryx.muted, fontSize = 13.sp)
+        }
+    }
     }
 }
 
