@@ -17,7 +17,16 @@ The native Android app: Kotlin + Jetpack Compose (the plan is in [docs/NATIVE.md
 - **Everything else from the website opens inside the app, already signed in:** Settings, Admin (owners and admins), and the full website for skills,
   teacher mode, connected apps, your files, sharing, the VryxCode editor, preview and file browser. Links to other sites open in the phone's browser.
 
-**Not yet:** push notifications, fingerprint lock, passkey and email-code sign-in, the on-phone model.
+- **The rest of the website's chat:** the chat's ⋯ menu (Share a link, Save as PDF / Word / Markdown, Archive, Delete), Archived chats,
+  Private chat (never saved), Move to a folder (the list groups pinned chats, folders, days and skills as the website does), 👍 Right,
+  the answer's ⋯ (Save as, Ask a stronger model, Branch, Report), what an answer looked up, Memory updated notes, the owner's timing line,
+  the thinking words with their clock, the error card, following a reply that kept going while the app was away, Jump to the newest.
+- **Usage and memory:** tap the usage line for the tank, when it is full again, this week and messages left by model; the memory
+  (context window) ring shows from the first message (an estimate until a reply measures it) with used, free and when it summarizes.
+- **Light or dark** (the moon in the top bar), **Your day** from connected apps, **email-code sign-in** when the server sends mail,
+  and a **fingerprint lock** (the switch by your name in the menu; it asks again after a minute away).
+
+**Not yet:** push notifications (needs a Firebase project), passkeys (needs the server's domain set up for the app), the on-phone model.
 
 **Built on GitHub:** every pull request that changes `android/` is compiled and its tests run (`.github/workflows/android.yml`); the debug `.apk`
 is under the run's *Artifacts* (emvryx-android-debug), so it can be installed without Android Studio.

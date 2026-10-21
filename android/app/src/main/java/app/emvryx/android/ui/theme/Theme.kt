@@ -5,10 +5,13 @@ import androidx.compose.animation.core.tween
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Typography
 import androidx.compose.material3.darkColorScheme
+import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.ExperimentalTextApi
@@ -20,18 +23,21 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.sp
 import app.emvryx.android.R
 
-// The PWA's dark colours (web/index.html :root) and each model's own palette (web/js/core.js MODEL). The app follows the
+// The PWA's colours (web/js/core.js BASE, dark and light) and each model's own palette (core.js MODEL). The app follows the
 // chosen model the way the website does: Flare is orange-red, Solstice gold, Apogee ice blue, Equinox white; before a model
 // is known (sign-in, "off") it is the Emvryx amber.
 object Emvryx {
-    val bg = Color(0xFF07080D)
-    val side = Color(0xFF0A0B11)
-    val surface = Color(0xFF0F1119)
-    val surface2 = Color(0xFF161926)
-    val line = Color(0xFF232739)
-    val text = Color(0xFFEEF0F6)
-    val muted = Color(0xFF9AA3BC)
-    val danger = Color(0xFFF87171)
+    /** Light or dark (the website's moon button). A snapshot state, so every screen that reads a colour redraws when it changes. */
+    var light by mutableStateOf(false)
+
+    val bg get() = if (light) Color(0xFFF7F8FC) else Color(0xFF07080D)
+    val side get() = if (light) Color(0xFFEEF0F7) else Color(0xFF0A0B11)
+    val surface get() = if (light) Color(0xFFFFFFFF) else Color(0xFF0F1119)
+    val surface2 get() = if (light) Color(0xFFEEF0F7) else Color(0xFF161926)
+    val line get() = if (light) Color(0xFFD8DCEA) else Color(0xFF232739)
+    val text get() = if (light) Color(0xFF0D0F1A) else Color(0xFFEEF0F6)
+    val muted get() = if (light) Color(0xFF4A526B) else Color(0xFF9AA3BC)
+    val danger get() = if (light) Color(0xFFD93A3A) else Color(0xFFF87171)
 }
 
 @Immutable
@@ -52,14 +58,22 @@ object Palettes {
     private val solstice = Palette(Color(0xFFF2A60C), Color(0xFF1F1400), Color(0xFFFFBE3B), Color(0xFFF2A60C), Color(0xFFFFE7A0), Color(0x2EF2A60C))
     private val apogee = Palette(Color(0xFFA8D1F5), Color(0xFF06121F), Color(0xFFB5D8F8), Color(0xFFA8D1F5), Color(0xFFF4F9FF), Color(0x26A8D1F5))
 
+    // the light versions (core.js MODEL[...].light)
+    private val brandL = Palette(Color(0xFFF5A524), Color(0xFF1A1204), Color(0xFF8F5600), Color(0xFFE08A00), Color(0xFFFFD27A), Color(0x1FF5A524))
+    private val emberL = Palette(Color(0xFFB7391E), Color(0xFFFFFFFF), Color(0xFF8F2A14), Color(0xFFA8321A), Color(0xFFFF9A3C), Color(0x24B7391E))
+    private val flareL = Palette(Color(0xFFFF4B1F), Color(0xFF1A0500), Color(0xFFB83208), Color(0xFFE5340A), Color(0xFFFFF3E6), Color(0x1FFF4B1F))
+    private val equinoxL = Palette(Color(0xFF0D0F1A), Color(0xFFFFFFFF), Color(0xFF0D0F1A), Color(0xFF0D0F1A), Color(0xFFFFFFFF), Color(0x120D0F1A))
+    private val solsticeL = Palette(Color(0xFFF2A60C), Color(0xFF1F1400), Color(0xFF8A5A00), Color(0xFFD18A00), Color(0xFFFFE7A0), Color(0x21F2A60C))
+    private val apogeeL = Palette(Color(0xFFA8D1F5), Color(0xFF06121F), Color(0xFF2A5F96), Color(0xFF4F8FC9), Color(0xFFF4F9FF), Color(0x2678AADC))
+
     /** The palette for a model by its name (Flare, Solstice...); unknown names get Flare's, as on the website. */
-    fun forModel(name: String?): Palette = when (name?.lowercase()) {
-        null, "" -> brand
-        "ember" -> ember
-        "equinox" -> equinox
-        "solstice" -> solstice
-        "apogee" -> apogee
-        else -> flare
+    fun forModel(name: String?, light: Boolean = false): Palette = when (name?.lowercase()) {
+        null, "" -> if (light) brandL else brand
+        "ember" -> if (light) emberL else ember
+        "equinox" -> if (light) equinoxL else equinox
+        "solstice" -> if (light) solsticeL else solstice
+        "apogee" -> if (light) apogeeL else apogee
+        else -> if (light) flareL else flare
     }
 }
 
@@ -103,7 +117,7 @@ private val type = Typography().run {
 /** [model] is the chosen model's name, or null for the Emvryx amber. Colours ease from one model to the next, like the website. */
 @Composable
 fun EmvryxTheme(model: String? = null, content: @Composable () -> Unit) {
-    val target = Palettes.forModel(model)
+    val target = Palettes.forModel(model, Emvryx.light)
     val ease = tween<Color>(600)
     val accent by animateColorAsState(target.accent, ease, label = "accent")
     val onAccent by animateColorAsState(target.onAccent, ease, label = "onAccent")
@@ -112,7 +126,7 @@ fun EmvryxTheme(model: String? = null, content: @Composable () -> Unit) {
     val core by animateColorAsState(target.core, ease, label = "core")
     val glow by animateColorAsState(target.glow, ease, label = "glow")
     val p = Palette(accent, onAccent, accentText, sun, core, glow)
-    val colors = darkColorScheme(
+    val colors = (if (Emvryx.light) lightColorScheme() else darkColorScheme()).copy(
         primary = p.accent,
         onPrimary = p.onAccent,
         primaryContainer = Emvryx.surface2,

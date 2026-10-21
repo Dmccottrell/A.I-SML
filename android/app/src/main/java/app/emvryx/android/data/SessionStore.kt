@@ -23,6 +23,16 @@ class SessionStore(context: Context) {
 
     val signedIn get() = session() != null
 
+    /** Light or dark, as picked with the moon button (the website keeps it per browser too) */
+    var light: Boolean
+        get() = prefs.getBoolean(KEY_LIGHT, false)
+        set(value) = prefs.edit().putBoolean(KEY_LIGHT, value).apply()
+
+    /** Fingerprint (or face, PIN) lock when the app opens */
+    var lock: Boolean
+        get() = prefs.getBoolean(KEY_LOCK, false)
+        set(value) = prefs.edit().putBoolean(KEY_LOCK, value).apply()
+
     fun forget() = prefs.edit().remove(KEY_COOKIE).apply()
 
     /** The session cookie as a Set-Cookie line, for the in-app website pages (WebView), so they open signed in */
@@ -52,6 +62,8 @@ class SessionStore(context: Context) {
         const val FILE = "emvryx_session"
         const val KEY_SERVER = "server"
         const val KEY_COOKIE = "cookie"
+        const val KEY_LIGHT = "light"
+        const val KEY_LOCK = "lock"
         const val COOKIE = "emvryx_session"
 
         fun open(context: Context): SharedPreferences {

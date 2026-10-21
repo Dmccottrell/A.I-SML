@@ -78,18 +78,39 @@ data class UserSettings(
 )
 
 @Serializable
-data class Tank(val pct: Double = 100.0)
+data class Tank(
+    val pct: Double = 100.0,
+    val left: Double = 0.0,
+    val cap: Double = 0.0,
+    @SerialName("messages_left") val messagesLeft: Int = 0,
+    @SerialName("full_at") val fullAt: Double = 0.0,
+    @SerialName("refill_per_hour") val refillPerHour: Double = 0.0,
+    val mode: String = "",
+    @SerialName("refill_hours") val refillHours: Double = 0.0,
+)
 
 @Serializable
-data class Week(@SerialName("pct_left") val pctLeft: Double = 100.0)
+data class Week(
+    @SerialName("pct_left") val pctLeft: Double = 100.0,
+    val left: Double = 0.0,
+    val cap: Double = 0.0,
+    @SerialName("messages_left") val messagesLeft: Int = 0,
+    @SerialName("resets_at") val resetsAt: Double = 0.0,
+)
+
+/** Messages left on one model ("flare", "solstice" ...) */
+@Serializable
+data class ModelLeft(val model: String = "", @SerialName("messages_left") val messagesLeft: Int = 0)
 
 /** The usage line under the message box (app usage_snapshot; web/js/chat.js renderUsage) */
 @Serializable
 data class Usage(
     val exempt: Boolean = false,
+    val status: String = "",
     @SerialName("can_send") val canSend: Int = 0,
     val tank: Tank = Tank(),
     val week: Week = Week(),
+    val models: List<ModelLeft> = emptyList(),
 ) {
     val fraction get() = if (exempt) 1.0 else minOf(tank.pct, week.pctLeft) / 100.0
 
@@ -131,7 +152,13 @@ data class ChatSummary(
     val title: String = "New chat",
     val updated: Double = 0.0,
     @Serializable(with = FlexBool::class) val pinned: Boolean = false,
+    val skill: String = "",             // started from a skill or Teacher mode: listed on its own, as on the website
+    val folder: String = "",
 )
+
+/** The model's memory size for the person (state "window"): used to estimate the memory ring before the first reply measures it */
+@Serializable
+data class ChatWindow(val window: Long = 0)
 
 /** "Regenerate" with a choice of how the new answer should differ (app/regen_modes.py) */
 @Serializable
@@ -153,6 +180,10 @@ data class AppState(
     @SerialName("regen_options") val regenOptions: List<RegenOption> = emptyList(),
     val features: Map<String, Boolean> = emptyMap(),        // the feature flags as they apply to this person (Admin > Previews)
     val settings: UserSettings = UserSettings(),
+    val window: ChatWindow? = null,
+    val briefing: Boolean = false,                           // "Your day" can be read from connected apps
+    @SerialName("thinking_words") val thinkingWords: List<String> = emptyList(),
+    @SerialName("think_switch_s") val thinkSwitchS: Double = 2.5,
 ) {
     /** "Pro plan" */
     val planName get() = plan.replaceFirstChar { it.uppercase() } + " plan"
@@ -201,7 +232,77 @@ data class Chat(
     val ctx: Ctx? = null,
     @Serializable(with = FlexBool::class) val pinned: Boolean = false,    // GET /api/chats/{id} sends 0 or 1 (app_engine.meta)
     val docs: List<DocInfo> = emptyList(),
+    val private: Boolean = false,
+    val skill: String = "",
+    val folder: String = "",
 )
+
+@Serializable
+data class ChatList(val chats: List<ChatSummary> = emptyList())
+
+/** What the model was given before it answered (the "notes" event; web/js/send.js lookupLine) */
+@Serializable
+data class Source(val title: String = "", val url: String = "")
+
+@Serializable
+data class AppError(val app: String = "", val message: String = "")
+
+@Serializable
+data class LookupNotes(
+    val asked: Boolean = false,
+    val retry: Boolean = false,
+    val pictures: Int = 0,
+    val ocr: Int = 0,
+    val saved: Int = 0,
+    val wiki: Int = 0,
+    val web: Int = 0,
+    val live: Int = 0,
+    val apps: List<String> = emptyList(),
+    val names: List<String> = emptyList(),
+    val unreadable: List<String> = emptyList(),
+    @SerialName("app_errors") val appErrors: List<AppError> = emptyList(),
+    @SerialName("web_tried") val webTried: Boolean = false,
+    @SerialName("web_source") val webSource: String = "",
+    val sources: List<Source> = emptyList(),
+)
+
+/** Where a reply's time went: shown under it to the owner and admins (the "done" event's timing; send.js timingLine) */
+@Serializable
+data class Timing(
+    val total: Double = 0.0,
+    val lookup: Double = 0.0,
+    val load: Double = 0.0,
+    @SerialName("first_word") val firstWord: Double = 0.0,
+    val thought: Boolean = false,
+    val tries: Int = 1,
+)
+
+/** "Your day" from the connected apps (GET /api/briefing) */
+@Serializable
+data class BriefItem(val title: String = "", val text: String = "")
+
+@Serializable
+data class BriefSection(val kind: String = "", val app: String = "", val items: List<BriefItem> = emptyList(), val error: String = "")
+
+@Serializable
+data class Briefing(val sections: List<BriefSection> = emptyList(), val off: Boolean = false)
+
+/** Read-only links to a copy of a chat (POST /api/chats/{id}/share, GET /api/shares) */
+@Serializable
+data class ShareRow(val id: String = "", val title: String = "", val expires: Double = 0.0)
+
+@Serializable
+data class Shares(val shares: List<ShareRow> = emptyList(), val on: Boolean = false)
+
+@Serializable
+data class ShareMade(val url: String = "", val shares: List<ShareRow> = emptyList())
+
+@Serializable
+data class LikeReply(val saved: Int = 0)
+
+/** Which ways of signing in this server offers (GET /api/auth-options) */
+@Serializable
+data class AuthOptions(val email: Boolean = false, val password: Boolean = true, val passkeys: Boolean = false)
 
 @Serializable
 data class SearchHit(val id: Long, val title: String = "", val snippet: String = "")

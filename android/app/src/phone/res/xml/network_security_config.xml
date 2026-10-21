@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The phone test build: https everywhere, except the emulator's own address for the PC (10.0.2.2), so it can be tried against
+     `python app_server.py` on the emulator too. A real phone uses https://chat.emvryx.app. -->
+<network-security-config>
+    <base-config cleartextTrafficPermitted="false" />
+    <domain-config cleartextTrafficPermitted="true">
+        <domain includeSubdomains="false">10.0.2.2</domain>
+    </domain-config>
+</network-security-config>

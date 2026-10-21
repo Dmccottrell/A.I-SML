@@ -29,6 +29,16 @@ android {
             isMinifyEnabled = true
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
         }
+        // A test build to put on a real phone: optimized like a release (a debug build is noticeably slower, opening the menu stuttered),
+        // but signed and named like the debug build, so it installs over it and keeps the person signed in.
+        // gradlew assemblePhone -> app/build/outputs/apk/phone/app-phone.apk
+        create("phone") {
+            initWith(getByName("release"))
+            applicationIdSuffix = ".debug"
+            signingConfig = signingConfigs.getByName("debug")
+            matchingFallbacks += listOf("release")
+            buildConfigField("String", "DEFAULT_SERVER", "\"http://10.0.2.2:8000\"")    // on a real phone it starts at chat.emvryx.app instead
+        }
     }
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
@@ -54,6 +64,7 @@ dependencies {
     implementation(libs.androidx.compose.material3)
     implementation(libs.androidx.compose.material.icons)
     implementation(libs.androidx.security.crypto)
+    implementation(libs.androidx.biometric)
     implementation(libs.okhttp)
     implementation(libs.kotlinx.serialization.json)
     implementation(libs.kotlinx.coroutines.android)

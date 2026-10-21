@@ -66,9 +66,16 @@ class CodeViewModel(app: Application) : AndroidViewModel(app) {
     var effort by mutableStateOf("balanced")
     var model by mutableStateOf("")
     var env by mutableStateOf("local")
+    var draft by mutableStateOf("")                   // a starting idea tapped on the home screen, put in the message box
     var offer by mutableStateOf("")                   // the suggested reply after a finished turn (flag vryxcode_suggest), greyed in the empty box
     var suggestOn = false
     var onTour: (() -> Unit)? = null                     // /tour: the VryxCode tour again
+    val docs = mutableStateListOf<app.emvryx.android.data.DocInfo>()   // vryxcode_review: documents for the model to read first (a spec, brand guidelines)
+    var review by mutableStateOf(false)                // flag vryxcode_review: the review view, like Cursor's
+    private val seenPrefs = app.getSharedPreferences("vryxcode", android.content.Context.MODE_PRIVATE)
+    /** Sessions opened since they last changed (id -> updated): they leave "Ready for review" */
+    var reviewed by mutableStateOf(seenPrefs.all.mapNotNull { (k, v) -> (v as? Float)?.let { k to it.toDouble() } ?: (v as? String)?.toDoubleOrNull()?.let { k to it } }.toMap())
+        private set
     val pictures = mutableStateListOf<String>()      // data: URLs sent with the next message (the full agent sees them)
     var commands by mutableStateOf<List<CodeCommand>>(emptyList())
         private set
@@ -111,9 +118,12 @@ class CodeViewModel(app: Application) : AndroidViewModel(app) {
         liveLine = null
         offer = ""
         pictures.clear()
+        docs.clear()
     }
 
     fun openSession(row: CodeSessionRow) {
+        reviewed = reviewed + (row.id to row.updated)                  // opened: no longer "Ready for review"
+        seenPrefs.edit().putString(row.id, row.updated.toString()).apply()
         stopPolling()
         sid = row.id
         project = row.project.ifEmpty { project }
@@ -123,6 +133,7 @@ class CodeViewModel(app: Application) : AndroidViewModel(app) {
         seen = 0
         pending = null
         pictures.clear()
+        docs.clear()
         poll()
     }
 
@@ -184,6 +195,7 @@ class CodeViewModel(app: Application) : AndroidViewModel(app) {
                     }
                 }
                 pictures.clear()
+        docs.clear()
                 poll()
             } catch (e: Exception) {
                 error = describe(e)
@@ -206,6 +218,7 @@ class CodeViewModel(app: Application) : AndroidViewModel(app) {
         put("model", model); put("effort", effort)
         put("auto_edits", mode == "auto"); put("plan", mode == "plan")
         if (pictures.isNotEmpty()) putJsonArray("images") { pictures.forEach { add(JsonPrimitive(it)) } }
+        if (docs.isNotEmpty()) putJsonArray("docs") { docs.forEach { add(JsonPrimitive(it.id)) } }
     }
 
     fun stop() {
@@ -226,6 +239,22 @@ class CodeViewModel(app: Application) : AndroidViewModel(app) {
         val q = pending?.int("id") ?: return
         if (text.isBlank()) return
         viewModelScope.launch { runCatching { api.codeAnswer(id, q, true, choice = text.trim()) }; pending = null; poll() }
+    }
+
+    /** A PDF, Word or text file for VryxCode to read with the next message: kept in your Documents (code.js pickDocs) */
+    fun addDoc(name: String, bytes: ByteArray) {
+        if (docs.size >= 8) return
+        if (bytes.size > 10_000_000) {
+            error = "$name is over 10 MB."
+            return
+        }
+        viewModelScope.launch {
+            try {
+                docs.add(api.upload(name, bytes))
+            } catch (e: Exception) {
+                error = "$name was not attached: " + describe(e)
+            }
+        }
     }
 
     fun addPicture(name: String, bytes: ByteArray) {

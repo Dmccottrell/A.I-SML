@@ -26,6 +26,7 @@ import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -51,9 +52,23 @@ fun SignInScreen(vm: AppViewModel) {
     var code by rememberSaveable { mutableStateOf("") }
     var show by rememberSaveable { mutableStateOf(false) }
     var showServer by rememberSaveable { mutableStateOf(false) }
+    var email by rememberSaveable { mutableStateOf("") }
+    LaunchedEffect(vm.server) { vm.checkSignInOptions() }        // does this server send sign-in codes by email?
     val twoStep = vm.twoStepTicket != null
-    val submit = { if (twoStep) vm.submitTwoStep(code) else vm.signIn(way, id, secret) }
-    val ready = if (twoStep) code.isNotBlank() else secret.isNotBlank() && (way == SignInWay.Key || id.isNotBlank())
+    val codeSent = vm.emailSentTo != null
+    val submit = {
+        when {
+            twoStep -> vm.submitTwoStep(code)
+            way == SignInWay.Email && codeSent -> vm.signInWithEmailCode(code)
+            way == SignInWay.Email -> vm.sendEmailCode(email)
+            else -> vm.signIn(way, id, secret)
+        }
+    }
+    val ready = when {
+        twoStep -> code.isNotBlank()
+        way == SignInWay.Email -> if (codeSent) code.isNotBlank() else email.contains('@')
+        else -> secret.isNotBlank() && (way == SignInWay.Key || id.isNotBlank())
+    }
 
     Box(Modifier.fillMaxSize().accentWash(p.glow, 420.dp).safeDrawingPadding().imePadding(), contentAlignment = Alignment.Center) {
         Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(horizontal = 20.dp, vertical = 32.dp),
@@ -100,6 +115,19 @@ fun SignInScreen(vm: AppViewModel) {
                             )
                         }
                     }
+                    way == SignInWay.Email && codeSent -> {
+                        Text("If ${vm.emailSentTo} belongs to an account, a 6-digit code is on its way. It works for 10 minutes.", color = Emvryx.muted, fontSize = 15.sp)
+                        Field(
+                            "Code from the email", code, { code = it }, placeholder = "123456",
+                            keyboard = KeyboardOptions(keyboardType = KeyboardType.Number, imeAction = ImeAction.Done),
+                            actions = KeyboardActions(onDone = { submit() }),
+                        )
+                    }
+                    way == SignInWay.Email -> Field(
+                        "Email", email, { email = it }, placeholder = "you@example.com",
+                        keyboard = KeyboardOptions(keyboardType = KeyboardType.Email, imeAction = ImeAction.Done),
+                        actions = KeyboardActions(onDone = { submit() }),
+                    )
                     else -> Field(
                         "Access key", secret, { secret = it }, placeholder = "emvx_…", hidden = true,
                         keyboard = KeyboardOptions(keyboardType = KeyboardType.Password, imeAction = ImeAction.Done),
@@ -109,9 +137,14 @@ fun SignInScreen(vm: AppViewModel) {
 
                 vm.signInError?.let { Text(it, color = MaterialTheme.colorScheme.error) }
 
-                PwaButton(if (twoStep) "Continue" else "Sign in", submit, Modifier.fillMaxWidth().height(50.dp), enabled = !vm.signInBusy && ready) {
+                val label = when {
+                    twoStep -> "Continue"
+                    way == SignInWay.Email && !codeSent -> "Email me a code"
+                    else -> "Sign in"
+                }
+                PwaButton(label, submit, Modifier.fillMaxWidth().height(50.dp), enabled = !vm.signInBusy && ready) {
                     if (vm.signInBusy) CircularProgressIndicator(Modifier.size(20.dp), strokeWidth = 2.dp, color = LocalContentColor.current)
-                    else Text(if (twoStep) "Continue" else "Sign in", fontWeight = FontWeight.SemiBold, fontSize = 16.sp)
+                    else Text(label, fontWeight = FontWeight.SemiBold, fontSize = 16.sp)
                 }
 
                 if (twoStep) {
@@ -122,11 +155,12 @@ fun SignInScreen(vm: AppViewModel) {
                         Text("or", color = Emvryx.muted, modifier = Modifier.padding(horizontal = 12.dp))
                         HorizontalDivider(Modifier.weight(1f), color = Emvryx.line)
                     }
-                    PwaButton(
-                        if (way == SignInWay.Password) "Use an access key" else "Sign in with a password",
-                        { way = if (way == SignInWay.Password) SignInWay.Key else SignInWay.Password; secret = "" },
-                        Modifier.fillMaxWidth(), ghost = true,
-                    )
+                    if (way != SignInWay.Password) PwaButton("Sign in with a password", { way = SignInWay.Password; secret = ""; vm.cancelEmailCode() },
+                        Modifier.fillMaxWidth(), ghost = true)
+                    if (way != SignInWay.Key) PwaButton("Use an access key", { way = SignInWay.Key; secret = ""; vm.cancelEmailCode() },
+                        Modifier.fillMaxWidth(), ghost = true)
+                    if (vm.emailOffered && way != SignInWay.Email) PwaButton("Email me a sign-in code", { way = SignInWay.Email; code = "" },
+                        Modifier.fillMaxWidth(), ghost = true)
                     Text(
                         "Forgot your password? Ask the owner for a one-time sign-in link, then choose a new one in Settings > Security.",
                         color = Emvryx.muted, fontSize = 15.sp,

@@ -120,20 +120,8 @@ fun MemoryRing(ctx: Ctx, onClick: () -> Unit) {
             drawArc(Emvryx.surface2, 0f, 360f, false, Offset(w / 2, w / 2), Size(size.width - w, size.height - w), style = Stroke(w))
             drawArc(color, -90f, 360f * frac, false, Offset(w / 2, w / 2), Size(size.width - w, size.height - w), style = Stroke(w, cap = StrokeCap.Round))
         }
-        Text("${Math.round(ctx.pct)}", fontSize = 9.sp, color = Emvryx.muted)
+        Text("${Math.round(ctx.pct)}%", fontSize = 9.sp, color = Emvryx.muted)
     }
-}
-
-@Composable
-fun MemoryMenuBody(vm: AppViewModel, close: () -> Unit) {
-    val c = vm.ctx ?: return
-    fun k(n: Long) = if (n >= 1000) "${n / 1000}K" else n.toString()
-    Text("MEMORY", color = Emvryx.muted, fontSize = 12.sp, fontWeight = FontWeight.SemiBold, letterSpacing = 1.2.sp, modifier = Modifier.padding(6.dp))
-    Text("${k(c.used)} of ${k(c.window)} words used (${c.pct}%)", fontSize = 16.sp, modifier = Modifier.padding(horizontal = 6.dp))
-    if (c.compactAt > 0) Text("Earlier messages are summarized by themselves at about ${k(c.compactAt)}, so the chat can keep going.",
-        color = Emvryx.muted, fontSize = 14.sp, modifier = Modifier.padding(6.dp))
-    PwaButton("Compact now", onClick = { vm.compact(); close() }, enabled = !vm.streaming && vm.chatId != null,
-        modifier = Modifier.fillMaxWidth().padding(top = 6.dp))
 }
 
 /** The "Regenerate" choices (app/regen_modes.py) */
@@ -208,14 +196,15 @@ fun NoteBox(value: String, onChange: (String) -> Unit, placeholder: String, minH
     }
 }
 
-/** A row in the side panel that opens another part of Emvryx */
+/** A row in the side panel that opens another part of Emvryx (.link): the website's [icon], the name, and a small grey [note] ("Never saved") */
 @Composable
-fun SideLink(icon: String, label: String, onClick: () -> Unit) {
+fun SideLink(icon: String, label: String, note: String = "", onClick: () -> Unit) {
     Row(
-        Modifier.fillMaxWidth().heightIn(min = 44.dp).clip(RoundedCornerShape(12.dp)).clickable(onClick = onClick).padding(horizontal = 12.dp),
+        Modifier.fillMaxWidth().heightIn(min = 42.dp).clip(RoundedCornerShape(12.dp)).clickable(onClick = onClick).padding(horizontal = 12.dp),
         verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        Text(icon, fontSize = 18.sp)
-        Text(label, fontSize = 16.sp)
+        PwaIcon(icon, Emvryx.muted)
+        Text(label, fontSize = 16.sp, fontWeight = FontWeight.Medium, modifier = Modifier.weight(1f))
+        if (note.isNotBlank()) Text(note, color = Emvryx.muted, fontSize = 12.sp)
     }
 }

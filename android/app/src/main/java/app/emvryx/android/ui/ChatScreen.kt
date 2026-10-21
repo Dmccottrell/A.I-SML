@@ -68,6 +68,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.rememberDrawerState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -115,6 +116,15 @@ fun ChatScreen(vm: AppViewModel) {
     var menu by remember { mutableStateOf<Menu?>(null) }
     var editing by remember { mutableStateOf<Bubble?>(null) }
     var reporting by remember { mutableStateOf<Bubble?>(null) }
+    var showUsage by remember { mutableStateOf(false) }
+    var saving by remember { mutableStateOf<String?>(null) }           // the text "Save as" was opened for
+    var folderFor by remember { mutableStateOf<ChatSummary?>(null) }
+    var saveText by remember { mutableStateOf("") }
+    var saveFormat by remember { mutableStateOf("pdf") }
+    val saveFile = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/octet-stream")) { uri ->
+        uri?.let { vm.saveAs(it, saveText, saveFormat) }
+    }
+    val onSaveAs: (String) -> Unit = { saving = it }
     // the pickers live here, not in the menu: the menu closes as soon as one opens, and its result must still arrive
     val context = LocalContext.current
     val pickPicture = rememberLauncherForActivityResult(ActivityResultContracts.PickMultipleVisualMedia(3)) { uris ->
@@ -125,22 +135,25 @@ fun ChatScreen(vm: AppViewModel) {
     }
     BackHandler(drawer.isOpen) { scope.launch { drawer.close() } }
     BackHandler(menu != null) { menu = null }
+    LaunchedEffect(Unit) { vm.checkSignInOptions() }
 
     ModalNavigationDrawer(
         drawerState = drawer,
         scrimColor = Color.Black.copy(alpha = 0.55f),
-        drawerContent = { Sidebar(vm, onDone = { scope.launch { drawer.close() } }) },
+        drawerContent = { Sidebar(vm, onDone = { scope.launch { drawer.close() } }, onFolder = { folderFor = it }) },
     ) {
         val p = LocalPalette.current
         Column(Modifier.fillMaxSize().background(Emvryx.bg).accentWash(p.glow).imePadding()) {
             TopBar(vm, onMenu = {
                 menu = null
-                vm.refreshChats()
-                scope.launch { drawer.open() }
-            })
+                scope.launch {
+                    drawer.open()                                    // slide in first, then fetch: the list was already loaded
+                    vm.refreshChats()
+                }
+            }, onSaveAs = { onSaveAs(vm.chatAsText()) })
             if (vm.state?.demo == true) DemoBanner()
             Box(Modifier.weight(1f).fillMaxWidth()) {
-                Thread(vm, onRegen = { menu = Menu.Regen }, onEdit = { editing = it }, onReport = { reporting = it })
+                Thread(vm, onRegen = { menu = Menu.Regen }, onEdit = { editing = it }, onReport = { reporting = it }, onSaveAs = onSaveAs)
                 if (menu != null) {
                     // tapping anywhere else closes the menu, as on the website
                     Box(Modifier.fillMaxSize().clickable(remember { MutableInteractionSource() }, null) { menu = null })
@@ -148,7 +161,7 @@ fun ChatScreen(vm: AppViewModel) {
                         when (menu) {
                             Menu.Model -> ModelMenu(vm) { menu = null }
                             Menu.Effort -> EffortMenu(vm) { menu = null }
-                            Menu.Memory -> MemoryMenuBody(vm) { menu = null }
+                            Menu.Memory -> vm.shownCtx?.let { c -> MemoryDetails(vm, c) { menu = null } }
                             Menu.Regen -> RegenMenuBody(vm) { menu = null }
                             Menu.Attach -> AttachMenu(
                                 onPicture = { pickPicture.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) },
@@ -160,7 +173,25 @@ fun ChatScreen(vm: AppViewModel) {
                 }
             }
             Composer(vm, menu, onMenu = { menu = if (menu == it) null else it })
-            UsageLine(vm)
+            UsageLine(vm, onClick = { showUsage = true })
+        }
+    }
+    if (showUsage) vm.usage?.let { UsageDialog(it) { showUsage = false } }
+    saving?.let { text ->
+        SaveAsDialog(text, onPick = { f ->
+            saveText = text
+            saveFormat = f
+            saveFile.launch(vm.title.replace(Regex("[^A-Za-z0-9 _-]"), "").trim().ifEmpty { "document" }.take(60) + "." + f)
+        }, onClose = { saving = null })
+    }
+    ShareDialog(vm)
+    ArchivedDialog(vm, onOpen = vm::openChat)
+    folderFor?.let { c -> FolderDialog(c.folder, onSave = { vm.moveToFolder(c, it) }, onClose = { folderFor = null }) }
+    vm.toast?.let { t ->
+        LaunchedEffect(t) { kotlinx.coroutines.delay(3000); vm.toast = null }
+        Box(Modifier.fillMaxSize().navigationBarsPadding().padding(bottom = 90.dp), contentAlignment = Alignment.BottomCenter) {
+            Text(t, color = Emvryx.text, modifier = Modifier.clip(RoundedCornerShape(14.dp)).background(Emvryx.surface2)
+                .border(1.dp, Emvryx.line, RoundedCornerShape(14.dp)).padding(horizontal = 16.dp, vertical = 10.dp))
         }
     }
     editing?.let { b ->
@@ -192,7 +223,9 @@ private fun AttachMenu(onPicture: () -> Unit, onFile: () -> Unit, close: () -> U
 // ---------------------------------------------------------------- top
 
 @Composable
-private fun TopBar(vm: AppViewModel, onMenu: () -> Unit) {
+private fun TopBar(vm: AppViewModel, onMenu: () -> Unit, onSaveAs: () -> Unit) {
+    var more by remember { mutableStateOf(false) }
+    var confirm by remember { mutableStateOf(false) }
     Column(Modifier.statusBarsPadding()) {
         Row(Modifier.fillMaxWidth().height(60.dp).padding(horizontal = 12.dp), verticalAlignment = Alignment.CenterVertically) {
             IconButton(onClick = onMenu) { Icon(Icons.Default.Menu, "Chats", tint = Emvryx.text) }
@@ -200,8 +233,38 @@ private fun TopBar(vm: AppViewModel, onMenu: () -> Unit) {
                 vm.title, fontWeight = FontWeight.SemiBold, fontSize = 17.sp, maxLines = 1, overflow = TextOverflow.Ellipsis,
                 modifier = Modifier.weight(1f).padding(horizontal = 8.dp),
             )
-            IconButton(onClick = vm::newChat, enabled = !vm.streaming) { Icon(Icons.Default.Add, "New chat", tint = Emvryx.text) }
+            IconButton(onClick = vm::toggleLight) {                  // the website's moon: switch dark or light
+                val ink = Emvryx.text
+                Canvas(Modifier.size(20.dp)) {                       // a crescent: a disc with a second disc taken out of it
+                    val r = size.minDimension * 0.42f
+                    val c = Offset(size.width / 2, size.height / 2)
+                    val moon = androidx.compose.ui.graphics.Path().apply {
+                        op(
+                            androidx.compose.ui.graphics.Path().apply { addOval(androidx.compose.ui.geometry.Rect(c, r)) },
+                            androidx.compose.ui.graphics.Path().apply { addOval(androidx.compose.ui.geometry.Rect(Offset(c.x + r * 0.55f, c.y - r * 0.45f), r * 0.85f)) },
+                            androidx.compose.ui.graphics.PathOperation.Difference,
+                        )
+                    }
+                    drawPath(moon, ink, style = androidx.compose.ui.graphics.drawscope.Stroke(1.8.dp.toPx()))
+                }
+            }
+            if (vm.chatId != null && vm.bubbles.isNotEmpty()) Box {
+                IconButton(onClick = { more = true }) { Text("⋯", fontSize = 22.sp, color = Emvryx.text) }
+                DropdownMenu(more, { more = false }, containerColor = Emvryx.surface) {
+                    if (!vm.isPrivate) DropdownMenuItem({ Text("Share a link…") }, { more = false; vm.loadShares() })
+                    DropdownMenuItem({ Text("Save as PDF or Word…") }, { more = false; onSaveAs() })
+                    if (!vm.isPrivate) DropdownMenuItem({ Text("Archive (still remembered)") }, { more = false; vm.archiveThis() })
+                    if (!vm.isPrivate) DropdownMenuItem({ Text("Delete this chat", color = Emvryx.danger) }, { more = false; confirm = true })
+                }
+            }
+            IconButton(onClick = { vm.newChat() }, enabled = !vm.streaming) { Icon(Icons.Default.Add, "New chat", tint = Emvryx.text) }
         }
+        if (confirm) androidx.compose.material3.AlertDialog(
+            onDismissRequest = { confirm = false }, containerColor = Emvryx.surface,
+            title = { Text("Delete this chat?") }, text = { Text("\"${vm.title}\" and its messages are deleted. This can't be undone.") },
+            confirmButton = { androidx.compose.material3.TextButton({ vm.chatId?.let { vm.delete(ChatSummary(it, vm.title)) }; confirm = false }) { Text("Delete", color = Emvryx.danger) } },
+            dismissButton = { androidx.compose.material3.TextButton({ confirm = false }) { Text("Cancel") } },
+        )
         HorizontalDivider(color = Emvryx.line)
     }
 }
@@ -225,27 +288,36 @@ private fun DemoBanner() {
 // ---------------------------------------------------------------- the thread
 
 @Composable
-private fun Thread(vm: AppViewModel, onRegen: () -> Unit, onEdit: (Bubble) -> Unit, onReport: (Bubble) -> Unit) {
+private fun Thread(vm: AppViewModel, onRegen: () -> Unit, onEdit: (Bubble) -> Unit, onReport: (Bubble) -> Unit, onSaveAs: (String) -> Unit) {
     val list = rememberLazyListState()
+    val scope = rememberCoroutineScope()
     val last = vm.bubbles.lastOrNull()
-    LaunchedEffect(vm.bubbles.size, last?.text?.length) {
-        if (vm.bubbles.isNotEmpty()) list.scrollToItem(vm.bubbles.lastIndex, Int.MAX_VALUE / 2)
+    // follow the newest words while you are at the bottom; once you scroll up to read, it stays put and offers "Jump to the newest"
+    val atEnd by remember { derivedStateOf { list.layoutInfo.visibleItemsInfo.lastOrNull()?.let { it.index >= list.layoutInfo.totalItemsCount - 2 } ?: true } }
+    LaunchedEffect(vm.bubbles.size, last?.text?.length, vm.failure) {
+        if (vm.bubbles.isNotEmpty() && (atEnd || last?.mine == true)) list.scrollToItem(list.layoutInfo.totalItemsCount.coerceAtLeast(1) - 1, Int.MAX_VALUE / 2)
     }
     if (vm.bubbles.isEmpty()) {
         Empty(vm)
         return
     }
     val lastReply = vm.bubbles.indexOfLast { !it.mine }
+    Box(Modifier.fillMaxSize()) {
     LazyColumn(
         Modifier.fillMaxSize(), state = list,
         contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 24.dp, bottom = 8.dp),
         verticalArrangement = Arrangement.spacedBy(22.dp),
     ) {
+        if (vm.isPrivate) item(key = "private") { Note("Private chat: not saved, and gone when you leave it") }
         items(vm.bubbles.size, key = { vm.bubbles[it].key }) { i ->
             val b = vm.bubbles[i]
-            if (b.mine) UserMessage(vm, b, onEdit)
-            else AiMessage(vm, b, isLast = i == lastReply && i == vm.bubbles.lastIndex, onRegen = onRegen, onReport = onReport)
+            if (b.mine) {
+                if (b.text.startsWith(AppViewModel.SUMMARY_MARK)) Note("Earlier messages were summarized to save room")
+                else UserMessage(vm, b, onEdit)
+            }
+            else AiMessage(vm, b, isLast = i == lastReply && i == vm.bubbles.lastIndex, onRegen = onRegen, onReport = onReport, onSaveAs = onSaveAs)
         }
+        vm.failure?.let { f -> item(key = "failure") { FailureCard(vm, f) } }
         vm.notice?.let { n ->
             item(key = "notice") {
                 Text(
@@ -255,6 +327,12 @@ private fun Thread(vm: AppViewModel, onRegen: () -> Unit, onEdit: (Bubble) -> Un
                 )
             }
         }
+    }
+    if (!atEnd) Box(                                                    // "Jump to the newest message"
+        Modifier.align(Alignment.BottomEnd).padding(16.dp).size(44.dp).clip(CircleShape).background(Emvryx.surface2)
+            .border(1.dp, Emvryx.line, CircleShape).clickable { scope.launch { list.animateScrollToItem(list.layoutInfo.totalItemsCount.coerceAtLeast(1) - 1) } },
+        contentAlignment = Alignment.Center,
+    ) { Text("↓", fontSize = 20.sp, color = Emvryx.text) }
     }
 }
 
@@ -267,8 +345,11 @@ private fun Empty(vm: AppViewModel) {
         Logo(Modifier.size(64.dp), kind = vm.currentModel?.name ?: "flare")
         Text("How can I help?", fontFamily = Heading, fontWeight = FontWeight.SemiBold, fontSize = 32.sp, letterSpacing = (-0.6).sp,
             textAlign = TextAlign.Center, modifier = Modifier.padding(top = 12.dp, bottom = 6.dp))
-        Text("Ask anything. Pick a model and how much it should think under the box.", color = Emvryx.muted, fontSize = 16.sp, textAlign = TextAlign.Center)
+        Text(if (vm.isPrivate) "Private chat: not saved, never searched on the web, and it uses no memory. Gone when you leave it."
+             else "Ask anything. Pick a model and how much it should think under the box.", color = Emvryx.muted, fontSize = 16.sp, textAlign = TextAlign.Center)
         vm.notice?.let { Text(it, color = Emvryx.danger, textAlign = TextAlign.Center, modifier = Modifier.padding(top = 16.dp)) }
+        vm.failure?.let { Box(Modifier.padding(top = 16.dp)) { FailureCard(vm, it) } }
+        if (vm.state?.briefing == true && !vm.isPrivate) YourDayCard(vm)
         Spacer(Modifier.height(24.dp))
     }
 }
@@ -302,15 +383,19 @@ private fun UserMessage(vm: AppViewModel, b: Bubble, onEdit: (Bubble) -> Unit) {
 /** .msg.ai: the model's name over a bordered card, then Copy / Regenerate */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-private fun AiMessage(vm: AppViewModel, b: Bubble, isLast: Boolean, onRegen: () -> Unit, onReport: (Bubble) -> Unit) {
+private fun AiMessage(vm: AppViewModel, b: Bubble, isLast: Boolean, onRegen: () -> Unit, onReport: (Bubble) -> Unit, onSaveAs: (String) -> Unit) {
     val clip = LocalClipboardManager.current
     val who = vm.modelById(b.model)
+    var more by remember { mutableStateOf(false) }
+    var copied by remember { mutableStateOf(false) }
     Column(Modifier.fillMaxWidth(0.94f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Logo(Modifier.size(16.dp), kind = who?.name ?: "flare")
             Spacer(Modifier.width(6.dp))
-            Text(who?.fullName ?: "Emvryx", color = Emvryx.muted, fontSize = 14.sp)
+            Text((who?.fullName ?: "Emvryx") + (if (b.cut && !b.streaming) " · stopped" else "") + (b.autoNote?.let { " · $it" } ?: ""),
+                color = Emvryx.muted, fontSize = 14.sp)
         }
+        lookupText(b.notes)?.let { Note(it) }
         Column(
             Modifier.clip(RoundedCornerShape(18.dp, 18.dp, 18.dp, 4.dp)).background(Emvryx.surface)
                 .border(1.dp, Emvryx.line, RoundedCornerShape(18.dp, 18.dp, 18.dp, 4.dp))
@@ -318,7 +403,7 @@ private fun AiMessage(vm: AppViewModel, b: Bubble, isLast: Boolean, onRegen: () 
             verticalArrangement = Arrangement.spacedBy(10.dp),
         ) {
             if (b.streaming && b.text.isEmpty()) {
-                Thinking(vm.working ?: "Thinking…")
+                ThinkingRow(vm)
             } else SelectionContainer {
                 Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                     Markdown.blocks(b.text + if (b.streaming) " ▍" else "").forEach { block ->
@@ -337,16 +422,28 @@ private fun AiMessage(vm: AppViewModel, b: Bubble, isLast: Boolean, onRegen: () 
             }
         }
         if (!b.streaming && b.text.isNotEmpty()) {
+            // the answer's buttons as on the website: Copy, Right, Continue, Regenerate, and the less-used ones behind ⋯ (chat.js bubble)
+            val saved = vm.chatId?.let { it >= 0 } == true && b.id > 0
+            val stronger = if (isLast && !vm.streaming) vm.strongerModel(b.model) else null
             FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Chip("Copy", { clip.setText(AnnotatedString(b.text)) })
+                Chip(if (copied) "Copied" else "Copy", { clip.setText(AnnotatedString(b.text)); copied = true })
+                if (saved) Chip(b.liked ?: "👍 Right", { if (b.liked == null) vm.like(b) })
                 if (isLast && !vm.streaming && b.cut) Chip("Continue →", vm::continueReply)
-                if (isLast && !vm.streaming) Chip("Regenerate", onRegen)
-                if (b.id > 0 && !vm.streaming) {
-                    if (b.fb.isEmpty()) Chip("Report", { onReport(b) }) else Text("Reported", color = Emvryx.muted, fontSize = 13.sp)
-                    Chip("New chat from here", { vm.branch(b) })
+                if (isLast && !vm.streaming) Chip("Regenerate ▾", onRegen)
+                Box {
+                    Chip("⋯", { more = true })
+                    DropdownMenu(more, { more = false }, containerColor = Emvryx.surface) {
+                        DropdownMenuItem({ Text("Save as…") }, { more = false; onSaveAs(b.text) })
+                        stronger?.let { m -> DropdownMenuItem({ Text("Ask ${m.name} (a stronger model)") }, { more = false; vm.askStronger(m) }) }
+                        if (b.id > 0 && !vm.streaming && vm.chatId != null) DropdownMenuItem({ Text("Branch: new chat from here") }, { more = false; vm.branch(b) })
+                        if (saved) DropdownMenuItem({ Text(if (b.fb.isEmpty()) "Report a problem…" else "Reported (thanks)") },
+                            { more = false; if (b.fb.isEmpty()) onReport(b) })
+                    }
                 }
             }
         }
+        b.memory?.let { Note(it) }
+        b.timing?.let { Note(timingText(it)) }
     }
 }
 
@@ -381,12 +478,12 @@ private fun Composer(vm: AppViewModel, open: Menu?, onMenu: (Menu) -> Unit) {
                 cursorBrush = SolidColor(p.accent),
             )
         }
-        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
             // + and the two pills share everything left of the send button; the pills only shorten their words when it really runs out
             // (a Spacer weighted alongside them took a third of the room and cut them to "F…" and "Bala…")
-            Row(Modifier.weight(1f), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Row(Modifier.weight(1f), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                 Box(
-                    Modifier.size(40.dp).clip(CircleShape).border(1.dp, if (open == Menu.Attach) p.accent else Emvryx.line, CircleShape)
+                    Modifier.size(36.dp).clip(CircleShape).border(1.dp, if (open == Menu.Attach) p.accent else Emvryx.line, CircleShape)
                         .clickable { onMenu(Menu.Attach) },
                     contentAlignment = Alignment.Center,
                 ) { Icon(Icons.Default.Add, "Add a picture or file", tint = Emvryx.muted) }
@@ -400,7 +497,7 @@ private fun Composer(vm: AppViewModel, open: Menu?, onMenu: (Menu) -> Unit) {
                         overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
                 }
             }
-            val c = vm.ctx
+            val c = vm.shownCtx
             if (c != null && vm.flag("context_meter")) MemoryRing(c) { onMenu(Menu.Memory) }
             SendButton(stop = vm.streaming, enabled = vm.streaming || ((text.isNotBlank() || vm.attached.isNotEmpty()) && !vm.uploading)) {
                 if (vm.streaming) vm.stop() else {
@@ -420,11 +517,11 @@ private fun Pill(open: Boolean, filled: Boolean, onClick: () -> Unit, modifier: 
         modifier.heightIn(min = 44.dp).clip(CircleShape)
             .then(if (filled) Modifier.background(Emvryx.surface2) else Modifier)
             .border(1.dp, if (open) p.accent else Emvryx.line, CircleShape)
-            .clickable(onClick = onClick).padding(start = 8.dp, end = 6.dp),
-        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp),
+            .clickable(onClick = onClick).padding(start = 8.dp, end = 2.dp),
+        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp),
     ) {
         content()
-        Icon(Icons.Default.ArrowDropDown, null, tint = Emvryx.muted, modifier = Modifier.size(18.dp))
+        Icon(Icons.Default.ArrowDropDown, null, tint = Emvryx.muted, modifier = Modifier.size(16.dp))
     }
 }
 
@@ -452,11 +549,11 @@ private fun SendButton(stop: Boolean, enabled: Boolean, onClick: () -> Unit) {
 
 /** .usage: a thin bar in the model's colour and "Usage: 99.5% · about 397 messages left" */
 @Composable
-private fun UsageLine(vm: AppViewModel) {
+private fun UsageLine(vm: AppViewModel, onClick: () -> Unit) {
     val p = LocalPalette.current
     val u = vm.usage
     Column(
-        Modifier.fillMaxWidth().navigationBarsPadding().padding(top = 10.dp, bottom = 8.dp),
+        Modifier.fillMaxWidth().navigationBarsPadding().clickable(enabled = u != null, onClick = onClick).padding(top = 10.dp, bottom = 8.dp),
         horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(6.dp),
     ) {
         if (u != null) {
@@ -550,7 +647,7 @@ private fun EffortMenu(vm: AppViewModel, close: () -> Unit) {
 // ---------------------------------------------------------------- the chat list (.side)
 
 @Composable
-private fun Sidebar(vm: AppViewModel, onDone: () -> Unit) {
+private fun Sidebar(vm: AppViewModel, onDone: () -> Unit, onFolder: (ChatSummary) -> Unit) {
     val p = LocalPalette.current
     var query by rememberSaveable { mutableStateOf("") }
     LaunchedEffect(query) { vm.search(query) }                   // the words inside chats too, from the server (core.js search)
@@ -566,7 +663,6 @@ private fun Sidebar(vm: AppViewModel, onDone: () -> Unit) {
                 Logo(Modifier.size(32.dp))
                 Spacer(Modifier.width(10.dp))
                 Text("Emvryx", fontFamily = Heading, fontWeight = FontWeight.SemiBold, fontSize = 20.sp, letterSpacing = (-0.4).sp, modifier = Modifier.weight(1f))
-                IconButton(onClick = vm::signOut) { Icon(Icons.AutoMirrored.Filled.ExitToApp, "Sign out", tint = Emvryx.muted) }
             }
             Box(
                 Modifier.fillMaxWidth().padding(start = 14.dp, end = 14.dp, top = 12.dp, bottom = 6.dp).heightIn(min = 46.dp)
@@ -588,14 +684,15 @@ private fun Sidebar(vm: AppViewModel, onDone: () -> Unit) {
                         textStyle = MaterialTheme.typography.bodyMedium.copy(color = Emvryx.text, fontSize = 15.sp), cursorBrush = SolidColor(p.accent))
                 }
             }
-            val shown = vm.chats.filter { query.isBlank() || it.title.contains(query.trim(), ignoreCase = true) }
+            val shown = remember(vm.chats, query) { vm.chats.filter { query.isBlank() || it.title.contains(query.trim(), ignoreCase = true) } }
+            val grouped = remember(shown) { groups(shown) }
             LazyColumn(Modifier.weight(1f).padding(horizontal = 14.dp)) {
-                groups(shown).forEach { (label, rows) ->
+                grouped.forEach { (label, rows) ->
                     item(key = "label-$label") {
                         Text(label, color = Emvryx.muted.copy(alpha = 0.8f), fontSize = 11.sp, fontWeight = FontWeight.SemiBold, letterSpacing = 1.1.sp,
                             modifier = Modifier.padding(start = 6.dp, top = 14.dp, bottom = 2.dp))
                     }
-                    items(rows, key = { it.id }) { c -> ChatRow(vm, c, c.id == vm.chatId) { vm.openChat(c.id); onDone() } }
+                    items(rows, key = { it.id }) { c -> ChatRow(vm, c, c.id == vm.chatId, onFolder) { vm.openChat(c.id); onDone() } }
                 }
                 val inside = vm.hits.orEmpty().filter { h -> shown.none { it.id == h.id } }
                 if (query.isNotBlank() && inside.isNotEmpty()) {
@@ -615,32 +712,73 @@ private fun Sidebar(vm: AppViewModel, onDone: () -> Unit) {
                 }
             }
             HorizontalDivider(color = Emvryx.line)
-            Column(Modifier.padding(horizontal = 8.dp, vertical = 6.dp)) {          // the rest of Emvryx, as in the website's menu
-                SideLink("⌨", "VryxCode") { vm.open(Screen.Code); onDone() }
-                SideLink("⚙", "Settings") { vm.open(Screen.Web("/#settings", "Settings")); onDone() }
-                if (vm.isAdmin) SideLink("🛡", "Admin") { vm.open(Screen.Web("/#admin", "Admin")); onDone() }
-                SideLink("◎", "Everything else (skills, teacher, apps, files)") { vm.open(Screen.Web("/", "Emvryx")); onDone() }
+            // the tools, as in the website's menu (tour.js renderLinks); Usage, Memory, Settings and Admin are under your name
+            Column(Modifier.padding(horizontal = 8.dp, vertical = 6.dp)) {
+                SideLink("lock", "Private chat", "Never saved") { vm.newChat(private = true); onDone() }
+                SideLink("code", "VryxCode") { vm.open(Screen.Code); onDone() }
+                SideLink("spark", "Skills") { vm.open(Screen.Web("/", "Skills", "openSkills()")); onDone() }
+                SideLink("pencil", "Teacher mode") { vm.open(Screen.Web("/", "Teacher mode", "newChat(false, 'teacher')")); onDone() }
+                SideLink("doc", "Documents") { vm.open(Screen.Web("/", "Documents", "openDocs()")); onDone() }
             }
             HorizontalDivider(color = Emvryx.line)
-            Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
-                val name = vm.state?.user.orEmpty()
-                Box(Modifier.size(34.dp).clip(CircleShape).background(p.accent), contentAlignment = Alignment.Center) {
-                    Text(name.take(1).uppercase(), color = p.onAccent, fontWeight = FontWeight.Bold)
-                }
-                Spacer(Modifier.width(10.dp))
-                Column {
-                    Text(name, fontWeight = FontWeight.SemiBold)
-                    vm.state?.let { Text(it.planName, color = Emvryx.muted, fontSize = 14.sp) }
-                }
-            }
+            Account(vm, onDone)
         }
     }
+}
+
+/** Your name at the bottom of the menu; tapping it opens Usage, Memory, Settings (archived chats are under Data controls there),
+ *  Admin, the app lock and Sign out, as the website's account menu does (tour.js acctMenu) */
+@Composable
+private fun Account(vm: AppViewModel, onDone: () -> Unit) {
+    val p = LocalPalette.current
+    var open by remember { mutableStateOf(false) }
+    var usage by remember { mutableStateOf(false) }
+    val name = vm.state?.user.orEmpty()
+    Box {
+        Row(
+            Modifier.fillMaxWidth().clickable { open = !open }.padding(horizontal = 16.dp, vertical = 12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Box(Modifier.size(34.dp).clip(CircleShape).background(p.accent), contentAlignment = Alignment.Center) {
+                Text(name.take(1).uppercase(), color = p.onAccent, fontWeight = FontWeight.Bold)
+            }
+            Spacer(Modifier.width(10.dp))
+            Column(Modifier.weight(1f)) {
+                Text(name, fontWeight = FontWeight.SemiBold)
+                vm.state?.let { Text(it.planName, color = Emvryx.muted, fontSize = 14.sp) }
+            }
+            PwaIcon("chevron", Emvryx.muted, 18.dp)
+        }
+        DropdownMenu(open, { open = false }, containerColor = Emvryx.surface) {
+            AccountItem("chart", "Usage") { open = false; usage = true }
+            AccountItem("brain", "Memory") { open = false; vm.open(Screen.Web("/", "Memory", "openMemory()")); onDone() }
+            AccountItem("gear", "Settings") { open = false; vm.open(Screen.Web("/#settings", "Settings")); onDone() }
+            if (vm.isAdmin) AccountItem("shield", "Admin") { open = false; vm.open(Screen.Web("/#admin", "Admin")); onDone() }
+            AccountItem("lock", "App lock", if (vm.lockOn) "On" else "Off") { vm.setLock(!vm.lockOn) }     // fingerprint, face or screen lock
+            AccountItem("signout", "Sign out") { open = false; vm.signOut() }
+        }
+    }
+    if (usage) vm.usage?.let { UsageDialog(it) { usage = false } }
+}
+
+@Composable
+private fun AccountItem(icon: String, label: String, note: String = "", action: () -> Unit) {
+    DropdownMenuItem(
+        text = {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(label)
+                if (note.isNotBlank()) Text("   $note", color = Emvryx.muted, fontSize = 13.sp)
+            }
+        },
+        leadingIcon = { PwaIcon(icon, Emvryx.muted, 18.dp) },
+        onClick = action,
+    )
 }
 
 /** .row: the current chat has a soft fill and an accent edge on the left. Hold it to pin or delete it. */
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
-private fun ChatRow(vm: AppViewModel, c: ChatSummary, current: Boolean, onClick: () -> Unit) {
+private fun ChatRow(vm: AppViewModel, c: ChatSummary, current: Boolean, onFolder: (ChatSummary) -> Unit, onClick: () -> Unit) {
     val p = LocalPalette.current
     var menu by remember { mutableStateOf(false) }
     var confirm by remember { mutableStateOf(false) }
@@ -654,7 +792,9 @@ private fun ChatRow(vm: AppViewModel, c: ChatSummary, current: Boolean, onClick:
     ) {
         Text((if (c.pinned) "📌 " else "") + c.title, maxLines = 1, overflow = TextOverflow.Ellipsis, fontSize = 16.sp)
         DropdownMenu(menu, { menu = false }, containerColor = Emvryx.surface) {
-            DropdownMenuItem({ Text(if (c.pinned) "Unpin" else "Pin to the top") }, { vm.pin(c); menu = false })
+            DropdownMenuItem({ Text(if (c.pinned) "Unpin" else "📌 Pin to the top") }, { vm.pin(c); menu = false })
+            DropdownMenuItem({ Text("Move to a folder…") }, { menu = false; onFolder(c) })
+            DropdownMenuItem({ Text("🗄️ Archive (still remembered)") }, { menu = false; vm.archive(c) })
             DropdownMenuItem({ Text("Delete", color = Emvryx.danger) }, { confirm = true; menu = false })
         }
     }
@@ -666,18 +806,30 @@ private fun ChatRow(vm: AppViewModel, c: ChatSummary, current: Boolean, onClick:
     )
 }
 
-/** Today / Yesterday / Previous 7 days / Older, by when each chat was last used */
+/** The chat list as the website groups it (core.js renderChats): pinned, then each folder, then by day, then chats started from a
+ *  skill or Teacher mode in their own groups at the end */
 internal fun groups(chats: List<ChatSummary>, today: LocalDate = LocalDate.now()): List<Pair<String, List<ChatSummary>>> {
     fun day(c: ChatSummary) = Instant.ofEpochMilli((c.updated * 1000).toLong()).atZone(ZoneId.systemDefault()).toLocalDate()
-    val sorted = chats.sortedWith(compareByDescending<ChatSummary> { it.pinned }.thenByDescending { it.updated })
-    return sorted.groupBy { c ->
+    val sorted = chats.sortedByDescending { it.updated }
+    val out = mutableListOf<Pair<String, List<ChatSummary>>>()
+    fun add(label: String, list: List<ChatSummary>) { if (list.isNotEmpty()) out += label to list }
+    add("PINNED", sorted.filter { it.pinned })
+    sorted.filter { it.folder.isNotBlank() && !it.pinned }.map { it.folder }.distinct().forEach { f ->
+        add(f.uppercase(), sorted.filter { it.folder == f && !it.pinned })
+    }
+    val plain = sorted.filter { !it.pinned && it.folder.isBlank() && it.skill.isBlank() }
+    plain.groupBy { c ->
         val d = day(c)
         when {
-            c.pinned -> "PINNED"
             d >= today -> "TODAY"
             d >= today.minusDays(1) -> "YESTERDAY"
             d >= today.minusDays(7) -> "PREVIOUS 7 DAYS"
             else -> "OLDER"
         }
-    }.toList()
+    }.forEach { (k, v) -> add(k, v) }
+    val names = mapOf("teacher" to "TEACHER MODE", "study" to "STUDY HELPER")
+    sorted.filter { it.skill.isNotBlank() && !it.pinned && it.folder.isBlank() }.map { it.skill }.distinct().forEach { k ->
+        add(names[k] ?: k.uppercase(), sorted.filter { it.skill == k && !it.pinned && it.folder.isBlank() })
+    }
+    return out
 }
