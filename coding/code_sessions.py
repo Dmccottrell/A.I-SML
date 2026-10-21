@@ -98,6 +98,33 @@ def context_meter(used, window):
     return {"used": used, "window": window, "pct": round(min(100.0, 100.0 * used / window), 1), "compact_at": harness.fold_point(window)}
 
 
+def change_counts(workspace, name, args):
+    """{"add", "del"}: the lines a write or an edit adds and takes away (for "+52 -3" in the session list and the file chips), worked out before it runs.
+    {} for any other step."""
+    if name not in ("write_file", "edit_file") or not isinstance(args, dict):
+        return {}
+    import difflib
+    if name == "edit_file":
+        old, new = str(args.get("old", "")).splitlines(), str(args.get("new", "")).splitlines()
+    else:
+        new, old = str(args.get("content", "")).splitlines(), []
+        if not args.get("append"):
+            try:
+                full = os.path.realpath(os.path.join(workspace, str(args.get("path", ""))))
+                if full.startswith(os.path.realpath(workspace) + os.sep) and os.path.isfile(full):
+                    with open(full, encoding="utf-8", errors="replace") as f:
+                        old = f.read().splitlines()
+            except (OSError, ValueError):
+                old = []
+    add = rem = 0
+    for tag, i1, i2, j1, j2 in difflib.SequenceMatcher(None, old, new, autojunk=False).get_opcodes():
+        if tag in ("replace", "delete"):
+            rem += i2 - i1
+        if tag in ("replace", "insert"):
+            add += j2 - j1
+    return {"add": add, "del": rem}
+
+
 def _folded_steps(messages):
     """How many old steps are listed under "Earlier steps" in the task message (harness.compact puts them there); 0 when nothing was folded."""
     first = next((m for m in messages if m.get("role") == "user"), None)
@@ -181,18 +208,24 @@ class Session:
 
     # ---- the history on disk (the Sessions list)
     def meta(self):
-        steps, files, snippet = 0, set(), ""
+        steps, files, snippet, added, removed, pending = 0, set(), "", 0, 0, None
         for e in self.events:
             if e["kind"] == "step" and e.get("tool") and e.get("tool") != "finish":
                 steps += 1
                 m = re.match(r"(?:write|edit) (\S+)", str(e.get("preview", "")))
                 if m:
                     files.add(m.group(1))
+                pending = (e.get("add", 0), e.get("del", 0)) if "add" in e else None
+            elif e["kind"] == "result" and pending:                   # counted once the change really went in
+                if not str(e.get("text", "")).startswith("error"):
+                    added, removed = added + pending[0], removed + pending[1]
+                pending = None
             if e["kind"] == "end" and e.get("summary"):
                 snippet = e["summary"]
         title = " ".join(str(self.task).split())[:70]
         return {"id": self.id, "title": title, "project": self.project, "model": self.model_id, "env": self.env, "state": self.state, "started": self.started,
-                "updated": self.updated, "snippet": clip(snippet, 220), "steps": steps, "files": len(files), "checkpoints": list(self.checkpoints)}
+                "updated": self.updated, "snippet": clip(snippet, 220), "steps": steps, "files": len(files), "checkpoints": list(self.checkpoints),
+                "added": added, "removed": removed}
 
     def persist(self, force=False):
         if not self.log:
@@ -479,7 +512,7 @@ class Session:
             self.live = None
             try:
                 name, args = harness.parse_tool_call(reply)
-                self.emit("step", tool=name, preview=clip(vryxcode.preview(name, args), 2500), raw=clip(reply, 1500), **took)
+                self.emit("step", tool=name, preview=clip(vryxcode.preview(name, args), 2500), raw=clip(reply, 1500), **took, **change_counts(self.workspace, name, args))
                 if name == "finish" and isinstance(args, dict):
                     nxt = args.get("next")
                     self.next_steps = [clip(str(x), 120) for x in nxt[:3]] if isinstance(nxt, list) else []

@@ -106,6 +106,7 @@ class Base(unittest.TestCase):
         self.state.flags.data["audiences"]["chat_fixes"] = "off"         # tests that read exact prompts, sampling and counts expect the plain chat (tests/test_overnight_fixes.py turns it on)
         self.state.flags.data["audiences"]["vryxcode_fixes"] = "off"
         self.state.flags.data["audiences"]["photo_fixes"] = "off"
+        self.state.flags.data["audiences"]["vryxcode_review"] = "off"
         self.owner = Client(self.port, self.state.owner_key())
         self.sam_key = self.state.add_user("sam", "free")
         self.sam = Client(self.port, self.sam_key)
