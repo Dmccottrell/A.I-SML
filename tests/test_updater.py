@@ -105,6 +105,26 @@ class Repos(unittest.TestCase):
         self.addCleanup(shutil.rmtree, d, True)
         self.assertIn("not installed with git", updater.Updater(d).check()["reason"])
 
+    def test_the_restart_ends_the_running_server_before_starting_it_again(self):
+        # stopping the task left the python server running on the old code (Oct 2026), so the restart ends the server process itself
+        ps = updater.Updater.restart_script(4321)
+        order = [ps.index("Stop-ScheduledTask"), ps.index("Stop-Process -Id 4321 -Force"), ps.index("Start-ScheduledTask")]
+        self.assertEqual(order, sorted(order))
+
+    def test_the_restart_task_is_made_for_this_server_process_and_windows_accepts_it(self):
+        calls = []
+        d = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, d, True)
+        u = updater.Updater(self.work, runner=lambda args, **kw: calls.append(args))
+        u._restart_windows_task(script_dir=d)
+        made = next(a for a in calls if "/Create" in a)
+        tr = made[made.index("/TR") + 1]
+        self.assertLessEqual(len(tr), 261)                                                # schtasks refuses a longer command (the old one was 298)
+        self.assertIn(os.path.join(d, "emvryx_restart.ps1"), tr)
+        with open(os.path.join(d, "emvryx_restart.ps1"), encoding="utf-8") as f:
+            self.assertIn(f"Stop-Process -Id {os.getpid()} -Force", f.read())
+        self.assertIn(["schtasks", "/Run", "/TN", "EmvryxRestart"], calls)
+
 
 class Server(Base):
     class Fake:
