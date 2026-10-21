@@ -121,7 +121,7 @@ fun CodeScreen(app: AppViewModel, vm: CodeViewModel) {
                 Box {
                     IconButton(onClick = { more = true }) { Text("⋯", fontSize = 22.sp, color = Emvryx.text) }
                     DropdownMenu(more, { more = false }, containerColor = Emvryx.surface) {
-                        DropdownMenuItem({ Text("Open the editor") }, { more = false; app.open(Screen.Web("/", "VryxCode editor", "openCode()")) },
+                        DropdownMenuItem({ Text("Open the editor") }, { more = false; app.open(Screen.Web("/", "VryxCode editor", editorJs(vm))) },
                             leadingIcon = { PwaIcon("doc", Emvryx.muted, 18.dp) })
                         DropdownMenuItem({ Text("What VryxCode remembers") }, { more = false; vm.showMemory() },
                             leadingIcon = { PwaIcon("brain", Emvryx.muted, 18.dp) })
@@ -159,6 +159,13 @@ fun CodeScreen(app: AppViewModel, vm: CodeViewModel) {
     }
     vm.memory?.let { MemoryDialog(vm, it) }
     vm.rules?.let { RulesDialog(vm) }
+}
+
+/** The website's VryxCode opened on this project's files: the open session (its changes and preview too), or a new one in this project */
+private fun editorJs(vm: CodeViewModel): String {
+    val p = kotlinx.serialization.json.JsonPrimitive(vm.project).toString()
+    val open = vm.sid?.let { "openSession({id: " + kotlinx.serialization.json.JsonPrimitive(it).toString() + ", project: $p, model: C.model})" } ?: "newSession()"
+    return "openCode().then(() => { C.project = $p; $open; showDrawer(true, 'files'); })"
 }
 
 /** The project VryxCode works in: its name (tap to switch), and + New project */
