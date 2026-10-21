@@ -99,6 +99,15 @@ import app.emvryx.android.ui.theme.Emvryx
 import app.emvryx.android.ui.theme.Heading
 import app.emvryx.android.ui.theme.LocalPalette
 import app.emvryx.android.ui.theme.Mono
+import app.emvryx.android.ui.theme.Palettes
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.LinearOutSlowInEasing
+import androidx.compose.foundation.interaction.collectIsFocusedAsState
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.compositeOver
+import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.text.TextStyle
 import kotlinx.coroutines.launch
 import java.time.Instant
 import java.time.LocalDate
@@ -143,7 +152,8 @@ fun ChatScreen(vm: AppViewModel) {
         drawerContent = { Sidebar(vm, onDone = { scope.launch { drawer.close() } }, onFolder = { folderFor = it }) },
     ) {
         val p = LocalPalette.current
-        Column(Modifier.fillMaxSize().background(Emvryx.bg).accentWash(p.glow).imePadding()) {
+        Box(Modifier.fillMaxSize()) {
+        Column(Modifier.fillMaxSize().background(Emvryx.bg).then(if (Emvryx.modern) Modifier.modernGlow(p.accent) else Modifier.accentWash(p.glow)).imePadding()) {
             TopBar(vm, onMenu = {
                 menu = null
                 scope.launch {
@@ -174,6 +184,8 @@ fun ChatScreen(vm: AppViewModel) {
             }
             Composer(vm, menu, onMenu = { menu = if (menu == it) null else it })
             UsageLine(vm, onClick = { showUsage = true })
+        }
+        ModelWash(vm.washes, vm.currentModel?.name)
         }
     }
     if (showUsage) vm.usage?.let { UsageDialog(it) { showUsage = false } }
@@ -342,14 +354,28 @@ private fun Empty(vm: AppViewModel) {
         Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 24.dp),
         horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center,
     ) {
-        Logo(Modifier.size(64.dp), kind = vm.currentModel?.name ?: "flare")
-        Text("How can I help?", fontFamily = Heading, fontWeight = FontWeight.SemiBold, fontSize = 32.sp, letterSpacing = (-0.6).sp,
-            textAlign = TextAlign.Center, modifier = Modifier.padding(top = 12.dp, bottom = 6.dp))
+        val p = LocalPalette.current
+        if (Emvryx.modern) {
+            // modern: the mark floats with a glow, and the greeting is bold with the accent in its lower half (modern.css .empty)
+            val t = rememberInfiniteTransition(label = "float")
+            val y by t.animateFloat(0f, -6f, infiniteRepeatable(tween(2500), RepeatMode.Reverse), label = "y")
+            Box(Modifier.size(96.dp).graphicsLayer { translationY = y.dp.toPx() }
+                .drawBehind { drawCircle(Brush.radialGradient(listOf(Look.halo(p.accent), Color.Transparent)), size.minDimension / 2) },
+                contentAlignment = Alignment.Center) { Logo(Modifier.size(64.dp), kind = vm.currentModel?.name ?: "flare") }
+            Text("How can I help?", fontFamily = Heading, fontWeight = FontWeight.Bold, fontSize = 34.sp, letterSpacing = (-1.2).sp, textAlign = TextAlign.Center,
+                style = TextStyle(brush = Brush.verticalGradient(listOf(Emvryx.text, androidx.compose.ui.graphics.lerp(Emvryx.text, p.accent, 0.38f)))),
+                modifier = Modifier.padding(top = 4.dp, bottom = 6.dp))
+        } else {
+            Logo(Modifier.size(64.dp), kind = vm.currentModel?.name ?: "flare")
+            Text("How can I help?", fontFamily = Heading, fontWeight = FontWeight.SemiBold, fontSize = 32.sp, letterSpacing = (-0.6).sp,
+                textAlign = TextAlign.Center, modifier = Modifier.padding(top = 12.dp, bottom = 6.dp))
+        }
         Text(if (vm.isPrivate) "Private chat: not saved, never searched on the web, and it uses no memory. Gone when you leave it."
              else "Ask anything. Pick a model and how much it should think under the box.", color = Emvryx.muted, fontSize = 16.sp, textAlign = TextAlign.Center)
         vm.notice?.let { Text(it, color = Emvryx.danger, textAlign = TextAlign.Center, modifier = Modifier.padding(top = 16.dp)) }
         vm.failure?.let { Box(Modifier.padding(top = 16.dp)) { FailureCard(vm, it) } }
         if (vm.state?.briefing == true && !vm.isPrivate) YourDayCard(vm)
+        if (Emvryx.modern && !vm.isPrivate && vm.failure == null) Ideas { vm.draft = it }
         Spacer(Modifier.height(24.dp))
     }
 }
@@ -367,7 +393,14 @@ private fun UserMessage(vm: AppViewModel, b: Bubble, onEdit: (Bubble) -> Unit) {
                 Text(
                     b.text, style = MaterialTheme.typography.bodyLarge,
                     modifier = Modifier                                // as wide as the words, at most 80%
-                        .clip(RoundedCornerShape(18.dp, 18.dp, 4.dp, 18.dp)).background(Emvryx.surface2)
+                        .then(if (Emvryx.modern) {
+                            // modern: a bubble tinted with the model's colour, with a fine edge (modern.css .msg.user .bubble)
+                            val p = LocalPalette.current
+                            val s = RoundedCornerShape(22.dp, 22.dp, 6.dp, 22.dp)
+                            Modifier.clip(s).background(Brush.linearGradient(listOf(
+                                androidx.compose.ui.graphics.lerp(Emvryx.surface2, p.accent, 0.22f), androidx.compose.ui.graphics.lerp(Emvryx.surface2, p.accent, 0.10f))))
+                                .border(1.dp, Look.edge(p.accent), s)
+                        } else Modifier.clip(RoundedCornerShape(18.dp, 18.dp, 4.dp, 18.dp)).background(Emvryx.surface2))
                         .combinedClickable(onClick = {}, onLongClick = { menu = true })
                         .padding(horizontal = 16.dp, vertical = 12.dp),
                 )
@@ -393,11 +426,20 @@ private fun AiMessage(vm: AppViewModel, b: Bubble, isLast: Boolean, onRegen: () 
             Logo(Modifier.size(16.dp), kind = who?.name ?: "flare")
             Spacer(Modifier.width(6.dp))
             Text((who?.fullName ?: "Emvryx") + (if (b.cut && !b.streaming) " · stopped" else "") + (b.autoNote?.let { " · $it" } ?: ""),
-                color = Emvryx.muted, fontSize = 14.sp)
+                color = if (Emvryx.modern) LocalPalette.current.accentText else Emvryx.muted, fontSize = 14.sp,
+                fontWeight = if (Emvryx.modern) FontWeight.SemiBold else FontWeight.Normal)
         }
         lookupText(b.notes)?.let { Note(it) }
+        val bar = LocalPalette.current.accent
         Column(
-            Modifier.clip(RoundedCornerShape(18.dp, 18.dp, 18.dp, 4.dp)).background(Emvryx.surface)
+            if (Emvryx.modern) Modifier.drawBehind {                 // modern: the answer sits on the page, a thin accent line down its left
+                    val w = 2.dp.toPx()
+                    val top = 6.dp.toPx()
+                    drawRoundRect(Brush.verticalGradient(listOf(bar.copy(alpha = 0.7f), Color.Transparent), startY = top, endY = size.height - top),
+                        topLeft = Offset(0f, top), size = androidx.compose.ui.geometry.Size(w, size.height - 2 * top),
+                        cornerRadius = androidx.compose.ui.geometry.CornerRadius(w))
+                }.padding(start = 14.dp, top = 2.dp, bottom = 2.dp, end = 2.dp)
+            else Modifier.clip(RoundedCornerShape(18.dp, 18.dp, 18.dp, 4.dp)).background(Emvryx.surface)
                 .border(1.dp, Emvryx.line, RoundedCornerShape(18.dp, 18.dp, 18.dp, 4.dp))
                 .padding(horizontal = 18.dp, vertical = 14.dp),
             verticalArrangement = Arrangement.spacedBy(10.dp),
@@ -461,9 +503,18 @@ private fun Composer(vm: AppViewModel, open: Menu?, onMenu: (Menu) -> Unit) {
     val p = LocalPalette.current
     var text by rememberSaveable { mutableStateOf("") }
     LaunchedEffect(vm.draft) { if (vm.draft.isNotEmpty()) text = vm.draft }          // shared from another app
-    val shape = RoundedCornerShape(20.dp)
+    val modern = Emvryx.modern
+    val shape = RoundedCornerShape(if (modern) 28.dp else 20.dp)
+    val typing = remember { MutableInteractionSource() }
+    val focused by typing.collectIsFocusedAsState()
     Column(
-        Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, top = 8.dp)
+        if (modern) Modifier.fillMaxWidth().padding(start = 12.dp, end = 12.dp, top = 8.dp)
+            // modern: a glass card with an edge in the model's colour; it lights up while you type (modern.css .composer .card)
+            .then(if (focused) Modifier.border(4.dp, Look.soft(p.accent), RoundedCornerShape(32.dp)).padding(4.dp) else Modifier.padding(4.dp))
+            .shadow(if (focused) 18.dp else 12.dp, shape, ambientColor = if (focused) p.accent else Color.Black, spotColor = if (focused) p.accent else Color.Black)
+            .clip(shape).background(Emvryx.surface.copy(alpha = 0.94f).compositeOver(Emvryx.bg)).border(1.dp, if (focused) p.accent else Look.edge(p.accent), shape)
+            .padding(start = 18.dp, end = 10.dp, top = 14.dp, bottom = 10.dp)
+        else Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, top = 8.dp)
             .clip(shape).background(Emvryx.surface).border(1.dp, Emvryx.line, shape)
             .padding(start = 16.dp, end = 10.dp, top = 12.dp, bottom = 10.dp),
         verticalArrangement = Arrangement.spacedBy(10.dp),
@@ -473,7 +524,7 @@ private fun Composer(vm: AppViewModel, open: Menu?, onMenu: (Menu) -> Unit) {
         Box(Modifier.fillMaxWidth().heightIn(min = 24.dp, max = 160.dp)) {
             if (text.isEmpty()) Text("Message Emvryx…", color = Emvryx.muted, style = MaterialTheme.typography.bodyLarge)
             BasicTextField(
-                text, { text = it }, Modifier.fillMaxWidth(),
+                text, { text = it }, Modifier.fillMaxWidth(), interactionSource = typing,
                 textStyle = MaterialTheme.typography.bodyLarge.copy(color = Emvryx.text),
                 cursorBrush = SolidColor(p.accent),
             )
@@ -515,8 +566,11 @@ private fun Pill(open: Boolean, filled: Boolean, onClick: () -> Unit, modifier: 
     val p = LocalPalette.current
     Row(
         modifier.heightIn(min = 44.dp).clip(CircleShape)
-            .then(if (filled) Modifier.background(Emvryx.surface2) else Modifier)
-            .border(1.dp, if (open) p.accent else Emvryx.line, CircleShape)
+            .then(if (Emvryx.modern) {                                 // modern: soft round pills with no outline (modern.css .pill)
+                Modifier.background(if (open) Look.soft(p.accent) else if (filled) Emvryx.surface2.copy(alpha = 0.6f) else Color.Transparent)
+                    .then(if (open) Modifier.border(1.dp, p.accent, CircleShape) else Modifier)
+            } else Modifier.then(if (filled) Modifier.background(Emvryx.surface2) else Modifier)
+                .border(1.dp, if (open) p.accent else Emvryx.line, CircleShape))
             .clickable(onClick = onClick).padding(start = 8.dp, end = 2.dp),
         verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp),
     ) {
@@ -529,17 +583,26 @@ private fun Pill(open: Boolean, filled: Boolean, onClick: () -> Unit, modifier: 
 @Composable
 private fun SendButton(stop: Boolean, enabled: Boolean, onClick: () -> Unit) {
     val p = LocalPalette.current
-    val shape = RoundedCornerShape(12.dp)
+    val modern = Emvryx.modern
+    val shape = if (modern) CircleShape else RoundedCornerShape(12.dp)
+    val lit = modern && enabled && !stop
     Box(
-        Modifier.size(44.dp).alpha(if (enabled) 1f else 0.45f).clip(shape)    // .send[disabled]: faded until there is something to send
-            .then(if (stop) Modifier.background(Emvryx.surface2).border(1.dp, Emvryx.line, shape) else Modifier.background(p.accent))
+        Modifier.size(44.dp)
+            .then(if (lit) Modifier.shadow(10.dp, shape, ambientColor = p.accent, spotColor = p.accent) else Modifier)   // modern: a round button with a halo
+            .alpha(if (enabled) 1f else if (modern) 0.8f else 0.45f).clip(shape)    // .send[disabled]: faded until there is something to send
+            .then(when {
+                stop -> Modifier.background(Emvryx.surface2).border(1.dp, Emvryx.line, shape)
+                lit -> Modifier.background(Look.shine(p.accent))
+                modern -> Modifier.background(Emvryx.surface2)
+                else -> Modifier.background(p.accent)
+            })
             .clickable(enabled = enabled, onClick = onClick),
         contentAlignment = Alignment.Center,
     ) {
         if (stop) Box(Modifier.size(12.dp).clip(RoundedCornerShape(2.dp)).background(Emvryx.text))
         else Canvas(Modifier.size(20.dp)) {
             val w = 2.4.dp.toPx()
-            val c = p.onAccent
+            val c = if (modern && !enabled) Emvryx.muted else p.onAccent
             drawLine(c, Offset(size.width / 2, size.height * 0.85f), Offset(size.width / 2, size.height * 0.15f), w, StrokeCap.Round)
             drawLine(c, Offset(size.width / 2, size.height * 0.15f), Offset(size.width * 0.2f, size.height * 0.45f), w, StrokeCap.Round)
             drawLine(c, Offset(size.width / 2, size.height * 0.15f), Offset(size.width * 0.8f, size.height * 0.45f), w, StrokeCap.Round)
@@ -560,7 +623,9 @@ private fun UsageLine(vm: AppViewModel, onClick: () -> Unit) {
             val low = !u.exempt && u.fraction <= 0.2
             Box(Modifier.width(220.dp).height(5.dp).clip(CircleShape).background(Emvryx.surface2)) {
                 Box(Modifier.fillMaxHeight().fillMaxWidth(u.fraction.toFloat().coerceIn(0f, 1f)).clip(CircleShape)
-                    .background(if (low) Emvryx.danger else p.accent))
+                    .then(if (low) Modifier.background(Emvryx.danger)
+                          else if (Emvryx.modern) Modifier.background(Brush.horizontalGradient(listOf(p.accent, androidx.compose.ui.graphics.lerp(p.accent, Color.White, 0.4f))))
+                          else Modifier.background(p.accent)))
             }
             Text(u.label, color = if (low) Emvryx.danger else Emvryx.muted, fontSize = 13.sp)
         }
@@ -571,9 +636,12 @@ private fun UsageLine(vm: AppViewModel, onClick: () -> Unit) {
 
 @Composable
 private fun PopMenu(modifier: Modifier, content: @Composable () -> Unit) {
+    val p = LocalPalette.current
+    val shape = RoundedCornerShape(if (Emvryx.modern) 24.dp else 20.dp)
     Column(
         modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, bottom = 10.dp).heightIn(max = 560.dp)
-            .clip(RoundedCornerShape(20.dp)).background(Emvryx.surface).border(1.dp, Emvryx.line, RoundedCornerShape(20.dp))
+            .then(if (Emvryx.modern) Modifier.shadow(24.dp, shape) else Modifier)
+            .clip(shape).background(Emvryx.surface).border(1.dp, if (Emvryx.modern) Look.edge(p.accent) else Emvryx.line, shape)
             .clickable(remember { MutableInteractionSource() }, null) {}
             .verticalScroll(rememberScrollState()).padding(12.dp),
         verticalArrangement = Arrangement.spacedBy(6.dp),
@@ -589,10 +657,13 @@ private fun MenuHead(text: String) {
 @Composable
 private fun Opt(selected: Boolean, enabled: Boolean = true, onClick: () -> Unit, content: @Composable RowScope.() -> Unit) {
     val p = LocalPalette.current
-    val shape = RoundedCornerShape(14.dp)
+    val modern = Emvryx.modern
+    val shape = RoundedCornerShape(if (modern) 16.dp else 14.dp)
     Row(
         Modifier.fillMaxWidth().heightIn(min = 44.dp).alpha(if (enabled) 1f else 0.5f).clip(shape)
-            .border(1.dp, if (selected) p.accent else Emvryx.line, shape).clickable(enabled = enabled, onClick = onClick)
+            .then(if (modern) Modifier.background(if (selected) Look.soft(p.accent) else Emvryx.surface2.copy(alpha = 0.45f))     // modern: soft fills
+                .then(if (selected) Modifier.border(1.dp, p.accent, shape) else Modifier)
+                else Modifier.border(1.dp, if (selected) p.accent else Emvryx.line, shape)).clickable(enabled = enabled, onClick = onClick)
             .padding(horizontal = 14.dp, vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp),
     ) { content() }
@@ -662,11 +733,14 @@ private fun Sidebar(vm: AppViewModel, onDone: () -> Unit, onFolder: (ChatSummary
             Row(Modifier.fillMaxWidth().padding(start = 20.dp, end = 8.dp, top = 12.dp, bottom = 4.dp), verticalAlignment = Alignment.CenterVertically) {
                 Logo(Modifier.size(32.dp))
                 Spacer(Modifier.width(10.dp))
-                Text("Emvryx", fontFamily = Heading, fontWeight = FontWeight.SemiBold, fontSize = 20.sp, letterSpacing = (-0.4).sp, modifier = Modifier.weight(1f))
+                Text("Emvryx", fontFamily = Heading, fontWeight = if (Emvryx.modern) FontWeight.Bold else FontWeight.SemiBold, fontSize = 20.sp,
+                    letterSpacing = if (Emvryx.modern) (-0.6).sp else (-0.4).sp, modifier = Modifier.weight(1f))
             }
             Box(
-                Modifier.fillMaxWidth().padding(start = 14.dp, end = 14.dp, top = 12.dp, bottom = 6.dp).heightIn(min = 46.dp)
-                    .clip(RoundedCornerShape(14.dp)).background(p.accent)
+                Modifier.fillMaxWidth().padding(start = 14.dp, end = 14.dp, top = 12.dp, bottom = 6.dp).heightIn(min = if (Emvryx.modern) 48.dp else 46.dp)
+                    .then(if (Emvryx.modern) Modifier.shadow(12.dp, RoundedCornerShape(16.dp), ambientColor = p.accent, spotColor = p.accent)
+                        .clip(RoundedCornerShape(16.dp)).background(Look.shine(p.accent))       // modern: a shining button with a halo
+                        else Modifier.clip(RoundedCornerShape(14.dp)).background(p.accent))
                     .clickable { vm.newChat(); onDone() },
                 contentAlignment = Alignment.Center,
             ) { Text("+ New chat", color = p.onAccent, fontWeight = FontWeight.SemiBold, fontSize = 16.sp) }
@@ -716,9 +790,9 @@ private fun Sidebar(vm: AppViewModel, onDone: () -> Unit, onFolder: (ChatSummary
             Column(Modifier.padding(horizontal = 8.dp, vertical = 6.dp)) {
                 SideLink("lock", "Private chat", "Never saved") { vm.newChat(private = true); onDone() }
                 SideLink("code", "VryxCode") { vm.open(Screen.Code); onDone() }
-                SideLink("spark", "Skills") { vm.open(Screen.Web("/", "Skills", "openSkills()")); onDone() }
+                SideLink("spark", "Skills") { vm.open(Screen.Web("/", "Skills", "openSkills()", panel = true)); onDone() }
                 SideLink("pencil", "Teacher mode") { vm.open(Screen.Web("/", "Teacher mode", "newChat(false, 'teacher')")); onDone() }
-                SideLink("doc", "Documents") { vm.open(Screen.Web("/", "Documents", "openDocs()")); onDone() }
+                SideLink("doc", "Documents") { vm.open(Screen.Web("/", "Documents", "openDocs()", panel = true)); onDone() }
             }
             HorizontalDivider(color = Emvryx.line)
             Account(vm, onDone)
@@ -751,9 +825,9 @@ private fun Account(vm: AppViewModel, onDone: () -> Unit) {
         }
         DropdownMenu(open, { open = false }, containerColor = Emvryx.surface) {
             AccountItem("chart", "Usage") { open = false; usage = true }
-            AccountItem("brain", "Memory") { open = false; vm.open(Screen.Web("/", "Memory", "openMemory()")); onDone() }
-            AccountItem("gear", "Settings") { open = false; vm.open(Screen.Web("/#settings", "Settings")); onDone() }
-            if (vm.isAdmin) AccountItem("shield", "Admin") { open = false; vm.open(Screen.Web("/#admin", "Admin")); onDone() }
+            AccountItem("brain", "Memory") { open = false; vm.open(Screen.Web("/", "Memory", "openMemory()", panel = true)); onDone() }
+            AccountItem("gear", "Settings") { open = false; vm.open(Screen.Web("/#settings", "Settings", panel = true)); onDone() }
+            if (vm.isAdmin) AccountItem("shield", "Admin") { open = false; vm.open(Screen.Web("/#admin", "Admin", panel = true)); onDone() }
             AccountItem("lock", "App lock", if (vm.lockOn) "On" else "Off") { vm.setLock(!vm.lockOn) }     // fingerprint, face or screen lock
             AccountItem("signout", "Sign out") { open = false; vm.signOut() }
         }
@@ -784,7 +858,10 @@ private fun ChatRow(vm: AppViewModel, c: ChatSummary, current: Boolean, onFolder
     var confirm by remember { mutableStateOf(false) }
     Box(
         Modifier.fillMaxWidth().heightIn(min = 40.dp).clip(RoundedCornerShape(12.dp))
-            .then(if (current) Modifier.background(Emvryx.surface2).drawBehind {
+            .then(if (current && Emvryx.modern) Modifier.background(Emvryx.surface2.copy(alpha = 0.7f))   // modern: a soft glow from the left, a fine accent edge
+                .background(Brush.horizontalGradient(0f to Look.soft(p.accent), 0.92f to Color.Transparent))
+                .drawBehind { drawRect(p.accent, size = size.copy(width = 2.dp.toPx())) }
+            else if (current) Modifier.background(Emvryx.surface2).drawBehind {
                 drawRect(p.accent, size = size.copy(width = 3.dp.toPx()))
             } else Modifier)
             .combinedClickable(onClick = onClick, onLongClick = { menu = true }).padding(horizontal = 12.dp, vertical = 8.dp),
@@ -832,4 +909,58 @@ internal fun groups(chats: List<ChatSummary>, today: LocalDate = LocalDate.now()
         add(names[k] ?: k.uppercase(), sorted.filter { it.skill == k && !it.pinned && it.folder.isBlank() })
     }
     return out
+}
+
+/** core.js wash(): when you pick another model its colours swell out from the middle of the screen and fade, over a second.
+ *  Drawn in the new model's own colours (its core inside, its accent round it), whatever the screen is still fading from. */
+@Composable
+private fun ModelWash(count: Int, model: String?) {
+    val t = remember { Animatable(1f) }
+    var seen by remember { mutableStateOf(count) }
+    LaunchedEffect(count) {
+        if (count == seen) return@LaunchedEffect
+        seen = count
+        t.snapTo(0f)
+        t.animateTo(1f, tween(1000, easing = LinearOutSlowInEasing))
+    }
+    val f = t.value
+    if (f >= 1f) return
+    val p = Palettes.forModel(model, Emvryx.light, Emvryx.violet)
+    // @keyframes swell: opacity 0 -> .55 at 45% -> 0, scale .3 -> 2.2
+    val a = if (f < 0.45f) 0.55f * f / 0.45f else 0.55f * (1 - (f - 0.45f) / 0.55f)
+    val scale = 0.3f + 1.9f * f
+    Canvas(Modifier.fillMaxSize()) {
+        val r = 500.dp.toPx() * scale
+        val c = Offset(size.width / 2, size.height * 0.55f)
+        drawCircle(Brush.radialGradient(0f to p.core, 0.30f to p.accent, 0.66f to Color.Transparent, center = c, radius = r), r, c, alpha = a.coerceIn(0f, 1f))
+    }
+}
+
+/** The modern look's things to try under the greeting (chat.js ML_IDEAS): tap one and it is put in the box */
+@Composable
+private fun Ideas(onPick: (String) -> Unit) {
+    val p = LocalPalette.current
+    val ideas = listOf(
+        "Explain something" to "Explain how vaccines work like I am twelve.",
+        "Plan my day" to "Help me plan a productive day around three things I need to get done.",
+        "Write for me" to "Write a short, friendly message asking my landlord to fix the heating.",
+        "Look it up" to "What is in the news today?",
+    )
+    Column(Modifier.padding(top = 22.dp).widthIn(max = 560.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        ideas.chunked(2).forEach { row ->
+            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                row.forEach { (name, text) ->
+                    val s = RoundedCornerShape(20.dp)
+                    Column(
+                        Modifier.weight(1f).clip(s).background(Emvryx.surface.copy(alpha = 0.62f)).border(1.dp, Look.edge(p.accent), s)
+                            .clickable { onPick(text) }.padding(horizontal = 16.dp, vertical = 14.dp),
+                        verticalArrangement = Arrangement.spacedBy(3.dp),
+                    ) {
+                        Text(name, fontWeight = FontWeight.Bold, fontSize = 15.sp)
+                        Text(text, color = Emvryx.muted, fontSize = 13.sp, maxLines = 3, overflow = TextOverflow.Ellipsis)
+                    }
+                }
+            }
+        }
+    }
 }

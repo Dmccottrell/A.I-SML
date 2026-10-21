@@ -16,6 +16,8 @@ import app.emvryx.android.data.CodeSessionRow
 import app.emvryx.android.data.OfflineException
 import app.emvryx.android.data.bool
 import app.emvryx.android.data.int
+import app.emvryx.android.data.num
+import app.emvryx.android.data.CodeUsage
 import app.emvryx.android.data.str
 import app.emvryx.android.data.strings
 import kotlinx.coroutines.Job
@@ -56,6 +58,8 @@ class CodeViewModel(app: Application) : AndroidViewModel(app) {
     var full by mutableStateOf(false)
         private set
     var liveLine by mutableStateOf<String?>(null)
+    /** The usage line under the box, as fresh as the last look at the server */
+    var usage by mutableStateOf<CodeUsage?>(null)
         private set
     private var seen = 0
     private var poller: Job? = null
@@ -95,6 +99,7 @@ class CodeViewModel(app: Application) : AndroidViewModel(app) {
             try {
                 val i = api.codeInfo()
                 info = i
+                i.usage?.let { usage = it }
                 if (i.effort != null) model = i.effort.auto ?: model
                 if (model.isEmpty() || i.models.none { it.id == model && it.ready }) model = i.models.firstOrNull { it.ready }?.id ?: ""
                 project = i.project ?: i.projects.firstOrNull() ?: project
@@ -167,7 +172,8 @@ class CodeViewModel(app: Application) : AndroidViewModel(app) {
                     state = v.state
                     pending = v.pending
                     full = v.full
-                    liveLine = v.live?.let { l -> listOf(l["phase"], l["tool"], l["target"]).mapNotNull { (it as? JsonPrimitive)?.content }.filter { it.isNotBlank() }.joinToString(" · ") }
+                    v.usage?.let { usage = it }
+                    liveLine = v.live?.let(::liveText)
                     if (!v.working) break
                     delay(if (v.state == "asking") 1500 else 400)
                 } catch (e: kotlinx.coroutines.CancellationException) {
@@ -356,4 +362,13 @@ class CodeViewModel(app: Application) : AndroidViewModel(app) {
         is ApiException -> listOf(e.message, e.action).filter { it.isNotBlank() }.joinToString(" ")
         else -> "Something went wrong. Please try again."
     }
+}
+
+/** The line under the newest step while it works, as the website's (ide.js paintLive): "Calling · write_file · index.html · 12s · 1,234 tokens" */
+internal fun liveText(l: JsonObject): String {
+    val phase = l.str("phase").replaceFirstChar { it.uppercase() }
+    val secs = l.num("secs").toInt()
+    val tokens = l.int("tokens")
+    return listOf(phase, l.str("tool"), l.str("target").lineSequence().firstOrNull().orEmpty().take(60), "${secs}s",
+        if (tokens > 0) "%,d tokens".format(tokens) else "").filter { it.isNotBlank() }.joinToString(" · ")
 }

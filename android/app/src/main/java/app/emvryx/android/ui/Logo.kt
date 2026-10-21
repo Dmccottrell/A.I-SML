@@ -29,7 +29,7 @@ import kotlin.math.sin
 @Composable
 fun Logo(modifier: Modifier = Modifier, kind: String? = null, animate: Boolean = false) {
     val k = kind?.lowercase()?.takeIf { it in KINDS } ?: if (kind == null) "brand" else "flare"
-    val p = if (k == "brand") Palettes.brand else LocalPalette.current
+    val p = if (k == "brand") Palettes.forModel(null, Emvryx.light, Emvryx.violet) else LocalPalette.current     // Emvryx's own mark: amber, or violet
     val pulse = if (animate) {
         val t = rememberInfiniteTransition(label = "logo")
         t.animateFloat(0f, 1f, infiniteRepeatable(tween(800), RepeatMode.Reverse), label = "pulse").value

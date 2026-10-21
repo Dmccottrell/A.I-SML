@@ -28,6 +28,11 @@ class SessionStore(context: Context) {
         get() = prefs.getBoolean(KEY_LIGHT, false)
         set(value) = prefs.edit().putBoolean(KEY_LIGHT, value).apply()
 
+    /** The looks the server had on last time (violet, modern), so the sign-in screen already wears them, as the website remembers them */
+    var looks: Pair<Boolean, Boolean>
+        get() = prefs.getBoolean(KEY_VIOLET, false) to prefs.getBoolean(KEY_MODERN, false)
+        set(value) = prefs.edit().putBoolean(KEY_VIOLET, value.first).putBoolean(KEY_MODERN, value.second).apply()
+
     /** Fingerprint (or face, PIN) lock when the app opens */
     var lock: Boolean
         get() = prefs.getBoolean(KEY_LOCK, false)
@@ -64,6 +69,8 @@ class SessionStore(context: Context) {
         const val KEY_COOKIE = "cookie"
         const val KEY_LIGHT = "light"
         const val KEY_LOCK = "lock"
+        const val KEY_VIOLET = "look_violet"
+        const val KEY_MODERN = "look_modern"
         const val COOKIE = "emvryx_session"
 
         fun open(context: Context): SharedPreferences {

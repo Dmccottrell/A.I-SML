@@ -77,7 +77,8 @@ fun Chip(text: String, onClick: () -> Unit, modifier: Modifier = Modifier) {
         modifier
             .heightIn(min = 36.dp)
             .clip(RoundedCornerShape(999.dp))
-            .border(1.dp, Emvryx.line, RoundedCornerShape(999.dp))
+            .then(if (Emvryx.modern) Modifier.background(Emvryx.surface2.copy(alpha = 0.55f))    // modern: a soft fill, no outline
+                  else Modifier.border(1.dp, Emvryx.line, RoundedCornerShape(999.dp)))
             .clickable(onClick = onClick)
             .padding(horizontal = 14.dp, vertical = 6.dp),
         contentAlignment = Alignment.Center,
@@ -125,6 +126,27 @@ fun Field(
 }
 
 /** The soft accent glow the PWA puts behind its pages (body.ml radial gradients, toned down for a phone) */
+/** The modern look's colours, all made from the model's accent as web/modern.css does: an edge a little tinted, a soft fill, a halo */
+object Look {
+    fun edge(accent: Color) = androidx.compose.ui.graphics.lerp(Emvryx.line, accent, 0.22f)
+    fun soft(accent: Color) = accent.copy(alpha = 0.12f)
+    fun halo(accent: Color) = accent.copy(alpha = 0.38f)
+    /** The send and new-chat buttons: the accent a little lighter top left, a little darker bottom right */
+    fun shine(accent: Color) = Brush.linearGradient(
+        0f to androidx.compose.ui.graphics.lerp(accent, Color.White, 0.08f),
+        0.55f to accent,
+        1f to androidx.compose.ui.graphics.lerp(accent, Color.Black, 0.2f),
+    )
+}
+
+/** body.ml's background: the accent glowing in from the top right and, fainter, the bottom left */
+fun Modifier.modernGlow(accent: Color) = drawBehind {
+    val w = size.width
+    val h = size.height
+    drawRect(Brush.radialGradient(listOf(accent.copy(alpha = 0.20f), Color.Transparent), center = Offset(w * 0.78f, -h * 0.08f), radius = maxOf(w, h) * 0.6f))
+    drawRect(Brush.radialGradient(listOf(accent.copy(alpha = 0.12f), Color.Transparent), center = Offset(-w * 0.06f, h * 1.08f), radius = maxOf(w, h) * 0.5f))
+}
+
 fun Modifier.accentWash(glow: Color, height: Dp = 260.dp) = drawBehind {
     val h = height.toPx()
     drawRect(
