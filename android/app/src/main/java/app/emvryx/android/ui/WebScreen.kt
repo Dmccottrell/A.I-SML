@@ -81,33 +81,39 @@ fun WebScreen(vm: AppViewModel, path: String, title: String, run: String = "", p
     LaunchedEffect(web) {
         val w = web ?: return@LaunchedEffect
         var hadPanel = false
-        var gone = 0
         var styled = false
         val started = System.currentTimeMillis()
         while (true) {
-            // an object comes back as JSON text: {"up":true,"open":1}
-            val r = w.eval("({up: typeof S !== 'undefined' && !!S.state, open: (document.getElementById('dialogs') || {children: []}).children.length})")
+            // an object comes back as JSON text: {"up":true,"open":1,"busy":false}. Open counts the panels, pop-ups and a tour; busy is waiting on
+            // the server: Settings' Memory, Usage, Documents, Apps, What's new and the tour close Settings first and open after a fetch
+            val r = w.eval("({up: typeof S !== 'undefined' && !!S.state, open: (document.getElementById('dialogs') || {children: []}).children.length" +
+                " + document.querySelectorAll('.tour').length, busy: (window.__emvxBusy || 0) > 0 && Date.now() - window.__emvxSince < 4000})")
             val up = r.contains("\"up\":true")
             val open = Regex("\"open\":(\\d+)").find(r)?.groupValues?.get(1)?.toIntOrNull() ?: 0
+            val busy = r.contains("\"busy\":true")
+            if (r.isNotEmpty() && r != "null") w.eval(FIT_HEIGHT)
             if (up && !styled) {
                 styled = true
                 // the website follows the app's light or dark choice; behind a panel the website itself is hidden
-                // the app runs its own tours: the website's welcome tour, "what's new" and model tours never open on top of a page here
-                w.eval("try { S.tourChecked = true; S.tourSoon = false; window.openTour = window.maybeTour = window.checkWhatsNew = window.openWhatsNew = window.checkModelTour = function () {};" +
+                // the app runs its own tours: the website's welcome tour, "what's new" and model tours never pop up by themselves on top of a
+                // page here. Only the automatic calls (false) are stopped: Settings' "Start the tour" and "See releases" (true) still work.
+                w.eval("try { S.tourChecked = true; S.tourSoon = false; window.maybeTour = window.checkWhatsNew = window.checkModelTour = window.maybeVryxTour = function () {};" +
+                       " ['openTour', 'openWhatsNew', 'openVryxTour'].forEach(function (n) { var f = window[n]; if (f) window[n] = function (asked) { if (asked) return f.apply(this, arguments) } });" +
+                       " var mt = window.openModelTour; if (mt) window.openModelTour = function (c, asked) { if (asked) return mt.apply(this, arguments) };" +
                        " document.querySelectorAll('.tour').forEach(function (t) { t.remove() }) } catch (e) {}")
                 w.eval("try { S.theme = '${if (light) "light" else "dark"}'; localStorage.setItem('emvryx_theme', S.theme); applyTheme() } catch (e) {}" +
                        if (panel) "; var st = document.createElement('style'); st.textContent = '#app{visibility:hidden !important}'; document.head.appendChild(st)" else "")
                 if (run.isNotEmpty()) w.eval("try { $run } catch (e) {}")
             }
             if (!ready && up && (!panel || open > 0)) {
-                delay(120)                                             // let the panel draw its first frame before the cover lifts
+                delay(40)                                              // let the panel draw its first frame before the cover lifts
                 ready = true
             }
             if (!ready && System.currentTimeMillis() - started > 8000) ready = true      // never stuck behind the cover
             if (panel) {
-                if (open > 0) { hadPanel = true; gone = 0 } else if (hadPanel && ++gone >= 2) { vm.backToChat(); break }
+                if (open > 0) hadPanel = true else if (hadPanel && !busy) { vm.backToChat(); break }    // empty and not waiting on the server: closed
             }
-            delay(if (ready) 300 else 100)
+            delay(if (ready) 60 else 50)
         }
     }
 
@@ -153,7 +159,7 @@ fun WebScreen(vm: AppViewModel, path: String, title: String, run: String = "", p
             )
         }
         // the cover: the app's own colours and mark until the page (or its panel) is ready, then it fades away
-        AnimatedVisibility(!ready, exit = fadeOut(tween(220))) {
+        AnimatedVisibility(!ready, exit = fadeOut(tween(150))) {
             Box(Modifier.fillMaxSize().background(bg), contentAlignment = Alignment.Center) {
                 Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(14.dp)) {
                     Logo(Modifier.size(48.dp), animate = true)
@@ -163,6 +169,23 @@ fun WebScreen(vm: AppViewModel, path: String, title: String, run: String = "", p
         }
     }
 }
+
+/**
+ * In the app's WebView the website's `dvh` heights come out as 0 (measured: 100dvh = 0 while innerHeight = 867), which squashed the Memory
+ * box and the other pop-ups (.dialog is max-height: 90dvh) to a strip. This puts the page's real height in --appH, kept up to date, and
+ * uses it wherever index.html uses dvh. Runs on every look at the page; it does its work once.
+ */
+private const val FIT_HEIGHT = "(function () { if (!document.head || document.getElementById('emvx-fit')) return;" +
+    // counts the page's requests still waiting on the server (see the panel watch in WebScreen)
+    " var f = window.fetch; window.__emvxBusy = 0; window.fetch = function () { window.__emvxBusy++; window.__emvxSince = Date.now();" +
+    " return f.apply(this, arguments).finally(function () { window.__emvxBusy-- }) };" +
+    " var set = function () { document.documentElement.style.setProperty('--appH', innerHeight + 'px') }; set(); addEventListener('resize', set);" +
+    " var st = document.createElement('style'); st.id = 'emvx-fit'; st.textContent =" +
+    " '.app{height:calc(var(--appH) / var(--z, 1)) !important}' +" +
+    " '.dialog{max-height:calc(var(--appH) * .9) !important}' +" +
+    " '#modelMenu,#effortMenu,#ctxMenu{max-height:min(72vh, calc(var(--appH) - 190px)) !important}' +" +
+    " '.code .top2 .menu{max-height:calc(var(--appH) - 90px) !important}';" +
+    " document.head.appendChild(st) })()"
 
 /** Runs a little JavaScript in the page and returns what it gave back ("" when the page is not ready) */
 private suspend fun WebView.eval(js: String): String = suspendCancellableCoroutine { c ->

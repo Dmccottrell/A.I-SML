@@ -143,8 +143,8 @@ private fun Screens(vm: AppViewModel, code: CodeViewModel) {
         transitionSpec = {
             val from = depth(initialState)
             val to = depth(targetState)
-            val ease = tween<IntOffset>(280, easing = FastOutSlowInEasing)
-            val fade = tween<Float>(220)
+            val ease = tween<IntOffset>(220, easing = FastOutSlowInEasing)
+            val fade = tween<Float>(160)
             when {
                 from < 0 || to < 0 || from == to -> fadeIn(fade) togetherWith fadeOut(fade)
                 to > from -> (slideInHorizontally(ease) { it } + fadeIn(fade)) togetherWith (slideOutHorizontally(ease) { -it / 5 } + fadeOut(fade))
