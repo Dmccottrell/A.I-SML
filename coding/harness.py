@@ -106,6 +106,20 @@ SHELL_NOTE = (" run(command) is a real terminal in the project folder: pipes, &&
               "install(manager=\"pip\" or \"npm\", packages=[\"name\"]) (the person is asked first); Python packages are then found by themselves.")
 
 
+INSTALL_CMD = re.compile(r"^\s*(?:sudo\s+)?(?:(?:py|python3?)(?:\.exe)?\s+-m\s+)?(pip3?|npm|yarn|pnpm)(?:\.exe)?\s+(?:install|i|add)\b(.*)$", re.I | re.S)
+
+
+def install_request(command):
+    """("pip" or "npm", [package names]) when a command tries to download packages (pip install flask, npm i react, python -m pip install -r ...), else None."""
+    m = INSTALL_CMD.match(str(command or "").split("&&")[0])
+    if not m:
+        return None
+    tool = m.group(1).lower()
+    words = [t for t in re.split(r"\s+", m.group(2).strip()) if t]
+    names = [] if "-r" in words or "--requirement" in words else [t for t in words if not t.startswith("-")]      # a requirements file: its names are not in the command
+    return ("pip" if tool.startswith("pip") else "npm"), names
+
+
 def shell_argv(command):
     """The argv that runs one terminal command inside the container or on the cloud machine."""
     return ["sh", "-c", command]
@@ -490,6 +504,15 @@ class Sandbox:
             self._py_version = m.group(1) if m else "3.12"
         return self._py_version
 
+    def _no_install(self, manager, packages):
+        names = ", ".join(f'"{p}"' for p in packages[:6]) or '"name"'
+        if self.full and self.shell and not self.remote:
+            return (f"{manager} install cannot reach the internet in this sandbox. Use install(manager=\"{'npm' if manager != 'pip' else 'pip'}\", packages=[{names}]) "
+                    "instead (the person is asked first), then run your code again.")
+        return ("Packages cannot be downloaded here: this sandbox has no internet and no installer. Do not try to install anything again. Use only what comes with "
+                "the language (the Python standard library: http.server, json, sqlite3, tkinter...). For a website, write plain HTML, CSS and JavaScript files: "
+                "they need nothing installed and show in the live preview, which a Flask or Node server would not.")
+
     def install(self, manager=None, packages=None):
         """install(manager="pip" | "npm", packages=[...]): packages for the sandbox, which has no internet (see PIP_NAME above). Only by name from the official
         registry: no links, paths or options. Python packages that come only as source (no wheel) cannot be installed this way."""
@@ -532,6 +555,9 @@ class Sandbox:
         return cut(f"exit code {r.returncode}\n{out}" if out else f"exit code {r.returncode}", self.output_limit)
 
     def run(self, command, timeout=None, background=False):
+        want = install_request(command)
+        if want:                                         # it has no internet: say what works instead of letting pip or npm time out and fail
+            raise ToolError(self._no_install(*want))
         if background and not self.full:
             raise ToolError("run takes only a command here")
         limit = None

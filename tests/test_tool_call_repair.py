@@ -148,5 +148,19 @@ class KeepsGoing(unittest.TestCase):
         self.assertLess(max(len(m["content"]) for m in r["messages"] if m["role"] == "assistant"), 800)
 
 
+
+class NoInternet(unittest.TestCase):
+    def test_a_package_install_is_stopped_with_what_works_instead(self):
+        self.assertEqual(harness.install_request("pip install flask"), ("pip", ["flask"]))
+        self.assertEqual(harness.install_request("python -m pip install -r requirements.txt"), ("pip", []))
+        self.assertEqual(harness.install_request("npm i react"), ("npm", ["react"]))
+        self.assertIsNone(harness.install_request("python app.py"))
+        self.assertIsNone(harness.install_request("pip list"))
+        with harness.Sandbox(workspace=tempfile.mkdtemp()) as box:
+            with self.assertRaises(harness.ToolError) as cm:
+                box.call("run", {"command": "pip install flask"})
+        self.assertIn("no internet", str(cm.exception))
+        self.assertIn("plain HTML, CSS and JavaScript", str(cm.exception))
+
 if __name__ == "__main__":
     unittest.main()
