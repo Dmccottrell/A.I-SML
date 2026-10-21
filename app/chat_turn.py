@@ -210,8 +210,23 @@ def start_turn(state, who, chat_id, text, model_id, effort, regenerate=False, re
                 described, picture_notes = set(), []
                 helper = state.vision if (state.vision and state.vision.available()) else None
                 own_eyes = state.sees(model)                                       # an Emvryx 3 model looks at the picture itself
+                focus = None
+                if photo_fix and own_eyes:                                         # only the pictures this message is about, so a new one is never mixed up with an older one
+                    pics = {d["id"] for d in attached if d["kind"] in documents.IMAGE_KINDS}
+                    new = [i for i in pics if i not in sent_before] if not regenerate else []
+                    if new:
+                        focus = set(new)
+                    else:                                                          # a follow-up (or Regenerate): the pictures of the latest message that had any
+                        for m in reversed(store.messages(chat_id)):
+                            ids = {i for i in (m.get("docs") or []) if i in pics}
+                            if m["role"] == "user" and ids:
+                                focus = ids
+                                break
                 for d in attached:
                     if d["kind"] not in documents.IMAGE_KINDS:
+                        continue
+                    if focus is not None and d["id"] not in focus:
+                        described.add(d["id"])                                     # an older picture: left out of this message entirely
                         continue
                     pictures["read"] += 1
                     if own_eyes and len(seen_pictures) < MAX_PICTURES:                # it keeps seeing the chat's pictures on later messages too (like other chat apps), not their words as a document

@@ -124,5 +124,25 @@ class InChat(Base):
         self.assertEqual(msgs[-1]["model_id"], seer["id"])                  # the answer says which model wrote it
 
 
+    def test_a_new_photo_is_never_mixed_up_with_an_earlier_one(self):
+        self.state.flags.data["audiences"]["photo_fixes"] = "everyone"
+        self.state.seeing = {m["id"] for m in self.state.manifest["models"]}
+        cid = self.new_chat(self.sam)
+        first = self.upload("balance.png", picture("PNG", (60, 40), colour=(255, 0, 0)))[1]["id"]
+        self.sam.call("POST", f"/api/chats/{cid}/docs", {"ids": [first]})
+        self.ask(self.sam, cid, "")
+        second = self.upload("chat.png", picture("PNG", (60, 40), colour=(0, 255, 0)))[1]["id"]
+        self.sam.call("POST", f"/api/chats/{cid}/docs", {"ids": [first, second]})
+        self.ask(self.sam, cid, "")
+        sent = self.backend.prompts[-1]
+        self.assertEqual(len(sent["multimodal_data"]), 1)                      # only the photo just sent
+        from PIL import Image
+        self.assertEqual(Image.open(io.BytesIO(base64.b64decode(sent["multimodal_data"][0]))).convert("RGB").getpixel((5, 5)), (0, 255, 0))
+        self.ask(self.sam, cid, "What does it say?")                          # a follow-up: still about the latest photo
+        later = self.backend.prompts[-1]
+        self.assertEqual(len(later["multimodal_data"]), 1)
+        self.assertEqual(Image.open(io.BytesIO(base64.b64decode(later["multimodal_data"][0]))).convert("RGB").getpixel((5, 5)), (0, 255, 0))
+        self.assertIn("every key number with its label", later["prompt_string"])
+
 if __name__ == "__main__":
     unittest.main()
