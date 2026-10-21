@@ -102,10 +102,13 @@ fun CodeScreen(app: AppViewModel, vm: CodeViewModel) {
     LaunchedEffect(app.state) {
         vm.suggestOn = app.flag("vryxcode_suggest")
         vm.review = app.flag("vryxcode_review")
+        vm.projects = app.flag("vryxcode_projects")
+        vm.alerts = app.flag("phone_alerts")
         vm.onTour = app::replayVryxTour
         app.maybeVryxTour()                                       // the VryxCode tour, the first time VryxCode opens (flag vryxcode_tour)
     }
     LaunchedEffect(Unit) { vm.load() }
+    LaunchedEffect(app.openSession) { app.openSession?.let { vm.openById(it); app.openSession = null } }   // a notification tapped
     BackHandler { if (vm.inSession) vm.backToList() else app.backToChat() }
     var more by remember { mutableStateOf(false) }
     Column(Modifier.fillMaxSize().background(Emvryx.bg).imePadding()) {
@@ -178,7 +181,7 @@ private fun ProjectRow(vm: CodeViewModel) {
             }
         DropdownMenu(open, { open = false }, containerColor = Emvryx.surface) {
             (vm.info?.projects.orEmpty() + vm.project).distinct().forEach { p ->
-                DropdownMenuItem({ Text(p) }, { vm.project = p; open = false; vm.newSession() })
+                DropdownMenuItem({ Text(p) }, { open = false; vm.newSessionIn(p) })
             }
             DropdownMenuItem({ Text("+ New project") }, { naming = true; open = false })
         }
@@ -192,7 +195,7 @@ private fun ProjectRow(vm: CodeViewModel) {
             onDismissRequest = { naming = false }, containerColor = Emvryx.surface,
             title = { Text("New project") },
             text = { NoteBox(name, { name = it.filter { c -> c.isLetterOrDigit() || c == '-' || c == '_' }.take(40) }, "my-new-app") },
-            confirmButton = { TextButton({ if (name.isNotBlank()) { vm.project = name; vm.newSession() }; naming = false }) { Text("Create") } },
+            confirmButton = { TextButton({ if (name.isNotBlank()) vm.newSessionIn(name); naming = false }) { Text("Create") } },
             dismissButton = { TextButton({ naming = false }) { Text("Cancel") } },
         )
     }
@@ -206,6 +209,10 @@ private fun SessionList(vm: CodeViewModel) {
         Welcome(vm, "Describe it. VryxCode plans it, writes it, runs it and checks it.")
         return
     }
+    if (vm.projects) {
+        Organizer(vm)
+        return
+    }
     LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 6.dp, bottom = 96.dp),
         verticalArrangement = Arrangement.spacedBy(10.dp)) {
         val groups = if (vm.review) sessionGroups(vm.sessions, vm.reviewed) else listOf("SESSIONS" to vm.sessions)
@@ -215,6 +222,61 @@ private fun SessionList(vm: CodeViewModel) {
                     fontWeight = FontWeight.SemiBold, letterSpacing = 1.1.sp, modifier = Modifier.padding(start = 4.dp, top = 6.dp))
             }
             items(rows, key = { it.id }) { s -> SessionCard(s, vm.review) { vm.openSession(s) } }
+        }
+    }
+}
+
+/** The projects organizer (flag vryxcode_projects), like Claude's list: every project with its sessions under it, newest first, numbered,
+ *  a spinner on the working ones, a dot on the ones ready for review, and + to start a new session in that project */
+@Composable
+private fun Organizer(vm: CodeViewModel) {
+    val busy = setOf("starting", "working", "asking", "queued")
+    val groups = projectGroups(vm.sessions, vm.info?.projects.orEmpty())
+    LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(start = 12.dp, end = 12.dp, top = 6.dp, bottom = 96.dp)) {
+        var n = 0
+        groups.forEach { (p, rows) ->
+            item(key = "proj-$p") {
+                Row(Modifier.fillMaxWidth().padding(start = 6.dp, top = 14.dp, bottom = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+                    PwaIcon("folder", Emvryx.muted, 16.dp)
+                    Spacer(Modifier.width(8.dp))
+                    Text(p, fontWeight = FontWeight.SemiBold, fontSize = 15.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+                    Box(Modifier.size(34.dp).clip(CircleShape).clickable { vm.newSessionIn(p) }, contentAlignment = Alignment.Center) {
+                        Text("+", color = Emvryx.muted, fontSize = 20.sp)
+                    }
+                }
+            }
+            if (rows.isEmpty()) item(key = "empty-$p") {
+                Text("No sessions yet", color = Emvryx.muted, fontSize = 13.sp, modifier = Modifier.padding(start = 30.dp, bottom = 4.dp))
+            }
+            rows.forEach { s ->
+                n += 1
+                val num = n
+                item(key = s.id) {
+                    val ready = s.state !in busy && s.state == "done" && (s.added > 0 || s.removed > 0 || s.files > 0) && vm.reviewed[s.id] != s.updated
+                    Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp)).clickable { vm.openSession(s) }.padding(start = 8.dp, end = 8.dp, top = 9.dp, bottom = 9.dp),
+                        verticalAlignment = Alignment.CenterVertically) {
+                        Box(Modifier.width(22.dp), contentAlignment = Alignment.Center) {
+                            when {
+                                s.state == "asking" -> Text("!", color = Color(0xFFF5A524), fontWeight = FontWeight.Bold, fontSize = 15.sp)
+                                s.state in busy -> androidx.compose.material3.CircularProgressIndicator(Modifier.size(12.dp), color = Violet, strokeWidth = 1.6.dp)
+                                ready -> Box(Modifier.size(7.dp).clip(CircleShape).background(Violet))
+                                s.state in setOf("failed", "interrupted") -> Text("✗", color = Emvryx.danger, fontSize = 13.sp)
+                            }
+                        }
+                        Text(s.title.ifBlank { "Session" }, fontSize = 15.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f),
+                            color = if (ready || s.state in busy) Emvryx.text else Emvryx.text.copy(alpha = 0.85f))
+                        if (s.added > 0 || s.removed > 0) {
+                            Spacer(Modifier.width(8.dp))
+                            Text("+${s.added}", color = Green, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+                            Text(" −${s.removed}", color = Emvryx.danger, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+                        }
+                        Spacer(Modifier.width(8.dp))
+                        Text(s.age, color = Emvryx.muted, fontSize = 12.sp)
+                        Text(num.toString(), color = Emvryx.muted, fontSize = 11.sp, modifier = Modifier.padding(start = 8.dp).widthIn(min = 16.dp),
+                            textAlign = androidx.compose.ui.text.style.TextAlign.End)
+                    }
+                }
+            }
         }
     }
 }
@@ -498,6 +560,15 @@ private fun CodeComposer(vm: CodeViewModel) {
         if (vm.pictures.isNotEmpty() || vm.docs.isNotEmpty()) FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
             vm.pictures.forEachIndexed { i, _ -> Chip("🖼 Picture ${i + 1} ×", { vm.pictures.removeAt(i) }) }
             vm.docs.forEachIndexed { i, dc -> Chip("📄 ${dc.name} ×", { vm.docs.removeAt(i) }) }
+        }
+        if (vm.projects && vm.sid == null) {                          // vryxcode_projects: where this idea will be built, and the other choice
+            val here = vm.buildHere
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(if (here) "Builds in ${vm.project}" else "Builds in a new project" + if (text.isNotBlank()) ": " + vm.whereFor(text) else "",
+                    color = Emvryx.muted, fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
+                Text(if (here) " · use a new project" else " · use ${vm.project}", color = Violet, fontSize = 13.sp, maxLines = 1,
+                    modifier = Modifier.clip(CircleShape).clickable { vm.buildHere = !here }.padding(horizontal = 4.dp, vertical = 2.dp))
+            }
         }
         // the suggested reply (flag vryxcode_suggest): greyed in the empty box; a swipe right across the box, or Tab on a keyboard, fills it in
         Box(Modifier.fillMaxWidth().heightIn(min = 24.dp, max = 160.dp).swipeRight { takeOffer() }) {

@@ -611,7 +611,30 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         if (screen == Screen.Chat || screen == Screen.Code || screen is Screen.Web) applyShare()
     }
 
+    /** A notification tapped (flag phone_alerts): VryxCode opens that session (CodeScreen reads [openSession]), or the chat opens. Kept until ready. */
+    var openSession by mutableStateOf<String?>(null)
+    private var pendingAlert: Pair<String?, Long?>? = null
+
+    fun fromAlert(session: String?, chat: Long?) {
+        if (session == null && chat == null) return
+        pendingAlert = session to chat
+        if (screen == Screen.Chat || screen == Screen.Code || screen is Screen.Web) applyAlert()
+    }
+
+    private fun applyAlert() {
+        val (session, chat) = pendingAlert ?: return
+        pendingAlert = null
+        if (session != null) {
+            openSession = session
+            screen = Screen.Code
+        } else if (chat != null) {
+            screen = Screen.Chat
+            openChat(chat)
+        }
+    }
+
     private fun applyShare() {
+        applyAlert()
         val (text, files) = pendingShare ?: return
         pendingShare = null
         screen = Screen.Chat
@@ -838,6 +861,9 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
                         }
                         is ReplyEvent.Done -> {
                             finished = true
+                            if (!app.emvryx.android.Alerts.visible && flag("phone_alerts") && !isPrivate)       // answered while the app was away
+                                app.emvryx.android.Alerts.chat(getApplication(), chatId ?: 0L, ev.title ?: title,
+                                    bubbles.firstOrNull { it.key == replyKey }?.text.orEmpty())
                             ev.title?.let { title = it }
                             ev.usage?.let { usage = it }
                             ev.context?.let { ctx = it }

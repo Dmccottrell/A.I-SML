@@ -52,6 +52,7 @@ class MainActivity : FragmentActivity() {
     private val vm: AppViewModel by viewModels()
     private val code: CodeViewModel by viewModels()
     private var leftAt = 0L
+    private val askAlerts = registerForActivityResult(androidx.activity.result.contract.ActivityResultContracts.RequestPermission()) { }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -61,18 +62,44 @@ class MainActivity : FragmentActivity() {
                           else SystemBarStyle.dark(android.graphics.Color.TRANSPARENT)
                 enableEdgeToEdge(bar, bar)
             }
+            LaunchedEffect(vm.state) { if (vm.flag("phone_alerts")) askForAlerts() }
             Root(vm, code, onUnlock = ::unlock)
         }
-        if (savedInstanceState == null) shared(intent)
+        Alerts.channels(this)
+        if (savedInstanceState == null) {
+            shared(intent)
+            tapped(intent)
+        }
+    }
+
+    /** Notifications (flag phone_alerts): Android 13 and later ask once; a "no" is respected (it can be turned on in the phone's settings) */
+    private fun askForAlerts() {
+        if (android.os.Build.VERSION.SDK_INT < 33) return
+        if (ContextCompat.checkSelfPermission(this, android.Manifest.permission.POST_NOTIFICATIONS) == android.content.pm.PackageManager.PERMISSION_GRANTED) return
+        val prefs = getSharedPreferences("alerts", MODE_PRIVATE)
+        if (prefs.getBoolean("asked", false)) return
+        prefs.edit().putBoolean("asked", true).apply()
+        askAlerts.launch(android.Manifest.permission.POST_NOTIFICATIONS)
+    }
+
+    /** A notification tapped: open that VryxCode session or chat */
+    private fun tapped(intent: Intent?) {
+        val session = intent?.getStringExtra(Alerts.EXTRA_SESSION)
+        val chat = intent?.getStringExtra(Alerts.EXTRA_CHAT)?.toLongOrNull()
+        intent?.removeExtra(Alerts.EXTRA_SESSION)
+        intent?.removeExtra(Alerts.EXTRA_CHAT)
+        vm.fromAlert(session, chat)
     }
 
     override fun onStop() {
         super.onStop()
+        Alerts.visible = false
         leftAt = SystemClock.elapsedRealtime()
     }
 
     override fun onStart() {
         super.onStart()
+        Alerts.visible = true
         if (leftAt > 0 && SystemClock.elapsedRealtime() - leftAt > LOCK_AFTER_MS) vm.lockIfOn()   // away more than a minute: ask again
     }
 
@@ -90,6 +117,7 @@ class MainActivity : FragmentActivity() {
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         shared(intent)
+        tapped(intent)
     }
 
     /** "Share to Emvryx" from another app: text goes in the message box, pictures and files are attached to a new chat */
