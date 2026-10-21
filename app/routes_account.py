@@ -44,7 +44,10 @@ class RoutesAccount:
             if len(st.rl.hits) > 5000:
                 st.rl.trim(3600)
             self._fail("bad password")
-            return self._send(401, {"code": "bad_login", "message": "That name or password isn't right.", "action": "Check them and try again."})
+            # the same answer whether or not the account exists; only what was typed (an email or a name) changes the hint
+            action = ("Check them and try again, or sign in with your account name instead of the email."
+                      if "@" in ident else "Check them and try again.")
+            return self._send(401, {"code": "bad_login", "message": "That name or password isn't right.", "action": action})
         st.rl.clear(key)
         if rec.get("banned"):
             return self._send(403, {"code": "banned", "message": "This account has been turned off.", "action": "Ask the owner if you think that is a mistake."})

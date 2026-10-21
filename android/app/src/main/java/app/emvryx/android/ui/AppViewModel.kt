@@ -47,7 +47,11 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         private set
 
     // ---- sign-in
-    var server by mutableStateOf(session.serverUrl ?: BuildConfig.DEFAULT_SERVER)
+    var server by mutableStateOf(run {
+        // 10.0.2.2 is the PC as seen from the emulator only: on a real phone it goes nowhere and looks like "Emvryx is off"
+        if (!onEmulator() && session.serverUrl?.contains(EMULATOR_HOST) == true) session.serverUrl = null
+        session.serverUrl ?: defaultServer()
+    })
     var signInBusy by mutableStateOf(false)
         private set
     var signInError by mutableStateOf<String?>(null)
@@ -575,6 +579,17 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     companion object {
+        private const val EMULATOR_HOST = "10.0.2.2"
+        private const val PUBLIC_SERVER = "https://chat.emvryx.app"
+
+        /** The Android emulator (where 10.0.2.2 reaches the PC), not a real phone */
+        fun onEmulator(): Boolean = android.os.Build.FINGERPRINT.let { it.startsWith("generic") || it.contains("emulator") || it.contains("sdk_gphone") } ||
+            android.os.Build.HARDWARE.let { it == "ranchu" || it == "goldfish" }
+
+        /** The debug build's PC address is only for the emulator; a real phone (a test build sideloaded on it) starts at the real address */
+        fun defaultServer(): String =
+            if (BuildConfig.DEFAULT_SERVER.contains(EMULATOR_HOST) && !onEmulator()) PUBLIC_SERVER else BuildConfig.DEFAULT_SERVER
+
         const val MAX_UPLOAD = 20_000_000
         const val VRYX_TOUR_VERSION = 1                          // web/js/tour.js VRYX_TOUR_VERSION: raise both to show a changed tour again
 

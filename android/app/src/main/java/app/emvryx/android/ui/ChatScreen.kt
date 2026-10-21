@@ -382,21 +382,24 @@ private fun Composer(vm: AppViewModel, open: Menu?, onMenu: (Menu) -> Unit) {
             )
         }
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            Box(
-                Modifier.size(40.dp).clip(CircleShape).border(1.dp, if (open == Menu.Attach) p.accent else Emvryx.line, CircleShape)
-                    .clickable { onMenu(Menu.Attach) },
-                contentAlignment = Alignment.Center,
-            ) { Icon(Icons.Default.Add, "Add a picture or file", tint = Emvryx.muted) }
-            Pill(open == Menu.Model, filled = true, onClick = { onMenu(Menu.Model) }, Modifier.weight(1f, fill = false)) {
-                Logo(Modifier.size(20.dp), kind = vm.currentModel?.name ?: "flare")
-                Text(vm.currentModel?.fullName ?: "Model", fontSize = 12.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.weight(1f, fill = false))
+            // + and the two pills share everything left of the send button; the pills only shorten their words when it really runs out
+            // (a Spacer weighted alongside them took a third of the room and cut them to "F…" and "Bala…")
+            Row(Modifier.weight(1f), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Box(
+                    Modifier.size(40.dp).clip(CircleShape).border(1.dp, if (open == Menu.Attach) p.accent else Emvryx.line, CircleShape)
+                        .clickable { onMenu(Menu.Attach) },
+                    contentAlignment = Alignment.Center,
+                ) { Icon(Icons.Default.Add, "Add a picture or file", tint = Emvryx.muted) }
+                Pill(open == Menu.Model, filled = true, onClick = { onMenu(Menu.Model) }, Modifier.weight(1f, fill = false)) {
+                    Logo(Modifier.size(20.dp), kind = vm.currentModel?.name ?: "flare")
+                    Text(vm.currentModel?.fullName ?: "Model", fontSize = 12.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.weight(1f, fill = false))
+                }
+                Pill(open == Menu.Effort, filled = false, onClick = { onMenu(Menu.Effort) }, Modifier.weight(1f, fill = false)) {
+                    Text(vm.state?.efforts?.firstOrNull { it.id == vm.effort }?.name ?: "Balanced", fontSize = 14.sp, color = Emvryx.muted, maxLines = 1,
+                        overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
+                }
             }
-            Pill(open == Menu.Effort, filled = false, onClick = { onMenu(Menu.Effort) }, Modifier.weight(1f, fill = false)) {
-                Text(vm.state?.efforts?.firstOrNull { it.id == vm.effort }?.name ?: "Balanced", fontSize = 14.sp, color = Emvryx.muted, maxLines = 1,
-                    overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
-            }
-            Spacer(Modifier.weight(1f))
             val c = vm.ctx
             if (c != null && vm.flag("context_meter")) MemoryRing(c) { onMenu(Menu.Memory) }
             SendButton(stop = vm.streaming, enabled = vm.streaming || ((text.isNotBlank() || vm.attached.isNotEmpty()) && !vm.uploading)) {

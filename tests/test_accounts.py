@@ -298,6 +298,23 @@ class Flows(Base):
         self.assertEqual(self.anon().call("POST", "/api/login/password", {"id": "newbie", "password": "x"})[1],
                          self.anon().call("POST", "/api/login/password", {"id": "nobody-here", "password": "x"})[1])
 
+    def test_password_sign_in_works_with_the_email_given_even_before_it_is_verified(self):
+        # people type the email they gave; refusing it (unverified) looked exactly like a wrong password
+        self.owner_mode("open")
+        self.sign_up()
+        self.assertIsNone(self.state.user_by_email("newbie@example.com"))                    # still unverified...
+        c, st, h = self.logged("Newbie@Example.com")                                         # ...yet the email and password sign in
+        self.assertEqual(st, 200)
+        c.cookie = cookie_of(h)
+        self.assertEqual(c.call("GET", "/api/state")[1]["user"], "newbie")
+        self.assertEqual(self.logged("newbie@example.com", "wrong password here")[1], 401)    # the password is still the proof
+        st, j = self.anon().call("POST", "/api/login/password", {"id": "newbie@example.com", "password": "wrong password here"})
+        self.assertIn("account name", j["action"])                                            # an email that fails says what else to try
+        self.assertEqual(self.sign_up(name="twin", email="twin@example.com")[1], 200)
+        self.state._set_fields("twin", email="newbie@example.com")                           # two accounts with one unverified email: never guessed between
+        self.assertEqual(self.logged("newbie@example.com")[1], 401)
+        self.assertEqual(self.logged("newbie")[1], 200)                                       # the name still works
+
     def test_a_password_typed_in_the_key_box_is_explained(self):
         st, j = self.anon().call("POST", "/api/login", {"key": "my password 123"})
         self.assertEqual(st, 401)

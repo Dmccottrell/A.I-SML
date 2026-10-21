@@ -1,5 +1,6 @@
 <resources>
     <color name="bg">#07080D</color>
     <color name="text">#EEF0F6</color>
-    <color name="accent">#8B5CF6</color>
+    <!-- the Emvryx amber, as the app and website use before a model is picked (ui/theme/Theme.kt Palettes.brand) -->
+    <color name="accent">#F5A524</color>
 </resources>
