@@ -112,7 +112,8 @@ class Page(Base):
                 page.evaluate("C.sessions = [{id: 'a', title: 'Build Landing Page', project: 'site', model: 'm', state: 'done', updated: 5, age: 'now', files: 2, added: 70, removed: 0, snippet: 'Done.'},"
                               "{id: 'b', title: 'Old one', project: 'site', model: 'm', state: 'done', updated: 3, age: '1h', files: 0}];"
                               "C.filter = 'all'; const real = api, list = C.sessions; api = async (u, o) => (u === '/api/code/sessions' ? {json: async () => ({sessions: list})} : real(u, o)); renderHome()")
-                wait_for(lambda: page.evaluate("document.querySelectorAll('.vx-group').length > 0"), 10)
+                # the page's own first load of the list can land after this one and empty it: draw again until the test's list is the one shown
+                wait_for(lambda: page.evaluate("renderHome().then(() => document.querySelectorAll('.vx-group').length > 0)"), 10)
                 groups = page.evaluate("[...document.querySelectorAll('.vx-group')].map((x) => x.textContent)")
                 self.assertEqual(groups, ["READY FOR REVIEW 1", "DONE 1"])
                 self.assertIn("+70", page.inner_text("#codeList"))

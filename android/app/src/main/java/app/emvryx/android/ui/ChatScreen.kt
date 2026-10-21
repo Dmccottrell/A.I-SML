@@ -9,6 +9,7 @@ import androidx.compose.foundation.combinedClickable
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
@@ -457,6 +458,7 @@ private fun AiMessage(vm: AppViewModel, b: Bubble, isLast: Boolean, onRegen: () 
                                     .border(1.dp, Emvryx.line, RoundedCornerShape(12.dp))
                                     .horizontalScroll(rememberScrollState()).padding(12.dp),
                             )
+                            is Block.Table -> MdTable(block)
                         }
                     }
                     if (b.cut) Text("Stopped.", color = Emvryx.muted, fontSize = 13.sp)
@@ -507,15 +509,30 @@ private fun Composer(vm: AppViewModel, open: Menu?, onMenu: (Menu) -> Unit) {
     val shape = RoundedCornerShape(if (modern) 28.dp else 20.dp)
     val typing = remember { MutableInteractionSource() }
     val focused by typing.collectIsFocusedAsState()
+    // model_bar: the box's edge and glow in the chosen model's own colour (index.html body.mbar .composer .card), easing to the next model's,
+    // and a pulse of it when a model is picked (the mbarSwap animation); the rest of the app keeps its colours
+    val bar by animateColorAsState(if (Emvryx.modelBar) Palettes.own(vm.currentModel?.name, Emvryx.light).accent else p.accent, tween(600), label = "bar")
+    val pulse = remember { Animatable(0f) }
+    var seenWash by remember { mutableStateOf(vm.washes) }
+    LaunchedEffect(vm.washes) {
+        if (vm.washes == seenWash) return@LaunchedEffect
+        seenWash = vm.washes
+        if (!Emvryx.modelBar) return@LaunchedEffect
+        pulse.snapTo(1f)
+        pulse.animateTo(0f, tween(1200, easing = LinearOutSlowInEasing))
+    }
+    val ring = if (pulse.value > 0.01f) Modifier.border((2 + 6 * pulse.value).dp, bar.copy(alpha = 0.45f * pulse.value), RoundedCornerShape(32.dp)) else Modifier
     Column(
-        if (modern) Modifier.fillMaxWidth().padding(start = 12.dp, end = 12.dp, top = 8.dp)
+        if (modern) Modifier.fillMaxWidth().padding(start = 12.dp, end = 12.dp, top = 8.dp).then(ring)
             // modern: a glass card with an edge in the model's colour; it lights up while you type (modern.css .composer .card)
-            .then(if (focused) Modifier.border(4.dp, Look.soft(p.accent), RoundedCornerShape(32.dp)).padding(4.dp) else Modifier.padding(4.dp))
-            .shadow(if (focused) 18.dp else 12.dp, shape, ambientColor = if (focused) p.accent else Color.Black, spotColor = if (focused) p.accent else Color.Black)
-            .clip(shape).background(Emvryx.surface.copy(alpha = 0.94f).compositeOver(Emvryx.bg)).border(1.dp, if (focused) p.accent else Look.edge(p.accent), shape)
+            .then(if (focused) Modifier.border(4.dp, Look.soft(bar), RoundedCornerShape(32.dp)).padding(4.dp) else Modifier.padding(4.dp))
+            .shadow(if (focused) 18.dp else 12.dp, shape, ambientColor = if (focused || Emvryx.modelBar) bar else Color.Black, spotColor = if (focused || Emvryx.modelBar) bar else Color.Black)
+            .clip(shape).background(Emvryx.surface.copy(alpha = 0.94f).compositeOver(Emvryx.bg))
+            .border(1.dp, if (focused) bar else if (Emvryx.modelBar) androidx.compose.ui.graphics.lerp(Emvryx.line, bar, 0.55f) else Look.edge(bar), shape)
             .padding(start = 18.dp, end = 10.dp, top = 14.dp, bottom = 10.dp)
-        else Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, top = 8.dp)
-            .clip(shape).background(Emvryx.surface).border(1.dp, Emvryx.line, shape)
+        else Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, top = 8.dp).then(ring)
+            .clip(shape).background(Emvryx.surface)
+            .border(1.dp, if (Emvryx.modelBar) (if (focused) bar else androidx.compose.ui.graphics.lerp(Emvryx.line, bar, 0.55f)) else Emvryx.line, shape)
             .padding(start = 16.dp, end = 10.dp, top = 12.dp, bottom = 10.dp),
         verticalArrangement = Arrangement.spacedBy(10.dp),
     ) {
@@ -925,7 +942,7 @@ private fun ModelWash(count: Int, model: String?) {
     }
     val f = t.value
     if (f >= 1f) return
-    val p = Palettes.forModel(model, Emvryx.light, Emvryx.violet)
+    val p = if (Emvryx.modelBar) Palettes.own(model, Emvryx.light) else Palettes.forModel(model, Emvryx.light, Emvryx.violet)     // model_bar: the wash in the model's own colour
     // @keyframes swell: opacity 0 -> .55 at 45% -> 0, scale .3 -> 2.2
     val a = if (f < 0.45f) 0.55f * f / 0.45f else 0.55f * (1 - (f - 0.45f) / 0.55f)
     val scale = 0.3f + 1.9f * f

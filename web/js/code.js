@@ -31,6 +31,8 @@ async function renderHome() {
   $('codeFilter').textContent = (FILTERS.find((f) => f[0] === C.filter) || FILTERS[0])[1] + ' \u25be';
   const live = ['starting', 'working'], pick = (x) => C.filter === 'all' || (C.filter === 'running' && live.includes(x.state)) || (C.filter === 'queued' && x.state === 'queued') || (C.filter === 'needs' && x.state === 'asking') || (C.filter === 'done' && !live.includes(x.state) && !['asking', 'queued'].includes(x.state));
   const rows = C.sessions.filter(pick);
+  vxWhere();
+  if (vxProjectsOn() && C.filter === 'all') { $('codeList').replaceChildren(...vxOrganizer(rows)); return; }
   if (vxReviewOn() && C.filter === 'all' && rows.length) {        // vryxcode_review: Working, Ready for review (finished with changes you have not opened yet), Done
     const seen = vxSeen(), busy = (x) => live.includes(x.state) || ['asking', 'queued'].includes(x.state);
     const ready = (x) => !busy(x) && x.state === 'done' && (x.added || x.removed || x.files) && seen[x.id] !== x.updated;
@@ -62,6 +64,24 @@ function resetWork() { C.todo = []; C.events = []; C.ctx = null; if ($('codeCtx'
 function newSession() {
   C.view = 'session'; $('code').classList.remove('home'); $('codeTitle').textContent = 'VryxCode'; C.sid = null; C.saved = false; C.checkpoints = []; C.seen = 0; C.last = null; C.pvAuto = false;
   offerReply(''); $('codeIn').replaceChildren(); $('codeGo').hidden = false; $('codeStop').hidden = true; resetWork(); renderCodeBar(); emptyFeed(); refreshFiles(); loadCmds(); C.pics = []; C.docs = []; renderPics(); $('codeTask').focus();
+}
+function vxOrganizer(rows) {   // vryxcode_projects: every project with its sessions under it (newest first), like Claude's list; + starts a new one in that project
+  const by = {}; let n = 0;
+  for (const m of rows) (by[m.project] = by[m.project] || []).push(m);
+  const names = [...new Set([...Object.keys(by), ...((C.info && C.info.projects) || [])])];
+  const latest = (p) => Math.max(0, ...(by[p] || []).map((m) => m.updated || 0));
+  names.sort((a, b) => latest(b) - latest(a) || a.localeCompare(b));
+  const seen = vxSeen(), busy = (x) => ['starting', 'working', 'asking', 'queued'].includes(x.state);
+  return names.map((p) => el('div', {class: 'vx-proj'},
+    el('div', {class: 'vx-phead'}, el('span', {class: 'nm'}, p), el('button', {type: 'button', class: 'add', title: 'New session in ' + p, 'aria-label': 'New session in ' + p, onclick: () => { C.project = p; newSession(); }}, '+')),
+    ...((by[p] || []).length ? by[p].map((m) => { n += 1;
+      const ready = !busy(m) && m.state === 'done' && (m.added || m.removed || m.files) && seen[m.id] !== m.updated;
+      return el('div', {class: 'vx-prow' + (ready ? ' ready' : ''), role: 'button', tabindex: '0', onclick: () => openSession(m), onkeydown: (ev) => { if (ev.key === 'Enter') openSession(m); }},
+        busy(m) ? el('span', {class: 'spin', 'aria-label': 'Working'}) : ready ? el('span', {class: 'dot', title: 'Ready for review'}) : '',
+        el('span', {class: 't'}, m.title || 'Session'),
+        m.added || m.removed ? el('span', {class: 'vx-lines'}, el('span', {class: 'a'}, '+' + (m.added || 0)), ' ', el('span', {class: 'd'}, '\u2212' + (m.removed || 0))) : '',
+        el('span', {class: 'age'}, m.age || ''), el('span', {class: 'num'}, String(n)));
+    }) : [el('div', {class: 'vx-pempty'}, 'No sessions yet')])));
 }
 const vxReviewOn = () => !!(S.state && S.state.features && S.state.features.vryxcode_review);
 function vxSeen() { try { return JSON.parse(localStorage.getItem('emvryx_vx_seen') || '{}') || {}; } catch (e) { return {}; } }
@@ -399,14 +419,32 @@ async function vxRenderTemplates() {
   }, 'data-id': t.id}, el('span', {}, t.icon), el('b', {}, t.name), el('small', {}, t.desc))));
 }
 const vxFreeName = (base) => { const have = new Set((C.info && C.info.projects) || []); let n = base, i = 2; while (have.has(n)) n = base + '-' + i++; return n; };
+const vxProjectsOn = () => !!(S.state && S.state.features && S.state.features.vryxcode_projects);
+function vxIdeaName(text) {   // "A bill splitter with tip and people" -> "bill-splitter": a short folder name made from the idea
+  const t = String(text || '').toLowerCase().replace(/^(please\s+)?((can|could) you\s+)?((make|build|create|write|code|give)( me)?\s+)?((a|an|the|my|me)\s+)?/, '');
+  const words = t.split(/\s(?:with|that|which|where|for|using|in|so|to)\s|[,.;:!?()]/)[0].replace(/[^a-z0-9\s-]/g, ' ').trim().split(/\s+/).filter(Boolean).slice(0, 4);
+  return (words.join('-').slice(0, 32).replace(/-+$/, '')) || 'new-project';
+}
+function vxWhere() {          // under the box: where the idea will be built
+  const row = $('vxWhere'); if (!row) return;
+  row.hidden = !vxProjectsOn(); if (row.hidden) return;
+  const text = $('vxQuick').value.trim(), here = C.buildHere && C.project;
+  row.replaceChildren(here ? el('span', {}, 'Builds in ', el('b', {}, C.project), ' \u00b7 ') : el('span', {}, 'Builds in a new project' + (text ? ': ' : ''), text ? el('b', {}, vxFreeName(vxIdeaName(text))) : '', ' \u00b7 '),
+    el('button', {type: 'button', class: 'link', onclick: () => { C.buildHere = !here; vxWhere(); }}, here ? 'use a new project instead' : 'use ' + (C.project || 'the current project') + ' instead'));
+}
 $('vxQuickGo').onclick = () => {
   const text = $('vxQuick').value.trim();
   if (!text && !C.template) { $('vxQuick').focus(); return; }
-  const tpl = C.template; C.template = null; newSession(); C.startTemplate = tpl; if (tpl) C.project = vxFreeName(tpl); $('codeTask').value = text; $('vxQuick').value = ''; $('codeGo').click();
+  const tpl = C.template; C.template = null;
+  const fresh = !tpl && vxProjectsOn() && !C.buildHere ? vxFreeName(vxIdeaName(text)) : null;      // vryxcode_projects: a new idea gets its own project
+  newSession(); C.startTemplate = tpl; if (tpl) C.project = vxFreeName(tpl);
+  if (fresh) { C.project = fresh; C.info.projects = (C.info.projects || []).concat([fresh]); renderCodeBar(); }
+  C.buildHere = false; $('codeTask').value = text; $('vxQuick').value = ''; $('codeGo').click();
 };
+$('vxQuick').addEventListener('input', () => vxWhere());
 $('vxQuick').addEventListener('keydown', (e) => { if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) { e.preventDefault(); $('vxQuickGo').click(); } });
 vxRenderChips();
-// the phone notification (owner only; it needs the ntfy topic from Settings > Owner > Security): remembered on this device
+// the phone notification (owner only; it needs the ntfy topic from Admin > Security): remembered on this device
 const vxNotifyOn = () => { try { return localStorage.getItem('vx_notify') === '1'; } catch (e) { return false; } };
 function vxNotifyInit() {
   const row = $('vxNotifyRow'); row.hidden = !(S.state && S.state.owner); $('vxNotify').checked = vxNotifyOn();

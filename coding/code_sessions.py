@@ -1181,11 +1181,11 @@ class CodeManager:
         """(ok, why not)."""
         c = self.cloud
         if not c or not c.get("host"):
-            return False, "Not set up. The owner adds it in Settings > Owner > Cloud machine."
+            return False, "Not set up. The owner adds it in Admin > Cloud machine."
         if not shutil.which("ssh"):
             return False, "This computer has no SSH program (ssh)."
         if not os.path.exists(c.get("key", "")):
-            return False, "No SSH key yet. The owner makes one in Settings > Owner > Cloud machine."
+            return False, "No SSH key yet. The owner makes one in Admin > Cloud machine."
         if not owner and not c.get("for_others"):
             return False, "Only the owner can use the cloud machine."
         return True, "ready"

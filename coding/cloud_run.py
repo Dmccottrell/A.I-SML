@@ -12,7 +12,7 @@ WHAT THIS FILE DOES
       3. fetches the folder back and copies files that CHANGED or are NEW into the project (never anything that tries to leave it: absolute
          paths, `..`, links and device files are dropped, and the total size is capped);
       4. prints what the command printed and exits with its exit code (255 if the machine could not be reached).
-    The key is a file on THIS computer (made for you by Settings > Owner > Cloud machine). The remote host's identity is remembered the first time
+    The key is a file on THIS computer (made for you by Admin > Cloud machine). The remote host's identity is remembered the first time
     (trust on first use) in the known-hosts file next to it.
 """
 import argparse

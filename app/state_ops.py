@@ -51,6 +51,6 @@ class StateOps:
                     check("email", rec.get("email") and rec.get("email_verified") is not False, "Your owner account has an email address", "Settings > Account."),
                     check("encryption", self.secrets.available, "Saved tokens and two-step secrets are encrypted", "pip install cryptography, then restart."),
                     check("alerts", self.security.get("alert_ntfy_topic"), "Security alerts reach your phone", "Set alert_ntfy_topic in security.json (see docs/SECURITY.md)."),
-                    check("backup", (summary.latest_backup_age_days(self, time.time()) is not None and summary.latest_backup_age_days(self, time.time()) <= 7), "A backup from the last 7 days exists", "Settings > Owner > Backups > Make a backup now."),
+                    check("backup", (summary.latest_backup_age_days(self, time.time()) is not None and summary.latest_backup_age_days(self, time.time()) <= 7), "A backup from the last 7 days exists", "Admin > Backups > Make a backup now."),
                     check("mail", self.mailer, "Email sign-in codes work", "Set EMVRYX_SMTP_* (see docs/DEPLOY.md). Optional.")],
                 "health": self.health()}

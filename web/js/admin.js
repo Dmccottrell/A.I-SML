@@ -9,13 +9,14 @@ function openAdmin(tab) {
 function admRender() {
   const root = ADM.root; if (!root || !root.isConnected) return;
   viewHash('admin/' + ADM.tab);
-  const tabs = [['previews', 'Previews'], ['models', 'Models'], ['apps', 'Apps'], ['pc', 'PC'], ['people', 'People'], ['signups', 'Sign-ups'], ['activity', 'Activity']];
+  const tabs = [['overview', 'Overview'], ['previews', 'Previews'], ['models', 'Models'], ['apps', 'Apps'], ['pc', 'PC'], ['people', 'People'], ['signups', 'Sign-ups'], ['reports', 'Answer reports'], ['backups', 'Backups'], ['cloud', 'Cloud machine'], ['activity', 'Activity']];
   const body = el('div', {class: 'adm-body', id: 'admBody'});
   root.replaceChildren(
     el('div', {class: 'adm-top'}, el('h2', {}, 'Admin'), el('button', {class: 'icon', type: 'button', 'aria-label': 'Close admin', onclick: closeAdmin}, icon('x'))),
     el('div', {class: 'adm-tabs', role: 'tablist'}, ...tabs.map(([id, n]) => el('button', {type: 'button', role: 'tab', class: ADM.tab === id ? 'on' : '', 'aria-selected': String(ADM.tab === id), onclick: () => { ADM.tab = id; ADM.q = ''; admRender(); }}, n))),
     body);
-  const fill = {previews: admPreviews, models: admModels, apps: admApps, pc: admPc, people: admPeople, signups: () => admOld(body, 'a-signups'), activity: () => admOld(body, 'a-log')}[ADM.tab];
+  const fill = {previews: admPreviews, models: admModels, apps: admApps, pc: admPc, people: admPeople, signups: () => admOld(body, 'a-signups'), activity: () => admOld(body, 'a-log'),
+    overview: () => admOld(body, 'a-overview'), reports: () => admOld(body, 'a-feedback'), backups: () => admOld(body, 'a-backups'), cloud: () => admOld(body, 'a-cloud')}[ADM.tab];
   body.append(el('div', {style: 'color:var(--muted)'}, 'Loading...'));
   Promise.resolve(fill(body)).catch(() => body.replaceChildren(el('p', {class: 'lead'}, 'That did not load. Check your connection and try again.')));
 }
@@ -271,8 +272,9 @@ async function admPeople(body) {
       el('div', {}, sxBtn('Add and make a sign-in link', async () => { const r = await post('/api/admin/users', {user: name.value.trim(), tier: plan, email: mail.value.trim() || undefined}); const k = await r.json(); if (r.ok) { out.textContent = 'Send this link privately (works once, ' + k.pair_minutes + ' minutes): ' + location.origin + '/pair/' + k.pair + (k.key ? '\nTheir access key (shown once, not stored): ' + k.key : ''); admRender(); } else toast(k.message || 'That did not work.'); }, 'primary'))));
 }
 
+const ADM_TAB_OF = {'a-overview': 'overview', 'a-flags': 'previews', 'a-people': 'people', 'a-signups': 'signups', 'a-feedback': 'reports', 'a-backups': 'backups', 'a-cloud': 'cloud', 'a-log': 'activity'};
 async function adminPage(id) {
-  if (id === 'a-flags' || id === 'a-people') { openAdmin(id === 'a-flags' ? 'previews' : 'people'); return; }   // these moved to the Admin screen
+  if (!$('sxAdmin') && ADM_TAB_OF[id]) { openAdmin(ADM_TAB_OF[id]); return; }   // the owner pages all live on the Admin screen now
   const host = $('sxAdmin'); if (!host) return;
   try {
     if (id === 'a-overview') {

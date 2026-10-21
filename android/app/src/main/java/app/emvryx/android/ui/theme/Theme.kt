@@ -34,6 +34,9 @@ object Emvryx {
     var violet by mutableStateOf(false)
     var modern by mutableStateOf(false)
 
+    /** model_bar (Admin > Previews): the message box wears the chosen model's own colour, and lights up in it when the model is picked */
+    var modelBar by mutableStateOf(false)
+
     val bg get() = if (light) Color(0xFFF7F8FC) else Color(0xFF07080D)
     val side get() = if (light) Color(0xFFEEF0F7) else Color(0xFF0A0B11)
     val surface get() = if (light) Color(0xFFFFFFFF) else Color(0xFF0F1119)
@@ -82,6 +85,9 @@ object Palettes {
         val v = if (light) violetL else violetD
         return if (name.isNullOrEmpty()) v else own.copy(accent = v.accent, onAccent = v.onAccent, accentText = v.accentText, glow = v.glow)
     }
+
+    /** A model's own colours, whatever look is on (the message box with model_bar, the wash) */
+    fun own(name: String?, light: Boolean = false): Palette = ownPalette(name, light)
 
     private fun ownPalette(name: String?, light: Boolean): Palette = when (name?.lowercase()) {
         null, "" -> if (light) brandL else brand

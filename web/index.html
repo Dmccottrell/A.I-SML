@@ -93,6 +93,27 @@ svg .core { fill: var(--core); stroke: var(--sun); stroke-width: 3; transition: 
 .code .cc-file.open .cc-diff { display: block; }
 .code .cc-done { display: flex; flex-direction: column; gap: 2px; margin: 6px 0; }
 .code .cc-done .lead { color: var(--muted); font-size: 13.5px; }
+/* model_bar: the message box in the chosen model's own colour (the rest stays in the app's colours); a pulse in it when a model is picked */
+body.mbar.mbar:not(.vx) .composer .card { border-color: color-mix(in srgb, var(--mbar) 55%, var(--line)); box-shadow: 0 0 0 1px color-mix(in srgb, var(--mbar) 18%, transparent), 0 14px 40px -18px color-mix(in srgb, var(--mbar) 55%, transparent); transition: border-color .6s ease, box-shadow .6s ease; }
+body.mbar.mbar:not(.vx) .composer .card:focus-within { border-color: var(--mbar); box-shadow: 0 0 0 4px color-mix(in srgb, var(--mbar) 16%, transparent), 0 20px 54px -16px color-mix(in srgb, var(--mbar) 60%, transparent); }
+body.mbar.mbar:not(.vx) .composer .card.mbar-swap { animation: mbarSwap 1.2s ease-out; }
+body.mbar.mbar .wash { background: radial-gradient(circle, var(--core) 0%, var(--mbar) 30%, transparent 66%); }
+@keyframes mbarSwap { 0% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--mbar) 70%, transparent), 0 0 0 0 transparent; } 35% { box-shadow: 0 0 0 7px color-mix(in srgb, var(--mbar) 32%, transparent), 0 0 46px 6px color-mix(in srgb, var(--mbar) 45%, transparent); } 100% { box-shadow: 0 0 0 1px color-mix(in srgb, var(--mbar) 18%, transparent), 0 14px 40px -18px color-mix(in srgb, var(--mbar) 55%, transparent); } }
+@media (prefers-reduced-motion: reduce) { body.mbar.mbar:not(.vx) .composer .card.mbar-swap { animation: none; } }
+.vx-where { color: var(--muted); font-size: 13.5px; margin: 6px 2px 0; }
+.vx-where .link { background: none; border: 0; color: var(--accenttext); padding: 0; font: inherit; cursor: pointer; text-decoration: underline; }
+.vx-proj { margin: 10px 0 14px; }
+.vx-phead { display: flex; align-items: center; justify-content: space-between; color: var(--muted); font-size: 14px; padding: 0 6px 4px; }
+.vx-phead .add { background: none; border: 0; color: var(--muted); font-size: 20px; width: 36px; height: 32px; border-radius: 8px; cursor: pointer; }
+.vx-phead .add:hover { background: var(--surface2); color: var(--text); }
+.vx-prow { display: flex; align-items: center; gap: 8px; padding: 9px 10px; border-radius: 10px; cursor: pointer; font-size: 15px; }
+.vx-prow:hover, .vx-prow:focus { background: var(--surface2); outline: none; }
+.vx-prow .t { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.vx-prow .age { color: var(--muted); font-size: 12.5px; }
+.vx-prow .num { color: var(--muted); font-size: 12px; border: 1px solid var(--line); border-radius: 6px; padding: 1px 6px; font-variant-numeric: tabular-nums; }
+.vx-prow .dot { width: 8px; height: 8px; border-radius: 99px; background: var(--accent); flex-shrink: 0; }
+.vx-prow.ready .t { font-weight: 600; }
+.vx-pempty { color: var(--muted); font-size: 13px; padding: 4px 10px; }
 .vx-group { color: var(--muted); font-size: 12px; font-weight: 700; letter-spacing: .06em; margin: 14px 4px 6px; }
 .vx-lines { margin-right: 6px; font-size: 13px; }
 .bubble .md, .code .cc-say .md, .cc-msg .md { white-space: normal; display: flex; flex-direction: column; gap: 10px; }
@@ -696,6 +717,7 @@ body:not(.vxn) .vx-hero, body:not(.vxn) .vx-dots { display: none; }   /* the new
       <p>Describe it. VryxCode plans it, writes it, runs it and checks it, right here.</p>
       <div class="vx-quick"><textarea id="vxQuick" rows="2" maxlength="8000" placeholder="A bill splitter with tip, a habit tracker, a snake game..." aria-label="What should VryxCode build?"></textarea><button class="vx-go" id="vxQuickGo" type="button">Build it</button></div>
       <div class="vx-under"><div style="position:relative"><button class="vx-model" id="vxModel" type="button" aria-haspopup="true" aria-label="Choose the model"></button><div class="menu" id="vxModelMenu" hidden></div></div></div>
+      <div class="vx-where" id="vxWhere" hidden></div>
       <label class="vx-notify" id="vxNotifyRow" hidden><input type="checkbox" id="vxNotify"> Tell my phone when it finishes or needs me</label>
       <div class="vx-tpl" id="vxTpl" hidden><span class="lbl">Or start from a template</span><div class="vx-tpls" id="vxTpls"></div></div>
       <div class="vx-chips" id="vxChips"></div>

@@ -243,7 +243,7 @@ class RoutesPost:
         if m:
             cid, store = int(m.group(1)), self.state.store(who["user"])
             if not self.state.security.get("sharing"):
-                return self._send(403, {"code": "sharing_off", "message": "Sharing links is switched off.", "action": "Ask the owner to turn it on (Settings > Owner > Overview)."})
+                return self._send(403, {"code": "sharing_off", "message": "Sharing links is switched off.", "action": "Ask the owner to turn it on (Admin > Overview)."})
             if cid < 0:
                 return self._send(400, {"code": "private", "message": "Private chats can't be shared: nothing about them is saved."})
             if not store.exists(cid):

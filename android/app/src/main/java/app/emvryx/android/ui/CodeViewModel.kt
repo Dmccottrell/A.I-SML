@@ -76,6 +76,9 @@ class CodeViewModel(app: Application) : AndroidViewModel(app) {
     var onTour: (() -> Unit)? = null                     // /tour: the VryxCode tour again
     val docs = mutableStateListOf<app.emvryx.android.data.DocInfo>()   // vryxcode_review: documents for the model to read first (a spec, brand guidelines)
     var review by mutableStateOf(false)                // flag vryxcode_review: the review view, like Cursor's
+    var projects by mutableStateOf(false)              // flag vryxcode_projects: the projects organizer, and a new idea gets its own project
+    var buildHere by mutableStateOf(false)             // ...unless the person chose this project (its +, the project picker, "use it instead")
+    var alerts = false                                 // flag phone_alerts: the phone's notifications while a session works
     private val seenPrefs = app.getSharedPreferences("vryxcode", android.content.Context.MODE_PRIVATE)
     /** Sessions opened since they last changed (id -> updated): they leave "Ready for review" */
     var reviewed by mutableStateOf(seenPrefs.all.mapNotNull { (k, v) -> (v as? Float)?.let { k to it.toDouble() } ?: (v as? String)?.toDoubleOrNull()?.let { k to it } }.toMap())
@@ -105,6 +108,7 @@ class CodeViewModel(app: Application) : AndroidViewModel(app) {
                 project = i.project ?: i.projects.firstOrNull() ?: project
                 if (i.environments.none { it.id == env && it.available }) env = "local"
                 sessions = api.codeSessions()
+                if (alerts && sessions.any { it.live }) app.emvryx.android.WatchService.start(getApplication())   // one still working: keep an eye on it
                 commands = runCatching { api.codeCommands(project) }.getOrDefault(emptyList())
             } catch (e: Exception) {
                 error = describe(e)
@@ -124,6 +128,26 @@ class CodeViewModel(app: Application) : AndroidViewModel(app) {
         offer = ""
         pictures.clear()
         docs.clear()
+        buildHere = false
+    }
+
+    /** A new session in this project (the + on a project, or picking it): it builds there, not in a new project */
+    fun newSessionIn(p: String) {
+        project = p
+        newSession()
+        buildHere = true
+    }
+
+    /** Where a new idea will be built (flag vryxcode_projects): this project, or a new one named from the idea */
+    fun whereFor(text: String): String =
+        if (!projects || buildHere) project else freeName(ideaName(text), info?.projects.orEmpty())
+
+    /** A notification tapped: that session, from the list (read again if it is not in it yet) */
+    fun openById(id: String) {
+        viewModelScope.launch {
+            val row = sessions.firstOrNull { it.id == id } ?: runCatching { api.codeSessions() }.getOrNull()?.also { sessions = it }?.firstOrNull { it.id == id }
+            if (row != null) openSession(row)
+        }
     }
 
     fun openSession(row: CodeSessionRow) {
@@ -159,9 +183,13 @@ class CodeViewModel(app: Application) : AndroidViewModel(app) {
         val id = sid ?: return
         poller?.cancel()
         poller = viewModelScope.launch {
+            var fails = 0
             while (isActive) {
                 try {
                     val v = api.codeView(id, seen)
+                    fails = 0
+                    if (error != null && error == pollError) error = null      // the connection came back: the old warning goes
+                    pollError = null
                     events.addAll(v.events)
                     v.events.forEach(::offerFrom)
                     seen += v.events.size
@@ -172,13 +200,21 @@ class CodeViewModel(app: Application) : AndroidViewModel(app) {
                     liveLine = v.live?.let(::liveText)
                     if (!v.working) break
                     delay(if (v.state == "asking") 1500 else 400)
+                } catch (e: kotlinx.coroutines.CancellationException) {
+                    throw e                                     // a newer check took over (after sending, opening a session): not a problem to show
                 } catch (e: Exception) {
-                    error = describe(e)
+                    fails += 1
+                    if (fails >= 3) {                           // one dropped answer on a phone network is normal: only say so when it keeps failing
+                        error = describe(e)
+                        pollError = error
+                    }
                     delay(3000)
                 }
             }
         }
     }
+
+    private var pollError: String? = null
 
     /** The send button: a new session, the next message, or (the full agent, while it works) a message it reads before its next step */
     fun send(text: String) {
@@ -194,6 +230,12 @@ class CodeViewModel(app: Application) : AndroidViewModel(app) {
                     id != null && working && full -> api.codeSteer(id, words)
                     id != null -> api.codeMessage(id, body(words, start = false))
                     else -> {
+                        val where = whereFor(words)
+                        if (where != project) {                 // vryxcode_projects: a new idea gets its own project
+                            project = where
+                            info = info?.let { it.copy(projects = it.projects + where) }
+                        }
+                        buildHere = false
                         val r = api.codeStart(body(words, start = true))
                         sid = r.id
                         events.clear()
@@ -201,8 +243,9 @@ class CodeViewModel(app: Application) : AndroidViewModel(app) {
                     }
                 }
                 pictures.clear()
-        docs.clear()
+                docs.clear()
                 poll()
+                if (alerts) app.emvryx.android.WatchService.start(getApplication())    // the phone keeps an eye on it, and says when it is done
             } catch (e: Exception) {
                 error = describe(e)
             }

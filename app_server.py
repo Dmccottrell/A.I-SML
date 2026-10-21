@@ -135,7 +135,7 @@ class AppState(StateAccounts, StateSettings, StateApps, StatePC, StateCode, Stat
         self.updater = updater.Updater(HERE, busy=self.busy)                         # Admin > PC > Update now (owner only)
         self.guard_sheet = os.path.join(HERE, "eval", "everyday.jsonl")            # the safety checks a new model must pass before it can be published
         self.guards = model_guard.GuardStore(os.path.join(data_dir, "guard") if data_dir else None)
-        self.guard_run, self._guard_lock = None, threading.Lock()    # which new features each kind of person can see (Settings > Owner > Features and testing)
+        self.guard_run, self._guard_lock = None, threading.Lock()    # which new features each kind of person can see (Admin > Previews)
         self.shares = shares.Shares(os.path.join(data_dir, "shares.db") if data_dir else ":memory:")   # read-only links to a copy of a chat (the owner switches sharing on)
         self.feedback = feedback.Feedback(os.path.join(data_dir, "feedback.db") if data_dir else ":memory:")   # "That didn't work" reports, for the owner
         self.links = app_links.Hub(app_links.Store(data_dir, self.secrets))   # the other connected apps (a token, link or app password; read-only)
