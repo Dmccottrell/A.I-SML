@@ -159,8 +159,19 @@ class NoInternet(unittest.TestCase):
         with harness.Sandbox(workspace=tempfile.mkdtemp()) as box:
             with self.assertRaises(harness.ToolError) as cm:
                 box.call("run", {"command": "pip install flask"})
-        self.assertIn("no internet", str(cm.exception))
+        self.assertIn("this computer itself", str(cm.exception))                # the folder sandbox on the PC never installs
         self.assertIn("plain HTML, CSS and JavaScript", str(cm.exception))
+
+    def test_in_the_sandbox_a_pip_install_goes_through_install(self):
+        with harness.Sandbox(workspace=tempfile.mkdtemp()) as box:
+            box.shell, calls = True, []
+            box.install = lambda manager, names: calls.append((manager, names)) or "exit code 0"
+            with open(os.path.join(box.root, "requirements.txt"), "w") as f:
+                f.write("flask==3.0.3  # web\nrequests\n")
+            self.assertIn("install(manager=\"pip\")", box.run("pip install flask"))
+            box.run("python -m pip install -r requirements.txt")
+            box.run("npm i react")
+        self.assertEqual(calls, [("pip", ["flask"]), ("pip", ["flask==3.0.3", "requests"]), ("npm", ["react"])])
 
 if __name__ == "__main__":
     unittest.main()

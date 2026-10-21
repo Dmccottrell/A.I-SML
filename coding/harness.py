@@ -102,8 +102,8 @@ FULL_TOOL_NOTE = (" YOUR TOOLS: read_file shows up to 2000 lines; edit_file(path
                   "error, fix it and run again. When something fails, find out why before changing more; if a way keeps failing, try another. Only stop to ask the person "
                   "when you truly need them.")
 SHELL_NOTE = (" run(command) is a real terminal in the project folder: pipes, && and cd inside one command all work (each command starts again in the project folder). "
-              "It runs in an isolated sandbox with no internet: pip install and npm install do not work there. To get a package use "
-              "install(manager=\"pip\" or \"npm\", packages=[\"name\"]) (the person is asked first); Python packages are then found by themselves.")
+              "It runs in an isolated sandbox with no internet of its own, but packages still work: install(manager=\"pip\" or \"npm\", packages=[\"name\"]) "
+              "(the person is asked first), or a plain pip install / npm install, fetch them for it; Python packages are then found by themselves.")
 
 
 INSTALL_CMD = re.compile(r"^\s*(?:sudo\s+)?(?:(?:py|python3?)(?:\.exe)?\s+-m\s+)?(pip3?|npm|yarn|pnpm)(?:\.exe)?\s+(?:install|i|add)\b(.*)$", re.I | re.S)
@@ -504,14 +504,29 @@ class Sandbox:
             self._py_version = m.group(1) if m else "3.12"
         return self._py_version
 
+    def _requirements(self, command):
+        """The package names in the requirements file a pip command names (-r requirements.txt), checked like any install."""
+        m = re.search(r"(?:-r|--requirement)\s+(\S+)", str(command or ""))
+        try:
+            full = os.path.realpath(os.path.join(self.root, m.group(1))) if m else ""
+            if not full.startswith(os.path.realpath(self.root) + os.sep):
+                return []
+            with open(full, encoding="utf-8", errors="replace") as f:
+                lines = [l.split("#")[0].strip() for l in f]
+        except OSError:
+            return []
+        return [l.replace(" ", "") for l in lines if l and not l.startswith("-")][:10]
+
     def _no_install(self, manager, packages):
         names = ", ".join(f'"{p}"' for p in packages[:6]) or '"name"'
         if self.full and self.shell and not self.remote:
             return (f"{manager} install cannot reach the internet in this sandbox. Use install(manager=\"{'npm' if manager != 'pip' else 'pip'}\", packages=[{names}]) "
                     "instead (the person is asked first), then run your code again.")
-        return ("Packages cannot be downloaded here: this sandbox has no internet and no installer. Do not try to install anything again. Use only what comes with "
-                "the language (the Python standard library: http.server, json, sqlite3, tkinter...). For a website, write plain HTML, CSS and JavaScript files: "
-                "they need nothing installed and show in the live preview, which a Flask or Node server would not.")
+        if not self.shell:
+            return ("Packages cannot be installed when VryxCode works on this computer itself (only in the isolated sandbox or on the cloud machine, where the person "
+                    "can switch the environment). Do not try to install anything again: use only what comes with the language (the Python standard library: "
+                    "http.server, json, sqlite3, tkinter...), and for a website write plain HTML, CSS and JavaScript, which need nothing installed and show in the preview.")
+        return (f"say which {manager} packages to install (for example install(manager=\"{manager}\", packages=[\"flask\"])), or list them in requirements.txt.")
 
     def install(self, manager=None, packages=None):
         """install(manager="pip" | "npm", packages=[...]): packages for the sandbox, which has no internet (see PIP_NAME above). Only by name from the official
@@ -555,9 +570,14 @@ class Sandbox:
         return cut(f"exit code {r.returncode}\n{out}" if out else f"exit code {r.returncode}", self.output_limit)
 
     def run(self, command, timeout=None, background=False):
-        want = install_request(command)
-        if want:                                         # it has no internet: say what works instead of letting pip or npm time out and fail
-            raise ToolError(self._no_install(*want))
+        want = None if self.remote else install_request(command)          # the cloud machine has its own internet: pip works there as usual
+        if want:                                         # the sandbox has no internet: the download goes through install(), which fetches it safely and puts it in the project
+            manager, names = want
+            if not names and manager == "pip":
+                names = self._requirements(command)
+            if self.shell and names:
+                return f"(no internet in the sandbox, so this was done with install(manager=\"{manager}\"))\n" + self.install(manager, names)
+            raise ToolError(self._no_install(manager, names))
         if background and not self.full:
             raise ToolError("run takes only a command here")
         limit = None
