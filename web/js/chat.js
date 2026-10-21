@@ -136,7 +136,7 @@ async function shareDialog() {
   const refresh = (shares) => listBox.replaceChildren(...(shares.length ? [el('b', {}, 'Your links')] : []), ...shares.map((s) => el('div', {class: 'opt', style: 'cursor:default'}, el('span', {class: 'grow'}, el('b', {}, s.title), el('small', {}, 'Works until ' + new Date(s.expires * 1000).toLocaleDateString())),
     el('button', {class: 'chip', onclick: async () => { await post('/api/shares/revoke', {id: s.id}); refresh((await (await api('/api/shares')).json()).shares); }}, 'Cancel link'))));
   refresh(j.shares);
-  if (!j.on) { dialog([el('h2', {}, 'Share a link'), el('p', {style: 'margin:0;color:var(--muted)'}, 'Sharing links is switched off on this Emvryx. The owner can turn it on in Settings > Owner > Overview.'), listBox], 'Close'); return; }
+  if (!j.on) { dialog([el('h2', {}, 'Share a link'), el('p', {style: 'margin:0;color:var(--muted)'}, 'Sharing links is switched off on this Emvryx. The owner can turn it on in Admin > Overview.'), listBox], 'Close'); return; }
   let days = 7;
   const seg = el('div', {class: 'seg'}, ...[[1, '1 day'], [7, '7 days'], [30, '30 days']].map(([d, t]) => el('button', {class: d === 7 ? 'on' : '', type: 'button', onclick: (e) => { days = d; [...seg.children].forEach((b) => b.classList.remove('on')); e.currentTarget.classList.add('on'); }}, t)));
   dialog([el('h2', {}, 'Share a link'), el('p', {style: 'margin:0;color:var(--muted)'}, 'Anyone who has the link can read a copy of this chat as it is now: only the words, not pictures, files or later messages. You can cancel the link any time. Private chats can\u2019t be shared.'), seg,

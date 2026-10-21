@@ -3,7 +3,7 @@ flags.py - Feature flags: new things are switched on for the owner and the admin
 
 WHAT THIS FILE DOES
     * FLAGS is the list of things that can be switched (a new screen, a new model, a tour). Add one line there when a new feature is built, and ship the feature
-      behind it: nobody but you sees it until you widen its audience in Settings > Owner > Features and testing.
+      behind it: nobody but you sees it until you widen its audience in Admin > Previews.
     * An audience is one of: off (nobody, a quick way to roll something back), owner (only the PC owner), admins (the owner and every admin) or everyone.
     * The choices are kept in flags.json in the data folder. Nothing here needs a restart.
 """

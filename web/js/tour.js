@@ -1,5 +1,5 @@
 /* The welcome tour and the what's new notice. */
-// ---------------------------------------------------------------- welcome tour (a feature flag: Settings > Owner > Features and testing)
+// ---------------------------------------------------------------- welcome tour (a feature flag: Admin > Previews)
 const TOUR_VERSION = 1;
 const tourDevice = () => {   // desktop browser, the installed app (home screen / dock), or a phone's browser
   let installed = false; try { installed = (window.matchMedia && matchMedia('(display-mode: standalone)').matches) || navigator.standalone === true; } catch (e) {}
@@ -27,7 +27,7 @@ function openTour(replay) {
      title: 'Build with VryxCode', text: 'Describe what you want. VryxCode plans it, writes the files, runs them, fixes what breaks and shows you the result live.'},
   ];
   if (admin) slides.push({art: () => el('div', {class: 'art'}, el('div', {class: 'chips'}, ...['People', 'Invite codes', 'Backups', 'Answer reports', 'Features and testing'].map((t, i) => el('span', {class: 'rise', style: '--d:' + (i * 0.1) + 's'}, t)))),
-    title: 'You’re an admin', text: 'Settings > Owner has the tools to run Emvryx: add people, make invite codes, take backups, read reports, and test new features before everyone gets them.'});
+    title: 'You’re an admin', text: 'Admin has the tools to run Emvryx: add people, make invite codes, take backups, read reports, and test new features before everyone gets them.'});
   const dev = tourDevice(), ios = /iPhone|iPad|iPod/i.test(navigator.userAgent);
   if (dev !== 'pwa') slides.push({art: () => el('div', {class: 'art'}, el('div', {class: 'chips'}, ...(dev === 'desktop' ? ['Address bar', 'Install Emvryx', 'Opens in its own window'] : ios ? ['Tap Share', 'Add to Home Screen', 'Open it like an app'] : ['Tap the menu', 'Install app', 'Open it like an app']).map((t, i) => el('span', {class: 'rise', style: '--d:' + (i * 0.15) + 's'}, t)))),
     title: 'Keep it one tap away', text: dev === 'desktop' ? 'In Chrome or Edge, click the install icon in the address bar (in Safari: File, then Add to Dock). Emvryx then opens in its own window.' : ios ? 'In Safari, tap the Share button, then Add to Home Screen. Emvryx opens full screen, like an app.' : 'Open your browser menu and choose Install app (or Add to Home screen). Emvryx opens full screen, like an app.'});

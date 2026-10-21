@@ -137,7 +137,7 @@ class Manager(unittest.TestCase):
     def test_who_may_use_it_and_why_not(self):
         m = CS.CodeManager(None)
         self.assertFalse(m.cloud_ready(True)[0])
-        self.assertIn("Settings > Owner", m.cloud_ready(True)[1])
+        self.assertIn("Admin > Cloud machine", m.cloud_ready(True)[1])
         with tempfile.TemporaryDirectory() as d, mock.patch("shutil.which", return_value="/usr/bin/ssh"):
             key = os.path.join(d, "key")
             m.cloud = {"host": "gpu.example", "port": 22, "user": "root", "key": key, "known_hosts": os.path.join(d, "kh"), "for_others": False}
@@ -226,7 +226,7 @@ class Server(Base):
         s, j = self.owner.call("GET", "/api/code")
         cloud = {e["id"]: e for e in j["environments"]}["cloud"]
         self.assertFalse(cloud["available"])
-        self.assertIn("Settings > Owner", cloud["note"])
+        self.assertIn("Admin > Cloud machine", cloud["note"])
 
 
 if __name__ == "__main__":
