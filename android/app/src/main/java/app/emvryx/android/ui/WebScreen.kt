@@ -13,7 +13,12 @@ import android.webkit.WebViewClient
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
@@ -21,6 +26,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
@@ -29,84 +35,136 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import app.emvryx.android.EmvryxApp
 import app.emvryx.android.ui.theme.Emvryx
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.suspendCancellableCoroutine
+import kotlin.coroutines.resume
 
 /**
- * A page of the Emvryx website inside the app, signed in with the app's own session: Settings, Admin, and the parts the app has no
- * screen of its own for (skills, teacher mode, connected apps, files, sharing, VryxCode's editor ...). Only your Emvryx server's pages open
- * here; any other link opens in the phone's browser. Nothing from the app is exposed to the page.
+ * A page of the Emvryx website inside the app, signed in with the app's own session. Only your Emvryx server's pages open here; any other
+ * link opens in the phone's browser. Nothing from the app is exposed to the page.
+ *
+ * [panel]: the page is one of the website's panels (Settings, Admin, Skills, Memory, Documents). Then the app shows a cover in its own
+ * colours until the panel is open (so the website's chat never flashes up first), hides the website behind the panel, and goes back
+ * to the app as soon as the panel is closed (its own × or Close); the panel's own header is the only title.
  */
 @SuppressLint("SetJavaScriptEnabled")
 @Composable
-fun WebScreen(vm: AppViewModel, path: String, title: String, run: String = "") {
+fun WebScreen(vm: AppViewModel, path: String, title: String, run: String = "", panel: Boolean = false) {
     val app = androidx.compose.ui.platform.LocalContext.current.applicationContext as EmvryxApp
     val server = app.api.server ?: return
     var web by remember { mutableStateOf<WebView?>(null) }
+    var ready by remember { mutableStateOf(false) }
     var pending by remember { mutableStateOf<ValueCallback<Array<Uri>>?>(null) }
     val chooser = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) { r ->
         pending?.onReceiveValue(if (r.resultCode == Activity.RESULT_OK) WebChromeClient.FileChooserParams.parseResult(r.resultCode, r.data) else null)
         pending = null
     }
-    BackHandler { web?.let { if (it.canGoBack()) it.goBack() else vm.backToChat() } ?: vm.backToChat() }
-    Column(Modifier.fillMaxSize().background(Emvryx.bg)) {
-        Column(Modifier.statusBarsPadding()) {
-            Row(Modifier.fillMaxWidth().height(56.dp).padding(horizontal = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-                IconButton(onClick = vm::backToChat) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back to the chat", tint = Emvryx.text) }
-                Text(title, fontWeight = FontWeight.SemiBold, fontSize = 17.sp)
-            }
-            HorizontalDivider(color = Emvryx.line)
-        }
-        AndroidView(
-            modifier = Modifier.fillMaxWidth().weight(1f).navigationBarsPadding(),
-            factory = { ctx ->
-                app.session.cookieLine()?.let { CookieManager.getInstance().setCookie(server, it) }
-                CookieManager.getInstance().flush()
-                WebView(ctx).apply {
-                    setBackgroundColor(android.graphics.Color.parseColor("#07080D"))
-                    settings.javaScriptEnabled = true
-                    settings.domStorageEnabled = true
-                    settings.userAgentString = settings.userAgentString + " Emvryx-Android"
-                    webViewClient = object : WebViewClient() {
-                        private var ran = false
+    BackHandler { web?.let { if (!panel && it.canGoBack()) it.goBack() else vm.backToChat() } ?: vm.backToChat() }
+    val bg = Emvryx.bg
+    val light = Emvryx.light
 
-                        // open the part of the website this page is for (Skills, Documents, Memory ...) once it has loaded
-                        override fun onPageFinished(view: WebView, url: String) {
-                            if (run.isNotEmpty() && !ran) {
-                                ran = true
-                                view.evaluateJavascript("(function t(n){ if (typeof S !== 'undefined' && S.state) { $run } else if (n < 40) setTimeout(function(){ t(n + 1) }, 250) })(0)", null)
+    // watch the page: ready when the website has loaded (and, for a panel, the panel is open); a panel that closes goes back to the app
+    LaunchedEffect(web) {
+        val w = web ?: return@LaunchedEffect
+        var hadPanel = false
+        var gone = 0
+        var styled = false
+        val started = System.currentTimeMillis()
+        while (true) {
+            // an object comes back as JSON text: {"up":true,"open":1}
+            val r = w.eval("({up: typeof S !== 'undefined' && !!S.state, open: (document.getElementById('dialogs') || {children: []}).children.length})")
+            val up = r.contains("\"up\":true")
+            val open = Regex("\"open\":(\\d+)").find(r)?.groupValues?.get(1)?.toIntOrNull() ?: 0
+            if (up && !styled) {
+                styled = true
+                // the website follows the app's light or dark choice; behind a panel the website itself is hidden
+                // the app runs its own tours: the website's welcome tour, "what's new" and model tours never open on top of a page here
+                w.eval("try { S.tourChecked = true; S.tourSoon = false; window.openTour = window.maybeTour = window.checkWhatsNew = window.openWhatsNew = window.checkModelTour = function () {};" +
+                       " document.querySelectorAll('.tour').forEach(function (t) { t.remove() }) } catch (e) {}")
+                w.eval("try { S.theme = '${if (light) "light" else "dark"}'; localStorage.setItem('emvryx_theme', S.theme); applyTheme() } catch (e) {}" +
+                       if (panel) "; var st = document.createElement('style'); st.textContent = '#app{visibility:hidden !important}'; document.head.appendChild(st)" else "")
+                if (run.isNotEmpty()) w.eval("try { $run } catch (e) {}")
+            }
+            if (!ready && up && (!panel || open > 0)) {
+                delay(120)                                             // let the panel draw its first frame before the cover lifts
+                ready = true
+            }
+            if (!ready && System.currentTimeMillis() - started > 8000) ready = true      // never stuck behind the cover
+            if (panel) {
+                if (open > 0) { hadPanel = true; gone = 0 } else if (hadPanel && ++gone >= 2) { vm.backToChat(); break }
+            }
+            delay(if (ready) 300 else 100)
+        }
+    }
+
+    Box(Modifier.fillMaxSize().background(bg)) {
+        Column(Modifier.fillMaxSize()) {
+            if (!panel) Column(Modifier.statusBarsPadding()) {
+                Row(Modifier.fillMaxWidth().height(56.dp).padding(horizontal = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+                    IconButton(onClick = vm::backToChat) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back to the chat", tint = Emvryx.text) }
+                    Text(title, fontWeight = FontWeight.SemiBold, fontSize = 17.sp)
+                }
+                HorizontalDivider(color = Emvryx.line)
+            }
+            AndroidView(
+                modifier = Modifier.fillMaxWidth().weight(1f).then(if (panel) Modifier.statusBarsPadding() else Modifier).navigationBarsPadding(),
+                factory = { ctx ->
+                    app.session.cookieLine()?.let { CookieManager.getInstance().setCookie(server, it) }
+                    CookieManager.getInstance().flush()
+                    WebView(ctx).apply {
+                        setBackgroundColor(bg.toArgb())
+                        settings.javaScriptEnabled = true
+                        settings.domStorageEnabled = true
+                        settings.userAgentString = settings.userAgentString + " Emvryx-Android"
+                        webViewClient = object : WebViewClient() {
+                            override fun shouldOverrideUrlLoading(view: WebView, request: WebResourceRequest): Boolean {
+                                val u = request.url
+                                val home = Uri.parse(server)
+                                if (u.scheme == home.scheme && u.host == home.host && u.port == home.port) return false     // the Emvryx server's own pages stay in the app
+                                runCatching { ctx.startActivity(Intent(Intent.ACTION_VIEW, u)) }
+                                return true
                             }
                         }
-
-                        override fun shouldOverrideUrlLoading(view: WebView, request: WebResourceRequest): Boolean {
-                            val u = request.url
-                            val home = Uri.parse(server)
-                            if (u.scheme == home.scheme && u.host == home.host && u.port == home.port) return false     // the Emvryx server's own pages stay in the app
-                            runCatching { ctx.startActivity(Intent(Intent.ACTION_VIEW, u)) }
-                            return true
+                        webChromeClient = object : WebChromeClient() {
+                            override fun onShowFileChooser(view: WebView, callback: ValueCallback<Array<Uri>>, params: FileChooserParams): Boolean {
+                                pending?.onReceiveValue(null)
+                                pending = callback
+                                return runCatching { chooser.launch(params.createIntent()); true }.getOrElse { pending = null; false }
+                            }
                         }
+                        loadUrl(server + path)
+                        web = this
                     }
-                    webChromeClient = object : WebChromeClient() {
-                        override fun onShowFileChooser(view: WebView, callback: ValueCallback<Array<Uri>>, params: FileChooserParams): Boolean {
-                            pending?.onReceiveValue(null)
-                            pending = callback
-                            return runCatching { chooser.launch(params.createIntent()); true }.getOrElse { pending = null; false }
-                        }
-                    }
-                    loadUrl(server + path)
-                    web = this
+                },
+            )
+        }
+        // the cover: the app's own colours and mark until the page (or its panel) is ready, then it fades away
+        AnimatedVisibility(!ready, exit = fadeOut(tween(220))) {
+            Box(Modifier.fillMaxSize().background(bg), contentAlignment = Alignment.Center) {
+                Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(14.dp)) {
+                    Logo(Modifier.size(48.dp), animate = true)
+                    Text(title, color = Emvryx.muted, fontSize = 15.sp)
                 }
-            },
-        )
+            }
+        }
     }
+}
+
+/** Runs a little JavaScript in the page and returns what it gave back ("" when the page is not ready) */
+private suspend fun WebView.eval(js: String): String = suspendCancellableCoroutine { c ->
+    evaluateJavascript(js) { r -> if (c.isActive) c.resume(r ?: "") }
 }

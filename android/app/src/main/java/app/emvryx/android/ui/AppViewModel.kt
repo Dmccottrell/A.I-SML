@@ -37,7 +37,7 @@ sealed interface Screen {
     data object Code : Screen
     /** A page of the website inside the app, signed in with the same session: Settings, Admin, or everything else the app has no screen for.
      *  [run] is the website's own call that opens a part of it once the page has loaded ("openSkills()", "openMemory()"). */
-    data class Web(val path: String, val title: String, val run: String = "") : Screen
+    data class Web(val path: String, val title: String, val run: String = "", val panel: Boolean = false) : Screen
 }
 
 enum class SignInWay { Password, Key, Email }
@@ -77,6 +77,9 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     var chats by mutableStateOf<List<ChatSummary>>(emptyList())
         private set
     var model by mutableStateOf("")
+        private set
+    /** Counts model picks, so the chat plays the colour wash once for each */
+    var washes by mutableStateOf(0)
         private set
     var effort by mutableStateOf("balanced")
         private set
@@ -161,6 +164,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
 
     init {
         Emvryx.light = session.light
+        session.looks.let { (v, m) -> Emvryx.violet = v; Emvryx.modern = m }
         start()
     }
 
@@ -336,8 +340,18 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
+    /** The website's looks follow the server's switches; remembered for the next sign-in screen */
+    private fun applyLooks(s: AppState) {
+        val v = s.on("violet_theme")
+        val m = s.on("modern_look")
+        if (Emvryx.violet != v) Emvryx.violet = v
+        if (Emvryx.modern != m) Emvryx.modern = m
+        if (session.looks != (v to m)) session.looks = v to m
+    }
+
     private suspend fun loadState() {
         val s = api.state(model.ifEmpty { null })
+        applyLooks(s)
         state = s
         chats = s.chats
         usage = s.usage
@@ -389,6 +403,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         viewModelScope.launch {
             runCatching { api.state(model) }.onSuccess {
                 // only what changed is set, so an unchanged list does not redraw the screen (opening the menu stayed smooth)
+                applyLooks(it)
                 if (it != state) state = it
                 if (it.chats != chats) chats = it.chats
                 if (it.usage != usage) usage = it.usage
@@ -399,6 +414,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     fun pickModel(id: String) {
         val m = modelById(id) ?: return
         if (!m.ready) return
+        if (id != model) washes++                                   // the model's colour washes over the screen (core.js wash)
         model = id
         if (effort != "auto" && m.efforts != null && effort !in m.efforts) effort = "balanced"
         refreshChats()

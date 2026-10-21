@@ -11,11 +11,19 @@ import androidx.activity.viewModels
 import androidx.biometric.BiometricManager.Authenticators.BIOMETRIC_WEAK
 import androidx.biometric.BiometricManager.Authenticators.DEVICE_CREDENTIAL
 import androidx.biometric.BiometricPrompt
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.animation.togetherWith
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.key
 import androidx.core.content.ContextCompat
 import androidx.core.content.IntentCompat
 import androidx.fragment.app.FragmentActivity
@@ -118,14 +126,40 @@ private fun Root(vm: AppViewModel, code: CodeViewModel, onUnlock: () -> Unit) {
     }
 }
 
+/** How deep a screen is: the chat, then VryxCode, then a website page. Going deeper slides in from the right, coming back slides the
+ *  other way; sign-in, "off" and the start fade (depth -1). */
+private fun depth(s: Screen) = when (s) {
+    Screen.Chat -> 0
+    Screen.Code -> 1
+    is Screen.Web -> 2
+    else -> -1
+}
+
 @Composable
 private fun Screens(vm: AppViewModel, code: CodeViewModel) {
-    when (val s = vm.screen) {
-        Screen.Starting -> StartingScreen()
-        is Screen.Off -> OffScreen(s, onRetry = vm::start, onChangeServer = vm::changeServer)
-        Screen.SignIn -> SignInScreen(vm)
-        Screen.Chat -> ChatScreen(vm)
-        Screen.Code -> CodeScreen(vm, code)
-        is Screen.Web -> key(s.path + s.run) { WebScreen(vm, s.path, s.title, s.run) }      // a new page gets a new WebView (the old one would keep showing the last page)
+    AnimatedContent(
+        targetState = vm.screen,
+        contentKey = { s -> if (s is Screen.Web) "web:" + s.path + s.run else s::class.simpleName },   // a new page gets a new WebView
+        transitionSpec = {
+            val from = depth(initialState)
+            val to = depth(targetState)
+            val ease = tween<IntOffset>(280, easing = FastOutSlowInEasing)
+            val fade = tween<Float>(220)
+            when {
+                from < 0 || to < 0 || from == to -> fadeIn(fade) togetherWith fadeOut(fade)
+                to > from -> (slideInHorizontally(ease) { it } + fadeIn(fade)) togetherWith (slideOutHorizontally(ease) { -it / 5 } + fadeOut(fade))
+                else -> (slideInHorizontally(ease) { -it / 5 } + fadeIn(fade)) togetherWith (slideOutHorizontally(ease) { it } + fadeOut(fade))
+            }
+        },
+        label = "screens",
+    ) { s ->
+        when (s) {
+            Screen.Starting -> StartingScreen()
+            is Screen.Off -> OffScreen(s, onRetry = vm::start, onChangeServer = vm::changeServer)
+            Screen.SignIn -> SignInScreen(vm)
+            Screen.Chat -> ChatScreen(vm)
+            Screen.Code -> CodeScreen(vm, code)
+            is Screen.Web -> WebScreen(vm, s.path, s.title, s.run, s.panel)
+        }
     }
 }
