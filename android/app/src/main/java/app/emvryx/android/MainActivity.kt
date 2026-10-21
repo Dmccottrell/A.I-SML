@@ -61,18 +61,45 @@ class MainActivity : FragmentActivity() {
                           else SystemBarStyle.dark(android.graphics.Color.TRANSPARENT)
                 enableEdgeToEdge(bar, bar)
             }
+            LaunchedEffect(vm.state) { if (vm.flag("phone_alerts")) askForAlerts() }
             Root(vm, code, onUnlock = ::unlock)
         }
-        if (savedInstanceState == null) shared(intent)
+        Alerts.channels(this)
+        if (savedInstanceState == null) {
+            shared(intent)
+            tapped(intent)
+        }
+    }
+
+    /** Notifications (flag phone_alerts): Android 13 and later ask once; a "no" is respected (it can be turned on in the phone's settings) */
+    private fun askForAlerts() {
+        if (android.os.Build.VERSION.SDK_INT < 33) return
+        if (ContextCompat.checkSelfPermission(this, android.Manifest.permission.POST_NOTIFICATIONS) == android.content.pm.PackageManager.PERMISSION_GRANTED) return
+        val prefs = getSharedPreferences("alerts", MODE_PRIVATE)
+        if (prefs.getBoolean("asked", false)) return
+        prefs.edit().putBoolean("asked", true).apply()
+        // asked directly: FragmentActivity refuses the result launcher's large request codes for permissions ("Can only use lower 16 bits")
+        androidx.core.app.ActivityCompat.requestPermissions(this, arrayOf(android.Manifest.permission.POST_NOTIFICATIONS), ASK_ALERTS)
+    }
+
+    /** A notification tapped: open that VryxCode session or chat */
+    private fun tapped(intent: Intent?) {
+        val session = intent?.getStringExtra(Alerts.EXTRA_SESSION)
+        val chat = intent?.getStringExtra(Alerts.EXTRA_CHAT)?.toLongOrNull()
+        intent?.removeExtra(Alerts.EXTRA_SESSION)
+        intent?.removeExtra(Alerts.EXTRA_CHAT)
+        vm.fromAlert(session, chat)
     }
 
     override fun onStop() {
         super.onStop()
+        Alerts.visible = false
         leftAt = SystemClock.elapsedRealtime()
     }
 
     override fun onStart() {
         super.onStart()
+        Alerts.visible = true
         if (leftAt > 0 && SystemClock.elapsedRealtime() - leftAt > LOCK_AFTER_MS) vm.lockIfOn()   // away more than a minute: ask again
     }
 
@@ -90,6 +117,7 @@ class MainActivity : FragmentActivity() {
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         shared(intent)
+        tapped(intent)
     }
 
     /** "Share to Emvryx" from another app: text goes in the message box, pictures and files are attached to a new chat */
@@ -107,6 +135,7 @@ class MainActivity : FragmentActivity() {
 
     private companion object {
         const val LOCK_AFTER_MS = 60_000L
+        const val ASK_ALERTS = 7
     }
 }
 
