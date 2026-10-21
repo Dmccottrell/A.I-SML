@@ -361,6 +361,7 @@ private fun EventRow(e: JsonObject, all: List<JsonObject>) {
                     is Block.Prose -> Text(Markdown.inline(b.text), fontSize = 15.sp)
                     is Block.Code -> Text(b.text, style = Mono, modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp)).background(Emvryx.bg)
                         .horizontalScroll(rememberScrollState()).padding(10.dp))
+                    is Block.Table -> MdTable(b)
                 }
             }
             e.strings("next").forEach { Text("→ $it", color = Emvryx.muted, fontSize = 14.sp) }

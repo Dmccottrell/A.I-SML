@@ -3,7 +3,7 @@ summary.py - The owner's weekly summary: what happened on this Emvryx in the las
 
 WHAT THIS FILE DOES
     Counts (no chat is read, no question is quoted): people and new sign-ups, sign-ins and wrong tries, lockouts, messages and which models answered, reports people sent
-    with the Report button, errors since the server started, and how old the newest backup is. It can be previewed any time (Settings > Owner > Overview), and when the
+    with the Report button, errors since the server started, and how old the newest backup is. It can be previewed any time (Admin > Overview), and when the
     owner switches it on it is sent once a week to the owner's email (if mail is set up) and as a short phone alert (if alerts are set up). Nothing is sent anywhere else.
 """
 import json
@@ -71,7 +71,7 @@ def build(state, now=None, days=7):
              f"Messages asked: {msgs}" + (" (" + ", ".join(f"{names.get(k, k or 'unknown')} {v}" for k, v in by_model.most_common(5)) + " answers)" if by_model else "") + ".",
              f"Reports under answers still to read: {fb['new']}" + (" (" + ", ".join(f"{k.replace('_', ' ')} {v}" for k, v in sorted(fb['by_kind'].items(), key=lambda kv: -kv[1])[:3]) + ")" if fb["by_kind"] else "") + ".",
              f"Server errors since it started: {numbers['server_errors']}.",
-             "Backup: " + ("none found yet. Make one in Settings > Owner > Backups." if backup is None else f"the newest is {backup} day(s) old." + (" That is old: make a new one." if backup > 7 else ""))]
+             "Backup: " + ("none found yet. Make one in Admin > Backups." if backup is None else f"the newest is {backup} day(s) old." + (" That is old: make a new one." if backup > 7 else ""))]
     return {"subject": f"Emvryx weekly summary ({day(since)} to {day(now)})", "text": "\n".join(lines), "numbers": numbers,
             "short": f"Emvryx this week: {msgs} messages, {numbers['sign_ins']} sign-ins, {numbers['wrong_tries']} wrong tries, {fb['new']} reports to read."}
 

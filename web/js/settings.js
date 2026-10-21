@@ -134,7 +134,8 @@ function restoreView() {
   if (S.viewChecked) return; S.viewChecked = true;
   const m = /^#(settings|admin)(?:\/([\w-]+))?$/.exec(location.hash || ''); if (!m) return;
   if (m[1] === 'admin') { if (S.state && S.state.admin) openAdmin(m[2]); else viewHash(''); return; }
-  const ok = [...SX_NAV, ...SX_OWNER].some((x) => x[0] === m[2]); openSettings(ok ? m[2] : undefined);
+  if (SX_OWNER.some((x) => x[0] === m[2])) { if (S.state && S.state.admin) openAdmin(ADM_TAB_OF[m[2]]); else viewHash(''); return; }   // an old link to an owner page
+  const ok = SX_NAV.some((x) => x[0] === m[2]); openSettings(ok ? m[2] : undefined);
 }
 function closeSettings() { document.querySelectorAll('.sx').forEach((n) => n.remove()); SX.root = null; sxHash(); }
 async function openSettings(page) {
@@ -158,7 +159,7 @@ function sxRender(onPage) {
   const sxNav = el('div', {class: 'sx-nav'},
     el('div', {class: 'sx-head'}, el('h2', {}, 'Settings'), el('button', {class: 'icon', type: 'button', 'aria-label': 'Close settings', onclick: closeSettings}, icon('x'))),
     el('div', {class: 'sx-search'}, icon('search'), search),
-    el('div', {class: 'sx-list'}, ...SX_NAV.map(([id, n, i]) => sxNavItem(id, n, i)), ...(owner ? [el('div', {class: 'label'}, 'OWNER'), ...SX_OWNER.map(([id, n, i]) => sxNavItem(id, n, i))] : [])));
+    el('div', {class: 'sx-list'}, ...SX_NAV.map(([id, n, i]) => sxNavItem(id, n, i))));        // the owner's pages are on the Admin screen (account menu > Admin)
   const body = el('div', {class: 'sx-body', id: 'sxBody'});
   root.replaceChildren(sxNav, body);
   sxBody(); body.scrollTop = keepScroll; sxHash();
@@ -179,7 +180,7 @@ function sxBody() {
       const rows = sec.rows.filter((r) => !r.node && ((r.title || '') + ' ' + (r.desc || '') + ' ' + (r.keys || '') + ' ' + sec.title + ' ' + name).toLowerCase().includes(q));
       if (rows.length) { n += rows.length; kids.push(el('div', {class: 'sx-sec'}, name + ' › ' + sec.title), sxCard(rows)); }
     }
-    for (const [id, name] of SX_OWNER) if (S.state.admin && name.toLowerCase().includes(q)) { n++; kids.push(el('div', {class: 'sx-sec'}, 'Owner'), el('div', {class: 'sx-card'}, el('button', {class: 'sx-item', type: 'button', onclick: () => { SX.q = ''; SX.page = id; sxRender(true); }}, name))); }
+    for (const [id, name] of SX_OWNER) if (S.state.admin && name.toLowerCase().includes(q)) { n++; kids.push(el('div', {class: 'sx-sec'}, 'Admin'), el('div', {class: 'sx-card'}, el('button', {class: 'sx-item', type: 'button', onclick: () => { SX.q = ''; closeSettings(); openAdmin(ADM_TAB_OF[id]); }}, name.replace(' (Admin screen)', '')))); }
     if (!n) kids.push(el('p', {class: 'lead'}, 'Nothing matches “' + SX.q + '”.'));
     return body.replaceChildren(...kids);
   }

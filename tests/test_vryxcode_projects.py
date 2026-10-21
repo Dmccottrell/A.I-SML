@@ -34,8 +34,7 @@ class Page(Base):
                 for idea, name in (("A bill splitter with tip and number of people", "bill-splitter"), ("A to-do list that saves in the browser", "to-do-list"),
                                    ("Please make me a snake game in one HTML file", "snake-game"), ("!!!", "new-project")):
                     self.assertEqual(page.evaluate("t => vxIdeaName(t)", idea), name)
-                page.evaluate("C.info.projects = ['bill-splitter']")
-                self.assertEqual(page.evaluate("vxFreeName(vxIdeaName('a bill splitter'))"), "bill-splitter-2")
+                self.assertEqual(page.evaluate("C.info.projects = ['bill-splitter'], vxFreeName(vxIdeaName('a bill splitter'))"), "bill-splitter-2")     # one step: the page may reload the list in between
             finally:
                 b.close()
 

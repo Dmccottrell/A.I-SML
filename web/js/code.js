@@ -444,7 +444,7 @@ $('vxQuickGo').onclick = () => {
 $('vxQuick').addEventListener('input', () => vxWhere());
 $('vxQuick').addEventListener('keydown', (e) => { if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) { e.preventDefault(); $('vxQuickGo').click(); } });
 vxRenderChips();
-// the phone notification (owner only; it needs the ntfy topic from Settings > Owner > Security): remembered on this device
+// the phone notification (owner only; it needs the ntfy topic from Admin > Security): remembered on this device
 const vxNotifyOn = () => { try { return localStorage.getItem('vx_notify') === '1'; } catch (e) { return false; } };
 function vxNotifyInit() {
   const row = $('vxNotifyRow'); row.hidden = !(S.state && S.state.owner); $('vxNotify').checked = vxNotifyOn();

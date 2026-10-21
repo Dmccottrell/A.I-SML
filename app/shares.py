@@ -4,7 +4,7 @@ shares.py - Read-only links to a chat: "share this conversation".
 WHAT THIS FILE DOES
     A person can make a link to a COPY of one of their chats (not private chats). The copy is taken when the link is made, so later messages and edits are not
     exposed, and it holds only the words (no pictures, files, notes or names of apps). The link is a long random address (/s/<token>); only its hash is stored.
-    It expires (7 days by default, up to 30), the person can cancel it any time, and the owner has to switch sharing on first (Settings > Owner > Overview);
+    It expires (7 days by default, up to 30), the person can cancel it any time, and the owner has to switch sharing on first (Admin > Overview);
     switching it off stops every link at once. Anyone with the link can read it, so the page says so before it is made.
 """
 import html

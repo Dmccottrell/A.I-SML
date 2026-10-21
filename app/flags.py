@@ -3,7 +3,7 @@ flags.py - Feature flags: new things are switched on for the owner and the admin
 
 WHAT THIS FILE DOES
     * FLAGS is the list of things that can be switched (a new screen, a new model, a tour). Add one line there when a new feature is built, and ship the feature
-      behind it: nobody but you sees it until you widen its audience in Settings > Owner > Features and testing.
+      behind it: nobody but you sees it until you widen its audience in Admin > Previews.
     * An audience is one of: off (nobody, a quick way to roll something back), owner (only the PC owner), admins (the owner and every admin) or everyone.
     * The choices are kept in flags.json in the data folder. Nothing here needs a restart.
 """
@@ -35,6 +35,7 @@ FLAGS = [
     {"id": "photo_fixes", "title": "Photos, native (Oct 21)", "desc": "Photos go straight to an Emvryx 3 model that can see (no words-only reading first): a photo with no text in it is accepted whenever a model can look at it, it is turned the right way up, WebP, HEIC and other formats are converted to JPEG or PNG (the model's picture loader opens only those), and it is sized for the model (sharper and faster). A model that cannot see pictures hands a message with a photo to one that can, and the answer says which model wrote it.", "default": "admins"},
     {"id": "vryxcode_review", "title": "VryxCode: review like Cursor", "desc": "The VryxCode list grouped into Working, Ready for review and Done, each with the lines added and removed and its last line; reading, searching and thinking shown as quiet grey lines instead of cards; a chip for each changed file (path +52 -3) that opens the change; documents (PDF, Word, text) attached to a task for it to read first; and a short Done line with every file it changed.", "default": "admins"},
     {"id": "vryxcode_projects", "title": "VryxCode: projects organizer", "desc": "A new idea typed on the VryxCode home gets its own project, named from the idea (\"A bill splitter with tip\" becomes bill-splitter), unless you choose to build it in the current one; and the sessions list becomes an organizer like Claude's: every project with its sessions under it, newest first, numbered, a dot on the ones ready for review, and a + to start a new session in that project.", "default": "admins"},
+    {"id": "model_bar", "title": "Message box in the model's colour", "desc": "The message box (its edge and glow) takes the colour of the model you picked (Flare orange, Equinox white, Solstice gold, Apogee ice blue), and lights up in that colour as the model is picked, with the colour wash in the same colour; everything else keeps the app's colours. On the website and in the Android app.", "default": "admins"},
     {"id": "vryxcode_fixes", "title": "VryxCode fixes (Oct 21)", "desc": "The overnight VryxCode fixes: pages that save things (a to-do list, a score) work in the preview instead of showing a storage error, a missing favicon or a blocked font is not reported as a problem, retries show as one line, edits that miss get the nearest real lines back, a step that keeps failing the same way is told to change approach, and stop messages that fit the model you are on.", "default": "admins"},
 ]
 BY_ID = {f["id"]: f for f in FLAGS}
