@@ -464,7 +464,7 @@ function renderLive(live, state) {
   let n = document.getElementById('codeLive') || C.liveEl;       // the same line is moved, not rebuilt, so its words do not blank and fade in again each time the page asks the server
   if (!live || state === 'asking' || !['starting', 'working'].includes(state)) { if (n) n.remove(); C.liveEl = null; C.liveAt = null; return; }
   if (!n) { n = el('div', {class: 'cc-live', id: 'codeLive'}, el('div', {class: 'l1'}, el('span', {class: 'mark'}, logo(20, false, 'brand')), el('span', {class: 'what'}), el('span', {class: 'meta'})), el('div', {class: 'prose'})); }
-  C.liveEl = n;
+  C.liveEl = n; n.classList.toggle('vx-q', vxReview());     // vryxcode_review: a plain shimmering line, like Cursor's, instead of the card
   $('codeIn').append(n);     // always the last thing in the feed
   const now = performance.now(), mine = C.liveAt == null ? null : (now - C.liveAt) / 1000;
   // the server counts whole seconds, so its number is often a second behind ours: keep ours unless the server is ahead or a new step has started (a clearly smaller number)

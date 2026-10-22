@@ -1,5 +1,6 @@
 """A model that sends a broken file-writing call: raw line breaks and unescaped quotes are repaired, a cut-off file keeps its whole lines and the rest is asked for, and a model that cannot get it right is told a new way, then stopped instead of looping."""
 import os, sys; sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), os.pardir)); import emvryx_paths  # noqa: E402,F401
+import os
 import tempfile
 import unittest
 
@@ -80,6 +81,44 @@ class Loop(unittest.TestCase):
             r = harness.run_agent("x", lambda m: next(replies), box, max_turns=20)
         self.assertTrue(r["finished"])
 
+
+
+class WrittenAsJson(unittest.TestCase):
+    """The model wrote its step as a ```json block ("Now I'll add the quests." then {"name": "edit_file", ...}), or said what it would do and stopped:
+    it was taken as its last message, nothing was changed and the session ended halfway"""
+    REPLY = ("Now I'll add some basic AI behavior to generate quests.\n\n```json\n{\n  \"name\": \"write_file\",\n  \"args\": {\n    \"path\": \"main.py\",\n"
+             "    \"content\": \"print('quest')\\n\"\n  }\n}\n```\n")
+
+    def test_a_call_in_a_json_block_runs(self):
+        self.assertEqual(harness.parse_tool_call(self.REPLY), ("write_file", {"path": "main.py", "content": "print('quest')\n"}))
+        self.assertEqual(harness.parse_tool_call('Saving it:\n{"name": "run", "arguments": {"command": "python main.py"}}')[0], "run")
+
+    def test_json_that_is_not_a_call_is_never_run(self):
+        for words in ('Your package.json:\n```json\n{"name": "my-app", "version": "1.0.0"}\n```', 'The API answers:\n```json\n{"name": "Sam", "args": [1], "id": 4}\n```'):
+            with self.assertRaises(harness.ToolError):
+                harness.parse_tool_call(words)
+
+    def test_saying_what_comes_next_is_not_the_end(self):
+        self.assertTrue(harness.promises_work("Now I'll add some basic AI behavior to generate quests and handle player actions."))
+        self.assertFalse(harness.promises_work("Done. Open index.html to play."))
+        self.assertFalse(harness.promises_work("Next I can add combat. Would you like dice or cards?"))
+
+    def _run(self, replies, fixes):
+        it = iter(replies)
+        gen = lambda m: next(it)
+        gen.fixes = fixes
+        with harness.Sandbox(workspace=tempfile.mkdtemp()) as box:
+            r = harness.run_agent("make the game", gen, box, max_turns=10, chat_mode=True)
+            return r, os.path.exists(os.path.join(box.root, "main.py"))
+
+    def test_it_carries_on_until_it_is_done(self):
+        replies = ["Here is the plan. Now I'll create the main file.", self.REPLY, call('{"name": "finish", "args": {"summary": "The game is in main.py."}}')]
+        r, made = self._run(replies, fixes=True)
+        self.assertTrue(r["finished"], r.get("summary"))
+        self.assertTrue(made)
+        r, made = self._run(replies, fixes=False)                          # without vryxcode_fixes the words still end the turn, as before
+        self.assertTrue(r.get("said"))
+        self.assertFalse(made)
 
 
 class XmlCalls(unittest.TestCase):

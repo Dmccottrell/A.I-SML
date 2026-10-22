@@ -992,9 +992,60 @@ def parse_xml_call(body):
     return fn.group(1), args
 
 
+FENCED_CALL = re.compile(r"```[ \t]*(?:json|tool_call|tool|javascript|js)?[ \t]*\n(\s*\{.*?\})\s*\n[ \t]*```", re.S)
+BARE_CALL = re.compile(r"(?:^|\n)(\{\s*\"name\"\s*:.*\})\s*$", re.S)
+_CALL_KEYS = {"name", "args", "arguments", "parameters", "input"}
+
+
+class _Found:
+    """A tool call found outside the tags, shaped like a regex match so parse_tool_call reads it the same way"""
+    def __init__(self, body):
+        self.body = body
+
+    def group(self, _):
+        return self.body
+
+
+def fenced_call(text):
+    """A tool call the model wrote as a ```json block (or plain JSON at the very end) instead of inside the tags: "Now I'll add the quests." followed by
+    {"name": "edit_file", "args": {...}}. Without this the words are taken as its last message, nothing is changed and the session stops halfway.
+    Only an object made of a tool's name and its arguments counts, so JSON shown as an example (a config, an API reply) is never run."""
+    for m in list(FENCED_CALL.finditer(text or "")) + list(BARE_CALL.finditer(text or "")):
+        body = m.group(1)
+        head = re.match(r'\s*\{\s*"name"\s*:\s*"([\w.\-]+)"', body)
+        if not head:
+            continue
+        try:
+            obj = json.loads(body, strict=False)
+            if not isinstance(obj, dict) or not set(obj) <= _CALL_KEYS or not any(k in obj for k in ("args", "arguments", "parameters", "input")):
+                continue
+        except ValueError:
+            if not re.search(r'"(?:args|arguments|parameters|input)"\s*:', body):
+                continue                                          # broken JSON is still a call when it plainly has a name and arguments (repaired below)
+        return _Found(body)
+    return None
+
+
+PROMISE_NUDGES = 3
+PROMISE_NUDGE = ("You said what you will do next but did not do it: nothing was changed. Do it now with a tool call, and keep going step by step until the "
+                 "task is finished or you need an answer from me. Only stop with words alone to ask me something or to say it is all done.")
+_PROMISE = re.compile(r"\b(?:i'?ll|i will|i am going to|i'm going to|let me|let's|now i|next,? i|next step:?|first,? i|i'll now|i will now)\b[^.?!\n]{0,120}?"
+                      r"\b(?:add|create|write|make|build|implement|update|set up|setup|start|edit|fix|install|run|test|change|move on|continue|put|code)\b", re.I)
+
+
+def promises_work(words):
+    """True when a reply in words ends by saying what it will do next ("Now I'll add some basic AI behavior...") without a question to the person:
+    the model meant to carry on and forgot the tool call."""
+    tail = re.sub(r"```.*?(```|$)", " ", words or "", flags=re.S).strip()
+    last = tail[-400:]
+    if not last or last.rstrip().endswith("?") or re.search(r"\b(?:would you like|do you want|shall i|should i|let me know|which (?:one|option)|your (?:choice|answer))\b", last, re.I):
+        return False
+    return bool(_PROMISE.search(last))
+
+
 def parse_tool_call(text):
     """The first tool call in the model's text -> (name, args). Raises ToolError if it can't be read."""
-    m = TOOL_CALL.search(text) or QWEN_TOOL_CALL.search(text)
+    m = TOOL_CALL.search(text) or QWEN_TOOL_CALL.search(text) or fenced_call(text)
     if not m and ("<|tool_call|>" in text or "<tool_call>" in text):
         raise ToolError("the tool call was cut off before its end (it was too long). Send it again in smaller parts: write_file for the first part, "
                         "then write_file with append=true for each next part, about 60 lines at a time.")
@@ -1007,7 +1058,8 @@ def parse_tool_call(text):
     for strict in (True, False):                                  # models often put raw line breaks inside the file text; strict=False accepts those
         try:
             call = json.loads(body, strict=strict)
-            return normalize_call(call["name"], call.get("args", {}))
+            args = next((call[k] for k in ("args", "arguments", "parameters", "input") if k in call), {})
+            return normalize_call(call["name"], args)
         except (json.JSONDecodeError, KeyError, TypeError, AttributeError):
             continue
     salvaged = _salvage_write(body)
@@ -1437,6 +1489,7 @@ def run_agent(task, generate, sandbox, max_turns=8, system=None, project=True, h
     checkpoints = Checkpoints(sandbox.root) if build else None
     fixes = bool(getattr(generate, "fixes", False))                  # vryxcode_fixes: nearest lines on a missed edit, a nudge on the same error twice, stop messages that fit
     last_err, same_err = None, 0
+    promised = 0                                                     # times it said what it would do next and then stopped (vryxcode_fixes)
     if build and "rollback" not in sandbox.extra_tools:
         sandbox.register_tool("rollback", lambda: checkpoints.restore())
     for turn in range(1, max_turns + 1):
@@ -1510,6 +1563,10 @@ def run_agent(task, generate, sandbox, max_turns=8, system=None, project=True, h
                 if pasted_code(words) and used_tools == 0 and not nudged:           # code pasted into the chat instead of saved: once, tell it to use the tools
                     nudged = True
                     messages.append({"role": "user", "content": CODE_NUDGE})
+                    continue
+                if fixes and promised < PROMISE_NUDGES and promises_work(words):       # "Now I'll add the quests." and then nothing: it is not done, it stopped
+                    promised += 1
+                    messages.append({"role": "user", "content": PROMISE_NUDGE})
                     continue
                 return {"finished": False, "said": True, "summary": words, "turns": turn, "messages": messages, "episodes": episodes}
             if str(e).startswith("the tool call was cut off"):
