@@ -16,10 +16,10 @@ class Flag(unittest.TestCase):
 
 @unittest.skipUnless(browser_check.available() and find_browser(), "needs the playwright package and a Chromium, Edge or Chrome")
 class Page(Base):
-    def page(self, p, audience="admins"):
+    def page(self, p, audience="admins", width=420):
         self.state.flags.data["audiences"]["vryxcode_projects"] = audience
         b = p.chromium.launch(executable_path=find_browser())
-        page = b.new_context(viewport={"width": 420, "height": 860}, extra_http_headers={"Authorization": "Bearer " + self.state.owner_key()}).new_page()
+        page = b.new_context(viewport={"width": width, "height": 860}, extra_http_headers={"Authorization": "Bearer " + self.state.owner_key()}).new_page()
         page.goto(f"http://127.0.0.1:{self.port}/")
         wait_for(lambda: page.evaluate("typeof S !== 'undefined' && !!S.state"), 15)
         page.evaluate("document.querySelectorAll('.tour').forEach((e) => e.remove()); openCode()")
@@ -75,6 +75,29 @@ class Page(Base):
             finally:
                 b.close()
 
+    def test_on_a_wide_screen_the_organizer_stays_beside_the_session(self):
+        from playwright.sync_api import sync_playwright
+        rows_ = [{"id": "a", "title": "Landing page", "project": "site", "state": "done", "updated": 9, "age": "now"},
+                 {"id": "b", "title": "Snake", "project": "game", "state": "done", "updated": 5, "age": "1h"}]
+        with sync_playwright() as p:
+            for width, shown in ((1400, True), (420, False)):
+                b, page = self.page(p, width=width)
+                try:
+                    page.route("**/api/code/sessions", lambda r: r.fulfill(json={"sessions": rows_}))
+                    page.route("**/api/code/sessions/b?**", lambda r: r.fulfill(json={"events": [], "state": "done"}))
+                    page.evaluate("openSession({id: 'b', project: 'game', model: C.model, title: 'Snake', updated: 5})")
+                    if shown:
+                        wait_for(lambda: page.evaluate("!document.getElementById('vxSide').hidden && document.querySelectorAll('#vxSide .vx-prow').length === 2"), 10)
+                        self.assertEqual(page.evaluate("document.querySelector('#vxSide .vx-prow.on').dataset.id"), "b")
+                        self.assertIn("New session", page.inner_text("#vxSide"))
+                        page.evaluate("showHome()")
+                        wait_for(lambda: page.evaluate("document.getElementById('vxSide').hidden"), 10)
+                    else:
+                        page.wait_for_timeout(500)
+                        self.assertTrue(page.evaluate("document.getElementById('vxSide').hidden"))      # a phone keeps the whole width for the work
+                finally:
+                    b.close()
+
     def test_the_organizer_lists_projects_with_their_sessions(self):
         from playwright.sync_api import sync_playwright
         with sync_playwright() as p:
@@ -86,8 +109,8 @@ class Page(Base):
                 page.route("**/api/code/sessions", lambda r: r.fulfill(json={"sessions": rows_}))
                 errs = []
                 page.on("pageerror", lambda e: errs.append(str(e)))
-                page.evaluate("C.filter = 'all'; renderHome()")
-                wait_for(lambda: page.evaluate("document.querySelectorAll('.vx-proj').length >= 2"), 10)
+                page.evaluate("C.filter = 'all'")       # the page's own first load of the list can land after this one: draw again until the test's list shows
+                wait_for(lambda: page.evaluate("renderHome().then(() => document.querySelectorAll('#codeList .vx-proj').length >= 2)"), 10)
                 self.assertEqual(errs, [])
                 heads = page.evaluate("[...document.querySelectorAll('.vx-phead .nm')].map((x) => x.textContent)")
                 self.assertEqual(heads[:2], ["site", "game"])                               # newest work first

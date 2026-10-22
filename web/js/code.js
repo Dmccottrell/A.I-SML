@@ -21,7 +21,7 @@ const ENV_NAME = {local: 'This computer', sandbox: 'Isolated sandbox', cloud: 'C
 const FILTERS = [['all', 'All'], ['running', 'Running'], ['queued', 'Queued'], ['needs', 'Needs you'], ['done', 'Finished']];
 async function showHome() {
   clearTimeout(C.timer); C.view = 'home'; $('code').classList.remove('ide'); $('code').classList.add('home'); closeCodeMenus(); $('codePv').hidden = true; showDrawer(false);
-  $('codeTitle').textContent = 'Code'; $('codeBack').setAttribute('aria-label', 'Back to chats'); await renderHome();
+  $('vxSide').hidden = true; $('codeTitle').textContent = 'Code'; $('codeBack').setAttribute('aria-label', 'Back to chats'); await renderHome();
 }
 function envLine(e) { return e ? [icon(ENV_ICON(e.id)), el('span', {}, e.name)] : []; }
 function ENV_ICON(id) { return id === 'sandbox' ? 'box' : id === 'cloud' ? 'cloud' : 'laptop'; }
@@ -63,7 +63,7 @@ function envInfo() {
 function resetWork() { C.todo = []; C.events = []; C.ctx = null; if ($('codeCtx')) $('codeCtx').hidden = true; renderTodo(); if (typeof OUT !== 'undefined') { OUT.items = []; OUT.pending = null; if (OUT.open) outRender(); } }
 function newSession() {
   C.view = 'session'; $('code').classList.remove('home'); $('codeTitle').textContent = 'VryxCode'; C.sid = null; C.saved = false; C.checkpoints = []; C.seen = 0; C.last = null; C.pvAuto = false; C.pvPage = '';
-  offerReply(''); $('codeIn').replaceChildren(); $('codeGo').hidden = false; $('codeStop').hidden = true; resetWork(); renderCodeBar(); emptyFeed(); refreshFiles(); loadCmds(); C.pics = []; C.docs = []; renderPics(); $('codeTask').focus();
+  offerReply(''); $('codeIn').replaceChildren(); $('codeGo').hidden = false; $('codeStop').hidden = true; resetWork(); renderCodeBar(); emptyFeed(); refreshFiles(); loadCmds(); C.pics = []; C.docs = []; renderPics(); $('codeTask').focus(); vxSide();
 }
 function vxOrganizer(rows) {   // vryxcode_projects: every project with its sessions under it (newest first), like Claude's list; + starts a new one in that project
   const by = {}; let n = 0;
@@ -76,7 +76,7 @@ function vxOrganizer(rows) {   // vryxcode_projects: every project with its sess
     el('div', {class: 'vx-phead'}, el('span', {class: 'nm'}, p), el('button', {type: 'button', class: 'add', title: 'New session in ' + p, 'aria-label': 'New session in ' + p, onclick: () => { C.project = p; newSession(); }}, '+')),
     ...((by[p] || []).length ? by[p].map((m) => { n += 1;
       const ready = !busy(m) && m.state === 'done' && (m.added || m.removed || m.files) && seen[m.id] !== m.updated;
-      return el('div', {class: 'vx-prow' + (ready ? ' ready' : ''), role: 'button', tabindex: '0', onclick: () => openSession(m), onkeydown: (ev) => { if (ev.key === 'Enter') openSession(m); }},
+      return el('div', {class: 'vx-prow' + (ready ? ' ready' : ''), 'data-id': m.id, role: 'button', tabindex: '0', onclick: () => openSession(m), onkeydown: (ev) => { if (ev.key === 'Enter') openSession(m); }},
         busy(m) ? el('span', {class: 'spin', 'aria-label': 'Working'}) : ready ? el('span', {class: 'dot', title: 'Ready for review'}) : '',
         el('span', {class: 't'}, m.title || 'Session'),
         m.added || m.removed ? el('span', {class: 'vx-lines'}, el('span', {class: 'a'}, '+' + (m.added || 0)), ' ', el('span', {class: 'd'}, '\u2212' + (m.removed || 0))) : '',
@@ -90,7 +90,7 @@ function openSession(m) {
   vxMarkSeen(m);
   C.view = 'session'; $('code').classList.remove('home'); $('codeTitle').textContent = 'VryxCode'; C.sid = m.id; C.project = m.project; C.saved = false; C.checkpoints = m.checkpoints || []; C.pvAuto = false; C.pvPage = '';
   if (C.info.models.some((x) => x.id === m.model && x.state === 'ready')) C.model = m.model;
-  C.seen = 0; C.last = null; $('codeIn').replaceChildren(); resetWork(); C.chatKey = C.project + '|' + C.model; renderCodeBar(); refreshFiles(); loadCmds(); C.pics = []; C.docs = []; renderPics(); poll();
+  C.seen = 0; C.last = null; $('codeIn').replaceChildren(); resetWork(); C.chatKey = C.project + '|' + C.model; renderCodeBar(); refreshFiles(); loadCmds(); C.pics = []; C.docs = []; renderPics(); poll(); vxSide();
 }
 $('codeNew').onclick = newSession;
 $('codeFilter').onclick = (e) => {
@@ -420,6 +420,17 @@ async function vxRenderTemplates() {
 }
 const vxFreeName = (base) => { const have = new Set((C.info && C.info.projects) || []); let n = base, i = 2; while (have.has(n)) n = base + '-' + i++; return n; };
 const vxProjectsOn = () => !!(S.state && S.state.features && S.state.features.vryxcode_projects);
+// vryxcode_projects on a wide screen: the organizer stays beside an open session, like Claude's sidebar (New session, then every project and its sessions)
+async function vxSide(reload) {
+  const side = $('vxSide'); if (!side) return;
+  const on = vxProjectsOn() && C.view === 'session' && matchMedia('(min-width: 1100px)').matches && !$('code').classList.contains('ide');
+  side.hidden = !on; if (!on) return;
+  if (reload || !C.sessions.length) { try { const r = await api('/api/code/sessions'); C.sessions = (await r.json()).sessions || []; } catch (e) { /* keeps the list it has */ } }
+  side.replaceChildren(el('button', {type: 'button', class: 'vx-snew', onclick: () => newSession()}, el('b', {}, '+'), 'New session'), ...vxOrganizer(C.sessions));
+  side.querySelectorAll('.vx-prow').forEach((r) => r.classList.toggle('on', !!C.sid && r.dataset.id === C.sid));
+}
+addEventListener('resize', () => { if (!$('code').hidden) vxSide(); });
+setInterval(() => { if (!$('code').hidden && !$('vxSide').hidden) vxSide(true); }, 15000);
 function vxIdeaName(text) {   // "A bill splitter with tip and people" -> "bill-splitter": a short folder name made from the idea
   const t = String(text || '').toLowerCase().replace(/^(please\s+)?((can|could) you\s+)?((make|build|create|write|code|give)( me)?\s+)?((a|an|the|my|me)\s+)?/, '');
   const words = t.split(/\s(?:with|that|which|where|for|using|in|so|to)\s|[,.;:!?()]/)[0].replace(/[^a-z0-9\s-]/g, ' ').trim().split(/\s+/).filter(Boolean).slice(0, 4);
