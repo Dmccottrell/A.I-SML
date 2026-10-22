@@ -12,14 +12,18 @@ function paintPv() {
 }
 async function openPreview() {
   if (!C.project) return;
-  const r = await post('/api/code/preview', {project: C.project}); const j = await r.json().catch(() => ({}));
+  const r = await post('/api/code/preview', {project: C.project, page: vxPreviewOn() ? C.pvPage || '' : ''}); const j = await r.json().catch(() => ({}));
   if (!r.ok) { note('bad', 'Preview', (j.message || 'Could not open the preview.') + ' ' + (j.action || '')); return; }
   if (!j.entry) { note('fin', 'Nothing to preview yet', 'Ask VryxCode to build a web page (an .html file) and it can be previewed here.'); return; }
   $('codePreviewBtn').classList.remove('pulse');
   PV.url = j.url; PV.entry = j.entry; PV.errors = []; PV.loaded = false; setPvSize(PV.size); paintPv();
   $('codePv').hidden = false; $('pvFrame').src = j.url;
 }
-function reloadPreview() { if (!PV.url) return; PV.errors = []; PV.loaded = false; paintPv(); $('pvFrame').src = PV.url; }
+const vxPreviewOn = () => !!(S.state && S.state.features && S.state.features.vryxcode_preview);
+function reloadPreview() {     // vryxcode_preview: when another page changed, that one is shown instead
+  if (!PV.url) return; if (vxPreviewOn() && C.pvPage && C.pvPage !== PV.entry) { openPreview(); return; }
+  PV.errors = []; PV.loaded = false; paintPv(); $('pvFrame').src = PV.url;
+}
 function fixPreviewErrors() {
   const list = PV.errors.slice(0, 6).map((m) => '- ' + m).join('\n');
   $('codePv').hidden = true;

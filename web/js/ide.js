@@ -407,7 +407,8 @@ function cEvent(e) {
       if (vxReview() && e.finished && changed.length) {          // the Done line: every file this message changed, each one opens the change
         const add = changed.reduce((n, [, f]) => n + f.add, 0), del = changed.reduce((n, [, f]) => n + f.del, 0);
         feed.append(el('div', {class: 'cc-done'}, el('div', {class: 'lead'}, 'Changed ' + changed.length + (changed.length === 1 ? ' file' : ' files') + ' ', el('span', {class: 'a'}, '+' + add), ' ', el('span', {class: 'd'}, '\u2212' + del)),
-          ...changed.map(([p, f]) => { const c = fileChip(p, f.add, f.del); c.classList.add('ok'); c.onclick = () => { showDrawer(true, 'changes'); }; return c; })));
+          ...changed.map(([p, f]) => { const c = fileChip(p, f.add, f.del); c.classList.add('ok'); c.onclick = () => { showDrawer(true, 'changes'); }; return c; }),
+          vxPreviewOn() && changed.some(([p]) => /\.(html?|css|js)$/i.test(p)) ? el('button', {class: 'btn small vx-pvgo', onclick: () => openPreview()}, '\u25B6 Preview') : ''));
       }
       if (e.report) feed.append(reportCard(e.report));
       if (e.plan) feed.append(el('div', {class: 'plan-actions'}, el('button', {class: 'btn small', onclick: () => { setMode(C.prevMode === 'plan' ? 'ask' : C.prevMode); $('codeTask').value = 'Go ahead and build it as planned.'; $('codeGo').click(); }}, 'Build it'), el('button', {class: 'chip', onclick: () => { $('codeTask').value = 'Change the plan: '; $('codeTask').focus(); }}, 'Change the plan')));
@@ -525,6 +526,10 @@ $('codeGo').onclick = async () => {
 };
 // the preview follows the work: on a wide screen it opens beside the chat by itself and refreshes after each change; on a phone the Preview button lights up
 function livePreview(events) {
+  for (const e of events) {                    // vryxcode_preview: the web page this session changed last is the one the preview shows
+    const m = e.kind === 'step' && ['write_file', 'edit_file'].includes(e.tool) && /^(?:write|edit) (\S+\.html?)\b/i.exec(String(e.preview || ''));
+    if (m) C.pvPage = m[1];
+  }
   if ($('codePreviewBtn').disabled) return;
   const wrote = events.some((e) => e.kind === 'result') || events.some((e) => e.kind === 'end' && e.finished);
   if (!wrote) return;

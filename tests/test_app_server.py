@@ -109,6 +109,7 @@ class Base(unittest.TestCase):
         self.state.flags.data["audiences"]["vryxcode_review"] = "off"
         self.state.flags.data["audiences"]["vryxcode_projects"] = "off"
         self.state.flags.data["audiences"]["model_bar"] = "off"
+        self.state.flags.data["audiences"]["vryxcode_preview"] = "off"
         self.owner = Client(self.port, self.state.owner_key())
         self.sam_key = self.state.add_user("sam", "free")
         self.sam = Client(self.port, self.sam_key)
