@@ -113,6 +113,12 @@ body.mbar.mbar .wash { background: radial-gradient(circle, var(--core) 0%, var(-
 .vx-where { color: var(--muted); font-size: 13.5px; margin: 6px 2px 0; }
 .vx-where .link { background: none; border: 0; color: var(--accenttext); padding: 0; font: inherit; cursor: pointer; text-decoration: underline; }
 .vx-proj { margin: 10px 0 14px; }
+.code .vx-side { flex: 0 0 280px; min-width: 0; overflow-y: auto; border-right: 1px solid var(--line); padding: 10px 8px 24px; background: color-mix(in srgb, var(--surface) 70%, transparent); }
+.code .vx-side .vx-snew { display: flex; align-items: center; gap: 10px; width: 100%; padding: 9px 10px; border: 0; border-radius: 10px; background: none; color: var(--text); font: inherit; font-size: 15px; cursor: pointer; }
+.code .vx-side .vx-snew:hover { background: var(--surface2); }
+.code .vx-side .vx-snew b { display: inline-grid; place-items: center; width: 24px; height: 24px; border-radius: 99px; background: var(--surface2); font-weight: 600; }
+.code .vx-side .vx-prow { font-size: 14px; padding: 8px 10px; }
+.code .vx-side .vx-prow.on { background: var(--surface2); }
 .vx-phead { display: flex; align-items: center; justify-content: space-between; color: var(--muted); font-size: 14px; padding: 0 6px 4px; }
 .vx-phead .add { background: none; border: 0; color: var(--muted); font-size: 20px; width: 36px; height: 32px; border-radius: 8px; cursor: pointer; }
 .vx-phead .add:hover { background: var(--surface2); color: var(--text); }
@@ -738,6 +744,7 @@ body:not(.vxn) .vx-hero, body:not(.vxn) .vx-dots { display: none; }   /* the new
   </div>
   <button class="fab" id="codeNew"><span style="font-size:22px;line-height:1">+</span> New session</button>
   <div class="main2">
+    <aside class="vx-side" id="vxSide" hidden aria-label="Projects and sessions"></aside>
     <div class="ide-tree" id="ideTree">
       <div class="ith"><span>Files</span><span class="grow"></span><button class="chip" id="ideNew" title="Make a new file">+ New</button><button class="chip" id="ideChanges">Changes</button><button class="chip" id="ideRewind">Rewind</button></div>
       <div class="itl" id="ideFiles"></div>

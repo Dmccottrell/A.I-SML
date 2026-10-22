@@ -6,7 +6,7 @@ const ideCan = () => matchMedia('(min-width: 1100px)').matches;
 const ideBase = (p) => p.split('/').pop();
 function ideApply() {                       // idempotent: it is called after every file refresh, so it only redraws when something really changed
   const on = IDE.want && ideCan() && C.view === 'session', was = IDE.on;
-  IDE.on = on; $('code').classList.toggle('ide', on); $('codeIdeBtn').classList.toggle('on', IDE.want);
+  IDE.on = on; $('code').classList.toggle('ide', on); $('codeIdeBtn').classList.toggle('on', IDE.want); if (typeof vxSide === 'function') vxSide();
   if (!on) return;
   if (IDE.project !== C.project) {          // another project: tabs of the old one go, unless they hold unsaved changes (those keep their own project)
     IDE.project = C.project; ideStash();
@@ -399,6 +399,7 @@ function cEvent(e) {
     feed.append(node); return;
   }
   if (e.kind === 'end') {
+    if (typeof vxSide === 'function') { clearTimeout(C.sideT); C.sideT = setTimeout(() => vxSide(true), 400); }     // vryxcode_projects: the sidebar shows it finished (once, after a whole history is drawn)
     if (C.retry) { C.retry.classList.replace('run', e.finished ? 'ok' : 'no'); C.retry = null; }
     if (e.finished || e.said) {                       // the model talking to the person: what it did, what to run, what it suggests
       if (e.finished) setTimeout(() => { if (!$('codePv').hidden) reloadPreview(); else if (!$('codePreviewBtn').disabled) $('codePreviewBtn').classList.add('pulse'); }, 700);     // the page changed: refresh it, or point at Preview
