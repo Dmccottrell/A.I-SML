@@ -92,6 +92,19 @@ class Page(Base):
             finally:
                 b.close()
 
+    def test_the_working_line_is_plain_text_not_a_card(self):
+        from playwright.sync_api import sync_playwright
+        with sync_playwright() as p:
+            for audience, plain in (("admins", True), ("off", False)):
+                b, page = self.page(p, audience)
+                try:
+                    page.evaluate("renderLive({phase: 'run', tool: 'run', target: 'npm install', secs: 4}, 'working')")
+                    self.assertEqual(page.evaluate("document.getElementById('codeLive').classList.contains('vx-q')"), plain)
+                    border = page.evaluate("getComputedStyle(document.getElementById('codeLive')).borderTopStyle")
+                    self.assertEqual(border == "none", plain, border)
+                finally:
+                    b.close()
+
     def test_off_means_the_cards_as_before(self):
         from playwright.sync_api import sync_playwright
         with sync_playwright() as p:
