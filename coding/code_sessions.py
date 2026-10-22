@@ -168,6 +168,14 @@ class Meter:
         self.seen = self.tokens(messages) + len(reply) // 4
 
 
+# vryxcode_preview: the model knew nothing of the app's live preview, so asked for a link it said it "cannot generate links or host files" and told
+# the person to find the file themselves
+PREVIEW_NOTE = ("\nThe person sees a live Preview of this project's web pages in the app, next to this chat: it opens the page you changed last and "
+                "refreshes by itself after every change. When they ask for a link, or how to see or run what you built, tell them to press Preview "
+                "(top right), or the Preview button under your last message. Never say you cannot make links or host files, and never tell them to "
+                "find the file on their computer. Web pages (HTML, CSS, JavaScript) show there; a Python or Node server cannot, so for those build the "
+                "page in HTML and JavaScript where you can.")
+
 class Session:
     """One task being worked on. `events` only ever grows; the page asks for the ones after the last it saw."""
 
@@ -570,7 +578,7 @@ class Session:
             self.emit("language", text=line, language=lang["name"], mode=lang["mode"])
         try:
             model_text, self._model_text = getattr(self, "_model_text", None), None
-            result = vryxcode.run_task(model_text or self.expand(text), self.wrap(self.generate), self.workspace, self.ask, self.max_turns, self.context_tokens, self.extra_programs, lang_note=languages.note_for(lang) + self._memory_note(),
+            result = vryxcode.run_task(model_text or self.expand(text), self.wrap(self.generate), self.workspace, self.ask, self.max_turns, self.context_tokens, self.extra_programs, lang_note=languages.note_for(lang) + self._memory_note() + (PREVIEW_NOTE if getattr(self.generate, "preview", False) else ""),
                                        out=lambda *_: None, tools=self._tools_now(),
                                        git_identity=self.identity,
                                        command_prefix=self.prefix, container=bool(self.prefix) and not self.remote, history=self.history, chat_mode=True, plan=plan, todo=True, remote=self.remote,

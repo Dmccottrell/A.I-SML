@@ -62,7 +62,7 @@ function envInfo() {
 }
 function resetWork() { C.todo = []; C.events = []; C.ctx = null; if ($('codeCtx')) $('codeCtx').hidden = true; renderTodo(); if (typeof OUT !== 'undefined') { OUT.items = []; OUT.pending = null; if (OUT.open) outRender(); } }
 function newSession() {
-  C.view = 'session'; $('code').classList.remove('home'); $('codeTitle').textContent = 'VryxCode'; C.sid = null; C.saved = false; C.checkpoints = []; C.seen = 0; C.last = null; C.pvAuto = false;
+  C.view = 'session'; $('code').classList.remove('home'); $('codeTitle').textContent = 'VryxCode'; C.sid = null; C.saved = false; C.checkpoints = []; C.seen = 0; C.last = null; C.pvAuto = false; C.pvPage = '';
   offerReply(''); $('codeIn').replaceChildren(); $('codeGo').hidden = false; $('codeStop').hidden = true; resetWork(); renderCodeBar(); emptyFeed(); refreshFiles(); loadCmds(); C.pics = []; C.docs = []; renderPics(); $('codeTask').focus();
 }
 function vxOrganizer(rows) {   // vryxcode_projects: every project with its sessions under it (newest first), like Claude's list; + starts a new one in that project
@@ -88,7 +88,7 @@ function vxSeen() { try { return JSON.parse(localStorage.getItem('emvryx_vx_seen
 function vxMarkSeen(m) { try { const s = vxSeen(); s[m.id] = m.updated; localStorage.setItem('emvryx_vx_seen', JSON.stringify(s)); } catch (e) { /* private window: it just stays in Ready for review */ } }
 function openSession(m) {
   vxMarkSeen(m);
-  C.view = 'session'; $('code').classList.remove('home'); $('codeTitle').textContent = 'VryxCode'; C.sid = m.id; C.project = m.project; C.saved = false; C.checkpoints = m.checkpoints || []; C.pvAuto = false;
+  C.view = 'session'; $('code').classList.remove('home'); $('codeTitle').textContent = 'VryxCode'; C.sid = m.id; C.project = m.project; C.saved = false; C.checkpoints = m.checkpoints || []; C.pvAuto = false; C.pvPage = '';
   if (C.info.models.some((x) => x.id === m.model && x.state === 'ready')) C.model = m.model;
   C.seen = 0; C.last = null; $('codeIn').replaceChildren(); resetWork(); C.chatKey = C.project + '|' + C.model; renderCodeBar(); refreshFiles(); loadCmds(); C.pics = []; C.docs = []; renderPics(); poll();
 }
