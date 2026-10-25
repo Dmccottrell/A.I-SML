@@ -28,6 +28,7 @@ import code_report
 import code_map
 import code_review
 import code_sandbox
+import guardrails
 import harness
 import languages
 import usage_limits as U
@@ -534,6 +535,7 @@ class Session:
                 # words with no tool call: if the turn ends on them they arrive as the "end" message, so no step is shown
             return reply
         call.fixes = getattr(generate, "fixes", False)          # vryxcode_fixes reaches the agent loop (harness.run_agent reads it from the model call)
+        call.guardrails = getattr(generate, "guardrails", False)     # ...and so does vryxcode_guardrails
         return call
 
     def run(self, generate, max_turns, context_tokens, extra_programs=()):
@@ -578,7 +580,7 @@ class Session:
             self.emit("language", text=line, language=lang["name"], mode=lang["mode"])
         try:
             model_text, self._model_text = getattr(self, "_model_text", None), None
-            result = vryxcode.run_task(model_text or self.expand(text), self.wrap(self.generate), self.workspace, self.ask, self.max_turns, self.context_tokens, self.extra_programs, lang_note=languages.note_for(lang) + self._memory_note() + (PREVIEW_NOTE if getattr(self.generate, "preview", False) else ""),
+            result = vryxcode.run_task(model_text or self.expand(text), self.wrap(self.generate), self.workspace, self.ask, self.max_turns, self.context_tokens, self.extra_programs, lang_note=languages.note_for(lang) + self._memory_note() + (PREVIEW_NOTE if getattr(self.generate, "preview", False) else "") + (guardrails.PROMPT_NOTE if getattr(self.generate, "guardrails", False) else ""),
                                        out=lambda *_: None, tools=self._tools_now(),
                                        git_identity=self.identity,
                                        command_prefix=self.prefix, container=bool(self.prefix) and not self.remote, history=self.history, chat_mode=True, plan=plan, todo=True, remote=self.remote,
@@ -703,6 +705,11 @@ class Session:
         except Exception:                                 # the report is a convenience: never fail a turn over it
             report = None
         self._pictures = None                              # the screenshots belong to the message that brought them
+        if getattr(self.generate, "guardrails", False) and data.get("summary"):
+            v = code_review.verdict(data["summary"])        # vryxcode_guardrails: a review's verdict, decided by the severities; only CRITICAL and MAJOR go back
+            if v:
+                data["verdict"] = {"status": v["status"], "blocking": len(v["blocking"]), "nits": len(v["defects"]) - len(v["blocking"]),
+                                   **({"fix": code_review.fix_request(v["blocking"])} if v["blocking"] else {})}
         self.emit("end", **data, **({"report": report} if report else {}))
 
     def _keep_history(self):
