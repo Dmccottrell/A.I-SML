@@ -102,6 +102,8 @@ svg .core { fill: var(--core); stroke: var(--sun); stroke-width: 3; transition: 
 .code .cc-file.open .cc-diff { display: block; }
 .code .cc-done { display: flex; flex-direction: column; gap: 2px; margin: 6px 0; }
 .code .cc-done .vx-pvgo { align-self: flex-start; margin-top: 8px; }
+.code .vx-verdict { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; padding: 10px 12px; margin: 8px 0; border-radius: 12px; border: 1px solid var(--line); font-size: 14px; }
+.code .vx-verdict.ok b { color: #3fb950; } .code .vx-verdict.no b { color: #f5a524; } .code .vx-verdict span { color: var(--muted); }
 .code .cc-done .lead { color: var(--muted); font-size: 13.5px; }
 /* model_bar: the message box in the chosen model's own colour (the rest stays in the app's colours); a pulse in it when a model is picked */
 body.mbar.mbar:not(.vx) .composer .card { border-color: color-mix(in srgb, var(--mbar) 55%, var(--line)); box-shadow: 0 0 0 1px color-mix(in srgb, var(--mbar) 18%, transparent), 0 14px 40px -18px color-mix(in srgb, var(--mbar) 55%, transparent); transition: border-color .6s ease, box-shadow .6s ease; }

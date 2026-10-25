@@ -81,3 +81,70 @@ def review_prompt(diff, changed, cut=0, source="these changes"):
     if not diff.strip():
         return f"Review {source}. There are no changes to look at yet: say so in one sentence."
     return f"{RULES}\n\nReview {source}. Files changed: {names}.{note}\n\n```diff\n{diff}\n```"
+
+
+# vryxcode_guardrails: a review that can end. A reviewer asked to "review this" thinks its job is to find fault, so it is given the request as a checklist,
+# three severities, and told that approving is the best answer when the change does what was asked. Only CRITICAL and MAJOR count; NITPICKs are listed
+# and never worked on by themselves. Every CRITICAL or MAJOR must say which test would fail because of it (the fix starts by writing that test).
+RULES_STRICT = """You are reviewing a code change against the request it was made for. You may only read: do not change any file and do not run anything.
+
+Judge it against this checklist only:
+- it does what the request asked (each part of it)
+- it does not crash or lose data on ordinary input
+- it has no security problem (secrets in code, injection, unsafe file or network use)
+- it does not break something that worked before
+
+Classify every problem you can point to in the change:
+- CRITICAL: a crash, a security hole or lost data
+- MAJOR: part of the request does not work
+- NITPICK: naming, style, small cleanups, micro-speedups (these never block)
+For CRITICAL and MAJOR also name the test that would fail because of it (what it does, what it expects). If you cannot describe such a test, it is
+not a CRITICAL or MAJOR problem. Do not invent problems or edge cases to look thorough: approving is the best outcome when the checklist is met.
+
+Write your findings in plain words, worst first, then end with exactly one JSON block:
+```json
+{"status": "APPROVED", "defects": []}
+```
+or, when something CRITICAL or MAJOR is wrong:
+```json
+{"status": "CHANGES_NEEDED", "defects": [{"severity": "MAJOR", "file": "app.py", "line": 12, "problem": "...", "fix": "...", "test": "..."}]}
+```
+NITPICK items may be listed in "defects" too; with only NITPICKs the status is still APPROVED."""
+
+FIX_GATE = """Fix only these problems from the review, one at a time. For each one, first write a small test that shows the problem and run it:
+if the test passes on the first run, the problem is not real, so drop it and say so; if it fails, fix the code until it passes, with the other tests
+still passing. Do not change or delete the existing tests. Leave NITPICK items alone. Problems:
+{items}"""
+
+
+def strict(prompt, task=""):
+    """The review request with the checklist rules instead of the open ones, and the request the change was made for (the reviewer sees only the
+    request, the change and its files: never the conversation that produced it)."""
+    body = prompt.replace(RULES, RULES_STRICT) if RULES in prompt else RULES_STRICT + "\n\n" + prompt
+    return body + (f"\n\nThe request this change was made for:\n{str(task)[:2000]}" if task else "")
+
+
+def verdict(text):
+    """The JSON block at the end of a strict review -> {"status", "defects", "blocking"} (blocking = CRITICAL and MAJOR only), or None."""
+    import json
+    blocks = re.findall(r"```(?:json)?\s*(\{.*?\})\s*```", str(text or ""), re.S)
+    for b in reversed(blocks):
+        try:
+            v = json.loads(b)
+        except ValueError:
+            continue
+        if not isinstance(v, dict) or "status" not in v:
+            continue
+        defects = [d for d in v.get("defects") or [] if isinstance(d, dict)]
+        blocking = [d for d in defects if str(d.get("severity", "")).upper() in ("CRITICAL", "MAJOR")]
+        status = "CHANGES_NEEDED" if blocking else "APPROVED"            # the router decides from the severities, not from the word the reviewer chose
+        return {"status": status, "defects": defects, "blocking": blocking}
+    return None
+
+
+def fix_request(blocking):
+    """The message that sends the CRITICAL and MAJOR problems back to be fixed, test first (FIX_GATE)."""
+    items = "\n".join(f"- {str(d.get('severity', '')).upper()} in {d.get('file', '?')}"
+                       + (f" line {d.get('line')}" if d.get("line") else "") + f": {d.get('problem', '')}"
+                       + (f" (test: {d.get('test')})" if d.get("test") else "") for d in blocking)
+    return FIX_GATE.format(items=items)

@@ -412,6 +412,12 @@ function cEvent(e) {
           vxPreviewOn() && changed.some(([p]) => /\.(html?|css|js)$/i.test(p)) ? el('button', {class: 'btn small vx-pvgo', onclick: () => openPreview()}, '\u25B6 Preview') : ''));
       }
       if (e.report) feed.append(reportCard(e.report));
+      if (e.verdict) {        // vryxcode_guardrails: a review ends on a verdict; only CRITICAL and MAJOR problems go back, test first, and style notes never loop
+        const v = e.verdict, ok = v.status === 'APPROVED';
+        feed.append(el('div', {class: 'vx-verdict ' + (ok ? 'ok' : 'no')}, el('b', {}, ok ? '\u2713 Approved' : v.blocking + (v.blocking === 1 ? ' serious problem' : ' serious problems')),
+          el('span', {}, ok ? (v.nits ? ' \u00b7 ' + v.nits + (v.nits === 1 ? ' small style note, not worked on' : ' small style notes, not worked on') : ' \u00b7 nothing to fix') : ' \u00b7 each one is proved with a failing test before it is fixed'),
+          ok || !v.fix ? '' : el('button', {class: 'btn small', onclick: () => { $('codeTask').value = v.fix; $('codeGo').click(); }}, 'Fix them, test first')));
+      }
       if (e.plan) feed.append(el('div', {class: 'plan-actions'}, el('button', {class: 'btn small', onclick: () => { setMode(C.prevMode === 'plan' ? 'ask' : C.prevMode); $('codeTask').value = 'Go ahead and build it as planned.'; $('codeGo').click(); }}, 'Build it'), el('button', {class: 'chip', onclick: () => { $('codeTask').value = 'Change the plan: '; $('codeTask').focus(); }}, 'Change the plan')));
       if (e.finished || e.plan) offerReply(e.plan ? 'Go ahead and build it as planned.' : (e.next || [])[0]);
       if (e.next && e.next.length) feed.append(el('div', {class: 'cc-next'}, el('span', {class: 'lead'}, 'Suggested next:'),

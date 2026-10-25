@@ -59,6 +59,8 @@ import subprocess
 import sys
 import tempfile
 
+import guardrails
+
 TOOL_CALL = re.compile(r"<\|tool_call\|>(.*?)<\|end_tool_call\|>", re.S)
 QWEN_TOOL_CALL = re.compile(r"<tool_call>(.*?)</tool_call>", re.S)       # the format Qwen models already know
 ALLOWED_PROGRAMS = {"python", "python3", "pytest", "ls", "cat", "head", "tail", "grep", "wc",
@@ -1490,6 +1492,7 @@ def run_agent(task, generate, sandbox, max_turns=8, system=None, project=True, h
     fixes = bool(getattr(generate, "fixes", False))                  # vryxcode_fixes: nearest lines on a missed edit, a nudge on the same error twice, stop messages that fit
     last_err, same_err = None, 0
     promised = 0                                                     # times it said what it would do next and then stopped (vryxcode_fixes)
+    guard = guardrails.Guard(sandbox.root, checkpoints) if getattr(generate, "guardrails", False) else None    # vryxcode_guardrails: no circles, progress or stop
     if build and "rollback" not in sandbox.extra_tools:
         sandbox.register_tool("rollback", lambda: checkpoints.restore())
     for turn in range(1, max_turns + 1):
@@ -1513,6 +1516,10 @@ def run_agent(task, generate, sandbox, max_turns=8, system=None, project=True, h
             refusal = permissions.check(name, args)
             if refusal:
                 raise ToolError(refusal)
+            if guard:
+                why = guard.before(name, args)
+                if why:
+                    raise ToolError(why)
             if name == "run":
                 blocked = hooks.run(sandbox, "before_run")
                 if blocked:
@@ -1528,6 +1535,17 @@ def run_agent(task, generate, sandbox, max_turns=8, system=None, project=True, h
                 if problems:
                     raise ToolError("not finished yet: " + "; ".join(problems))
             result, done = sandbox.call(name, args)
+            if guard and not done:
+                try:
+                    if name in ("write_file", "edit_file", "delete_file"):
+                        guard.after_change()
+                    elif name == "run" and isinstance(args, dict) and TEST_COMMAND.search(str(args.get("command", ""))):
+                        note = guard.after_test(result)
+                        if note:
+                            result = str(result) + "\n" + note
+                except guardrails.Stop as stop:
+                    messages.append({"role": "user", "content": format_result(str(result))})
+                    return {"finished": False, "turns": turn, "messages": messages, "episodes": episodes, "stopped": "guardrail", "summary": stop.summary}
             if name in ("write_file", "edit_file") and isinstance(args, dict) and str(args.get("path", "")).lower().endswith((".html", ".htm", ".css", ".js")):
                 web_unchecked = True
             elif name == "check_page":
