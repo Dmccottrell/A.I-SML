@@ -41,6 +41,7 @@ jobs:
           path: ~/.cache/ms-playwright
           key: playwright-${{ runner.os }}-${{ hashFiles('requirements.txt') }}-v1
       - name: Install the browser
+        timeout-minutes: 10                # a download that hangs fails here (and can be re-run) instead of holding the run for half an hour
         run: python -m playwright install --with-deps chromium
       - name: Find the browser the browser tests use
         run: |
@@ -49,4 +50,26 @@ jobs:
         if: matrix.shard == 1
         run: python tools/lint.py
       - name: Tests
+        timeout-minutes: 15
         run: python scripts/run_tests.py --shard ${{ matrix.shard }}/2
+
+  # The project's guardrails (tools/guard_repo.py): existing tests are not deleted or weakened, no new unconditional skips, a fix comes with a
+  # test, no secrets. Pull requests only (it compares the change with main).
+  guard:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Guardrails
+        env:
+          PR_TITLE: ${{ github.event.pull_request.title }}
+        run: |
+          git fetch -q origin "${{ github.base_ref }}"
+          git checkout -q -B guard-head "${{ github.event.pull_request.head.sha }}"
+          python tools/guard_repo.py --base "origin/${{ github.base_ref }}"
