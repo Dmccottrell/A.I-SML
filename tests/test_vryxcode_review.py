@@ -56,7 +56,9 @@ class Page(Base):
     def page(self, p, audience="admins"):
         self.state.flags.data["audiences"]["vryxcode_review"] = audience
         b = p.chromium.launch(executable_path=find_browser())
-        page = b.new_context(viewport={"width": 420, "height": 860}, extra_http_headers={"Authorization": "Bearer " + self.state.owner_key()}).new_page()
+        ctx = b.new_context(viewport={"width": 420, "height": 860}, extra_http_headers={"Authorization": "Bearer " + self.state.owner_key()})
+        ctx.route(lambda url: not url.startswith(f"http://127.0.0.1:{self.port}/"), lambda r: r.abort())    # only the test server: a web font that cannot load must not slow the page
+        page = ctx.new_page()
         page.goto(f"http://127.0.0.1:{self.port}/")
         wait_for(lambda: page.evaluate("typeof S !== 'undefined' && !!S.state"), 15)
         page.evaluate("document.querySelectorAll('.tour').forEach((e) => e.remove()); openCode(); newSession()")
@@ -100,8 +102,11 @@ class Page(Base):
                 try:
                     page.evaluate("renderLive({phase: 'run', tool: 'run', target: 'npm install', secs: 4}, 'working')")
                     self.assertEqual(page.evaluate("document.getElementById('codeLive').classList.contains('vx-q')"), plain)
-                    border = page.evaluate("getComputedStyle(document.getElementById('codeLive')).borderTopStyle")
-                    self.assertEqual(border == "none", plain, border)
+                    # the VryxCode stylesheet (the card's dashed border) is added once the page knows its flags and loads in the background:
+                    # wait for the look to settle instead of reading it at once
+                    border = lambda: page.evaluate("getComputedStyle(document.getElementById('codeLive')).borderTopStyle")
+                    wait_for(lambda: (border() == "none") == plain, 10)
+                    self.assertEqual(border() == "none", plain, border())
                 finally:
                     b.close()
 
