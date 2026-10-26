@@ -41,8 +41,14 @@ jobs:
           path: ~/.cache/ms-playwright
           key: playwright-${{ runner.os }}-${{ hashFiles('requirements.txt') }}-v1
       - name: Install the browser
-        timeout-minutes: 10                # a download that hangs fails here (and can be re-run) instead of holding the run for half an hour
-        run: python -m playwright install --with-deps chromium
+        timeout-minutes: 10                # a download that hangs fails here instead of holding the run for half an hour
+        # The browser itself comes from Playwright's own download (cached above). The system packages it needs are usually already on the runner;
+        # they are installed from Ubuntu's mirror (slow some days: it stalled two runs on fonts alone) only when the browser cannot start without them.
+        run: |
+          python -m playwright install chromium
+          if ! python -c "from playwright.sync_api import sync_playwright as s; p = s().start(); p.chromium.launch().close(); p.stop()"; then
+            python -m playwright install-deps chromium
+          fi
       - name: Find the browser the browser tests use
         run: |
           echo "EMVRYX_BROWSER=$(python -c 'from playwright.sync_api import sync_playwright as s; p = s().start(); print(p.chromium.executable_path); p.stop()')" >> "$GITHUB_ENV"
