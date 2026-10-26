@@ -15,6 +15,7 @@ what the model says about its own work:
 
 Pure Python: harness.run_agent calls before() ahead of a change and after_change() / after_test() after it.
 """
+import difflib
 import hashlib
 import os
 import re
@@ -81,6 +82,12 @@ def is_test_file(path):
     return bool(TEST_FILE.search(str(path or "").replace("\\", "/").lstrip("./")))
 
 
+def changed_lines(old, new):
+    """How many lines a change really touches: the lines taken out or put in, by a line diff (one line added at the top is 1, not the whole file)."""
+    sm = difflib.SequenceMatcher(None, old, new, autojunk=False)
+    return sum(max(i2 - i1, j2 - j1) for op, i1, i2, j1, j2 in sm.get_opcodes() if op != "equal")
+
+
 def _lines(text):
     return len(str(text or "").splitlines()) or (1 if text else 0)
 
@@ -128,16 +135,17 @@ class Guard:
             return None
         full = os.path.join(self.root, path)
         if name == "edit_file":
-            size = max(_lines(args.get("old")), _lines(args.get("new")))
+            size = changed_lines(str(args.get("old") or "").splitlines(), str(args.get("new") or "").splitlines())
         elif os.path.isfile(full):
-            try:
-                with open(full, encoding="utf-8", errors="replace") as f:
-                    old = f.read().splitlines()
-            except OSError:
-                old = []
-            new = str(args.get("content", "")).splitlines()
-            same = sum(1 for a, b in zip(old, new) if a == b)
-            size = max(len(old), len(new)) - same
+            if args.get("append"):
+                size = _lines(args.get("content"))       # a part added to the end: only the new lines
+            else:
+                try:
+                    with open(full, encoding="utf-8", errors="replace") as f:
+                        old = f.read().splitlines()
+                except OSError:
+                    old = []
+                size = changed_lines(old, str(args.get("content", "")).splitlines())
         else:
             return None                                  # a new file (a new test, a new module) is not a fix to existing code
         limit = NARROW_LINES if self.fixes + 1 >= NARROW_FROM else WIDE_LINES
