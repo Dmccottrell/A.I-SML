@@ -25,8 +25,12 @@ async function showHome() {
 }
 function envLine(e) { return e ? [icon(ENV_ICON(e.id)), el('span', {}, e.name)] : []; }
 function ENV_ICON(id) { return id === 'sandbox' ? 'box' : id === 'cloud' ? 'cloud' : 'laptop'; }
+let homeDraw = 0;
 async function renderHome() {
-  const [r, ri] = await Promise.all([api('/api/code/sessions'), api('/api/code')]); C.sessions = (await r.json()).sessions || []; C.info = await ri.json();
+  const mine = ++homeDraw;                         // two loads at once (opening, then a filter): only the newest is drawn, an older slow answer never replaces it
+  const [r, ri] = await Promise.all([api('/api/code/sessions'), api('/api/code')]); const sessions = (await r.json()).sessions || [], info = await ri.json();
+  if (mine !== homeDraw) return;
+  C.sessions = sessions; C.info = info;
   $('codeEnvs').replaceChildren(el('span', {class: 'lbl'}, 'Environments'), ...C.info.environments.map((e) => el('button', {class: 'chip', onclick: () => envInfo()}, el('span', {class: 'dot' + (e.available ? ' on' : '')}), e.name)));
   $('codeFilter').textContent = (FILTERS.find((f) => f[0] === C.filter) || FILTERS[0])[1] + ' \u25be';
   const live = ['starting', 'working'], pick = (x) => C.filter === 'all' || (C.filter === 'running' && live.includes(x.state)) || (C.filter === 'queued' && x.state === 'queued') || (C.filter === 'needs' && x.state === 'asking') || (C.filter === 'done' && !live.includes(x.state) && !['asking', 'queued'].includes(x.state));

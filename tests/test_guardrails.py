@@ -93,6 +93,17 @@ class Guard(unittest.TestCase):
         self.assertIsNone(g.before("edit_file", {"path": "app.py", "old": "a\nb", "new": "a\nc"}))
         self.assertIsNone(g.before("write_file", {"path": "new_module.py", "content": "x\n" * 300}))   # a new file is not a fix to old code
 
+    def test_a_small_change_is_measured_as_small(self):
+        body = "".join(f"line{i}\n" for i in range(300))
+        g = G.Guard(project({"app.py": body}))
+        g.after_test("exit code 1\nFAILED (failures=1)")
+        g.fixes = 2                                                       # the tightest limit: 15 lines
+        self.assertIsNone(g.before("write_file", {"path": "app.py", "content": "import os\n" + body}))     # one line added at the top
+        self.assertIsNone(g.before("write_file", {"path": "app.py", "content": "x = 1\n", "append": True}))   # one line added at the end
+        self.assertIsNone(g.before("edit_file", {"path": "app.py", "old": "".join(f"line{i}\n" for i in range(30)),
+                                                 "new": "".join(f"line{i}\n" for i in range(29)) + "changed\n"}))   # 30 lines of context, 1 changed
+        self.assertIn("15 lines", g.before("write_file", {"path": "app.py", "content": "x\n" * 20, "append": True}))
+
     def test_the_tests_are_locked_while_fixing(self):
         d = project({"tests/test_app.py": "assert 1\n", "app.py": "x\n"})
         g = G.Guard(d)

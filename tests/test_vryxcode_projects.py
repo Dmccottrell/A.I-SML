@@ -98,6 +98,25 @@ class Page(Base):
                 finally:
                     b.close()
 
+    def test_an_older_list_never_replaces_a_newer_one(self):
+        from playwright.sync_api import sync_playwright
+        with sync_playwright() as p:
+            b, page = self.page(p)
+            try:
+                page.wait_for_timeout(500)                                   # the page's own first load is over
+                # the first answer is slow and has the older list; the second, asked for later, answers at once
+                page.evaluate("""(() => { let n = 0; const real = api;
+                    const rows = (id, title) => ({json: async () => ({sessions: [{id, title, project: 'site', state: 'done', updated: 1, age: 'now'}]})});
+                    api = async (u, o) => { if (u !== '/api/code/sessions') return real(u, o); n += 1;
+                      if (n === 1) { await new Promise((r) => setTimeout(r, 1200)); return rows('old', 'Old list'); } return rows('new', 'New list'); };
+                    C.filter = 'all'; renderHome(); setTimeout(renderHome, 200); })()""")
+                page.wait_for_timeout(2000)
+                text = page.inner_text("#codeList")
+                self.assertIn("New list", text)
+                self.assertNotIn("Old list", text)
+            finally:
+                b.close()
+
     def test_the_organizer_lists_projects_with_their_sessions(self):
         from playwright.sync_api import sync_playwright
         with sync_playwright() as p:

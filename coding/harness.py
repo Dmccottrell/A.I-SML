@@ -1042,6 +1042,8 @@ def promises_work(words):
     last = tail[-400:]
     if not last or last.rstrip().endswith("?") or re.search(r"\b(?:would you like|do you want|shall i|should i|let me know|which (?:one|option)|your (?:choice|answer))\b", last, re.I):
         return False
+    if re.search(r"\b(?:done|finished|complete|completed|all set|is ready|are ready|works now)\b|\bif you (?:want|would like|'d like|like)\b|\bwant me to\b", last, re.I):
+        return False                                    # a finished summary or an offer ends the work: pushing on here is the "always find more to do" loop
     return bool(_PROMISE.search(last))
 
 

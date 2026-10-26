@@ -102,6 +102,12 @@ class WrittenAsJson(unittest.TestCase):
         self.assertTrue(harness.promises_work("Now I'll add some basic AI behavior to generate quests and handle player actions."))
         self.assertFalse(harness.promises_work("Done. Open index.html to play."))
         self.assertFalse(harness.promises_work("Next I can add combat. Would you like dice or cards?"))
+        # a finished summary, or an offer, is the end of the work, not a promise: pushing on here is the "always find more to do" loop
+        for done in ("Done! The game is in index.html. Let's test it: press Preview to play.",
+                     "All finished. I will now explain how to run it: open a terminal and run python main.py.",
+                     "The page is ready. Next, I'll add sounds if you want them."):
+            self.assertFalse(harness.promises_work(done), done)
+        self.assertTrue(harness.promises_work("I read the files. Now I'll add the scoring."))
 
     def _run(self, replies, fixes):
         it = iter(replies)
