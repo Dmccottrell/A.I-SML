@@ -533,6 +533,9 @@ $('codeGo').onclick = async () => {
 };
 // the preview follows the work: on a wide screen it opens beside the chat by itself and refreshes after each change; on a phone the Preview button lights up
 function livePreview(events) {
+  if (events.some((e) => e.kind === 'result' && /^The app is running/.test(String(e.text || '')))) {
+    $('codePreviewBtn').disabled = false; openPreview();         // vryxcode_servers: the app VryxCode started opens by itself
+  }
   for (const e of events) {                    // vryxcode_preview: the web page this session changed last is the one the preview shows
     const m = e.kind === 'step' && ['write_file', 'edit_file'].includes(e.tool) && /^(?:write|edit) (\S+\.html?)\b/i.exec(String(e.preview || ''));
     if (m) C.pvPage = m[1];

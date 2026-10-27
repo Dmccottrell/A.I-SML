@@ -342,6 +342,11 @@ GITHUB_TOOL_NOTE = (" github(action) with action status, pull or push works with
                     "the user is asked before anything is pulled or pushed.")
 
 
+APP_NOTE = (" start_app(command, port) runs a server you built (Flask, FastAPI, Express...) so the person can use it in the Preview: give the command "
+            "that starts it (like python app.py) and the port it listens on (like 5000); make it listen on 0.0.0.0 or 127.0.0.1 and read the port from "
+            "the PORT setting when you can. It waits until the app answers and tells you what came back, or what the app printed if it failed. "
+            "app_logs() shows what the running app printed (its errors); stop_app() stops it. Start it again after you change its code. It has no "
+            "internet: install packages first (pip or npm install), and keep data in a file or SQLite.")
 CHECK_PAGE_NOTE = (" check_page(path, width, height) opens a web page of this project in a hidden browser (phone size by default), clicks around, and tells you the errors and "
                    "layout problems it finds (sideways scrolling, tiny buttons, broken pictures, no labels) with a screenshot for the person. Use it after you build or change a page, "
                    "fix what it reports, and check again. It cannot reach the internet except a few common CDNs. "
@@ -404,9 +409,11 @@ def run_task(task, generate, workspace, ask, max_turns=12, context_tokens=None, 
     programs = set(harness.ALLOWED_PROGRAMS) | set(extra_programs)
     rules = {"write_file": "ask", "edit_file": "ask", "run": "ask", "helper": "allow", "ask_user": "allow", "remember": "allow", "web_search": "allow",
              "fetch_page": "ask"}                                 # opening a page asks first (an address can carry data out), as in Claude Code
+    rules.update({"start_app": "ask", "stop_app": "allow", "app_logs": "allow"})     # starting runs the code it wrote (sealed, but it asks like a command)
     if plan:
         rules = {"write_file": "deny", "edit_file": "deny", "run": "deny", "git": "deny", "github": "deny", "helper": "allow", "ask_user": "allow",
                  "web_search": "allow", "remember": "deny", "fetch_page": "deny"}
+        rules.update({"start_app": "deny", "stop_app": "deny", "app_logs": "allow"})
         if full:                                                  # as in Claude Code's plan mode: commands that only look may still run
             rules["run"] = "ask"
             ask = lambda name, args: name == "run" and harness.read_only_command((args or {}).get("command", ""))
@@ -429,7 +436,7 @@ def run_task(task, generate, workspace, ask, max_turns=12, context_tokens=None, 
                 sandbox.register_tool(name, fn)
         if sandbox.full:                                          # the helper only looks, so Plan first may use it too
             sandbox.register_tool("helper", make_helper(generate, sandbox, context_tokens))
-        system = SYSTEM + (harness.FULL_TOOL_NOTE if sandbox.full else "") + (harness.SHELL_NOTE if sandbox.shell else "") + (GITHUB_TOOL_NOTE if "github" in (tools or {}) else "") + (CHECK_PAGE_NOTE if "check_page" in (tools or {}) else "") + (TODO_NOTE if todo else "") + (BUILD_NOTE if build else "") + (PLAN_NOTE if plan else "") + (lang_note or "")
+        system = SYSTEM + (harness.FULL_TOOL_NOTE if sandbox.full else "") + (harness.SHELL_NOTE if sandbox.shell else "") + (GITHUB_TOOL_NOTE if "github" in (tools or {}) else "") + (CHECK_PAGE_NOTE if "check_page" in (tools or {}) else "") + (APP_NOTE if "start_app" in (tools or {}) else "") + (TODO_NOTE if todo else "") + (BUILD_NOTE if build else "") + (PLAN_NOTE if plan else "") + (lang_note or "")
         result = harness.run_agent(task, generate, sandbox, max_turns=max_turns, system=system, ask=ask, context_tokens=context_tokens,
                                    permissions=harness.Permissions(rules=rules, ask=ask), history=history, chat_mode=chat_mode, checks=checks, steady=todo, build=build)
     out(("Done: " if result["finished"] else "Stopped without finishing: ") + (result["summary"] or f"{result['turns']} steps used") )

@@ -106,10 +106,12 @@ HEAD_TAG = re.compile(rb"<head\b[^>]*>", re.I)                                 #
 ROOT_URL = re.compile(rb"""((?:\bsrc|\bhref|\baction|\bposter)\s*=\s*["'])/(?!/)([^"']*)""", re.I)       # src="/style.css": the page lives in a folder, not at the site's root, so "/" would miss the project
 
 
-def inject(html, fixes=False):
+def inject(html, fixes=False, root_urls=True):
     """The reporter script added at the very top of an HTML page (after <head> when there is one), so it sees every error that follows.
-    The page's own scripts get `crossorigin` (the frame has an empty identity, so its own files count as another site's: without it a browser hides the details of their errors)."""
-    html = ROOT_URL.sub(lambda m: m.group(1) + (m.group(2) or b"./"), html)
+    The page's own scripts get `crossorigin` (the frame has an empty identity, so its own files count as another site's: without it a browser hides the details of their errors).
+    root_urls=False leaves addresses that start with "/" alone (an app's pages, which code_servers already pointed under its preview path)."""
+    if root_urls:
+        html = ROOT_URL.sub(lambda m: m.group(1) + (m.group(2) or b"./"), html)
     html = LOCAL_SCRIPT.sub(rb'<script crossorigin="anonymous"\1', html)
     m = HEAD_TAG.search(html)
     first = REPORTER + (STORAGE_SHIM if fixes else b"")

@@ -10,6 +10,8 @@ import harness
 import vryxcode
 import github_link
 import code_preview
+import code_sandbox
+import code_servers
 import browser_check
 from app_shared import HERE, OUTSIDE_NOTE
 
@@ -150,6 +152,27 @@ class StateCode:
             self._ci = code_ci.Watcher(os.path.join(self.data_dir, "ci_watch.json") if self.data_dir else None, look,
                                        lambda who, project, model, sha, failed: routes_code.start_fix(self, who, project, model), notify)
         return self._ci
+
+    def app_tools(self, user, project):
+        """start_app / stop_app / app_logs (flag vryxcode_servers): the model starts the server it built, sealed in a container with no network,
+        and the person uses it in the Preview (coding/code_servers.py). Never on this computer: without Docker it is refused."""
+        def start_app(command="", port=5000):
+            ok, why = self.code.sandbox_ready() if self.code.sandbox.get("mode") == "docker" else code_sandbox.available(self.code.sandbox.get("image", code_sandbox.DEFAULT_IMAGE))
+            if not ok:
+                raise harness.ToolError("apps run only in the isolated sandbox (Docker), and it is not ready on the Emvryx computer: " + why
+                                        + ". Build the page in HTML and JavaScript instead, so it shows in the Preview.")
+            folder = self.code.project_path(user, project)
+            try:
+                return self.app_servers.start(user, project, self.code.prefix_for(folder, force=True), command, port)
+            except code_servers.AppError as e:
+                raise harness.ToolError(str(e))
+
+        def stop_app():
+            return "The app was stopped." if self.app_servers.stop(user, project) else "No app was running."
+
+        def app_logs():
+            return self.app_servers.logs(user, project)
+        return {"start_app": start_app, "stop_app": stop_app, "app_logs": app_logs}
 
     def browser_tool(self, user, project):
         """The `check_page` tool the model may call: a hidden browser opens a page of the project, clicks around and audits it (coding/browser_check.py)."""

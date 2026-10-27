@@ -797,6 +797,8 @@ body:not(.vxn) .vx-hero, body:not(.vxn) .vx-dots { display: none; }   /* the new
         <span class="title">Preview</span>
         <button class="chip" data-size="phone">Phone</button><button class="chip" data-size="tablet">Tablet</button><button class="chip" data-size="desktop">Wide</button>
         <button class="chip" id="pvReload" aria-label="Reload the preview">&#8635;</button>
+        <button class="chip" id="pvLogs" hidden title="What the app printed (its errors)">Logs</button>
+        <button class="chip" id="pvStopApp" hidden title="Stop the app">Stop app</button>
       </div>
       <div class="pvstage" id="pvStage" data-size="phone"><iframe id="pvFrame" title="Preview of your project" sandbox="allow-scripts allow-forms allow-popups allow-modals allow-pointer-lock" referrerpolicy="no-referrer"></iframe></div>
       <div class="pvfoot" id="pvFoot"></div>

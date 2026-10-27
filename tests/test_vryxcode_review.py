@@ -65,6 +65,17 @@ class Page(Base):
         wait_for(lambda: page.evaluate("C.view === 'session'"), 15)
         return b, page
 
+    def test_a_session_started_while_vryxcode_opens_is_not_replaced_by_the_home(self):
+        from playwright.sync_api import sync_playwright
+        with sync_playwright() as p:
+            b, page = self.page(p)
+            try:
+                page.evaluate("showHome(); openCode(); newSession()")       # New session tapped while VryxCode is still loading
+                page.wait_for_timeout(1500)                                   # ...and the loading finishes afterwards
+                self.assertEqual(page.evaluate("C.view"), "session")
+            finally:
+                b.close()
+
     EVENTS = ("cEvent({kind: 'start', task: 'make a landing page'});"
               "cEvent({kind: 'step', tool: 'read_file', preview: 'read_file {\"path\": \"about-acme.md\"}', raw: '', secs: 6.2});"
               "cEvent({kind: 'result', text: '1: Acme makes rockets'});"
