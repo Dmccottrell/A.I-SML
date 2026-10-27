@@ -62,7 +62,9 @@ const APK_URL = 'https://github.com/Dmccottrell/A.I-SML/releases/download/androi
 function sxSections(id) {
   const st = S.state, s = st.settings, w = st.window, a = SX.acct || {mfa: {}}, owner = st.admin;
   const A = {
-    general: [...(featureOn('apk_link') ? [{title: 'Android app', rows: [      // apk_link: one fixed link, always the newest app (the android-latest release)
+    general: [...(featureOn('pwa_push') ? [{title: 'Notifications', rows: [   // pwa_push (pwa.js): this device is told when an answer or VryxCode is ready
+      {title: 'Notifications on this device', desc: 'When an answer or a VryxCode session is ready while Emvryx is closed. Only a short line is sent, never the chat.', ctl: pwaPushRow(), keys: 'notifications push alerts phone'}]}] : []),
+      ...(featureOn('apk_link') ? [{title: 'Android app', rows: [      // apk_link: one fixed link, always the newest app (the android-latest release)
       {title: 'Get the Android app', desc: 'Always the newest version. On your phone, tap Download and open the file (allow installing from your browser if it asks). On a computer, scan the code with the phone.',
         ctl: el('div', {style: 'display:flex;gap:8px;flex-wrap:wrap'}, el('a', {class: 'sbtn', href: APK_URL, rel: 'noopener'}, 'Download'),
           sxBtn('Show code', () => dialog([el('h2', {}, 'Scan with your phone'), el('div', {style: 'display:grid;place-items:center;margin:8px 0'}, qrSvg(APK_URL, 5)), el('small', {style: 'color:var(--muted);word-break:break-all'}, APK_URL)], 'Close'))),

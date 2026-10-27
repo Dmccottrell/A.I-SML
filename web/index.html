@@ -137,6 +137,13 @@ body.cp-open main { margin-right: min(46vw, 760px); }
 .cp-proj { display: flex; align-items: center; gap: 4px; padding: 6px 10px; font-size: 14px; font-weight: 600; }
 .cp-proj .icon { width: 28px; height: 28px; min-height: 0; }
 #chatList .label:empty { display: none; }
+.pwa-update { position: fixed; left: 50%; bottom: 18px; transform: translateX(-50%); z-index: 70; display: flex; align-items: center; gap: 10px; padding: 10px 14px; border-radius: 14px; background: var(--surface); border: 1px solid var(--line); box-shadow: 0 10px 30px rgba(0,0,0,.35); }
+.pwa-off { position: fixed; inset: 0; z-index: 80; overflow: auto; background: var(--bg); color: var(--text); padding: 16px; display: flex; flex-direction: column; gap: 10px; max-width: 760px; margin: 0 auto; }
+.pwa-offbar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; padding: 10px 12px; border-radius: 12px; border: 1px solid var(--line); background: var(--surface); color: var(--muted); }
+.pwa-offbar b { color: var(--text); }
+.pwa-off .msg { max-width: 100%; }
+.pwa-outbox { display: flex; flex-direction: column; gap: 8px; margin-top: 10px; }
+.pwa-outbox textarea { background: var(--surface2); color: var(--text); border: 1px solid var(--line); border-radius: 12px; padding: 10px; font: inherit; }
 .cp-results { display: flex; flex-direction: column; gap: 6px; max-height: 60vh; overflow: auto; margin-top: 8px; }
 .acc-bars { display: flex; align-items: flex-end; gap: 3px; height: 42px; margin: 6px 0; }
 .acc-bars i { width: 10px; border-radius: 3px 3px 0 0; background: var(--accent); opacity: .8; }
@@ -911,6 +918,7 @@ body:not(.vxn) .vx-hero, body:not(.vxn) .vx-dots { display: none; }   /* the new
 <script src="/js/ide.js"></script>
 <script src="/js/preview.js"></script>
 <script src="/js/auth.js"></script>
+<script src="/js/pwa.js"></script>
 <script src="/js/boot.js"></script>
 </body>
 </html>

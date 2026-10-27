@@ -2,6 +2,7 @@
 routes_get.py - The web routes for reading (GET): pages and files, what a person can read, and what the admins can read. Each part returns UNHANDLED when the address is not one of its own, and the next part is tried.
 """
 import os, sys; sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), os.pardir)); import emvryx_paths  # noqa: E402,F401  (the code folders become importable)
+import json
 import re
 import data_tools
 import app_skills
@@ -22,6 +23,28 @@ import shares
 from app_shared import BACKUP_NAME, PAIR_PAGE
 from app_shared import UNHANDLED
 
+
+
+WEB_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), os.pardir, "web")
+
+
+def shell_files():
+    """What the installed app keeps for opening offline: the page, its styles, every script in web/js (a new one is included by itself), icons."""
+    js = sorted(n for n in os.listdir(os.path.join(WEB_DIR, "js")) if n.endswith(".js"))
+    return ["/", "/editor.js", "/vryx.css", "/modern.css"] + ["/js/" + n for n in js] + ["/icon.svg", "/icon-192.png", "/manifest.webmanifest"]
+
+
+def shell_version():
+    """Changes whenever one of those files changes (after an update), so the installed app takes the new ones and can say so."""
+    import hashlib
+    h = hashlib.sha1()
+    for p in ["index.html", "sw.js"] + [x.lstrip("/") for x in shell_files() if x != "/"]:
+        try:
+            st = os.stat(os.path.join(WEB_DIR, p))
+            h.update(f"{p}:{st.st_mtime_ns}:{st.st_size};".encode())
+        except OSError:
+            continue
+    return h.hexdigest()[:12]
 
 class RoutesGet:
     """The GET routes."""
@@ -81,8 +104,10 @@ class RoutesGet:
             return self._file(path[1:] + ".html", "text/html; charset=utf-8")
         if path == "/manifest.webmanifest":
             return self._file("manifest.webmanifest", "application/manifest+json")
-        if path == "/sw.js":
-            return self._file("sw.js", "text/javascript")
+        if path == "/sw.js":                          # the offline list and the version are worked out from the files themselves
+            with open(os.path.join(WEB_DIR, "sw.js"), encoding="utf-8") as f:
+                body = f.read().replace("__VERSION__", shell_version()).replace("__FILES__", json.dumps(shell_files()).replace('"', "'"))
+            return self._send(200, body.encode(), "text/javascript")
         mjs = re.fullmatch(r"/js/([a-z0-9_-]{1,40})\.js", path)
         if mjs:                                       # the page's own script files (web/js/): one file per part of the app
             return self._file("js/" + mjs.group(1) + ".js", "text/javascript; charset=utf-8")
@@ -124,6 +149,8 @@ class RoutesGet:
             ans = next((x for x in reversed(msgs) if x["role"] == "assistant"), None)
             q = next((x["content"] for x in reversed(msgs) if x["role"] == "user"), "")
             return self._send(200, {"items": chat_plus.followups(q, ans["content"]) if ans and ans["status"] == "done" else []})
+        if path == "/api/push" and self.state.flags.on("pwa_push", who):              # pwa_push: the server's public key for the browser to subscribe with
+            return self._send(200, {"key": self.state.push.public_key(), "devices": self.state.push.subscribed(who["user"])})
         if path == "/api/projects" and self.state.flags.on("chat_projects", who):
             return self._send(200, {"projects": self.state.store(who["user"]).projects()})
         m = re.fullmatch(r"/api/chats/(-?\d+)", path)

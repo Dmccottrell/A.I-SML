@@ -4,6 +4,7 @@ routes_chat.py - The chat web routes: the app state, a chat's messages, sending 
 import os, sys; sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), os.pardir)); import emvryx_paths  # noqa: E402,F401  (the code folders become importable)
 import json
 import queue
+import threading
 import time
 import chat_polish
 import app_links
@@ -308,4 +309,18 @@ class RoutesChat:
                     emit("error", payload)
                     return
         except (BrokenPipeError, ConnectionResetError, OSError):
-            pass                                               # the page went away (the app was closed or switched away from): the reply keeps being written and saved, and shows when they come back
+            # the page went away (the app was closed or switched away from): the reply keeps being written and saved, and shows when they come back.
+            # pwa_push: when it is ready, the browsers they turned notifications on in are told
+            if st.flags.on("pwa_push", who) and st.push.subscribed(who["user"]):
+                def tell():
+                    while True:
+                        try:
+                            kind, _ = q.get(timeout=900)
+                        except queue.Empty:
+                            return
+                        if kind == "done":
+                            st.push.send(who["user"], "Emvryx", "Your answer is ready: " + (store.title(cid) or "your chat")[:60], "/")
+                            return
+                        if kind == "error":
+                            return
+                threading.Thread(target=tell, daemon=True).start()

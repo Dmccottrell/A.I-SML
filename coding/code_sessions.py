@@ -727,6 +727,12 @@ class Session:
                 cb(self, kind)
             except Exception:
                 pass
+        push = getattr(self, "on_push", None)              # pwa_push: the browsers this person turned notifications on in
+        if push:
+            try:
+                push(self, kind)
+            except Exception:
+                pass
 
     def _end(self, **data):
         """The end of a turn. When it did any work the end carries its verification report (so it is in the history on disk too)."""

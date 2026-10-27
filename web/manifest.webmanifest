@@ -32,5 +32,76 @@
     }
   ],
   "description": "Emvryx: your AI assistant",
-  "scope": "/"
+  "scope": "/",
+  "id": "/",
+  "shortcuts": [
+    {
+      "name": "New chat",
+      "short_name": "New chat",
+      "url": "/?pwa=new",
+      "icons": [
+        {
+          "src": "/icon-192.png",
+          "sizes": "192x192"
+        }
+      ]
+    },
+    {
+      "name": "VryxCode",
+      "short_name": "VryxCode",
+      "url": "/?pwa=code",
+      "icons": [
+        {
+          "src": "/icon-192.png",
+          "sizes": "192x192"
+        }
+      ]
+    },
+    {
+      "name": "Talk to Emvryx",
+      "short_name": "Talk",
+      "url": "/?pwa=voice",
+      "icons": [
+        {
+          "src": "/icon-192.png",
+          "sizes": "192x192"
+        }
+      ]
+    }
+  ],
+  "share_target": {
+    "action": "/",
+    "method": "GET",
+    "params": {
+      "title": "share_title",
+      "text": "share_text",
+      "url": "share_url"
+    }
+  },
+  "file_handlers": [
+    {
+      "action": "/?pwa=file",
+      "accept": {
+        "application/pdf": [
+          ".pdf"
+        ],
+        "text/plain": [
+          ".txt",
+          ".md"
+        ],
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.document": [
+          ".docx"
+        ],
+        "image/*": [
+          ".png",
+          ".jpg",
+          ".jpeg",
+          ".webp"
+        ]
+      }
+    }
+  ],
+  "launch_handler": {
+    "client_mode": "focus-existing"
+  }
 }

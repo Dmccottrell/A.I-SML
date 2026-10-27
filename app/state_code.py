@@ -118,6 +118,13 @@ class StateCode:
         import notify
         threading.Thread(target=notify.send, args=(topic, text, "VryxCode"), daemon=True).start()
 
+    def code_push(self, session, kind):
+        """pwa_push: the same short line to the browsers the person turned notifications on in (web_push.py). Not while it is still working."""
+        said = {"done": "finished. Open it to see what it built.", "asking": "is waiting for your OK.", "stopped": "stopped.", "failed": "ran into a problem.",
+                "limited": "paused: your usage ran out."}
+        if kind in said:
+            self.push.send_later(session.user, "VryxCode", f'"{session.project}" {said[kind]}', "/#code")
+
     # ---- CI: /fixci and "Watch CI" (app/code_ci.py)
     def ci_failures(self, user, project):
         """(owner, repo, branch, sha, failed) for the project's GitHub branch; raises CodeError when it is not linked to GitHub."""

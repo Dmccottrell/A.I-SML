@@ -109,6 +109,21 @@ class RoutesPost:
                 docs = (docs + [i for i in proj["docs"] if i not in docs and lib.info(i)])[:10]
             store.set_docs(cid, docs)
             return self._send(200, {"id": cid})
+        if path.startswith("/api/push/") and self.state.flags.on("pwa_push", who):    # pwa_push: this browser on or off, and a test
+            push = self.state.push
+            try:
+                if path == "/api/push/subscribe":
+                    push.subscribe(who["user"], body.get("subscription"))
+                elif path == "/api/push/unsubscribe":
+                    push.unsubscribe(who["user"], str(body.get("endpoint") or "") or None)
+                elif path == "/api/push/test":
+                    if not push.send(who["user"], "Emvryx", "Notifications work on this device."):
+                        return self._send(400, {"code": "not_sent", "message": "The notification could not be sent.", "action": "Turn notifications off and on again on this device."})
+                else:
+                    return self._send(404, {"code": "not_found", "message": "Not found."})
+            except ValueError as e:
+                return self._send(400, {"code": "bad_request", "message": str(e)})
+            return self._send(200, {"devices": push.subscribed(who["user"])})
         if path == "/api/panel" and self.state.flags.on("chat_panel", who):         # a web page from an answer, for the side panel's sealed frame
             try:
                 return self._send(200, {"url": "/panel/" + self.state.panels.make(who["user"], body.get("html"))})

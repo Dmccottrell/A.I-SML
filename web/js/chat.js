@@ -177,6 +177,7 @@ function renderThread(jump) {
   if (jump !== false) scrollDown(true);
   renderCtx(null, S.compacting);
   if (typeof plusAfterThread === 'function') plusAfterThread();
+  if (typeof pwaKeep === 'function') pwaKeep();                     // pwa_offline: kept for reading with no connection
 }
 function scrollDown(force) { const s = $('scroll'); if (force || S.stick) s.scrollTop = s.scrollHeight; }
 $('scroll').addEventListener('scroll', () => { const s = $('scroll'); S.stick = s.scrollHeight - s.scrollTop - s.clientHeight < 60; $('down').classList.toggle('show', !S.stick); });

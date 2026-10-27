@@ -541,6 +541,8 @@ class RoutesCode:
                                         model_text=second, build_steps=steps, turns=turns, full=full, pictures=body.get("images"))
                 if body.get("notify") and who["owner"]:                        # the phone notification is the owner's (it goes to their ntfy topic)
                     s.notify, s.on_notify = True, st.code_notify
+                if st.flags.on("pwa_push", who):
+                    s.on_push = st.code_push
                 return self._send(200, {"id": s.id, "note": note, "queued": s.state == "queued", "position": st.code.queue_position(user, s.id)})
             if path == "/api/code/preview":
                 allowed, why = st.code_allowed(who)
@@ -644,6 +646,7 @@ class RoutesCode:
                     sess.auto_edits = bool(body.get("auto_edits"))             # the mode picked now applies to this message
                 if who["owner"]:
                     sess.notify, sess.on_notify = bool(body.get("notify")), st.code_notify
+                sess.on_push = st.code_push if st.flags.on("pwa_push", who) else None
                 text = body.get("text")
                 if getattr(sess, "full", False) and body.get("images"):    # screenshots sent with the message: the model sees them this turn
                     mark = sess.attach_pictures(body.get("images"))
