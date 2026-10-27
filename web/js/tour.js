@@ -169,7 +169,9 @@ const REL_KIND = {major: 'Major', minor: 'Minor', patch: 'Patch', 'model-new': '
 const relTitle = (r) => r.model ? r.model : 'v' + r.version;
 function whatsNewList(releases) {
   return releases.length ? releases.map((r) => el('div', {class: 'adm-sub', style: 'margin:0 0 10px'}, el('div', {class: 'adm-row'}, el('span', {}, el('b', {}, relTitle(r)), ' ', el('span', {class: 'adm-tag'}, REL_KIND[r.kind] || r.kind)), el('small', {}, admDate(r.at))),
-    ...(r.model && !r.product ? [] : r.items.map((i) => el('div', {}, el('b', {style: 'font-size:15px'}, i.title), el('br'), el('small', {}, i.desc)))), r.notes ? el('small', {}, r.notes) : null)) : [el('p', {style: 'color:var(--muted)'}, 'Nothing has been released yet.')];
+    ...(r.model && !r.product ? [] : (r.items || []).map((i) => el('div', {}, el('b', {style: 'font-size:15px'}, i.title), el('br'), el('small', {}, i.desc)))),
+    ...((r.fixes || []).length ? [el('b', {style: 'font-size:15px'}, 'Fixed'), ...r.fixes.map((t) => el('small', {style: 'display:block'}, '\u2022 ' + t))] : []),
+    r.notes ? el('small', {}, r.notes) : null)) : [el('p', {style: 'color:var(--muted)'}, 'Nothing has been released yet.')];
 }
 async function openWhatsNew(all) {
   let j; try { j = await (await api('/api/whats-new')).json(); } catch (e) { return; }

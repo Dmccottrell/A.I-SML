@@ -160,7 +160,7 @@ class RoutesGet:
             if not isinstance(seen, int) or seen < 0:                         # a new account, or one from before releases were numbered: start from now
                 seen = fl.last_seq()
                 self.state.put_settings(who["user"], {"whats_new_seq": seen})
-            rel = [{k: r.get(k) for k in ("seq", "version", "kind", "model", "at", "notes", "items")} for r in fl.releases()[:50]]
+            rel = [{k: r.get(k) for k in ("seq", "version", "kind", "model", "product", "at", "notes", "items", "fixes")} for r in fl.releases()[:50]]
             return self._send(200, {"version": fl.version(), "seq": fl.last_seq(), "releases": rel, "unseen": [r for r in rel if r["seq"] > seen]})
         if path == "/api/memory":
             return self._send(200, {"facts": self.state.memory_for(who["user"]).list(), "on": self.state.get_settings(who["user"])["memory"]})
@@ -213,7 +213,7 @@ class RoutesGet:
             return self._send(200, {"events": self.state.auth.events(int((qs.get("limit") or ["100"])[0]), (qs.get("kind") or [None])[0])})
         if path == "/api/admin/flags" and who["admin"]:
             return self._send(200, {"flags": self.state.flags.listing(), "audiences": [[a, flags.AUDIENCE_NAMES[a]] for a in flags.AUDIENCES],
-                                    "version": self.state.flags.version(), "releases": self.state.flags.releases(),
+                                    "version": self.state.flags.version(), "releases": self.state.flags.releases(), "fixes": [f["text"] for f in self.state.flags.pending_fixes(None)],
                                     "people": sorted(u["user"] for u in self.state.users.values() if not u.get("app"))})
         if path == "/api/admin/models" and who["admin"]:
             return self._send(200, self.state.models_admin())
