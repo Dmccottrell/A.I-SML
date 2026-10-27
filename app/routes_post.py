@@ -15,6 +15,9 @@ import app_links
 import connected_apps
 import feedback
 import updater
+import code_log
+import code_sandbox
+import model_code_test
 import github_link
 from app_shared import APP_PREFIX, MAX_TEXT
 from app_shared import UNHANDLED
@@ -425,6 +428,22 @@ class RoutesPost:
                         return self._send(409, {"code": "busy", "message": "A reply is being written right now.", "action": "Try again in a moment."})
                     st.unload_model(f"unloaded by {who['user']}")
                 return self._send(200, st.pc_status())
+            if path == "/api/admin/code-test":                                 # model_code_test: the owner's own models on the owner's recorded sessions, sealed
+                st = self.state
+                if not (who["owner"] and st.flags.on("model_code_test", who)):
+                    return self._send(403, {"code": "owner_only", "message": "Only the PC owner can run the coding test."})
+                ok, why = code_sandbox.available(st.code.sandbox.get("image", code_sandbox.DEFAULT_IMAGE))
+                if not ok:
+                    return self._send(400, {"code": "bad_request", "message": "The coding test runs only in the isolated sandbox (Docker): " + why,
+                                            "action": "Start Docker Desktop and build the image: docker build -t emvryx/code-sandbox:1 docker/code-sandbox"})
+                cases = model_code_test.build_cases(code_log.SessionLog(st.code.base(who["user"])))
+                models = [{"id": m["id"], "label": m["label"]} for m in st.code_models(who) if not m["outside"] and m["state"] == "ready"]
+                try:
+                    st.code_test.start(cases, models, lambda mid: st.code_backend(st.pick_model(who, mid)), lambda folder: st.code.prefix_for(folder, force=True), by=who["user"])
+                except ValueError as e:
+                    return self._send(400, {"code": "bad_request", "message": str(e)})
+                st.auth.event("model_checks", who["user"], self._ip(), f"coding test started: {len(cases)} tasks, {len(models)} models")
+                return self._send(200, dict(st.code_test.status(), recorded=len(cases)))
             if path == "/api/admin/models":                                   # publish a model that is in preview, schedule it, or record an update that keeps its version
                 mp, man, mid, by = self.state.models_pub, self.state.manifest, str(body.get("id", "")), who["user"]
                 try:

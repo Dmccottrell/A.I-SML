@@ -59,6 +59,7 @@ import lookup_auto
 import mailer
 import secret_box
 import code_secrets
+import model_code_test
 import shares
 import summary
 import code_preview
@@ -151,6 +152,7 @@ class AppState(StateAccounts, StateSettings, StateApps, StatePC, StateCode, Stat
         self.users = self._load_users()
         self.code = code_sessions.CodeManager(data_dir, quotas=code_sandbox.Quotas(self.security))       # VryxCode sessions (projects live under <data>/code/)
         self.secrets = secret_box.SecretBox(data_dir, require=self.security["require_encryption"])
+        self.code_test = model_code_test.Runner(os.path.join(data_dir, "code_test.json") if data_dir else None)   # model_code_test: Admin > Models
         self.code_secrets = code_secrets.ProjectSecrets(data_dir, self.secrets)      # vryxcode_secrets: per project, never shown to the model
         self.github = github_link.Store(data_dir, self.secrets)  # connected GitHub accounts (tokens encrypted, files mode 600)
         self.models_pub = model_publish.ModelPublisher(os.path.join(data_dir, "models_state.json") if data_dir else None, None, guard=self.guard_ok, file_sig=self.model_file_sig)

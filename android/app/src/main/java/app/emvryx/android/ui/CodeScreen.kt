@@ -104,6 +104,8 @@ fun CodeScreen(app: AppViewModel, vm: CodeViewModel) {
         vm.review = app.flag("vryxcode_review")
         vm.projects = app.flag("vryxcode_projects")
         vm.alerts = app.flag("phone_alerts")
+        vm.parity = if (!app.flag("android_vryxcode")) emptySet() else PARITY_FLAGS.filter { app.flag(it) }.toSet()     // each part follows its own switch
+        vm.onWeb = { title, js -> app.open(Screen.Web("/", title, js)) }
         vm.onTour = app::replayVryxTour
         app.maybeVryxTour()                                       // the VryxCode tour, the first time VryxCode opens (flag vryxcode_tour)
     }
@@ -367,18 +369,21 @@ private fun Feed(vm: CodeViewModel) {
         Welcome(vm, "Describe one task. VryxCode reads, edits, runs the tests and tries again in its own project folder, and asks before it changes anything. Type / for commands.")
         return
     }
+    val plan = if ("vryxcode_taskbox" in vm.parity) planSteps(vm.events, vm.working) else emptyList()
     LazyColumn(Modifier.fillMaxSize(), state = list, contentPadding = PaddingValues(14.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-        if (vm.review) {
-            val shown = reviewItems(vm.events)
+        if (plan.isNotEmpty()) item { PlanBox(plan) }
+        if (vm.review || "vryxcode_lines" in vm.parity) {
+            val shown = reviewItems(vm.events).let { if ("vryxcode_lines" in vm.parity) foldQuiet(it) else it }
             items(shown.size) { i ->
                 when (val r = shown[i]) {
                     is ReviewItem.Quiet -> QuietLine(r)
+                    is ReviewItem.Group -> GroupLine(r)
                     is ReviewItem.File -> FileChip(r)
                     is ReviewItem.Done -> DoneLine(r)
-                    is ReviewItem.Event -> EventRow(r.e, vm.events)
+                    is ReviewItem.Event -> EventRow(r.e, vm.events, vm)
                 }
             }
-        } else items(vm.events.size) { i -> EventRow(vm.events[i], vm.events) }
+        } else items(vm.events.size) { i -> EventRow(vm.events[i], vm.events, vm) }
         item {
             val q = vm.pending
             when {
@@ -391,13 +396,14 @@ private fun Feed(vm: CodeViewModel) {
 }
 
 @Composable
-private fun EventRow(e: JsonObject, all: List<JsonObject>) {
+private fun EventRow(e: JsonObject, all: List<JsonObject>, vm: CodeViewModel) {
     val shape = RoundedCornerShape(14.dp)
     when (e.str("kind")) {
-        "start", "user" -> if (!e.bool("auto")) Text(
-            (if (e.bool("plan")) "[Plan] " else "") + e.str("task").ifEmpty { e.str("text") } + (if (e.bool("steer")) "  (while it worked)" else ""),
-            fontSize = 15.sp, modifier = Modifier.fillMaxWidth().clip(shape).background(Emvryx.surface2).padding(12.dp),
-        )
+        "start", "user" -> if (!e.bool("auto")) Row(Modifier.fillMaxWidth().clip(shape).background(Emvryx.surface2).padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
+            Text((if (e.bool("plan")) "[Plan] " else "") + e.str("task").ifEmpty { e.str("text") } + (if (e.bool("steer")) "  (while it worked)" else ""),
+                fontSize = 15.sp, modifier = Modifier.weight(1f))
+            if ("vryxcode_restore" in vm.parity && e.int("turn") > 0) RestorePill(vm, e.int("turn"))
+        }
         "step" -> Column(Modifier.fillMaxWidth().clip(shape).background(Emvryx.surface).border(1.dp, Emvryx.line, shape).padding(12.dp),
             verticalArrangement = Arrangement.spacedBy(6.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -434,8 +440,86 @@ private fun EventRow(e: JsonObject, all: List<JsonObject>) {
                 }
             }
             e.strings("next").forEach { Text("→ $it", color = Emvryx.muted, fontSize = 14.sp) }
+            EndExtras(e, vm)
         }
         else -> Unit
+    }
+}
+
+// ---------------------------------------------------------------- the website's newer parts (flag android_vryxcode; CodeParity.kt)
+
+/** The flags of the parts the Android app can show, each still behind its own switch */
+private val PARITY_FLAGS = listOf("vryxcode_restore", "vryxcode_taskbox", "vryxcode_autocontinue", "vryxcode_guardrails", "vryxcode_lines",
+                                  "vryxcode_preview", "vryxcode_servers", "vryxcode_github", "vryxcode_publish")
+
+/** The plan as a box, like Claude Code's: a ticked circle when done, a ring on the step it is doing, a dashed one on the steps to come */
+@Composable
+private fun PlanBox(steps: List<PlanStep>) {
+    val shape = RoundedCornerShape(14.dp)
+    Column(Modifier.fillMaxWidth().clip(shape).border(1.dp, Emvryx.line, shape).padding(horizontal = 14.dp, vertical = 12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        steps.forEach { st ->
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(when (st.state) { "done" -> "✓"; "now" -> "○"; else -> "◌" }, color = if (st.state == "now") Emvryx.text else Emvryx.muted,
+                    fontSize = 14.sp, fontWeight = FontWeight.Bold, modifier = Modifier.width(22.dp))
+                Text(st.text, fontSize = 14.sp, color = if (st.state == "done") Emvryx.muted else Emvryx.text)
+            }
+        }
+    }
+}
+
+/** Quiet steps in a row as one line: "Read 3 files, ran 2 commands ›", opening to each one */
+@Composable
+private fun GroupLine(g: ReviewItem.Group) {
+    var open by remember { mutableStateOf(false) }
+    val bad = g.lines.any { it.bad }
+    Column(Modifier.padding(horizontal = 4.dp).clickable { open = !open }) {
+        Text((if (bad) "✗ " else "") + groupTitle(g) + if (open) "  ⌄" else "  ›", color = if (bad) Emvryx.danger else Emvryx.muted, fontSize = 13.sp)
+        if (open) g.lines.forEach { QuietLine(it) }
+    }
+}
+
+/** Restore on one of your messages: the files go back to just before it, after a yes */
+@Composable
+private fun RestorePill(vm: CodeViewModel, turn: Int) {
+    var ask by remember { mutableStateOf(false) }
+    Text("↶ Restore", fontSize = 12.sp, color = Emvryx.muted, modifier = Modifier.clip(CircleShape).border(1.dp, Emvryx.line, CircleShape)
+        .clickable(enabled = !vm.working) { ask = true }.padding(horizontal = 10.dp, vertical = 6.dp))
+    if (ask) AlertDialog(onDismissRequest = { ask = false }, containerColor = Emvryx.surface,
+        title = { Text("Restore the files?") }, text = { Text("The project goes back to how it was just before this message. Files made after it are removed.") },
+        confirmButton = { TextButton({ ask = false; vm.restore(turn) }) { Text("Restore", color = Violet) } },
+        dismissButton = { TextButton({ ask = false }) { Text("Cancel", color = Emvryx.muted) } })
+}
+
+/** Under a message's end: the review verdict with Fix them, the plain Done / Not finished line, and Preview, Save to GitHub and Publish */
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun EndExtras(e: JsonObject, vm: CodeViewModel) {
+    val on = vm.parity
+    if ("vryxcode_guardrails" in on) verdictOf(e)?.let { v ->
+        Text(if (v.approved) "✓ Approved" + (if (v.nits > 0) " · ${v.nits} small style note" + (if (v.nits == 1) "" else "s") + ", not worked on" else " · nothing to fix")
+             else "${v.blocking} serious problem" + (if (v.blocking == 1) "" else "s") + " · each one proved with a failing test before it is fixed",
+            color = if (v.approved) Green else Emvryx.danger, fontWeight = FontWeight.SemiBold, fontSize = 14.sp)
+        if (!v.approved && v.fix.isNotBlank()) SmallPill("Fix them, test first") { vm.send(v.fix) }
+    }
+    if ("vryxcode_autocontinue" in on) when (val st = endState(e)) {
+        EndState.Finished -> Text("✓ Done: the task is finished", color = Green, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+        EndState.Waiting -> Text("● Not finished yet: it is waiting for your answer", color = Violet, fontSize = 14.sp)
+        is EndState.OutOfSteps -> {
+            Text("■ Not finished: it used all its steps" + (if (st.rounds > 0) " and carried on ${st.rounds} time" + (if (st.rounds == 1) "" else "s") + " by itself" else "") +
+                ". Your files so far are kept.", fontSize = 14.sp)
+            SmallPill("Continue") { vm.send("Carry on from where you stopped and finish the task.") }
+        }
+        null -> Unit
+    }
+    if (!e.bool("finished")) return
+    val js = editorJs(vm)
+    val pills = listOfNotNull(
+        ("▶ Preview" to "openPreview()").takeIf { "vryxcode_preview" in on || "vryxcode_servers" in on },
+        ("↑ Save to GitHub" to "saveToGithub()").takeIf { "vryxcode_github" in on },
+        ("🌐 Publish" to "publishSite()").takeIf { "vryxcode_publish" in on },
+    )
+    if (pills.isNotEmpty()) FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        pills.forEach { (label, call) -> SmallPill(label) { vm.onWeb?.invoke("VryxCode", js.removeSuffix(" })") + "; setTimeout(() => $call, 1500); })") } }
     }
 }
 

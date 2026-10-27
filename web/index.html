@@ -103,6 +103,10 @@ svg .core { fill: var(--core); stroke: var(--sun); stroke-width: 3; transition: 
 .code .cc-done { display: flex; flex-direction: column; gap: 2px; margin: 6px 0; }
 .code .cc-done .vx-pvgo { align-self: flex-start; margin-top: 8px; }
 .code .vx-ship { display: flex; gap: 8px; flex-wrap: wrap; margin: 6px 0 10px; }
+.code .vx-state { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin: 6px 0 12px; padding: 8px 12px; border-radius: 12px; border: 1px solid var(--line); font-size: 14px; }
+.code .vx-state.ok { color: var(--good, #4ade80); border-color: color-mix(in srgb, var(--good, #4ade80) 40%, transparent); }
+.code .vx-state.wait { color: var(--accenttext); }
+.code .vx-state.no { color: var(--text); border-color: color-mix(in srgb, var(--danger, #f87171) 45%, transparent); }
 .code .cc-user .vx-restore { margin-left: auto; padding: 2px 8px; font-size: 12px; opacity: .55; }
 .code .cc-user:hover .vx-restore, .code .cc-user .vx-restore:focus { opacity: 1; }
 .code .vx-grp { color: var(--muted); font-size: 14px; margin: 4px 0; }
@@ -449,6 +453,13 @@ body.mbar.mbar .wash { background: radial-gradient(circle, var(--core) 0%, var(-
 @media (min-width: 1000px) { .code .pv { position: static; flex: 0 0 46%; border-left: 1px solid var(--line); z-index: auto; } .code .home { padding: 8px max(16px, calc((100% - 760px) / 2)) 110px; } }
 /* VryxCode workflow: to-do list, slash and @ suggestions, the Files / Changes / Rewind panel */
 .code .todo { flex-shrink: 0; margin: 4px 16px 0; background: var(--surface); border: 1px solid var(--line); border-radius: 16px; padding: 8px 12px; font-size: 14px; }
+.code .todo.vx-tasks { display: flex; flex-direction: column; gap: 7px; padding: 12px 16px; border-radius: 14px; background: transparent; }
+.code .todo.vx-tasks[hidden] { display: none; }
+.code .vx-tasks .vt { display: flex; align-items: center; gap: 10px; color: var(--text); }
+.code .vx-tasks .vt .dot { width: 15px; height: 15px; border-radius: 50%; flex-shrink: 0; display: grid; place-items: center; font-size: 9px; line-height: 1; font-weight: 700; border: 1.5px dashed var(--muted); }
+.code .vx-tasks .vt.is-now .dot { border: 1.5px solid var(--text); }
+.code .vx-tasks .vt.is-done { color: var(--muted); }
+.code .vx-tasks .vt.is-done .dot { border: 0; background: var(--muted); color: var(--bg); }
 .code .todo[hidden] { display: none; } .code .todo .th { display: flex; align-items: center; gap: 8px; font-weight: 600; cursor: pointer; min-height: 30px; } .code .todo .th .bar { flex: 1; height: 5px; background: var(--surface2); border-radius: 999px; overflow: hidden; } .code .todo .th .bar i { display: block; height: 100%; background: var(--accent); }
 .code .todo ul { list-style: none; margin: 6px 0 2px; padding: 0; display: flex; flex-direction: column; gap: 4px; } .code .todo li { display: flex; gap: 8px; align-items: flex-start; } .code .todo li .bx { width: 16px; height: 16px; border-radius: 5px; border: 2px solid var(--muted); flex-shrink: 0; margin-top: 2px; display: grid; place-items: center; font-size: 11px; line-height: 1; } .code .todo li.done { color: var(--muted); text-decoration: line-through; } .code .todo li.done .bx { background: var(--accent); border-color: var(--accent); color: var(--onaccent); }
 .code .suggest { max-height: 260px; overflow-y: auto; padding: 6px; } .code .suggest .opt { min-height: 44px; padding: 8px 12px; } .code .suggest .opt code { font-weight: 700; margin-right: 8px; } .code .suggest .opt.hi { border-color: var(--accent); }

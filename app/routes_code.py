@@ -265,10 +265,10 @@ class RoutesCode:
         on = lambda fid: st.flags.on(fid, who)
         return {"fixes": on("vryxcode_fixes"), "preview": on("vryxcode_preview"), "guard": on("vryxcode_guardrails"), "servers": on("vryxcode_servers"),
                 "autocheck": on("vryxcode_autocheck"), "open_pc": bool(who.get("owner")) and on("vryxcode_open_pc"), "record": bool(who.get("owner")) and on("vryxcode_record"),
-                "secrets": on("vryxcode_secrets")}
+                "secrets": on("vryxcode_secrets"), "autocontinue": on("vryxcode_autocontinue")}
 
     @staticmethod
-    def _code_kit(st, user, model, project, fixes=False, preview=False, guard=False, servers=False, autocheck=False, open_pc=False, record=False, secrets=False):
+    def _code_kit(st, user, model, project, fixes=False, preview=False, guard=False, servers=False, autocheck=False, open_pc=False, record=False, secrets=False, autocontinue=False):
         """What a session needs to work with this model in this project: the model call, the usage meter, its tools (GitHub, the browser check) and the git name."""
         box = {}
 
@@ -304,6 +304,7 @@ class RoutesCode:
         generate.autocheck = autocheck                 # vryxcode_autocheck: the whole project is built after every change to code (harness.project_build_command)
         generate.open_pc = open_pc                     # vryxcode_open_pc: the OWNER's own sessions on "This computer" may run anything (harness.Sandbox open_host)
         generate.record = record                       # vryxcode_record: the OWNER's own sessions are recorded whole, for replaying (tools/replay_vryx.py)
+        generate.autocontinue = autocontinue           # vryxcode_autocontinue: out of steps, it carries on by itself (code_sessions AUTO_ROUNDS)
         generate.secrets = st.code_secrets.values(user, project) if secrets else {}   # vryxcode_secrets: environment variables for its programs, never shown to the model
         snap = st.limiter.snapshot(user, model["limiter_key"], "balanced", st.clock())
         if not snap["exempt"] and snap["can_send"] < 1:

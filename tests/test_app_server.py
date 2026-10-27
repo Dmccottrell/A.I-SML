@@ -121,6 +121,8 @@ class Base(unittest.TestCase):
         self.state.flags.data["audiences"]["vryxcode_github"] = "off"
         self.state.flags.data["audiences"]["vryxcode_dbview"] = "off"
         self.state.flags.data["audiences"]["vryxcode_publish"] = "off"
+        self.state.flags.data["audiences"]["vryxcode_autocontinue"] = "off"
+        self.state.flags.data["audiences"]["vryxcode_taskbox"] = "off"
         self.state.flags.data["audiences"]["admin_crashes"] = "off"
         self.state.flags.data["audiences"]["apk_link"] = "off"
         self.state.flags.data["audiences"]["android_vryxcode"] = "off"

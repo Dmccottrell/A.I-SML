@@ -12,6 +12,8 @@ import documents
 import feedback
 import updater
 import crash_log
+import code_log
+import model_code_test
 import live_data
 import flags
 import passkeys
@@ -209,6 +211,9 @@ class RoutesGet:
                 return self._send(200, self.state.updater.check())
             except updater.UpdateError as e:
                 return self._send(200, {"can_update": False, "reason": e.message, "incoming": [], "dirty": []})
+        if path == "/api/admin/code-test" and who["owner"] and self.state.flags.on("model_code_test", who):
+            cases = model_code_test.build_cases(code_log.SessionLog(self.state.code.base(who["user"])))
+            return self._send(200, dict(self.state.code_test.status(), recorded=len(cases)))
         if path == "/api/admin/crashes" and who["owner"] and self.state.flags.on("admin_crashes", who):     # tracebacks may hold private text: the owner only
             log = os.path.join(self.state.data_dir, "server.log") if self.state.data_dir else ""
             crashes = crash_log.read(log) if log else []

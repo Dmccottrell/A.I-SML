@@ -269,6 +269,16 @@ function renderTodo() {
   if (!items.length) { box.hidden = true; box.replaceChildren(); return; }
   const done = items.filter((i) => i.done).length;
   box.hidden = false;
+  if (featureOn('vryxcode_taskbox')) {          // like Claude Code: done, the one it is on now, and the ones still to come, in a box that stays open
+    const now = items.findIndex((i) => !i.done), working = C.state === 'working' || C.state === 'starting';
+    box.classList.add('vx-tasks');
+    box.replaceChildren(...items.map((i, k) => {
+      const st = i.done ? 'done' : (k === now && working ? 'now' : 'todo');
+      return el('div', {class: 'vt is-' + st, title: st === 'done' ? 'Done' : st === 'now' ? 'Working on it now' : 'Still to do'}, el('span', {class: 'dot', 'aria-hidden': 'true'}, st === 'done' ? '\u2713' : ''), el('span', {}, i.text));
+    }));
+    return;
+  }
+  box.classList.remove('vx-tasks');
   box.replaceChildren(el('div', {class: 'th', onclick: () => { C.todoOpen = !C.todoOpen; renderTodo(); }}, el('span', {}, 'To-do ' + done + '/' + items.length), el('span', {class: 'bar'}, el('i', {style: 'width:' + Math.round(100 * done / items.length) + '%'})), el('span', {style: 'color:var(--muted)'}, C.todoOpen ? '\u25b4' : '\u25be')),
     C.todoOpen ? el('ul', {}, ...items.map((i) => el('li', {class: i.done ? 'done' : ''}, el('span', {class: 'bx'}, i.done ? '\u2713' : ''), el('span', {}, i.text)))) : '');
 }

@@ -68,6 +68,9 @@ def remove_tree(path, tries=3):
 WEB_FILES = (".html", ".htm", ".js", ".mjs", ".css", ".jsx")
 PAGE_TROUBLE = re.compile(r"loaded, with problems|did not finish loading", re.I)
 PAGE_FIX_TRIES = 2
+AUTO_ROUNDS = 5                                            # vryxcode_autocontinue: at most this many extra rounds of steps per message
+CONTINUE_TEXT = ("You used all your steps for this round and the task is not finished. Carry on from exactly where you stopped (do not start over), "
+                 "and finish the task. When it is really done and checked, call finish with what you did.")
 
 
 class CodeError(Exception):
@@ -205,6 +208,7 @@ class Session:
         self.turns_run = 0
         self.build = False                              # the long-build loop (a VryxCode 3 model): set by CodeManager.start / revive / switch_model
         self._auto_tries = 0                            # automatic second tries after an unexpected failure, this message
+        self._auto_rounds = 0                           # vryxcode_autocontinue: times it carried on by itself after using all its steps, this message
         self._page_tries = 0                            # automatic fixes after the app's own page check found problems, this message
         self.notify, self.on_notify = False, None       # tell the owner's phone when a turn ends or it needs an answer (set by the server)
 
@@ -572,7 +576,7 @@ class Session:
                 raise CodeError("This session cannot continue.", "Start a new one.")
             self.state = "working"
             self.stop.clear()
-        self._auto_tries = self._page_tries = 0
+        self._auto_tries = self._page_tries = self._auto_rounds = 0
         self._model_text = model_text                       # what the model gets instead of the line the person sees (a code review's diff)
         threading.Thread(target=self._turn, args=(text, False, bool(plan)), daemon=True).start()
 
@@ -611,8 +615,16 @@ class Session:
                 again = ("I opened the page in a browser and it does not work yet:\n" + clip(report, 1500) +
                          "\nFix these problems, then open it again with check_page and finish only when it loads with no errors.")
                 return
+            # used every step without finishing (not stopped by a guardrail, by the person, or because it got stuck)
+            out_of_steps = not result["finished"] and not result.get("said") and not result.get("stopped") and not self.stop.is_set()
+            if out_of_steps and getattr(self.generate, "autocontinue", False) and self._auto_rounds < AUTO_ROUNDS:
+                self._auto_rounds += 1                  # vryxcode_autocontinue: carry on by itself (usage limits still stop it)
+                self.emit("note", text=f"Used all {result['turns']} steps and it is not finished yet: carrying on by itself ({self._auto_rounds} of {AUTO_ROUNDS}).")
+                again = CONTINUE_TEXT
+                return
             self._end( finished=result["finished"], said=bool(result.get("said")), summary=clip(result["summary"], 4000), turns=result["turns"],
-                      next=self.next_steps if result["finished"] else [], plan=bool(plan) and bool(result["finished"] or result.get("said")))
+                      next=self.next_steps if result["finished"] else [], plan=bool(plan) and bool(result["finished"] or result.get("said")),
+                      **({"reason": "steps", "rounds": self._auto_rounds} if out_of_steps else {}))
             self.state = "done" if (result["finished"] or result.get("said")) else "stopped"
         except U.LimitError as e:
             self._keep_history()

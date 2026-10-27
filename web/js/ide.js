@@ -458,6 +458,8 @@ function cEvent(e) {
     if (e.finished || e.said) {                       // the model talking to the person: what it did, what to run, what it suggests
       if (e.finished) setTimeout(() => { if (!$('codePv').hidden) reloadPreview(); else if (!$('codePreviewBtn').disabled) $('codePreviewBtn').classList.add('pulse'); }, 700);     // the page changed: refresh it, or point at Preview
       feed.append(renderMessage(e.summary || 'Done.', e.finished));
+      if (featureOn('vryxcode_autocontinue') && !e.plan) feed.append(el('div', {class: 'vx-state ' + (e.finished ? 'ok' : 'wait')},     // plainly: finished, or waiting for you
+        e.finished ? '\u2713 Done: the task is finished' : '\u25CF Not finished yet: it is waiting for your answer'));
       const changed = Object.entries(C.turnFiles || {});
       if (vxReview() && e.finished && changed.length) {          // the Done line: every file this message changed, each one opens the change
         const add = changed.reduce((n, [, f]) => n + f.add, 0), del = changed.reduce((n, [, f]) => n + f.del, 0);
@@ -479,6 +481,12 @@ function cEvent(e) {
       if (e.finished || e.plan) offerReply(e.plan ? 'Go ahead and build it as planned.' : (e.next || [])[0]);
       if (e.next && e.next.length) feed.append(el('div', {class: 'cc-next'}, el('span', {class: 'lead'}, 'Suggested next:'),
         ...e.next.map((t) => el('button', {class: 'chip', onclick: () => { $('codeTask').value = t; $('codeGo').click(); }}, t))));
+      return;
+    }
+    if (e.reason === 'steps' && featureOn('vryxcode_autocontinue')) {          // out of steps: say so plainly, and one tap carries on
+      if (e.report) feed.append(reportCard(e.report));
+      feed.append(el('div', {class: 'vx-state no'}, el('span', {}, '\u25A0 Not finished: it used all its steps' + (e.rounds ? ' and carried on ' + e.rounds + (e.rounds === 1 ? ' time' : ' times') + ' by itself' : '') + '. Your files so far are kept.'),
+        el('button', {class: 'btn small', onclick: () => { $('codeTask').value = 'Carry on from where you stopped and finish the task.'; $('codeGo').click(); }}, 'Continue')));
       return;
     }
     const cls = e.error || e.limited ? 'bad' : 'stop';
@@ -560,6 +568,7 @@ async function poll() {
   const old = document.getElementById('codeLive'); if (old) old.remove();      // the live line sits below the newest step, so take it out while steps are added
   for (const e of j.events) cEvent(e); C.seen += j.events.length;
   C.saved = !!j.saved; C.state = j.state; C.checkpoints = j.checkpoints || C.checkpoints || [];
+  if (featureOn('vryxcode_taskbox') && (C.todo || []).length) renderTodo();          // the circle on the step it is doing goes away once it stops
   $('codeTask').placeholder = C.offer || 'Ask, answer, or tell VryxCode what to build or fix';
   if (j.events.some((e) => e.kind === 'result' || e.kind === 'end' || e.kind === 'rewind')) refreshFiles().then(() => livePreview(j.events));
   if (j.events.length && !$('codeDrawer').hidden && C.tab !== 'files') showDrawer(true, C.tab);

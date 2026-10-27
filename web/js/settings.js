@@ -58,10 +58,16 @@ const sxLocal = (k, d) => { try { return localStorage.getItem(k) || d; } catch (
 async function sxAcct() { try { SX.acct = await (await api('/api/account')).json(); } catch (e) { if (e.message === 'login') closeSettings(); } return SX.acct; }
 
 // A page is a list of sections; a section is {title, rows}; a row is {title, desc, ctl | node, keys, danger}. Search looks through every row.
+const APK_URL = 'https://github.com/Dmccottrell/A.I-SML/releases/download/android-latest/emvryx.apk';     // made by .github/workflows/android.yml (release job)
 function sxSections(id) {
   const st = S.state, s = st.settings, w = st.window, a = SX.acct || {mfa: {}}, owner = st.admin;
   const A = {
-    general: [{title: 'Welcome tour and what\u2019s new', rows: [{title: 'What\u2019s new', desc: 'Every release so far, newest first: new features and new model versions.', ctl: sxBtn('See releases', () => { closeSettings(); openWhatsNew(true); }), keys: 'whats new releases updates changes history version'}, ...(featureOn('welcome_tour') ? [{title: 'Welcome tour', desc: 'The short animated introduction to Emvryx: the models, answers with sources, making it yours and VryxCode.', ctl: sxBtn('Start the tour', () => { closeSettings(); openTour(true); }), keys: 'welcome tour introduction walk through intro'}] : [])]},
+    general: [...(featureOn('apk_link') ? [{title: 'Android app', rows: [      // apk_link: one fixed link, always the newest app (the android-latest release)
+      {title: 'Get the Android app', desc: 'Always the newest version. On your phone, tap Download and open the file (allow installing from your browser if it asks). On a computer, scan the code with the phone.',
+        ctl: el('div', {style: 'display:flex;gap:8px;flex-wrap:wrap'}, el('a', {class: 'sbtn', href: APK_URL, rel: 'noopener'}, 'Download'),
+          sxBtn('Show code', () => dialog([el('h2', {}, 'Scan with your phone'), el('div', {style: 'display:grid;place-items:center;margin:8px 0'}, qrSvg(APK_URL, 5)), el('small', {style: 'color:var(--muted);word-break:break-all'}, APK_URL)], 'Close'))),
+        keys: 'android apk phone download install app'}]}] : []),
+      {title: 'Welcome tour and what\u2019s new', rows: [{title: 'What\u2019s new', desc: 'Every release so far, newest first: new features and new model versions.', ctl: sxBtn('See releases', () => { closeSettings(); openWhatsNew(true); }), keys: 'whats new releases updates changes history version'}, ...(featureOn('welcome_tour') ? [{title: 'Welcome tour', desc: 'The short animated introduction to Emvryx: the models, answers with sources, making it yours and VryxCode.', ctl: sxBtn('Start the tour', () => { closeSettings(); openTour(true); }), keys: 'welcome tour introduction walk through intro'}] : [])]},
       {title: 'Appearance', rows: [
       {title: 'Theme', desc: 'Automatic follows your phone or computer.', ctl: sxSeg([['auto', 'Automatic'], ['dark', 'Dark'], ['light', 'Light']], S.theme, (v) => { S.theme = v; try { localStorage.setItem('emvryx_theme', v); } catch (e) {} applyTheme(); }), keys: 'dark light mode colour color'},
       {title: 'Text and button size', ctl: sxSeg([['0.85', 'Small'], ['1', 'Normal'], ['1.15', 'Large'], ['1.3', 'Extra large']], String(parseFloat(sxLocal('emvryx_size', '1')) || 1), (v) => { try { localStorage.setItem('emvryx_size', v); } catch (e) {} applySize(); }), keys: 'font zoom bigger'}]},

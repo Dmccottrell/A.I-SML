@@ -49,6 +49,8 @@ sealed interface ReviewItem {
         val add get() = files.sumOf { it.second }
         val del get() = files.sumOf { it.third }
     }
+    /** Quiet lines in a row, folded into one line that opens on a tap (flag vryxcode_lines, CodeParity.kt foldQuiet) */
+    data class Group(val lines: List<Quiet>) : ReviewItem
     /** Anything else, drawn as before (your message, a long step, the summary, a question ...) */
     data class Event(val e: JsonObject) : ReviewItem
 }

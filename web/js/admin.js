@@ -98,6 +98,28 @@ async function admCrashes(body) {
       el('div', {class: 'adm-acts'}, sxBtn('Fix this', () => fix(c), 'primary')))) : [el('p', {}, j.log_found ? 'No errors. \u2713' : '')])));
 }
 
+// model_code_test: your own models on tasks made from your recorded VryxCode sessions, sealed in the sandbox; the tests decide pass or fail
+async function codeTestCard(box) {
+  let j; try { j = await (await api('/api/admin/code-test')).json(); } catch (e) { return; }
+  if (!box.isConnected) return;
+  const run = sxBtn(j.state === 'running' ? 'Running\u2026' : 'Run the coding test', async () => {
+    const r = await post('/api/admin/code-test', {run: true}); const k = await r.json().catch(() => ({}));
+    if (!r.ok) return toast((k.message || 'That did not work.') + (k.action ? ' ' + k.action : ''));
+    codeTestCard(box);
+  }, j.recorded && j.state !== 'running' ? 'primary' : '');
+  if (j.state === 'running') run.disabled = true;
+  const rows = (j.models || []).slice().sort((a, b) => b.passed - a.passed).map((m) => el('div', {class: 'adm-sub'},
+    el('div', {class: 'adm-row'}, el('b', {}, m.label), el('span', {class: 'adm-tag' + (m.done && m.passed === m.done ? ' on' : '')}, m.passed + ' of ' + m.done + ' passed')),
+    m.error ? el('small', {style: 'color:var(--danger)'}, 'Could not load: ' + m.error) : el('small', {}, m.done ? 'About ' + Math.round(m.steps / m.done) + ' steps and ' + Math.round(m.secs / m.done) + ' s a task' : 'Waiting\u2026'),
+    m.fails.length ? el('details', {}, el('summary', {style: 'cursor:pointer;color:var(--muted);font-size:14px'}, 'What it got wrong (' + m.fails.length + ')'),
+      ...m.fails.map((f) => el('small', {style: 'display:block;margin-top:6px'}, el('b', {}, f.task), ' \u2192 ' + f.why))) : null));
+  box.replaceChildren(el('h3', {}, '\u{1F9EA} Coding test'),
+    el('p', {}, 'Your recorded VryxCode sessions become tasks: the project as it was and the same request. Each of your own models does them, sealed in the sandbox, and the project\u2019s tests decide. Nothing a model writes is kept or used for training.'),
+    el('div', {class: 'adm-row'}, el('span', {style: 'color:var(--muted)'}, j.recorded + (j.recorded === 1 ? ' task' : ' tasks') + ' from your recordings' + (j.state === 'running' ? ' \u00b7 ' + j.progress[0] + ' of ' + j.progress[1] + ' done' : j.finished ? ' \u00b7 last run ' + admAgo(j.finished) : '')), run),
+    ...rows);
+  if (j.state === 'running') setTimeout(() => { if (box.isConnected) codeTestCard(box); }, 5000);
+}
+
 async function admModels(body) {
   let j = await (await api('/api/admin/models')).json(); let timer = null;
   const refresh = async () => { try { j = await (await api('/api/admin/models')).json(); draw(); } catch (e) { /* try again next time */ } };
@@ -150,8 +172,11 @@ async function admModels(body) {
   const draw = () => {
     clearTimeout(timer);
     const prev = j.models.filter((m) => m.preview), live = j.models.filter((m) => !m.preview);
+    const testBox = S.state && S.state.owner && featureOn('model_code_test') ? el('div', {class: 'adm-card', id: 'admCodeTest'}, el('h3', {}, '\u{1F9EA} Coding test'), el('p', {}, 'Loading\u2026')) : null;
+    if (testBox) setTimeout(() => codeTestCard(testBox), 0);
     body.replaceChildren(
       ...(j.products || []).map(productCard),
+      ...(testBox ? [testBox] : []),
       el('div', {class: 'adm-card'}, el('h3', {}, '\u{1F9E0} Model versions'),
         el('p', {}, 'A new model version stays in preview (only you and admins see it, marked Preview in the model picker) until you publish it. Before it can be published it must pass the safety checks. Publishing makes it live for everyone and moves the older version of that name to Other models, where it stays usable. Other models keeps the newest ' + j.keep_older + ' older versions of each name.'),
         el('p', {}, 'Rule of thumb: a new version when the training lessons change (Flare 2.5 to 2.6); otherwise it is an update and the version stays (record it below). The app’s own version does not change.'),
@@ -391,7 +416,20 @@ async function adminPage(id) {
       };
       const keyRows = c.public_key ? [el('div', {class: 'setupkey', style: 'font-size:13px;letter-spacing:0;text-align:left'}, c.public_key),
         el('div', {}, sxBtn('Copy public key', async (e) => { try { await navigator.clipboard.writeText(c.public_key); e.target.textContent = 'Copied'; } catch (x) {} }))] : [];
+      // cloud_guide: a free Oracle Cloud machine, step by step in plain words (the steps below are the same three: machine, key, check)
+      const step = (n, title, ...kids) => el('div', {class: 'srow stack', style: 'border-top:1px solid var(--line)'}, el('b', {}, n + '. ' + title), ...kids);
+      const tip = (t) => el('small', {style: 'color:var(--muted)'}, t);
+      const guide = featureOn('cloud_guide') ? el('details', {class: 'sx-card', open: !c.ready}, el('summary', {style: 'cursor:pointer;padding:12px 14px;font-weight:600'}, '\u2601 Free machine on Oracle Cloud: step by step'),
+        step(1, 'Make the account', tip('On cloud.oracle.com choose Sign up and pick a home region near you (it cannot be changed later). Oracle asks for a card to check who you are; Always Free machines are not charged. Never press Upgrade to Pay As You Go: that is the only way charges can start.')),
+        step(2, 'Make the key here first', tip('Below, under "2. A key for Emvryx", press Make a key, then Copy public key. Emvryx keeps the private half on this computer; nobody is shown it.')),
+        step(3, 'Create the machine', tip('In Oracle: menu > Compute > Instances > Create instance. Image: Canonical Ubuntu (22.04 or newer). Shape: Ampere, VM.Standard.A1.Flex (it says Always Free-eligible), with the cores and memory inside the free amount it shows. Under Add SSH keys choose Paste public keys and paste the key you copied. Press Create and wait until it says Running.'),
+          tip('If it says "Out of capacity", try another availability domain in the same screen, or again later: free Arm machines are popular.')),
+        step(4, 'Fill in its address', tip('On the instance page copy the Public IP address. Below, put it in Host; the user is ubuntu and the port 22.'),
+          el('div', {}, sxBtn('Fill in ubuntu and 22', () => { userIn.value = 'ubuntu'; portIn.value = '22'; hostIn.focus(); }))),
+        step(5, 'Check it', tip('Press Save, then Test the connection. When it says Connected, choose Cloud machine as the environment in VryxCode: its terminal and servers then run there, not on this PC.')),
+        step(6, 'Keep it free and safe', tip('Leave only port 22 (SSH) open in Oracle; never open 3389. If the machine sits unused for a long time Oracle may stop it: start it again from the same page.'))) : null;
       host.replaceChildren(
+        ...(guide ? [guide] : []),
         el('div', {class: 'sx-card'}, el('div', {class: 'srow stack'},
           el('div', {class: 'stxt'}, el('b', {}, c.ready ? 'Ready' : 'Not ready yet'), el('small', {}, c.ready ? 'VryxCode can run code on ' + c.host + '.' : (c.why_not || 'Fill in the steps below.'))),
           !c.ssh_found ? el('small', {style: 'color:var(--danger)'}, 'This computer has no ssh program. On Windows, turn on OpenSSH Client in Settings > Optional features.') : null)),
