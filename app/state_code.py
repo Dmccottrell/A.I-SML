@@ -153,7 +153,7 @@ class StateCode:
                                        lambda who, project, model, sha, failed: routes_code.start_fix(self, who, project, model), notify)
         return self._ci
 
-    def app_tools(self, user, project):
+    def app_tools(self, user, project, secrets=None):
         """start_app / stop_app / app_logs (flag vryxcode_servers): the model starts the server it built, sealed in a container with no network,
         and the person uses it in the Preview (coding/code_servers.py). Never on this computer: without Docker it is refused."""
         def start_app(command="", port=5000):
@@ -163,7 +163,10 @@ class StateCode:
                                         + ". Build the page in HTML and JavaScript instead, so it shows in the Preview.")
             folder = self.code.project_path(user, project)
             try:
-                return self.app_servers.start(user, project, self.code.prefix_for(folder, force=True), command, port)
+                prefix = self.code.prefix_for(folder, force=True)
+                if secrets:                                     # vryxcode_secrets: the app gets them too (docker run -e, before the image name)
+                    prefix = prefix[:-1] + [x for k, v in secrets.items() for x in ("-e", f"{k}={v}")] + prefix[-1:]
+                return self.app_servers.start(user, project, prefix, command, port)
             except code_servers.AppError as e:
                 raise harness.ToolError(str(e))
 

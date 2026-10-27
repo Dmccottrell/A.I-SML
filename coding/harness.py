@@ -282,6 +282,7 @@ class Sandbox:
         self.allowed = set(allowed_programs)
         self.prefix = [] if self.open_host else _no_network_prefix() if command_prefix is None else list(command_prefix)
         self.extra_tools = {}
+        self.secrets = {}                                          # vryxcode_secrets: NAME -> value for the programs it runs; masked in everything the model gets back
 
     def close(self):
         for job in list(self.bg.values()):                # background commands end with the reply that started them
@@ -429,11 +430,12 @@ class Sandbox:
         env = {"PATH": os.environ.get("PATH", ""), "PYTHONDONTWRITEBYTECODE": "1", "PYTHONIOENCODING": "utf-8"}
         if os.name == "nt":
             env["SYSTEMROOT"] = os.environ.get("SYSTEMROOT", "")
+        env.update(self.secrets)
         env.update(extra_env or {})
         kwargs = {"preexec_fn": _limits} if sys.platform.startswith("linux") and not self.container and not self.remote else {}
         if self.container and wrap:
             # the container is a separate world: environment variables must be passed in with -e (before the image name, the last word of the prefix)
-            inside = dict(extra_env or {})
+            inside = dict(self.secrets, **(extra_env or {}))
             if "HOME" in inside:
                 inside["HOME"] = "/tmp"
             command = self.prefix[:-1] + [x for k, v in inside.items() for x in ("-e", f"{k}={v}")] + [self.prefix[-1]] + argv
@@ -468,9 +470,11 @@ class Sandbox:
         if sys.platform.startswith("linux") and not self.container:
             extra["preexec_fn"] = _limits_and_session
             extra.pop("start_new_session")
-        env = {"PATH": os.environ.get("PATH", ""), "PYTHONDONTWRITEBYTECODE": "1", "PYTHONIOENCODING": "utf-8", "PYTHONUNBUFFERED": "1"}
+        env = {"PATH": os.environ.get("PATH", ""), "PYTHONDONTWRITEBYTECODE": "1", "PYTHONIOENCODING": "utf-8", "PYTHONUNBUFFERED": "1", **self.secrets}
         if os.name == "nt":
             env["SYSTEMROOT"] = os.environ.get("SYSTEMROOT", "")
+        if self.container and self.secrets and argv[:2] == ["docker", "run"]:
+            argv = argv[:2] + [x for k, v in self.secrets.items() for x in ("-e", f"{k}={v}")] + argv[2:]
         with open(log, "w", encoding="utf-8") as fh:
             try:
                 proc = subprocess.Popen(argv, cwd=self.root, env=env, stdout=fh, stderr=subprocess.STDOUT, stdin=subprocess.DEVNULL, **extra)
@@ -764,6 +768,13 @@ class Sandbox:
     def builtin_names(self):
         return ["list_files", "read_file", "write_file", "edit_file", "run", "git", "diagnostics", "finish"] + (["glob", "grep", "command_output", "stop_command", "install"] if self.full else [])
 
+    def mask(self, text):
+        """The text with every secret's value replaced by [secret NAME], so the model never sees one (longest first: one value may contain another)."""
+        for k, v in sorted(self.secrets.items(), key=lambda kv: -len(kv[1])):
+            if len(v) >= 4:
+                text = text.replace(v, f"[secret {k}]")
+        return text
+
     def call(self, name, args):
         """Run one tool. Returns (text for the model, whether the model said it is finished)."""
         if name == "finish":
@@ -778,7 +789,10 @@ class Sandbox:
         if not isinstance(args, dict):
             raise ToolError("'args' must be an object like {\"path\": \"main.py\"}")
         try:
-            return tools[name](**args), False
+            out = tools[name](**args)
+            return (self.mask(out) if isinstance(out, str) else out), False
+        except ToolError as e:
+            raise ToolError(self.mask(str(e)))
         except TypeError as e:
             raise ToolError(f"wrong arguments for {name}: {e}")
         except (ValueError, OSError) as e:                       # a bad number, a name the system refuses, a file that cannot be written: tell the model, do not crash the session
@@ -1637,6 +1651,11 @@ def run_agent(task, generate, sandbox, max_turns=8, system=None, project=True, h
     autocheck = bool(getattr(generate, "autocheck", False))           # vryxcode_autocheck: the whole project is built after every change to code
     build_broken, build_nudges = None, 0
     guard = guardrails.Guard(sandbox.root, checkpoints) if getattr(generate, "guardrails", False) else None    # vryxcode_guardrails: no circles, progress or stop
+    if getattr(generate, "secrets", None):                           # vryxcode_secrets: its programs get them; the model gets only the names
+        sandbox.secrets = dict(generate.secrets)
+        if not history:
+            messages[-1]["content"] += ("\n\nThis project has secrets, set as environment variables for every program you run: " + ", ".join(sorted(generate.secrets))
+                                        + ". You never see their values: read them from the environment (os.environ[\"NAME\"], process.env.NAME), never write a value into a file.")
     if build and "rollback" not in sandbox.extra_tools:
         sandbox.register_tool("rollback", lambda: checkpoints.restore())
     for turn in range(1, max_turns + 1):

@@ -52,7 +52,9 @@ class SiteFx(unittest.TestCase):
                 for y in range(0, page.evaluate("document.documentElement.scrollHeight"), 500):
                     page.evaluate(f"window.scrollTo(0, {y})")
                     page.wait_for_timeout(60)
-                eventually(lambda: self.assertEqual(page.evaluate("document.querySelectorAll('.fx-r:not(.fx-in)').length"), 0))  # everything rose into view
+                # everything rose into view. On a busy machine a quick scroll can pass an element before the browser noticed it: bring each one still
+                # waiting into view again while waiting (the condition, not a longer sleep)
+                eventually(lambda: self.assertEqual(page.evaluate("[...document.querySelectorAll('.fx-r:not(.fx-in)')].map((e) => (e.scrollIntoView({block: 'center'}), e)).length"), 0))
                 self.assertEqual(errors, [])
             finally:
                 b.close()

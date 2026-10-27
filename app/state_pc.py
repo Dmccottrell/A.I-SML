@@ -206,7 +206,7 @@ class StatePC:
                             "available": bool(self.runner.available(m["id"])) if self.runner else True,
                             "guard": model_guard.public(self.guards.load(m["id"]), self.guard_run if (self.guard_run and self.guard_run["state"] == "running" and self.guard_run["model_id"] == m["id"]) else None),
                             "schedule_failed": mp.data["failed"].get(m["id"]), "changes": "" if preview else mp.changes(m)})
-        return {"models": out, "keep_older": int(self.manifest.get("keep_older_versions", 6)), "checks_running": bool(self.guard_run and self.guard_run["state"] == "running"),
+        return {"models": out, "keep_older": int(self.manifest.get("keep_older_versions", 6)), "checks_running": bool(self.guard_run and self.guard_run["state"] == "running"), "products": self.flags.products(),
                 "releases": [r for r in self.flags.releases() if str(r.get("kind", "")).startswith("model")]}
 
     def preload(self, model_id):

@@ -116,6 +116,16 @@ class Base(unittest.TestCase):
         self.state.flags.data["audiences"]["vryxcode_open_pc"] = "off"
         self.state.flags.data["audiences"]["vryxcode_record"] = "off"
         self.state.flags.data["audiences"]["vryxcode_lines"] = "off"
+        self.state.flags.data["audiences"]["vryxcode_restore"] = "off"
+        self.state.flags.data["audiences"]["vryxcode_secrets"] = "off"
+        self.state.flags.data["audiences"]["vryxcode_github"] = "off"
+        self.state.flags.data["audiences"]["vryxcode_dbview"] = "off"
+        self.state.flags.data["audiences"]["vryxcode_publish"] = "off"
+        self.state.flags.data["audiences"]["admin_crashes"] = "off"
+        self.state.flags.data["audiences"]["apk_link"] = "off"
+        self.state.flags.data["audiences"]["android_vryxcode"] = "off"
+        self.state.flags.data["audiences"]["cloud_guide"] = "off"
+        self.state.flags.data["audiences"]["model_code_test"] = "off"
         self.owner = Client(self.port, self.state.owner_key())
         self.sam_key = self.state.add_user("sam", "free")
         self.sam = Client(self.port, self.sam_key)
@@ -123,6 +133,7 @@ class Base(unittest.TestCase):
     def tearDown(self):
         self.srv.shutdown()
         self.srv.server_close()
+        self.state.close_databases()                       # Windows cannot delete a folder with an open database in it
         self.tmp.cleanup()
 
     def page_text(self):

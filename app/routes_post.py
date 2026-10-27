@@ -428,7 +428,10 @@ class RoutesPost:
             if path == "/api/admin/models":                                   # publish a model that is in preview, schedule it, or record an update that keeps its version
                 mp, man, mid, by = self.state.models_pub, self.state.manifest, str(body.get("id", "")), who["user"]
                 try:
-                    if body.get("run_checks"):
+                    if body.get("push_product"):                                   # VryxCode: every waiting feature goes out as its next version
+                        label = self.state.flags.push_product(str(body["push_product"]), by=by, kind=str(body.get("kind") or "minor"), notes=str(body.get("notes") or ""))
+                        self.state.auth.event("model_published", by, self._ip(), label + " pushed")
+                    elif body.get("run_checks"):
                         self.state.start_guard(mid, by=by)
                         self.state.auth.event("model_checks", by, self._ip(), f"{mid}: started")
                     elif body.get("publish") == "now":

@@ -244,7 +244,22 @@ async function acFetch(t) {
 }
 acPaint();
 addEventListener('beforeunload', (ev) => { if (IDE.tabs.some((t) => t.dirty)) { ev.preventDefault(); ev.returnValue = ''; } });
+// vryxcode_dbview: a SQLite file opens as its tables (read-only), with a search box
+async function viewDb(f, table, q) {
+  const r = await api('/api/code/db?project=' + encodeURIComponent(C.project) + '&path=' + encodeURIComponent(f) + '&table=' + encodeURIComponent(table || '') + '&q=' + encodeURIComponent(q || ''));
+  const j = await r.json().catch(() => ({})), v = $('codeView');
+  if (!r.ok) { v.textContent = j.message || 'It could not be opened.'; return; }
+  const search = el('input', {type: 'search', value: q || '', placeholder: 'Search this table', 'aria-label': 'Search this table', style: 'flex:1;min-width:120px'});
+  search.addEventListener('keydown', (e) => { if (e.key === 'Enter') viewDb(f, j.table, search.value); });
+  v.replaceChildren(el('div', {class: 'vx-db'},
+    el('div', {class: 'row'}, ...j.tables.map((t) => el('button', {class: 'chip' + (t.name === j.table ? ' on' : ''), onclick: () => viewDb(f, t.name, '')}, t.name + (t.rows == null ? '' : ' (' + t.rows + ')')))),
+    j.table ? el('div', {class: 'row'}, search, el('button', {class: 'chip', onclick: () => viewDb(f, j.table, search.value)}, 'Search')) : el('div', {}, 'This database has no tables yet.'),
+    j.table ? el('div', {class: 'tw'}, el('table', {}, el('thead', {}, el('tr', {}, ...j.columns.map((c) => el('th', {}, c)))),
+      el('tbody', {}, ...j.rows.map((row) => el('tr', {}, ...row.map((x) => el('td', {class: x === null ? 'nul' : ''}, x === null ? 'NULL' : String(x)))))))) : '',
+    el('small', {style: 'color:var(--muted)'}, j.rows.length >= j.limit ? 'Showing the first ' + j.limit + ' rows. Read-only: nothing here changes the database.' : 'Read-only: nothing here changes the database.')));
+}
 async function viewFile(f) {
+  if (featureOn('vryxcode_dbview') && /\.(db|sqlite3?|db3)$/i.test(f)) { C.file = f; refreshFiles(); return viewDb(f, '', ''); }
   C.file = f; const r = await api('/api/code/file?project=' + encodeURIComponent(C.project) + '&path=' + encodeURIComponent(f)); const j = await r.json();
   $('codeView').textContent = r.ok ? j.text + (j.truncated ? '\n... (shortened)' : '') : j.message; refreshFiles();
 }
@@ -252,7 +267,7 @@ function showUsage(u) {
   if (!u) return;
   $('codeUsage').textContent = u.exempt ? 'Owner: no limits' : u.plan[0].toUpperCase() + u.plan.slice(1) + ' · ' + u.tank_pct + '% left · about ' + fmt(u.steps_left) + ' coding steps';
 }
-function note(cls, k, text) { $('codeIn').append(el('div', {class: cls}, el('b', {}, k), el('div', {}, text))); scrollCode(); }
+function note(cls, k, text) { const n = el('div', {class: cls}, el('b', {}, k), el('div', {}, text)); $('codeIn').append(n); scrollCode(); return n; }
 function scrollCode() { const f = $('codeFeed'); f.scrollTop = f.scrollHeight; }
 // Past-tense words for finished actions (what the card says), and rotating present-tense words for the live line (what it is doing right now)
 const DONE_VERB = {read_file: 'Read', write_file: 'Wrote', edit_file: 'Edited', run: 'Ran', list_files: 'Looked around', git: 'Git', diagnostics: 'Checked', github: 'GitHub'};
@@ -330,13 +345,26 @@ $('codeCtx').onclick = () => {
   m.hidden = false;
 };
 document.addEventListener('click', (e) => { if (!e.target.closest('#codeCtx, #codeCtxMenu')) $('codeCtxMenu').hidden = true; });
+// vryxcode_restore: a Restore button on each of your messages puts the files back as they were just before it (the same as Rewind, one tap from the feed)
+function restoreBtn(e) {
+  if (!featureOn('vryxcode_restore') || !e.turn) return '';
+  return el('button', {class: 'chip vx-restore', type: 'button', title: 'Put the files back as they were before this message', onclick: async (ev) => {
+    ev.stopPropagation();
+    if (C.state === 'working') return toast('Wait for VryxCode to finish, or press Stop.');
+    if (!(C.checkpoints || []).some((c) => c.turn === e.turn)) return toast('That point is no longer kept: only the last few messages can be restored.');
+    if (!confirm('Put the files back as they were before this message? Files made after it are removed.')) return;
+    const r = await post('/api/code/sessions/' + C.sid + '/rewind', {turn: e.turn}); const j = await r.json().catch(() => ({}));
+    if (!r.ok) { note('bad', 'Could not restore', (j.message || '') + ' ' + (j.action || '')); return; }
+    poll(); refreshFiles(); if (!$('codePv').hidden) reloadPreview();
+  }}, icon('undo'), ' Restore');
+}
 function cEvent(e) {
   if (e.kind === 'user' || e.kind === 'start') offerReply('');          // a new message: the last suggestion no longer fits
   const feed = $('codeIn'); C.events.push(e);
   if (e.kind === 'context') { codeCtx(e); return; }
   if (e.kind === 'model') { feed.append(el('div', {class: 'note', style: 'align-self:center;margin:6px auto'}, 'Now using ' + modelName(e.model) + (e.previous ? ' (was ' + modelName(e.previous) + ')' : ''))); C.last = null; return; }
   if (e.kind === 'note' || (e.kind === 'user' && e.auto)) { if (e.kind === 'note') feed.append(el('div', {class: 'note', style: 'align-self:center;margin:6px auto;max-width:92%'}, '\u21bb ' + e.text)); C.last = null; return; }
-  if (e.kind === 'user') { feed.append(el('div', {class: 'cc-user'}, el('span', {class: 'ember'}), el('span', {}, (e.plan ? '[Plan] ' : '') + e.text), e.steer ? el('small', {style: 'color:var(--muted);margin-left:6px'}, '(while it worked)') : '')); C.last = null; return; }
+  if (e.kind === 'user') { feed.append(el('div', {class: 'cc-user'}, el('span', {class: 'ember'}), el('span', {}, (e.plan ? '[Plan] ' : '') + e.text), e.steer ? el('small', {style: 'color:var(--muted);margin-left:6px'}, '(while it worked)') : '', restoreBtn(e))); C.last = null; return; }
   if (e.kind === 'choose') {          // the full agent asks the person to pick: one tap answers, or they write their own
     const pick = (choice) => { if (!String(choice || '').trim()) return; post('/api/code/sessions/' + C.sid + '/answer', {id: e.id, choice}).then(() => poll()); };
     const other = el('input', {type: 'text', placeholder: 'Or write your own answer', 'aria-label': 'Your own answer',
@@ -348,7 +376,7 @@ function cEvent(e) {
     return;
   }
   if (e.kind === 'start' || e.kind === 'user') C.turnFiles = {};       // vryxcode_review: the files this message changed, for its Done line
-  if (e.kind === 'start') { feed.replaceChildren(el('div', {class: 'cc-user'}, el('span', {class: 'ember'}), el('span', {}, (e.plan ? '[Plan] ' : '') + e.task))); C.last = null; return; }
+  if (e.kind === 'start') { feed.replaceChildren(el('div', {class: 'cc-user'}, el('span', {class: 'ember'}), el('span', {}, (e.plan ? '[Plan] ' : '') + e.task), restoreBtn(e))); C.last = null; return; }
   if (e.kind === 'step') {
     if (C.retry) { C.retry.classList.replace('run', 'ok'); const v = C.retry.querySelector('.cc-verb'); if (v) v.textContent = 'Fixed a step'; C.retry = null; }   // vryxcode_fixes: the step it retried went through
     const prose = String(e.raw || '').split(/<\|tool_call\|>|<tool_call>/)[0].trim();
@@ -437,6 +465,9 @@ function cEvent(e) {
           ...changed.map(([p, f]) => { const c = fileChip(p, f.add, f.del); c.classList.add('ok'); c.onclick = () => { showDrawer(true, 'changes'); }; return c; }),
           vxPreviewOn() && changed.some(([p]) => /\.(html?|css|js)$/i.test(p)) ? el('button', {class: 'btn small vx-pvgo', onclick: () => openPreview()}, '\u25B6 Preview') : ''));
       }
+      if (e.finished && (featureOn('vryxcode_github') || featureOn('vryxcode_publish'))) feed.append(el('div', {class: 'vx-ship'},     // the work is done: keep it on GitHub, or put it online
+        featureOn('vryxcode_github') ? el('button', {class: 'chip', onclick: () => saveToGithub()}, '\u2191 Save to GitHub') : '',
+        featureOn('vryxcode_publish') ? el('button', {class: 'chip', onclick: () => publishSite()}, '\u{1F310} Publish') : ''));
       if (e.report) feed.append(reportCard(e.report));
       if (e.verdict) {        // vryxcode_guardrails: a review ends on a verdict; only CRITICAL and MAJOR problems go back, test first, and style notes never loop
         const v = e.verdict, ok = v.status === 'APPROVED';

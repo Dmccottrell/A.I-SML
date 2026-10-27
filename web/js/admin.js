@@ -9,14 +9,14 @@ function openAdmin(tab) {
 function admRender() {
   const root = ADM.root; if (!root || !root.isConnected) return;
   viewHash('admin/' + ADM.tab);
-  const tabs = [['overview', 'Overview'], ['previews', 'Previews'], ['models', 'Models'], ['apps', 'Apps'], ['pc', 'PC'], ['people', 'People'], ['signups', 'Sign-ups'], ['reports', 'Answer reports'], ['backups', 'Backups'], ['cloud', 'Cloud machine'], ['activity', 'Activity']];
+  const tabs = [['overview', 'Overview'], ['previews', 'Previews'], ['models', 'Models'], ['apps', 'Apps'], ['pc', 'PC'], ['people', 'People'], ['signups', 'Sign-ups'], ['reports', 'Answer reports'], ['backups', 'Backups'], ['cloud', 'Cloud machine'], ['activity', 'Activity'], ...(S.state && S.state.owner && featureOn('admin_crashes') ? [['crashes', 'Crashes']] : [])];
   const body = el('div', {class: 'adm-body', id: 'admBody'});
   root.replaceChildren(
     el('div', {class: 'adm-top'}, el('h2', {}, 'Admin'), el('button', {class: 'icon', type: 'button', 'aria-label': 'Close admin', onclick: closeAdmin}, icon('x'))),
     el('div', {class: 'adm-tabs', role: 'tablist'}, ...tabs.map(([id, n]) => el('button', {type: 'button', role: 'tab', class: ADM.tab === id ? 'on' : '', 'aria-selected': String(ADM.tab === id), onclick: () => { ADM.tab = id; ADM.q = ''; admRender(); }}, n))),
     body);
   const fill = {previews: admPreviews, models: admModels, apps: admApps, pc: admPc, people: admPeople, signups: () => admOld(body, 'a-signups'), activity: () => admOld(body, 'a-log'),
-    overview: () => admOld(body, 'a-overview'), reports: () => admOld(body, 'a-feedback'), backups: () => admOld(body, 'a-backups'), cloud: () => admOld(body, 'a-cloud')}[ADM.tab];
+    overview: () => admOld(body, 'a-overview'), reports: () => admOld(body, 'a-feedback'), backups: () => admOld(body, 'a-backups'), cloud: () => admOld(body, 'a-cloud'), crashes: admCrashes}[ADM.tab] || admPreviews;
   body.append(el('div', {style: 'color:var(--muted)'}, 'Loading...'));
   Promise.resolve(fill(body)).catch(() => body.replaceChildren(el('p', {class: 'lead'}, 'That did not load. Check your connection and try again.')));
 }
@@ -49,8 +49,8 @@ async function admPreviews(body) {
   const ready = j.flags.filter((f) => f.audience !== 'everyone' && f.audience !== 'off'), prev = j.flags.filter((f) => f.audience !== 'everyone'), pub = j.flags.filter((f) => f.audience === 'everyone');
   const previewCard = (f) => {
     const when = sxInput('datetime-local', '', {'aria-label': 'Publish date and time for ' + f.title}); when.min = new Date(Date.now() + 60000 - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 16);
-    return el('div', {class: 'adm-sub'}, el('b', {}, f.title), el('small', {}, f.desc),
-      el('small', {style: 'color:var(--accenttext)'}, 'Only you see this until you publish it.'),
+    return el('div', {class: 'adm-sub'}, el('b', {}, f.title, f.model ? ' ' : '', f.model ? el('span', {class: 'adm-tag'}, 'Part of VryxCode') : null), el('small', {}, f.desc),
+      el('small', {style: 'color:var(--accenttext)'}, f.model ? 'Only you and the admins see this. It goes to everyone with the next VryxCode version (Models > Push update), or publish it alone here.' : 'Only you see this until you publish it.'),
       f.scheduled ? el('small', {style: 'color:var(--accenttext)'}, 'Goes live for everyone on ' + sxWhen(f.scheduled.at) + ' as a ' + (f.scheduled.kind || 'minor') + ' release (set by ' + f.scheduled.by + ').') : null,
       el('div', {class: 'adm-acts'}, when,
         sxBtn('Schedule', () => { const t = new Date(when.value).getTime(); if (!when.value || !(t > Date.now())) return toast('Choose a date and time in the future.');
@@ -78,6 +78,25 @@ async function admPreviews(body) {
   draw();
 }
 
+
+// admin_crashes: the errors in server.log, the same one counted once; Fix this hands it to VryxCode in the Emvryx project, test first
+async function admCrashes(body) {
+  const j = await (await api('/api/admin/crashes')).json();
+  const fix = async (c) => {
+    closeAdmin(); await openCode();
+    const mine = (C.info.projects || []).find((p) => /^(a-?i-?sml|emvryx)/i.test(p));
+    if (!mine) { note('bad', 'Import Emvryx first', 'Fix this works on your Emvryx code as a VryxCode project. Import your A.I-SML repository from GitHub (tap the project name, then Import from GitHub), then press Fix this again.'); return; }
+    C.project = mine; renderCodeBar(); newSession(); $('codeTask').value = c.task; $('codeTask').focus();
+    note('fin', 'Ready to fix', 'The error is in the message box. Send it to start; when it is done, Save to GitHub makes a pull request. Nothing changes on the running app until you update it.');
+  };
+  body.replaceChildren(el('div', {class: 'adm-card'}, el('h3', {}, '\u{1F6A8} Crashes and errors'),
+    el('p', {}, j.log_found ? 'Errors from server.log, newest first. The same error is listed once with how many times it happened.' : 'No server.log was found. It is written when Emvryx is started by the autostart script.'),
+    ...(j.crashes.length ? j.crashes.map((c) => el('div', {class: 'adm-sub'},
+      el('div', {class: 'adm-row'}, el('b', {}, c.error), el('span', {class: 'adm-tag'}, c.count + (c.count === 1 ? ' time' : ' times'))),
+      el('small', {}, c.where + (c.request ? ' \u00b7 ' + c.request : '') + (c.last ? ' \u00b7 last ' + c.last : '')),
+      el('details', {}, el('summary', {style: 'cursor:pointer;color:var(--muted);font-size:14px'}, 'The lines around it'), el('pre', {style: 'white-space:pre-wrap;font-size:12px;overflow:auto'}, c.text)),
+      el('div', {class: 'adm-acts'}, sxBtn('Fix this', () => fix(c), 'primary')))) : [el('p', {}, j.log_found ? 'No errors. \u2713' : '')])));
+}
 
 async function admModels(body) {
   let j = await (await api('/api/admin/models')).json(); let timer = null;
@@ -109,10 +128,30 @@ async function admModels(body) {
         ok ? sxBtn('Publish', () => { if (confirm('Publish ' + m.label + ' to everyone now?' + (m.replaces ? ' ' + m.replaces + ' moves to Other models.' : ''))) save({id: m.id, publish: 'now'}); }, m.available ? 'primary' : '')
            : sxBtn('Publish without the checks…', () => { if (confirm('Publish ' + m.label + ' WITHOUT passing the safety checks? This is recorded in the security log. Only do it if you have tested the model yourself.')) save({id: m.id, publish: 'now', skip_checks: true}); }, 'bad')));
   };
+  // a product released like a model (VryxCode): its waiting features go out together as its next version
+  const productCard = (p) => el('div', {class: 'adm-card'}, el('h3', {}, '\u{1F6E0} ' + p.label),
+    el('p', {}, p.desc + ' Each feature keeps its own switch under Previews (for trying it on you and the admins); Push update sends every waiting one to everyone as ' + p.title + ' ' + p.next.minor + '.'),
+    el('h3', {style: 'font-size:16px'}, 'Waiting for the next version (' + p.waiting.length + ')'),
+    ...(p.waiting.length ? p.waiting.map((f) => el('div', {class: 'adm-sub'}, el('b', {}, f.title, ' ', el('span', {class: 'adm-tag'}, f.audience === 'owner' ? 'Owner' : 'Admins')), el('small', {}, f.desc)))
+                         : [el('p', {}, 'Nothing is waiting. New ' + p.title + ' features appear here.')]),
+    p.held.length ? el('small', {style: 'color:var(--muted)'}, 'Switched off, so left out: ' + p.held.map((f) => f.title).join(', ')) : null,
+    el('div', {class: 'adm-acts'}, sxBtn('Push update', () => {
+      if (!p.waiting.length) return toast('Nothing is waiting to push.');
+      let kind = 'minor';
+      const notes = el('textarea', {rows: 3, maxlength: 500, placeholder: 'What changed (optional, shown in What\u2019s new)', style: 'width:100%;border-radius:12px;padding:10px;background:var(--surface2);color:var(--text);border:1px solid var(--line);font:inherit'});
+      const opts = el('div', {style: 'display:flex;flex-direction:column;gap:8px;margin:10px 0'});
+      const paint = () => opts.replaceChildren(...[['minor', 'Update', 'New features and fixes'], ['major', 'Big version', 'A big change']].map(([k, n, w]) => el('button', {type: 'button', class: 'opt' + (k === kind ? ' sel' : ''), onclick: () => { kind = k; paint(); }},
+        el('span', {class: 'grow'}, el('b', {}, n + '  \u00b7  ' + p.title + ' ' + p.next[k]), el('small', {}, w)))));
+      paint();
+      const m = dialog([el('h2', {}, 'Push ' + p.title + ' to everyone'), el('div', {style: 'color:var(--muted)'}, p.waiting.length + ' feature' + (p.waiting.length === 1 ? '' : 's') + ' go live for everyone.'), opts, notes], 'Cancel',
+        el('button', {class: 'btn', style: 'margin-bottom:8px', onclick: () => { m.remove(); save({push_product: p.id, kind, notes: notes.value.trim()}); }}, 'Push update'));
+    }, p.waiting.length ? 'primary' : '')),
+    p.live.length ? el('details', {}, el('summary', {style: 'cursor:pointer;color:var(--muted);font-size:14px'}, 'Live for everyone (' + p.live.length + ')'), ...p.live.map((f) => el('small', {style: 'display:block;margin-top:6px'}, '\u2022 ' + f.title))) : null);
   const draw = () => {
     clearTimeout(timer);
     const prev = j.models.filter((m) => m.preview), live = j.models.filter((m) => !m.preview);
     body.replaceChildren(
+      ...(j.products || []).map(productCard),
       el('div', {class: 'adm-card'}, el('h3', {}, '\u{1F9E0} Model versions'),
         el('p', {}, 'A new model version stays in preview (only you and admins see it, marked Preview in the model picker) until you publish it. Before it can be published it must pass the safety checks. Publishing makes it live for everyone and moves the older version of that name to Other models, where it stays usable. Other models keeps the newest ' + j.keep_older + ' older versions of each name.'),
         el('p', {}, 'Rule of thumb: a new version when the training lessons change (Flare 2.5 to 2.6); otherwise it is an update and the version stays (record it below). The app’s own version does not change.'),

@@ -11,6 +11,7 @@ import connected_apps
 import documents
 import feedback
 import updater
+import crash_log
 import live_data
 import flags
 import passkeys
@@ -208,6 +209,10 @@ class RoutesGet:
                 return self._send(200, self.state.updater.check())
             except updater.UpdateError as e:
                 return self._send(200, {"can_update": False, "reason": e.message, "incoming": [], "dirty": []})
+        if path == "/api/admin/crashes" and who["owner"] and self.state.flags.on("admin_crashes", who):     # tracebacks may hold private text: the owner only
+            log = os.path.join(self.state.data_dir, "server.log") if self.state.data_dir else ""
+            crashes = crash_log.read(log) if log else []
+            return self._send(200, {"crashes": [dict(c, task=crash_log.fix_task(c)) for c in crashes], "log_found": bool(log) and os.path.exists(log)})
         if path == "/api/admin/pc" and who["admin"]:
             self.state.sync_gaming()
             return self._send(200, self.state.pc_status())

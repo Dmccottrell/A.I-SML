@@ -550,6 +550,7 @@ class Session:
         call.guardrails = getattr(generate, "guardrails", False)     # ...and so does vryxcode_guardrails
         call.autocheck = getattr(generate, "autocheck", False)       # ...and vryxcode_autocheck
         call.record = getattr(generate, "record", False)             # ...and vryxcode_record
+        call.secrets = getattr(generate, "secrets", None)           # ...and vryxcode_secrets (the values go to the sandbox, never to the model)
         return call
 
     def run(self, generate, max_turns, context_tokens, extra_programs=()):
@@ -584,9 +585,9 @@ class Session:
             self.deadline = self.quotas.session_deadline()          # each message gets its own time allowance
         self._checkpoint(text)
         if first:
-            self.emit("start", task=text, model=self.model_id, project=self.project, plan=plan)
+            self.emit("start", task=text, model=self.model_id, project=self.project, plan=plan, turn=self.turns_run)
         else:
-            self.emit("user", text=text, plan=plan, **({"auto": True} if auto else {}))
+            self.emit("user", text=text, plan=plan, turn=self.turns_run, **({"auto": True} if auto else {}))
         if getattr(self.generate, "record", False):
             self._record({"user": text, "plan": bool(plan), "first": bool(first), "model_text": bool(getattr(self, "_model_text", None))})
         self.live_messages = None

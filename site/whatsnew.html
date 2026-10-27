@@ -207,7 +207,12 @@ body{font-family:'DM Sans',sans-serif;color:var(--text);line-height:1.55;font-si
     list.forEach(function (en) { if (en.isIntersecting) { en.target.classList.add('fx-in'); io.unobserve(en.target); } });
   }, {rootMargin: '0px 0px -8% 0px', threshold: .08});
   targets.forEach(function (e) { io.observe(e); });
-  setTimeout(function () { targets.forEach(function (e) { var r = e.getBoundingClientRect(); if (r.top < innerHeight) e.classList.add('fx-in'); }); }, 2500);   // never leave anything hidden
+  // never leave anything hidden: a part the observer cannot see (inside a clipped box) is shown once it is above the bottom of the screen, 2.5 s
+  // after the page opens and again each time scrolling stops (on a slow phone the observer can miss it)
+  function reveal() { targets.forEach(function (e) { if (!e.classList.contains('fx-in') && e.getBoundingClientRect().top < innerHeight) e.classList.add('fx-in'); }); }
+  var revealT = null;
+  setTimeout(reveal, 2500);
+  addEventListener('scroll', function () { clearTimeout(revealT); revealT = setTimeout(reveal, 400); }, {passive: true});
   /* ---- scroll: progress line, frosted menu, hero drifting away, dashes dimming */
   var bar = document.createElement('div'); bar.className = 'fx-bar'; document.body.appendChild(bar);
   var nav = document.querySelector('.nav'), heroBlock = h1 && (h1.closest('section') || h1.parentElement), ticking = false;
