@@ -102,6 +102,24 @@ async function admCrashes(body) {
       el('div', {class: 'adm-acts'}, sxBtn('Fix this', () => fix(c), 'primary')))) : [el('p', {}, j.log_found ? 'No errors. \u2713' : '')])));
 }
 
+// accuracy_score: each model's score on the everyday question sheet, every time the checks ran, and the change since the run before
+function accuracyCard(j, save) {
+  const hist = j.accuracy || {}, live = j.models.filter((m) => !m.preview && m.available);
+  const rows = j.models.filter((m) => (hist[m.id] || []).length || live.includes(m)).map((m) => {
+    const runs = hist[m.id] || [], last = runs[runs.length - 1], prev = runs[runs.length - 2];
+    const d = last && prev ? Math.round((last.percent - prev.percent) * 10) / 10 : null;
+    return el('div', {class: 'adm-sub'},
+      el('div', {class: 'adm-row'}, el('b', {}, m.label), last ? el('span', {class: 'adm-tag' + (last.percent >= 80 ? ' on' : '')}, Math.round(last.percent) + '%') : el('small', {}, 'Not measured yet')),
+      last ? el('small', {style: d == null ? '' : d < 0 ? 'color:var(--danger)' : 'color:var(--good, #4ade80)'}, d == null ? 'First run ' + admAgo(last.when) + '.' : (d < 0 ? '\u25bc ' : d > 0 ? '\u25b2 ' : '= ') + Math.abs(d) + ' points since the run before (' + admAgo(last.when) + ')') : null,
+      runs.length > 1 ? el('div', {class: 'acc-bars', title: 'The last ' + runs.length + ' runs, oldest first'}, ...runs.slice(-12).map((r) => el('i', {style: 'height:' + Math.max(4, Math.round(r.percent * 0.4)) + 'px', title: Math.round(r.percent) + '%'}))) : null,
+      last ? el('small', {}, Object.entries(last.by_category || {}).map(([k, v]) => k + ' ' + v[0] + '/' + v[1]).join(' \u00b7 ')) : null,
+      live.includes(m) ? el('div', {class: 'adm-acts'}, sxBtn('Measure now', () => save({id: m.id, run_checks: true}))) : null);
+  });
+  return el('div', {class: 'adm-card'}, el('h3', {}, '\u{1F4C8} Accuracy over time'),
+    el('p', {}, 'The same everyday questions (facts, sums, following a format, saying \u201cI don\u2019t know\u201d, code, refusing harm) after every update, so you can see whether it got smarter or worse. It takes a few minutes and loads the model.'),
+    ...(rows.length ? rows : [el('p', {}, 'No model is on this computer yet.')]));
+}
+
 // model_code_test: your own models on tasks made from your recorded VryxCode sessions, sealed in the sandbox; the tests decide pass or fail
 async function codeTestCard(box) {
   let j; try { j = await (await api('/api/admin/code-test')).json(); } catch (e) { return; }
@@ -183,6 +201,7 @@ async function admModels(body) {
     if (testBox) setTimeout(() => codeTestCard(testBox), 0);
     body.replaceChildren(
       ...(j.products || []).map(productCard),
+      ...(featureOn('accuracy_score') ? [accuracyCard(j, (b) => save(b))] : []),
       ...(testBox ? [testBox] : []),
       el('div', {class: 'adm-card'}, el('h3', {}, '\u{1F9E0} Model versions'),
         el('p', {}, 'A new model version stays in preview (only you and admins see it, marked Preview in the model picker) until you publish it. Before it can be published it must pass the safety checks. Publishing makes it live for everyone and moves the older version of that name to Other models, where it stays usable. Other models keeps the newest ' + j.keep_older + ' older versions of each name.'),

@@ -2,6 +2,7 @@
 state_pc.py - AppState's model-running part: gaming mode, idle unload, safety checks before publishing, and choosing, warming and talking to a model.
 """
 import os, sys; sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), os.pardir)); import emvryx_paths  # noqa: E402,F401  (the code folders become importable)
+import json
 import queue
 import threading
 import time
@@ -186,12 +187,42 @@ class StatePC:
                 self.guards.save(model_id, {"model_id": model_id, "when": time.time(), "by": by, "passed": passed, "reasons": reasons, "summary": summary, "results": results,
                                            "fingerprint": self._model_fingerprint(model_id)})
                 self.auth.event("model_checks", by or "owner", "", f"{model_id}: {'passed' if passed else 'failed'} {summary['percent']:g}%")
+                self.record_accuracy(model_id, summary)                       # accuracy_score: every run kept, to see the score over time
             except Exception as e:                                           # noqa: BLE001
                 print(f"(safety checks for {model_id} stopped: {e})", flush=True)
             finally:
                 run["state"] = "done"
         threading.Thread(target=work, daemon=True).start()
         return {"started": True, "n": len(tests)}
+
+    def _accuracy_path(self):
+        return os.path.join(self.data_dir, "accuracy_history.json") if self.data_dir else None
+
+    def accuracy_history(self):
+        """{model id: [{"when", "percent", "passed", "total", "by_category"}, ...]} oldest first, the last 30 runs of each."""
+        if getattr(self, "_accuracy", None) is None:
+            self._accuracy = {}
+            path = self._accuracy_path()
+            if path and os.path.exists(path):
+                try:
+                    with open(path, encoding="utf-8") as f:
+                        got = json.load(f)
+                    self._accuracy = got if isinstance(got, dict) else {}
+                except (OSError, ValueError):
+                    pass
+        return self._accuracy
+
+    def record_accuracy(self, model_id, summary):
+        hist = self.accuracy_history()
+        runs = hist.setdefault(model_id, [])
+        runs.append({"when": time.time(), "percent": summary.get("percent"), "passed": summary.get("passed"), "total": summary.get("total"),
+                     "by_category": summary.get("by_category", {})})
+        del runs[:-30]
+        path = self._accuracy_path()
+        if path:
+            with open(path + ".tmp", "w", encoding="utf-8") as f:
+                json.dump(hist, f)
+            os.replace(path + ".tmp", path)
 
     def models_admin(self):
         """The Models tab: every model in the family, whether it is in preview or live, what a publish would replace, and the model releases so far."""
@@ -207,7 +238,7 @@ class StatePC:
                             "guard": model_guard.public(self.guards.load(m["id"]), self.guard_run if (self.guard_run and self.guard_run["state"] == "running" and self.guard_run["model_id"] == m["id"]) else None),
                             "schedule_failed": mp.data["failed"].get(m["id"]), "changes": "" if preview else mp.changes(m)})
         return {"models": out, "keep_older": int(self.manifest.get("keep_older_versions", 6)), "checks_running": bool(self.guard_run and self.guard_run["state"] == "running"), "products": self.flags.products(),
-                "releases": [r for r in self.flags.releases() if str(r.get("kind", "")).startswith("model")]}
+                "releases": [r for r in self.flags.releases() if str(r.get("kind", "")).startswith("model")], "accuracy": self.accuracy_history()}
 
     def preload(self, model_id):
         """Start the model's llama-server now (with the window the owner's chats would ask for), so the first message is not slow.

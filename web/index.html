@@ -138,6 +138,13 @@ body.cp-open main { margin-right: min(46vw, 760px); }
 .cp-proj .icon { width: 28px; height: 28px; min-height: 0; }
 #chatList .label:empty { display: none; }
 .cp-results { display: flex; flex-direction: column; gap: 6px; max-height: 60vh; overflow: auto; margin-top: 8px; }
+.acc-bars { display: flex; align-items: flex-end; gap: 3px; height: 42px; margin: 6px 0; }
+.acc-bars i { width: 10px; border-radius: 3px 3px 0 0; background: var(--accent); opacity: .8; }
+.msg .cp-cite { display: inline-grid; place-items: center; min-width: 17px; height: 17px; padding: 0 4px; margin: 0 1px; border-radius: 9px; font-size: 11px; font-weight: 600; vertical-align: super; line-height: 1; background: var(--surface2); color: var(--accenttext); text-decoration: none; border: 1px solid var(--line); }
+.msg .cp-note { font-size: 13px; color: var(--muted); margin-top: 6px; }
+.msg .cp-note.ok { color: var(--good, #4ade80); }
+.msg .cp-note.warn summary { cursor: pointer; color: var(--warn, #fbbf24); }
+.msg .cp-unsup { margin: 6px 0 0 10px; padding-left: 8px; border-left: 2px solid var(--warn, #fbbf24); font-size: 13px; }
 #cpMic.on { background: var(--accent); color: var(--onaccent); }
 .code .vx-ship { display: flex; gap: 8px; flex-wrap: wrap; margin: 6px 0 10px; }
 .code .vx-state { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin: 6px 0 12px; padding: 8px 12px; border-radius: 12px; border: 1px solid var(--line); font-size: 14px; }

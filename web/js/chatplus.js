@@ -15,6 +15,9 @@ function plusMsg(m, node, last) {
     const lines = quietLines(m); if (lines) node.insertBefore(lines, bubbleEl);
     const chips = sourceChips(m); if (chips) node.insertBefore(chips, acts);
   }
+  if (featureOn('chat_cite') && (m.cites || []).length) linkCites(bubbleEl, m.cites);
+  if (featureOn('chat_verify') && (m.unsupported || []).length && acts) node.insertBefore(verifyNote(m.unsupported), acts);
+  if (featureOn('chat_calc') && (m.calc_fixed || []).length && acts) node.insertBefore(el('div', {class: 'cp-note ok'}, '\u2713 Sum corrected with a calculator: ' + m.calc_fixed.map((f) => f.was + ' \u2192 ' + f.now.split(/=|\bis\b|equals|comes to/i).pop().trim()).join('; ')), acts);
   if (featureOn('chat_panel') && m.content && acts) { const a = artifactOf(m.content); if (a) acts.prepend(el('button', {class: 'chip on', title: 'Show it next to the chat', onclick: () => openPanel(a, m.id)}, '◨ Open in panel')); }
   if (featureOn('chat_voice') && acts && m.content && 'speechSynthesis' in window) acts.append(el('button', {class: 'chip', title: 'Read this answer aloud', onclick: (e) => readAloud(m.content, e.currentTarget)}, '🔊 Read aloud'));
   if (last && featureOn('chat_followups') && m.status === 'done' && !S.busy) node.append(el('div', {class: 'cp-follow', id: 'cpFollow'}));
@@ -31,6 +34,27 @@ function plusAfterThread() {   // after the thread is drawn: the follow-ups unde
     if (a) openPanel(a, ans.id);
     PANEL.follow = false;
   }
+}
+
+// ---------------------------------------------------------------- chat_cite and chat_verify: [1] links to its source; figures not in the sources are marked
+function linkCites(root, cites) {
+  const by = {}; cites.forEach((c) => { by[c.n] = c; });
+  const walk = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, {acceptNode: (t) => (t.parentElement.closest('pre, code, a') ? NodeFilter.FILTER_REJECT : /\[\d{1,2}\]/.test(t.nodeValue) ? NodeFilter.FILTER_ACCEPT : NodeFilter.FILTER_SKIP)});
+  const found = []; while (walk.nextNode()) found.push(walk.currentNode);
+  for (const t of found) {
+    const frag = document.createDocumentFragment();
+    t.nodeValue.split(/(\[\d{1,2}\])/).forEach((part) => {
+      const c = /^\[(\d{1,2})\]$/.exec(part), cite = c && by[+c[1]];
+      if (!cite) { if (part) frag.append(part); return; }
+      frag.append(cite.url ? el('a', {class: 'cp-cite', href: cite.url, target: '_blank', rel: 'noopener noreferrer', title: cite.title}, c[1]) : el('sup', {class: 'cp-cite', title: cite.title}, c[1]));
+    });
+    t.replaceWith(frag);
+  }
+}
+function verifyNote(list) {
+  const figs = [...new Set(list.flatMap((x) => x.figures))];
+  return el('details', {class: 'cp-note warn'}, el('summary', {}, '\u26a0 ' + figs.length + (figs.length === 1 ? ' figure was' : ' figures were') + ' not found in the sources: ' + figs.slice(0, 4).join(', ') + ' \u203a'),
+    ...list.map((x) => el('div', {class: 'cp-unsup'}, x.sentence)));
 }
 
 // ---------------------------------------------------------------- chat_versions: ‹ 1/2 › under an edited question

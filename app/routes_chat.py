@@ -52,9 +52,11 @@ class RoutesChat:
             return self._send(404, {"code": "not_found", "message": "That chat is gone."})
         lib = self.state.docs_for(who["user"])
         lines = self.state.flags.on("chat_lines", who)                   # chat_lines: what each answer looked up and how long it thought
+        checks = [k for k, fid in (("calc_fixed", "chat_calc"), ("unsupported", "chat_verify"), ("cites", "chat_cite")) if self.state.flags.on(fid, who)]
         msgs = [{"id": m["id"], "role": m["role"], "content": m["content"], "model_id": m["model_id"], "status": m["status"],
                  "cut": bool((m.get("flags") or {}).get("cut")), "fb": (m.get("flags") or {}).get("fb", ""), "ctx": (m.get("flags") or {}).get("ctx"),
                  **({"looked": (m.get("flags") or {}).get("looked"), "thought_s": (m.get("flags") or {}).get("thought_s")} if lines else {}),
+                 **{k: (m.get("flags") or {})[k] for k in checks if k in (m.get("flags") or {})},
                  "docs": [{"id": d["id"], "name": d["name"], "kind": d["kind"]} for d in (lib.info(i) for i in m.get("docs") or []) if d]}
                 for m in store.messages(cid) if not (m["status"] == "compacted" and not m["content"])]
         ctx = None
