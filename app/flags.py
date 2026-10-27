@@ -68,6 +68,24 @@ FLAGS = [
     {"id": "cloud_guide", "title": "Cloud machine: step-by-step setup", "desc": "Admin > Cloud machine gets a guide for a free Oracle Cloud machine (the Always Free Arm machine): each step in plain words with a check that it worked, ending with the machine connected so VryxCode's terminal and servers can run there instead of on this PC.", "default": "admins"},
     {"id": "model_code_test", "title": "Models: coding test from real sessions", "desc": "Admin > Models gets a Coding test: the recorded VryxCode sessions (only your own, recorded with the switch for it) are turned into tasks with checks, and each of your models is run on them, sealed, to show which one codes best. Only your own models are tested, and nothing from them is used for training.", "default": "admins"},
 ]
+# Bug fixes people would notice, in plain words. Each goes out with the next release of its part (product None: the next app release, from Previews;
+# "vryxcode": the next VryxCode version, Push update in Models) and shows under "Fixed" in What's new. Add one line here with every fix that ships.
+FIXES = [
+    {"id": "site_hidden_parts", "product": None, "text": "The Emvryx website no longer leaves parts of a page invisible on a slow phone or computer."},
+    {"id": "vx_go_builds", "product": "vryxcode", "text": "Go projects build and run again (every Go command failed on a missing build folder)."},
+    {"id": "vx_java_starts", "product": "vryxcode", "text": "Java programs start again (the memory limit stopped Java from opening)."},
+    {"id": "vx_csharp_sandbox", "product": "vryxcode", "text": "C# programs run in the isolated sandbox."},
+    {"id": "vx_missing_program", "product": "vryxcode", "text": "When a program is not installed, VryxCode says so plainly and what to do instead, instead of \u201cexit code 127\u201d."},
+    {"id": "vx_built_program", "product": "vryxcode", "text": "Running a program VryxCode built now explains where it can run, instead of only \u201cnot allowed\u201d (Windows paths too)."},
+    {"id": "vx_test_results", "product": "vryxcode", "text": "VryxCode reads test results in every language, so it knows when the tests really pass."},
+    {"id": "vx_small_fix_refused", "product": "vryxcode", "text": "A small, good fix (a line added at the top of a file, or text added at the end) is no longer refused as too big."},
+    {"id": "vx_keep_going", "product": "vryxcode", "text": "VryxCode stops when it says it is done or offers something, instead of being pushed to keep going."},
+    {"id": "vx_new_session_jump", "product": "vryxcode", "text": "A session you start while VryxCode is still opening no longer jumps back to the home screen."},
+    {"id": "vx_deleted_returns", "product": "vryxcode", "text": "A session you delete just as it finishes no longer comes back in the list."},
+    {"id": "vx_old_list", "product": "vryxcode", "text": "The sessions list no longer shows an older list for a moment."},
+]
+FIX_IDS = {f["id"] for f in FIXES}
+
 # Products that are released like a model: every unpublished feature of VryxCode is part of the next VryxCode version. Each feature still has its own switch
 # (for testing on the owner and admins); "Push update" in Admin > Models sends all of the waiting ones to everyone at once as, say, VryxCode 1.4.
 PRODUCTS = {"vryxcode": {"title": "VryxCode", "desc": "The coding agent. Its new features wait here and go out together as the next VryxCode version."}}
@@ -82,12 +100,12 @@ KINDS = ("major", "minor", "patch")
 class Flags:
     def __init__(self, path=None, clock=time.time):
         self.path, self.lock, self.clock = path, threading.Lock(), clock
-        self.data = {"audiences": {}, "changed": {}, "scheduled": {}, "version": "1.0.0", "releases": [], "products": {}}
+        self.data = {"audiences": {}, "changed": {}, "scheduled": {}, "version": "1.0.0", "releases": [], "products": {}, "fixed": []}
         if path and os.path.exists(path):
             try:
                 with open(path, encoding="utf-8") as f:
                     got = json.load(f)
-                self.data.update({k: got[k] for k in ("audiences", "changed", "scheduled", "releases", "products") if isinstance(got.get(k), (dict, list))})
+                self.data.update({k: got[k] for k in ("audiences", "changed", "scheduled", "releases", "products", "fixed") if isinstance(got.get(k), (dict, list))})
                 if isinstance(got.get("version"), str) and VERSION_RE.fullmatch(got["version"]):
                     self.data["version"] = got["version"]
                 for i, r in enumerate(self.data["releases"], 1):         # releases saved before they were numbered
@@ -155,7 +173,8 @@ class Flags:
         major, minor, patch = (major + 1, 0, 0) if kind == "major" else (major, minor + 1, 0) if kind == "minor" else (major, minor, patch + 1)
         self.data["version"] = f"{major}.{minor}.{patch}"
         items = [{"id": f, "title": BY_ID[f]["title"], "desc": BY_ID[f]["desc"]} for f in fids]
-        self.data["releases"].append({"seq": self.next_seq(), "version": self.data["version"], "kind": kind, "at": at, "by": by, "notes": notes, "items": items})
+        self.data["releases"].append({"seq": self.next_seq(), "version": self.data["version"], "kind": kind, "at": at, "by": by, "notes": notes, "items": items,
+                                      "fixes": self._take_fixes(None)})
         del self.data["releases"][:-200]
 
     def next_seq(self):
@@ -173,6 +192,17 @@ class Flags:
                                           "items": [{"id": model_id, "title": label, "desc": desc}]})
             del self.data["releases"][:-200]
             self._save()
+
+    def pending_fixes(self, product=None):
+        """The fixes that have not been in a release yet, for this part (None: the app, or a product id)."""
+        done = set(self.data["fixed"])
+        return [f for f in FIXES if f["product"] == product and f["id"] not in done]
+
+    def _take_fixes(self, product=None):
+        """The waiting fixes of this part go in the release being made (caller holds the lock): their words, and they are marked as released."""
+        got = self.pending_fixes(product)
+        self.data["fixed"].extend(f["id"] for f in got)
+        return [f["text"] for f in got]
 
     def product_version(self, pid):
         v = (self.data["products"].get(pid) or {}).get("version")
@@ -192,7 +222,8 @@ class Flags:
             pick = lambda test: [{"id": f["id"], "title": f["title"], "desc": f["desc"], "audience": self.audience(f["id"])} for f in feats if test(self.audience(f["id"]))]
             out.append({"id": pid, "title": p["title"], "desc": p["desc"], "version": v, "label": f"{p['title']} {v}",
                         "next": {k: self.next_product_version(v, k) for k in ("minor", "major")},
-                        "waiting": pick(lambda a: a not in ("everyone", "off")), "live": pick(lambda a: a == "everyone"), "held": pick(lambda a: a == "off")})
+                        "waiting": pick(lambda a: a not in ("everyone", "off")), "live": pick(lambda a: a == "everyone"), "held": pick(lambda a: a == "off"),
+                        "fixes": [f["text"] for f in self.pending_fixes(pid)]})
         return out
 
     def push_product(self, pid, by="", kind="minor", notes=""):
@@ -204,8 +235,8 @@ class Flags:
             raise ValueError("choose minor or major")
         title = PRODUCTS[pid]["title"]
         ids = [f["id"] for f in FLAGS if f.get("model") == pid and self.audience(f["id"]) not in ("everyone", "off")]
-        if not ids:
-            raise ValueError(f"nothing in {title} is waiting: every feature is live or switched off")
+        if not ids and not self.pending_fixes(pid):
+            raise ValueError(f"nothing in {title} is waiting: every feature is live or switched off, and there are no new fixes")
         with self.lock:
             v = self.next_product_version(self.product_version(pid), kind)
             now = self.clock()
@@ -216,7 +247,8 @@ class Flags:
             self.data["products"][pid] = {"version": v, "at": now, "by": by}
             label = f"{title} {v}"
             self.data["releases"].append({"seq": self.next_seq(), "version": self.data["version"], "kind": "model-update", "model": label, "product": pid, "at": now, "by": by,
-                                          "notes": str(notes)[:500], "items": [{"id": f, "title": BY_ID[f]["title"], "desc": BY_ID[f]["desc"]} for f in ids]})
+                                          "notes": str(notes)[:500], "items": [{"id": f, "title": BY_ID[f]["title"], "desc": BY_ID[f]["desc"]} for f in ids],
+                                          "fixes": self._take_fixes(pid)})
             del self.data["releases"][:-200]
             self._save()
         return label
@@ -240,8 +272,8 @@ class Flags:
         """Everything still in preview goes live for everyone as ONE release. Returns the ids that went live."""
         if kind not in KINDS:
             raise ValueError("choose " + ", ".join(KINDS))
-        ids = [f for f in self.preview_ids() if self.audience(f) != "off"]       # a feature switched Off is on hold, not ready
-        if not ids:
+        ids = [f for f in self.preview_ids() if self.audience(f) != "off" and not BY_ID[f].get("model")]   # Off = on hold; a product's features go with its own push
+        if not ids and not self.pending_fixes(None):
             raise ValueError("nothing is waiting to be published")
         with self.lock:
             for f in ids:

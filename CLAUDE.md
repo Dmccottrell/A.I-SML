@@ -7,6 +7,8 @@ in `android/`. The owner is not a programmer and reads on a phone: reply in shor
 - `python scripts/run_tests.py` and `python tools/lint.py` both pass. `python tools/guard_repo.py` is clean (CI runs all three on every pull request).
 - New features go behind a feature flag in `app/flags.py`, default `"admins"`; add it to the order in `tests/test_flags.py` and, if it changes
   what existing tests see, switch it off in `tests/test_app_server.py` Base.
+- A bug fix people would notice gets one plain line in `FIXES` in `app/flags.py` (product `"vryxcode"` or `None`): it goes out with the next
+  release and shows under "Fixed" in What's new.
 - Android (Kotlin) cannot be built here: wait for the `android` CI build before merging a change to `android/`.
 
 ## When a bug appears: the guardrails (the same ones VryxCode follows, coding/guardrails.py)

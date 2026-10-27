@@ -415,7 +415,8 @@ class RoutesPost:
                         self.state.auth.event("flag_changed", who["user"], self._ip(), f"{body['id']} -> {body.get('audience')}")
                 except ValueError as e:
                     return self._send(400, {"code": "bad_request", "message": str(e)})
-                return self._send(200, {"flags": self.state.flags.listing(), "version": self.state.flags.version(), "releases": self.state.flags.releases()})
+                return self._send(200, {"flags": self.state.flags.listing(), "version": self.state.flags.version(), "releases": self.state.flags.releases(),
+                                        "fixes": [f["text"] for f in self.state.flags.pending_fixes(None)]})
             if path == "/api/admin/apps":                                     # make, change, switch off, rotate the key of, or remove an app
                 st, act = self.state, str(body.get("action", ""))
                 try:

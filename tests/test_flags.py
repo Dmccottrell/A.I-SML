@@ -198,9 +198,9 @@ class ScheduleServer(Base):
 
 
 class Releases(unittest.TestCase):
-    def setUp(self):                                                  # these rules are about one flag: leave the others out
+    def setUp(self):                                                  # these rules are about one flag: leave the others (and the fixes waiting to ship) out
         only = [f for f in F.FLAGS if f["id"] == "welcome_tour"]
-        for name, value in (("FLAGS", only), ("BY_ID", {f["id"]: f for f in only})):
+        for name, value in (("FLAGS", only), ("BY_ID", {f["id"]: f for f in only}), ("FIXES", [])):
             patch = unittest.mock.patch.object(F, name, value)
             patch.start()
             self.addCleanup(patch.stop)
