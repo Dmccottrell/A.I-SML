@@ -114,6 +114,24 @@ class EditorUi(Base):
             finally:
                 b.close()
 
+    def test_a_new_session_started_while_vryxcode_opens_is_not_sent_back_to_the_list(self):
+        from playwright.sync_api import sync_playwright
+        with sync_playwright() as p:
+            b = p.chromium.launch(executable_path=find_browser())
+            try:
+                page = b.new_context(viewport={"width": 1000, "height": 800}, extra_http_headers={"Authorization": "Bearer " + self.state.owner_key()}).new_page()
+                # a slow PC: the first answer about VryxCode comes a second late, after the person has already tapped New session
+                page.add_init_script("const f0 = window.fetch; let slow = true; window.fetch = (u, o) => { if (slow && String(u).endsWith('/api/code')) { slow = false; return new Promise((r) => setTimeout(r, 1000)).then(() => f0(u, o)); } return f0(u, o); };")
+                page.goto(f"http://127.0.0.1:{self.port}/")
+                ready(page)
+                page.evaluate("document.querySelectorAll('.tour').forEach((e) => e.remove()); openCode(); newSession()")
+                wait_for(lambda: page.evaluate("!!C.info"), 15)                                  # the late answer has arrived
+                page.wait_for_timeout(300)
+                self.assertEqual(page.evaluate("C.view"), "session")                             # still in the new session, not back on the Sessions list
+                self.assertFalse(page.evaluate("document.getElementById('code').classList.contains('home')"))
+            finally:
+                b.close()
+
     def test_update_now_card_lists_the_changes_and_asks_before_updating(self):
         from playwright.sync_api import sync_playwright
         from tests.test_updater import Server

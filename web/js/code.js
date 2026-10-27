@@ -9,12 +9,13 @@ const cOn = () => !$('code').hidden;
 const cModel = () => (C.info ? C.info.models.find((m) => m.id === C.model) : null);
 async function openCode() {
   $('code').hidden = false; document.body.classList.remove('menu-open'); document.body.classList.add('vx'); startDots($('vxDots'), $('code'));
+  C.view = 'home';                                 // opening on the Sessions list: a session started before the answer below comes (a slow PC) is kept, not sent back to the list
   const r = await api('/api/code'); C.info = await r.json(); showUsage(C.info.usage);
   const usable = C.info.models.filter((m) => m.state === 'ready');
   if (!cModel() || cModel().state !== 'ready') C.model = (usable.find((m) => m.id === S.model) || usable[0] || C.info.models[0] || {}).id;
   if (oneModel()) C.model = C.info.effort.auto || C.model;
   C.project = C.project || C.info.running && C.info.project || C.info.projects[0] || 'my-project';
-  renderCodeBar(); showHome(); vxRenderTemplates(); vxNotifyInit(); maybeVryxTour();
+  renderCodeBar(); if (C.view === 'home') showHome(); else refreshFiles(); vxRenderTemplates(); vxNotifyInit(); maybeVryxTour();
 }
 // ---- the Sessions list: where VryxCode opens, like a to-do list of everything it has worked on
 const ENV_NAME = {local: 'This computer', sandbox: 'Isolated sandbox', cloud: 'Cloud machine'};
