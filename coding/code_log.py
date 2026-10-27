@@ -60,11 +60,26 @@ class SessionLog:
                     out.append(d["meta"])
         return out
 
-    def delete(self, sid):
+    def save_replay(self, sid, data):
+        """The session's recording (the owner's messages and the model's whole replies), next to its history: <id>.replay"""
+        path = self._json(sid)[:-5] + ".replay"
+        with open(path + ".tmp", "w", encoding="utf-8") as f:
+            json.dump(data, f)
+        os.replace(path + ".tmp", path)
+
+    def load_replay(self, sid):
         try:
-            os.remove(self._json(sid))
-        except OSError:
-            pass
+            with open(self._json(sid)[:-5] + ".replay", encoding="utf-8") as f:
+                return json.load(f)
+        except (OSError, ValueError):
+            return None
+
+    def delete(self, sid):
+        for path in (self._json(sid), self._json(sid)[:-5] + ".replay"):
+            try:
+                os.remove(path)
+            except OSError:
+                pass
         shutil.rmtree(os.path.join(self.dir, sid), ignore_errors=True)
 
     def _trim(self):

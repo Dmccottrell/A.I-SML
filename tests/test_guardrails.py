@@ -35,6 +35,38 @@ class Counting(unittest.TestCase):
         self.assertEqual(G.failing_count("exit code 1\nTests:       2 failed, 5 passed"), 2)
         self.assertIsNone(G.failing_count("exit code 1\nsomething else went wrong"))
 
+    def test_every_languages_test_results_are_read(self):
+        # the last lines each test runner prints, as they really print them
+        cases = {
+            "go test": ("exit code 1\n--- FAIL: TestAdd (0.00s)\n--- FAIL: TestSub (0.00s)\nFAIL\nFAIL\tgame\t0.002s", 2),
+            "cargo test": ("exit code 101\ntest result: FAILED. 3 passed; 2 failed; 0 ignored; 0 measured; 0 filtered out", 2),
+            "dotnet test": ("exit code 1\nFailed!  - Failed:     4, Passed:    10, Skipped:     0, Total:    14, Duration: 1 s", 4),
+            "maven": ("exit code 1\n[ERROR] Tests run: 8, Failures: 1, Errors: 2, Skipped: 0", 3),
+            "gradle": ("exit code 1\n5 tests completed, 2 failed", 2),
+            "phpunit": ("exit code 1\nFAILURES!\nTests: 6, Assertions: 9, Failures: 2, Errors: 1.", 3),
+            "rspec": ("exit code 1\n12 examples, 3 failures", 3),
+            "minitest": ("exit code 1\n7 runs, 9 assertions, 1 failures, 1 errors, 0 skips", 2),
+            "ctest": ("exit code 8\n75% tests passed, 2 tests failed out of 8", 2),
+            "vitest": ("exit code 1\n Tests  3 failed | 12 passed (15)", 3),
+            "elixir": ("exit code 2\n10 tests, 2 failures", 2),
+            "swift": ("exit code 1\nExecuted 5 tests, with 2 failures (0 unexpected) in 0.1 seconds", 2),
+        }
+        for runner, (out, n) in cases.items():
+            self.assertEqual(G.failing_count(out), n, runner)
+
+    def test_every_languages_test_command_is_recognised(self):
+        for cmd in ("go test ./...", "cargo test", "dotnet test", "mvn test", "gradle test", "./gradlew test", "npm test", "npx jest", "vitest run",
+                    "phpunit", "vendor/bin/phpunit", "bundle exec rspec", "rake test", "ctest", "mix test", "swift test", "pytest -q", "python -m unittest"):
+            self.assertTrue(harness.TEST_COMMAND.search(cmd), cmd)
+        for cmd in ("go build", "cargo run", "python main.py", "echo testing"):
+            self.assertFalse(harness.TEST_COMMAND.search(cmd), cmd)
+
+    def test_tests_are_found_in_every_language(self):
+        for path in ("add_test.go", "src/lib_test.rs", "tests/api.rs", "src/test/java/AppTest.java", "web/app.test.js", "src/app.spec.ts",
+                     "spec/game_spec.rb", "tests/UserTest.php", "Game.Tests/GameTests.cs", "test_main.py", "tests/test_x.py"):
+            self.assertTrue(harness.has_tests(project({path: "x\n"})), path)
+        self.assertFalse(harness.has_tests(project({"main.go": "x", "app.js": "x", "README.md": "x"})))
+
     def test_the_same_files_give_the_same_hash(self):
         d = project({"a.py": "x = 1\n"})
         h = G.state_hash(d)

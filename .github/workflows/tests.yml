@@ -79,3 +79,32 @@ jobs:
           git fetch -q origin "${{ github.base_ref }}"
           git checkout -q -B guard-head "${{ github.event.pull_request.head.sha }}"
           python tools/guard_repo.py --base "origin/${{ github.base_ref }}"
+
+  # The same tests on Windows, like the Emvryx computer: catches what only Windows does (paths with \, no fork, other shells).
+  windows:
+    runs-on: windows-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: requirements.txt
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install torch --index-url https://download.pytorch.org/whl/cpu
+          pip install -r requirements.txt peft playwright pyflakes
+      - name: Install the browser
+        timeout-minutes: 10
+        run: python -m playwright install chromium
+      - name: Find the browser the browser tests use
+        shell: bash
+        run: |
+          echo "EMVRYX_BROWSER=$(python -c 'from playwright.sync_api import sync_playwright as s; p = s().start(); print(p.chromium.executable_path); p.stop()')" >> "$GITHUB_ENV"
+      - name: Tests
+        timeout-minutes: 30
+        env:
+          PYTHONIOENCODING: utf-8
+        run: python scripts/run_tests.py

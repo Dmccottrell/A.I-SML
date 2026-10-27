@@ -273,6 +273,25 @@ function nowKind(l) {
   return k === 'run' && /unittest|pytest|\btest/i.test(l.target || '') ? 'test' : k;
 }
 const vxReview = () => !!(S.state && S.state.features && S.state.features.vryxcode_review);
+// vryxcode_lines: the feed reads like Claude Code's: steps that only look or run fold into one quiet line that opens on a tap, the model's words
+// in between, file changes as chips, a plain box for what the person wrote, and a small "working" line with moving dots
+const vxLines = () => !!(S.state && S.state.features && S.state.features.vryxcode_lines);
+const VX_VERB = {read_file: ['read', 'file', 'files'], list_files: ['listed', 'folder', 'folders'], glob: ['listed', 'folder', 'folders'],
+  grep: ['searched', 'time', 'times'], search_project: ['searched', 'time', 'times'], code_search: ['searched', 'time', 'times'], run: ['ran', 'command', 'commands'],
+  check_page: ['checked', 'page', 'pages'], command_output: ['read', 'output', 'outputs'], lookup_docs: ['looked up', 'doc', 'docs']};
+function vxGroup(feed) {
+  if (C.group && feed.lastElementChild === C.group) return C.group;
+  const head = el('div', {class: 'h', role: 'button', tabindex: '0'}), g = el('div', {class: 'vx-grp'}, head, el('div', {class: 'list'}));
+  head.onclick = () => g.classList.toggle('open'); head.onkeydown = (ev) => { if (ev.key === 'Enter') g.classList.toggle('open'); };
+  g._n = {}; feed.append(g); C.group = g; return g;
+}
+function vxCount(g, tool) {
+  const v = VX_VERB[tool] || ['used', 'tool', 'tools'], k = v[0] + '|' + v[1] + '|' + v[2];
+  g._n[k] = (g._n[k] || 0) + 1;
+  const parts = Object.entries(g._n).map(([key, n]) => { const [verb, one, many] = key.split('|'); return verb + ' ' + (n === 1 && one === 'command' ? 'a command' : n + ' ' + (n === 1 ? one : many)); });
+  const text = (g._thought ? ['thought ' + Math.round(g._thought) + 's'] : []).concat(parts).join(', ');
+  g.querySelector('.h').textContent = text.charAt(0).toUpperCase() + text.slice(1);
+}
 const QUIET_TOOLS = ['read_file', 'list_files', 'glob', 'grep', 'diagnostics', 'command_output', 'project_map', 'search_project', 'code_search', 'lookup_docs', 'memory'];
 function fileChip(path, add, del) {   // "app/page.tsx  +52 -0", like Cursor's
   return el('div', {class: 'cc-file', role: 'button', tabindex: '0', title: 'Show the change'}, el('span', {class: 'ic'}, '\u{1F4C4}'), el('span', {class: 'nm'}, path || 'file'),
@@ -339,6 +358,12 @@ function cEvent(e) {
     if (e.tool === 'run') outAgentStep(e); else OUT.pending = null;
     if (prose) feed.append(vxSay(prose));
     const [name, arg, extra] = toolParts(e.preview, e.tool);
+    if (vxLines() && e.tool !== 'write_file' && e.tool !== 'edit_file') {   // like Claude Code: looking and running fold into one grey line ("Read 3 files, ran 2 commands ›")
+      const g = vxGroup(feed);
+      if (e.secs >= 2) g._thought = (g._thought || 0) + e.secs;
+      const q = el('div', {class: 'cc-quiet run'}, name + ' ', el('span', {class: 'arg'}, arg));
+      g.querySelector('.list').append(q); vxCount(g, e.tool); C.last = q; return;
+    }
     if (vxReview()) {                                 // like Cursor: looking is a quiet grey line, a change is a file chip
       if (e.secs >= 2) feed.append(el('div', {class: 'cc-quiet'}, 'Thought ' + Math.round(e.secs) + 's'));
       if (QUIET_TOOLS.includes(e.tool)) { const q = el('div', {class: 'cc-quiet'}, name + ' ', el('span', {class: 'arg'}, arg)); feed.append(q); C.last = q; return; }
@@ -359,6 +384,7 @@ function cEvent(e) {
       const t = String(e.text || ''), bad = /^error|exit code [1-9]|Traceback|FAILED/m.test(t), node = C.last;
       node.classList.remove('run'); node.classList.add(bad ? 'no' : 'ok');
       if (bad) node.append(el('div', {class: 'why'}, t.split('\n')[0].slice(0, 200)));
+      const grp = node.closest && node.closest('.vx-grp'); if (bad && grp) grp.classList.add('vx-bad');      // vryxcode_lines: the folded line shows that something in it failed
       else if (node._path) { const f = C.turnFiles[node._path] || {add: 0, del: 0}; f.add += node._add; f.del += node._del; C.turnFiles[node._path] = f; }
       C.last = null; return;
     }
@@ -469,10 +495,11 @@ function renderMessage(text, good) {
 }
 // the live "working" line: our ember mark pulsing, a word for what it is doing (it changes every few seconds), the file or command, seconds, and the text as it is written
 function renderLive(live, state) {
+  document.body.classList.toggle('vxl', vxLines());
   let n = document.getElementById('codeLive') || C.liveEl;       // the same line is moved, not rebuilt, so its words do not blank and fade in again each time the page asks the server
   if (!live || state === 'asking' || !['starting', 'working'].includes(state)) { if (n) n.remove(); C.liveEl = null; C.liveAt = null; return; }
-  if (!n) { n = el('div', {class: 'cc-live', id: 'codeLive'}, el('div', {class: 'l1'}, el('span', {class: 'mark'}, logo(20, false, 'brand')), el('span', {class: 'what'}), el('span', {class: 'meta'})), el('div', {class: 'prose'})); }
-  C.liveEl = n; n.classList.toggle('vx-q', vxReview());     // vryxcode_review: a plain shimmering line, like Cursor's, instead of the card
+  if (!n) { n = el('div', {class: 'cc-live', id: 'codeLive'}, el('div', {class: 'l1'}, el('span', {class: 'dots', 'aria-hidden': 'true'}, logoDots(20)), el('span', {class: 'mark'}, logo(20, false, 'brand')), el('span', {class: 'what'}), el('span', {class: 'meta'})), el('div', {class: 'prose'})); }
+  C.liveEl = n; n.classList.toggle('vx-q', vxReview() || vxLines());     // vryxcode_review: a plain shimmering line, like Cursor's, instead of the card
   $('codeIn').append(n);     // always the last thing in the feed
   const now = performance.now(), mine = C.liveAt == null ? null : (now - C.liveAt) / 1000;
   // the server counts whole seconds, so its number is often a second behind ours: keep ours unless the server is ahead or a new step has started (a clearly smaller number)

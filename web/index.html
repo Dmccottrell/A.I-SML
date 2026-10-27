@@ -102,6 +102,20 @@ svg .core { fill: var(--core); stroke: var(--sun); stroke-width: 3; transition: 
 .code .cc-file.open .cc-diff { display: block; }
 .code .cc-done { display: flex; flex-direction: column; gap: 2px; margin: 6px 0; }
 .code .cc-done .vx-pvgo { align-self: flex-start; margin-top: 8px; }
+.code .vx-grp { color: var(--muted); font-size: 14px; margin: 4px 0; }
+.code .vx-grp > .h { cursor: pointer; display: inline-flex; align-items: center; gap: 6px; padding: 2px 0; }
+.code .vx-grp > .h::after { content: "\203A"; font-size: 16px; transition: transform .15s; }
+.code .vx-grp.open > .h::after { transform: rotate(90deg); }
+.code .vx-grp > .h:hover { color: var(--text); }
+.code .vx-grp.vx-bad > .h::before { content: "\2717"; color: var(--danger); }
+.code .vx-grp > .list { display: none; margin: 4px 0 2px 4px; padding-left: 12px; border-left: 1px solid var(--line); }
+.code .vx-grp.open > .list { display: block; }
+.code .cc-live .dots { display: none; }
+body.vxl .code .cc-live.vx-q .dots { display: inline-flex; align-items: center; margin-right: 2px; }
+body.vxl .code .cc-user { background: var(--surface2); border: 0; box-shadow: none; border-radius: 14px; font-weight: 400; }
+body.vxl .code .cc-user .ember { display: none; }
+body.vxl .code .cc-msg { border-left: 0; padding-left: 0; background: none; }
+@media (prefers-reduced-motion: reduce) { .logo-dots animate { display: none; } }
 .code .vx-verdict { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; padding: 10px 12px; margin: 8px 0; border-radius: 12px; border: 1px solid var(--line); font-size: 14px; }
 .code .vx-verdict.ok b { color: #3fb950; } .code .vx-verdict.no b { color: #f5a524; } .code .vx-verdict span { color: var(--muted); }
 .code .cc-done .lead { color: var(--muted); font-size: 13.5px; }

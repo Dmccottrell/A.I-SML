@@ -69,7 +69,7 @@ class InsideTheContainer(unittest.TestCase):
                 sb.git("status")
         cmd, kw = seen[0]
         self.assertEqual(cmd[:len(prefix)], prefix)
-        self.assertEqual(cmd[len(prefix):], ["python", "-m", "unittest"])                  # not this machine's python path
+        self.assertEqual(cmd[len(prefix):], ["sh", "-c", "python -m unittest"])            # the image's own terminal and python, not this machine's python path
         self.assertNotIn("preexec_fn", kw)                                                  # the limits are Docker's job now
         gcmd = seen[1][0]
         image_at = gcmd.index("img:1")
