@@ -220,6 +220,16 @@ def _limits():
     resource.setrlimit(resource.RLIMIT_FSIZE, (50 * 1024**2, 50 * 1024**2))  # files up to 50 MB
 
 
+# what to say when a language's program is not installed on the Emvryx computer (harness.Sandbox.run)
+MISSING_HINT = {"sqlite3": " Use Python's built-in sqlite3 module instead (python -c \"import sqlite3 ...\", or a small .py script): it needs nothing installed.",
+                "node": " Use python for scripts here, or ask the person to install Node.js.",
+                "go": " Ask the person to install Go, or use the isolated sandbox.", "rustc": " Ask the person to install Rust, or use the isolated sandbox.",
+                "java": " Ask the person to install a JDK, or use the isolated sandbox.", "javac": " Ask the person to install a JDK, or use the isolated sandbox.",
+                "gcc": " Use the isolated sandbox (it has gcc and g++), or ask the person to install a C compiler.",
+                "g++": " Use the isolated sandbox (it has gcc and g++), or ask the person to install a C++ compiler.",
+                "cc": " Use the isolated sandbox (it has gcc and g++), or ask the person to install a C compiler."}
+
+
 def _limits_and_session():
     """A background command on this computer: the same limits, in its own process group (so it can be stopped with everything it started)."""
     os.setsid()
@@ -265,6 +275,8 @@ class Sandbox:
     def close(self):
         for job in list(self.bg.values()):                # background commands end with the reply that started them
             self._kill(job)
+        if getattr(self, "cache_dir", None):
+            shutil.rmtree(self.cache_dir, ignore_errors=True)
         if self.bg_dir:
             shutil.rmtree(self.bg_dir, ignore_errors=True)
         if self.own_dir:
@@ -606,16 +618,44 @@ class Sandbox:
         if not argv:
             raise ToolError("empty command")
         program = os.path.basename(argv[0])
+        if program not in self.allowed and (str(command).lstrip().startswith(("./", ".\\")) or os.path.isfile(os.path.join(self.root, argv[0]))
+                                            or os.path.isfile(os.path.join(self.root, argv[0] + ".exe"))):
+            raise ToolError(f"{argv[0]} is a program built here, and a program built from the project's code runs only in the isolated sandbox "
+                            "(or on the cloud machine), never on the Emvryx computer. Ask the person to pick Isolated sandbox for this session; "
+                            "here you can still build it to check that it compiles, and run scripts with python, node, php or ruby.")
         if program not in self.allowed:
             extra = " Run one program at a time (no cd, &&, |, ; or >): the project folder is already the current folder." if program in ("cd", "sh", "bash", "cmd", "powershell") or any(t in argv for t in ("&&", "||", "|", ";", ">", ">>")) else ""
             raise ToolError(f"{program!r} is not allowed. Allowed: {', '.join(sorted(self.allowed))}.{extra}")
         if any(t in argv for t in ("&&", "||", "|", ";", ">", ">>")):
             raise ToolError("run one program at a time: no &&, ||, |, ; or > (they are not understood here). The project folder is already the current folder.")
+        extra_env = None
         if program in ("python", "python3") and not self.container and not self.remote:
             argv[0] = sys.executable                     # the same Python we are running (inside a container, or on a remote machine, that one's own python is used)
+        elif not self.container and not self.remote:
+            if not shutil.which(argv[0]):
+                raise ToolError(f"{program} is not installed on the Emvryx computer, so it cannot run here." + MISSING_HINT.get(program, ""))
+            argv, extra_env = self._language_setup(program, argv)
         if background:
             return self._background(command, self.prefix + argv)
-        return self._exec(argv, timeout=limit)
+        return self._exec(argv, extra_env, timeout=limit)
+
+    def _language_setup(self, program, argv):
+        """(argv, environment) a language needs to work in the folder sandbox: Go a build cache (the sandbox gives it no home folder), Java a
+        memory layout that fits the sandbox's memory limit (it reserves 1 GB for class data alone and would not start)."""
+        if program == "go":
+            cache = self._cache()
+            return argv, {"GOCACHE": os.path.join(cache, "go-build"), "GOPATH": os.path.join(cache, "go"), "GOMODCACHE": os.path.join(cache, "go", "mod"),
+                          "GOTOOLCHAIN": "local", "GOFLAGS": "-mod=mod", "HOME": cache, "LOCALAPPDATA": cache, "USERPROFILE": cache}
+        if program in ("java", "javac") and sys.platform.startswith("linux"):
+            flags = ["-Xmx512m", "-XX:CompressedClassSpaceSize=128m", "-XX:ReservedCodeCacheSize=64m", "-XX:MaxMetaspaceSize=256m", "-Xss1m"]
+            return [argv[0]] + (["-J" + f for f in flags] if program == "javac" else flags) + argv[1:], None
+        return argv, None
+
+    def _cache(self):
+        """A folder for compilers' caches, outside the person's project, removed with the sandbox."""
+        if not getattr(self, "cache_dir", None):
+            self.cache_dir = tempfile.mkdtemp(prefix="vryx_cache_")
+        return self.cache_dir
 
     # ---------------------------------------------------------------- git (a safe subset)
     def git(self, args):

@@ -158,11 +158,51 @@ def m_multi(c, r):
     ])
 
 
+# --languages: one project per language; the model writes good, broken, crashing and never-ending code, then builds, runs and tests it
+LANGS = {
+    "c": ("main.c", '#include <stdio.h>\nint main(void) { printf("hi\\n"); return 0; }\n', "int main( { return 0 }\n",
+          "#include <stdlib.h>\nint main(void) { int *p = 0; return *p; }\n", ["gcc main.c -o main", "./main", "cc main.c"]),
+    "cpp": ("main.cpp", '#include <iostream>\nint main() { std::cout << "hi" << std::endl; }\n', "int main() { std::cout << }\n",
+            "#include <vector>\nint main() { std::vector<int> v; return v.at(5); }\n", ["g++ main.cpp -o main", "./main", "g++ -std=c++17 -Wall main.cpp"]),
+    "csharp": ("Program.cs", 'System.Console.WriteLine("hi");\n', "class P { void M( }\n", "throw new System.Exception(\"boom\");\n",
+               ["dotnet run", "csc Program.cs", "mcs Program.cs"]),
+    "java": ("Main.java", 'public class Main { public static void main(String[] a) { System.out.println("hi"); } }\n', "public class Main { void m( }\n",
+             "public class Main { public static void main(String[] a) { int[] x = new int[1]; x[5] = 1; } }\n", ["javac Main.java", "java Main", "java Main.java"]),
+    "go": ("main.go", 'package main\nimport "fmt"\nfunc main() { fmt.Println("hi") }\n', "package main\nfunc main( {\n",
+           'package main\nfunc main() { var m map[string]int; m["a"] = 1 }\n', ["go run main.go", "go build -o app main.go", "go vet main.go", "go test ./..."]),
+    "rust": ("main.rs", 'fn main() { println!("hi"); }\n', "fn main( {\n", 'fn main() { let v: Vec<i32> = vec![]; println!("{}", v[3]); }\n',
+             ["rustc main.rs", "./main", "cargo run"]),
+    "php": ("index.php", '<?php echo "hi\\n";\n', "<?php echo (;\n", '<?php throw new Exception("boom");\n', ["php index.php", "php -l index.php"]),
+    "ruby": ("main.rb", 'puts "hi"\n', "def x(\n", 'raise "boom"\n', ["ruby main.rb", "ruby -c main.rb"]),
+    "perl": ("main.pl", 'print "hi\\n";\n', "print (;\n", 'die "boom";\n', ["perl main.pl", "perl -c main.pl"]),
+    "typescript": ("main.ts", 'const n: number = 1;\nconsole.log(n);\n', "const n: number = ;\n", "const n: number = 'text';\n",
+                   ["tsc main.ts", "node main.js", "npx tsc", "bun main.ts"]),
+    "javascript": ("main.js", "console.log('hi');\n", "console.log(;\n", "null.x;\n", ["node main.js", "node --check main.js", "npm test"]),
+    "bash": ("run.sh", "echo hi\n", "if then fi\n", "exit 3\n", ["bash run.sh", "sh run.sh", "./run.sh"]),
+    "sql": ("q.sql", "CREATE TABLE t(a);\nINSERT INTO t VALUES (1);\nSELECT * FROM t;\n", "SELEC * FRM t;\n", "SELECT * FROM nowhere;\n",
+            ["sqlite3 app.db < q.sql", "sqlite3 app.db \"SELECT 1\"", "sqlite3 app.db \".read q.sql\""]),
+    "python": ("main.py", "print('hi')\n", "def x(:\n", "raise SystemExit(3)\n", ["python main.py", "python -m py_compile main.py", "python -m unittest"]),
+}
+LOOPS = {"c": "int main(void) { for (;;) {} }\n", "python": "while True:\n    pass\n", "javascript": "for (;;) {}\n", "go": "package main\nfunc main() { for {} }\n"}
+LANG = {"name": "python"}
+
+
+def m_lang(c, r):
+    name = LANG["name"]
+    path, good, bad, crash, cmds = LANGS[name]
+    pick = r.random()
+    if pick < 0.45:
+        return call("run", command=r.choice(cmds))
+    content = good if pick < 0.7 else bad if pick < 0.82 else crash if pick < 0.95 else LOOPS.get(name, crash)
+    return call("write_file", path=path, content=content)
+
+
 SEEDED = []
 
 MOVES = {"write": (24, m_write), "edit": (10, m_edit), "run": (14, m_run), "read": (8, m_read), "test": (6, m_test), "broken": (9, m_broken),
          "fenced": (4, m_fenced), "words": (7, m_words), "circle": (5, m_circle), "huge": (1, m_huge), "tools": (6, m_tools),
-         "seeded": (0, m_seeded_edit), "heavy": (0, m_heavy), "search": (0, m_search), "multi": (0, m_multi)}
+         "seeded": (0, m_seeded_edit), "heavy": (0, m_heavy), "search": (0, m_search), "multi": (0, m_multi),
+         "lang": (0, m_lang)}
 COMPLEX_WEIGHTS = {"seeded": 12, "heavy": 3, "search": 8, "multi": 22}
 
 
@@ -204,7 +244,8 @@ def seed_project(folder, rng, big=False, many=False):
 
 def work(job):
     """One worker: its own Emvryx server (the test one), `runs` sessions. Returns (problems, counts)."""
-    seed, first, runs, complex_mode = job
+    seed, first, runs, mode = job
+    complex_mode = mode == "complex"
     import unittest
     import app_server
     import flags
@@ -221,12 +262,15 @@ def work(job):
         def runTest(self):
             open_to_everyone(self.state)
             self.read = {}
+            self.lang_mode = mode == "languages"
             self.tl = threading.local()                               # each person's own client and model while three run at once
             self.state.code.quotas.q["code_sessions_per_day"] = 10 ** 6     # the daily limit (50) is right for people, not for a test of 1,000
             if complex_mode:                                          # pushing past the usual limits, to see what breaks
                 vryxcode.FULL_STEPS, vryxcode.FULL_STEPS_CAP = 150, 200
                 self.state.code.max_turns = 150
                 self.state.code.quotas.q.update({"code_project_mb": 5, "code_max_files": 300})     # small, so the edge is reached
+                for tier in self.state.cfg["tiers"].values():          # usage is not what is being tested: the two extra people never run out
+                    tier.update(tank=10 ** 12, week=10 ** 12, refill_per_hour=10 ** 12)
                 for k in ("code_sessions_per_day",):
                     self.state.code.quotas.q[k] = 10 ** 6
                 for w, m in COMPLEX_WEIGHTS.items():
@@ -238,6 +282,16 @@ def work(job):
             root = os.path.realpath(self.state.code.project_path("owner", "p0"))
             parent = os.path.dirname(root)
             before = set(os.listdir(os.path.dirname(parent)))
+            if mode == "languages":
+                MOVES.update({k: (0, v[1]) for k, v in MOVES.items()})
+                MOVES["lang"], MOVES["words"], MOVES["broken"] = (20, m_lang), (1, m_words), (1, m_broken)
+                names = sorted(LANGS)
+                for n in range(first, first + runs):
+                    rng = random.Random(seed * 1000003 + n)
+                    LANG["name"] = names[n % len(names)]
+                    self.state.code_generate = lambda model, rng=rng: Chaos(rng, rng.randint(6, 20))
+                    self.one(n, rng, self.owner, "owner", project="lang-" + LANG["name"])
+                return
             if not complex_mode:
                 for n in range(first, first + runs):
                     rng = random.Random(seed * 1000003 + n)
@@ -356,6 +410,18 @@ def work(job):
                 out["problems"].append(f"run {n}: never ended (state {v.get('state')}, last events {[e.get('kind') for e in events[-5:]]})")
                 return False
             out["counts"][v["state"]] = out["counts"].get(v["state"], 0) + 1
+            if self.lang_mode:                                 # what each language could do here: built and ran, refused, not installed, failed
+                last_run = None
+                for e in events:
+                    if e.get("kind") == "step" and e.get("tool") == "run":
+                        last_run = str(e.get("preview", ""))[:60]
+                    elif e.get("kind") in ("result", "retry") and last_run:
+                        t = str(e.get("text") or e.get("why") or "")
+                        what = ("ok" if t.startswith("exit code 0") else "not allowed" if "is not allowed" in t else "not installed" if re.search(r"not found|No such file|not installed|could not run", t)
+                                else "failed" if t.startswith("exit code") else "refused/other")
+                        key = f"lang:{LANG['name']}:{what}"
+                        out["counts"][key] = out["counts"].get(key, 0) + 1
+                        last_run = None
             for e in events:                                   # what really happened inside, so a run that "passes" by doing nothing shows
                 k = "ev:" + str(e.get("kind")) + (":" + str(e.get("tool")) if e.get("kind") == "step" else "")
                 out["counts"][k] = out["counts"].get(k, 0) + 1
@@ -384,9 +450,10 @@ def main():
     ap.add_argument("--workers", type=int, default=4)
     ap.add_argument("--seed", type=int, default=1)
     ap.add_argument("--complex", action="store_true", help="big projects, long sessions, three people at once, small limits to reach the edge")
+    ap.add_argument("--languages", action="store_true", help="one project per language (C, C++, C#, Java, Go, Rust, PHP, Ruby, Perl, TypeScript, ...)")
     a = ap.parse_args()
     per = -(-a.runs // a.workers)
-    jobs = [(a.seed, w * per, min(per, a.runs - w * per), a.complex) for w in range(a.workers) if a.runs - w * per > 0]
+    jobs = [(a.seed, w * per, min(per, a.runs - w * per), "languages" if a.languages else "complex" if a.complex else "basic") for w in range(a.workers) if a.runs - w * per > 0]
     t = time.time()
     with multiprocessing.Pool(len(jobs)) as pool:
         results = pool.map(work, jobs)
