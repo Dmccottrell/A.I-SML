@@ -11,6 +11,7 @@ import app_engine as E
 import chat_polish
 import app_skills
 import documents
+import accuracy
 import live_data
 import identity_answer
 import lookup_auto
@@ -315,6 +316,9 @@ def start_turn(state, who, chat_id, text, model_id, effort, regenerate=False, re
                 backend.sampling = dict(backend.sampling, temperature=round(min(bounds[1], max(bounds[0], t)), 2))   # never outside the model's safe range
             if think and (tuned.get("sampling_think") or model.get("sampling_think")) and hasattr(backend, "sampling"):     # Deep on an Emvryx 3 model: the settings Qwen gives for thinking
                 backend.sampling = dict(backend.sampling, **(tuned.get("sampling_think") or model["sampling_think"]))
+            used = list(notes or [])                                              # the notes the final answer was written from (chat_cite, chat_verify)
+            if used and state.flags.on("chat_cite", who):                         # chat_cite: a fact from a note gets its number, like [1]
+                skill_hint = (skill_hint + "\n\n" if skill_hint else "") + accuracy.CITE_HINT
             prior_reply = next((m["content"] for m in reversed(store.messages(chat_id)) if m["role"] == "assistant"), "")      # to notice a reply that is only a copy of this one
             first_hint = "\n\n".join(h for h in (skill_hint, regen_modes.get(mode)["hint"] if regenerate else "",
                                                   "" if regenerate else (chat_polish.answer_hint(text, next((m["content"] for m in reversed(store.messages(chat_id)) if m["role"] == "assistant"), ""))
@@ -380,11 +384,14 @@ def start_turn(state, who, chat_id, text, model_id, effort, regenerate=False, re
                     msgs = [m for m in store.messages(chat_id) if m["status"] != "compacted"]
                     if msgs and msgs[-1]["role"] == "assistant":
                         store.remove_message(chat_id, msgs[-1]["id"])
+                    used = ([mem_note] if mem_note else []) + list(notes2 or [])
                     r = E.run_turn(tok, store, chat_id, backend, counted_model, window, max_new, pictures=seen_pictures or None, user_text=None, stop=stop, notes=([mem_note] if mem_note else []) + list(notes2 or []),
                                    limiter=state.limiter, user=who["user"], effort=effort, clock=state.clock, pacer=pacer, think=False, on_compact=lambda: q.put(("compacting", True)), style_hint=skill_hint, fixes=fixes)
                     found = found2
             if found and found["asked"] and text:
                 state.remember_lookup(who["user"], chat_id, r["message_id"], text, found)
+            if r.get("message_id") is not None and (r.get("text") or "").strip() and not stop.is_set():
+                check_answer(state, who, store, chat_id, r, used, asked_id, (found or {}).get("used") or ())      # chat_calc, chat_verify, chat_cite: plain code, no model time
             if state.flags.on("chat_lines", who) and r.get("message_id") is not None:     # chat_lines: the quiet lines and source chips, kept with the answer
                 if found and found.get("asked"):
                     store.set_flag(chat_id, r["message_id"], "looked", {k: found.get(k) for k in ("saved", "wiki", "web", "web_tried", "live", "names")}
@@ -412,6 +419,24 @@ def start_turn(state, who, chat_id, text, model_id, effort, regenerate=False, re
 
     threading.Thread(target=work, daemon=True).start()
     return q, stop, model, win, decision
+
+
+def check_answer(state, who, store, chat_id, r, used, question, sources=()):
+    """After an answer: its written-out sums checked and corrected (chat_calc), its figures checked against the notes it was given (chat_verify),
+    and what each [1] in it points to kept (chat_cite). What was found is kept with the message for the page."""
+    mid, text = r["message_id"], r["text"]
+    if state.flags.on("chat_calc", who):
+        fixed, changes = accuracy.fix_sums(text)
+        if changes:
+            status = next((m["status"] for m in store.messages(chat_id) if m["id"] == mid), "done")
+            store.update(chat_id, mid, fixed, status)
+            store.set_flag(chat_id, mid, "calc_fixed", changes)
+            r["text"] = text = fixed
+    lookups = [n for n in used if isinstance(n, dict) and n.get("text")]
+    if lookups and state.flags.on("chat_verify", who):
+        store.set_flag(chat_id, mid, "unsupported", accuracy.unsupported(text, lookups, question))
+    if used and state.flags.on("chat_cite", who):
+        store.set_flag(chat_id, mid, "cites", accuracy.cites_for(used, sources))
 
 
 def model_guard_tests(path):
