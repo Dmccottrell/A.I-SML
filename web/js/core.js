@@ -180,7 +180,8 @@ function renderChats() {
       el('button', {class: 'more', 'aria-label': 'Options for ' + c.title, 'aria-haspopup': 'true', onclick: (e) => chatMenu(c, e.currentTarget)}, '\u22ef'),
       el('button', {class: 'del', 'aria-label': 'Delete chat ' + c.title, onclick: () => delChat(c)}, '\u00d7'))); };
   group('PINNED', all.filter((c) => c.pinned));
-  for (const f of [...new Set(all.filter((c) => c.folder && !c.pinned).map((c) => c.folder))]) group(f.toUpperCase(), all.filter((c) => c.folder === f && !c.pinned));
+  if (featureOn('chat_projects') && typeof plusProjects === 'function') plusProjects(box, all, group);          // chat_projects: folders are projects (chatplus.js)
+  else for (const f of [...new Set(all.filter((c) => c.folder && !c.pinned).map((c) => c.folder))]) group(f.toUpperCase(), all.filter((c) => c.folder === f && !c.pinned));
   group('TODAY', today); group('EARLIER', earlier);
   const names = {teacher: 'TEACHER MODE', study: 'STUDY HELPER'};   // chats started from a skill or Teacher mode keep their own list, so they never mix with ordinary chats
   const seen = [...new Set(all.filter((c) => c.skill && !c.pinned && !c.folder).map((c) => c.skill))];

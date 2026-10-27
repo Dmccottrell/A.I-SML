@@ -102,6 +102,43 @@ svg .core { fill: var(--core); stroke: var(--sun); stroke-width: 3; transition: 
 .code .cc-file.open .cc-diff { display: block; }
 .code .cc-done { display: flex; flex-direction: column; gap: 2px; margin: 6px 0; }
 .code .cc-done .vx-pvgo { align-self: flex-start; margin-top: 8px; }
+/* chatplus.js: the chat parts behind the chat_* flags */
+.msg .cp-ver { display: flex; align-items: center; gap: 4px; justify-content: flex-end; color: var(--muted); font-size: 13px; }
+.msg .cp-ver .icon { width: 28px; height: 28px; min-height: 0; }
+.msg .cp-ql { align-self: flex-start; }
+.msg .cp-q { background: none; border: 0; padding: 2px 0; color: var(--muted); font: inherit; font-size: 13px; cursor: pointer; text-align: left; }
+.msg .cp-src { display: flex; flex-direction: column; gap: 4px; padding: 4px 0 6px 10px; border-left: 2px solid var(--line); font-size: 13px; }
+.msg .cp-src a { color: var(--accenttext); }
+.msg .cp-chips, .cp-follow { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 6px; }
+.msg .cp-chips .chip { font-size: 12px; min-height: 28px; padding: 2px 10px; text-decoration: none; }
+.cp-follow .chip { font-size: 13px; }
+.cp-panel { position: fixed; top: 0; right: 0; bottom: 0; width: min(46vw, 760px); z-index: 50; display: flex; flex-direction: column; background: var(--bg); border-left: 1px solid var(--line); box-shadow: -12px 0 40px rgba(0,0,0,.25); }
+body.cp-open main { margin-right: min(46vw, 760px); }
+@media (max-width: 760px) { .cp-panel { width: 100vw; border-left: 0; } body.cp-open main { margin-right: 0; } }
+.cp-head { display: flex; align-items: center; gap: 8px; padding: 10px 12px; border-bottom: 1px solid var(--line); flex-wrap: wrap; }
+.cp-head b { flex: 1; min-width: 80px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cp-body { flex: 1; overflow: auto; min-height: 0; }
+.cp-frame { width: 100%; height: 100%; border: 0; background: #fff; display: block; }
+.cp-code { margin: 0; padding: 14px; white-space: pre; overflow: auto; font: 13px/1.5 ui-monospace, Menlo, Consolas, monospace; }
+.cp-doc { padding: 14px 18px; background: none; border: 0; }
+.cp-ask { display: flex; gap: 8px; padding: 10px 12px; border-top: 1px solid var(--line); }
+.cp-ask input { flex: 1; min-width: 0; background: var(--surface2); color: var(--text); border: 1px solid var(--line); border-radius: 12px; padding: 10px 12px; font: inherit; }
+.modal input[type=search] { background: var(--surface2); color: var(--text); border: 1px solid var(--line); border-radius: 12px; padding: 10px 12px; font: inherit; }
+.cp-tasks { display: flex; flex-direction: column; gap: 7px; padding: 12px 16px; border: 1px solid var(--line); border-radius: 14px; align-self: stretch; max-width: 560px; font-size: 14px; }
+.cp-tasks .vt { display: flex; align-items: center; gap: 10px; }
+.cp-tasks .vt .dot { width: 15px; height: 15px; border-radius: 50%; flex-shrink: 0; display: grid; place-items: center; font-size: 9px; font-weight: 700; border: 1.5px dashed var(--muted); }
+.cp-tasks .vt.is-now .dot { border: 1.5px solid var(--text); }
+.cp-tasks .vt.is-done { color: var(--muted); }
+.cp-tasks .vt.is-done .dot { border: 0; background: var(--muted); color: var(--bg); }
+.cp-cmd { bottom: 100%; top: auto; width: min(360px, 100%); }
+.cp-cmd .opt.sel { background: var(--surface2); }
+.cp-plabel { display: flex; align-items: center; justify-content: space-between; }
+.cp-plabel .chip { min-height: 26px; padding: 0 10px; font-size: 12px; }
+.cp-proj { display: flex; align-items: center; gap: 4px; padding: 6px 10px; font-size: 14px; font-weight: 600; }
+.cp-proj .icon { width: 28px; height: 28px; min-height: 0; }
+#chatList .label:empty { display: none; }
+.cp-results { display: flex; flex-direction: column; gap: 6px; max-height: 60vh; overflow: auto; margin-top: 8px; }
+#cpMic.on { background: var(--accent); color: var(--onaccent); }
 .code .vx-ship { display: flex; gap: 8px; flex-wrap: wrap; margin: 6px 0 10px; }
 .code .vx-state { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin: 6px 0 12px; padding: 8px 12px; border-radius: 12px; border: 1px solid var(--line); font-size: 14px; }
 .code .vx-state.ok { color: var(--good, #4ade80); border-color: color-mix(in srgb, var(--good, #4ade80) 40%, transparent); }
@@ -862,6 +899,7 @@ body:not(.vxn) .vx-hero, body:not(.vxn) .vx-dots { display: none; }   /* the new
 <script src="/js/settings.js"></script>
 <script src="/js/admin.js"></script>
 <script src="/js/send.js"></script>
+<script src="/js/chatplus.js"></script>
 <script src="/js/code.js"></script>
 <script src="/js/ide.js"></script>
 <script src="/js/preview.js"></script>
