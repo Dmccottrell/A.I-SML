@@ -14,6 +14,7 @@ import code_sessions
 import vryxcode
 import github_link
 import code_preview
+import code_servers
 import browser_check
 import code_ci
 import code_extras
@@ -53,7 +54,7 @@ def start_fix(st, who, project, model_id=""):
     model = RoutesCode._pick_code_model(st, who, model_id, effort)
     full = RoutesCode._full(st, who, model)
     steps, turns = effort_turns(model, effort, st.code.max_turns, full)
-    generate, meter, tools, identity = RoutesCode._code_kit(st, who["user"], model, project, fixes=st.flags.on("vryxcode_fixes", who), preview=st.flags.on("vryxcode_preview", who), guard=st.flags.on("vryxcode_guardrails", who))
+    generate, meter, tools, identity = RoutesCode._code_kit(st, who["user"], model, project, fixes=st.flags.on("vryxcode_fixes", who), preview=st.flags.on("vryxcode_preview", who), guard=st.flags.on("vryxcode_guardrails", who), servers=st.flags.on("vryxcode_servers", who))
     s, _ = st.code.start(who["user"], project, code_ci.fix_task(owner, repo, branch, sha, failed), model["id"], generate, False,
                          int(model.get("context_tested") or 8192), meter, outside=bool(model.get("outside")), tools=tools, identity=identity,
                          owner=who["admin"], queue=True, build_steps=steps, turns=turns, full=full)
@@ -227,7 +228,7 @@ class RoutesCode:
             self._code_error(e)
 
     @staticmethod
-    def _code_kit(st, user, model, project, fixes=False, preview=False, guard=False):
+    def _code_kit(st, user, model, project, fixes=False, preview=False, guard=False, servers=False):
         """What a session needs to work with this model in this project: the model call, the usage meter, its tools (GitHub, the browser check) and the git name."""
         box = {}
 
@@ -277,6 +278,8 @@ class RoutesCode:
         if browser_check.available():                                  # needs the playwright package: pip install playwright
             tools = dict(tools or {}, check_page=st.browser_tool(user, project))
         tools = dict(tools or {}, **code_web.make_tools())             # documentation lookup: only the full agent gets these (vryxcode.FULL_ONLY_TOOLS)
+        if servers:                                                    # vryxcode_servers: start the server it built, sealed in a container, for the Preview
+            tools = dict(tools, **st.app_tools(user, project))
         return generate, meter, tools, identity
 
     def _review_prompt(self, st, user, sid, review):
@@ -477,7 +480,7 @@ class RoutesCode:
                 full = self._full(st, who, model)
                 steps, turns = effort_turns(model, effort, st.code.max_turns, full)
                 project = st.code.check_name(body.get("project"))
-                generate, meter, tools, identity = self._code_kit(st, user, model, project, fixes=st.flags.on("vryxcode_fixes", who), preview=st.flags.on("vryxcode_preview", who), guard=st.flags.on("vryxcode_guardrails", who))
+                generate, meter, tools, identity = self._code_kit(st, user, model, project, fixes=st.flags.on("vryxcode_fixes", who), preview=st.flags.on("vryxcode_preview", who), guard=st.flags.on("vryxcode_guardrails", who), servers=st.flags.on("vryxcode_servers", who))
                 task = body.get("task")
                 if body.get("template"):                                       # a starter: its files are written first, and the task says to build on them
                     if not templates.TEMPLATES.get(str(body["template"])):
@@ -499,6 +502,11 @@ class RoutesCode:
                 if not allowed:
                     raise code_sessions.CodeError(why, "Ask the owner about VryxCode access.")
                 folder = st.code.project_path(user, body.get("project"))
+                if st.flags.on("vryxcode_servers", who) and not body.get("page_only"):
+                    app_token = st.app_servers.token(user, str(body.get("project")))
+                    if app_token:                                  # vryxcode_servers: the app VryxCode started, carried in and out of its sealed container
+                        return self._send(200, {"entry": "the app", "app": True, "url": code_servers.prefix_of(app_token) + "/",
+                                                **st.app_servers.status(user, str(body.get("project")))})
                 entry = code_preview.entry_page(folder) if os.path.isdir(folder) else None
                 page = str(body.get("page") or "")
                 if entry and page.lower().endswith((".html", ".htm")) and st.flags.on("vryxcode_preview", who) and code_preview.resolve(os.path.realpath(folder), page):
@@ -507,6 +515,10 @@ class RoutesCode:
                     return self._send(200, {"entry": None})
                 token = st.previews.make(user, folder, fixes=st.flags.on("vryxcode_fixes", who))
                 return self._send(200, {"entry": entry, "url": f"/preview/{token}/{urllib.parse.quote(entry)}"})
+            if path == "/api/code/app/stop":                     # vryxcode_servers: the Stop button on a running app
+                return self._send(200, {"ok": True, "stopped": st.app_servers.stop(user, str(body.get("project")))})
+            if path == "/api/code/app/logs":
+                return self._send(200, {"logs": st.app_servers.logs(user, str(body.get("project"))), **st.app_servers.status(user, str(body.get("project")))})
             m = re.fullmatch(r"/api/code/sessions/([\w-]+)/message", path)
             if m:                                                # the next message of a conversation that is already going
                 allowed, why = st.code_allowed(who)
@@ -528,7 +540,7 @@ class RoutesCode:
                 if sid not in st.code.sessions:                          # an older session (from the history, e.g. after a restart): it comes back to life and carries on
                     meta = st.code.saved(user, sid)["meta"]
                     model = self._pick_code_model(st, who, want or meta["model"], effort)
-                    generate, meter, tools, identity = self._code_kit(st, user, model, meta["project"], fixes=st.flags.on("vryxcode_fixes", who), preview=st.flags.on("vryxcode_preview", who), guard=st.flags.on("vryxcode_guardrails", who))
+                    generate, meter, tools, identity = self._code_kit(st, user, model, meta["project"], fixes=st.flags.on("vryxcode_fixes", who), preview=st.flags.on("vryxcode_preview", who), guard=st.flags.on("vryxcode_guardrails", who), servers=st.flags.on("vryxcode_servers", who))
                     full = self._full(st, who, model)
                     steps, turns = effort_turns(model, effort, st.code.max_turns, full)
                     sess = st.code.revive(user, sid, model["id"], generate, int(model.get("context_tested") or 8192), meter, tools=tools, identity=identity, owner=who["admin"], build_steps=steps,
@@ -538,7 +550,7 @@ class RoutesCode:
                     sess, revived, model = st.code.get(user, sid), False, None
                     if effort:                                           # no picker: the model VryxCode picks, at the effort picked for this message
                         model = self._pick_code_model(st, who, "", effort)
-                        generate, meter, tools, identity = self._code_kit(st, user, model, sess.project, fixes=st.flags.on("vryxcode_fixes", who), preview=st.flags.on("vryxcode_preview", who), guard=st.flags.on("vryxcode_guardrails", who))
+                        generate, meter, tools, identity = self._code_kit(st, user, model, sess.project, fixes=st.flags.on("vryxcode_fixes", who), preview=st.flags.on("vryxcode_preview", who), guard=st.flags.on("vryxcode_guardrails", who), servers=st.flags.on("vryxcode_servers", who))
                         steps, turns = effort_turns(model, effort, st.code.max_turns, self._full(st, who, model))
                         if model["id"] != sess.model_id:                 # e.g. Apogee 3 was added since this session started
                             sess.switch_model(model["id"], generate, int(model.get("context_tested") or 8192), meter, build_steps=steps, default_turns=turns or st.code.max_turns)
@@ -546,7 +558,7 @@ class RoutesCode:
                             sess.set_effort(generate, steps or turns)
                     elif want and want != sess.model_id:                 # another model takes over the same conversation
                         model = self._pick_code_model(st, who, want)
-                        generate, meter, tools, identity = self._code_kit(st, user, model, sess.project, fixes=st.flags.on("vryxcode_fixes", who), preview=st.flags.on("vryxcode_preview", who), guard=st.flags.on("vryxcode_guardrails", who))
+                        generate, meter, tools, identity = self._code_kit(st, user, model, sess.project, fixes=st.flags.on("vryxcode_fixes", who), preview=st.flags.on("vryxcode_preview", who), guard=st.flags.on("vryxcode_guardrails", who), servers=st.flags.on("vryxcode_servers", who))
                         sess.switch_model(model["id"], generate, int(model.get("context_tested") or 8192), meter, build_steps=build_steps(model), default_turns=st.code.max_turns)
                     full = self._full(st, who, model) if model else (getattr(sess, "full", False) or st.flags.on("vryxcode_full_agent", who))
                     if full and not getattr(sess, "full", False):            # the flag was switched on since this session started: the next message works the new way

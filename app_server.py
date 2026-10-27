@@ -34,6 +34,7 @@ import re
 import secrets
 import socketserver
 import sys
+import shutil
 import threading
 import time
 import urllib.error
@@ -59,6 +60,7 @@ import secret_box
 import shares
 import summary
 import code_preview
+import code_servers
 import models as M
 import usage_limits as U
 from app_errors import AppError  # noqa: F401  (tests reach it through app_server)
@@ -100,6 +102,7 @@ class AppState(StateAccounts, StateSettings, StateApps, StatePC, StateCode, Stat
         self.saved = {}                                        # person -> saved_notes.SavedNotes (approved notes, usable offline)
         self.memories = {}                                     # person -> user_memory.Memory (facts about them, shared by every model)
         self.previews = code_preview.Previews()               # short-lived tokens for the live preview of a project
+        self.app_servers = code_servers.AppServers()                  # servers VryxCode built, running sealed in a container (flag vryxcode_servers)
         self.lookups = {}                                      # (person, chat, message id) -> the notes that answer used, for the thumbs up
         self.wiki = None                                       # the local Wikipedia index (wiki_index.WikiIndex), if there is one
         self.live_net = None                                   # live_data.Net (tests pass a fake)
@@ -241,6 +244,61 @@ class Handler(RoutesGet, RoutesPost, RoutesCode, RoutesAccount, RoutesAdmin, Rou
         self._cookies = []
         self.end_headers()
         self.wfile.write(body)
+
+    APP_PATH = re.compile(r"/preview-app/([A-Za-z0-9_-]{16,64})(?:/(.*))?")
+
+    def _preview_app(self, method):
+        """A request from the preview frame to an app VryxCode started (coding/code_servers.py): carried into its sealed container and back.
+        True when this was such a request. The token in the address is the key (the sandboxed frame has no cookie and no origin)."""
+        url = urllib.parse.urlparse(self.path)
+        m = self.APP_PATH.fullmatch(url.path)
+        if not m:
+            return False
+        if m.group(2) is None:                                   # /preview-app/<token>: the app's own links expect a trailing slash
+            self._send_app(301, [("Location", url.path + "/")], b"")
+            return True
+        try:
+            size = int(self.headers.get("Content-Length") or 0)
+        except ValueError:
+            size = 0
+        if size > code_servers.MAX_BODY:
+            self._send_app(413, [("Content-Type", "text/plain; charset=utf-8")], b"That is too big to send to the app.\n")
+            return True
+        body = self.rfile.read(size) if size > 0 else b""
+        try:
+            status, headers, data = self.state.app_servers.relay(m.group(1), method, urllib.parse.unquote(m.group(2)), url.query, dict(self.headers.items()), body)
+        except Exception:
+            log_crash(method, self.path)
+            status, headers, data = 502, [("Content-Type", "text/plain; charset=utf-8")], b"The app could not be reached.\n"
+        if any(k.lower() == "content-type" and "text/html" in v.lower() for k, v in headers):
+            data = code_preview.inject(data, True, root_urls=False)     # its errors reach the preview panel, storage works in the sandboxed frame
+        self._send_app(status, headers, data)
+        return True
+
+    def _send_app(self, status, headers, body):
+        """An app's answer for the preview frame, with the same protection as a previewed page (_send_preview)."""
+        self.send_response(status)
+        for k, v in headers:
+            self.send_header(k, v)
+        self.send_header("Content-Length", str(len(body)))
+        self.send_header("Cache-Control", "no-store")
+        self.send_header("X-Content-Type-Options", "nosniff")
+        self.send_header("Content-Security-Policy", code_preview.PREVIEW_CSP)
+        self.send_header("Referrer-Policy", "no-referrer")
+        self.send_header("Cross-Origin-Resource-Policy", "cross-origin")
+        self.send_header("Access-Control-Allow-Origin", "*")
+        self.send_header("X-Robots-Tag", "noindex, nofollow")
+        self.end_headers()
+        if self.command != "HEAD":
+            self.wfile.write(body)
+
+    def do_PUT(self):
+        if not self._preview_app("PUT"):
+            self._send(405, {"code": "not_allowed", "message": "Not allowed."})
+
+    def do_PATCH(self):
+        if not self._preview_app("PATCH"):
+            self._send(405, {"code": "not_allowed", "message": "Not allowed."})
 
     def _send_preview(self, status, ctype, body):
         """A page of someone's project, for the preview frame: an empty identity (sandbox), no framing by other sites, readable by the sandboxed frame."""
@@ -409,6 +467,8 @@ class Handler(RoutesGet, RoutesPost, RoutesCode, RoutesAccount, RoutesAdmin, Rou
     def do_GET(self):
         url = urllib.parse.urlparse(self.path)
         path, qs = url.path, urllib.parse.parse_qs(url.query)
+        if path.startswith("/preview-app/") and self._preview_app("GET"):
+            return
         pv = re.fullmatch(r"/preview/([A-Za-z0-9_-]{16,64})/(.*)", path)
         if pv:                                                   # the live preview: a token in the address instead of the cookie (the sandboxed frame sends none)
             folder = self.state.previews.folder(pv.group(1))
@@ -433,6 +493,8 @@ class Handler(RoutesGet, RoutesPost, RoutesCode, RoutesAccount, RoutesAdmin, Rou
 
     def do_POST(self):
         path = urllib.parse.urlparse(self.path).path
+        if path.startswith("/preview-app/") and self._preview_app("POST"):     # a form in the previewed app: its frame has no origin, the token is the key
+            return
         if not self._origin_ok():
             self.state.auth.event("bad_origin", "", self._ip(), f"POST {path}")
             return self._send(403, {"code": "bad_origin", "message": "That request came from another website, so it was refused.", "action": "Use Emvryx at its own address."})
@@ -472,6 +534,8 @@ class Handler(RoutesGet, RoutesPost, RoutesCode, RoutesAccount, RoutesAdmin, Rou
 
     def do_DELETE(self):
         path = urllib.parse.urlparse(self.path).path
+        if path.startswith("/preview-app/") and self._preview_app("DELETE"):
+            return
         if not self._origin_ok():
             self.state.auth.event("bad_origin", "", self._ip(), f"DELETE {path}")
             return self._send(403, {"code": "bad_origin", "message": "That request came from another website, so it was refused.", "action": "Use Emvryx at its own address."})
@@ -707,6 +771,8 @@ def main():
     print("Need another link later?  python app_server.py --pair owner")
     if args.host == "0.0.0.0":
         print("Reachable from your network. Anyone with a key can use it; keep keys private.")
+    if shutil.which("docker"):
+        threading.Thread(target=state.app_servers.cleanup, daemon=True).start()     # apps left over from before a crash or power cut are stopped
     try:
         summary.start(state)                                # the owner's weekly summary, when switched on
         if runner and not state.cfg.get("gaming") and runner.warm_last():
@@ -714,6 +780,8 @@ def main():
         srv.serve_forever()
     except KeyboardInterrupt:
         print("\nStopped.")
+    finally:
+        state.app_servers.stop_all()                               # the apps VryxCode started end with the server
 
 
 if __name__ == "__main__":

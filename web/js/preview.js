@@ -16,9 +16,19 @@ async function openPreview() {
   if (!r.ok) { note('bad', 'Preview', (j.message || 'Could not open the preview.') + ' ' + (j.action || '')); return; }
   if (!j.entry) { note('fin', 'Nothing to preview yet', 'Ask VryxCode to build a web page (an .html file) and it can be previewed here.'); return; }
   $('codePreviewBtn').classList.remove('pulse');
-  PV.url = j.url; PV.entry = j.entry; PV.errors = []; PV.loaded = false; setPvSize(PV.size); paintPv();
+  PV.url = j.url; PV.entry = j.entry; PV.errors = []; PV.loaded = false; PV.app = !!j.app; setPvSize(PV.size); paintPv();
+  $('pvLogs').hidden = $('pvStopApp').hidden = !PV.app;       // vryxcode_servers: a running app shows its logs and a Stop button
   $('codePv').hidden = false; $('pvFrame').src = j.url;
 }
+$('pvStopApp').onclick = async () => {
+  await post('/api/code/app/stop', {project: C.project}); $('codePv').hidden = true; PV.app = false;
+  note('fin', 'App stopped', 'Ask VryxCode to start it again when you want to use it.');
+};
+$('pvLogs').onclick = async () => {
+  const r = await post('/api/code/app/logs', {project: C.project}); const j = await r.json().catch(() => ({}));
+  const m = dialog([el('h2', {}, 'What the app printed'), el('pre', {style: 'white-space:pre-wrap;max-height:60vh;overflow:auto;font-size:12.5px'}, j.logs || '(nothing)'),
+    el('div', {class: 'row'}, el('button', {class: 'btn small', onclick: () => { m.remove(); $('codePv').hidden = true; $('codeTask').value = 'The app shows these errors in its log:\n' + String(j.logs || '').slice(-1500) + '\nFix the cause, start it again with start_app and check it answers.'; $('codeGo').click(); }}, 'Ask VryxCode to fix these'))]);
+};
 const vxPreviewOn = () => !!(S.state && S.state.features && S.state.features.vryxcode_preview);
 function reloadPreview() {     // vryxcode_preview: when another page changed, that one is shown instead
   if (!PV.url) return; if (vxPreviewOn() && C.pvPage && C.pvPage !== PV.entry) { openPreview(); return; }

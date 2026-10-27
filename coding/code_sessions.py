@@ -426,6 +426,8 @@ class Session:
             return True                                  # only looking at the link
         if name == "check_page":
             return True                                  # the browser check only looks (and cannot reach the internet): no question
+        if name in ("stop_app", "app_logs") or (name == "start_app" and self.auto_edits):
+            return True                                  # stopping or reading the app changes nothing; starting it asks like a command unless edits run without asking
         if name in getattr(self, "_always", set()) and name != "github":       # pulling and pushing always ask, every time
             return True
         qid = len(self.events)
