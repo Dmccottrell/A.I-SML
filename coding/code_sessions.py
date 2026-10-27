@@ -236,6 +236,8 @@ class Session:
                 "updated": self.updated, "snippet": clip(snippet, 220), "steps": steps, "files": len(files), "checkpoints": list(self.checkpoints),
                 "added": added, "removed": removed}
 
+    _save_lock = threading.Lock()                         # one save or delete of a session's history at a time (shared: saves are short)
+
     def persist(self, force=False):
         if not self.log:
             return
@@ -246,7 +248,10 @@ class Session:
         try:
             with self.cv:
                 events = list(self.events)
-            self.log.save(self.meta(), events)
+            with Session._save_lock:
+                if getattr(self, "deleted", False):
+                    return                                # deleted while it was finishing: its last save must not bring it back
+                self.log.save(self.meta(), events)
         except (OSError, ValueError):
             pass                                          # the history is a convenience: never stop the work for it
 
@@ -1284,8 +1289,11 @@ class CodeManager:
         live = self.sessions.get(sid)
         if live and live.user == user and live.state in ("starting", "working", "asking"):
             raise CodeError("That session is running.", "Stop it first.")
-        self.sessions.pop(sid, None)
-        self.log(user).delete(sid)
+        with Session._save_lock:
+            if live and live.user == user:
+                live.deleted = True                       # its worker may still save once as it finishes (persist checks this)
+            self.sessions.pop(sid, None)
+            self.log(user).delete(sid)
 
     def _before_and_after(self, user, sid):
         """(workspace, the zip of the project before the session's first message, {path: text} then, {path: text} now)."""

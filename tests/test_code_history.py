@@ -168,6 +168,13 @@ class History(Base):
         self.assertEqual(self.owner.call("POST", f"/api/code/sessions/{sid}/delete", {})[0], 200)
         self.assertEqual(self.owner.call("GET", "/api/code/sessions")[1]["sessions"], [])
 
+    def test_a_session_deleted_just_as_it_finishes_stays_deleted(self):
+        sid = self.run_session()
+        live = self.state.code.sessions[sid]
+        self.assertEqual(self.owner.call("POST", f"/api/code/sessions/{sid}/delete", {})[0], 200)
+        live.persist(force=True)                          # its worker's last save, a moment after "done" (it brought the session back)
+        self.assertEqual(self.owner.call("GET", "/api/code/sessions")[1]["sessions"], [])
+
     def test_project_list_does_not_show_the_history_folder(self):
         self.run_session()
         self.assertEqual(self.owner.call("GET", "/api/code")[1]["projects"], ["demo"])
