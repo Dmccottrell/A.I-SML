@@ -7,7 +7,7 @@
 # code_sandbox.docker_prefix, not here). The image is big (about 4 GB) so nothing is missing; remove a block below to make it smaller.
 #   Python, JavaScript / TypeScript (Node), C, C++, C#/.NET, Java, Kotlin, Go, Rust, PHP, Ruby, Perl, Lua, R, Elixir/Erlang, Bash, SQL (SQLite),
 #   plus make, cmake and git. Packages: pip and npm installs work (VryxCode downloads them on the Emvryx computer and installs them here).
-FROM python:3.12-slim
+FROM python:3.12-slim-bookworm
 
 ENV DEBIAN_FRONTEND=noninteractive \
     DOTNET_CLI_TELEMETRY_OPTOUT=1 DOTNET_NOLOGO=1 DOTNET_SKIP_FIRST_TIME_EXPERIENCE=1 DOTNET_CLI_HOME=/tmp \

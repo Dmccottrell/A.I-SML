@@ -18,7 +18,6 @@ import tempfile
 import traceback
 import zipfile
 
-import harness
 import vryxcode
 
 

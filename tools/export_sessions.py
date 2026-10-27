@@ -10,7 +10,6 @@ before the first message (its Rewind snapshot). Nothing else from this computer 
 import os, sys; sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), os.pardir)); import emvryx_paths  # noqa: E402,F401
 import argparse
 import glob
-import json
 import zipfile
 
 
