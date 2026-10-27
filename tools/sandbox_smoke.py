@@ -43,6 +43,12 @@ LANGUAGES = {
 FLASK_APP = "from flask import Flask\nimport os\napp = Flask(__name__)\n\n\n@app.route('/')\ndef home():\n    return 'ok-flask'\n\n\napp.run(host='0.0.0.0', port=int(os.environ.get('PORT', 5000)))\n"
 
 
+def short(out):
+    """The start of an error says what went wrong and the end says where: keep both."""
+    out = out.strip()
+    return out if len(out) <= 1200 else out[:600] + "\n...\n" + out[-600:]
+
+
 def run(prefix, command, timeout=240):
     try:
         r = subprocess.run(prefix + ["sh", "-c", command], capture_output=True, text=True, timeout=timeout)
@@ -67,7 +73,7 @@ def main():
         code, out = run(code_sandbox.docker_prefix(code_sandbox.DEFAULT_IMAGE, d), command)
         good = code == 0 and expect in out
         bad += not good
-        print(f"{'ok  ' if good else 'FAIL'} {name:13} {time.time() - t:5.1f}s  {command}" + ("" if good else "\n       " + out.strip()[-600:].replace("\n", "\n       ")))
+        print(f"{'ok  ' if good else 'FAIL'} {name:13} {time.time() - t:5.1f}s  {command}" + ("" if good else "\n       " + short(out).replace("\n", "\n       ")))
         shutil.rmtree(d, ignore_errors=True)
     d = tempfile.mkdtemp(prefix="smoke_app_")
     os.chmod(d, 0o777)
