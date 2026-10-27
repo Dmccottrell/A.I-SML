@@ -166,6 +166,16 @@ class Benchmark(unittest.TestCase):
         self.assertEqual(problems, [])
         self.assertGreaterEqual(checked, 12)                     # every Python reference, plus each installed language's
 
+    def test_a_built_program_is_run_by_its_full_path_and_on_windows_ends_in_exe(self):
+        from unittest import mock
+        work = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, work, True)
+        with mock.patch.object(B.os, "name", "nt"):                     # Windows looks for ./main next to Emvryx, not in the folder it runs in
+            build, run = B.commands("c", work)
+        self.assertIn("main.exe", build)
+        self.assertEqual(run, [os.path.join(os.path.realpath(work), "main.exe")])
+        self.assertEqual(B.commands("python", work), (None, ["python3", "main.py"]))
+
     def test_scoring_reports_what_went_wrong(self):
         work = tempfile.mkdtemp()
         self.addCleanup(shutil.rmtree, work, True)

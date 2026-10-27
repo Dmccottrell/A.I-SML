@@ -69,9 +69,20 @@ def env_for(folder):
                 PYTHONDONTWRITEBYTECODE="1")
 
 
+def commands(lang, folder):
+    """(build command or None, run command) for a program in `folder`. A built program is run by its full path: Windows looks for a relative
+    program like ./main next to Emvryx, not in the folder it runs in, and its programs end in .exe."""
+    _, build, run, _, _ = LANGS[lang]
+    exe = "main.exe" if os.name == "nt" else "main"
+    build = build and [exe if w == "main" else w for w in build]
+    run = [os.path.join(os.path.realpath(folder), exe) if w == "./main" else w for w in run]
+    return build, run
+
+
 def score(lang, folder, task, timeout=10):
     """{"passed", "passed_tests", "total", "stage", "detail"}: builds (if the language needs it) and runs every test."""
-    fname, build, run, _, _ = LANGS[lang]
+    fname = LANGS[lang][0]
+    build, run = commands(lang, folder)
     tests = TASKS[task][1]
     res = {"passed": False, "passed_tests": 0, "total": len(tests), "stage": "build", "detail": ""}
     if not os.path.exists(os.path.join(folder, fname)):

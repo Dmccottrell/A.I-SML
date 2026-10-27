@@ -150,7 +150,8 @@ class Backups(unittest.TestCase):
 
     def test_a_backup_is_consistent_private_and_leaves_the_key_out(self):
         target, count, removed = B.make_backup(self.data, self.out)
-        self.assertEqual(stat.S_IMODE(os.stat(target).st_mode) & 0o077, 0)
+        if os.name != "nt":                                  # Windows has no Unix file modes (only the machine is skipped)
+            self.assertEqual(stat.S_IMODE(os.stat(target).st_mode) & 0o077, 0)
         z = zipfile.ZipFile(target)
         names = set(z.namelist())
         self.assertIn("users.json", names)

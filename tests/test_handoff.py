@@ -10,9 +10,12 @@ import unittest
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import handoff as H
+import harness
+
+BASH = harness.real_bash()                     # on Windows: Git Bash, not the WSL launcher in System32
 
 
-@unittest.skipUnless(shutil.which("bash"), "needs bash (the cloud machine's shell)")
+@unittest.skipUnless(BASH, "needs bash (the cloud machine's shell)")
 class CloudPaths(unittest.TestCase):
     """The cloud commands use ~/A.I-SML paths. Run them through bash with HOME set to a temp folder."""
 
@@ -24,7 +27,7 @@ class CloudPaths(unittest.TestCase):
         env = dict(os.environ, HOME=self.home)
 
         def ssh_out(host, port, command):
-            r = subprocess.run(["bash", "-c", command], capture_output=True, text=True, env=env)
+            r = subprocess.run([BASH, "-c", command], capture_output=True, text=True, env=env)
             if r.returncode:
                 raise SystemExit(r.stderr)
             return r.stdout.strip()
@@ -55,7 +58,7 @@ class CloudPaths(unittest.TestCase):
             with open(fake, "w") as f:
                 f.write(f"#!/bin/sh\nprintf '{pids}'\n")
             os.chmod(fake, 0o755)
-            r = subprocess.run(["bash", "-c", H.STILL_TRAINING], capture_output=True, text=True, env=env)
+            r = subprocess.run([BASH, "-c", H.STILL_TRAINING], capture_output=True, text=True, env=env)
             self.assertEqual(r.stdout.strip(), want, pids)
 
     def test_start_passes_extra_training_settings(self):

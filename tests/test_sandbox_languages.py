@@ -79,6 +79,23 @@ class SyntaxCheckOnEveryEdit(unittest.TestCase):
 
 
 
+class WindowsBash(unittest.TestCase):
+    """On Windows the first bash.exe on PATH is usually System32's: the WSL launcher, which sees another file system and, with no Linux installed,
+    only prints a notice. Shell scripts are checked, and the owner's terminal runs, with Git Bash instead."""
+    def test_git_bash_is_used_not_the_wsl_launcher(self):
+        from unittest import mock
+        with tempfile.TemporaryDirectory() as d:
+            wsl, git = os.path.join(d, "Windows", "System32"), os.path.join(d, "Git", "bin")
+            for folder in (wsl, git):
+                os.makedirs(folder)
+                open(os.path.join(folder, "bash.exe"), "w").close()
+            with mock.patch.object(harness.os, "name", "nt"), mock.patch.dict(os.environ, {"PATH": wsl + os.pathsep + git}):
+                self.assertEqual(harness.host_shell_argv("ls"), [os.path.join(git, "bash.exe"), "-c", "ls"])
+                self.assertEqual(harness.OTHER_CHECKS[".sh"][1]("x.sh", d)[0], os.path.join(git, "bash.exe"))
+            with mock.patch.object(harness.os, "name", "nt"), mock.patch.dict(os.environ, {"PATH": wsl}), mock.patch.object(harness.shutil, "which", return_value=None):
+                self.assertEqual(harness.host_shell_argv("dir")[0], "cmd")                     # no Git Bash: Windows' own cmd
+
+
 class BuildCheckAfterEdits(unittest.TestCase):
     """After a change to code, the whole project is built (flag vryxcode_autocheck): an error that spans files (a function renamed in one file
     and still called by its old name in another) comes back at once, and "finished" waits until it builds."""

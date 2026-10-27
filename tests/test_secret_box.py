@@ -23,7 +23,8 @@ class Box(unittest.TestCase):
             self.assertTrue(blob.startswith("enc1:"))
             self.assertNotIn(TOKEN, blob)
             self.assertEqual(box.decrypt(blob), TOKEN)
-            self.assertEqual(stat.S_IMODE(os.stat(os.path.join(d, "secret.key")).st_mode), 0o600)
+            if os.name != "nt":                                  # Windows has no Unix file modes (only the machine is skipped)
+                self.assertEqual(stat.S_IMODE(os.stat(os.path.join(d, "secret.key")).st_mode), 0o600)
             again = secret_box.SecretBox(d)                                    # the same key is read back
             self.assertEqual(again.decrypt(blob), TOKEN)
 

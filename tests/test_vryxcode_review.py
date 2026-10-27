@@ -60,7 +60,7 @@ class Page(Base):
         ctx.route(lambda url: not url.startswith(f"http://127.0.0.1:{self.port}/"), lambda r: r.abort())    # only the test server: a web font that cannot load must not slow the page
         page = ctx.new_page()
         page.goto(f"http://127.0.0.1:{self.port}/")
-        wait_for(lambda: page.evaluate("typeof S !== 'undefined' && !!S.state"), 15)
+        wait_for(lambda: page.evaluate("typeof S !== 'undefined' && !!S.state && typeof openCode === 'function' && typeof newSession === 'function'"), 15)   # every script is in
         page.evaluate("document.querySelectorAll('.tour').forEach((e) => e.remove()); openCode(); newSession()")
         wait_for(lambda: page.evaluate("C.view === 'session'"), 15)
         return b, page

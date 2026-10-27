@@ -71,7 +71,8 @@ class Rules(unittest.TestCase):
             f = F.Flags(None)
             MP.ModelPublisher(path, f).publish(MANIFEST, "flare-2.6", by="owner")
             self.assertTrue(MP.ModelPublisher(path, f).live("flare-2.6"))
-            self.assertEqual(oct(os.stat(path).st_mode & 0o777), "0o600")
+            if os.name != "nt":                                  # Windows has no Unix file modes (only the machine is skipped)
+                self.assertEqual(oct(os.stat(path).st_mode & 0o777), "0o600")
 
 
 class Server(Base):

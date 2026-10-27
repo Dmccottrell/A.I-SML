@@ -498,7 +498,8 @@ class Privacy(Base):
 
     def test_keys_file_is_private_and_holds_no_key(self):
         path = os.path.join(self.tmp.name, "users.json")
-        self.assertEqual(os.stat(path).st_mode & 0o077, 0)
+        if os.name != "nt":                                  # Windows has no Unix file modes (only the machine is skipped)
+            self.assertEqual(os.stat(path).st_mode & 0o077, 0)
         text = open(path).read()
         for key in (self.sam_key, self.state.owner_key()):
             self.assertNotIn(key, text)                                    # only the hash of a key is stored

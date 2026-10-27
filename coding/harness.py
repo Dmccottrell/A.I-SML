@@ -123,12 +123,26 @@ def install_request(command):
     return ("pip" if tool.startswith("pip") else "npm"), names
 
 
+def real_bash():
+    """The bash that works on this computer's own files, or None. On Windows that is Git Bash: the bash.exe in System32 (and the WindowsApps
+    alias) is the WSL launcher, which sees another file system and, with no Linux installed, only prints a notice."""
+    if os.name != "nt":
+        return shutil.which("bash")
+    for folder in os.environ.get("PATH", "").split(os.pathsep):
+        exe = os.path.join(folder.strip('"'), "bash.exe")
+        if folder and os.path.isfile(exe) and not re.search(r"system32|windowsapps", exe, re.I):
+            return exe
+    git = shutil.which("git")                                    # Git for Windows: ...\Git\cmd\git.exe, with bash in ...\Git\bin
+    exe = git and os.path.join(os.path.dirname(os.path.dirname(git)), "bin", "bash.exe")
+    return exe if exe and os.path.isfile(exe) else None
+
+
 def host_shell_argv(command):
     """A terminal command on the owner's own computer (open_host): bash where there is one (Git Bash on Windows), else Windows' cmd."""
+    bash = real_bash()
     if os.name == "nt":
-        bash = shutil.which("bash")
-        return [bash, "-c", command] if bash and "system32" not in bash.lower() else ["cmd", "/d", "/s", "/c", command]
-    return ["bash", "-c", command] if shutil.which("bash") else ["sh", "-c", command]
+        return [bash, "-c", command] if bash else ["cmd", "/d", "/s", "/c", command]
+    return ["bash", "-c", command] if bash else ["sh", "-c", command]
 
 
 def shell_argv(command):
@@ -306,11 +320,9 @@ class Sandbox:
         if not isinstance(name, str) or not name.strip() or "\x00" in name:
             raise ToolError("path must be a non-empty string")
         name = name.strip().replace("\\", "/")                   # a Windows-style path from the model
-        if re.match(r"^[A-Za-z]:/", name):
-            name = name[3:]
-        if name.startswith("/"):                                  # "/index.html" means the project's root, unless it already is a real path inside it
-            inside = os.path.realpath(name)
-            name = inside if inside == self.root or inside.startswith(self.root + os.sep) else name.lstrip("/") or "."
+        if re.match(r"^[A-Za-z]:/", name) or name.startswith("/"):   # "/index.html" or "C:/site/app.js" means the project's root, unless it already is a real path inside it
+            inside = os.path.realpath(name) if os.path.isabs(name) else ""
+            name = inside if inside == self.root or inside.startswith(self.root + os.sep) else re.sub(r"^[A-Za-z]:", "", name).lstrip("/") or "."
         full = os.path.realpath(os.path.join(self.root, name))    # resolves .. and symlinks
         if full != self.root and not full.startswith(self.root + os.sep):
             raise ToolError(f"{name!r} is outside the workspace; only files inside it can be used")
@@ -886,7 +898,7 @@ OTHER_CHECKS = {
     ".rs": ("rustfmt", lambda f, d: ["rustfmt", "--edition", "2021", "--emit", "stdout", f], re.compile(r"^error", re.I)),        # parses the file only, never builds it
     ".ts": ("tsc", lambda f, d: ["tsc", "--noEmit", "--skipLibCheck", "--pretty", "false", "--target", "es2022", "--jsx", "preserve", f], re.compile(r"error TS1\d{3}")),
     ".tsx": ("tsc", lambda f, d: ["tsc", "--noEmit", "--skipLibCheck", "--pretty", "false", "--target", "es2022", "--jsx", "preserve", f], re.compile(r"error TS1\d{3}")),
-    ".sh": ("bash", lambda f, d: ["bash", "-n", f], re.compile(r"syntax error|unexpected", re.I)),                                  # -n reads it without running it
+    ".sh": ("bash", lambda f, d: [real_bash() or "bash", "-n", f], re.compile(r"syntax error|unexpected", re.I)),                                  # -n reads it without running it
     ".lua": ("luac", lambda f, d: ["luac", "-p", f], re.compile(r"expected|unexpected|near", re.I)),
 }
 # (a TypeScript type error, error TS2xxx, is not a broken file: it depends on the rest of the project, so only TS1xxx syntax errors count here)
@@ -895,7 +907,7 @@ OTHER_CHECKS = {
 def _check_other(path, text):
     ext = os.path.splitext(str(path).lower())[1]
     spec = OTHER_CHECKS.get(ext)
-    if not spec or not shutil.which(spec[0]):
+    if not spec or not (real_bash() if spec[0] == "bash" else shutil.which(spec[0])):
         return []
     import tempfile
     with tempfile.TemporaryDirectory() as d:

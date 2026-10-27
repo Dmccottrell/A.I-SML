@@ -108,7 +108,6 @@ class Factory(unittest.TestCase):
         self.assertEqual(r["pair"]["rejected"], "Certainly! That's $15.")
 
     def test_run_writes_its_progress_and_the_rental_script_is_valid(self):
-        import shutil
         import subprocess
         with tempfile.TemporaryDirectory() as d:
             out = LF.Out(d)
@@ -116,9 +115,11 @@ class Factory(unittest.TestCase):
             with open(out.path("progress.json"), encoding="utf-8") as f:
                 p = json.load(f)
             self.assertEqual((p["kept"], p["done"], p["total"]), (1, 1, 1))
-        if shutil.which("bash"):
+        import harness
+        bash = harness.real_bash()                                               # on Windows: Git Bash, not the WSL launcher in System32
+        if bash:
             script = os.path.join(os.path.dirname(os.path.abspath(__file__)), os.pardir, "scripts", "vast_lessons4.sh")
-            self.assertEqual(subprocess.run(["bash", "-n", script]).returncode, 0)
+            self.assertEqual(subprocess.run([bash, "-n", script]).returncode, 0)
 
     def test_about_the_planned_share_of_questions_get_a_pair_draft(self):
         share = sum(LF.wants_pair({"id": f"q{i}"}) for i in range(4000)) / 4000

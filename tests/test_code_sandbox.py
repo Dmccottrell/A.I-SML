@@ -30,6 +30,12 @@ class Prefix(unittest.TestCase):
             self.assertEqual(sum(1 for x in p if x == "-v"), 1)                          # exactly one folder is visible
             self.assertIn(f"{os.path.realpath(d)}:/work:rw", p)
 
+    def test_on_windows_the_container_still_does_not_run_as_root(self):
+        with tempfile.TemporaryDirectory() as d, mock.patch.object(CS.os, "name", "nt"):     # the owner's PC: no getuid, Docker Desktop
+            p = CS.docker_prefix("img", d)
+        self.assertIn("--user", p)
+        self.assertNotIn(p[p.index("--user") + 1].split(":")[0], ("0", "root"))
+
     def test_a_stronger_runtime_can_be_chosen(self):
         with tempfile.TemporaryDirectory() as d:
             p = CS.docker_prefix("img", d, runtime="runsc", uid=1, gid=1)
