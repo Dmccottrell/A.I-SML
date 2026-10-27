@@ -396,7 +396,7 @@ def make_todo():
 
 
 def run_task(task, generate, workspace, ask, max_turns=12, context_tokens=None, extra_programs=(), out=print, tools=None, git_identity=None, command_prefix=None, container=False,
-             history=None, chat_mode=False, checks=True, plan=False, todo=False, remote=False, lang_note="", build=False, full=False):
+             history=None, chat_mode=False, checks=True, plan=False, todo=False, remote=False, lang_note="", build=False, full=False, open_host=False):
     """Run one task. Returns harness.run_agent's result (finished, summary, turns, messages).
     `tools` is {name: function(**args) -> text} of extra tools (the GitHub tool, run by the server, never by the sandbox).
     `plan` looks only (no edits, runs or git changes) and answers with a plan; `todo` adds the checklist tool the page shows as a to-do list.
@@ -426,6 +426,8 @@ def run_task(task, generate, workspace, ask, max_turns=12, context_tokens=None, 
     kw = {"git_identity": git_identity} if git_identity else {}
     if full:
         kw["full"] = True
+    if open_host and not command_prefix:
+        kw["open_host"] = True                                    # the owner's own computer, opened to VryxCode by them (flag vryxcode_open_pc)
     if command_prefix:
         kw.update(command_prefix=command_prefix, container=container, remote=remote)
         if remote:

@@ -302,6 +302,20 @@ class Api:
         text = data.get("_text", "") if isinstance(data, dict) else ""
         return title, text[:limit]
 
+    def call(self, method, path, body=None):
+        """Any other GitHub API call (site_publish.py uses it for Pages)."""
+        return self._call(method, path, body)
+
+    def find_pull(self, owner, repo, branch):
+        """The open pull request from this branch of the same repository, or None: {"number", "url"}."""
+        data = self._call("GET", f"/repos/{owner}/{repo}/pulls?state=open&head={urllib.parse.quote(owner + ':' + branch, safe='')}")
+        pr = data[0] if isinstance(data, list) and data and isinstance(data[0], dict) else None
+        return {"number": int(pr.get("number") or 0), "url": str(pr.get("html_url") or "")} if pr else None
+
+    def create_pull(self, owner, repo, head, base, title, body=""):
+        d = self._call("POST", f"/repos/{owner}/{repo}/pulls", {"title": str(title)[:250], "head": head, "base": base, "body": str(body)[:20000]})
+        return {"number": int(d.get("number") or 0), "url": str(d.get("html_url") or "")}
+
     def create_repo(self, name, private=True, description=""):
         if not REPO_RE.fullmatch(name or "") or name in (".", "..") or name.endswith(".git"):
             raise GitHubError("That isn't a valid repository name.", "Use letters, numbers, dots, dashes and underscores.")
@@ -502,6 +516,42 @@ class Git:
         out = self.run(["push", "--", remote[2], f"refs/heads/{branch}:refs/heads/{branch}"])
         self.run(["update-ref", f"refs/remotes/origin/{branch}", "HEAD"], check=False)
         return out or f"Pushed {branch} to {remote[0]}/{remote[1]}."
+
+    def save_work(self, title, body="", prefix="vryxcode/"):
+        """vryxcode_github: everything changed in the project as one commit on a branch of its own, pushed (the caller then opens a pull request).
+        The first save of a project with no commits yet goes to main (there is nothing yet for a pull request to compare with). A project already
+        on one of these branches keeps it, so saving again adds to the same pull request.
+        Returns {"branch", "base" (the branch the pull request goes into, or None when it already exists), "first"}."""
+        remote = self.remote()
+        if not remote:
+            raise GitHubError("This project isn't linked to a GitHub repository yet.", "Create or link one first.")
+        title = " ".join(str(title or "").split())[:120] or "Changes from VryxCode"
+        has_commits = bool(self.run(["rev-parse", "-q", "--verify", "HEAD"], check=False))
+        dirty = bool(self.run(["status", "--porcelain"], check=False).strip())
+        if not has_commits:
+            if not dirty:
+                raise GitHubError("The project is empty: there is nothing to save.")
+            branch = self.branch() or "main"
+            self.run(["add", "-A"])
+            self.run(["commit", "-q", "-m", title] + (["-m", body] if body else []))
+            self.push(allow_protected=True)
+            return {"branch": branch, "base": None, "first": True}
+        branch, base = self.branch(), None
+        if not branch:
+            raise GitHubError("No branch is checked out.", "Switch to a branch first (git switch main).")
+        if not branch.startswith(prefix):
+            base = branch
+            if not dirty:
+                raise GitHubError("Nothing has changed since the last commit, so there is nothing to save.")
+            slug = re.sub(r"[^a-z0-9]+", "-", title.lower()).strip("-")[:40] or "changes"
+            new = f"{prefix}{slug}-{time.strftime('%m%d-%H%M')}"
+            self.run(["switch", "-q", "-c", new])
+            branch = new
+        if dirty:
+            self.run(["add", "-A"])
+            self.run(["commit", "-q", "-m", title] + (["-m", body] if body else []))
+        self.push()
+        return {"branch": branch, "base": base, "first": False}
 
     def clone(self, owner, repo):
         url = clean_url(owner, repo)

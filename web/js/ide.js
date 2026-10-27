@@ -244,7 +244,22 @@ async function acFetch(t) {
 }
 acPaint();
 addEventListener('beforeunload', (ev) => { if (IDE.tabs.some((t) => t.dirty)) { ev.preventDefault(); ev.returnValue = ''; } });
+// vryxcode_dbview: a SQLite file opens as its tables (read-only), with a search box
+async function viewDb(f, table, q) {
+  const r = await api('/api/code/db?project=' + encodeURIComponent(C.project) + '&path=' + encodeURIComponent(f) + '&table=' + encodeURIComponent(table || '') + '&q=' + encodeURIComponent(q || ''));
+  const j = await r.json().catch(() => ({})), v = $('codeView');
+  if (!r.ok) { v.textContent = j.message || 'It could not be opened.'; return; }
+  const search = el('input', {type: 'search', value: q || '', placeholder: 'Search this table', 'aria-label': 'Search this table', style: 'flex:1;min-width:120px'});
+  search.addEventListener('keydown', (e) => { if (e.key === 'Enter') viewDb(f, j.table, search.value); });
+  v.replaceChildren(el('div', {class: 'vx-db'},
+    el('div', {class: 'row'}, ...j.tables.map((t) => el('button', {class: 'chip' + (t.name === j.table ? ' on' : ''), onclick: () => viewDb(f, t.name, '')}, t.name + (t.rows == null ? '' : ' (' + t.rows + ')')))),
+    j.table ? el('div', {class: 'row'}, search, el('button', {class: 'chip', onclick: () => viewDb(f, j.table, search.value)}, 'Search')) : el('div', {}, 'This database has no tables yet.'),
+    j.table ? el('div', {class: 'tw'}, el('table', {}, el('thead', {}, el('tr', {}, ...j.columns.map((c) => el('th', {}, c)))),
+      el('tbody', {}, ...j.rows.map((row) => el('tr', {}, ...row.map((x) => el('td', {class: x === null ? 'nul' : ''}, x === null ? 'NULL' : String(x)))))))) : '',
+    el('small', {style: 'color:var(--muted)'}, j.rows.length >= j.limit ? 'Showing the first ' + j.limit + ' rows. Read-only: nothing here changes the database.' : 'Read-only: nothing here changes the database.')));
+}
 async function viewFile(f) {
+  if (featureOn('vryxcode_dbview') && /\.(db|sqlite3?|db3)$/i.test(f)) { C.file = f; refreshFiles(); return viewDb(f, '', ''); }
   C.file = f; const r = await api('/api/code/file?project=' + encodeURIComponent(C.project) + '&path=' + encodeURIComponent(f)); const j = await r.json();
   $('codeView').textContent = r.ok ? j.text + (j.truncated ? '\n... (shortened)' : '') : j.message; refreshFiles();
 }
@@ -252,7 +267,7 @@ function showUsage(u) {
   if (!u) return;
   $('codeUsage').textContent = u.exempt ? 'Owner: no limits' : u.plan[0].toUpperCase() + u.plan.slice(1) + ' · ' + u.tank_pct + '% left · about ' + fmt(u.steps_left) + ' coding steps';
 }
-function note(cls, k, text) { $('codeIn').append(el('div', {class: cls}, el('b', {}, k), el('div', {}, text))); scrollCode(); }
+function note(cls, k, text) { const n = el('div', {class: cls}, el('b', {}, k), el('div', {}, text)); $('codeIn').append(n); scrollCode(); return n; }
 function scrollCode() { const f = $('codeFeed'); f.scrollTop = f.scrollHeight; }
 // Past-tense words for finished actions (what the card says), and rotating present-tense words for the live line (what it is doing right now)
 const DONE_VERB = {read_file: 'Read', write_file: 'Wrote', edit_file: 'Edited', run: 'Ran', list_files: 'Looked around', git: 'Git', diagnostics: 'Checked', github: 'GitHub'};
@@ -273,6 +288,25 @@ function nowKind(l) {
   return k === 'run' && /unittest|pytest|\btest/i.test(l.target || '') ? 'test' : k;
 }
 const vxReview = () => !!(S.state && S.state.features && S.state.features.vryxcode_review);
+// vryxcode_lines: the feed reads like Claude Code's: steps that only look or run fold into one quiet line that opens on a tap, the model's words
+// in between, file changes as chips, a plain box for what the person wrote, and a small "working" line with moving dots
+const vxLines = () => !!(S.state && S.state.features && S.state.features.vryxcode_lines);
+const VX_VERB = {read_file: ['read', 'file', 'files'], list_files: ['listed', 'folder', 'folders'], glob: ['listed', 'folder', 'folders'],
+  grep: ['searched', 'time', 'times'], search_project: ['searched', 'time', 'times'], code_search: ['searched', 'time', 'times'], run: ['ran', 'command', 'commands'],
+  check_page: ['checked', 'page', 'pages'], command_output: ['read', 'output', 'outputs'], lookup_docs: ['looked up', 'doc', 'docs']};
+function vxGroup(feed) {
+  if (C.group && feed.lastElementChild === C.group) return C.group;
+  const head = el('div', {class: 'h', role: 'button', tabindex: '0'}), g = el('div', {class: 'vx-grp'}, head, el('div', {class: 'list'}));
+  head.onclick = () => g.classList.toggle('open'); head.onkeydown = (ev) => { if (ev.key === 'Enter') g.classList.toggle('open'); };
+  g._n = {}; feed.append(g); C.group = g; return g;
+}
+function vxCount(g, tool) {
+  const v = VX_VERB[tool] || ['used', 'tool', 'tools'], k = v[0] + '|' + v[1] + '|' + v[2];
+  g._n[k] = (g._n[k] || 0) + 1;
+  const parts = Object.entries(g._n).map(([key, n]) => { const [verb, one, many] = key.split('|'); return verb + ' ' + (n === 1 && one === 'command' ? 'a command' : n + ' ' + (n === 1 ? one : many)); });
+  const text = (g._thought ? ['thought ' + Math.round(g._thought) + 's'] : []).concat(parts).join(', ');
+  g.querySelector('.h').textContent = text.charAt(0).toUpperCase() + text.slice(1);
+}
 const QUIET_TOOLS = ['read_file', 'list_files', 'glob', 'grep', 'diagnostics', 'command_output', 'project_map', 'search_project', 'code_search', 'lookup_docs', 'memory'];
 function fileChip(path, add, del) {   // "app/page.tsx  +52 -0", like Cursor's
   return el('div', {class: 'cc-file', role: 'button', tabindex: '0', title: 'Show the change'}, el('span', {class: 'ic'}, '\u{1F4C4}'), el('span', {class: 'nm'}, path || 'file'),
@@ -311,13 +345,26 @@ $('codeCtx').onclick = () => {
   m.hidden = false;
 };
 document.addEventListener('click', (e) => { if (!e.target.closest('#codeCtx, #codeCtxMenu')) $('codeCtxMenu').hidden = true; });
+// vryxcode_restore: a Restore button on each of your messages puts the files back as they were just before it (the same as Rewind, one tap from the feed)
+function restoreBtn(e) {
+  if (!featureOn('vryxcode_restore') || !e.turn) return '';
+  return el('button', {class: 'chip vx-restore', type: 'button', title: 'Put the files back as they were before this message', onclick: async (ev) => {
+    ev.stopPropagation();
+    if (C.state === 'working') return toast('Wait for VryxCode to finish, or press Stop.');
+    if (!(C.checkpoints || []).some((c) => c.turn === e.turn)) return toast('That point is no longer kept: only the last few messages can be restored.');
+    if (!confirm('Put the files back as they were before this message? Files made after it are removed.')) return;
+    const r = await post('/api/code/sessions/' + C.sid + '/rewind', {turn: e.turn}); const j = await r.json().catch(() => ({}));
+    if (!r.ok) { note('bad', 'Could not restore', (j.message || '') + ' ' + (j.action || '')); return; }
+    poll(); refreshFiles(); if (!$('codePv').hidden) reloadPreview();
+  }}, icon('undo'), ' Restore');
+}
 function cEvent(e) {
   if (e.kind === 'user' || e.kind === 'start') offerReply('');          // a new message: the last suggestion no longer fits
   const feed = $('codeIn'); C.events.push(e);
   if (e.kind === 'context') { codeCtx(e); return; }
   if (e.kind === 'model') { feed.append(el('div', {class: 'note', style: 'align-self:center;margin:6px auto'}, 'Now using ' + modelName(e.model) + (e.previous ? ' (was ' + modelName(e.previous) + ')' : ''))); C.last = null; return; }
   if (e.kind === 'note' || (e.kind === 'user' && e.auto)) { if (e.kind === 'note') feed.append(el('div', {class: 'note', style: 'align-self:center;margin:6px auto;max-width:92%'}, '\u21bb ' + e.text)); C.last = null; return; }
-  if (e.kind === 'user') { feed.append(el('div', {class: 'cc-user'}, el('span', {class: 'ember'}), el('span', {}, (e.plan ? '[Plan] ' : '') + e.text), e.steer ? el('small', {style: 'color:var(--muted);margin-left:6px'}, '(while it worked)') : '')); C.last = null; return; }
+  if (e.kind === 'user') { feed.append(el('div', {class: 'cc-user'}, el('span', {class: 'ember'}), el('span', {}, (e.plan ? '[Plan] ' : '') + e.text), e.steer ? el('small', {style: 'color:var(--muted);margin-left:6px'}, '(while it worked)') : '', restoreBtn(e))); C.last = null; return; }
   if (e.kind === 'choose') {          // the full agent asks the person to pick: one tap answers, or they write their own
     const pick = (choice) => { if (!String(choice || '').trim()) return; post('/api/code/sessions/' + C.sid + '/answer', {id: e.id, choice}).then(() => poll()); };
     const other = el('input', {type: 'text', placeholder: 'Or write your own answer', 'aria-label': 'Your own answer',
@@ -329,7 +376,7 @@ function cEvent(e) {
     return;
   }
   if (e.kind === 'start' || e.kind === 'user') C.turnFiles = {};       // vryxcode_review: the files this message changed, for its Done line
-  if (e.kind === 'start') { feed.replaceChildren(el('div', {class: 'cc-user'}, el('span', {class: 'ember'}), el('span', {}, (e.plan ? '[Plan] ' : '') + e.task))); C.last = null; return; }
+  if (e.kind === 'start') { feed.replaceChildren(el('div', {class: 'cc-user'}, el('span', {class: 'ember'}), el('span', {}, (e.plan ? '[Plan] ' : '') + e.task), restoreBtn(e))); C.last = null; return; }
   if (e.kind === 'step') {
     if (C.retry) { C.retry.classList.replace('run', 'ok'); const v = C.retry.querySelector('.cc-verb'); if (v) v.textContent = 'Fixed a step'; C.retry = null; }   // vryxcode_fixes: the step it retried went through
     const prose = String(e.raw || '').split(/<\|tool_call\|>|<tool_call>/)[0].trim();
@@ -339,6 +386,12 @@ function cEvent(e) {
     if (e.tool === 'run') outAgentStep(e); else OUT.pending = null;
     if (prose) feed.append(vxSay(prose));
     const [name, arg, extra] = toolParts(e.preview, e.tool);
+    if (vxLines() && e.tool !== 'write_file' && e.tool !== 'edit_file') {   // like Claude Code: looking and running fold into one grey line ("Read 3 files, ran 2 commands ›")
+      const g = vxGroup(feed);
+      if (e.secs >= 2) g._thought = (g._thought || 0) + e.secs;
+      const q = el('div', {class: 'cc-quiet run'}, name + ' ', el('span', {class: 'arg'}, arg));
+      g.querySelector('.list').append(q); vxCount(g, e.tool); C.last = q; return;
+    }
     if (vxReview()) {                                 // like Cursor: looking is a quiet grey line, a change is a file chip
       if (e.secs >= 2) feed.append(el('div', {class: 'cc-quiet'}, 'Thought ' + Math.round(e.secs) + 's'));
       if (QUIET_TOOLS.includes(e.tool)) { const q = el('div', {class: 'cc-quiet'}, name + ' ', el('span', {class: 'arg'}, arg)); feed.append(q); C.last = q; return; }
@@ -359,6 +412,7 @@ function cEvent(e) {
       const t = String(e.text || ''), bad = /^error|exit code [1-9]|Traceback|FAILED/m.test(t), node = C.last;
       node.classList.remove('run'); node.classList.add(bad ? 'no' : 'ok');
       if (bad) node.append(el('div', {class: 'why'}, t.split('\n')[0].slice(0, 200)));
+      const grp = node.closest && node.closest('.vx-grp'); if (bad && grp) grp.classList.add('vx-bad');      // vryxcode_lines: the folded line shows that something in it failed
       else if (node._path) { const f = C.turnFiles[node._path] || {add: 0, del: 0}; f.add += node._add; f.del += node._del; C.turnFiles[node._path] = f; }
       C.last = null; return;
     }
@@ -404,6 +458,8 @@ function cEvent(e) {
     if (e.finished || e.said) {                       // the model talking to the person: what it did, what to run, what it suggests
       if (e.finished) setTimeout(() => { if (!$('codePv').hidden) reloadPreview(); else if (!$('codePreviewBtn').disabled) $('codePreviewBtn').classList.add('pulse'); }, 700);     // the page changed: refresh it, or point at Preview
       feed.append(renderMessage(e.summary || 'Done.', e.finished));
+      if (featureOn('vryxcode_autocontinue') && !e.plan) feed.append(el('div', {class: 'vx-state ' + (e.finished ? 'ok' : 'wait')},     // plainly: finished, or waiting for you
+        e.finished ? '\u2713 Done: the task is finished' : '\u25CF Not finished yet: it is waiting for your answer'));
       const changed = Object.entries(C.turnFiles || {});
       if (vxReview() && e.finished && changed.length) {          // the Done line: every file this message changed, each one opens the change
         const add = changed.reduce((n, [, f]) => n + f.add, 0), del = changed.reduce((n, [, f]) => n + f.del, 0);
@@ -411,6 +467,9 @@ function cEvent(e) {
           ...changed.map(([p, f]) => { const c = fileChip(p, f.add, f.del); c.classList.add('ok'); c.onclick = () => { showDrawer(true, 'changes'); }; return c; }),
           vxPreviewOn() && changed.some(([p]) => /\.(html?|css|js)$/i.test(p)) ? el('button', {class: 'btn small vx-pvgo', onclick: () => openPreview()}, '\u25B6 Preview') : ''));
       }
+      if (e.finished && (featureOn('vryxcode_github') || featureOn('vryxcode_publish'))) feed.append(el('div', {class: 'vx-ship'},     // the work is done: keep it on GitHub, or put it online
+        featureOn('vryxcode_github') ? el('button', {class: 'chip', onclick: () => saveToGithub()}, '\u2191 Save to GitHub') : '',
+        featureOn('vryxcode_publish') ? el('button', {class: 'chip', onclick: () => publishSite()}, '\u{1F310} Publish') : ''));
       if (e.report) feed.append(reportCard(e.report));
       if (e.verdict) {        // vryxcode_guardrails: a review ends on a verdict; only CRITICAL and MAJOR problems go back, test first, and style notes never loop
         const v = e.verdict, ok = v.status === 'APPROVED';
@@ -422,6 +481,12 @@ function cEvent(e) {
       if (e.finished || e.plan) offerReply(e.plan ? 'Go ahead and build it as planned.' : (e.next || [])[0]);
       if (e.next && e.next.length) feed.append(el('div', {class: 'cc-next'}, el('span', {class: 'lead'}, 'Suggested next:'),
         ...e.next.map((t) => el('button', {class: 'chip', onclick: () => { $('codeTask').value = t; $('codeGo').click(); }}, t))));
+      return;
+    }
+    if (e.reason === 'steps' && featureOn('vryxcode_autocontinue')) {          // out of steps: say so plainly, and one tap carries on
+      if (e.report) feed.append(reportCard(e.report));
+      feed.append(el('div', {class: 'vx-state no'}, el('span', {}, '\u25A0 Not finished: it used all its steps' + (e.rounds ? ' and carried on ' + e.rounds + (e.rounds === 1 ? ' time' : ' times') + ' by itself' : '') + '. Your files so far are kept.'),
+        el('button', {class: 'btn small', onclick: () => { $('codeTask').value = 'Carry on from where you stopped and finish the task.'; $('codeGo').click(); }}, 'Continue')));
       return;
     }
     const cls = e.error || e.limited ? 'bad' : 'stop';
@@ -469,10 +534,11 @@ function renderMessage(text, good) {
 }
 // the live "working" line: our ember mark pulsing, a word for what it is doing (it changes every few seconds), the file or command, seconds, and the text as it is written
 function renderLive(live, state) {
+  document.body.classList.toggle('vxl', vxLines());
   let n = document.getElementById('codeLive') || C.liveEl;       // the same line is moved, not rebuilt, so its words do not blank and fade in again each time the page asks the server
   if (!live || state === 'asking' || !['starting', 'working'].includes(state)) { if (n) n.remove(); C.liveEl = null; C.liveAt = null; return; }
-  if (!n) { n = el('div', {class: 'cc-live', id: 'codeLive'}, el('div', {class: 'l1'}, el('span', {class: 'mark'}, logo(20, false, 'brand')), el('span', {class: 'what'}), el('span', {class: 'meta'})), el('div', {class: 'prose'})); }
-  C.liveEl = n; n.classList.toggle('vx-q', vxReview());     // vryxcode_review: a plain shimmering line, like Cursor's, instead of the card
+  if (!n) { n = el('div', {class: 'cc-live', id: 'codeLive'}, el('div', {class: 'l1'}, el('span', {class: 'dots', 'aria-hidden': 'true'}, logoDots(20)), el('span', {class: 'mark'}, logo(20, false, 'brand')), el('span', {class: 'what'}), el('span', {class: 'meta'})), el('div', {class: 'prose'})); }
+  C.liveEl = n; n.classList.toggle('vx-q', vxReview() || vxLines());     // vryxcode_review: a plain shimmering line, like Cursor's, instead of the card
   $('codeIn').append(n);     // always the last thing in the feed
   const now = performance.now(), mine = C.liveAt == null ? null : (now - C.liveAt) / 1000;
   // the server counts whole seconds, so its number is often a second behind ours: keep ours unless the server is ahead or a new step has started (a clearly smaller number)
@@ -502,6 +568,7 @@ async function poll() {
   const old = document.getElementById('codeLive'); if (old) old.remove();      // the live line sits below the newest step, so take it out while steps are added
   for (const e of j.events) cEvent(e); C.seen += j.events.length;
   C.saved = !!j.saved; C.state = j.state; C.checkpoints = j.checkpoints || C.checkpoints || [];
+  if (featureOn('vryxcode_taskbox') && (C.todo || []).length) renderTodo();          // the circle on the step it is doing goes away once it stops
   $('codeTask').placeholder = C.offer || 'Ask, answer, or tell VryxCode what to build or fix';
   if (j.events.some((e) => e.kind === 'result' || e.kind === 'end' || e.kind === 'rewind')) refreshFiles().then(() => livePreview(j.events));
   if (j.events.length && !$('codeDrawer').hidden && C.tab !== 'files') showDrawer(true, C.tab);

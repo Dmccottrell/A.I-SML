@@ -269,6 +269,16 @@ function renderTodo() {
   if (!items.length) { box.hidden = true; box.replaceChildren(); return; }
   const done = items.filter((i) => i.done).length;
   box.hidden = false;
+  if (featureOn('vryxcode_taskbox')) {          // like Claude Code: done, the one it is on now, and the ones still to come, in a box that stays open
+    const now = items.findIndex((i) => !i.done), working = C.state === 'working' || C.state === 'starting';
+    box.classList.add('vx-tasks');
+    box.replaceChildren(...items.map((i, k) => {
+      const st = i.done ? 'done' : (k === now && working ? 'now' : 'todo');
+      return el('div', {class: 'vt is-' + st, title: st === 'done' ? 'Done' : st === 'now' ? 'Working on it now' : 'Still to do'}, el('span', {class: 'dot', 'aria-hidden': 'true'}, st === 'done' ? '\u2713' : ''), el('span', {}, i.text));
+    }));
+    return;
+  }
+  box.classList.remove('vx-tasks');
   box.replaceChildren(el('div', {class: 'th', onclick: () => { C.todoOpen = !C.todoOpen; renderTodo(); }}, el('span', {}, 'To-do ' + done + '/' + items.length), el('span', {class: 'bar'}, el('i', {style: 'width:' + Math.round(100 * done / items.length) + '%'})), el('span', {style: 'color:var(--muted)'}, C.todoOpen ? '\u25b4' : '\u25be')),
     C.todoOpen ? el('ul', {}, ...items.map((i) => el('li', {class: i.done ? 'done' : ''}, el('span', {class: 'bx'}, i.done ? '\u2713' : ''), el('span', {}, i.text)))) : '');
 }
@@ -297,8 +307,75 @@ const SLASH = [['plan', 'Plan first: look and plan, change nothing', () => setMo
   ['fixci', 'Fix what is failing on GitHub for this project (reads the CI log)', () => fixCi()],
   ['watchci', 'Watch this project\u2019s CI: fix new failures by itself (owner)', () => watchCi()],
   ['permissions', 'This project\u2019s saved permission rules (always allow / never allow)', () => showRules()],
+  ['secrets', 'This project\u2019s secrets (API keys): its programs get them, VryxCode never sees them', () => showSecrets(), 'vryxcode_secrets'],
+  ['github', 'Save this project to GitHub: a branch, a commit and a pull request', () => saveToGithub(), 'vryxcode_github'],
+  ['publish', 'Publish this web project to a free public link (GitHub Pages)', () => publishSite(), 'vryxcode_publish'],
   ['tour', 'Take the VryxCode tour again', () => openVryxTour(true)],
-  ['help', 'List these commands', () => note('fin', 'Commands', SLASH.map((x) => '/' + x[0] + ' \u2014 ' + x[1]).concat((C.cmds || []).map((x) => '/' + x.name + ' \u2014 ' + (x.about || 'this project\u2019s own command'))).join('\n') + '\n@filename \u2014 point at a file in your message')]];
+  ['help', 'List these commands', () => note('fin', 'Commands', slashOn().map((x) => '/' + x[0] + ' \u2014 ' + x[1]).concat((C.cmds || []).map((x) => '/' + x.name + ' \u2014 ' + (x.about || 'this project\u2019s own command'))).join('\n') + '\n@filename \u2014 point at a file in your message')]];
+const slashOn = () => SLASH.filter((x) => !x[3] || featureOn(x[3]));     // a command that belongs to a switched-off feature is not listed
+// vryxcode_secrets: names only; a value can be replaced or removed, never read back
+async function showSecrets() {
+  const q = '?project=' + encodeURIComponent(C.project); const r = await api('/api/code/secrets' + q); const j = await r.json().catch(() => ({names: []}));
+  let m; const change = async (body) => { const x = await post('/api/code/secrets', Object.assign({project: C.project}, body)); const k = await x.json().catch(() => ({})); if (!x.ok) { note('bad', 'Could not save', k.message || ''); return; } m.remove(); showSecrets(); };
+  const name = el('input', {type: 'text', placeholder: 'NAME, like WEATHER_API_KEY', 'aria-label': 'Secret name', autocapitalize: 'characters', style: 'flex:1;min-width:140px'});
+  const value = el('input', {type: 'password', placeholder: 'Value', 'aria-label': 'Secret value', autocomplete: 'off', style: 'flex:1;min-width:140px'});
+  m = dialog([el('h2', {}, 'Secrets for ' + C.project),
+    el('div', {style: 'color:var(--muted)'}, 'Programs VryxCode runs in this project get these as environment variables. VryxCode is told only the names; a value that shows up in a program\u2019s output is hidden from it. Kept encrypted on the Emvryx computer. Once saved, a value can be replaced but not shown again.'),
+    ...(j.names.length ? j.names.map((n) => el('div', {class: 'opt', style: 'cursor:default'}, el('code', {class: 'grow'}, n), el('span', {style: 'color:var(--muted)'}, '\u2022\u2022\u2022\u2022'), el('button', {class: 'chip bad', onclick: () => { if (confirm('Remove ' + n + '?')) change({name: n, delete: true}); }}, 'Remove')))
+                   : [el('div', {style: 'color:var(--muted)'}, 'No secrets yet.')]),
+    el('div', {class: 'row', style: 'flex-wrap:wrap;gap:8px'}, name, value, el('button', {class: 'chip', onclick: () => { name.value = name.value.trim().toUpperCase(); change({name: name.value, value: value.value}); }}, 'Save'))], 'Close');
+}
+// vryxcode_github: Save to GitHub. The person sees and can change the commit title and the description before anything is sent.
+async function saveToGithub() {
+  if (!C.project) return toast('Open a project first.');
+  if (C.state === 'working') return toast('Wait for VryxCode to finish, or press Stop.');
+  let g; try { g = await (await api('/api/code/git?project=' + encodeURIComponent(C.project))).json(); } catch (e) { return toast('That did not load. Try again.'); }
+  if (!g.connected) { note('bad', 'GitHub is not connected', 'Open Menu > Connected apps > GitHub and connect it, then try again.'); return; }
+  if (!g.linked) {
+    if (!confirm('This project has no GitHub repository yet. Make a new PRIVATE repository called "' + C.project + '" on ' + (g.login || 'your account') + ' for it?')) return;
+    const r = await post('/api/code/git', {project: C.project, action: 'create_repo', name: C.project, private: true}); const j = await r.json().catch(() => ({}));
+    if (!r.ok) { note('bad', 'Could not make the repository', (j.message || '') + ' ' + (j.action || '')); return; }
+  }
+  const evs = C.events || [], start = evs.find((e) => e.kind === 'start'), ends = evs.filter((e) => e.kind === 'end' && e.finished), asks = evs.filter((e) => e.kind === 'user' && !e.auto);
+  const files = Object.keys(C.turnFiles || {});
+  const title = el('input', {type: 'text', maxlength: 120, value: ((asks.length ? asks[asks.length - 1].text : start ? start.task : '') || 'Changes from VryxCode').split('\n')[0].slice(0, 100), 'aria-label': 'Title', style: 'width:100%'});
+  const desc = el('textarea', {rows: 8, maxlength: 20000, 'aria-label': 'Description', style: 'width:100%;border-radius:12px;padding:10px;background:var(--surface2);color:var(--text);border:1px solid var(--line);font:inherit'});
+  desc.value = ['Asked for: ' + (start ? start.task : ''), ...asks.map((u) => 'Then: ' + u.text), '', 'What VryxCode did:', ...ends.slice(-3).map((e) => e.summary || ''), files.length ? '\nFiles changed in the last message: ' + files.join(', ') : '', '', 'Made with VryxCode.'].join('\n').trim();
+  const m = dialog([el('h2', {}, 'Save to GitHub'),
+    el('div', {style: 'color:var(--muted)'}, 'Everything changed in ' + C.project + ' goes into one commit on a new branch' + (g.branch && /^vryxcode\//.test(g.branch) ? ' (the same branch as last time, so the same pull request)' : '') + ', then a pull request you can look at and merge on GitHub. Nothing goes into main by itself.'),
+    el('b', {}, 'Title'), title, el('b', {}, 'Description'), desc], 'Cancel',
+    el('button', {class: 'btn', style: 'margin-bottom:8px', onclick: async (ev) => {
+      ev.target.disabled = true; ev.target.textContent = 'Saving\u2026';
+      const r = await post('/api/code/git', {project: C.project, action: 'save_pr', title: title.value, description: desc.value}); const j = await r.json().catch(() => ({}));
+      m.remove();
+      if (!r.ok) { note('bad', 'Could not save to GitHub', (j.message || '') + ' ' + (j.action || '')); return; }
+      const box = note('fin', 'Saved to GitHub', j.message || 'Saved.');
+      if (j.url && box) box.append(el('a', {class: 'btn small', href: j.url, target: '_blank', rel: 'noopener', style: 'margin-top:8px;display:inline-block'}, 'Open on GitHub'));
+    }}, 'Save and open a pull request'));
+}
+// vryxcode_publish: the person sees exactly which files would be public, then says yes
+async function publishSite() {
+  if (!C.project) return toast('Open a project first.');
+  const r = await api('/api/code/publish?project=' + encodeURIComponent(C.project)); const j = await r.json().catch(() => ({}));
+  if (!r.ok) { note('bad', 'Cannot publish this project', (j.message || '') + ' ' + (j.action || '')); return; }
+  const go = async (body, btn) => {
+    btn.disabled = true; btn.textContent = 'Working\u2026';
+    const x = await post('/api/code/publish', Object.assign({project: C.project, confirm: true}, body)); const k = await x.json().catch(() => ({}));
+    m.remove();
+    if (!x.ok) { note('bad', 'That did not work', (k.message || '') + ' ' + (k.action || '')); return; }
+    if (!k.published) { note('fin', 'Unpublished', 'The link no longer works, and the ' + j.repo + ' repository is private again.'); return; }
+    const box = note('fin', 'Published', 'It can take a minute or two before the link works: ' + k.url);
+    box.append(el('a', {class: 'btn small', href: k.url, target: '_blank', rel: 'noopener', style: 'margin-top:8px;display:inline-block'}, 'Open the link'));
+  };
+  const list = el('div', {style: 'max-height:180px;overflow:auto;font-family:monospace;font-size:13px;background:var(--surface2);border-radius:10px;padding:8px'}, ...j.files.map((f) => el('div', {}, f)));
+  const m = dialog([el('h2', {}, j.published ? C.project + ' is published' : 'Publish ' + C.project + ' to a public link'),
+    j.published ? el('p', {}, el('a', {href: j.url, target: '_blank', rel: 'noopener'}, j.url)) : null,
+    el('p', {style: 'color:var(--muted)'}, 'Anyone with the link can see these ' + j.files.length + ' files. They go into a PUBLIC GitHub repository, ' + j.login + '/' + j.repo + ', with free GitHub Pages. Nothing else from the project leaves this computer' + (j.skipped.length ? ' (' + j.skipped.length + ' other files, like code that runs on a server, stay private)' : '') + '.'),
+    el('b', {}, 'Will be public:'), list], 'Cancel',
+    el('div', {style: 'display:flex;flex-direction:column;gap:8px;margin-bottom:8px'},
+      el('button', {class: 'btn', onclick: (ev) => go({}, ev.target)}, j.published ? 'Publish again (replace it)' : 'Yes, publish'),
+      j.published ? el('button', {class: 'btn ghost', onclick: (ev) => { if (confirm('Take the link down?')) go({action: 'unpublish'}, ev.target); }}, 'Unpublish') : ''));
+}
 // ---- pictures sent with the next message (the full agent sees them), memory, saved permission rules, the project's own /commands
 C.pics = [];
 C.docs = [];                                   // vryxcode_review: documents attached to the next message ({id, name}), read by the model before it starts
@@ -365,7 +442,7 @@ function suggest() {
   const t = $('codeTask'), box = $('codeSuggest'), pos = t.selectionStart, before = t.value.slice(0, pos);
   let items = [];
   const sl = /^\/(\w*)$/.exec(before);
-  if (sl) items = SLASH.filter((x) => x[0].startsWith(sl[1].toLowerCase())).map((x) => ({label: '/' + x[0], sub: x[1], run: () => { t.value = ''; closeCodeMenus(); x[2](); }}))
+  if (sl) items = slashOn().filter((x) => x[0].startsWith(sl[1].toLowerCase())).map((x) => ({label: '/' + x[0], sub: x[1], run: () => { t.value = ''; closeCodeMenus(); x[2](); }}))
     .concat((C.cmds || []).filter((x) => x.name.startsWith(sl[1].toLowerCase()) && !SLASH.some((y) => y[0] === x.name)).map((x) => ({label: '/' + x.name, sub: x.about || 'this project\u2019s own command', run: () => { t.value = '/' + x.name + ' '; closeCodeMenus(); t.focus(); }})));
   else { const at = /(?:^|\s)@([\w./-]*)$/.exec(before);
     if (at) { const q = at[1].toLowerCase(); items = C.files.filter((f) => f.toLowerCase().includes(q)).slice(0, 8).map((f) => ({label: '@' + f, sub: '', run: () => { const start = before.length - at[1].length - 1; t.value = t.value.slice(0, start) + '@' + f + ' ' + t.value.slice(pos); closeCodeMenus(); t.focus(); }})); } }

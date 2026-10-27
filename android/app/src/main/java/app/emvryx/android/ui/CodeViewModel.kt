@@ -270,6 +270,18 @@ class CodeViewModel(app: Application) : AndroidViewModel(app) {
         if (docs.isNotEmpty()) putJsonArray("docs") { docs.forEach { add(JsonPrimitive(it.id)) } }
     }
 
+    var onWeb: ((String, String) -> Unit)? = null      // opens the website's VryxCode with this script (Preview, Save to GitHub, Publish)
+    var parity by mutableStateOf<Set<String>>(emptySet())   // flag android_vryxcode: the website's newer VryxCode parts that are switched on (their own flags)
+
+    /** Restore on a message (flag vryxcode_restore): the files go back to just before it */
+    fun restore(turn: Int) {
+        val id = sid ?: return
+        viewModelScope.launch {
+            try { api.codeRewind(id, turn); error = null } catch (e: Exception) { error = describe(e) }
+            poll()
+        }
+    }
+
     fun stop() {
         val id = sid ?: return
         viewModelScope.launch { runCatching { api.codeStop(id) }; poll() }

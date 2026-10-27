@@ -67,7 +67,8 @@ ALLOWED_PROGRAMS = {"python", "python3", "pytest", "ls", "cat", "head", "tail", 
                     "echo", "pwd", "sort", "uniq", "diff",
                     # other languages, when they are installed (in the container image: node, gcc, g++, sqlite3). Not package managers (npm, pip, cargo: they download and run other
                     # people's code) and not `make` (a Makefile can run anything); the person is told to run those themselves.
-                    "node", "gcc", "g++", "cc", "go", "java", "javac", "php", "ruby", "rustc", "sqlite3"}
+                    "node", "gcc", "g++", "cc", "go", "java", "javac", "php", "ruby", "rustc", "sqlite3",
+                    "tsc"}                                         # the TypeScript compiler only compiles (it writes .js files, it runs nothing)
 
 
 # git: only these subcommands, and never flags that point outside the workspace or run other programs.
@@ -120,6 +121,14 @@ def install_request(command):
     words = [t for t in re.split(r"\s+", m.group(2).strip()) if t]
     names = [] if "-r" in words or "--requirement" in words else [t for t in words if not t.startswith("-")]      # a requirements file: its names are not in the command
     return ("pip" if tool.startswith("pip") else "npm"), names
+
+
+def host_shell_argv(command):
+    """A terminal command on the owner's own computer (open_host): bash where there is one (Git Bash on Windows), else Windows' cmd."""
+    if os.name == "nt":
+        bash = shutil.which("bash")
+        return [bash, "-c", command] if bash and "system32" not in bash.lower() else ["cmd", "/d", "/s", "/c", command]
+    return ["bash", "-c", command] if shutil.which("bash") else ["sh", "-c", command]
 
 
 def shell_argv(command):
@@ -220,6 +229,16 @@ def _limits():
     resource.setrlimit(resource.RLIMIT_FSIZE, (50 * 1024**2, 50 * 1024**2))  # files up to 50 MB
 
 
+# what to say when a language's program is not installed on the Emvryx computer (harness.Sandbox.run)
+MISSING_HINT = {"sqlite3": " Use Python's built-in sqlite3 module instead (python -c \"import sqlite3 ...\", or a small .py script): it needs nothing installed.",
+                "node": " Use python for scripts here, or ask the person to install Node.js.",
+                "go": " Ask the person to install Go, or use the isolated sandbox.", "rustc": " Ask the person to install Rust, or use the isolated sandbox.",
+                "java": " Ask the person to install a JDK, or use the isolated sandbox.", "javac": " Ask the person to install a JDK, or use the isolated sandbox.",
+                "gcc": " Use the isolated sandbox (it has gcc and g++), or ask the person to install a C compiler.",
+                "g++": " Use the isolated sandbox (it has gcc and g++), or ask the person to install a C++ compiler.",
+                "cc": " Use the isolated sandbox (it has gcc and g++), or ask the person to install a C compiler."}
+
+
 def _limits_and_session():
     """A background command on this computer: the same limits, in its own process group (so it can be stopped with everything it started)."""
     os.setsid()
@@ -244,10 +263,12 @@ class Sandbox:
 
     def __init__(self, workspace=None, command_timeout=20, output_limit=1500, max_read_lines=80,
                  command_prefix=None, allowed_programs=ALLOWED_PROGRAMS, git_identity=("Emvryx agent", "agent@localhost"), container=False, remote=False,
-                 full=False):
+                 full=False, open_host=False):
         self.full = bool(full)                   # the Claude Code-style tools: bigger reads and output, replace_all, glob, grep, longer commands
-        # ...and a real terminal, but ONLY when commands already run inside the container or on the cloud machine (never on this computer)
-        self.shell = self.full and bool(command_prefix) and bool(container or remote)
+        # A real terminal (any program, pipes, programs it built) wherever the commands are sealed off: inside the container or on the cloud machine,
+        # for every agent. And on this computer only when its owner opened it to VryxCode (open_host: their own sessions, with the switch on).
+        self.open_host = bool(open_host) and not container and not remote
+        self.shell = (bool(command_prefix) and bool(container or remote)) or self.open_host
         if self.full:
             command_timeout, output_limit, max_read_lines = max(command_timeout, FULL_TIMEOUT), max(output_limit, FULL_OUTPUT), max(max_read_lines, FULL_READ_LINES)
         self.bg, self.bg_dir = {}, None          # the full agent's background commands (a server, a watcher): id -> {"proc", "log", "read", "command", "name"}
@@ -259,12 +280,15 @@ class Sandbox:
         os.makedirs(self.root, exist_ok=True)
         self.command_timeout, self.output_limit, self.max_read_lines = command_timeout, output_limit, max_read_lines
         self.allowed = set(allowed_programs)
-        self.prefix = _no_network_prefix() if command_prefix is None else list(command_prefix)
+        self.prefix = [] if self.open_host else _no_network_prefix() if command_prefix is None else list(command_prefix)
         self.extra_tools = {}
+        self.secrets = {}                                          # vryxcode_secrets: NAME -> value for the programs it runs; masked in everything the model gets back
 
     def close(self):
         for job in list(self.bg.values()):                # background commands end with the reply that started them
             self._kill(job)
+        if getattr(self, "cache_dir", None):
+            shutil.rmtree(self.cache_dir, ignore_errors=True)
         if self.bg_dir:
             shutil.rmtree(self.bg_dir, ignore_errors=True)
         if self.own_dir:
@@ -406,11 +430,12 @@ class Sandbox:
         env = {"PATH": os.environ.get("PATH", ""), "PYTHONDONTWRITEBYTECODE": "1", "PYTHONIOENCODING": "utf-8"}
         if os.name == "nt":
             env["SYSTEMROOT"] = os.environ.get("SYSTEMROOT", "")
+        env.update(self.secrets)
         env.update(extra_env or {})
         kwargs = {"preexec_fn": _limits} if sys.platform.startswith("linux") and not self.container and not self.remote else {}
         if self.container and wrap:
             # the container is a separate world: environment variables must be passed in with -e (before the image name, the last word of the prefix)
-            inside = dict(extra_env or {})
+            inside = dict(self.secrets, **(extra_env or {}))
             if "HOME" in inside:
                 inside["HOME"] = "/tmp"
             command = self.prefix[:-1] + [x for k, v in inside.items() for x in ("-e", f"{k}={v}")] + [self.prefix[-1]] + argv
@@ -445,9 +470,11 @@ class Sandbox:
         if sys.platform.startswith("linux") and not self.container:
             extra["preexec_fn"] = _limits_and_session
             extra.pop("start_new_session")
-        env = {"PATH": os.environ.get("PATH", ""), "PYTHONDONTWRITEBYTECODE": "1", "PYTHONIOENCODING": "utf-8", "PYTHONUNBUFFERED": "1"}
+        env = {"PATH": os.environ.get("PATH", ""), "PYTHONDONTWRITEBYTECODE": "1", "PYTHONIOENCODING": "utf-8", "PYTHONUNBUFFERED": "1", **self.secrets}
         if os.name == "nt":
             env["SYSTEMROOT"] = os.environ.get("SYSTEMROOT", "")
+        if self.container and self.secrets and argv[:2] == ["docker", "run"]:
+            argv = argv[:2] + [x for k, v in self.secrets.items() for x in ("-e", f"{k}={v}")] + argv[2:]
         with open(log, "w", encoding="utf-8") as fh:
             try:
                 proc = subprocess.Popen(argv, cwd=self.root, env=env, stdout=fh, stderr=subprocess.STDOUT, stdin=subprocess.DEVNULL, **extra)
@@ -572,7 +599,7 @@ class Sandbox:
         return cut(f"exit code {r.returncode}\n{out}" if out else f"exit code {r.returncode}", self.output_limit)
 
     def run(self, command, timeout=None, background=False):
-        want = None if self.remote else install_request(command)          # the cloud machine has its own internet: pip works there as usual
+        want = None if self.remote or self.open_host else install_request(command)   # the cloud machine and the opened computer have the internet: pip works as usual
         if want:                                         # the sandbox has no internet: the download goes through install(), which fetches it safely and puts it in the project
             manager, names = want
             if not names and manager == "pip":
@@ -595,6 +622,10 @@ class Sandbox:
             if not command:
                 raise ToolError("empty command")
             deps = os.path.isdir(os.path.join(self.root, *PY_DEPS.split("/")))
+            if self.open_host:                           # the owner's own computer: their own shell, Go's cache and Java's memory as above
+                argv = host_shell_argv(command)
+                env = self._language_setup("go", ["go"])[1] if re.search(r"\bgo\b", command) else None
+                return self._background(command, argv) if background else self._exec(argv, env, timeout=limit)
             if background:
                 pre = self.prefix[:-1] + ["-e", "PYTHONPATH=/work/" + PY_DEPS, self.prefix[-1]] if deps and self.container else self.prefix
                 return self._background(command, pre + shell_argv(command))
@@ -606,16 +637,58 @@ class Sandbox:
         if not argv:
             raise ToolError("empty command")
         program = os.path.basename(argv[0])
+        if program not in self.allowed and (str(command).lstrip().startswith(("./", ".\\")) or os.path.isfile(os.path.join(self.root, argv[0]))
+                                            or os.path.isfile(os.path.join(self.root, argv[0] + ".exe"))):
+            raise ToolError(f"{argv[0]} is a program built here, and a program built from the project's code runs only in the isolated sandbox "
+                            "(or on the cloud machine), never on the Emvryx computer. Ask the person to pick Isolated sandbox for this session; "
+                            "here you can still build it to check that it compiles, and run scripts with python, node, php or ruby.")
         if program not in self.allowed:
             extra = " Run one program at a time (no cd, &&, |, ; or >): the project folder is already the current folder." if program in ("cd", "sh", "bash", "cmd", "powershell") or any(t in argv for t in ("&&", "||", "|", ";", ">", ">>")) else ""
             raise ToolError(f"{program!r} is not allowed. Allowed: {', '.join(sorted(self.allowed))}.{extra}")
         if any(t in argv for t in ("&&", "||", "|", ";", ">", ">>")):
             raise ToolError("run one program at a time: no &&, ||, |, ; or > (they are not understood here). The project folder is already the current folder.")
+        extra_env = None
         if program in ("python", "python3") and not self.container and not self.remote:
             argv[0] = sys.executable                     # the same Python we are running (inside a container, or on a remote machine, that one's own python is used)
+        elif not self.container and not self.remote:
+            if not shutil.which(argv[0]):
+                raise ToolError(f"{program} is not installed on the Emvryx computer, so it cannot run here." + MISSING_HINT.get(program, ""))
+            argv, extra_env = self._language_setup(program, argv)
         if background:
             return self._background(command, self.prefix + argv)
-        return self._exec(argv, timeout=limit)
+        return self._exec(argv, extra_env, timeout=limit)
+
+    def _language_setup(self, program, argv):
+        """(argv, environment) a language needs to work in the folder sandbox: Go a build cache (the sandbox gives it no home folder), Java a
+        memory layout that fits the sandbox's memory limit (it reserves 1 GB for class data alone and would not start)."""
+        if program == "go":
+            cache = self._cache()
+            return argv, {"GOCACHE": os.path.join(cache, "go-build"), "GOPATH": os.path.join(cache, "go"), "GOMODCACHE": os.path.join(cache, "go", "mod"),
+                          "GOTOOLCHAIN": "local", "GOFLAGS": "-mod=mod", "HOME": cache, "LOCALAPPDATA": cache, "USERPROFILE": cache}
+        if program in ("java", "javac") and sys.platform.startswith("linux"):
+            flags = ["-Xmx512m", "-XX:CompressedClassSpaceSize=128m", "-XX:ReservedCodeCacheSize=64m", "-XX:MaxMetaspaceSize=256m", "-Xss1m"]
+            return [argv[0]] + (["-J" + f for f in flags] if program == "javac" else flags) + argv[1:], None
+        return argv, None
+
+    def build_check(self):
+        """Build the whole project without running it (project_build_command): its output, or None when there is nothing to build here."""
+        trusted = self.container or self.remote or getattr(self, "open_host", False)
+        argv = project_build_command(self.root, full=trusted, inside=self.container or self.remote)
+        if not argv:
+            return None
+        env = None
+        if not self.container and not self.remote:
+            argv, env = self._language_setup(argv[0], argv)
+        try:
+            return self._exec(argv, env, timeout=90)
+        except ToolError as e:
+            return "exit code 1\n" + str(e)
+
+    def _cache(self):
+        """A folder for compilers' caches, outside the person's project, removed with the sandbox."""
+        if not getattr(self, "cache_dir", None):
+            self.cache_dir = tempfile.mkdtemp(prefix="vryx_cache_")
+        return self.cache_dir
 
     # ---------------------------------------------------------------- git (a safe subset)
     def git(self, args):
@@ -695,6 +768,13 @@ class Sandbox:
     def builtin_names(self):
         return ["list_files", "read_file", "write_file", "edit_file", "run", "git", "diagnostics", "finish"] + (["glob", "grep", "command_output", "stop_command", "install"] if self.full else [])
 
+    def mask(self, text):
+        """The text with every secret's value replaced by [secret NAME], so the model never sees one (longest first: one value may contain another)."""
+        for k, v in sorted(self.secrets.items(), key=lambda kv: -len(kv[1])):
+            if len(v) >= 4:
+                text = text.replace(v, f"[secret {k}]")
+        return text
+
     def call(self, name, args):
         """Run one tool. Returns (text for the model, whether the model said it is finished)."""
         if name == "finish":
@@ -709,7 +789,10 @@ class Sandbox:
         if not isinstance(args, dict):
             raise ToolError("'args' must be an object like {\"path\": \"main.py\"}")
         try:
-            return tools[name](**args), False
+            out = tools[name](**args)
+            return (self.mask(out) if isinstance(out, str) else out), False
+        except ToolError as e:
+            raise ToolError(self.mask(str(e)))
         except TypeError as e:
             raise ToolError(f"wrong arguments for {name}: {e}")
         except (ValueError, OSError) as e:                       # a bad number, a name the system refuses, a file that cannot be written: tell the model, do not crash the session
@@ -742,12 +825,14 @@ def check_text(path, text):
         return _check_js(path, text)
     if low.endswith((".html", ".htm")):
         return _check_html(path, text)
+    if low.endswith(".sql"):
+        return _check_sql(path, text)
     other = _check_other(path, text)
     return other
 
 
 def checkable(path):
-    return str(path).lower().endswith((".py", ".json", ".js", ".mjs", ".html", ".htm") + tuple(OTHER_CHECKS))
+    return str(path).lower().endswith((".py", ".json", ".js", ".mjs", ".html", ".htm", ".sql") + tuple(OTHER_CHECKS))
 
 
 SCRIPT_RX = re.compile(r"<script\b([^>]*)>(.*?)</script\s*>", re.I | re.S)
@@ -795,7 +880,16 @@ OTHER_CHECKS = {
     ".cpp": ("g++", lambda f, d: ["g++", "-fsyntax-only", "-x", "c++", f], _SYNTAX_WORDS),
     ".cc": ("g++", lambda f, d: ["g++", "-fsyntax-only", "-x", "c++", f], _SYNTAX_WORDS),
     ".java": ("javac", lambda f, d: ["javac", "-proc:none", "-d", d, f], _SYNTAX_WORDS),
+    ".hpp": ("g++", lambda f, d: ["g++", "-fsyntax-only", "-x", "c++", f], _SYNTAX_WORDS),
+    ".hh": ("g++", lambda f, d: ["g++", "-fsyntax-only", "-x", "c++", f], _SYNTAX_WORDS),
+    ".cxx": ("g++", lambda f, d: ["g++", "-fsyntax-only", "-x", "c++", f], _SYNTAX_WORDS),
+    ".rs": ("rustfmt", lambda f, d: ["rustfmt", "--edition", "2021", "--emit", "stdout", f], re.compile(r"^error", re.I)),        # parses the file only, never builds it
+    ".ts": ("tsc", lambda f, d: ["tsc", "--noEmit", "--skipLibCheck", "--pretty", "false", "--target", "es2022", "--jsx", "preserve", f], re.compile(r"error TS1\d{3}")),
+    ".tsx": ("tsc", lambda f, d: ["tsc", "--noEmit", "--skipLibCheck", "--pretty", "false", "--target", "es2022", "--jsx", "preserve", f], re.compile(r"error TS1\d{3}")),
+    ".sh": ("bash", lambda f, d: ["bash", "-n", f], re.compile(r"syntax error|unexpected", re.I)),                                  # -n reads it without running it
+    ".lua": ("luac", lambda f, d: ["luac", "-p", f], re.compile(r"expected|unexpected|near", re.I)),
 }
+# (a TypeScript type error, error TS2xxx, is not a broken file: it depends on the rest of the project, so only TS1xxx syntax errors count here)
 
 
 def _check_other(path, text):
@@ -826,6 +920,36 @@ def _check_other(path, text):
         out.append(f"{path}:{m.group(1)}: syntax error: {m.group(2).strip()}" if m else f"{path}: syntax error: {clean}")
         if len(out) >= 3:
             break
+    return out
+
+
+def _check_sql(path, text):
+    """SQL: each statement is tried on an empty database in memory (Python's own sqlite3, nothing to install). Only real syntax errors count:
+    a table that does not exist yet is not a broken file."""
+    import sqlite3
+    out, stmt = [], ""
+    con = sqlite3.connect(":memory:")
+    try:
+        start = 1
+        for i, piece in enumerate(text.splitlines(True), 1):
+            if not stmt.strip():
+                start = i
+            stmt += piece
+            if sqlite3.complete_statement(stmt):
+                try:
+                    con.execute(stmt)
+                except sqlite3.Warning:
+                    pass
+                except sqlite3.Error as e:
+                    if re.search(r"syntax error|incomplete input|unrecognized token", str(e)):
+                        out.append(f"{path}:{start}: syntax error: {e}")
+                stmt = ""
+            if len(out) >= 3:
+                break
+        if stmt.strip() and not out and re.search(r"[A-Za-z]", stmt):
+            out.append(f"{path}:{start}: syntax error: the last statement is not finished (a ; or a bracket is missing)")
+    finally:
+        con.close()
     return out
 
 
@@ -880,17 +1004,47 @@ def preview_check(root, name, args):
     return "; ".join(check_text(*got))
 
 
+def project_build_command(root, full=False, inside=False):
+    """The command that builds the whole project WITHOUT running it, from the build file at its top (go.mod, tsconfig.json, Cargo.toml, a .csproj),
+    or None. Cargo and dotnet can run code of the project while they build (build scripts, MSBuild tasks), so they are used only where that is
+    allowed (`full`: the isolated sandbox, the cloud machine, or the owner's own computer opened to VryxCode). `inside`: the tools are those of the
+    container or remote machine, not of this one."""
+    has = lambda n: os.path.isfile(os.path.join(root, n))
+    tool = lambda t: inside or bool(shutil.which(t))
+    try:
+        names = os.listdir(root)
+    except OSError:
+        return None
+    if has("go.mod") and tool("go"):
+        return ["go", "vet", "./..."]
+    if has("tsconfig.json") and tool("tsc"):
+        return ["tsc", "--noEmit", "--pretty", "false", "-p", "."]
+    if full and has("Cargo.toml") and tool("cargo"):
+        return ["cargo", "check", "--quiet", "--offline", "--message-format", "short"]
+    if full and any(n.endswith((".csproj", ".sln")) for n in names) and tool("dotnet"):
+        return ["dotnet", "build", "--nologo", "-v", "q", "-clp:ErrorsOnly"]
+    return None
+
+
 def has_tests(root):
     for dirpath, dirs, names in os.walk(root):
         dirs[:] = [d for d in dirs if d not in (".git", "node_modules", "__pycache__", ".venv", "venv")]
         if dirpath[len(root):].count(os.sep) > 2:
             dirs[:] = []
-        if any((n.startswith("test_") or n.endswith("_test.py")) and n.endswith(".py") for n in names):
+        rel = dirpath[len(root):].replace(os.sep, "/")
+        if any(TEST_FILE.search(n) for n in names) or (re.search(r"(^|/)tests?$", rel) and any(n.endswith((".rs", ".php", ".java", ".kt")) for n in names)):
             return True
     return False
 
 
-TEST_COMMAND = re.compile(r"unittest|pytest")
+# test files in any language: test_x.py, x_test.py, x_test.go, x_test.rs, x.test.js/ts, x.spec.js/ts, x_spec.rb, XTest.java/.php/.kt, XTests.cs
+CODE_FILES = (".py", ".go", ".rs", ".js", ".mjs", ".ts", ".tsx", ".jsx", ".java", ".kt", ".cs", ".php", ".rb", ".c", ".h", ".cpp", ".cc", ".hpp", ".swift", ".ex", ".exs")
+TEST_FILE = re.compile(r"^test_.+\.py$|_test\.(?:py|go|rs|exs)$|\.(?:test|spec)\.[cm]?[jt]sx?$|_spec\.rb$|(?:Test|Tests)\.(?:java|php|kt|cs|swift)$")
+
+
+# a command that runs the tests, in any language (it decides "tests passed since the last change" and the build loop's checkpoints)
+TEST_COMMAND = re.compile(r"unittest|pytest|\b(?:go|cargo|dotnet|mvn|gradle|gradlew|npm|yarn|pnpm|bun|deno|mix|swift|zig) test\b|\b(?:jest|vitest|mocha|phpunit|"
+                          r"rspec|ctest)\b|\brake test\b|\bnpx (?:jest|vitest|mocha)\b")
 
 
 # -------------------------------------------------------------------- the loop
@@ -1494,7 +1648,14 @@ def run_agent(task, generate, sandbox, max_turns=8, system=None, project=True, h
     fixes = bool(getattr(generate, "fixes", False))                  # vryxcode_fixes: nearest lines on a missed edit, a nudge on the same error twice, stop messages that fit
     last_err, same_err = None, 0
     promised = 0                                                     # times it said what it would do next and then stopped (vryxcode_fixes)
+    autocheck = bool(getattr(generate, "autocheck", False))           # vryxcode_autocheck: the whole project is built after every change to code
+    build_broken, build_nudges = None, 0
     guard = guardrails.Guard(sandbox.root, checkpoints) if getattr(generate, "guardrails", False) else None    # vryxcode_guardrails: no circles, progress or stop
+    if getattr(generate, "secrets", None):                           # vryxcode_secrets: its programs get them; the model gets only the names
+        sandbox.secrets = dict(generate.secrets)
+        if not history:
+            messages[-1]["content"] += ("\n\nThis project has secrets, set as environment variables for every program you run: " + ", ".join(sorted(generate.secrets))
+                                        + ". You never see their values: read them from the environment (os.environ[\"NAME\"], process.env.NAME), never write a value into a file.")
     if build and "rollback" not in sandbox.extra_tools:
         sandbox.register_tool("rollback", lambda: checkpoints.restore())
     for turn in range(1, max_turns + 1):
@@ -1529,7 +1690,11 @@ def run_agent(task, generate, sandbox, max_turns=8, system=None, project=True, h
             if name == "finish":
                 if checks and edited_since_test and not test_nudged and has_tests(sandbox.root):
                     test_nudged = True
-                    raise ToolError("not finished yet: code changed since the tests last passed. Run them first (python -m unittest), then finish.")
+                    raise ToolError("not finished yet: code changed since the tests last passed. Run the project's tests first (python -m unittest, "
+                                    "go test ./..., cargo test, npm test, dotnet test...), then finish.")
+                if autocheck and build_broken and build_nudges < 2:
+                    build_nudges += 1
+                    raise ToolError("not finished yet: the project does not build:\n" + build_broken + "\nFix these errors first, then finish.")
                 if checks and web_unchecked and page_nudges < 2 and "check_page" in sandbox.extra_tools:
                     page_nudges += 1
                     raise ToolError("not finished yet: you changed the web page since it was last checked. Open it with check_page first, fix anything it reports, then finish.")
@@ -1554,7 +1719,15 @@ def run_agent(task, generate, sandbox, max_turns=8, system=None, project=True, h
                 web_unchecked = False
             if checks and name in ("write_file", "edit_file") and isinstance(args, dict) and checkable(args.get("path", "")):
                 result += " \u00b7 checked \u2713"
-                edited_since_test = edited_since_test or str(args.get("path", "")).endswith(".py")
+                edited_since_test = edited_since_test or str(args.get("path", "")).lower().endswith(CODE_FILES)
+            if autocheck and name in ("write_file", "edit_file") and isinstance(args, dict) and str(args.get("path", "")).lower().endswith(CODE_FILES) and not done:
+                built = sandbox.build_check()                    # like the red underlines in an editor: what this change broke elsewhere, at once
+                if built is not None and not str(built).startswith("exit code 0"):
+                    build_broken = "\n".join(l for l in str(built).splitlines()[1:16] if l.strip())
+                    result += "\n\u26a0 the project does not build now:\n" + build_broken + "\nFix this before going on."
+                elif built is not None:
+                    build_broken = None
+                    result += " \u00b7 builds \u2713"
             if checks and name == "run" and isinstance(args, dict) and TEST_COMMAND.search(str(args.get("command", ""))) and str(result).startswith("exit code 0"):
                 edited_since_test = False
             if build:

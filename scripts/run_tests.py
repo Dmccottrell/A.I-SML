@@ -34,6 +34,19 @@ WEIGHT = {"test_editor_ui": 35, "test_agent": 25, "test_accounts": 22, "test_app
           "test_model_runner": 11, "test_code_sessions": 11, "test_code_history": 10, "test_cloud_mode": 10, "test_site_fx": 9, "test_code_complete_run": 8, "test_flags": 8}
 
 
+def summary(out):
+    """["test_x (module.Class): ValueError: ...", ...] from unittest's output: each failing test and the last line of its error."""
+    lines, got = out.splitlines(), []
+    for i, l in enumerate(lines):
+        if l.startswith(("ERROR: ", "FAIL: ")):
+            k = i + 2                                      # past the line of dashes under the test's name
+            while k < len(lines) and not lines[k].startswith(("=" * 20, "-" * 20)):
+                k += 1
+            err = next((x.strip() for x in reversed(lines[i + 2:k]) if x.strip()), "")
+            got.append(l.split(" ", 1)[1] + ": " + err[:300])
+    return got
+
+
 def main(argv=None):
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("files", nargs="*", help="test file names (without .py); default: all")
@@ -54,6 +67,11 @@ def main(argv=None):
     bad = [r for r in results if r[1]]
     for name, code, secs, ran, out in bad:
         print(f"\n===== {name} FAILED =====\n{out}")
+    if bad:                                              # one line per failing test with its error, so a long log can be read from its end
+        print("\nFailing tests:")
+        for name, code, secs, ran, out in bad:
+            for line in summary(out) or [f"{name}: the file failed to run (see above)"]:
+                print("  " + line)
     print("\nSlowest files:")
     for name, code, secs, ran, _ in sorted(results, key=lambda r: -r[2])[:12]:
         print(f"  {secs:6.1f}s  {ran:4d} tests  {name}" + ("  FAILED" if code else ""))

@@ -29,6 +29,7 @@ import emvryx_paths  # noqa: E402,F401  (the code folders become importable)
 import argparse
 import http.server
 import json
+import sqlite3
 import os
 import re
 import secrets
@@ -57,6 +58,8 @@ import google_signin
 import lookup_auto
 import mailer
 import secret_box
+import code_secrets
+import model_code_test
 import shares
 import summary
 import code_preview
@@ -83,6 +86,26 @@ from app_runner import ModelRunner, discover_ggufs, find_llama_server, gpu_note 
 
 
 class AppState(StateAccounts, StateSettings, StateApps, StatePC, StateCode, StateOps):
+    def close_databases(self):
+        """Close every SQLite file this state holds open (the stores, and the per-person ones in its caches). Windows cannot delete or move an
+        open file, so this runs before the data folder goes away (the tests' temporary folders)."""
+        seen = set()
+
+        def shut(obj):
+            for name in ("db", "conn"):
+                c = getattr(obj, name, None)
+                if isinstance(c, sqlite3.Connection) and id(c) not in seen:
+                    seen.add(id(c))
+                    try:
+                        c.close()
+                    except sqlite3.Error:
+                        pass
+        for v in list(vars(self).values()):
+            shut(v)
+            if isinstance(v, dict):
+                for x in list(v.values()):
+                    shut(x)
+
     def __init__(self, data_dir=None, llama_url=None, llama_key=None, tok=None, manifest=None, cfg=None, ram_gb=None,
                  backend_factory=None, clock=time.time, pace=True, runner=None, root=HERE):
         self.data_dir = data_dir                              # None = keep everything in memory (tests)
@@ -129,6 +152,8 @@ class AppState(StateAccounts, StateSettings, StateApps, StatePC, StateCode, Stat
         self.users = self._load_users()
         self.code = code_sessions.CodeManager(data_dir, quotas=code_sandbox.Quotas(self.security))       # VryxCode sessions (projects live under <data>/code/)
         self.secrets = secret_box.SecretBox(data_dir, require=self.security["require_encryption"])
+        self.code_test = model_code_test.Runner(os.path.join(data_dir, "code_test.json") if data_dir else None)   # model_code_test: Admin > Models
+        self.code_secrets = code_secrets.ProjectSecrets(data_dir, self.secrets)      # vryxcode_secrets: per project, never shown to the model
         self.github = github_link.Store(data_dir, self.secrets)  # connected GitHub accounts (tokens encrypted, files mode 600)
         self.models_pub = model_publish.ModelPublisher(os.path.join(data_dir, "models_state.json") if data_dir else None, None, guard=self.guard_ok, file_sig=self.model_file_sig)
         self.flags = flags.Flags(os.path.join(data_dir, "flags.json") if data_dir else None)

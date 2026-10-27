@@ -25,9 +25,23 @@ MAX_HASH_BYTES = 2_000_000                  # a file bigger than this is hashed 
 WIDE_LINES, NARROW_LINES, NARROW_FROM = 150, 15, 3
 FLAT_NUDGE, FLAT_STOP, FIX_CAP = 2, 3, 5
 TEST_FILE = re.compile(r"(^|/)(tests?|__tests__|spec)/|(^|/)test_[^/]*\.py$|_test\.(py|go)$|\.(test|spec)\.[jt]sx?$")
-_COUNTS = (re.compile(r"FAILED \((?:failures=(\d+))?(?:, )?(?:errors=(\d+))?"),        # unittest
-           re.compile(r"Tests:\s+(\d+) failed"), re.compile(r"(\d+) failing"),             # jest, mocha
-           re.compile(r"(\d+) (?:failed|errors?)\b"))                                       # pytest ("2 failed, 1 error")
+# How many tests failed, as each test runner prints it. Order matters: the first runner whose summary matches decides (a pytest-style "2 failed"
+# must not also be counted from a jest line). Each pattern's numbers are added up (failures + errors).
+_COUNTS = (re.compile(r"FAILED \((?:failures=(\d+))?(?:, )?(?:errors=(\d+))?"),                    # Python unittest
+           re.compile(r"test result: FAILED\. \d+ passed; (\d+) failed"),                                 # Rust cargo test
+           re.compile(r"Failed!\s+-\s+Failed:\s+(\d+)"),                                                  # C# dotnet test
+           re.compile(r"Tests run: \d+, Failures: (\d+), Errors: (\d+)"),                                # Java Maven / JUnit
+           re.compile(r"Tests: \d+, Assertions: \d+(?:, Failures: (\d+))?(?:, Errors: (\d+))?"),        # PHP phpunit
+           re.compile(r"\d+ runs, \d+ assertions, (\d+) failures, (\d+) errors"),                      # Ruby minitest
+           re.compile(r"\d+ examples?, (\d+) failures?"),                                                  # Ruby rspec
+           re.compile(r"tests passed, (\d+) tests? failed out of"),                                          # C/C++ ctest
+           re.compile(r"Executed \d+ tests?, with (\d+) failures?"),                                       # Swift
+           re.compile(r"\d+ tests completed, (\d+) failed"),                                                # Java Gradle
+           re.compile(r"Tests:\s+(\d+) failed"), re.compile(r"Tests\s+(\d+) failed"),                     # jest, vitest
+           re.compile(r"(\d+) failing"),                                                                     # mocha
+           re.compile(r"^--- FAIL: ", re.M),                                                                 # Go: one line per failed test
+           re.compile(r"\d+ tests?, (\d+) failures?"),                                                      # Elixir mix test
+           re.compile(r"(\d+) (?:failed|errors?)\b"))                                                      # pytest ("2 failed, 1 error")
 
 STOP_OSCILLATION = ("It stopped: the last change put the files back to how they were a few steps ago (it was going round in circles, undoing and "
                     "redoing the same thing). {restored}Tell it which way you want it, or what is still wrong, and it carries on from there.")
@@ -53,7 +67,9 @@ def failing_count(output):
     for rx in _COUNTS[1:]:                              # the first runner that matches decides (jest's "Tests: 2 failed" is not also a pytest line)
         found = rx.findall(text)
         if found:
-            return sum(int(g) for g in found)
+            if rx.groups == 0:
+                return len(found)                       # a line per failed test (Go)
+            return sum(int(g or 0) for f in found for g in (f if isinstance(f, tuple) else (f,)))
     return None
 
 

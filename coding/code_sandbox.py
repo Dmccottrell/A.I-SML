@@ -31,11 +31,16 @@ QUOTA_DEFAULTS = {"code_max_projects": 20, "code_project_mb": 100, "code_total_m
                   "code_session_minutes": 30, "code_max_files": 3000}
 
 
-def docker_prefix(image, workspace, cpus="1", memory="768m", pids=128, runtime=None, uid=None, gid=None, tmp_mb=64):
+# Room for every language in the image: Java and .NET start many threads (each counts against the process limit), Go and .NET build programs in
+# /tmp and then run them (so /tmp allows running; the project folder already did), and a compiler's caches live in /tmp. Still sealed: no network.
+DEFAULT_MEMORY, DEFAULT_PIDS, DEFAULT_TMP_MB = "1536m", 512, 512
+
+
+def docker_prefix(image, workspace, cpus="1", memory=DEFAULT_MEMORY, pids=DEFAULT_PIDS, runtime=None, uid=None, gid=None, tmp_mb=DEFAULT_TMP_MB):
     """The words that go in front of a command so it runs in the container: prefix + ["python", "-m", "unittest"]."""
     ws = os.path.realpath(workspace)
     argv = ["docker", "run", "--rm", "-i", "--network", "none", "--cap-drop", "ALL", "--security-opt", "no-new-privileges",
-            "--read-only", "--tmpfs", f"/tmp:rw,noexec,nosuid,size={int(tmp_mb)}m", "--pids-limit", str(int(pids)),
+            "--read-only", "--tmpfs", f"/tmp:rw,exec,nosuid,size={int(tmp_mb)}m", "--pids-limit", str(int(pids)),
             "--memory", str(memory), "--memory-swap", str(memory), "--cpus", str(cpus), "--ulimit", "nofile=256:256",
             "-v", f"{ws}:/work:rw", "-w", "/work", "-e", "HOME=/tmp", "-e", "PYTHONDONTWRITEBYTECODE=1", "-e", "PYTHONIOENCODING=utf-8"]
     if os.name != "nt":                                     # run as the same user that owns the files, never root

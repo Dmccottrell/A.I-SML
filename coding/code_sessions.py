@@ -68,6 +68,9 @@ def remove_tree(path, tries=3):
 WEB_FILES = (".html", ".htm", ".js", ".mjs", ".css", ".jsx")
 PAGE_TROUBLE = re.compile(r"loaded, with problems|did not finish loading", re.I)
 PAGE_FIX_TRIES = 2
+AUTO_ROUNDS = 5                                            # vryxcode_autocontinue: at most this many extra rounds of steps per message
+CONTINUE_TEXT = ("You used all your steps for this round and the task is not finished. Carry on from exactly where you stopped (do not start over), "
+                 "and finish the task. When it is really done and checked, call finish with what you did.")
 
 
 class CodeError(Exception):
@@ -205,6 +208,7 @@ class Session:
         self.turns_run = 0
         self.build = False                              # the long-build loop (a VryxCode 3 model): set by CodeManager.start / revive / switch_model
         self._auto_tries = 0                            # automatic second tries after an unexpected failure, this message
+        self._auto_rounds = 0                           # vryxcode_autocontinue: times it carried on by itself after using all its steps, this message
         self._page_tries = 0                            # automatic fixes after the app's own page check found problems, this message
         self.notify, self.on_notify = False, None       # tell the owner's phone when a turn ends or it needs an answer (set by the server)
 
@@ -252,6 +256,9 @@ class Session:
                 if getattr(self, "deleted", False):
                     return                                # deleted while it was finishing: its last save must not bring it back
                 self.log.save(self.meta(), events)
+                if getattr(self, "replay", None):
+                    self.log.save_replay(self.id, {"task": self.task, "model": self.model_id, "project": self.project, "env": self.env,
+                                                   "full": bool(getattr(self, "full", False)), "steps": list(self.replay)})
         except (OSError, ValueError):
             pass                                          # the history is a convenience: never stop the work for it
 
@@ -520,6 +527,8 @@ class Session:
                 if isinstance(e, vryxcode.Interrupted):
                     raise Stopped()
                 raise
+            if getattr(generate, "record", False):        # vryxcode_record: the model's whole reply, for replaying the session later (tools/replay_vryx.py)
+                self._record({"model": reply})
             if self.meter:
                 self.meter.settle(res, generate, messages, reply)
             if self.stop.is_set():
@@ -543,6 +552,9 @@ class Session:
             return reply
         call.fixes = getattr(generate, "fixes", False)          # vryxcode_fixes reaches the agent loop (harness.run_agent reads it from the model call)
         call.guardrails = getattr(generate, "guardrails", False)     # ...and so does vryxcode_guardrails
+        call.autocheck = getattr(generate, "autocheck", False)       # ...and vryxcode_autocheck
+        call.record = getattr(generate, "record", False)             # ...and vryxcode_record
+        call.secrets = getattr(generate, "secrets", None)           # ...and vryxcode_secrets (the values go to the sandbox, never to the model)
         return call
 
     def run(self, generate, max_turns, context_tokens, extra_programs=()):
@@ -564,7 +576,7 @@ class Session:
                 raise CodeError("This session cannot continue.", "Start a new one.")
             self.state = "working"
             self.stop.clear()
-        self._auto_tries = self._page_tries = 0
+        self._auto_tries = self._page_tries = self._auto_rounds = 0
         self._model_text = model_text                       # what the model gets instead of the line the person sees (a code review's diff)
         threading.Thread(target=self._turn, args=(text, False, bool(plan)), daemon=True).start()
 
@@ -577,9 +589,11 @@ class Session:
             self.deadline = self.quotas.session_deadline()          # each message gets its own time allowance
         self._checkpoint(text)
         if first:
-            self.emit("start", task=text, model=self.model_id, project=self.project, plan=plan)
+            self.emit("start", task=text, model=self.model_id, project=self.project, plan=plan, turn=self.turns_run)
         else:
-            self.emit("user", text=text, plan=plan, **({"auto": True} if auto else {}))
+            self.emit("user", text=text, plan=plan, turn=self.turns_run, **({"auto": True} if auto else {}))
+        if getattr(self.generate, "record", False):
+            self._record({"user": text, "plan": bool(plan), "first": bool(first), "model_text": bool(getattr(self, "_model_text", None))})
         self.live_messages = None
         lang = languages.decide(text, self.env, self.workspace)                  # which language fits, and what can run here: told to the person and to the model
         line = languages.page_line(lang)
@@ -591,7 +605,8 @@ class Session:
                                        out=lambda *_: None, tools=self._tools_now(),
                                        git_identity=self.identity,
                                        command_prefix=self.prefix, container=bool(self.prefix) and not self.remote, history=self.history, chat_mode=True, plan=plan, todo=True, remote=self.remote,
-                                       build=getattr(self, "build", False), full=getattr(self, "full", False))
+                                       build=getattr(self, "build", False), full=getattr(self, "full", False),
+                                       open_host=bool(getattr(self.generate, "open_pc", False)) and self.prefix is None and not self.remote and self.env == "local")
             self.history = result["messages"]
             report = None if self.stop.is_set() else self._page_proof()
             if report and PAGE_TROUBLE.search(report) and self._page_tries < PAGE_FIX_TRIES:
@@ -600,8 +615,16 @@ class Session:
                 again = ("I opened the page in a browser and it does not work yet:\n" + clip(report, 1500) +
                          "\nFix these problems, then open it again with check_page and finish only when it loads with no errors.")
                 return
+            # used every step without finishing (not stopped by a guardrail, by the person, or because it got stuck)
+            out_of_steps = not result["finished"] and not result.get("said") and not result.get("stopped") and not self.stop.is_set()
+            if out_of_steps and getattr(self.generate, "autocontinue", False) and self._auto_rounds < AUTO_ROUNDS:
+                self._auto_rounds += 1                  # vryxcode_autocontinue: carry on by itself (usage limits still stop it)
+                self.emit("note", text=f"Used all {result['turns']} steps and it is not finished yet: carrying on by itself ({self._auto_rounds} of {AUTO_ROUNDS}).")
+                again = CONTINUE_TEXT
+                return
             self._end( finished=result["finished"], said=bool(result.get("said")), summary=clip(result["summary"], 4000), turns=result["turns"],
-                      next=self.next_steps if result["finished"] else [], plan=bool(plan) and bool(result["finished"] or result.get("said")))
+                      next=self.next_steps if result["finished"] else [], plan=bool(plan) and bool(result["finished"] or result.get("said")),
+                      **({"reason": "steps", "rounds": self._auto_rounds} if out_of_steps else {}))
             self.state = "done" if (result["finished"] or result.get("said")) else "stopped"
         except U.LimitError as e:
             self._keep_history()
@@ -718,6 +741,14 @@ class Session:
                 data["verdict"] = {"status": v["status"], "blocking": len(v["blocking"]), "nits": len(v["defects"]) - len(v["blocking"]),
                                    **({"fix": code_review.fix_request(v["blocking"])} if v["blocking"] else {})}
         self.emit("end", **data, **({"report": report} if report else {}))
+
+    REPLAY_MAX = 600                                       # recorded steps per session, each cut at 60,000 characters
+
+    def _record(self, item):
+        """One step of the replay recording: the person's message or the model's whole reply (the owner's own sessions, flag vryxcode_record)."""
+        rec = self.__dict__.setdefault("replay", [])
+        if len(rec) < self.REPLAY_MAX:
+            rec.append({k: (v[:60000] if isinstance(v, str) else v) for k, v in item.items()})
 
     def _keep_history(self):
         """A stopped or failed turn still happened: the next message continues from where it got to."""
@@ -1052,8 +1083,8 @@ class CodeManager:
         if self.sandbox.get("mode") != "docker" and not force:
             return None
         sb = self.sandbox
-        return code_sandbox.docker_prefix(sb.get("image", code_sandbox.DEFAULT_IMAGE), workspace, cpus=sb.get("cpus", "1"), memory=sb.get("memory", "768m"),
-                                          pids=sb.get("pids", 128), runtime=sb.get("runtime"))
+        return code_sandbox.docker_prefix(sb.get("image", code_sandbox.DEFAULT_IMAGE), workspace, cpus=sb.get("cpus", "1"), memory=sb.get("memory", code_sandbox.DEFAULT_MEMORY),
+                                          pids=sb.get("pids", code_sandbox.DEFAULT_PIDS), runtime=sb.get("runtime"))
 
     def start(self, user, project, task, model_id, generate, auto_edits=False, context_tokens=None, meter=None, outside=False, tools=None, identity=None, env="local", plan=False, owner=False, queue=False, model_text=None,
               build_steps=None, turns=None, full=False, pictures=None):

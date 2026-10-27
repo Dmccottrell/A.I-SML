@@ -41,7 +41,29 @@ FLAGS = [
     {"id": "vryxcode_preview", "title": "VryxCode: preview follows the work", "desc": "The preview opens the web page VryxCode changed last (not always index.html) and refreshes after every change, the Done line gets a Preview button, and VryxCode is told the preview exists, so asked for a link it points to Preview instead of saying it cannot make links.", "default": "admins"},
     {"id": "vryxcode_guardrails", "title": "VryxCode: guardrails", "desc": "Keeps VryxCode from going in circles or making the code worse: it stops when a change undoes an earlier one (and puts back the last passing files), when the tests stop getting better, or after 5 fixes that did not work; while fixing, each change must get smaller and the existing tests cannot be edited; it asks instead of guessing when unsure. Reviews check the change against the request, grade problems Critical, Major or Nitpick, and end on Approved when nothing serious is wrong; Fix them sends only the serious ones back, each proved with a failing test first.", "default": "admins"},
     {"id": "vryxcode_servers", "title": "VryxCode: run servers", "desc": "VryxCode can start the server it built (Flask, FastAPI, Express...) and you use it in the Preview: it runs sealed in the isolated sandbox with no network, and each request is carried in and out by Docker itself, so nothing else can reach it. Links, forms and logins work inside the Preview; Logs shows what it printed and Stop ends it (it also stops after 30 minutes unused). Needs Docker on the Emvryx computer.", "default": "admins"},
+    {"id": "vryxcode_autocheck", "title": "VryxCode: build check after every change", "desc": "Like the red underlines in an editor: after VryxCode changes code, the whole project is built (go vet, tsc, cargo check, dotnet build) and any error, even one in another file the change broke, goes straight back to it to fix; it cannot say it is finished while the project does not build.", "default": "admins"},
+    {"id": "vryxcode_open_pc", "title": "VryxCode: nothing blocked on this computer (owner only)", "desc": "In the owner's own VryxCode sessions on This computer, nothing is blocked: any program or language, a real terminal (bash, or cmd on Windows), programs it builds, and installs with the internet. Other people always use the isolated sandbox. The risk: a mistake by the model (deleting the wrong folder) happens on the real computer.", "default": "admins"},
+    {"id": "vryxcode_record", "title": "VryxCode: record my sessions for testing (owner only)", "desc": "The owner's own VryxCode sessions are saved whole (their messages and the model's full replies, next to the session history on this computer), so they can be replayed through newer VryxCode code to find bugs: python tools/export_sessions.py makes one zip to send. Other people's sessions are never recorded.", "default": "admins"},
+    {"id": "vryxcode_lines", "title": "VryxCode: Claude Code-style feed", "desc": "The VryxCode feed reads like Claude Code: steps that only look or run fold into one quiet grey line (\"Read 3 files, ran 2 commands \u203a\", tap to open it), the model's words in between, file changes as chips with their + and - lines, a plain box for your messages instead of the purple bubble, and a small working line with moving dots and the time.", "default": "admins"},
+    {"id": "vryxcode_restore", "title": "VryxCode: Restore on each message", "desc": "Each of your messages in a VryxCode session gets a Restore button: one tap (and a yes) puts the project's files back as they were just before that message, like Rewind but straight from the feed.", "default": "admins"},
+    {"id": "vryxcode_secrets", "title": "VryxCode: secrets per project", "desc": "Each project can keep secrets (an API key, a password for a database) in Settings of the project. Programs VryxCode runs get them as environment variables, but the model never sees them: they are never put in its messages, and if a value shows up in a command's output it is replaced with [secret NAME]. Kept encrypted on the Emvryx computer.", "default": "admins"},
+    {"id": "vryxcode_github", "title": "VryxCode: save to GitHub", "desc": "When a session is done, Save to GitHub puts the project in a GitHub repository of yours (through the connected GitHub): a new branch, one commit with a description written from the session, and a pull request you can merge. You confirm each step; nothing is pushed by itself.", "default": "admins"},
+    {"id": "vryxcode_dbview", "title": "VryxCode: database viewer", "desc": "A SQLite database in the project (.db, .sqlite) opens in the Files panel as tables: every table, its columns and its first 200 rows, with a search box. Read-only: nothing is changed.", "default": "admins"},
+    {"id": "vryxcode_publish", "title": "VryxCode: publish to a public link", "desc": "Publish puts a web project (HTML, CSS, JavaScript) on a free public link with GitHub Pages, through the connected GitHub. It says exactly what will be public and asks first; Unpublish takes it down. Servers (Flask, Express) cannot go on Pages: they need the cloud machine.", "default": "admins"},
+    {"id": "vryxcode_autocontinue", "title": "VryxCode: auto continue", "desc": "When VryxCode uses all its steps before the task is finished, it carries on by itself (up to 5 more rounds per message) instead of stopping; your usage limits still apply. The end of every message says plainly whether it is done: \u2713 Done, or Not finished with why and a Continue button.", "default": "admins"},
+    {"id": "vryxcode_taskbox", "title": "VryxCode: task list box", "desc": "VryxCode's to-do list as a box like Claude Code's: every step of the plan, a ticked circle when done, a filled circle on the one it is doing now and a dashed circle on the ones still to come.", "default": "admins"},
+    {"id": "admin_crashes", "title": "Admin: crashes and errors", "desc": "A Crashes page in Admin lists the errors in server.log (newest first, the same error counted once) with the lines around each one, for the owner only (an error can hold private text). Fix this opens VryxCode on your Emvryx project (imported from GitHub) with the error and the rule to prove it with a failing test first; the fix comes back as a pull request, never straight onto the running app.", "default": "admins"},
+    {"id": "apk_link", "title": "Android: one-tap download link", "desc": "Settings shows a Get the Android app button with a fixed link (the android-latest release on GitHub), always the newest app, and a QR code to open it on a phone.", "default": "admins"},
+    {"id": "android_vryxcode", "title": "Android: VryxCode like the website", "desc": "The Android app's VryxCode gets the website's newer parts: the Preview button and running apps (logs and stop), the Claude Code-style feed, the review verdict with its Fix button, and Restore on each message. Each part still follows its own VryxCode switch.", "default": "admins"},
+    {"id": "cloud_guide", "title": "Cloud machine: step-by-step setup", "desc": "Admin > Cloud machine gets a guide for a free Oracle Cloud machine (the Always Free Arm machine): each step in plain words with a check that it worked, ending with the machine connected so VryxCode's terminal and servers can run there instead of on this PC.", "default": "admins"},
+    {"id": "model_code_test", "title": "Models: coding test from real sessions", "desc": "Admin > Models gets a Coding test: the recorded VryxCode sessions (only your own, recorded with the switch for it) are turned into tasks with checks, and each of your models is run on them, sealed, to show which one codes best. Only your own models are tested, and nothing from them is used for training.", "default": "admins"},
 ]
+# Products that are released like a model: every unpublished feature of VryxCode is part of the next VryxCode version. Each feature still has its own switch
+# (for testing on the owner and admins); "Push update" in Admin > Models sends all of the waiting ones to everyone at once as, say, VryxCode 1.4.
+PRODUCTS = {"vryxcode": {"title": "VryxCode", "desc": "The coding agent. Its new features wait here and go out together as the next VryxCode version."}}
+for _f in FLAGS:
+    if _f["id"].startswith("vryxcode_"):
+        _f.setdefault("model", "vryxcode")
 BY_ID = {f["id"]: f for f in FLAGS}
 VERSION_RE = re.compile(r"\d{1,3}\.\d{1,3}\.\d{1,3}")
 KINDS = ("major", "minor", "patch")
@@ -50,12 +72,12 @@ KINDS = ("major", "minor", "patch")
 class Flags:
     def __init__(self, path=None, clock=time.time):
         self.path, self.lock, self.clock = path, threading.Lock(), clock
-        self.data = {"audiences": {}, "changed": {}, "scheduled": {}, "version": "1.0.0", "releases": []}
+        self.data = {"audiences": {}, "changed": {}, "scheduled": {}, "version": "1.0.0", "releases": [], "products": {}}
         if path and os.path.exists(path):
             try:
                 with open(path, encoding="utf-8") as f:
                     got = json.load(f)
-                self.data.update({k: got[k] for k in ("audiences", "changed", "scheduled", "releases") if isinstance(got.get(k), (dict, list))})
+                self.data.update({k: got[k] for k in ("audiences", "changed", "scheduled", "releases", "products") if isinstance(got.get(k), (dict, list))})
                 if isinstance(got.get("version"), str) and VERSION_RE.fullmatch(got["version"]):
                     self.data["version"] = got["version"]
                 for i, r in enumerate(self.data["releases"], 1):         # releases saved before they were numbered
@@ -141,6 +163,53 @@ class Flags:
                                           "items": [{"id": model_id, "title": label, "desc": desc}]})
             del self.data["releases"][:-200]
             self._save()
+
+    def product_version(self, pid):
+        v = (self.data["products"].get(pid) or {}).get("version")
+        return v if isinstance(v, str) and re.fullmatch(r"\d{1,3}\.\d{1,3}", v) else "1.0"
+
+    @staticmethod
+    def next_product_version(version, kind):
+        major, minor = (int(x) for x in version.split("."))
+        return f"{major + 1}.0" if kind == "major" else f"{major}.{minor + 1}"
+
+    def products(self):
+        """Admin > Models: each product with its version, the features waiting for its next version, the live ones and the ones switched off."""
+        out = []
+        for pid, p in PRODUCTS.items():
+            feats = [f for f in FLAGS if f.get("model") == pid]
+            v = self.product_version(pid)
+            pick = lambda test: [{"id": f["id"], "title": f["title"], "desc": f["desc"], "audience": self.audience(f["id"])} for f in feats if test(self.audience(f["id"]))]
+            out.append({"id": pid, "title": p["title"], "desc": p["desc"], "version": v, "label": f"{p['title']} {v}",
+                        "next": {k: self.next_product_version(v, k) for k in ("minor", "major")},
+                        "waiting": pick(lambda a: a not in ("everyone", "off")), "live": pick(lambda a: a == "everyone"), "held": pick(lambda a: a == "off")})
+        return out
+
+    def push_product(self, pid, by="", kind="minor", notes=""):
+        """Every waiting feature of the product goes live for everyone as its next version (a model update in the release history; the app's own version
+        does not change). A feature switched Off is on hold and stays out. Returns the new label ("VryxCode 1.4")."""
+        if pid not in PRODUCTS:
+            raise ValueError("no such model")
+        if kind not in ("minor", "major"):
+            raise ValueError("choose minor or major")
+        title = PRODUCTS[pid]["title"]
+        ids = [f["id"] for f in FLAGS if f.get("model") == pid and self.audience(f["id"]) not in ("everyone", "off")]
+        if not ids:
+            raise ValueError(f"nothing in {title} is waiting: every feature is live or switched off")
+        with self.lock:
+            v = self.next_product_version(self.product_version(pid), kind)
+            now = self.clock()
+            for f in ids:
+                self.data["scheduled"].pop(f, None)
+                self.data["audiences"][f] = "everyone"
+                self.data["changed"][f] = {"by": by, "at": now}
+            self.data["products"][pid] = {"version": v, "at": now, "by": by}
+            label = f"{title} {v}"
+            self.data["releases"].append({"seq": self.next_seq(), "version": self.data["version"], "kind": "model-update", "model": label, "product": pid, "at": now, "by": by,
+                                          "notes": str(notes)[:500], "items": [{"id": f, "title": BY_ID[f]["title"], "desc": BY_ID[f]["desc"]} for f in ids]})
+            del self.data["releases"][:-200]
+            self._save()
+        return label
 
     @staticmethod
     def next_version(version, kind):

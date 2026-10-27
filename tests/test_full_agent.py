@@ -63,7 +63,8 @@ class Tools(unittest.TestCase):
         self.assertTrue(sb.shell)
         out = sb.run("echo one && echo two | tr a-z A-Z")
         self.assertEqual(out, "exit code 0\none\nTWO")
-        self.assertFalse(harness.Sandbox(self.tmp.name, command_prefix=["env"], container=True).shell)    # the usual agent never gets one
+        # the owner's choice (Oct 2026): nothing is blocked inside the sealed sandbox, so the usual agent gets the real terminal there too
+        self.assertTrue(harness.Sandbox(self.tmp.name, command_prefix=["env"], container=True).shell)
 
 
 class Rules(unittest.TestCase):

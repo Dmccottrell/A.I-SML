@@ -188,6 +188,11 @@ class ApiClient(private val session: SessionStore) {
         post<JsonObject>("/api/code/sessions/$id/stop", JsonObject(emptyMap()))
     }
 
+    /** vryxcode_restore: the project's files as they were before message `turn` of this session */
+    suspend fun codeRewind(id: String, turn: Int) {
+        post<JsonObject>("/api/code/sessions/$id/rewind", buildJsonObject { put("turn", turn) })
+    }
+
     suspend fun codeFixCi(body: JsonObject): CodeStarted = post("/api/code/fixci", body)
 
     suspend fun codeMemory(): CodeMemory = get("/api/code/memory")

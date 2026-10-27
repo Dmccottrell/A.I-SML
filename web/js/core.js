@@ -65,6 +65,19 @@ const logo = (size, animate, kind) => {
     <path d="M17 32 H${k === 'ember' ? 36 : 37}" stroke="${sun}" stroke-width="6" stroke-linecap="round"/>${ring}`;
   return s;
 };
+// The working mark (VryxCode's "working" line, flag vryxcode_lines): the E, its middle arm in Emvryx's colour, and its dot become three dots that
+// light up in turn, like a typing indicator made of the logo
+const logoDots = (size) => {
+  const s = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+  s.setAttribute('width', Math.round(size * 1.25)); s.setAttribute('height', size); s.setAttribute('viewBox', '0 0 80 64'); s.setAttribute('fill', 'none');
+  s.setAttribute('aria-hidden', 'true'); s.setAttribute('class', 'logo-dots');
+  const sun = violetOn() ? '#8B5CF6' : '#F5A524';
+  const dot = (cx, begin) => `<circle cx="${cx}" cy="32" r="4.6" fill="${sun}" opacity="0.3"><animate attributeName="opacity" values="0.3;1;0.3" dur="1.2s" begin="${begin}s" repeatCount="indefinite"/>`
+    + `<animate attributeName="r" values="4.6;6.2;4.6" dur="1.2s" begin="${begin}s" repeatCount="indefinite"/></circle>`;
+  s.innerHTML = `<path d="M10 16 H32 M10 48 H32 M10 16 V48" stroke="var(--text)" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/>
+    <path d="M10 32 H28" stroke="${sun}" stroke-width="6" stroke-linecap="round"/>${dot(42, 0)}${dot(56, 0.2)}${dot(70, 0.4)}`;
+  return s;
+};
 const fmt = (n) => Math.round(n).toLocaleString('en-US');
 const nice = (n) => fmt(n >= 100 ? Math.round(n / 10) * 10 : Math.round(n));
 
