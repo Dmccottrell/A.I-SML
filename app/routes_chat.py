@@ -51,8 +51,10 @@ class RoutesChat:
         if not store.exists(cid):
             return self._send(404, {"code": "not_found", "message": "That chat is gone."})
         lib = self.state.docs_for(who["user"])
+        lines = self.state.flags.on("chat_lines", who)                   # chat_lines: what each answer looked up and how long it thought
         msgs = [{"id": m["id"], "role": m["role"], "content": m["content"], "model_id": m["model_id"], "status": m["status"],
                  "cut": bool((m.get("flags") or {}).get("cut")), "fb": (m.get("flags") or {}).get("fb", ""), "ctx": (m.get("flags") or {}).get("ctx"),
+                 **({"looked": (m.get("flags") or {}).get("looked"), "thought_s": (m.get("flags") or {}).get("thought_s")} if lines else {}),
                  "docs": [{"id": d["id"], "name": d["name"], "kind": d["kind"]} for d in (lib.info(i) for i in m.get("docs") or []) if d]}
                 for m in store.messages(cid) if not (m["status"] == "compacted" and not m["content"])]
         ctx = None
@@ -64,7 +66,13 @@ class RoutesChat:
                 ctx = None
                 if self.state.verbose:
                     print(f"(memory meter: could not measure chat {cid}: {type(e).__name__})", flush=True)
-        self._send(200, {"id": cid, "title": store.title(cid), "private": cid < 0, "skill": store.skill(cid), "messages": msgs, "ctx": ctx, **store.meta(cid),
+        extra = {}
+        if self.state.flags.on("chat_versions", who):
+            extra["versions"] = {str(k): v for k, v in store.versions(cid).items()}
+        if self.state.flags.on("chat_projects", who) and store.meta(cid).get("folder"):
+            p = store.project(store.meta(cid)["folder"])
+            extra["project"] = p["name"] if p else None
+        self._send(200, {"id": cid, "title": store.title(cid), "private": cid < 0, "skill": store.skill(cid), "messages": msgs, "ctx": ctx, **store.meta(cid), **extra,
                          "generating": (who["user"], cid) in self.state.stops,
                          "docs": [d for d in (self.state.docs_for(who["user"]).info(i) for i in store.docs(cid)) if d]})
 

@@ -12,6 +12,7 @@ import documents
 import feedback
 import updater
 import crash_log
+import chat_plus
 import code_log
 import model_code_test
 import live_data
@@ -113,6 +114,18 @@ class RoutesGet:
             return self._send(200, {"chats": self.state.store(who["user"]).list_chats(archived=True)})
         if path == "/api/chats/search":
             return self._send(200, {"results": self.state.store(who["user"]).search((qs.get("q") or [""])[0])})
+        m = re.fullmatch(r"/api/chats/(-?\d+)/followups", path)
+        if m and self.state.flags.on("chat_followups", who):          # what to ask next, from the last answer (no model time)
+            store = self.state.store(who["user"])
+            cid = int(m.group(1))
+            if not store.exists(cid):
+                return self._send(404, {"code": "not_found", "message": "That chat is gone."})
+            msgs = [x for x in store.messages(cid) if x["status"] != "compacted" and x["content"]]
+            ans = next((x for x in reversed(msgs) if x["role"] == "assistant"), None)
+            q = next((x["content"] for x in reversed(msgs) if x["role"] == "user"), "")
+            return self._send(200, {"items": chat_plus.followups(q, ans["content"]) if ans and ans["status"] == "done" else []})
+        if path == "/api/projects" and self.state.flags.on("chat_projects", who):
+            return self._send(200, {"projects": self.state.store(who["user"]).projects()})
         m = re.fullmatch(r"/api/chats/(-?\d+)", path)
         if m:
             return self.api_get_chat(who, int(m.group(1)))

@@ -102,8 +102,34 @@ class RoutesPost:
             store = self.state.store(who["user"])
             cid = store.new_chat(private=bool(body.get("private")), skill=skill)
             lib = self.state.docs_for(who["user"])
-            store.set_docs(cid, [i for i in (body.get("docs") or []) if isinstance(i, int) and lib.info(i)])
+            docs = [i for i in (body.get("docs") or []) if isinstance(i, int) and lib.info(i)]
+            proj = store.project(str(body.get("project") or "")) if (body.get("project") and self.state.flags.on("chat_projects", who) and cid >= 0) else None
+            if proj:                                                                # chat_projects: a new chat in a project starts with its files
+                store.set_folder(cid, proj["name"])
+                docs = (docs + [i for i in proj["docs"] if i not in docs and lib.info(i)])[:10]
+            store.set_docs(cid, docs)
             return self._send(200, {"id": cid})
+        if path == "/api/panel" and self.state.flags.on("chat_panel", who):         # a web page from an answer, for the side panel's sealed frame
+            try:
+                return self._send(200, {"url": "/panel/" + self.state.panels.make(who["user"], body.get("html"))})
+            except ValueError as e:
+                return self._send(400, {"code": "bad_request", "message": str(e)})
+        if path == "/api/projects" and self.state.flags.on("chat_projects", who):    # make, change or remove a project (a folder with instructions and files)
+            store, lib = self.state.store(who["user"]), self.state.docs_for(who["user"])
+            try:
+                if body.get("delete"):
+                    store.delete_project(str(body.get("name", "")))
+                else:
+                    old = str(body.get("old") or "")
+                    name = store.save_project(body.get("name"), body.get("instructions", ""), [i for i in (body.get("docs") or []) if isinstance(i, int) and lib.info(i)])
+                    if old and old != name:                                          # renamed: its chats move with it
+                        moving = [c["id"] for c in store.list_chats(everything=True) if c.get("folder") == old]
+                        store.delete_project(old)
+                        for cid in moving:
+                            store.set_folder(cid, name)
+            except ValueError as e:
+                return self._send(400, {"code": "bad_request", "message": str(e)})
+            return self._send(200, {"projects": store.projects()})
         if path == "/api/documents":
             import base64
             try:
@@ -304,7 +330,8 @@ class RoutesPost:
                 text = str(body.get("text", "")).strip()
                 if len(text) > MAX_TEXT:
                     return self._send(400, {"code": "too_long", "message": "That message is too long. Please shorten it."})
-                if not store.edit_message(cid, mid, text):
+                keep = self.state.flags.on("chat_versions", who)      # chat_versions: the question as it was and its answers stay as version 1
+                if not (store.edit_keeping(cid, mid, text) if keep else store.edit_message(cid, mid, text)):
                     return self._send(400, {"code": "bad_request", "message": "Only your own messages can be edited."})
                 return self._send(200, {"ok": True})
             if cid < 0:
@@ -320,6 +347,20 @@ class RoutesPost:
             store.set_flag(cid, mid, "fb", kind if kind in feedback.KINDS else "other")
             self.state.auth.event("feedback", who["user"], self._ip(), kind)
             return self._send(200, {"ok": True})
+        m = re.fullmatch(r"/api/chats/(-?\d+)/messages/(\d+)/version", path)
+        if m and self.state.flags.on("chat_versions", who):               # ‹ 1/2 ›: show another version of an edited question and its answers
+            cid, mid, store = int(m.group(1)), int(m.group(2)), self.state.store(who["user"])
+            if not store.exists(cid):
+                return self._send(404, {"code": "not_found", "message": "That chat is gone."})
+            if (who["user"], cid) in self.state.stops:
+                return self._send(400, {"code": "busy", "message": "It is still answering.", "action": "Wait for it to finish, or press Stop."})
+            try:
+                index = int(body.get("index", -1))
+            except (TypeError, ValueError):
+                index = -1
+            if not store.show_version(cid, mid, index):
+                return self._send(400, {"code": "bad_request", "message": "That version isn't kept."})
+            return self._send(200, {"ok": True, "versions": {str(k): v for k, v in store.versions(cid).items()}})
         m = re.fullmatch(r"/api/chats/(-?\d+)/messages/(\d+)/like", path)
         if m:
             cid, mid = int(m.group(1)), int(m.group(2))

@@ -137,6 +137,10 @@ def start_turn(state, who, chat_id, text, model_id, effort, regenerate=False, re
                                          CONTINUE_HINT if cont else "") if h)   # the person's own preference, then the chat's skill (Study helper ...), then "continue": extra instructions for the model only
     if extra_hint:
         skill_hint = (skill_hint + "\n\n" if skill_hint else "") + extra_hint
+    if chat_id is not None and chat_id >= 0 and state.flags.on("chat_projects", who):    # chat_projects: the project's own instructions on every message
+        proj = store.project(store.meta(chat_id).get("folder") or "")
+        if proj and proj["instructions"].strip():
+            skill_hint = (skill_hint + "\n\n" if skill_hint else "") + "Instructions for this project (" + proj["name"] + "): " + proj["instructions"].strip()
     if model.get("think") == "empty" and state.flags.on("chat_house_rules", who):    # an Emvryx 3 model: the house rules on every message
         skill_hint = (skill_hint + "\n\n" if skill_hint else "") + HOUSE_HINT
     if fixes and model.get("think") == "empty":
@@ -381,6 +385,12 @@ def start_turn(state, who, chat_id, text, model_id, effort, regenerate=False, re
                     found = found2
             if found and found["asked"] and text:
                 state.remember_lookup(who["user"], chat_id, r["message_id"], text, found)
+            if state.flags.on("chat_lines", who) and r.get("message_id") is not None:     # chat_lines: the quiet lines and source chips, kept with the answer
+                if found and found.get("asked"):
+                    store.set_flag(chat_id, r["message_id"], "looked", {k: found.get(k) for k in ("saved", "wiki", "web", "web_tried", "live", "names")}
+                                   | {"sources": [{"title": str(x.get("title", ""))[:120], "url": str(x.get("url") or "")[:300]} for x in (found.get("sources") or [])][:8]})
+                if timing.get("thought"):
+                    store.set_flag(chat_id, r["message_id"], "thought_s", round(timing.get("first", time.monotonic()) - t_load - timing.get("load", 0), 1))
             if text and store.title(chat_id) == "New chat":
                 store.set_title(chat_id, "Picture" if picture_only else attached[0]["name"][:48] if text == documents.FILE_ONLY_TEXT and attached else (chat_polish.short_title(text) if fixes else (" ".join(text.split())[:48] or "New chat")))
             end = time.monotonic()                              # where the time went, for the owner and admins (shown under the reply)

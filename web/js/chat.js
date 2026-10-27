@@ -8,7 +8,7 @@ async function newChat(isPrivate, skill, docs) {
 async function openChat(id) {
   if (S.busy) return;
   const r = await api('/api/chats/' + id); if (!r.ok) return load();
-  const c = await r.json(); S.chatId = c.id; S.messages = c.messages; S.title = c.title; S.private = c.private; S.skill = c.skill || ''; S.docs = c.docs || []; S.chatCtx = c.ctx || null;
+  const c = await r.json(); S.chatId = c.id; S.messages = c.messages; S.title = c.title; S.private = c.private; S.skill = c.skill || ''; S.docs = c.docs || []; S.chatCtx = c.ctx || null; S.plus = {versions: c.versions || {}, project: c.project || null};
   remember(); document.body.classList.remove('menu-open'); renderThread(true); renderAttached(); renderChats();
   if (c.generating) followReply();
 }
@@ -51,7 +51,7 @@ function richText(t) {   // **bold** and "# heading" lines show as bold text ins
 const ONLY_SENT = ['(sent a picture)', '(sent a file)'];   // saved for a picture or file sent without words (documents.PICTURE_ONLY_TEXT, FILE_ONLY_TEXT): only it is shown
 function bubble(m, last) {
   if (m.role === 'user' && m.content.startsWith(SUMMARY_MARK)) return el('div', {class: 'note'}, 'Earlier messages were summarized to save room');
-  if (m.role === 'user') return el('div', {class: 'msg user'}, (m.docs && m.docs.length) ? el('div', {class: 'pics'}, ...m.docs.map((d) => isPic(d) ? el('img', {src: picUrl(d), alt: d.name, onclick: () => window.open(picUrl(d), '_blank', 'noopener')}) : el('span', {class: 'chip', title: d.name}, '\ud83d\udcc4 ' + d.name))) : '', m.content && !ONLY_SENT.includes(m.content) ? el('div', {class: 'bubble'}, m.content) : '', (S.chatId != null && !S.busy && typeof m.id === 'number' && m.content && !ONLY_SENT.includes(m.content)) ? el('div', {class: 'acts'}, el('button', {class: 'chip', title: 'Change this message and ask again', onclick: (e) => editMessage(m, e.currentTarget.closest('.msg'))}, 'Edit')) : '');
+  if (m.role === 'user') return plusMsgOr(m, last, el('div', {class: 'msg user'}, (m.docs && m.docs.length) ? el('div', {class: 'pics'}, ...m.docs.map((d) => isPic(d) ? el('img', {src: picUrl(d), alt: d.name, onclick: () => window.open(picUrl(d), '_blank', 'noopener')}) : el('span', {class: 'chip', title: d.name}, '\ud83d\udcc4 ' + d.name))) : '', m.content && !ONLY_SENT.includes(m.content) ? el('div', {class: 'bubble'}, m.content) : '', (S.chatId != null && !S.busy && typeof m.id === 'number' && m.content && !ONLY_SENT.includes(m.content)) ? el('div', {class: 'acts'}, el('button', {class: 'chip', title: 'Change this message and ask again', onclick: (e) => editMessage(m, e.currentTarget.closest('.msg'))}, 'Edit')) : ''));
   const model = allModels().find((c) => c.id === m.model_id);
   const meta = el('div', {class: 'meta'}, logo(14, false, model ? model.name : 'brand'), mname(model) + (m.status === 'partial' ? ' · stopped' : ''));
   const acts = el('div', {class: 'acts'}, el('button', {class: 'chip', onclick: (e) => { navigator.clipboard && navigator.clipboard.writeText(m.content); e.target.textContent = 'Copied'; setTimeout(() => e.target.textContent = 'Copy', 1500); }}, 'Copy'));
@@ -66,8 +66,9 @@ function bubble(m, last) {
   if (S.chatId != null && S.chatId >= 0 && m.status === 'done') more.push([m.fb ? 'Reported (thanks)' : 'Report a problem\u2026', (btn) => reportAnswer(m, btn)]);
   if (last && !S.busy) acts.append(el('button', {class: 'chip', 'aria-haspopup': 'true', onclick: (e) => regenMenu(e.currentTarget)}, 'Regenerate \u25be'));
   if (more.length) acts.append(el('button', {class: 'chip', 'aria-haspopup': 'true', 'aria-label': 'More actions', title: 'More', onclick: (e) => moreMenu(e.currentTarget, more)}, '\u22ef'));
-  return el('div', {class: 'msg ai', 'data-id': m.id}, meta, el('div', {class: 'bubble'}, richText(m.content)), acts);
+  return plusMsgOr(m, last, el('div', {class: 'msg ai', 'data-id': m.id}, meta, el('div', {class: 'bubble'}, richText(m.content)), acts));
 }
+const plusMsgOr = (m, last, node) => (typeof plusMsg === 'function' ? plusMsg(m, node, last) : node);     // chatplus.js adds its parts (switched on by their flags)
 function moreMenu(btn, items) {   // a small menu of the less-used answer actions
   document.querySelectorAll('.chatmenu').forEach((x) => x.remove());
   const menu = el('div', {class: 'acctmenu chatmenu', role: 'menu', style: 'position:fixed;left:' + Math.max(8, Math.min(btn.getBoundingClientRect().left, innerWidth - 248)) + 'px;top:' + Math.min(btn.getBoundingClientRect().bottom + 4, innerHeight - 60 - items.length * 42) + 'px;right:auto;bottom:auto;width:240px;z-index:60'},
@@ -175,6 +176,7 @@ function renderThread(jump) {
   S.messages.forEach((m) => t.append(bubble(m, last && m.id === last.id && m === S.messages[S.messages.length - 1])));
   if (jump !== false) scrollDown(true);
   renderCtx(null, S.compacting);
+  if (typeof plusAfterThread === 'function') plusAfterThread();
 }
 function scrollDown(force) { const s = $('scroll'); if (force || S.stick) s.scrollTop = s.scrollHeight; }
 $('scroll').addEventListener('scroll', () => { const s = $('scroll'); S.stick = s.scrollHeight - s.scrollTop - s.clientHeight < 60; $('down').classList.toggle('show', !S.stick); });
@@ -327,8 +329,9 @@ new MutationObserver(() => {                       // ...and on others as an <im
 }).observe(input, {childList: true, subtree: true});
 input.addEventListener('drop', (e) => { if (!(e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files.length)) { e.preventDefault(); const t = e.dataTransfer && e.dataTransfer.getData('text/plain'); if (t) document.execCommand('insertText', false, t); } });
 input.addEventListener('input', () => { if (!input.textContent && input.innerHTML) input.innerHTML = ''; if (input.value.length > 20000) input.value = input.value.slice(0, 20000); });   // :empty shows the placeholder again
-input.addEventListener('keydown', (e) => { if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) { e.preventDefault(); send(); } });
-$('send').onclick = () => (S.busy ? stop() : send());
+const steering = () => S.busy && featureOn('chat_steer') && typeof steer === 'function' && !!input.value.trim();     // chat_steer: typing while it answers
+input.addEventListener('keydown', (e) => { if (e.key === 'Enter' && !e.shiftKey && !e.isComposing && !(typeof plusMenuOpen === 'function' && plusMenuOpen())) { e.preventDefault(); steering() ? steer() : send(); } });
+$('send').onclick = () => (steering() ? steer() : S.busy ? stop() : send());
 $('plus').onclick = () => {
   const open = !$('attachMenu').hidden; closeMenus(); if (open) return;
   const m = $('attachMenu'); const row = (icon, title, sub, fn) => el('button', {class: 'opt', onclick: () => { closeMenus(); fn(); }}, el('span', {style: 'font-size:20px;width:26px;text-align:center'}, icon), el('span', {class: 'grow'}, el('b', {}, title), el('small', {}, sub)));

@@ -15,7 +15,7 @@ async function send(regen, mode) {
   const sentNow = sentIds(), pendingDocs = S.docs.filter((d) => !sentNow.has(d.id));
   let text = regen === true ? '' : input.value.trim();     // a picture or file alone is sent as it is (no made-up question); the model reacts to it
   if (regen !== true && !text && !pendingDocs.length) return;
-  if (!S.chatId) { const r = await post('/api/chats', {private: S.private, skill: S.skill, docs: S.docs.map((d) => d.id)}); if (!r.ok) return; S.chatId = (await r.json()).id; remember(); }
+  if (!S.chatId) { const r = await post('/api/chats', {private: S.private, skill: S.skill, docs: S.docs.map((d) => d.id), ...(S.newProject ? {project: S.newProject} : {})}); if (!r.ok) return; S.chatId = (await r.json()).id; S.newProject = null; remember(); }
   S.busy = true; S.stick = true; S.contNow = S.cont === true; S.cont = false; renderComposer(); closeMenus();
   if (regen === true) { const last = S.messages[S.messages.length - 1]; if (last && last.role === 'assistant') S.messages.pop(); }
   else { S.pending = {id: 'u' + Date.now(), role: 'user', content: text, docs: pendingDocs.map((d) => ({id: d.id, name: d.name, kind: d.kind}))}; S.messages.push(S.pending); input.value = ''; renderAttached(); }
@@ -31,6 +31,7 @@ async function send(regen, mode) {
     if (!r.ok) { const j = await r.json().catch(() => ({})); throw Object.assign(new Error(j.message || 'Something went wrong.'), {info: j, status: r.status, retry: r.headers.get('Retry-After')}); }
     const reader = r.body.getReader(), dec = new TextDecoder(); let buf = '';
     const handle = (ev, data) => {
+      if (typeof plusEvent === 'function') plusEvent(ev, data, think);          // chatplus.js: the task box (chat_taskbox)
       if (ev === 'thinking') {
         S.autoNote = data.auto ? data : null; renderComposer();
       } else if (ev === 'notes') {
@@ -76,10 +77,11 @@ async function send(regen, mode) {
     else if (e.message !== 'login') { if (e instanceof TypeError || /network|fetch|load failed|terminated|connection/i.test(e.message || '')) lost = true; else errCard = errorCard(e); }
   } finally {
     think._stop && think._stop(); think.remove(); S.busy = false; S.compacting = false; S.abort = null; S.resume = false;
+    if (typeof plusEvent === 'function') plusEvent('end', null, null);
   }
   if (lost) return followReply();   // the reply keeps being written on the server: show it when it is ready
   S.pending = null; S.sentAt = null;
-    try { const r = await api('/api/chats/' + S.chatId); if (r.ok) { const c = await r.json(); S.messages = c.messages; S.title = c.title; } } catch (e) {}
+    try { const r = await api('/api/chats/' + S.chatId); if (r.ok) { const c = await r.json(); S.messages = c.messages; S.title = c.title; S.plus = {versions: c.versions || {}, project: c.project || null}; } } catch (e) {}
   renderThread(); if (errCard) { $('thread').append(errCard); scrollDown(true); if (!got && regen !== true) input.value = text; }
   if (S.timing && !errCard) { $('thread').append(timingLine(S.timing)); scrollDown(); } S.timing = null;
   renderComposer(); try { const q = new URLSearchParams({effort: S.effort, model: S.model}); const r = await api('/api/state?' + q); const st = await r.json(); S.state.chats = st.chats; S.state.usage = st.usage; renderChats(); renderUsage(st.usage); } catch (e) {}

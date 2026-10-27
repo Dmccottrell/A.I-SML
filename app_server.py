@@ -60,6 +60,7 @@ import mailer
 import secret_box
 import code_secrets
 import model_code_test
+import chat_plus
 import shares
 import summary
 import code_preview
@@ -152,6 +153,7 @@ class AppState(StateAccounts, StateSettings, StateApps, StatePC, StateCode, Stat
         self.users = self._load_users()
         self.code = code_sessions.CodeManager(data_dir, quotas=code_sandbox.Quotas(self.security))       # VryxCode sessions (projects live under <data>/code/)
         self.secrets = secret_box.SecretBox(data_dir, require=self.security["require_encryption"])
+        self.panels = chat_plus.Panels()                     # chat_panel: pages from answers for the side panel's sealed frame
         self.code_test = model_code_test.Runner(os.path.join(data_dir, "code_test.json") if data_dir else None)   # model_code_test: Admin > Models
         self.code_secrets = code_secrets.ProjectSecrets(data_dir, self.secrets)      # vryxcode_secrets: per project, never shown to the model
         self.github = github_link.Store(data_dir, self.secrets)  # connected GitHub accounts (tokens encrypted, files mode 600)
@@ -494,6 +496,12 @@ class Handler(RoutesGet, RoutesPost, RoutesCode, RoutesAccount, RoutesAdmin, Rou
         path, qs = url.path, urllib.parse.parse_qs(url.query)
         if path.startswith("/preview-app/") and self._preview_app("GET"):
             return
+        pn = re.fullmatch(r"/panel/([A-Za-z0-9_-]{16,64})", path)
+        if pn:                                                # chat_panel: the token is the key; the frame is sealed (no identity, no cookies)
+            data = self.state.panels.get(pn.group(1))
+            if data is None:
+                return self._send_preview(404, "text/plain; charset=utf-8", b"This page is no longer kept. Open it again from the chat.\n")
+            return self._send_preview(200, "text/html; charset=utf-8", code_preview.inject(data, True, root_urls=False))
         pv = re.fullmatch(r"/preview/([A-Za-z0-9_-]{16,64})/(.*)", path)
         if pv:                                                   # the live preview: a token in the address instead of the cookie (the sandboxed frame sends none)
             folder = self.state.previews.folder(pv.group(1))

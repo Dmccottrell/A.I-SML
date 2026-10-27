@@ -448,6 +448,118 @@ class ChatStore:
         self.db.commit()
         return True
 
+    # ---- versions of an edited message (flag chat_versions): editing keeps the earlier question and its answers, ‹ 1/2 › flips between them
+    def _versions_table(self):
+        self.db.execute("CREATE TABLE IF NOT EXISTS versions (chat_id INTEGER, message_id INTEGER, data TEXT, PRIMARY KEY (chat_id, message_id))")
+
+    def _snapshot(self, chat_id, message_id):
+        msgs = self.messages(chat_id)
+        i = next((n for n, m in enumerate(msgs) if m["id"] == message_id), None)
+        if i is None:
+            return None
+        return {"text": msgs[i]["content"], "tail": [{k: m[k] for k in ("role", "content", "model_id", "status", "docs", "flags")} for m in msgs[i + 1:]]}
+
+    def _load_versions(self, chat_id, message_id):
+        self._versions_table()
+        r = self.db.execute("SELECT data FROM versions WHERE chat_id = ? AND message_id = ?", (chat_id, message_id)).fetchone()
+        try:
+            return json.loads(r[0]) if r else None
+        except ValueError:
+            return None
+
+    def _save_versions(self, chat_id, message_id, data):
+        self._versions_table()
+        self.db.execute("INSERT OR REPLACE INTO versions (chat_id, message_id, data) VALUES (?, ?, ?)", (chat_id, message_id, json.dumps(data)))
+        self.db.commit()
+
+    def edit_keeping(self, chat_id, message_id, text):
+        """Like edit_message, but the question as it was and every answer after it stay as an earlier version. Private chats keep no versions."""
+        if chat_id < 0:
+            return self.edit_message(chat_id, message_id, text)
+        snap = self._snapshot(chat_id, message_id)
+        if snap is None or not self.edit_message(chat_id, message_id, text):
+            return False
+        v = self._load_versions(chat_id, message_id) or {"list": [], "current": 0}
+        if v["list"]:
+            v["list"][v["current"]] = snap
+        else:
+            v["list"] = [snap]
+        v["list"].append(None)                                   # the new version: filled in when another one is shown
+        v["current"] = len(v["list"]) - 1
+        del v["list"][:-20]
+        v["current"] = min(v["current"], len(v["list"]) - 1)
+        self._save_versions(chat_id, message_id, v)
+        return True
+
+    def versions(self, chat_id):
+        """{message id: [this one (1-based), how many]} for the messages that have earlier versions."""
+        if chat_id < 0:
+            return {}
+        self._versions_table()
+        out = {}
+        for mid, data in self.db.execute("SELECT message_id, data FROM versions WHERE chat_id = ?", (chat_id,)).fetchall():
+            try:
+                v = json.loads(data)
+                out[int(mid)] = [v["current"] + 1, len(v["list"])]
+            except (ValueError, KeyError):
+                continue
+        return out
+
+    def show_version(self, chat_id, message_id, index):
+        """Put version `index` (0-based) of this question and its answers back; the one shown now is kept in its place."""
+        v = self._load_versions(chat_id, message_id)
+        if not v or not (0 <= index < len(v["list"])) or v["list"][index] is None and index != v["current"]:
+            return False
+        if index == v["current"]:
+            return True
+        v["list"][v["current"]] = self._snapshot(chat_id, message_id)
+        want = v["list"][index]
+        self.db.execute("UPDATE messages SET content = ? WHERE id = ? AND chat_id = ?", (want["text"], message_id, chat_id))
+        self.db.execute("DELETE FROM messages WHERE chat_id = ? AND id > ?", (chat_id, message_id))
+        for m in want["tail"]:
+            self.db.execute("INSERT INTO messages (chat_id, role, content, model_id, status, created, docs, flags) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+                            (chat_id, m["role"], m["content"], m["model_id"], m["status"], time.time(), json.dumps(m["docs"]) if m.get("docs") else None,
+                             json.dumps(m["flags"]) if m.get("flags") else None))
+        v["current"] = index
+        self.db.commit()
+        self._save_versions(chat_id, message_id, v)
+        return True
+
+    # ---- projects (flag chat_projects): a folder of chats with its own instructions and files
+    def _projects_table(self):
+        self.db.execute("CREATE TABLE IF NOT EXISTS projects (name TEXT PRIMARY KEY, instructions TEXT, docs TEXT)")
+
+    def projects(self):
+        self._projects_table()
+        out = []
+        for name, ins, docs in self.db.execute("SELECT name, instructions, docs FROM projects ORDER BY name").fetchall():
+            try:
+                ids = [int(x) for x in json.loads(docs)] if docs else []
+            except (ValueError, TypeError):
+                ids = []
+            out.append({"name": name, "instructions": ins or "", "docs": ids})
+        return out
+
+    def project(self, name):
+        return next((p for p in self.projects() if p["name"] == name), None)
+
+    def save_project(self, name, instructions="", docs=()):
+        name = " ".join(str(name or "").split())[:30]
+        if not name:
+            raise ValueError("Give the project a name.")
+        self._projects_table()
+        self.db.execute("INSERT OR REPLACE INTO projects (name, instructions, docs) VALUES (?, ?, ?)",
+                        (name, str(instructions or "")[:2000], json.dumps([int(i) for i in docs][:10])))
+        self.db.commit()
+        return name
+
+    def delete_project(self, name):
+        """The project's settings go; its chats stay, out of the folder."""
+        self._projects_table()
+        self.db.execute("DELETE FROM projects WHERE name = ?", (name,))
+        self.db.execute("UPDATE chats SET folder = NULL WHERE folder = ?", (name,))
+        self.db.commit()
+
     def branch(self, chat_id, upto_message_id, private=False):
         """A new chat that starts as a copy of this one up to and including a message: try another direction without losing the first. Returns the new chat id (None if the message is not here)."""
         msgs = [m for m in self.messages(chat_id) if m["status"] != "compacted"]
@@ -553,11 +665,15 @@ class ChatStore:
             return
         self.db.execute("DELETE FROM messages WHERE chat_id = ?", (chat_id,))
         self.db.execute("DELETE FROM chats WHERE id = ?", (chat_id,))
+        self._versions_table()
+        self.db.execute("DELETE FROM versions WHERE chat_id = ?", (chat_id,))           # its earlier versions go with it
         self.db.commit()
 
     def delete_everything(self):
         self.db.execute("DELETE FROM messages")
         self.db.execute("DELETE FROM chats")
+        self._versions_table()
+        self.db.execute("DELETE FROM versions")
         self.db.commit()
         self.private.clear()
 

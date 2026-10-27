@@ -61,7 +61,8 @@ class Page(Base):
         page = ctx.new_page()
         page.goto(f"http://127.0.0.1:{self.port}/")
         wait_for(lambda: page.evaluate("typeof S !== 'undefined' && !!S.state"), 15)
-        page.evaluate("document.querySelectorAll('.tour').forEach((e) => e.remove()); openCode(); newSession()")
+        # the welcome tour must never cover a click: on a slow machine it opens after the page is ready, so stop it from opening at all (as ready() does)
+        page.evaluate("S.tourChecked = true; openTour = () => {}; document.querySelectorAll('.tour').forEach((e) => e.remove()); openCode(); newSession()")
         wait_for(lambda: page.evaluate("C.view === 'session'"), 15)
         return b, page
 
