@@ -159,7 +159,12 @@ class Backups(unittest.TestCase):
         self.assertNotIn("secret.key", names)
         out = os.path.join(self.tmp.name, "x.db")
         open(out, "wb").write(z.read("chats-sam.db"))
-        self.assertEqual(sqlite3.connect(out).execute("SELECT x FROM t").fetchone()[0], "hello")
+        z.close()
+        con = sqlite3.connect(out)
+        try:
+            self.assertEqual(con.execute("SELECT x FROM t").fetchone()[0], "hello")
+        finally:
+            con.close()                                                       # before tearDown deletes the folder (Windows cannot delete an open file)
 
     def test_options_for_the_key_and_projects(self):
         names = set(zipfile.ZipFile(B.make_backup(self.data, self.out, with_key=True, projects=False)[0]).namelist())

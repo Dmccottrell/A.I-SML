@@ -205,7 +205,7 @@ def selftest(out=print):
         work = tempfile.mkdtemp(prefix="vryxlang_")
         try:
             open(os.path.join(work, LANGS[lang][0]), "w").write(src)
-            r = score(lang, work, "sum")
+            r = score(lang, work, "sum", timeout=30)              # a check of the answer, not of speed: a cold start on a busy machine is slow
             checked += 1
             if not r["passed"]:
                 problems.append(f"{lang} reference for sum fails ({r['stage']}): {r['detail']}")

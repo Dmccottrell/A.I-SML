@@ -81,13 +81,10 @@ jobs:
           python tools/guard_repo.py --base "origin/${{ github.base_ref }}"
 
   # The same tests on Windows, like the Emvryx computer: catches what only Windows does (paths with \, no fork, other shells).
-  # The whole suite on Windows (the owner's PC runs Windows). Report-only for now: the suite was written on Linux and still has Windows-only
-  # differences (open files cannot be deleted, file modes, paths). The failing tests are listed at the end of the log; make it blocking again
-  # (remove continue-on-error) once it is green.
+  # The whole suite on Windows (the owner's PC runs Windows), and it blocks like the others. The failing tests are listed at the end of the log.
   windows:
     runs-on: windows-latest
     timeout-minutes: 45
-    continue-on-error: true
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
