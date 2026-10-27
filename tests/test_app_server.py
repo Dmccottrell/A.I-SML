@@ -21,6 +21,19 @@ def fake_factory(script="Sure thing, here is your answer.", mode="ok"):
     return lambda model, question: E.FakeBackend(script, mode)
 
 
+def close_all_databases():
+    """Close every SQLite connection still open in this test process (the server is already stopped). Only Windows needs it: it cannot delete
+    a file that is open."""
+    import gc
+    import sqlite3
+    for obj in gc.get_objects():
+        if isinstance(obj, sqlite3.Connection):
+            try:
+                obj.close()
+            except sqlite3.Error:
+                pass
+
+
 class Client:
     def __init__(self, port, key=None):
         self.port, self.key, self.cookie = port, key, None
@@ -136,6 +149,7 @@ class Base(unittest.TestCase):
         self.srv.shutdown()
         self.srv.server_close()
         self.state.close_databases()                       # Windows cannot delete a folder with an open database in it
+        close_all_databases()                              # ...and some are held deeper inside the stores
         self.tmp.cleanup()
 
     def page_text(self):
