@@ -9,12 +9,15 @@ const cOn = () => !$('code').hidden;
 const cModel = () => (C.info ? C.info.models.find((m) => m.id === C.model) : null);
 async function openCode() {
   $('code').hidden = false; document.body.classList.remove('menu-open'); document.body.classList.add('vx'); startDots($('vxDots'), $('code'));
+  const asked = C.opening = (C.opening || 0) + 1, view = C.view, sid = C.sid;
   const r = await api('/api/code'); C.info = await r.json(); showUsage(C.info.usage);
   const usable = C.info.models.filter((m) => m.state === 'ready');
   if (!cModel() || cModel().state !== 'ready') C.model = (usable.find((m) => m.id === S.model) || usable[0] || C.info.models[0] || {}).id;
   if (oneModel()) C.model = C.info.effort.auto || C.model;
   C.project = C.project || C.info.running && C.info.project || C.info.projects[0] || 'my-project';
-  renderCodeBar(); showHome(); vxRenderTemplates(); vxNotifyInit(); maybeVryxTour();
+  // a session started (or opened) while this was loading stays on screen: the home is drawn only if nothing else was chosen meanwhile
+  const moved = C.view === 'session' && (view !== 'session' || C.sid !== sid);
+  renderCodeBar(); if (!moved && asked === C.opening) showHome(); vxRenderTemplates(); vxNotifyInit(); maybeVryxTour();
 }
 // ---- the Sessions list: where VryxCode opens, like a to-do list of everything it has worked on
 const ENV_NAME = {local: 'This computer', sandbox: 'Isolated sandbox', cloud: 'Cloud machine'};
