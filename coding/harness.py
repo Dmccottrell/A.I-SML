@@ -305,9 +305,13 @@ class Sandbox:
         """Turn a path the model gave into a real path INSIDE the workspace, or refuse."""
         if not isinstance(name, str) or not name.strip() or "\x00" in name:
             raise ToolError("path must be a non-empty string")
-        name = name.strip().replace("\\", "/")                   # a Windows-style path from the model
-        if re.match(r"^[A-Za-z]:/", name):
-            name = name[3:]
+        name = name.strip()
+        if re.match(r"^[A-Za-z]:[\\/]", name):                    # a full Windows path: the file itself when it is inside the project (C:\...\project\a.py)
+            inside = os.path.realpath(name)
+            if inside == self.root or inside.startswith(self.root + os.sep):
+                return inside
+            name = name[3:]                                          # anywhere else: the same path inside the project
+        name = name.replace("\\", "/")                             # a Windows-style path from the model
         if name.startswith("/"):                                  # "/index.html" means the project's root, unless it already is a real path inside it
             inside = os.path.realpath(name)
             name = inside if inside == self.root or inside.startswith(self.root + os.sep) else name.lstrip("/") or "."

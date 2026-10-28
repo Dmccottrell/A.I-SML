@@ -85,6 +85,7 @@ FLAGS = [
 # Bug fixes people would notice, in plain words. Each goes out with the next release of its part (product None: the next app release, from Previews;
 # "vryxcode": the next VryxCode version, Push update in Models) and shows under "Fixed" in What's new. Add one line here with every fix that ships.
 FIXES = [
+    {"id": "vx_windows_full_path", "product": "vryxcode", "text": "On a Windows PC, a file VryxCode names by its full path (C:\\...\\your project\\index.html) is that file, instead of a copy in a new folder inside the project."},
     {"id": "android_black_panel", "product": None, "text": "In the Android app, Admin, Settings and the other pages no longer end on a black screen when Emvryx is slow to answer: they say so, with Try again."},
     {"id": "pwa_offline_scripts", "product": None, "text": "The installed app (Install / Add to Home screen) keeps every part of the page for offline use, and takes an update as soon as there is one."},
     {"id": "site_hidden_parts", "product": None, "text": "The Emvryx website no longer leaves parts of a page invisible on a slow phone or computer."},
