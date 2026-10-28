@@ -136,6 +136,7 @@ class Base(unittest.TestCase):
         self.state.flags.data["audiences"]["vryxcode_publish"] = "off"
         self.state.flags.data["audiences"]["vryxcode_autocontinue"] = "off"
         self.state.flags.data["audiences"]["vryxcode_taskbox"] = "off"
+        self.state.flags.data["audiences"]["vryxcode_options"] = "off"
         self.state.flags.data["audiences"]["chat_panel"] = "off"
         self.state.flags.data["audiences"]["chat_versions"] = "off"
         self.state.flags.data["audiences"]["chat_lines"] = "off"
