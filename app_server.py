@@ -61,6 +61,7 @@ import secret_box
 import code_secrets
 import model_code_test
 import chat_plus
+import phone_model
 import web_push
 import shares
 import summary
@@ -156,6 +157,7 @@ class AppState(StateAccounts, StateSettings, StateApps, StatePC, StateCode, Stat
         self.secrets = secret_box.SecretBox(data_dir, require=self.security["require_encryption"])
         contact = self.security.get("contact_email")
         self.push = web_push.WebPush(data_dir, self.secrets, ("mailto:" + contact) if contact else (self.security.get("public_url") or "https://emvryx.app"))   # pwa_push
+        self.phone_sha = phone_model.Checksums(data_dir)       # android_offline_model: the phone model file's checksum, worked out once
         self.panels = chat_plus.Panels()                     # chat_panel: pages from answers for the side panel's sealed frame
         self.code_test = model_code_test.Runner(os.path.join(data_dir, "code_test.json") if data_dir else None)   # model_code_test: Admin > Models
         self.code_secrets = code_secrets.ProjectSecrets(data_dir, self.secrets)      # vryxcode_secrets: per project, never shown to the model

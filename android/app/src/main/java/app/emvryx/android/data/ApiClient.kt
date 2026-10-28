@@ -62,8 +62,35 @@ class ApiClient(private val session: SessionStore) {
     suspend fun chat(id: Long): Chat = get("/api/chats/$id")
 
     /** A new chat; a private one is never saved, never listed and never uses memory (its id is below zero) */
-    suspend fun newChat(private: Boolean = false): Long =
-        post<NewChat>("/api/chats", if (private) buildJsonObject { put("private", true) } else JsonObject(emptyMap())).id
+    suspend fun newChat(private: Boolean = false, skill: String = ""): Long =
+        post<NewChat>("/api/chats", buildJsonObject { if (private) put("private", true); if (skill.isNotEmpty()) put("skill", skill) }).id
+
+    // ---- the app's own Memory, Files, Skills and Settings screens (feature flag android_native): the website's calls
+
+    suspend fun memory(): MemoryList = get("/api/memory")
+
+    suspend fun memoryAdd(text: String): MemoryList = post("/api/memory/add", buildJsonObject { put("text", text) })
+
+    suspend fun memoryDelete(id: Long) {
+        post<JsonObject>("/api/memory/delete", buildJsonObject { put("id", id) })
+    }
+
+    suspend fun memoryClear() {
+        post<JsonObject>("/api/memory/clear", JsonObject(emptyMap()))
+    }
+
+    suspend fun documents(): DocList = get("/api/documents")
+
+    suspend fun deleteDocument(id: Long) {
+        delete<JsonObject>("/api/documents/$id")
+    }
+
+    suspend fun skills(): List<Skill> = get<SkillList>("/api/skills").skills
+
+    suspend fun settings(): SettingsData = get("/api/settings")
+
+    /** Changes only what [body] names; the server checks each value and sends back all the settings */
+    suspend fun saveSettings(body: JsonObject): SettingsData = post("/api/settings", body)
 
     // ---- what the website's chat menus do (web/js/chat.js, core.js): archive, folders, share a link, save as, Right, Your day
 

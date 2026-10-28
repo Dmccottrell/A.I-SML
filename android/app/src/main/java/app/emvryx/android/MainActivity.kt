@@ -29,6 +29,7 @@ import androidx.core.content.IntentCompat
 import androidx.fragment.app.FragmentActivity
 import androidx.lifecycle.lifecycleScope
 import app.emvryx.android.ui.ModelTour
+import app.emvryx.android.ui.NativeScreen
 import app.emvryx.android.ui.VryxTour
 import app.emvryx.android.ui.AppViewModel
 import app.emvryx.android.ui.ChatScreen
@@ -160,7 +161,7 @@ private fun Root(vm: AppViewModel, code: CodeViewModel, onUnlock: () -> Unit) {
 private fun depth(s: Screen) = when (s) {
     Screen.Chat -> 0
     Screen.Code -> 1
-    is Screen.Web -> 2
+    is Screen.Web, is Screen.Native -> 2
     else -> -1
 }
 
@@ -168,7 +169,7 @@ private fun depth(s: Screen) = when (s) {
 private fun Screens(vm: AppViewModel, code: CodeViewModel) {
     AnimatedContent(
         targetState = vm.screen,
-        contentKey = { s -> if (s is Screen.Web) "web:" + s.path + s.run else s::class.simpleName },   // a new page gets a new WebView
+        contentKey = { s -> if (s is Screen.Web) "web:" + s.path + s.run else if (s is Screen.Native) "native:" + s.kind else s::class.simpleName },   // a new page gets a new WebView
         transitionSpec = {
             val from = depth(initialState)
             val to = depth(targetState)
@@ -189,6 +190,7 @@ private fun Screens(vm: AppViewModel, code: CodeViewModel) {
             Screen.Chat -> ChatScreen(vm)
             Screen.Code -> CodeScreen(vm, code)
             is Screen.Web -> WebScreen(vm, s.path, s.title, s.run, s.panel)
+            is Screen.Native -> NativeScreen(vm, s.kind)
         }
     }
 }

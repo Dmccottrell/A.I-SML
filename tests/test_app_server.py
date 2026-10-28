@@ -157,6 +157,8 @@ class Base(unittest.TestCase):
         self.state.flags.data["audiences"]["admin_crashes"] = "off"
         self.state.flags.data["audiences"]["apk_link"] = "off"
         self.state.flags.data["audiences"]["android_vryxcode"] = "off"
+        self.state.flags.data["audiences"]["android_native"] = "off"
+        self.state.flags.data["audiences"]["android_offline_model"] = "off"
         self.state.flags.data["audiences"]["cloud_guide"] = "off"
         self.state.flags.data["audiences"]["model_code_test"] = "off"
         self.owner = Client(self.port, self.state.owner_key())

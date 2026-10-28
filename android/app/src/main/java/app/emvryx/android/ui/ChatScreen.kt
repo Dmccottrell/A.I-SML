@@ -807,9 +807,9 @@ private fun Sidebar(vm: AppViewModel, onDone: () -> Unit, onFolder: (ChatSummary
             Column(Modifier.padding(horizontal = 8.dp, vertical = 6.dp)) {
                 SideLink("lock", "Private chat", "Never saved") { vm.newChat(private = true); onDone() }
                 SideLink("code", "VryxCode") { vm.open(Screen.Code); onDone() }
-                SideLink("spark", "Skills") { vm.open(Screen.Web("/", "Skills", "openSkills()", panel = true)); onDone() }
+                SideLink("spark", "Skills") { vm.open(vm.panel("skills", Screen.Web("/", "Skills", "openSkills()", panel = true))); onDone() }
                 SideLink("pencil", "Teacher mode") { vm.open(Screen.Web("/", "Teacher mode", "newChat(false, 'teacher')")); onDone() }
-                SideLink("doc", "Documents") { vm.open(Screen.Web("/", "Documents", "openDocs()", panel = true)); onDone() }
+                SideLink("doc", "Documents") { vm.open(vm.panel("files", Screen.Web("/", "Documents", "openDocs()", panel = true))); onDone() }
             }
             HorizontalDivider(color = Emvryx.line)
             Account(vm, onDone)
@@ -842,8 +842,8 @@ private fun Account(vm: AppViewModel, onDone: () -> Unit) {
         }
         DropdownMenu(open, { open = false }, containerColor = Emvryx.surface) {
             AccountItem("chart", "Usage") { open = false; usage = true }
-            AccountItem("brain", "Memory") { open = false; vm.open(Screen.Web("/", "Memory", "openMemory()", panel = true)); onDone() }
-            AccountItem("gear", "Settings") { open = false; vm.open(Screen.Web("/#settings", "Settings", panel = true)); onDone() }
+            AccountItem("brain", "Memory") { open = false; vm.open(vm.panel("memory", Screen.Web("/", "Memory", "openMemory()", panel = true))); onDone() }
+            AccountItem("gear", "Settings") { open = false; vm.open(vm.panel("settings", Screen.Web("/#settings", "Settings", panel = true))); onDone() }
             if (vm.isAdmin) AccountItem("shield", "Admin") { open = false; vm.open(Screen.Web("/#admin", "Admin", panel = true)); onDone() }
             AccountItem("lock", "App lock", if (vm.lockOn) "On" else "Off") { vm.setLock(!vm.lockOn) }     // fingerprint, face or screen lock
             AccountItem("signout", "Sign out") { open = false; vm.signOut() }

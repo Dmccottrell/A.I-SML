@@ -68,6 +68,8 @@ fun WebScreen(vm: AppViewModel, path: String, title: String, run: String = "", p
     val server = app.api.server ?: return
     var web by remember { mutableStateOf<WebView?>(null) }
     var ready by remember { mutableStateOf(false) }
+    var failed by remember { mutableStateOf(false) }
+    var attempt by remember { mutableStateOf(0) }
     var pending by remember { mutableStateOf<ValueCallback<Array<Uri>>?>(null) }
     val chooser = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) { r ->
         pending?.onReceiveValue(if (r.resultCode == Activity.RESULT_OK) WebChromeClient.FileChooserParams.parseResult(r.resultCode, r.data) else null)
@@ -78,7 +80,7 @@ fun WebScreen(vm: AppViewModel, path: String, title: String, run: String = "", p
     val light = Emvryx.light
 
     // watch the page: ready when the website has loaded (and, for a panel, the panel is open); a panel that closes goes back to the app
-    LaunchedEffect(web) {
+    LaunchedEffect(web, attempt) {
         val w = web ?: return@LaunchedEffect
         var hadPanel = false
         var styled = false
@@ -105,11 +107,15 @@ fun WebScreen(vm: AppViewModel, path: String, title: String, run: String = "", p
                        if (panel) "; var st = document.createElement('style'); st.textContent = '#app{visibility:hidden !important}'; document.head.appendChild(st)" else "")
                 if (run.isNotEmpty()) w.eval("try { $run } catch (e) {}")
             }
-            if (!ready && up && (!panel || open > 0)) {
-                delay(40)                                              // let the panel draw its first frame before the cover lifts
-                ready = true
+            when (if (ready) Cover.Ready else coverAfter(up, panel, open, System.currentTimeMillis() - started)) {
+                Cover.Ready -> if (!ready) {
+                    delay(40)                                          // let the panel draw its first frame before the cover lifts
+                    ready = true
+                }
+                // never stuck behind the cover, and never lifted onto an empty page (the black screen): say so, with Try again
+                Cover.Failed -> { failed = true; break }
+                Cover.Waiting -> {}
             }
-            if (!ready && System.currentTimeMillis() - started > 8000) ready = true      // never stuck behind the cover
             if (panel) {
                 if (open > 0) hadPanel = true else if (hadPanel && !busy) { vm.backToChat(); break }    // empty and not waiting on the server: closed
             }
@@ -160,8 +166,10 @@ fun WebScreen(vm: AppViewModel, path: String, title: String, run: String = "", p
         }
         // the cover: the app's own colours and mark until the page (or its panel) is ready, then it fades away
         AnimatedVisibility(!ready, exit = fadeOut(tween(150))) {
-            Box(Modifier.fillMaxSize().background(bg), contentAlignment = Alignment.Center) {
-                Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(14.dp)) {
+            Box(Modifier.fillMaxSize().background(bg).statusBarsPadding(), contentAlignment = Alignment.Center) {
+                if (failed) Problem("$title did not open. Emvryx may be busy or restarting, or the connection dropped.",
+                    retry = { failed = false; web?.reload(); attempt++ }, back = vm::backToChat)
+                else Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(14.dp)) {
                     Logo(Modifier.size(48.dp), animate = true)
                     Text(title, color = Emvryx.muted, fontSize = 15.sp)
                 }
@@ -169,6 +177,18 @@ fun WebScreen(vm: AppViewModel, path: String, title: String, run: String = "", p
         }
     }
 }
+
+enum class Cover { Waiting, Ready, Failed }
+
+/** The cover over a website page: lifted once the page is up (and, for a panel, the panel is open). A page that is not ready after
+ *  [COVER_GIVE_UP_MS] gets "did not open" with Try again; lifting it anyway showed a black page (the website is hidden behind a panel). */
+fun coverAfter(up: Boolean, panel: Boolean, open: Int, waitedMs: Long): Cover = when {
+    up && (!panel || open > 0) -> Cover.Ready
+    waitedMs > COVER_GIVE_UP_MS -> Cover.Failed
+    else -> Cover.Waiting
+}
+
+const val COVER_GIVE_UP_MS = 15_000L
 
 /**
  * In the app's WebView the website's `dvh` heights come out as 0 (measured: 100dvh = 0 while innerHeight = 867), which squashed the Memory
