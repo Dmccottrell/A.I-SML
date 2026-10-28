@@ -199,6 +199,15 @@ class PhoneModel(private val context: Context, private val api: ApiClient) {
         status = Status.None
     }
 
+    /** Only for the screenshot run (ScreensTest): shows the phone's chats as if the model were here, without its 2 GB file. Nothing is saved. */
+    @androidx.annotation.VisibleForTesting
+    fun showForScreens(k: PhoneKit, sample: LocalChat) {
+        kit = k
+        status = Status.Ready
+        chats.add(sample)
+        openChat = sample.id
+    }
+
     /** Frees the chat model's memory (the picture model is about to be loaded); it loads again on the next answer */
     fun unload() = close()
 
