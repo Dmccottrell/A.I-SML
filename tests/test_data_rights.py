@@ -152,14 +152,19 @@ class Backups(unittest.TestCase):
     def test_a_backup_is_consistent_private_and_leaves_the_key_out(self):
         target, count, removed = B.make_backup(self.data, self.out)
         self.assertTrue(private_files.is_private(target))
-        z = zipfile.ZipFile(target)
-        names = set(z.namelist())
-        self.assertIn("users.json", names)
-        self.assertIn("code/sam/app/a.py", names)
-        self.assertNotIn("secret.key", names)
-        out = os.path.join(self.tmp.name, "x.db")
-        open(out, "wb").write(z.read("chats-sam.db"))
-        self.assertEqual(sqlite3.connect(out).execute("SELECT x FROM t").fetchone()[0], "hello")
+        with zipfile.ZipFile(target) as z:                                    # closed again: Windows cannot delete an open file
+            names = set(z.namelist())
+            self.assertIn("users.json", names)
+            self.assertIn("code/sam/app/a.py", names)
+            self.assertNotIn("secret.key", names)
+            out = os.path.join(self.tmp.name, "x.db")
+            with open(out, "wb") as f:
+                f.write(z.read("chats-sam.db"))
+        db = sqlite3.connect(out)
+        try:
+            self.assertEqual(db.execute("SELECT x FROM t").fetchone()[0], "hello")
+        finally:
+            db.close()
 
     def test_options_for_the_key_and_projects(self):
         names = set(zipfile.ZipFile(B.make_backup(self.data, self.out, with_key=True, projects=False)[0]).namelist())

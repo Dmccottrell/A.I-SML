@@ -206,6 +206,7 @@ class Server(Base):
         env.start()
         self.addCleanup(env.stop)
 
+    @unittest.skipIf(os.name == "nt", "the stand-in ssh and ssh-keygen are scripts found on PATH; Windows runs only .exe files")
     def test_key_making_and_the_connection_test_with_stand_in_tools(self):
         home = tempfile.mkdtemp()
         self.addCleanup(shutil.rmtree, home, True)
