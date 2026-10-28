@@ -22,6 +22,8 @@ sealed interface ReplyEvent {
     data class Memory(val saved: List<String>, val forgot: Int) : ReplyEvent
     data class Done(val title: String?, val messageId: Long?, val cut: Boolean, val timing: Timing? = null, val usage: Usage? = null,
                     val context: Ctx? = null) : ReplyEvent
+    /** Deep Research (chat_research): one search or page read, [done] of [of] */
+    data class Research(val step: String, val done: Int, val of: Int) : ReplyEvent
     data class Failed(val code: String, val message: String, val action: String) : ReplyEvent
     data class Other(val name: String) : ReplyEvent
 }
@@ -78,6 +80,7 @@ class SseParser(private val json: Json = Json { ignoreUnknownKeys = true; coerce
                 usage = obj(body, "usage"),
                 context = obj(body, "context"),
             )
+            "research" -> ReplyEvent.Research(s("step") ?: "", s("done")?.toIntOrNull() ?: 0, s("of")?.toIntOrNull() ?: 0)
             "error" -> ReplyEvent.Failed(s("code") ?: "error", s("message") ?: "Something went wrong.", s("action") ?: "")
             else -> ReplyEvent.Other(name)
         }

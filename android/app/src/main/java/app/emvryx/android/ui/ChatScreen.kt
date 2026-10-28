@@ -189,6 +189,7 @@ fun ChatScreen(vm: AppViewModel) {
         ModelWash(vm.washes, vm.currentModel?.name)
         }
     }
+    if (vm.talking) TalkOverlay(vm)
     if (showUsage) vm.usage?.let { UsageDialog(it) { showUsage = false } }
     saving?.let { text ->
         SaveAsDialog(text, onPick = { f ->
@@ -536,10 +537,11 @@ private fun Composer(vm: AppViewModel, open: Menu?, onMenu: (Menu) -> Unit) {
             .padding(start = 16.dp, end = 10.dp, top = 12.dp, bottom = 10.dp),
         verticalArrangement = Arrangement.spacedBy(10.dp),
     ) {
+        AssistChips(vm)
         DocRow(vm, vm.attached, onRemove = vm::unattach)
         if (vm.uploading) Text("Adding…", color = Emvryx.muted, fontSize = 13.sp)
         Box(Modifier.fillMaxWidth().heightIn(min = 24.dp, max = 160.dp)) {
-            if (text.isEmpty()) Text("Message Emvryx…", color = Emvryx.muted, style = MaterialTheme.typography.bodyLarge)
+            if (text.isEmpty()) Text(if (vm.research && vm.canResearch) "What should Emvryx research?" else "Message Emvryx…", color = Emvryx.muted, style = MaterialTheme.typography.bodyLarge)
             BasicTextField(
                 text, { text = it }, Modifier.fillMaxWidth(), interactionSource = typing,
                 textStyle = MaterialTheme.typography.bodyLarge.copy(color = Emvryx.text),
@@ -811,6 +813,9 @@ private fun Sidebar(vm: AppViewModel, onDone: () -> Unit, onFolder: (ChatSummary
                 SideLink("spark", "Skills") { vm.open(vm.panel("skills", Screen.Web("/", "Skills", "openSkills()", panel = true))); onDone() }
                 SideLink("pencil", "Teacher mode") { vm.open(Screen.Web("/", "Teacher mode", "newChat(false, 'teacher')")); onDone() }
                 SideLink("doc", "Documents") { vm.open(vm.panel("files", Screen.Web("/", "Documents", "openDocs()", panel = true))); onDone() }
+                if (vm.flag("chat_schedule")) SideLink("clock", "Scheduled tasks", "Answered by itself at a set time") {
+                    vm.open(vm.panel("schedules", Screen.Web("/", "Scheduled tasks", "openSchedules()", panel = true))); onDone()
+                }
             }
             HorizontalDivider(color = Emvryx.line)
             Account(vm, onDone)
@@ -845,7 +850,7 @@ private fun Account(vm: AppViewModel, onDone: () -> Unit) {
             AccountItem("chart", "Usage") { open = false; usage = true }
             AccountItem("brain", "Memory") { open = false; vm.open(vm.panel("memory", Screen.Web("/", "Memory", "openMemory()", panel = true))); onDone() }
             AccountItem("gear", "Settings") { open = false; vm.open(vm.panel("settings", Screen.Web("/#settings", "Settings", panel = true))); onDone() }
-            if (vm.isAdmin) AccountItem("shield", "Admin") { open = false; vm.open(Screen.Web("/#admin", "Admin", panel = true)); onDone() }
+            if (vm.isAdmin) AccountItem("shield", "Admin") { open = false; vm.open(vm.panel("admin", Screen.Web("/#admin", "Admin", panel = true))); onDone() }
             AccountItem("lock", "App lock", if (vm.lockOn) "On" else "Off") { vm.setLock(!vm.lockOn) }     // fingerprint, face or screen lock
             AccountItem("signout", "Sign out") { open = false; vm.signOut() }
         }
