@@ -102,6 +102,31 @@ svg .core { fill: var(--core); stroke: var(--sun); stroke-width: 3; transition: 
 .code .cc-file.open .cc-diff { display: block; }
 .code .cc-done { display: flex; flex-direction: column; gap: 2px; margin: 6px 0; }
 .code .cc-done .vx-pvgo { align-self: flex-start; margin-top: 8px; }
+/* assist.js: Deep Research, talking with Emvryx, scheduled tasks */
+#asResearch.on { background: color-mix(in srgb, var(--accent) 18%, transparent); border-color: var(--accent); color: var(--text); }
+.as-steps { align-self: flex-start; display: flex; flex-direction: column; gap: 4px; max-width: 560px; padding: 10px 14px; border: 1px solid var(--line); border-radius: 14px; font-size: 13px; color: var(--muted); }
+.as-steps b { color: var(--text); }
+.as-steps .now { color: var(--text); }
+.as-bar { height: 4px; border-radius: 4px; background: var(--surface2); overflow: hidden; }
+.as-bar span { display: block; height: 100%; background: var(--accent); transition: width .3s; }
+.as-talk { position: fixed; inset: 0; z-index: 90; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 18px; padding: 24px; background: var(--bg); }
+.as-talk-state { font-size: 20px; font-weight: 600; text-align: center; }
+.as-talk-heard { min-height: 3em; max-width: 560px; text-align: center; color: var(--muted); }
+.as-orb { width: 140px; height: 140px; border-radius: 50%; background: radial-gradient(circle at 35% 35%, var(--accent), color-mix(in srgb, var(--accent) 30%, transparent)); cursor: pointer; }
+.as-orb.listen { animation: asPulse 1.6s ease-in-out infinite; }
+.as-orb.think { animation: asPulse .7s ease-in-out infinite; opacity: .7; }
+.as-orb.speak { animation: asPulse 1s ease-in-out infinite alternate; }
+@keyframes asPulse { 50% { transform: scale(1.08); } }
+@media (prefers-reduced-motion: reduce) { .as-orb { animation: none !important; } }
+.as-list { display: flex; flex-direction: column; gap: 8px; margin-bottom: 8px; }
+.as-task { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; padding: 10px 12px; border: 1px solid var(--line); border-radius: 12px; }
+.as-task.off { opacity: .6; }
+.as-task .grow { flex: 1 1 200px; display: flex; flex-direction: column; gap: 2px; }
+.as-task small { color: var(--muted); }
+.as-row { display: flex; gap: 8px; flex-wrap: wrap; margin: 8px 0; }
+.as-in { background: var(--bg); border: 1px solid var(--line); border-radius: 12px; color: var(--text); padding: 10px 12px; font: inherit; min-height: 44px; color-scheme: dark light; }
+.as-in[hidden] { display: none; }
+.as-days { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 8px; }
 /* chatplus.js: the chat parts behind the chat_* flags */
 .msg .cp-ver { display: flex; align-items: center; gap: 4px; justify-content: flex-end; color: var(--muted); font-size: 13px; }
 .msg .cp-ver .icon { width: 28px; height: 28px; min-height: 0; }
@@ -918,6 +943,7 @@ body:not(.vxn) .vx-hero, body:not(.vxn) .vx-dots { display: none; }   /* the new
 <script src="/js/ide.js"></script>
 <script src="/js/preview.js"></script>
 <script src="/js/auth.js"></script>
+<script src="/js/assist.js"></script>
 <script src="/js/pwa.js"></script>
 <script src="/js/boot.js"></script>
 </body>

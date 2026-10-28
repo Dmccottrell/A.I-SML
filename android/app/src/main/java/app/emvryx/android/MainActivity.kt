@@ -30,6 +30,7 @@ import androidx.fragment.app.FragmentActivity
 import androidx.lifecycle.lifecycleScope
 import app.emvryx.android.ui.ModelTour
 import app.emvryx.android.ui.NativeScreen
+import app.emvryx.android.ui.LocalChatScreen
 import app.emvryx.android.ui.VryxTour
 import app.emvryx.android.ui.AppViewModel
 import app.emvryx.android.ui.ChatScreen
@@ -161,7 +162,7 @@ private fun Root(vm: AppViewModel, code: CodeViewModel, onUnlock: () -> Unit) {
 private fun depth(s: Screen) = when (s) {
     Screen.Chat -> 0
     Screen.Code -> 1
-    is Screen.Web, is Screen.Native -> 2
+    is Screen.Web, is Screen.Native, Screen.Local -> 2
     else -> -1
 }
 
@@ -185,12 +186,14 @@ private fun Screens(vm: AppViewModel, code: CodeViewModel) {
     ) { s ->
         when (s) {
             Screen.Starting -> StartingScreen()
-            is Screen.Off -> OffScreen(s, onRetry = vm::start, onChangeServer = vm::changeServer)
+            is Screen.Off -> OffScreen(s, onRetry = vm::start, onChangeServer = vm::changeServer,
+                onLocal = if (vm.phoneChats) ({ vm.open(Screen.Local) }) else null)
             Screen.SignIn -> SignInScreen(vm)
             Screen.Chat -> ChatScreen(vm)
             Screen.Code -> CodeScreen(vm, code)
             is Screen.Web -> WebScreen(vm, s.path, s.title, s.run, s.panel)
             is Screen.Native -> NativeScreen(vm, s.kind)
+            Screen.Local -> LocalChatScreen(vm, vm::leaveLocal)
         }
     }
 }

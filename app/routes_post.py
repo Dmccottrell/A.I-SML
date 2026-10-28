@@ -19,6 +19,7 @@ import code_log
 import code_sandbox
 import model_code_test
 import github_link
+import scheduled
 from app_shared import APP_PREFIX, MAX_TEXT
 from app_shared import UNHANDLED
 
@@ -109,6 +110,8 @@ class RoutesPost:
                 docs = (docs + [i for i in proj["docs"] if i not in docs and lib.info(i)])[:10]
             store.set_docs(cid, docs)
             return self._send(200, {"id": cid})
+        if path.startswith("/api/schedules") and self.state.flags.on("chat_schedule", who):    # chat_schedule: scheduled tasks
+            return self.post_schedules(who, path, body)
         if path.startswith("/api/push/") and self.state.flags.on("pwa_push", who):    # pwa_push: this browser on or off, and a test
             push = self.state.push
             try:
@@ -201,6 +204,25 @@ class RoutesPost:
                 ev.set()
             return self._send(200, {"ok": True})
         return UNHANDLED
+
+    def post_schedules(self, who, path, body):
+        sch = self.state.schedules
+        try:
+            if path == "/api/schedules":
+                return self._send(200, {"task": sch.add(who["user"], body), "tasks": sch.list(who["user"])})
+            m = re.fullmatch(r"/api/schedules/([0-9a-f]{12})/(delete|on|run)", path)
+            if not m or not sch.get(who["user"], m.group(1)):
+                return self._send(404, {"code": "not_found", "message": "That scheduled task is gone."})
+            if m.group(2) == "delete":
+                sch.delete(who["user"], m.group(1))
+            elif m.group(2) == "on":
+                sch.set_on(who["user"], m.group(1), bool(body.get("on")))
+            else:                                                                  # Run now: answered in the background, into the task's chat
+                task = sch.get(who["user"], m.group(1))
+                threading.Thread(target=scheduled.run_task, args=(self.state, who["user"], dict(task)), daemon=True).start()
+            return self._send(200, {"tasks": sch.list(who["user"])})
+        except ValueError as e:
+            return self._send(400, {"code": "bad_schedule", "message": str(e)})
 
     def post_apps(self, who, path, body):
         """VryxCode, settings, warming a model and the connected apps (GitHub and the others)."""

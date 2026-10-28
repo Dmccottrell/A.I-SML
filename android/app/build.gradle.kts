@@ -17,7 +17,17 @@ android {
         versionName = "0.1.0"
         buildConfigField("String", "DEFAULT_SERVER", "\"https://chat.emvryx.app\"")
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+        // android_offline_model: llama.cpp (src/main/cpp) for 64-bit ARM phones (nearly every phone since 2017), and x86_64 for the emulator
+        ndk { abiFilters += listOf("arm64-v8a", "x86_64") }
+        externalNativeBuild {
+            cmake { arguments += listOf("-DCMAKE_BUILD_TYPE=Release", "-DANDROID_STL=c++_shared") }
+        }
     }
+    externalNativeBuild {
+        cmake { path("src/main/cpp/CMakeLists.txt") }
+    }
+    // llama.cpp picks the CPU code for the phone's chip from separate files at start (GGML_BACKEND_DL): they must be real files on the phone
+    packaging { jniLibs { useLegacyPackaging = true } }
 
     buildTypes {
         debug {

@@ -283,6 +283,20 @@ class ApiClient(private val session: SessionStore) {
         call(Request.Builder().url(base + path).delete().build())
     }
 
+    // ---- android_offline_model: the model the phone runs itself (app/phone_model.py)
+
+    suspend fun phoneKit(): app.emvryx.android.local.PhoneKit = get("/api/phone-model")
+
+    /** The model file from byte [from] on (a download that stopped carries on). Blocking: call it off the main thread, and close the reply. */
+    fun downloadFrom(path: String, from: Long): Response {
+        val req = Request.Builder().url(base + path).get().apply { if (from > 0) header("Range", "bytes=$from-") }.build()
+        return try {
+            stream.newBuilder().readTimeout(120, TimeUnit.SECONDS).build().newCall(req).execute()
+        } catch (e: IOException) {
+            throw OfflineException(e)
+        }
+    }
+
     /** The server address the in-app pages open (Settings, Admin, the full website) */
     val server: String? get() = session.serverUrl?.trimEnd('/')
 

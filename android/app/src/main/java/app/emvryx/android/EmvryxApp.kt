@@ -9,6 +9,8 @@ class EmvryxApp : Application() {
         private set
     lateinit var api: ApiClient
         private set
+    /** android_offline_model: the model that runs on the phone itself */
+    val phone by lazy { app.emvryx.android.local.PhoneModel(this, api) }
 
     override fun onCreate() {
         super.onCreate()

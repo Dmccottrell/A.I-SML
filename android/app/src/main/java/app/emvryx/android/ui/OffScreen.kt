@@ -35,7 +35,7 @@ fun StartingScreen() {
 
 /** The PC is off (no answer at all) or resting in Gaming mode */
 @Composable
-fun OffScreen(s: Screen.Off, onRetry: () -> Unit, onChangeServer: () -> Unit) {
+fun OffScreen(s: Screen.Off, onRetry: () -> Unit, onChangeServer: () -> Unit, onLocal: (() -> Unit)? = null) {
     Box(Modifier.fillMaxSize().accentWash(LocalPalette.current.glow, 420.dp).safeDrawingPadding(), contentAlignment = Alignment.Center) {
         Column(
             Modifier.widthIn(max = 420.dp).padding(28.dp),
@@ -53,6 +53,8 @@ fun OffScreen(s: Screen.Off, onRetry: () -> Unit, onChangeServer: () -> Unit) {
                 color = Emvryx.muted, textAlign = TextAlign.Center, fontSize = 16.sp,
             )
             PwaButton("Try again", onRetry, Modifier.fillMaxWidth().padding(top = 6.dp))
+            // android_offline_model: the model on this phone answers while the PC is off
+            if (onLocal != null) PwaButton("Chat on this phone", onLocal, Modifier.fillMaxWidth(), ghost = true)
             Text(s.server.substringAfter("://"), color = Emvryx.muted, fontSize = 14.sp,
                 modifier = Modifier.clickable(onClick = onChangeServer).padding(8.dp))
         }

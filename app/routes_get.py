@@ -152,6 +152,8 @@ class RoutesGet:
             return self._send(200, {"items": chat_plus.followups(q, ans["content"]) if ans and ans["status"] == "done" else []})
         if path == "/api/push" and self.state.flags.on("pwa_push", who):              # pwa_push: the server's public key for the browser to subscribe with
             return self._send(200, {"key": self.state.push.public_key(), "devices": self.state.push.subscribed(who["user"])})
+        if path == "/api/schedules" and self.state.flags.on("chat_schedule", who):       # chat_schedule: this person's scheduled tasks
+            return self._send(200, {"tasks": self.state.schedules.list(who["user"])})
         if path == "/api/phone-model" and self.state.flags.on("android_offline_model", who):    # android_offline_model: the model the phone runs itself
             return self._send(200, phone_model.for_person(self.state, who))
         if path == "/api/phone-model/file" and self.state.flags.on("android_offline_model", who):
