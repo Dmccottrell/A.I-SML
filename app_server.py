@@ -58,6 +58,7 @@ import google_signin
 import lookup_auto
 import mailer
 import secret_box
+import code_drafts
 import code_secrets
 import model_code_test
 import chat_plus
@@ -160,6 +161,7 @@ class AppState(StateAccounts, StateSettings, StateApps, StatePC, StateCode, Stat
         self.secrets = secret_box.SecretBox(data_dir, require=self.security["require_encryption"])
         contact = self.security.get("contact_email")
         self.push = web_push.WebPush(data_dir, self.secrets, ("mailto:" + contact) if contact else (self.security.get("public_url") or "https://emvryx.app"))   # pwa_push
+        self.code_drafts = code_drafts.Drafts(data_dir)        # android_offline_model: VryxCode drafts written on the phone with the PC off
         self.phone_synced = phone_model.Synced(data_dir)       # android_offline_model: phone chats already taken in (a retried sync is not added twice)
         self.phone_sha = phone_model.Checksums(data_dir)       # android_offline_model: the phone model file's checksum, worked out once
         self.schedules = scheduled.Schedules(data_dir)          # chat_schedule: messages answered by themselves at a set time

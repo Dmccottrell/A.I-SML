@@ -5,7 +5,7 @@ from unittest import mock
 
 import app_engine as E
 import browser_check
-from tests.test_app_server import Base
+from tests.test_app_server import Base, Client
 from tests.test_browser_check import find_browser
 from tests.test_code_sessions import wait_for
 from tests.test_editor_ui import ready
@@ -108,6 +108,24 @@ class Page(Base):
         page.click(".as-task >> text=Pause")
         wait_for(lambda: "off" in page.inner_text(".as-task"))
         self.assertEqual([t["on"] for ts in self.state.schedules.tasks.values() for t in ts], [False])
+        self.assertEqual(self.errors, [])
+
+
+    def test_phone_drafts_show_in_vryxcode_and_run(self):
+        import vryxcode
+        from tests.test_code_sessions import open_to_everyone
+        open_to_everyone(self.state)
+        self.state.code_generate = lambda model: vryxcode.ScriptedChat(['<|tool_call|>{"name": "finish", "args": {"summary": "done"}}<|end_tool_call|>'])
+        page = self.open(("android_offline_model",))
+        s, j = Client(self.port, self.state.owner_key()).call("POST", "/api/code/drafts", {"sync_id": "d1", "project": "tips", "request": "a tip calculator",
+                                                                                         "files": [{"path": "index.html", "content": "<h1>Tips</h1>"}]})
+        self.assertEqual(s, 200, j)
+        page.evaluate("openCode()")
+        page.wait_for_selector("#asDrafts")
+        self.assertIn("a tip calculator", page.inner_text("#asDrafts"))
+        page.click("#asDrafts >> text=Run in VryxCode")
+        wait_for(lambda: any(x.task.startswith("Phone draft") for x in self.state.code.sessions.values()))
+        wait_for(lambda: page.locator("#asDrafts").count() == 0)                          # a draft that was run leaves the list
         self.assertEqual(self.errors, [])
 
 

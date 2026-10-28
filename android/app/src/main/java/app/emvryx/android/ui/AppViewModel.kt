@@ -407,6 +407,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         if (phone.allowed) viewModelScope.launch {
             phone.refresh()                                                // the newest instructions and memory for the phone's model
             if (phone.syncUp() > 0) refreshChats()                         // chats written on the phone while the PC was off join the list
+            phone.syncDrafts()                                             // VryxCode drafts written on the phone go to the PC, ready to run
             phone.keepRecent(s.chats)                                      // copies of the recent chats, to read and carry on when the PC is off
         }
         chats = s.chats

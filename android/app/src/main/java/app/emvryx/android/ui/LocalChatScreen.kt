@@ -21,6 +21,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
@@ -88,8 +89,83 @@ fun LocalChatScreen(vm: AppViewModel, onBack: () -> Unit) {
         }
         if (!vm.online) OfflineBar(vm)
         Box(Modifier.weight(1f).fillMaxWidth().navigationBarsPadding().imePadding()) {
-            if (phone.status == PhoneModel.Status.Ready) LocalChats(phone) else Column(Modifier.padding(16.dp)) { PhoneModelCard(phone, vm.online) }
+            if (phone.status == PhoneModel.Status.Ready) {
+                var tab by remember { mutableStateOf(0) }
+                Column(Modifier.fillMaxSize()) {
+                    Row(Modifier.padding(start = 12.dp, end = 12.dp, top = 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        TabChip("Chats", tab == 0) { tab = 0 }
+                        TabChip("Code drafts", tab == 1) { tab = 1 }
+                    }
+                    if (tab == 0) LocalChats(phone) else DraftsPane(vm, phone)
+                }
+            } else Column(Modifier.padding(16.dp)) { PhoneModelCard(phone, vm.online) }
         }
+    }
+}
+
+@Composable
+private fun TabChip(label: String, on: Boolean, onClick: () -> Unit) {
+    val p = LocalPalette.current
+    Box(Modifier.clip(RoundedCornerShape(999.dp)).background(if (on) p.accent else Emvryx.surface2).clickable(onClick = onClick)
+        .padding(horizontal = 14.dp, vertical = 7.dp)) {
+        Text(label, color = if (on) p.onAccent else Emvryx.text, fontSize = 14.sp)
+    }
+}
+
+/** VryxCode drafts: with the PC off, the phone's model writes the files for a request; they go to the PC when it is back and run there */
+@Composable
+private fun DraftsPane(vm: AppViewModel, phone: PhoneModel) {
+    val scope = rememberCoroutineScope()
+    val p = LocalPalette.current
+    var project by remember { mutableStateOf(phone.drafts.lastOrNull()?.project ?: "") }
+    var request by remember { mutableStateOf("") }
+    var live by remember { mutableStateOf("") }
+    var note by remember { mutableStateOf<String?>(null) }
+    var open by remember { mutableStateOf<Long?>(null) }
+    LazyColumn(Modifier.fillMaxSize().padding(horizontal = 14.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        item {
+            Text("The phone's model writes the files; a phone cannot run them. When the PC is back the draft goes to it, and Run in VryxCode " +
+                 "writes it into the project, runs and tests it there.", color = Emvryx.muted, fontSize = 13.sp, modifier = Modifier.padding(top = 10.dp))
+        }
+        item { Field("Project", project, { project = it.take(60) }, placeholder = "tip-calculator") }
+        item { Field("What to build", request, { request = it.take(2000) }, placeholder = "A tip calculator page: bill, tip %, people; shows each share") }
+        item {
+            if (phone.writing) {
+                Text(live.takeLast(600).ifEmpty { "Writing on the phone…" }, color = Emvryx.muted, fontSize = 13.sp, style = Mono)
+                Chip("Stop", phone::stop)
+            } else PwaButton("Write the draft", {
+                val pr = project.trim()
+                val rq = request.trim()
+                if (pr.isEmpty() || rq.isEmpty()) { note = "Write the project name and what to build."; return@PwaButton }
+                note = null
+                live = ""
+                scope.launch { note = phone.writeDraft(pr, rq) { live = it } ?: "Written. It goes to your PC when it is back."; if (note!!.startsWith("Written")) request = "" }
+            }, Modifier.fillMaxWidth())
+            note?.let { Text(it, color = Emvryx.muted, fontSize = 13.sp, modifier = Modifier.padding(top = 6.dp)) }
+        }
+        items(phone.drafts.sortedByDescending { it.made }, key = { it.id }) { d ->
+            Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(Emvryx.surface).padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                Text(d.request, fontWeight = FontWeight.SemiBold, fontSize = 14.sp, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                Text("${d.project} · ${d.files.size} file${if (d.files.size == 1) "" else "s"} · " + (if (d.serverId != null) "on the PC" else "on this phone"),
+                    color = Emvryx.muted, fontSize = 12.sp)
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Chip(if (open == d.id) "Hide files" else "Show files", { open = if (open == d.id) null else d.id })
+                    if (vm.online) Chip("Run in VryxCode", {
+                        scope.launch { note = phone.runDraft(d) ?: "Started in VryxCode: it writes the files, runs and tests them." }
+                    })
+                    Chip("Delete", { phone.deleteDraft(d.id) })
+                }
+                if (open == d.id) {
+                    d.files.forEach { f ->
+                        Text(f.path, fontWeight = FontWeight.SemiBold, fontSize = 13.sp, color = p.accentText)
+                        Text(f.content.take(4000), style = Mono, color = Emvryx.text, modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp))
+                            .background(Emvryx.bg).horizontalScroll(rememberScrollState()).padding(10.dp))
+                    }
+                    if (d.note.isNotBlank()) Text(d.note, color = Emvryx.muted, fontSize = 13.sp)
+                }
+            }
+        }
+        item { Spacer(Modifier.height(20.dp)) }
     }
 }
 

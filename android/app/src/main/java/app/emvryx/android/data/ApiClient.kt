@@ -288,6 +288,12 @@ class ApiClient(private val session: SessionStore) {
     suspend fun phoneKit(model: String? = null): app.emvryx.android.local.PhoneKit =
         get("/api/phone-model" + (model?.let { "?model=" + java.net.URLEncoder.encode(it, "UTF-8") } ?: ""))
 
+    /** A VryxCode draft written on the phone while the PC was off: its id on the PC */
+    suspend fun codeDraft(body: JsonObject): String = post<DraftSaved>("/api/code/drafts", body).id
+
+    /** Runs a draft in VryxCode on the PC (it writes the files, runs and tests them) */
+    suspend fun codeDraftRun(id: String): CodeStarted = post("/api/code/drafts/$id/run", JsonObject(emptyMap()))
+
     /** Messages written on the phone while the PC was off, added to the PC's chat (or a new one): the chat's id */
     suspend fun phoneSync(body: JsonObject): Long = post<PhoneSynced>("/api/phone-sync", body).chat
 

@@ -10,6 +10,7 @@ import code_edit
 import code_map
 import code_review
 import templates
+import code_drafts
 import code_sessions
 import vryxcode
 import github_link
@@ -159,6 +160,8 @@ class RoutesCode:
         st, user = self.state, who["user"]
         arg = lambda k: (qs.get(k) or [""])[0]
         try:
+            if path == "/api/code/drafts" and st.flags.on("android_offline_model", who):
+                return self._send(200, {"drafts": st.code_drafts.list(user)})
             if path == "/api/code":
                 run = st.code.running(user)
                 if st.flags.on("vryxcode_effort", who) and not run:          # opening VryxCode starts loading its model, so the first task does not wait for it
@@ -500,6 +503,26 @@ class RoutesCode:
                     prompt = code_review.strict(prompt, old.task)          # a checklist from the request, severities, and approving is the best answer
                 body = {"project": old.project, "task": "Second opinion on: " + clip_line(old.task), "model": body.get("model"), "plan": True, "queue": True, "notify": body.get("notify")}
                 second = prompt
+                path = "/api/code/start"
+            if path.startswith("/api/code/drafts") and st.flags.on("android_offline_model", who):   # drafts written on the phone with the PC off
+                drafts = st.code_drafts
+                if path == "/api/code/drafts":
+                    try:
+                        return self._send(200, {"id": drafts.add(user, body, st.code.check_name)})
+                    except ValueError as e:
+                        return self._send(400, {"code": "bad_draft", "message": str(e)})
+                m = re.fullmatch(r"/api/code/drafts/([0-9a-f]{12})/(run|delete)", path)
+                d = drafts.get(user, m.group(1)) if m else None
+                if not d:
+                    return self._send(404, {"code": "not_found", "message": "That draft is gone."})
+                if m.group(2) == "delete":
+                    drafts.delete(user, d["id"])
+                    return self._send(200, {"drafts": drafts.list(user)})
+                # Run in VryxCode: an ordinary session on the project writes the files, runs and tests them (Restore and the sandbox as always)
+                body = {"project": d["project"], "task": "Phone draft: " + clip_line(d["request"]), "queue": True,
+                        "model": body.get("model") or vryxcode.pick_auto(st.code_models(who)),      # none picked: VryxCode's own choice of coding model
+                        "notify": body.get("notify"), "effort": body.get("effort")}
+                second = code_drafts.task_for(d)
                 path = "/api/code/start"
             if path == "/api/code/fixci":                      # /fixci: the failing checks of the project's GitHub branch become the task of a new session
                 project = st.code.check_name(body.get("project"))

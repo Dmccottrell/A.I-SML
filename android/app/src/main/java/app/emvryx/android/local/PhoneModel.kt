@@ -326,25 +326,7 @@ class PhoneModel(private val context: Context, private val api: ApiClient) {
         }
         stopping = false
         try {
-            val model = loaded?.takeIf { loadedId == k.id } ?: run {
-                close()
-                if (!canRun()) return@withContext "This phone cannot run the model."
-                Llama.load(modelFile.path, k.context)?.also { loaded = it; loadedId = k.id }
-                    ?: return@withContext "The model could not be loaded: the phone may not have enough free memory. Close other apps and try again."
-            }
-            val prompt = LocalPrompt.build(k, history, question) { model.count(it) }
-            val joiner = Utf8Joiner()
-            var shown = ""
-            var last = 0L
-            val end = model.generate(prompt, k.maxReplyTokens, k.sampling) { bytes ->
-                joiner.add(bytes)
-                val (text, done) = LocalPrompt.shown(joiner.text, k.format.stop)
-                shown = text
-                val now = System.currentTimeMillis()
-                if (now - last > 50) { last = now; onText(text) }
-                !done && !stopping
-            }
-            shown = LocalPrompt.shown(joiner.text, k.format.stop).first.trimEnd()
+            val (shown, end) = generateWith(k, history, question, k.maxReplyTokens, onText) ?: return@withContext loadError
             withContext(Dispatchers.Main) {
                 val j = chats.indexOfFirst { it.id == chatId }
                 if (j >= 0) chats[j] = chats[j].copy(turns = history + LocalTurn(true, question) + LocalTurn(false, shown.ifEmpty { "…" }))
@@ -361,7 +343,104 @@ class PhoneModel(private val context: Context, private val api: ApiClient) {
         }
     }
 
+    private var loadError = ""
+
+    /** Loads the model if needed and writes the answer to [question] after [history]: (text, how it ended), or null (loadError says why) */
+    private fun generateWith(k: PhoneKit, history: List<LocalTurn>, question: String, maxTokens: Int, onText: (String) -> Unit): Pair<String, Llama.End>? {
+        val model = loaded?.takeIf { loadedId == k.id } ?: run {
+            close()
+            if (!canRun()) { loadError = "This phone cannot run the model."; return null }
+            Llama.load(modelFile.path, k.context)?.also { loaded = it; loadedId = k.id }
+                ?: run { loadError = "The model could not be loaded: the phone may not have enough free memory. Close other apps and try again."; return null }
+        }
+        val prompt = LocalPrompt.build(k, history, question) { model.count(it) }
+        val joiner = Utf8Joiner()
+        var last = 0L
+        val end = model.generate(prompt, maxTokens, k.sampling) { bytes ->
+            joiner.add(bytes)
+            val (text, done) = LocalPrompt.shown(joiner.text, k.format.stop)
+            val now = System.currentTimeMillis()
+            if (now - last > 50) { last = now; onText(text) }
+            !done && !stopping
+        }
+        return LocalPrompt.shown(joiner.text, k.format.stop).first.trimEnd() to end
+    }
+
+    // ---- VryxCode drafts: written here with the PC off, run on the PC when it is back
+
+    val drafts = mutableStateListOf<CodeDraft>().apply { addAll(readDrafts()) }
+    private val draftsFile get() = File(dir, "drafts.json")
+
+    private fun readDrafts(): List<CodeDraft> = runCatching { json.decodeFromString<List<CodeDraft>>(File(dir, "drafts.json").readText()) }.getOrDefault(emptyList())
+
+    private fun saveDrafts() {
+        runCatching { draftsFile.writeText(json.encodeToString(drafts.toList().takeLast(MAX_DRAFTS))) }
+    }
+
+    fun deleteDraft(id: Long) {
+        drafts.removeAll { it.id == id }
+        saveDrafts()
+    }
+
+    /** Writes a draft for [request] in [project]; [onText] shows it as it is written. Returns null when it went well, else what went wrong. */
+    suspend fun writeDraft(project: String, request: String, onText: (String) -> Unit): String? = withContext(Dispatchers.Default) {
+        val k = kit ?: return@withContext "The model is not on this phone yet."
+        withContext(Dispatchers.Main) { writing = true }
+        stopping = false
+        try {
+            val (text, end) = generateWith(k, emptyList(), request.trim() + "\n\n" + DraftWriter.INSTRUCTION, maxOf(k.maxReplyTokens, DRAFT_TOKENS), onText)
+                ?: return@withContext loadError
+            val (files, note) = DraftWriter.parse(text)
+            if (files.isEmpty()) return@withContext if (end == Llama.End.Stopped) "Stopped." else "No files came out of it. Try saying more exactly what to build."
+            withContext(Dispatchers.Main) {
+                drafts.add(CodeDraft(System.currentTimeMillis(), project.trim(), request.trim(), files, note, made = System.currentTimeMillis(), model = k.id))
+                saveDrafts()
+            }
+            null
+        } finally {
+            withContext(Dispatchers.Main) { writing = false }
+        }
+    }
+
+    /** The PC is back: drafts not sent yet go to it. Returns how many were sent. */
+    suspend fun syncDrafts(): Int {
+        if (!allowed) return 0
+        var sent = 0
+        for (d in drafts.toList().filter { it.serverId == null }) {
+            val body = kotlinx.serialization.json.buildJsonObject {
+                put("sync_id", kotlinx.serialization.json.JsonPrimitive(DraftWriter.syncId(d)))
+                put("project", kotlinx.serialization.json.JsonPrimitive(d.project))
+                put("request", kotlinx.serialization.json.JsonPrimitive(d.request))
+                put("note", kotlinx.serialization.json.JsonPrimitive(d.note))
+                put("model", kotlinx.serialization.json.JsonPrimitive(d.model))
+                put("files", kotlinx.serialization.json.JsonArray(d.files.map { f ->
+                    kotlinx.serialization.json.buildJsonObject {
+                        put("path", kotlinx.serialization.json.JsonPrimitive(f.path))
+                        put("content", kotlinx.serialization.json.JsonPrimitive(f.content))
+                    }
+                }))
+            }
+            val id = runCatching { api.codeDraft(body) }.getOrNull() ?: continue          // a bad draft (or the PC went away): the others still go
+            withContext(Dispatchers.Main) {
+                val i = drafts.indexOfFirst { it.id == d.id }
+                if (i >= 0) drafts[i] = drafts[i].copy(serverId = id)
+                saveDrafts()
+            }
+            sent++
+        }
+        return sent
+    }
+
+    /** Starts a VryxCode session on the PC that writes, runs and tests the draft. Null when it started, else what went wrong. */
+    suspend fun runDraft(d: CodeDraft): String? {
+        if (d.serverId == null && syncDrafts() == 0 && drafts.firstOrNull { it.id == d.id }?.serverId == null) return "The PC could not be reached."
+        val id = drafts.firstOrNull { it.id == d.id }?.serverId ?: return "The PC could not be reached."
+        return runCatching { api.codeDraftRun(id); null }.getOrElse { (it as? app.emvryx.android.data.ApiException)?.message ?: "The PC could not be reached." }
+    }
+
     companion object {
+        const val MAX_DRAFTS = 30
+        const val DRAFT_TOKENS = 2048
         const val MAX_CHATS = 60
         const val KEEP_RECENT = 30
     }
