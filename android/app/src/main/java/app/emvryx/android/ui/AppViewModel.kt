@@ -67,6 +67,10 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     /** The chats on this phone can be opened: the switch is on and the model is here (or, online, to download it) */
     val phoneChats get() = phone.allowed && (online || phone.status == app.emvryx.android.local.PhoneModel.Status.Ready)
 
+    /** The line on "Emvryx is off" about the phone model when it is not on the phone yet */
+    val phoneTip get() = offTip(phone.allowed, phone.status == app.emvryx.android.local.PhoneModel.Status.Ready,
+        phone.status is app.emvryx.android.local.PhoneModel.Status.Downloading)
+
     /** Back from the phone's chats: to the chat when the PC answers, else to "Emvryx is off" (which tries again) */
     fun leaveLocal() {
         if (online && state != null) backToChat() else start()
