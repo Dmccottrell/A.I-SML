@@ -26,6 +26,7 @@ import code_extras
 import code_log
 import code_report
 import code_map
+import code_options
 import code_review
 import code_sandbox
 import guardrails
@@ -595,12 +596,20 @@ class Session:
         if getattr(self.generate, "record", False):
             self._record({"user": text, "plan": bool(plan), "first": bool(first), "model_text": bool(getattr(self, "_model_text", None))})
         self.live_messages = None
-        lang = languages.decide(text, self.env, self.workspace)                  # which language fits, and what can run here: told to the person and to the model
-        line = languages.page_line(lang)
-        if line:
-            self.emit("language", text=line, language=lang["name"], mode=lang["mode"])
         try:
             model_text, self._model_text = getattr(self, "_model_text", None), None
+            if not auto and not model_text and getattr(self.generate, "options", False) and code_options.vague(text):
+                # vryxcode_options: an open-ended message ("let's build something"): talk first and offer choices, instead of guessing
+                question, choices = code_options.options_for(text, self._top_files())
+                try:
+                    picked = self.ask_choice(question, choices)
+                except harness.ToolError:
+                    raise Stopped()
+                model_text = code_options.with_choice(text, picked.split("The person chose: ", 1)[-1])
+            lang = languages.decide(model_text or text, self.env, self.workspace)      # which language fits, and what can run here: told to the person and to the model
+            line = languages.page_line(lang)
+            if line:
+                self.emit("language", text=line, language=lang["name"], mode=lang["mode"])
             result = vryxcode.run_task(model_text or self.expand(text), self.wrap(self.generate), self.workspace, self.ask, self.max_turns, self.context_tokens, self.extra_programs, lang_note=languages.note_for(lang) + self._memory_note() + (PREVIEW_NOTE if getattr(self.generate, "preview", False) else "") + (guardrails.PROMPT_NOTE if getattr(self.generate, "guardrails", False) else ""),
                                        out=lambda *_: None, tools=self._tools_now(),
                                        git_identity=self.identity,
@@ -665,6 +674,13 @@ class Session:
                     idle(self)                            # the next queued session may start
                 except Exception:
                     pass
+
+    def _top_files(self):
+        """The files and folders at the top of the project (empty for a new project)."""
+        try:
+            return [n for n in os.listdir(self.workspace) if not n.startswith(".")]
+        except OSError:
+            return []
 
     def _page_proof(self):
         """Proof before "done": when this turn changed the web page and nothing opened it since, the app opens it itself (the model is not trusted to
