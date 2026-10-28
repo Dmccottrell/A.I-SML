@@ -19,7 +19,7 @@ class AdminOnly(Base):
                 errs = []
                 page.on("pageerror", lambda e: errs.append(str(e)))
                 page.goto(f"http://127.0.0.1:{self.port}/")
-                wait_for(lambda: page.evaluate("typeof S !== 'undefined' && !!S.state"), 15)
+                wait_for(lambda: page.evaluate("typeof S !== 'undefined' && !!S.state"))
                 page.evaluate("document.querySelectorAll('.tour').forEach((e) => e.remove()); openSettings()")
                 page.wait_for_selector(".sx-nav")
                 self.assertNotIn("OWNER", page.inner_text(".sx-nav"))

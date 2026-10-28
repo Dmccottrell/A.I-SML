@@ -21,9 +21,9 @@ class Page(Base):
         b = p.chromium.launch(executable_path=find_browser())
         page = b.new_context(viewport={"width": width, "height": 860}, extra_http_headers={"Authorization": "Bearer " + self.state.owner_key()}).new_page()
         page.goto(f"http://127.0.0.1:{self.port}/")
-        wait_for(lambda: page.evaluate("typeof S !== 'undefined' && !!S.state"), 15)
+        wait_for(lambda: page.evaluate("typeof S !== 'undefined' && !!S.state"))
         page.evaluate("document.querySelectorAll('.tour').forEach((e) => e.remove()); openCode()")
-        wait_for(lambda: page.evaluate("!!(C.info && C.info.projects)"), 15)
+        wait_for(lambda: page.evaluate("!!(C.info && C.info.projects)"))
         return b, page
 
     def test_names_come_from_the_idea(self):
@@ -87,11 +87,11 @@ class Page(Base):
                     page.route("**/api/code/sessions/b?**", lambda r: r.fulfill(json={"events": [], "state": "done"}))
                     page.evaluate("openSession({id: 'b', project: 'game', model: C.model, title: 'Snake', updated: 5})")
                     if shown:
-                        wait_for(lambda: page.evaluate("!document.getElementById('vxSide').hidden && document.querySelectorAll('#vxSide .vx-prow').length === 2"), 10)
+                        wait_for(lambda: page.evaluate("!document.getElementById('vxSide').hidden && document.querySelectorAll('#vxSide .vx-prow').length === 2"))
                         self.assertEqual(page.evaluate("document.querySelector('#vxSide .vx-prow.on').dataset.id"), "b")
                         self.assertIn("New session", page.inner_text("#vxSide"))
                         page.evaluate("showHome()")
-                        wait_for(lambda: page.evaluate("document.getElementById('vxSide').hidden"), 10)
+                        wait_for(lambda: page.evaluate("document.getElementById('vxSide').hidden"))
                     else:
                         page.wait_for_timeout(500)
                         self.assertTrue(page.evaluate("document.getElementById('vxSide').hidden"))      # a phone keeps the whole width for the work
@@ -129,7 +129,7 @@ class Page(Base):
                 errs = []
                 page.on("pageerror", lambda e: errs.append(str(e)))
                 page.evaluate("C.filter = 'all'")       # the page's own first load of the list can land after this one: draw again until the test's list shows
-                wait_for(lambda: page.evaluate("renderHome().then(() => document.querySelectorAll('#codeList .vx-proj').length >= 2)"), 10)
+                wait_for(lambda: page.evaluate("renderHome().then(() => document.querySelectorAll('#codeList .vx-proj').length >= 2)"))
                 self.assertEqual(errs, [])
                 heads = page.evaluate("[...document.querySelectorAll('.vx-phead .nm')].map((x) => x.textContent)")
                 self.assertEqual(heads[:2], ["site", "game"])                               # newest work first
@@ -138,7 +138,7 @@ class Page(Base):
                 self.assertIn("Fix header", rows)
                 self.assertEqual(page.locator(".vx-prow.ready").count(), 1)
                 page.evaluate("[...document.querySelectorAll('.vx-phead')].find((h) => h.textContent.includes('game')).querySelector('.add').click()")
-                wait_for(lambda: page.evaluate("C.view === 'session' && C.project === 'game'"), 10)
+                wait_for(lambda: page.evaluate("C.view === 'session' && C.project === 'game'"))
             finally:
                 b.close()
 

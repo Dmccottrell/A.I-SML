@@ -69,7 +69,7 @@ class History(Base):
         self.state.code_generate = backend
         st, j = self.owner.call("POST", "/api/code/start", {"project": "demo", "task": "fix the error", "model": "solstice-2"})
         self.assertEqual(st, 200, j)
-        wait_for(lambda: self.state.code.sessions[j["id"]].state in ("done", "stopped", "failed"), 20)
+        wait_for(lambda: self.state.code.sessions[j["id"]].state in ("done", "stopped", "failed"))
         s = self.state.code.sessions[j["id"]]
         self.assertEqual(s.state, "done")                                   # it carried on instead of stopping with the error
         self.assertEqual(len(loads), 2)
@@ -87,7 +87,7 @@ class History(Base):
             return chat
         self.state.code_generate = backend
         st, j = self.owner.call("POST", "/api/code/start", {"project": "demo", "task": "fix it", "model": "solstice-2"})
-        wait_for(lambda: self.state.code.sessions[j["id"]].state in ("done", "stopped", "failed"), 20)
+        wait_for(lambda: self.state.code.sessions[j["id"]].state in ("done", "stopped", "failed"))
         s = self.state.code.sessions[j["id"]]
         self.assertEqual(s.state, "done")
         kinds = [e["kind"] for e in s.events]
@@ -99,7 +99,7 @@ class History(Base):
     def test_it_gives_up_after_one_automatic_try(self):
         self.state.code_generate = lambda model: (lambda messages: (_ for _ in ()).throw(RuntimeError("still broken")))
         st, j = self.owner.call("POST", "/api/code/start", {"project": "demo", "task": "fix it", "model": "solstice-2"})
-        wait_for(lambda: self.state.code.sessions[j["id"]].state in ("done", "stopped", "failed"), 20)
+        wait_for(lambda: self.state.code.sessions[j["id"]].state in ("done", "stopped", "failed"))
         s = self.state.code.sessions[j["id"]]
         self.assertEqual(s.state, "failed")
         self.assertEqual(sum(1 for e in s.events if e["kind"] == "note"), 1)

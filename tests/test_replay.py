@@ -45,7 +45,7 @@ class Record(Base):
         self.run_one(self.sam, "sam")
         self.assertEqual(self.replays("sam"), [])                               # never someone else's
         path = os.path.join(self.state.code.base("owner"), ".sessions", sid + ".replay")
-        wait_for(lambda: os.path.exists(path), 10)
+        wait_for(lambda: os.path.exists(path))
         data = json.load(open(path))
         self.assertEqual(data["steps"][0], {"user": "make it", "plan": False, "first": True, "model_text": False})
         models = [s["model"] for s in data["steps"] if "model" in s]

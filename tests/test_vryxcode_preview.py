@@ -49,9 +49,9 @@ class Page(Base):
             try:
                 page = b.new_context(viewport={"width": 420, "height": 860}, extra_http_headers={"Authorization": "Bearer " + self.state.owner_key()}).new_page()
                 page.goto(f"http://127.0.0.1:{self.port}/")
-                wait_for(lambda: page.evaluate("typeof S !== 'undefined' && !!S.state"), 15)
+                wait_for(lambda: page.evaluate("typeof S !== 'undefined' && !!S.state"))
                 page.evaluate("document.querySelectorAll('.tour').forEach((e) => e.remove()); openCode(); newSession()")
-                wait_for(lambda: page.evaluate("C.view === 'session'"), 15)
+                wait_for(lambda: page.evaluate("C.view === 'session'"))
                 events = ("[{kind: 'start', task: 'rpg'}, {kind: 'step', tool: 'write_file', preview: 'write graphical_interface.html (40 lines)', raw: '', add: 40, del: 0},"
                           "{kind: 'result', text: 'wrote graphical_interface.html (40 lines)'}, {kind: 'end', finished: true, summary: 'Done.'}]")
                 page.evaluate(f"(() => {{ const ev = {events}; ev.forEach(cEvent); livePreview(ev); }})()")
