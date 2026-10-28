@@ -35,8 +35,11 @@ class ScreensTest {
         assumeTrue("no key: not the screenshot run", key.isNotEmpty())
         shell("mkdir -p $DIR")
         shell("settings put global hide_error_dialogs 1")      // a slow CI emulator otherwise covers the pictures with "System UI isn't responding"
+        // "Allow notifications?" is answered before it is asked: it covered every picture after signing in
+        shell("pm grant ${instrumentation.targetContext.packageName} android.permission.POST_NOTIFICATIONS")
         lateinit var vm: AppViewModel
         lateinit var code: CodeViewModel
+        this.vm = { vm }
         rule.scenario.onActivity {
             vm = ViewModelProvider(it)[AppViewModel::class.java]
             code = ViewModelProvider(it)[CodeViewModel::class.java]
@@ -86,6 +89,8 @@ class ScreensTest {
         pause(1500)
     }
 
+    private var vm: () -> AppViewModel? = { null }
+
     private fun main(block: () -> Unit) = instrumentation.runOnMainSync(block)
 
     private fun pause(ms: Long) = SystemClock.sleep(ms)
@@ -102,6 +107,8 @@ class ScreensTest {
 
     /** The whole phone screen, as the shell's screencap sees it (status bar included) */
     private fun shot(name: String) {
+        main { vm()?.let { if (it.tour != null) it.closeTour(false); if (it.vryxTour) it.closeVryxTour() } }     // the welcome tours cover the screens
+        pause(800)
         shell("am broadcast -a android.intent.action.CLOSE_SYSTEM_DIALOGS")
         pause(500)
         shell("screencap -p $DIR/$name.png")
