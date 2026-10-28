@@ -38,6 +38,8 @@ sealed interface Screen {
     /** A page of the website inside the app, signed in with the same session: Settings, Admin, or everything else the app has no screen for.
      *  [run] is the website's own call that opens a part of it once the page has loaded ("openSkills()", "openMemory()"). */
     data class Web(val path: String, val title: String, val run: String = "", val panel: Boolean = false) : Screen
+    /** The app's own screens for what the website shows in a panel (feature flag android_native): "memory", "files", "skills", "settings" */
+    data class Native(val kind: String) : Screen
 }
 
 enum class SignInWay { Password, Key, Email }
@@ -97,6 +99,8 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     var failure by mutableStateOf<Failure?>(null)         // the error card under the thread
         private set
     var isPrivate by mutableStateOf(false)                // a private chat: never saved, never listed, no memory
+        private set
+    var skill by mutableStateOf("")                       // the skill a new chat starts with (Skills, feature flag android_native)
         private set
     var sentAt by mutableStateOf(0L)                      // when the message went (elapsedRealtime), for the thinking clock
         private set
@@ -426,12 +430,13 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         effort = id
     }
 
-    /** A new chat; [private] makes it one that is never saved */
-    fun newChat(private: Boolean = false) {
+    /** A new chat; [private] makes it one that is never saved; [skill] (an id from GET /api/skills) shapes every answer in it */
+    fun newChat(private: Boolean = false, skill: String = "", skillName: String = "") {
         if (streaming) return
         chatId = null
         isPrivate = private
-        title = if (private) "Private chat" else "New chat"
+        this.skill = skill
+        title = if (private) "Private chat" else skillName.ifEmpty { "New chat" }
         bubbles.clear()
         attached.clear()
         chatDocIds = emptyList()
@@ -567,6 +572,9 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         this.screen = screen
     }
 
+    /** The app's own screen for one of the website's panels when android_native is on, else the website's panel */
+    fun panel(kind: String, web: Screen.Web): Screen = if (flag("android_native")) Screen.Native(kind) else web
+
     /** Back from VryxCode or a website page to the chat */
     fun backToChat() {
         screen = Screen.Chat
@@ -584,7 +592,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         notice = null
         viewModelScope.launch {
             try {
-                val id = chatId ?: api.newChat().also { chatId = it }
+                val id = chatId ?: api.newChat(isPrivate, skill).also { chatId = it }
                 val doc = api.upload(name, bytes)
                 chatDocIds = api.setChatDocs(id, (chatDocIds + doc.id).distinct()).map { it.id }     // every file of the chat stays with it
                 attached.add(doc)
@@ -796,6 +804,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         val kept = bubbles.filter { !it.mine && it.id > 0 }.associateBy { it.id }
         chatId = c.id
         isPrivate = c.private
+        skill = c.skill
         title = c.title
         bubbles.clear()
         bubbles.addAll(c.messages.map {
@@ -840,7 +849,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         var got = false
         replyJob = viewModelScope.launch {
             try {
-                val id = chatId ?: api.newChat(isPrivate).also { chatId = it }
+                val id = chatId ?: api.newChat(isPrivate, skill).also { chatId = it }
                 api.send(id, words, model, effort, regenerate, mode, cont).collect { ev ->
                     when (ev) {
                         is ReplyEvent.Thinking -> if (ev.auto) update(replyKey) {
@@ -925,7 +934,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         if (i >= 0) bubbles[i] = change(bubbles[i])
     }
 
-    private fun handleSignedOut(e: Exception): Boolean {
+    fun handleSignedOut(e: Exception): Boolean {
         if (e is ApiException && e.signedOut) {
             session.forget()
             signInError = "You were signed out. Please sign in again."
@@ -935,7 +944,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         return false
     }
 
-    private fun describe(e: Exception): String = when (e) {
+    fun describe(e: Exception): String = when (e) {
         is OfflineException -> "Emvryx is off right now. The PC may be switched off or asleep; try again in a little while."
         is ApiException -> listOf(e.message, e.action).filter { it.isNotBlank() }.joinToString(" ")
         else -> "Something went wrong. Please try again."
