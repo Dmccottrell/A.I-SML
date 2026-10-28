@@ -127,3 +127,25 @@ function asSetup() {
   if (pfOn('chat_schedule')) asScheduleButton(); else if ($('asSched')) $('asSched').remove();
 }
 setInterval(() => { if (S.state && S.state !== asSetup.seen) { asSetup.seen = S.state; asSetup(); } }, 500);
+
+// ---------------------------------------------------------------- android_offline_model: VryxCode drafts written on the phone with the PC off
+async function asPhoneDrafts() {
+  const old = $('asDrafts'); if (old) old.remove();
+  if (!pfOn('android_offline_model') || !$('codeList')) return;
+  let drafts = [];
+  try { const r = await api('/api/code/drafts'); if (!r.ok) return; drafts = (await r.json()).drafts || []; } catch (e) { return; }
+  if (!drafts.length || $('asDrafts')) return;
+  const box = el('div', {class: 'as-drafts', id: 'asDrafts'}, el('div', {class: 'vx-group'}, 'WRITTEN ON YOUR PHONE ' + drafts.length),
+    ...drafts.map((d) => el('div', {class: 'scard'},
+      el('div', {class: 'grow'}, el('b', {}, d.request), el('small', {}, d.project + ' · ' + d.files.length + (d.files.length === 1 ? ' file' : ' files') + ' · not run yet')),
+      el('button', {class: 'chip', title: 'VryxCode writes these files into the project, runs and tests them, and fixes what does not work',
+        onclick: async (e) => { e.stopPropagation(); const r = await post('/api/code/drafts/' + d.id + '/run', {}); const j = await r.json().catch(() => ({}));
+          if (!r.ok) { toast(j.message || 'It could not start.'); return; } await post('/api/code/drafts/' + d.id + '/delete'); toast('Started in VryxCode.'); renderHome(); }}, 'Run in VryxCode'),
+      el('button', {class: 'chip', 'aria-label': 'Delete this draft', onclick: async (e) => { e.stopPropagation(); if (!confirm('Delete this draft?')) return;
+        await post('/api/code/drafts/' + d.id + '/delete'); asPhoneDrafts(); }}, '×'))));
+  $('codeList').before(box);
+}
+if (typeof renderHome === 'function') {       // the VryxCode home: the phone's drafts above the sessions
+  const asRenderHome = renderHome;
+  renderHome = async function () { await asRenderHome.apply(this, arguments); asPhoneDrafts(); };   // eslint-disable-line no-global-assign
+}

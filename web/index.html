@@ -126,6 +126,10 @@ svg .core { fill: var(--core); stroke: var(--sun); stroke-width: 3; transition: 
 .as-row { display: flex; gap: 8px; flex-wrap: wrap; margin: 8px 0; }
 .as-in { background: var(--bg); border: 1px solid var(--line); border-radius: 12px; color: var(--text); padding: 10px 12px; font: inherit; min-height: 44px; color-scheme: dark light; }
 .as-in[hidden] { display: none; }
+.as-drafts { display: flex; flex-direction: column; gap: 8px; margin-bottom: 12px; }
+.as-drafts .scard { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.as-drafts .grow { flex: 1 1 220px; display: flex; flex-direction: column; gap: 2px; }
+.as-drafts small { color: var(--muted); }
 .as-days { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 8px; }
 /* chatplus.js: the chat parts behind the chat_* flags */
 .msg .cp-ver { display: flex; align-items: center; gap: 4px; justify-content: flex-end; color: var(--muted); font-size: 13px; }

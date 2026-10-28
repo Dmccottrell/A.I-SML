@@ -21,6 +21,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
@@ -58,6 +59,10 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import app.emvryx.android.EmvryxApp
 import app.emvryx.android.local.PhoneModel
+import app.emvryx.android.local.PictureText
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.PickVisualMediaRequest
+import androidx.activity.result.contract.ActivityResultContracts
 import app.emvryx.android.ui.theme.Emvryx
 import app.emvryx.android.ui.theme.LocalPalette
 import app.emvryx.android.ui.theme.Mono
@@ -84,8 +89,83 @@ fun LocalChatScreen(vm: AppViewModel, onBack: () -> Unit) {
         }
         if (!vm.online) OfflineBar(vm)
         Box(Modifier.weight(1f).fillMaxWidth().navigationBarsPadding().imePadding()) {
-            if (phone.status == PhoneModel.Status.Ready) LocalChats(phone) else Column(Modifier.padding(16.dp)) { PhoneModelCard(phone, vm.online) }
+            if (phone.status == PhoneModel.Status.Ready) {
+                var tab by remember { mutableStateOf(0) }
+                Column(Modifier.fillMaxSize()) {
+                    Row(Modifier.padding(start = 12.dp, end = 12.dp, top = 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        TabChip("Chats", tab == 0) { tab = 0 }
+                        TabChip("Code drafts", tab == 1) { tab = 1 }
+                    }
+                    if (tab == 0) LocalChats(phone) else DraftsPane(vm, phone)
+                }
+            } else Column(Modifier.padding(16.dp)) { PhoneModelCard(phone, vm.online) }
         }
+    }
+}
+
+@Composable
+private fun TabChip(label: String, on: Boolean, onClick: () -> Unit) {
+    val p = LocalPalette.current
+    Box(Modifier.clip(RoundedCornerShape(999.dp)).background(if (on) p.accent else Emvryx.surface2).clickable(onClick = onClick)
+        .padding(horizontal = 14.dp, vertical = 7.dp)) {
+        Text(label, color = if (on) p.onAccent else Emvryx.text, fontSize = 14.sp)
+    }
+}
+
+/** VryxCode drafts: with the PC off, the phone's model writes the files for a request; they go to the PC when it is back and run there */
+@Composable
+private fun DraftsPane(vm: AppViewModel, phone: PhoneModel) {
+    val scope = rememberCoroutineScope()
+    val p = LocalPalette.current
+    var project by remember { mutableStateOf(phone.drafts.lastOrNull()?.project ?: "") }
+    var request by remember { mutableStateOf("") }
+    var live by remember { mutableStateOf("") }
+    var note by remember { mutableStateOf<String?>(null) }
+    var open by remember { mutableStateOf<Long?>(null) }
+    LazyColumn(Modifier.fillMaxSize().padding(horizontal = 14.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        item {
+            Text("The phone's model writes the files; a phone cannot run them. When the PC is back the draft goes to it, and Run in VryxCode " +
+                 "writes it into the project, runs and tests it there.", color = Emvryx.muted, fontSize = 13.sp, modifier = Modifier.padding(top = 10.dp))
+        }
+        item { Field("Project", project, { project = it.take(60) }, placeholder = "tip-calculator") }
+        item { Field("What to build", request, { request = it.take(2000) }, placeholder = "A tip calculator page: bill, tip %, people; shows each share") }
+        item {
+            if (phone.writing) {
+                Text(live.takeLast(600).ifEmpty { "Writing on the phone…" }, color = Emvryx.muted, fontSize = 13.sp, style = Mono)
+                Chip("Stop", phone::stop)
+            } else PwaButton("Write the draft", {
+                val pr = project.trim()
+                val rq = request.trim()
+                if (pr.isEmpty() || rq.isEmpty()) { note = "Write the project name and what to build."; return@PwaButton }
+                note = null
+                live = ""
+                scope.launch { note = phone.writeDraft(pr, rq) { live = it } ?: "Written. It goes to your PC when it is back."; if (note!!.startsWith("Written")) request = "" }
+            }, Modifier.fillMaxWidth())
+            note?.let { Text(it, color = Emvryx.muted, fontSize = 13.sp, modifier = Modifier.padding(top = 6.dp)) }
+        }
+        items(phone.drafts.sortedByDescending { it.made }, key = { it.id }) { d ->
+            Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(Emvryx.surface).padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                Text(d.request, fontWeight = FontWeight.SemiBold, fontSize = 14.sp, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                Text("${d.project} · ${d.files.size} file${if (d.files.size == 1) "" else "s"} · " + (if (d.serverId != null) "on the PC" else "on this phone"),
+                    color = Emvryx.muted, fontSize = 12.sp)
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Chip(if (open == d.id) "Hide files" else "Show files", { open = if (open == d.id) null else d.id })
+                    if (vm.online) Chip("Run in VryxCode", {
+                        scope.launch { note = phone.runDraft(d) ?: "Started in VryxCode: it writes the files, runs and tests them." }
+                    })
+                    Chip("Delete", { phone.deleteDraft(d.id) })
+                }
+                if (open == d.id) {
+                    d.files.forEach { f ->
+                        Text(f.path, fontWeight = FontWeight.SemiBold, fontSize = 13.sp, color = p.accentText)
+                        Text(f.content.take(4000), style = Mono, color = Emvryx.text, modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp))
+                            .background(Emvryx.bg).horizontalScroll(rememberScrollState()).padding(10.dp))
+                    }
+                    if (d.note.isNotBlank()) Text(d.note, color = Emvryx.muted, fontSize = 13.sp)
+                }
+            }
+        }
+        item { Spacer(Modifier.height(20.dp)) }
     }
 }
 
@@ -179,6 +259,8 @@ private fun LocalChats(phone: PhoneModel) {
     var error by remember { mutableStateOf<String?>(null) }
     var text by remember { mutableStateOf("") }
     var menu by remember { mutableStateOf(false) }
+    var picture by remember { mutableStateOf<String?>(null) }        // the words read from a picture, waiting to go with the next message
+    var reading by remember { mutableStateOf(false) }
     val chat = phone.chats.firstOrNull { it.id == chatId } ?: phone.chats.lastOrNull() ?: phone.newChat().also { chatId = it.id }
     val list = rememberLazyListState()
     val turns = chat.turns
@@ -221,19 +303,44 @@ private fun LocalChats(phone: PhoneModel) {
             error?.let { item { Text(it, color = Emvryx.muted, fontSize = 14.sp) } }
         }
         val p = LocalPalette.current
+        // a picture: its words are read here on the phone and go with the next message (the phone's model reads the words, it cannot see)
+        val context = LocalContext.current
+        val pick = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri ->
+            if (uri == null) return@rememberLauncherForActivityResult
+            reading = true
+            scope.launch {
+                val got = PictureText.read(context, uri)
+                reading = false
+                if (got == null) error = "No text could be read in that picture. The phone's model can only read the words in a picture, not see it."
+                else { picture = got; error = null }
+            }
+        }
+        picture?.let { t ->
+            Row(Modifier.padding(start = 14.dp, end = 14.dp, top = 6.dp).clip(RoundedCornerShape(999.dp)).background(Emvryx.surface2)
+                .padding(start = 12.dp, end = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+                Text("Picture: ${PictureText.words(t)} read", fontSize = 13.sp, color = Emvryx.muted)
+                TextButton(onClick = { picture = null }) { Text("Remove", fontSize = 13.sp) }
+            }
+        }
+        if (reading) Text("Reading the picture…", color = Emvryx.muted, fontSize = 13.sp, modifier = Modifier.padding(start = 16.dp, top = 6.dp))
         Row(Modifier.fillMaxWidth().padding(12.dp).clip(RoundedCornerShape(20.dp)).background(Emvryx.surface).border(1.dp, Emvryx.line, RoundedCornerShape(20.dp))
-            .padding(start = 16.dp, end = 8.dp, top = 8.dp, bottom = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-            Box(Modifier.weight(1f).heightIn(min = 24.dp, max = 140.dp)) {
+            .padding(start = 6.dp, end = 8.dp, top = 8.dp, bottom = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+            Box(Modifier.size(36.dp).clip(CircleShape).clickable(enabled = !phone.writing && !reading) {
+                pick.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
+            }, contentAlignment = Alignment.Center) { Text("+", fontSize = 22.sp, color = Emvryx.muted) }
+            Box(Modifier.weight(1f).padding(start = 6.dp).heightIn(min = 24.dp, max = 140.dp)) {
                 if (text.isEmpty()) Text("Message the phone's model…", color = Emvryx.muted, style = MaterialTheme.typography.bodyLarge)
                 BasicTextField(text, { text = it }, Modifier.fillMaxWidth(), textStyle = MaterialTheme.typography.bodyLarge.copy(color = Emvryx.text),
                     cursorBrush = SolidColor(p.accent))
             }
-            Box(Modifier.size(40.dp).clip(CircleShape).background(if (phone.writing || text.isNotBlank()) p.accent else Emvryx.surface2)
+            Box(Modifier.size(40.dp).clip(CircleShape).background(if (phone.writing || text.isNotBlank() || picture != null) p.accent else Emvryx.surface2)
                 .clickable {
                     if (phone.writing) { phone.stop(); return@clickable }
-                    val q = text.trim()
+                    val pic = picture
+                    val q = if (pic != null) PictureText.withPicture(text, pic) else text.trim()
                     if (q.isEmpty()) return@clickable
                     text = ""
+                    picture = null
                     error = null
                     live = ""
                     scope.launch { error = phone.answer(chatId, q) { live = it } }

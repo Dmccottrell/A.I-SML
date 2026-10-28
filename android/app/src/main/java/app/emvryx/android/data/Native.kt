@@ -50,3 +50,7 @@ fun docSize(chars: Long): String = when {
 /** POST /api/phone-sync */
 @Serializable
 data class PhoneSynced(val chat: Long)
+
+/** POST /api/code/drafts */
+@Serializable
+data class DraftSaved(val id: String)
