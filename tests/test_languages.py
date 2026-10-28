@@ -161,6 +161,17 @@ class Session(Base):
 
 @unittest.skipIf(not shutil.which("python3"), "needs python")
 class Benchmark(unittest.TestCase):
+    def test_on_windows_a_built_program_is_main_exe(self):
+        # the Windows test job: go, c, cpp and rust "could not run: [WinError 2]" (it built "main" and ran "./main")
+        from unittest import mock
+        with mock.patch.object(B.os, "name", "nt"):
+            build, run = B.commands("c", "C:\\work")
+        self.assertIn("main.exe", build)
+        self.assertNotIn("main", build)
+        self.assertEqual(run, [B.os.path.join("C:\\work", "main.exe")])
+        self.assertEqual(B.commands("python", "/w")[1], B.LANGS["python"][2])                # nothing changes for a language that is not built
+        self.assertEqual(B.commands("c", "/w"), (B.LANGS["c"][1], ["./main"]) if B.os.name != "nt" else B.commands("c", "/w"))
+
     def test_its_own_tests_are_fair(self):
         problems, checked = B.selftest(out=lambda *_: None)
         self.assertEqual(problems, [])

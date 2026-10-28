@@ -43,10 +43,13 @@ def docker_prefix(image, workspace, cpus="1", memory=DEFAULT_MEMORY, pids=DEFAUL
             "--read-only", "--tmpfs", f"/tmp:rw,exec,nosuid,size={int(tmp_mb)}m", "--pids-limit", str(int(pids)),
             "--memory", str(memory), "--memory-swap", str(memory), "--cpus", str(cpus), "--ulimit", "nofile=256:256",
             "-v", f"{ws}:/work:rw", "-w", "/work", "-e", "HOME=/tmp", "-e", "PYTHONDONTWRITEBYTECODE=1", "-e", "PYTHONIOENCODING=utf-8"]
-    if os.name != "nt":                                     # run as the same user that owns the files, never root
-        uid = os.getuid() if uid is None else uid
-        gid = os.getgid() if gid is None else gid
-        argv += ["--user", f"{uid}:{gid}"]
+    # never root: the same user that owns the files; Windows has no user ids, and Docker Desktop lets any user write the shared folder,
+    # so an ordinary user (1000) runs it there
+    if uid is None:
+        uid = os.getuid() if os.name != "nt" else 1000
+    if gid is None:
+        gid = os.getgid() if os.name != "nt" else 1000
+    argv += ["--user", f"{uid}:{gid}"]
     if runtime:
         argv += ["--runtime", str(runtime)]
     return argv + [image]

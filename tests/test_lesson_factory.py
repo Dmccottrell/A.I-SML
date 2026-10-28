@@ -1,5 +1,6 @@
 """The Lessons 4 factory (data_prep/lesson_factory.py) with a scripted teacher: drafts, proofs, judging, rewriting, pairs, thinking and resuming."""
 import os, sys; sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), os.pardir)); import emvryx_paths  # noqa: E402,F401
+import harness  # noqa: E402
 import json
 import tempfile
 import unittest
@@ -116,9 +117,10 @@ class Factory(unittest.TestCase):
             with open(out.path("progress.json"), encoding="utf-8") as f:
                 p = json.load(f)
             self.assertEqual((p["kept"], p["done"], p["total"]), (1, 1, 1))
-        if shutil.which("bash"):
+        bash = harness.tool_path("bash")                       # on Windows, Git's bash: System32's bash.exe only starts WSL
+        if bash:
             script = os.path.join(os.path.dirname(os.path.abspath(__file__)), os.pardir, "scripts", "vast_lessons4.sh")
-            self.assertEqual(subprocess.run(["bash", "-n", script]).returncode, 0)
+            self.assertEqual(subprocess.run([bash, "-n", script]).returncode, 0)
 
     def test_about_the_planned_share_of_questions_get_a_pair_draft(self):
         share = sum(LF.wants_pair({"id": f"q{i}"}) for i in range(4000)) / 4000

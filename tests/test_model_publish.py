@@ -1,5 +1,6 @@
 """Publishing a model: preview for admins, publish or schedule for everyone, the older version moving to Other models, updates that keep the version."""
 import os, sys; sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), os.pardir)); import emvryx_paths  # noqa: E402,F401
+import private_files  # noqa: E402
 import json
 import time
 import unittest
@@ -71,7 +72,7 @@ class Rules(unittest.TestCase):
             f = F.Flags(None)
             MP.ModelPublisher(path, f).publish(MANIFEST, "flare-2.6", by="owner")
             self.assertTrue(MP.ModelPublisher(path, f).live("flare-2.6"))
-            self.assertEqual(oct(os.stat(path).st_mode & 0o777), "0o600")
+            self.assertTrue(private_files.is_private(path, mode=0o600))
 
 
 class Server(Base):

@@ -25,6 +25,8 @@ import tempfile
 import time
 import zipfile
 
+import private_files
+
 SKIP = {"secret.key"}
 
 
@@ -32,6 +34,7 @@ def make_backup(data_dir, out_dir, keep=14, with_key=False, projects=True, now=N
     if not os.path.isdir(data_dir):
         raise SystemExit(f"no data folder at {data_dir}")
     os.makedirs(out_dir, exist_ok=True)
+    private_files.lock_folder(out_dir)                           # Windows: the backups folder is private too (Linux: each zip is 0600)
     stamp = time.strftime("%Y-%m-%d-%H%M", time.gmtime(time.time() if now is None else now))
     target = os.path.join(out_dir, f"emvryx-{stamp}.zip")
     tmp = target + ".part"

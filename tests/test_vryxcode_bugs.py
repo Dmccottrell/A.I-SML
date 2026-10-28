@@ -48,6 +48,24 @@ class Paths(unittest.TestCase):
             self.assertEqual(box.path(os.path.join(box.root, "index.html")), os.path.join(box.root, "index.html"))   # a full path that is inside is fine
 
 
+    def test_a_full_windows_path_inside_the_project_is_that_file(self):
+        # on the owner's Windows PC the model often gives the whole path (C:\\Users\\...\\project\\index.html): it is that file in the project,
+        # not a new Users\\...\\project folder inside it. Windows paths are checked here with ntpath, as Windows itself would.
+        import ntpath
+        from types import SimpleNamespace
+        from unittest import mock
+        with harness.Sandbox(workspace=tempfile.mkdtemp()) as box:
+            box.root = "C:\\Users\\me\\proj"
+            with mock.patch.object(harness, "os", SimpleNamespace(path=ntpath, sep="\\")):
+                self.assertEqual(box.path("C:\\Users\\me\\proj\\index.html"), "C:\\Users\\me\\proj\\index.html")
+                self.assertEqual(box.path("C:/Users/me/proj/css/a.css"), "C:\\Users\\me\\proj\\css\\a.css")
+                self.assertEqual(box.path("C:\\site\\app.js"), "C:\\Users\\me\\proj\\site\\app.js")       # a path elsewhere lands inside the project
+                self.assertEqual(box.path("/index.html"), "C:\\Users\\me\\proj\\index.html")
+                with self.assertRaises(harness.ToolError):
+                    box.path("..\\outside.txt")                                              # still never outside
+                self.assertTrue(box.path("C:\\Users\\me\\other\\x.txt").startswith("C:\\Users\\me\\proj\\"))   # a full path elsewhere stays inside too
+
+
 class Errors(unittest.TestCase):
     def test_bad_arguments_become_messages_not_crashes(self):
         with harness.Sandbox(workspace=tempfile.mkdtemp()) as box:
