@@ -40,6 +40,8 @@ sealed interface Screen {
     data class Web(val path: String, val title: String, val run: String = "", val panel: Boolean = false) : Screen
     /** The app's own screens for what the website shows in a panel (feature flag android_native): "memory", "files", "skills", "settings" */
     data class Native(val kind: String) : Screen
+    /** Chats answered by the model on this phone (feature flag android_offline_model), for when the PC is off */
+    data object Local : Screen
 }
 
 enum class SignInWay { Password, Key, Email }
@@ -56,6 +58,19 @@ data class Failure(val message: String, val action: String = "", val code: Strin
 class AppViewModel(app: Application) : AndroidViewModel(app) {
     private val session = (app as EmvryxApp).session
     private val api = (app as EmvryxApp).api
+    private val phone = (app as EmvryxApp).phone
+
+    /** The PC answered the last time it was asked (the phone's model is downloaded only then) */
+    var online by mutableStateOf(false)
+        private set
+
+    /** The chats on this phone can be opened: the switch is on and the model is here (or, online, to download it) */
+    val phoneChats get() = phone.allowed && (online || phone.status == app.emvryx.android.local.PhoneModel.Status.Ready)
+
+    /** Back from the phone's chats: to the chat when the PC answers, else to "Emvryx is off" (which tries again) */
+    fun leaveLocal() {
+        if (online && state != null) backToChat() else start()
+    }
 
     var screen by mutableStateOf<Screen>(Screen.Starting)
         private set
@@ -215,6 +230,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
                 screen = Screen.Chat
                 applyShare()
             } catch (e: OfflineException) {
+                online = false
                 screen = Screen.Off(resting = false, server = url)
             } catch (e: ApiException) {
                 if (e.signedOut) session.forget()
@@ -358,6 +374,9 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         val s = api.state(model.ifEmpty { null })
         applyLooks(s)
         state = s
+        online = true
+        phone.setAllowed(s.on("android_offline_model"))                  // remembered for when the PC is off
+        if (phone.allowed) viewModelScope.launch { phone.refresh() }       // the newest instructions and memory for the phone's model
         chats = s.chats
         usage = s.usage
         if (model.isEmpty() || models.none { it.id == model && it.ready }) model = s.model

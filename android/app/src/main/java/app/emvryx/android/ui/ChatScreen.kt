@@ -807,6 +807,7 @@ private fun Sidebar(vm: AppViewModel, onDone: () -> Unit, onFolder: (ChatSummary
             Column(Modifier.padding(horizontal = 8.dp, vertical = 6.dp)) {
                 SideLink("lock", "Private chat", "Never saved") { vm.newChat(private = true); onDone() }
                 SideLink("code", "VryxCode") { vm.open(Screen.Code); onDone() }
+                if (vm.phoneChats) SideLink("lock", "On this phone", "Works with the PC off") { vm.open(Screen.Local); onDone() }
                 SideLink("spark", "Skills") { vm.open(vm.panel("skills", Screen.Web("/", "Skills", "openSkills()", panel = true))); onDone() }
                 SideLink("pencil", "Teacher mode") { vm.open(Screen.Web("/", "Teacher mode", "newChat(false, 'teacher')")); onDone() }
                 SideLink("doc", "Documents") { vm.open(vm.panel("files", Screen.Web("/", "Documents", "openDocs()", panel = true))); onDone() }

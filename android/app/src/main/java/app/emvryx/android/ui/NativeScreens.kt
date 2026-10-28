@@ -370,6 +370,13 @@ private fun SettingsPane(vm: AppViewModel) {
                 Spacer(Modifier.height(8.dp))
                 Card { Toggle("Use my connected apps in chats", "When a question is clearly about one (“what is on my calendar”), the few matching items are read. Read-only.", s.connectedApps) { save("connected_apps", it) } }
 
+                val phone = (LocalContext.current.applicationContext as EmvryxApp).phone
+                if (phone.allowed) {
+                    Section("This phone")
+                    PhoneModelCard(phone, vm.online)
+                    if (phone.status == app.emvryx.android.local.PhoneModel.Status.Ready) Chip("Open the chats on this phone", { vm.open(Screen.Local) })
+                }
+
                 Section("More")
                 Card {
                     Text("Connected apps, data controls, notifications and everything else are in the full Settings.", color = Emvryx.muted, fontSize = 13.sp)
