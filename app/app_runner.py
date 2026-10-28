@@ -75,8 +75,8 @@ class ModelRunner:
         """The id of the model that is loaded right now, or None."""
         return self.model_id if (self.proc and self.proc.poll() is None) else None
 
-    def touch(self):
-        self.last_used = time.time()
+    def touch(self, now=None):
+        self.last_used = time.time() if now is None else now
 
     def unload(self):
         """Free the graphics card and memory: stop llama-server. Not while a model is being loaded (the lock is busy). True if something was stopped."""
