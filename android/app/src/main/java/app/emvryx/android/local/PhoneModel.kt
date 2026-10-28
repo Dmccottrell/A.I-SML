@@ -201,11 +201,80 @@ class PhoneModel(private val context: Context, private val api: ApiClient) {
     private fun readChats(): List<LocalChat> = runCatching { json.decodeFromString<List<LocalChat>>(chatsFile.readText()) }.getOrDefault(emptyList())
 
     private fun saveChats() {
-        val keep = chats.takeLast(MAX_CHATS)
+        val keep = LocalSync.keep(chats.toList(), MAX_CHATS)
         runCatching { chatsFile.writeText(json.encodeToString(keep)) }
     }
 
-    fun newChat(): LocalChat = LocalChat(System.currentTimeMillis(), "New chat", emptyList()).also { chats.add(it); saveChats() }
+    fun newChat(): LocalChat = LocalChat(System.currentTimeMillis(), "New chat", emptyList(), updated = System.currentTimeMillis()).also { chats.add(it); saveChats() }
+
+    // ---- the PC's chats kept on the phone, and the phone's chats sent to the PC (both only while the switch is on)
+
+    /** Keeps a copy of one of the PC's chats; returns the phone's id for it */
+    fun keepCopy(c: app.emvryx.android.data.Chat): Long {
+        val turns = c.messages.filter { (it.role == "user" || it.role == "assistant") && it.content.isNotBlank() }.map { LocalTurn(it.role == "user", it.content) }
+        val i = chats.indexOfFirst { it.serverId == c.id }
+        val merged = LocalSync.merge(chats.getOrNull(i), c.id, c.title, turns, System.currentTimeMillis())
+        if (i >= 0) chats[i] = merged else chats.add(merged)
+        saveChats()
+        return merged.id
+    }
+
+    /** The PC is there: copies of the most recent chats (at most every 10 minutes, unless [force]) */
+    suspend fun keepRecent(list: List<app.emvryx.android.data.ChatSummary>, force: Boolean = false) {
+        if (!allowed) return
+        val now = System.currentTimeMillis()
+        if (!force && now - prefs.getLong("kept_at", 0) < 10 * 60_000) return
+        prefs.edit().putLong("kept_at", now).apply()
+        for (s in list.filter { it.id >= 0 }.take(KEEP_RECENT)) {
+            val c = runCatching { api.chat(s.id) }.getOrNull() ?: break      // the PC went away: stop, try again next time
+            withContext(Dispatchers.Main) { keepCopy(c) }
+        }
+    }
+
+    /** Sends what was written on the phone to the PC. Returns how many chats were sent. */
+    suspend fun syncUp(): Int {
+        if (!allowed || writing) return 0
+        var sent = 0
+        for (c in chats.toList().filter { it.pending.isNotEmpty() }) {
+            val body = kotlinx.serialization.json.buildJsonObject {
+                put("sync_id", kotlinx.serialization.json.JsonPrimitive(LocalSync.syncId(c)))
+                c.serverId?.let { put("chat", kotlinx.serialization.json.JsonPrimitive(it)) }
+                put("title", kotlinx.serialization.json.JsonPrimitive(c.title))
+                put("model", kotlinx.serialization.json.JsonPrimitive(kit?.id ?: "phone"))
+                put("messages", kotlinx.serialization.json.JsonArray(c.pending.map { t ->
+                    kotlinx.serialization.json.buildJsonObject {
+                        put("role", kotlinx.serialization.json.JsonPrimitive(if (t.mine) "user" else "assistant"))
+                        put("content", kotlinx.serialization.json.JsonPrimitive(t.text))
+                    }
+                }))
+            }
+            val id = runCatching { api.phoneSync(body) }.getOrNull() ?: break
+            withContext(Dispatchers.Main) {
+                val j = chats.indexOfFirst { it.id == c.id }
+                if (j >= 0) chats[j] = chats[j].copy(serverId = id, synced = c.turns.size)
+                saveChats()
+            }
+            sent++
+        }
+        return sent
+    }
+
+    /** The chat the phone's chat screen opens next, and a question to answer there at once (the PC dropped while it was being sent) */
+    var openChat by mutableStateOf<Long?>(null)
+    var ask by mutableStateOf<String?>(null)
+
+    /** Carries a chat on here: the PC's chat [serverId] with the [turns] it has (or a new chat), then [question] is answered on the phone */
+    fun carryOn(serverId: Long?, title: String, turns: List<LocalTurn>, question: String) {
+        val id = if (serverId != null && serverId >= 0) {
+            val i = chats.indexOfFirst { it.serverId == serverId }
+            val merged = LocalSync.merge(chats.getOrNull(i), serverId, title, turns, System.currentTimeMillis())
+            if (i >= 0) chats[i] = merged else chats.add(merged)
+            saveChats()
+            merged.id
+        } else newChat().id
+        openChat = id
+        ask = question
+    }
 
     fun deleteChat(id: Long) {
         chats.removeAll { it.id == id }
@@ -230,7 +299,7 @@ class PhoneModel(private val context: Context, private val api: ApiClient) {
         val history = chats[i].turns
         withContext(Dispatchers.Main) {
             chats[i] = chats[i].copy(turns = history + LocalTurn(true, question) + LocalTurn(false, ""),
-                                     title = if (history.isEmpty()) question.take(48) else chats[i].title)
+                                     title = if (history.isEmpty()) question.take(48) else chats[i].title, updated = System.currentTimeMillis())
             writing = true
         }
         stopping = false
@@ -271,9 +340,35 @@ class PhoneModel(private val context: Context, private val api: ApiClient) {
     }
 
     companion object {
-        const val MAX_CHATS = 30
+        const val MAX_CHATS = 60
+        const val KEEP_RECENT = 30
     }
 }
 
+/** A chat on the phone. [serverId]: the PC's chat it is a copy of (null: started on the phone); [synced]: how many of its turns the PC has. */
 @kotlinx.serialization.Serializable
-data class LocalChat(val id: Long, val title: String, val turns: List<LocalTurn>)
+data class LocalChat(val id: Long, val title: String, val turns: List<LocalTurn>, val serverId: Long? = null, val synced: Int = 0,
+                     val updated: Long = 0) {
+    /** Written on the phone and not on the PC yet */
+    val pending get() = turns.drop(synced).filter { it.text.isNotBlank() && it.text != "…" }
+}
+
+/** The rules for keeping the phone's chats and the PC's in step (plain code, so it is tested on its own) */
+object LocalSync {
+    /** The PC's copy of a chat, kept on the phone: what was written on the phone and not synced yet stays at the end. */
+    fun merge(existing: LocalChat?, serverId: Long, title: String, serverTurns: List<LocalTurn>, now: Long): LocalChat {
+        val extra = existing?.turns?.drop(existing.synced).orEmpty()
+        return LocalChat(existing?.id ?: (now * 1000 + (serverId % 1000)), title, serverTurns + extra, serverId, serverTurns.size,
+                         if (extra.isNotEmpty()) existing!!.updated else now)
+    }
+
+    /** The same sync id for the same turns, so a sync sent again after a lost answer is not added twice */
+    fun syncId(c: LocalChat) = "${c.id}-${c.synced}-${c.turns.size}"
+
+    /** Which chats to keep: every chat with something not synced, then the newest, up to [max] */
+    fun keep(chats: List<LocalChat>, max: Int): List<LocalChat> {
+        val must = chats.filter { it.pending.isNotEmpty() }
+        val rest = chats.filter { it.pending.isEmpty() }.sortedByDescending { it.updated }.take(maxOf(0, max - must.size))
+        return chats.filter { c -> must.any { it.id == c.id } || rest.any { it.id == c.id } }
+    }
+}

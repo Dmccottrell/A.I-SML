@@ -64,6 +64,29 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     var online by mutableStateOf(false)
         private set
 
+    /** The model is on this phone and may answer (android_offline_model) */
+    val phoneReady get() = phone.allowed && phone.status == app.emvryx.android.local.PhoneModel.Status.Ready
+
+    /** The PC is off: has it come back? (quietly, every half minute from the phone's chats) Back: the app goes back to the PC's chats. */
+    fun checkPc() {
+        if (phone.writing) return                                          // never in the middle of an answer on the phone
+        viewModelScope.launch {
+            val back = runCatching { api.status() }.getOrNull()
+            if (back != null && !back.resting && session.signedIn) start()
+        }
+    }
+
+    /** The PC dropped while a message was being sent: the same chat carries on here, answered by the phone */
+    private fun carryOnOnPhone(words: String): Boolean {
+        if (!phoneReady || isPrivate || words.isBlank()) return false
+        val turns = bubbles.filter { !it.streaming && it.text.isNotBlank() }.map { app.emvryx.android.local.LocalTurn(it.mine, it.text) }
+            .let { t -> if (t.lastOrNull()?.let { it.mine && it.text == words } == true) t.dropLast(1) else t }
+        phone.carryOn(chatId, title, turns, words)
+        online = false
+        screen = Screen.Local
+        return true
+    }
+
     /** The chats on this phone can be opened: the switch is on and the model is here (or, online, to download it) */
     val phoneChats get() = phone.allowed && (online || phone.status == app.emvryx.android.local.PhoneModel.Status.Ready)
 
@@ -235,7 +258,8 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
                 applyShare()
             } catch (e: OfflineException) {
                 online = false
-                screen = Screen.Off(resting = false, server = url)
+                // android_offline_model: with the model on the phone, it goes straight to the phone's chats instead of "Emvryx is off"
+                screen = if (phoneReady) Screen.Local else Screen.Off(resting = false, server = url)
             } catch (e: ApiException) {
                 if (e.signedOut) session.forget()
                 screen = Screen.SignIn
@@ -380,7 +404,11 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         state = s
         online = true
         phone.rememberAllowed(s.on("android_offline_model"))                  // remembered for when the PC is off
-        if (phone.allowed) viewModelScope.launch { phone.refresh() }       // the newest instructions and memory for the phone's model
+        if (phone.allowed) viewModelScope.launch {
+            phone.refresh()                                                // the newest instructions and memory for the phone's model
+            if (phone.syncUp() > 0) refreshChats()                         // chats written on the phone while the PC was off join the list
+            phone.keepRecent(s.chats)                                      // copies of the recent chats, to read and carry on when the PC is off
+        }
         chats = s.chats
         usage = s.usage
         if (model.isEmpty() || models.none { it.id == model && it.ready }) model = s.model
@@ -827,6 +855,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         val kept = bubbles.filter { !it.mine && it.id > 0 }.associateBy { it.id }
         chatId = c.id
         isPrivate = c.private
+        if (phone.allowed && !c.private && c.id >= 0) phone.keepCopy(c)             // kept on the phone for when the PC is off
         skill = c.skill
         title = c.title
         bubbles.clear()
@@ -909,7 +938,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
             } catch (e: CancellationException) {
                 throw e
             } catch (e: OfflineException) {
-                if (got) lost = true else failure = Failure(describe(e))
+                if (got) lost = true else if (!carryOnOnPhone(words)) failure = Failure(describe(e))
             } catch (e: Exception) {
                 if (!handleSignedOut(e)) failure = failureOf(e)
             } finally {

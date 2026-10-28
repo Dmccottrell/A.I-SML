@@ -82,11 +82,30 @@ fun LocalChatScreen(vm: AppViewModel, onBack: () -> Unit) {
             }
             HorizontalDivider(color = Emvryx.line)
         }
+        if (!vm.online) OfflineBar(vm)
         Box(Modifier.weight(1f).fillMaxWidth().navigationBarsPadding().imePadding()) {
             if (phone.status == PhoneModel.Status.Ready) LocalChats(phone) else Column(Modifier.padding(16.dp)) { PhoneModelCard(phone, vm.online) }
         }
     }
 }
+
+/** The PC is off: everything here is answered on the phone; it looks for the PC every half minute and goes back by itself */
+@Composable
+private fun OfflineBar(vm: AppViewModel) {
+    LaunchedEffect(Unit) {
+        while (true) {
+            kotlinx.coroutines.delay(OFFLINE_CHECK_MS)
+            vm.checkPc()
+        }
+    }
+    Row(Modifier.fillMaxWidth().background(Emvryx.surface2).padding(horizontal = 16.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+        Text("Offline: the PC is off, so answers are written on this phone. Your chats sync when it is back.", color = Emvryx.muted, fontSize = 13.sp,
+            modifier = Modifier.weight(1f))
+        TextButton(onClick = vm::checkPc) { Text("Try the PC") }
+    }
+}
+
+const val OFFLINE_CHECK_MS = 30_000L
 
 /** Download, progress, remove: the model on this phone (also in Settings) */
 @Composable
@@ -126,7 +145,7 @@ fun PhoneModelCard(phone: PhoneModel, online: Boolean) {
 @Composable
 private fun LocalChats(phone: PhoneModel) {
     val scope = rememberCoroutineScope()
-    var chatId by remember { mutableLongStateOf(phone.chats.lastOrNull()?.id ?: phone.newChat().id) }
+    var chatId by remember { mutableLongStateOf(phone.openChat ?: phone.chats.maxByOrNull { it.updated }?.id ?: phone.newChat().id) }
     var live by remember { mutableStateOf("") }
     var error by remember { mutableStateOf<String?>(null) }
     var text by remember { mutableStateOf("") }
@@ -135,6 +154,15 @@ private fun LocalChats(phone: PhoneModel) {
     val list = rememberLazyListState()
     val turns = chat.turns
     LaunchedEffect(turns.size, live.length / 80) { if (turns.isNotEmpty()) list.scrollToItem(turns.size - 1) }
+    LaunchedEffect(phone.ask) {                                      // the PC dropped while this was being sent: it is answered here
+        val q = phone.ask ?: return@LaunchedEffect
+        phone.openChat?.let { chatId = it }
+        phone.ask = null
+        phone.openChat = null
+        error = null
+        live = ""
+        error = phone.answer(chatId, q) { live = it }
+    }
 
     Column(Modifier.fillMaxSize()) {
         Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -142,8 +170,9 @@ private fun LocalChats(phone: PhoneModel) {
                 Text(chat.title, maxLines = 1, overflow = TextOverflow.Ellipsis, color = Emvryx.muted, fontSize = 14.sp,
                     modifier = Modifier.clickable { menu = true }.padding(6.dp))
                 DropdownMenu(menu, { menu = false }, containerColor = Emvryx.surface) {
-                    phone.chats.asReversed().forEach { c ->
-                        DropdownMenuItem(text = { Text(c.title, maxLines = 1, overflow = TextOverflow.Ellipsis) }, onClick = { menu = false; chatId = c.id })
+                    phone.chats.sortedByDescending { it.updated }.forEach { c ->
+                        DropdownMenuItem(text = { Text(c.title, maxLines = 1, overflow = TextOverflow.Ellipsis) }, onClick = { menu = false; chatId = c.id },
+                            trailingIcon = { if (c.pending.isNotEmpty()) Text("not synced", color = Emvryx.muted, fontSize = 11.sp) })
                     }
                     if (turns.isNotEmpty()) DropdownMenuItem(text = { Text("Delete this chat", color = Emvryx.muted) },
                         onClick = { menu = false; phone.deleteChat(chat.id); chatId = phone.chats.lastOrNull()?.id ?: phone.newChat().id })

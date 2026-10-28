@@ -194,3 +194,60 @@ def file_for(state):
     files = getattr(state.runner, "files", None) or {} if state.runner else {}
     model = pick(state.manifest, files)
     return files[model["id"]] if model else None
+
+
+MAX_SYNC_MESSAGES = 400
+MAX_SYNC_CHARS = 40_000
+
+
+class Synced:
+    """The sync ids already taken in, per person (data_dir/phone_sync.json, the last 500): a sync the phone retries after a lost answer
+    is not added twice."""
+
+    def __init__(self, data_dir):
+        self.path = os.path.join(data_dir, "phone_sync.json") if data_dir else None
+        self.lock = threading.Lock()
+        self.seen = {}
+        if self.path:
+            try:
+                with open(self.path, encoding="utf-8") as f:
+                    got = json.load(f)
+                self.seen = got if isinstance(got, dict) else {}
+            except (OSError, ValueError):
+                pass
+
+    def get(self, user, sync_id):
+        return self.seen.get(user, {}).get(sync_id)
+
+    def put(self, user, sync_id, chat_id):
+        with self.lock:
+            mine = self.seen.setdefault(user, {})
+            mine[sync_id] = chat_id
+            while len(mine) > 500:
+                mine.pop(next(iter(mine)))
+            if self.path:
+                with open(self.path + ".tmp", "w", encoding="utf-8") as f:
+                    json.dump(self.seen, f)
+                os.replace(self.path + ".tmp", self.path)
+
+
+def sync_chat(store, synced, user, body):
+    """POST /api/phone-sync: messages written on the phone while the PC was off, added to an existing chat ("chat": its id) or to a new one.
+    {"sync_id", "chat", "title", "model", "messages": [{"role", "content"}]} -> the chat's id. A sync_id seen before changes nothing."""
+    sync_id = str(body.get("sync_id") or "")[:64]
+    if not sync_id:
+        raise ValueError("A sync id is needed.")
+    done = synced.get(user, sync_id)
+    if done is not None:
+        return done
+    msgs = [m for m in body.get("messages") or [] if isinstance(m, dict) and m.get("role") in ("user", "assistant") and str(m.get("content") or "").strip()]
+    if not msgs or len(msgs) > MAX_SYNC_MESSAGES:
+        raise ValueError("Nothing to add, or too much at once.")
+    model = "phone:" + re.sub(r"[^\w.\-]", "", str(body.get("model") or "phone"))[:40]
+    cid = body.get("chat")
+    if not (isinstance(cid, int) and not isinstance(cid, bool) and cid >= 0 and store.exists(cid)):
+        cid = store.new_chat(title=" ".join(str(body.get("title") or "Chat on the phone").split())[:80] or "Chat on the phone")
+    for m in msgs:
+        store.add(cid, m["role"], str(m["content"])[:MAX_SYNC_CHARS], model_id=model if m["role"] == "assistant" else "")
+    synced.put(user, sync_id, cid)
+    return cid

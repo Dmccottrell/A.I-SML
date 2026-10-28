@@ -120,5 +120,53 @@ class Serving(Base):
         c.close()
 
 
+
+class Syncing(Base):
+    data_dir = True
+
+    def sync(self, body, who=None):
+        return (who or self.sam).call("POST", "/api/phone-sync", body)
+
+    def test_off_by_default(self):
+        self.assertNotEqual(self.sync({"sync_id": "a", "messages": [{"role": "user", "content": "hi"}]})[0], 200)
+
+    def test_a_phone_chat_becomes_a_normal_chat_and_a_retry_adds_nothing(self):
+        self.state.flags.data["audiences"]["android_offline_model"] = "everyone"
+        body = {"sync_id": "s1", "title": "Tides", "model": "flare-3",
+                "messages": [{"role": "user", "content": "why do tides happen"}, {"role": "assistant", "content": "The Moon pulls the sea."}]}
+        s, j = self.sync(body)
+        self.assertEqual(s, 200, j)
+        cid = j["chat"]
+        chat = self.sam.call("GET", f"/api/chats/{cid}")[1]
+        self.assertEqual(chat["title"], "Tides")
+        self.assertEqual([(m["role"], m["content"]) for m in chat["messages"]], [("user", "why do tides happen"), ("assistant", "The Moon pulls the sea.")])
+        self.assertEqual(chat["messages"][1]["model_id"], "phone:flare-3")
+        self.assertEqual(self.sync(body)[1]["chat"], cid)                                    # the phone lost the answer and tried again
+        self.assertEqual(len(self.sam.call("GET", f"/api/chats/{cid}")[1]["messages"]), 2)
+        self.assertIn(cid, [c["id"] for c in self.sam.call("GET", "/api/state")[1]["chats"]])
+
+    def test_carrying_on_a_pc_chat(self):
+        self.state.flags.data["audiences"]["android_offline_model"] = "everyone"
+        cid = self.new_chat(self.sam)
+        self.ask(self.sam, cid, "hello")
+        s, j = self.sync({"sync_id": "s2", "chat": cid, "messages": [{"role": "user", "content": "and then?"}, {"role": "assistant", "content": "Then this."}]})
+        self.assertEqual(j["chat"], cid)
+        self.assertEqual([m["content"] for m in self.sam.call("GET", f"/api/chats/{cid}")[1]["messages"]][-2:], ["and then?", "Then this."])
+
+    def test_someone_elses_chat_is_never_written(self):
+        self.state.flags.data["audiences"]["android_offline_model"] = "everyone"
+        theirs = self.new_chat(self.owner)
+        s, j = self.sync({"sync_id": "s3", "chat": theirs, "messages": [{"role": "user", "content": "x"}]})
+        self.assertEqual(s, 200)                                                             # each person's chats are their own: it became a new chat of sam's
+        self.assertIn(j["chat"], [c["id"] for c in self.sam.call("GET", "/api/state")[1]["chats"]])
+        self.assertEqual(len(self.owner.call("GET", f"/api/chats/{theirs}")[1]["messages"]), 0)
+
+    def test_bad_input(self):
+        self.state.flags.data["audiences"]["android_offline_model"] = "everyone"
+        self.assertEqual(self.sync({"messages": [{"role": "user", "content": "x"}]})[0], 400)            # no sync id
+        self.assertEqual(self.sync({"sync_id": "e", "messages": [{"role": "system", "content": "x"}]})[0], 400)
+        self.assertEqual(self.sync({"sync_id": "e2", "messages": []})[0], 400)
+
+
 if __name__ == "__main__":
     unittest.main()
