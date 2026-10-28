@@ -58,6 +58,10 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import app.emvryx.android.EmvryxApp
 import app.emvryx.android.local.PhoneModel
+import app.emvryx.android.local.PictureText
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.PickVisualMediaRequest
+import androidx.activity.result.contract.ActivityResultContracts
 import app.emvryx.android.ui.theme.Emvryx
 import app.emvryx.android.ui.theme.LocalPalette
 import app.emvryx.android.ui.theme.Mono
@@ -179,6 +183,8 @@ private fun LocalChats(phone: PhoneModel) {
     var error by remember { mutableStateOf<String?>(null) }
     var text by remember { mutableStateOf("") }
     var menu by remember { mutableStateOf(false) }
+    var picture by remember { mutableStateOf<String?>(null) }        // the words read from a picture, waiting to go with the next message
+    var reading by remember { mutableStateOf(false) }
     val chat = phone.chats.firstOrNull { it.id == chatId } ?: phone.chats.lastOrNull() ?: phone.newChat().also { chatId = it.id }
     val list = rememberLazyListState()
     val turns = chat.turns
@@ -221,19 +227,44 @@ private fun LocalChats(phone: PhoneModel) {
             error?.let { item { Text(it, color = Emvryx.muted, fontSize = 14.sp) } }
         }
         val p = LocalPalette.current
+        // a picture: its words are read here on the phone and go with the next message (the phone's model reads the words, it cannot see)
+        val context = LocalContext.current
+        val pick = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri ->
+            if (uri == null) return@rememberLauncherForActivityResult
+            reading = true
+            scope.launch {
+                val got = PictureText.read(context, uri)
+                reading = false
+                if (got == null) error = "No text could be read in that picture. The phone's model can only read the words in a picture, not see it."
+                else { picture = got; error = null }
+            }
+        }
+        picture?.let { t ->
+            Row(Modifier.padding(start = 14.dp, end = 14.dp, top = 6.dp).clip(RoundedCornerShape(999.dp)).background(Emvryx.surface2)
+                .padding(start = 12.dp, end = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+                Text("Picture: ${PictureText.words(t)} read", fontSize = 13.sp, color = Emvryx.muted)
+                TextButton(onClick = { picture = null }) { Text("Remove", fontSize = 13.sp) }
+            }
+        }
+        if (reading) Text("Reading the picture…", color = Emvryx.muted, fontSize = 13.sp, modifier = Modifier.padding(start = 16.dp, top = 6.dp))
         Row(Modifier.fillMaxWidth().padding(12.dp).clip(RoundedCornerShape(20.dp)).background(Emvryx.surface).border(1.dp, Emvryx.line, RoundedCornerShape(20.dp))
-            .padding(start = 16.dp, end = 8.dp, top = 8.dp, bottom = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-            Box(Modifier.weight(1f).heightIn(min = 24.dp, max = 140.dp)) {
+            .padding(start = 6.dp, end = 8.dp, top = 8.dp, bottom = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+            Box(Modifier.size(36.dp).clip(CircleShape).clickable(enabled = !phone.writing && !reading) {
+                pick.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
+            }, contentAlignment = Alignment.Center) { Text("+", fontSize = 22.sp, color = Emvryx.muted) }
+            Box(Modifier.weight(1f).padding(start = 6.dp).heightIn(min = 24.dp, max = 140.dp)) {
                 if (text.isEmpty()) Text("Message the phone's model…", color = Emvryx.muted, style = MaterialTheme.typography.bodyLarge)
                 BasicTextField(text, { text = it }, Modifier.fillMaxWidth(), textStyle = MaterialTheme.typography.bodyLarge.copy(color = Emvryx.text),
                     cursorBrush = SolidColor(p.accent))
             }
-            Box(Modifier.size(40.dp).clip(CircleShape).background(if (phone.writing || text.isNotBlank()) p.accent else Emvryx.surface2)
+            Box(Modifier.size(40.dp).clip(CircleShape).background(if (phone.writing || text.isNotBlank() || picture != null) p.accent else Emvryx.surface2)
                 .clickable {
                     if (phone.writing) { phone.stop(); return@clickable }
-                    val q = text.trim()
+                    val pic = picture
+                    val q = if (pic != null) PictureText.withPicture(text, pic) else text.trim()
                     if (q.isEmpty()) return@clickable
                     text = ""
+                    picture = null
                     error = null
                     live = ""
                     scope.launch { error = phone.answer(chatId, q) { live = it } }
