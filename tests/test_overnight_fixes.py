@@ -230,7 +230,7 @@ class Formatting(Base):
             try:
                 page = b.new_context(extra_http_headers={"Authorization": "Bearer " + self.state.owner_key()}).new_page()
                 page.goto(f"http://127.0.0.1:{self.port}/")
-                wait_for(lambda: page.evaluate("typeof S !== 'undefined' && !!S.state"), 15)
+                wait_for(lambda: page.evaluate("typeof S !== 'undefined' && !!S.state"))
                 return page.evaluate("t => { const d = document.createElement('div'); d.append(richText(t)); window.__ran = 0; return d.innerHTML; }", text), page.evaluate("window.__ran")
             finally:
                 b.close()

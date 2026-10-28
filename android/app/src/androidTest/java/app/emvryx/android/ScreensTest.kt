@@ -5,6 +5,9 @@ import androidx.lifecycle.ViewModelProvider
 import androidx.test.ext.junit.rules.ActivityScenarioRule
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
+import app.emvryx.android.local.LocalChat
+import app.emvryx.android.local.LocalTurn
+import app.emvryx.android.local.PhoneKit
 import app.emvryx.android.ui.AppViewModel
 import app.emvryx.android.ui.CodeViewModel
 import app.emvryx.android.ui.Screen
@@ -32,8 +35,11 @@ class ScreensTest {
         assumeTrue("no key: not the screenshot run", key.isNotEmpty())
         shell("mkdir -p $DIR")
         shell("settings put global hide_error_dialogs 1")      // a slow CI emulator otherwise covers the pictures with "System UI isn't responding"
+        // "Allow notifications?" is answered before it is asked: it covered every picture after signing in
+        shell("pm grant ${instrumentation.targetContext.packageName} android.permission.POST_NOTIFICATIONS")
         lateinit var vm: AppViewModel
         lateinit var code: CodeViewModel
+        this.vm = { vm }
         rule.scenario.onActivity {
             vm = ViewModelProvider(it)[AppViewModel::class.java]
             code = ViewModelProvider(it)[CodeViewModel::class.java]
@@ -61,9 +67,29 @@ class ScreensTest {
         main { vm.open(Screen.Web("/#admin", "Admin")) }
         pause(15000)
         shot("07-admin-in-app")
+        // the phone's own chats (android_offline_model): first the download card, then the chats as they look once the model is on the phone
+        main { vm.open(Screen.Local) }
+        pause(3000)
+        shot("08-offline-download")
+        val phone = (instrumentation.targetContext.applicationContext as EmvryxApp).phone
+        main {
+            phone.showForScreens(PhoneKit(available = true, id = "flare-3", name = "Flare", version = 3.0),
+                LocalChat(1L, "Packing for a weekend hike", listOf(
+                    LocalTurn(true, "What should I pack for a weekend hike?"),
+                    LocalTurn(false, "Here is a simple list:\n\n- **Water**: 2 litres a day\n- **Food**: easy snacks and two simple meals\n" +
+                        "- **Clothes**: a warm layer and a rain jacket\n- **Map** and a charged phone\n\nCheck the weather the day before you go."),
+                ), updated = System.currentTimeMillis()))
+            vm.open(Screen.Chat)
+        }
+        pause(500)
+        main { vm.open(Screen.Local) }
+        pause(3000)
+        shot("09-offline-chat")
         main { vm.backToChat() }
         pause(1500)
     }
+
+    private var vm: () -> AppViewModel? = { null }
 
     private fun main(block: () -> Unit) = instrumentation.runOnMainSync(block)
 
@@ -81,6 +107,8 @@ class ScreensTest {
 
     /** The whole phone screen, as the shell's screencap sees it (status bar included) */
     private fun shot(name: String) {
+        main { vm()?.let { if (it.tour != null) it.closeTour(false); if (it.vryxTour) it.closeVryxTour() } }     // the welcome tours cover the screens
+        pause(800)
         shell("am broadcast -a android.intent.action.CLOSE_SYSTEM_DIALOGS")
         pause(500)
         shell("screencap -p $DIR/$name.png")

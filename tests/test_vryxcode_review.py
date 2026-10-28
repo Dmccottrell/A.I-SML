@@ -60,10 +60,10 @@ class Page(Base):
         ctx.route(lambda url: not url.startswith(f"http://127.0.0.1:{self.port}/"), lambda r: r.abort())    # only the test server: a web font that cannot load must not slow the page
         page = ctx.new_page()
         page.goto(f"http://127.0.0.1:{self.port}/")
-        wait_for(lambda: page.evaluate("typeof S !== 'undefined' && !!S.state"), 15)
+        wait_for(lambda: page.evaluate("typeof S !== 'undefined' && !!S.state"))
         # the welcome tour must never cover a click: on a slow machine it opens after the page is ready, so stop it from opening at all (as ready() does)
         page.evaluate("S.tourChecked = true; openTour = () => {}; document.querySelectorAll('.tour').forEach((e) => e.remove()); openCode(); newSession()")
-        wait_for(lambda: page.evaluate("C.view === 'session'"), 15)
+        wait_for(lambda: page.evaluate("C.view === 'session'"))
         return b, page
 
     def test_a_session_started_while_vryxcode_opens_is_not_replaced_by_the_home(self):
@@ -117,7 +117,7 @@ class Page(Base):
                     # the VryxCode stylesheet (the card's dashed border) is added once the page knows its flags and loads in the background:
                     # wait for the look to settle instead of reading it at once
                     border = lambda: page.evaluate("getComputedStyle(document.getElementById('codeLive')).borderTopStyle")
-                    wait_for(lambda: (border() == "none") == plain, 10)
+                    wait_for(lambda: (border() == "none") == plain)
                     self.assertEqual(border() == "none", plain, border())
                 finally:
                     b.close()
@@ -143,7 +143,7 @@ class Page(Base):
                               "{id: 'b', title: 'Old one', project: 'site', model: 'm', state: 'done', updated: 3, age: '1h', files: 0}];"
                               "C.filter = 'all'; const real = api, list = C.sessions; api = async (u, o) => (u === '/api/code/sessions' ? {json: async () => ({sessions: list})} : real(u, o)); renderHome()")
                 # the page's own first load of the list can land after this one and empty it: draw again until the test's list is the one shown
-                wait_for(lambda: page.evaluate("renderHome().then(() => document.querySelectorAll('.vx-group').length > 0)"), 10)
+                wait_for(lambda: page.evaluate("renderHome().then(() => document.querySelectorAll('.vx-group').length > 0)"))
                 groups = page.evaluate("[...document.querySelectorAll('.vx-group')].map((x) => x.textContent)")
                 self.assertEqual(groups, ["READY FOR REVIEW 1", "DONE 1"])
                 self.assertIn("+70", page.inner_text("#codeList"))

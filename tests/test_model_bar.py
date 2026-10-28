@@ -25,7 +25,7 @@ class Page(Base):
             try:
                 page = b.new_context(extra_http_headers={"Authorization": "Bearer " + self.state.owner_key()}).new_page()
                 page.goto(f"http://127.0.0.1:{self.port}/")
-                wait_for(lambda: page.evaluate("typeof S !== 'undefined' && !!S.state"), 15)
+                wait_for(lambda: page.evaluate("typeof S !== 'undefined' && !!S.state"))
                 page.evaluate("document.querySelectorAll('.tour').forEach((e) => e.remove()); applyTheme()")
                 css = lambda name: page.evaluate(f"getComputedStyle(document.documentElement).getPropertyValue('{name}').trim()")    # noqa: E731
                 out = {"on": page.evaluate("document.body.classList.contains('mbar')"), "mbar": css("--mbar"), "accent": css("--accent"),

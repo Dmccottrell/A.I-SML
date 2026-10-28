@@ -52,7 +52,7 @@ class TourUi(Base):
         b = p.chromium.launch(executable_path=find_browser())
         page = b.new_context(viewport={"width": 420, "height": 860}, extra_http_headers={"Authorization": "Bearer " + self.state.owner_key()}).new_page()
         page.goto(f"http://127.0.0.1:{self.port}/")
-        wait_for(lambda: page.evaluate("typeof S !== 'undefined' && !!S.state"), 15)
+        wait_for(lambda: page.evaluate("typeof S !== 'undefined' && !!S.state"))
         page.evaluate("S.tourChecked = true; openTour = () => {}; document.querySelectorAll('.tour').forEach((e) => e.remove())")
         return b, page
 
@@ -70,7 +70,7 @@ class TourUi(Base):
                 self.assertIn("Build with VryxCode", titles)                            # Solstice 3 is a VryxCode model
                 self.assertEqual(titles[-1], "Try Solstice 3")
                 page.click(".tour .skip")
-                wait_for(lambda: page.evaluate("S.state.settings.model_tours_seen.includes('solstice-3')"), 10)
+                wait_for(lambda: page.evaluate("S.state.settings.model_tours_seen.includes('solstice-3')"))
             finally:
                 b.close()
 
@@ -121,7 +121,7 @@ class VryxTourUi(TourUi):
                 self.assertIn("Your next message, suggested", titles)
                 self.assertEqual(titles[-1], "Ready to build")
                 page.click(".tour .skip")
-                wait_for(lambda: page.evaluate("S.state.settings.vryx_tour_seen === 1"), 10)
+                wait_for(lambda: page.evaluate("S.state.settings.vryx_tour_seen === 1"))
                 page.evaluate("maybeVryxTour()")
                 page.wait_for_timeout(700)
                 self.assertEqual(page.locator(".tour.vxtour").count(), 0)

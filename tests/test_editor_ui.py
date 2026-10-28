@@ -11,7 +11,7 @@ from tests.test_code_sessions import open_to_everyone, wait_for
 
 def vryx_on(page):
     """The new VryxCode look is behind a flag: wait until the page has applied it."""
-    wait_for(lambda: page.evaluate("document.body.classList.contains('vxn') && !!document.getElementById('cssVryx')"), 10)
+    wait_for(lambda: page.evaluate("document.body.classList.contains('vxn') && !!document.getElementById('cssVryx')"))
 
 
 def eventually(check, timeout=10):
@@ -30,18 +30,18 @@ def eventually(check, timeout=10):
 def open_ide(page):
     """VryxCode open on a blank session in the 'demo' project, in the Editor layout, with the file tree drawn (waits for each, instead of guessing how long)."""
     page.evaluate("document.querySelectorAll('.tour').forEach((x) => x.remove()); openCode()")
-    wait_for(lambda: page.evaluate("!!(C.info && C.view === 'home')"), 15)
+    wait_for(lambda: page.evaluate("!!(C.info && C.view === 'home')"))
     page.evaluate("C.project = 'demo'; newSession()")
-    wait_for(lambda: page.evaluate("C.view === 'session'"), 15)
+    wait_for(lambda: page.evaluate("C.view === 'session'"))
     page.evaluate("document.querySelectorAll('.tour').forEach((x) => x.remove())")
     page.click("#codeIdeBtn")
-    wait_for(lambda: page.evaluate("document.getElementById('code').classList.contains('ide') && document.querySelectorAll('#ideFiles button').length > 0"), 15)
+    wait_for(lambda: page.evaluate("document.getElementById('code').classList.contains('ide') && document.querySelectorAll('#ideFiles button').length > 0"))
 
 
 def open_file(page, name):
     """Open a file in the editor and wait until it is the one showing."""
     page.click(f"#ideFiles >> text={name}")
-    wait_for(lambda: page.evaluate("(IDE.tabs[IDE.active] || {}).path") == name and page.locator("#ideBody textarea").count() > 0, 15)
+    wait_for(lambda: page.evaluate("(IDE.tabs[IDE.active] || {}).path") == name and page.locator("#ideBody textarea").count() > 0)
 
 
 def ready(page):
@@ -101,7 +101,7 @@ class EditorUi(Base):
                 page.goto(f"http://127.0.0.1:{self.port}/")
                 ready(page)
                 page.evaluate("document.querySelectorAll('.tour').forEach((e) => e.remove()); openCode(); newSession()")
-                wait_for(lambda: page.evaluate("C.view === 'session'"), 15)
+                wait_for(lambda: page.evaluate("C.view === 'session'"))
                 page.evaluate("cEvent({kind: 'retry', text: 'I see the issue. I will correct the tool call.', why: 'x', secs: 19.2, words: 94}); cEvent({kind: 'step', tool: 'write_file', preview: 'write index.html (3 lines)\\n  + a', raw: '', secs: 7.4, words: 52}); cEvent({kind: 'result', text: 'wrote index.html'})")
                 text = page.inner_text("#codeIn")
                 self.assertIn("I see the issue", text)
@@ -267,7 +267,7 @@ class EditorUi(Base):
                         anon = b.new_context(viewport={"width": 1200, "height": 850}).new_page()
                         anon.add_init_script("localStorage.setItem('emvryx_looks', JSON.stringify({ml: true, vxn: false}))")
                         anon.goto(f"http://127.0.0.1:{self.port}/")
-                        wait_for(lambda: anon.evaluate("document.body.classList.contains('ml') && !!document.getElementById('cssModern')"), 10)
+                        wait_for(lambda: anon.evaluate("document.body.classList.contains('ml') && !!document.getElementById('cssModern')"))
                         self.assertTrue(anon.is_visible("#auth"))                                       # the sign-in screen, in the modern look
                         page.click(".ml-ideas button >> nth=0")
                         self.assertIn("vaccines", page.evaluate("document.getElementById('input').value"))
