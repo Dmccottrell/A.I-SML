@@ -1,7 +1,7 @@
 /* Starts the app: follows the system theme, registers the offline cache, loads. */
 matchMedia('(prefers-color-scheme: light)').addEventListener('change', () => { if (S.theme === 'auto') applyTheme(); });
 if ('serviceWorker' in navigator) navigator.serviceWorker.register('/sw.js').catch(() => {});
-load().catch(() => {});
+load().catch((e) => { if (typeof pwaOffline === 'function') pwaOffline(e); });     // pwa_offline: no connection or the PC is off: the chats kept here
 // A click whose request failed (the PC restarting, the tunnel showing an error page instead of an answer, a lost connection) used to do nothing
 // at all. Now it says so. "login" is the normal sign-in redirect, and a stopped reply is not an error.
 addEventListener('unhandledrejection', (e) => {

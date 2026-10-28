@@ -727,6 +727,12 @@ class Session:
                 cb(self, kind)
             except Exception:
                 pass
+        push = getattr(self, "on_push", None)              # pwa_push: the browsers this person turned notifications on in
+        if push:
+            try:
+                push(self, kind)
+            except Exception:
+                pass
 
     def _end(self, **data):
         """The end of a turn. When it did any work the end carries its verification report (so it is in the history on disk too)."""
@@ -1070,6 +1076,12 @@ class CodeManager:
     def any_running(self):
         return any(x.state in ("starting", "working", "asking") for x in list(self.sessions.values()))
 
+    def _own_pc(self, generate, owner, env):
+        """True when the owner turned on "nothing blocked on this computer" (vryxcode_open_pc, owner only: routes_code sets generate.open_pc) and
+        picked This computer: it runs on the PC itself, even where the PC runs everyone else in Docker, and whether or not Docker is answering.
+        Their explicit choice, never a quiet fallback for anyone else; picking the isolated sandbox still means the sandbox."""
+        return bool(owner) and bool(getattr(generate, "open_pc", False)) and str(env or "local") == "local"
+
     def sandbox_ready(self):
         """(ok, message). In container mode Docker must answer (checked at most every 30 s); there is no quiet fallback to the host."""
         if self.sandbox.get("mode") != "docker":
@@ -1105,10 +1117,15 @@ class CodeManager:
                 raise CodeError("You already have a session running.", "Stop it or wait for it to finish.")
             if busy and sum(1 for x in self.sessions.values() if x.user == user and x.state == "queued") >= MAX_QUEUED:
                 raise CodeError(f"{MAX_QUEUED} sessions are already waiting in your queue.", "Wait for some to finish, or stop one.")
-            ok, why = self.sandbox_ready()
-            if not ok:
-                raise CodeError("The code sandbox isn't available, so nothing was run. " + why, "The owner needs to start Docker or build the sandbox image.")
-            env = self.resolve_env(env, owner)
+            own_pc = self._own_pc(generate, owner, env)
+            if not own_pc:
+                ok, why = self.sandbox_ready()
+                if not ok:
+                    raise CodeError("The code sandbox isn't available, so nothing was run. " + why,
+                                    "On the PC, open Docker Desktop and wait until it says Running, then try again. (Or, for your own sessions, switch on "
+                                    "\u201cVryxCode: nothing blocked on this computer\u201d in Admin > Previews and pick This computer.)" if owner else
+                                    "The owner needs to start Docker or build the sandbox image.")
+            env = "local" if own_pc else self.resolve_env(env, owner)
             workspace = self.project_path(user, project)
             try:
                 self.quotas.new_project(self.base(user), project)
@@ -1119,7 +1136,7 @@ class CodeManager:
                 raise CodeError(e.message, e.action)
             self._n += 1
             s = Session(f"s{self._n}-{int(time.time())}", user, project, task, model_id, workspace, auto_edits, meter, tools, identity,
-                        prefix=(self.cloud_prefix(user, project) if env == "cloud" else self.prefix_for(workspace, force=(env == "sandbox"))), quotas=self.quotas, base=self.base(user),
+                        prefix=(None if own_pc else self.cloud_prefix(user, project) if env == "cloud" else self.prefix_for(workspace, force=(env == "sandbox"))), quotas=self.quotas, base=self.base(user),
                         env=env, remote=(env == "cloud"), log=code_log.SessionLog(self.base(user)), snapshot=lambda u=user, p=project: self._snapshot(u, p), plan=bool(plan),
                         expand=lambda t, u=user, p=project: self.expand_mentions(u, p, t))
             self.sessions[s.id], self.by_user[user] = s, s.id
@@ -1147,11 +1164,12 @@ class CodeManager:
             d = self.saved(user, sid)
             meta = d["meta"]
             project = meta["project"]
-            env = self.resolve_env(meta.get("env") or "local", owner)
+            own_pc = self._own_pc(generate, owner, meta.get("env") or "local")
+            env = "local" if own_pc else self.resolve_env(meta.get("env") or "local", owner)
             workspace = self.project_path(user, project)
             os.makedirs(workspace, exist_ok=True)
             s = Session(sid, user, project, meta.get("title") or "", model_id, workspace, auto_edits, meter, tools, identity,
-                        prefix=(self.cloud_prefix(user, project) if env == "cloud" else self.prefix_for(workspace, force=(env == "sandbox"))), quotas=self.quotas, base=self.base(user),
+                        prefix=(None if own_pc else self.cloud_prefix(user, project) if env == "cloud" else self.prefix_for(workspace, force=(env == "sandbox"))), quotas=self.quotas, base=self.base(user),
                         env=env, remote=(env == "cloud"), log=code_log.SessionLog(self.base(user)), snapshot=lambda u=user, p=project: self._snapshot(u, p),
                         expand=lambda t, u=user, p=project: self.expand_mentions(u, p, t))
             s.events = list(d["events"])

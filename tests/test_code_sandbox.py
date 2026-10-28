@@ -87,8 +87,8 @@ class Gating(Base):
         st, j = self.owner.call("POST", "/api/admin/users", {"user": "pro1", "tier": "pro"})
         self.pro = Client(self.port, j["key"])
 
-    def start(self, c, project="demo"):
-        return c.call("POST", "/api/code/start", {"project": project, "task": "x", "model": "solstice-2", "auto_edits": True})
+    def start(self, c, project="demo", **kw):
+        return c.call("POST", "/api/code/start", {"project": project, "task": "x", "model": "solstice-2", "auto_edits": True, **kw})
 
     def test_the_free_plan_does_not_include_vryxcode(self):
         st, j = self.start(self.sam)
@@ -122,6 +122,24 @@ class Gating(Base):
                 self.assertEqual(st, 400)
                 self.assertIn("sandbox isn't available", j["message"])
         self.assertEqual(self.state.code.running("owner"), None)
+
+    def test_the_owners_own_computer_choice_does_not_need_docker(self):
+        # vryxcode_open_pc on, "This computer" picked: the owner's own session runs on the PC even when the PC runs everyone else in Docker and
+        # Docker is not answering (it is the owner's explicit choice, not a quiet fallback). Others, and the owner with the switch off, still need Docker.
+        self.state.code.sandbox = {"mode": "docker", "image": "img"}
+        self.state.flags.data["audiences"]["vryxcode_open_pc"] = "owner"
+        with mock.patch("code_sandbox.available", return_value=(False, "Docker did not answer.")):
+            st, j = self.start(self.pro)
+            self.assertEqual(st, 400)
+            self.assertIn("sandbox isn't available", j["message"])
+            st, j = self.start(self.owner, env="local")
+            self.assertEqual(st, 200, j)
+            sess = self.state.code.sessions[j["id"]]
+            self.assertEqual((sess.prefix, sess.env), (None, "local"))                         # on the PC itself
+            wait_for(lambda: self.owner.call("GET", "/api/code")[1]["running"] is None)
+            self.assertEqual(self.start(self.owner, env="sandbox")[0], 400)                    # the sandbox picked on purpose still means the sandbox
+            self.state.flags.data["audiences"]["vryxcode_open_pc"] = "off"
+            self.assertEqual(self.start(self.owner, env="local")[0], 400)
 
 
 class Quota(Base):
