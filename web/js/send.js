@@ -26,13 +26,15 @@ async function send(regen, mode) {
   S.abort = new AbortController();
   try {
     const r = await fetch('/api/chats/' + S.chatId + '/send', {method: 'POST', credentials: 'same-origin', signal: S.abort.signal, headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({text, model: S.model, effort: S.effort, regenerate: regen === true, regen_mode: mode || null, continue: S.contNow === true})});
+      body: JSON.stringify({text, model: S.model, effort: S.effort, regenerate: regen === true, regen_mode: mode || null, continue: S.contNow === true,
+        ...(typeof asTakeResearch === 'function' && regen !== true && asTakeResearch() ? {research: true} : {})})});
     if (r.status === 401) { showLogin(); throw new Error('login'); }
     if (!r.ok) { const j = await r.json().catch(() => ({})); throw Object.assign(new Error(j.message || 'Something went wrong.'), {info: j, status: r.status, retry: r.headers.get('Retry-After')}); }
     const reader = r.body.getReader(), dec = new TextDecoder(); let buf = '';
     const handle = (ev, data) => {
       if (typeof plusEvent === 'function') plusEvent(ev, data, think);          // chatplus.js: the task box (chat_taskbox)
-      if (ev === 'thinking') {
+      if (ev === 'research') { if (typeof asResearchStep === 'function') asResearchStep(data, think); }        // assist.js: Deep Research's searches
+      else if (ev === 'thinking') {
         S.autoNote = data.auto ? data : null; renderComposer();
       } else if (ev === 'notes') {
         looked = data;
@@ -49,6 +51,7 @@ async function send(regen, mode) {
         if (S.state.features && S.state.features.context_meter) $('thread').insertBefore(el('div', {class: 'note', id: 'compactNote'}, 'Summarizing earlier messages to make room\u2026'), think);
       } else if (ev === 'loading') {   // the model is still starting: the normal thinking words carry on (no extra message)
       } else if (ev === 'piece') {
+        if (!aiWrap && typeof asResearchEnd === 'function') asResearchEnd();
         if (!aiWrap) { think._stop(); think.remove(); const m = curModel(); aiBubble = el('div', {class: 'bubble'}); const note = S.autoNote ? el('span', {title: S.autoNote.reason}, ' \u00b7 Auto chose ' + S.autoNote.effort[0].toUpperCase() + S.autoNote.effort.slice(1)) : null;
         aiWrap = el('div', {class: 'msg ai'}, el('div', {class: 'meta'}, logo(14, false, m ? m.name : 'brand'), mname(m), note), aiBubble); $('thread').append(aiWrap);
           const line = lookupLine(looked); if (line) aiWrap.insertBefore(line, aiBubble); }

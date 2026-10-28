@@ -13,6 +13,8 @@ import usage_limits as U
 from app_shared import EFFORTS, MAX_TEXT, error_payload
 import chat_turn
 import documents
+import research
+import web_search
 from chat_turn import start_turn
 
 
@@ -240,16 +242,57 @@ class RoutesChat:
         if st.cfg.get("gaming"):                              # Gaming mode: a plain "resting" answer at once, nothing is saved or counted
             status, headers, payload = U.LimitError("gaming", "Emvryx is resting while the PC is being used for something else. Please try again in a little while.", retry_after=300).to_http()
             return self._send(status, payload, headers=headers)
+        opened = []
+
+        def open_stream():
+            if opened:
+                return
+            opened.append(True)
+            self.send_response(200)
+            self.send_header("Content-Type", "text/event-stream")
+            self.send_header("Cache-Control", "no-store")
+            self.send_header("X-Content-Type-Options", "nosniff")
+            for k, v in self._security_headers().items():
+                self.send_header(k, v)
+            self.send_header("Connection", "close")
+            self.end_headers()
+            self.close_connection = True
+
+        def emit(event, data):
+            self.wfile.write(f"event: {event}\ndata: {json.dumps(data)}\n\n".encode())
+            self.wfile.flush()
+
+        def refuse(status, payload, headers=None):        # before the stream: a proper HTTP status; once research has started: an error event
+            if not opened:
+                return self._send(status, payload, headers=headers)
+            emit("error", dict(payload, http=status))
+        extra_notes, extra_hint = None, ""
+        if body.get("research") and cid >= 0 and not picture_only and st.flags.on("chat_research", who):     # chat_research: Deep Research first
+            where = st.get_settings(who["user"])["web_search"]
+            if where == "none":
+                return self._send(400, {"code": "no_research", "message": "Deep Research needs the web, and your answers are set to Model only.",
+                                        "action": "Change Where answers come from in Settings."})
+            asked = text if not regenerate else next((m["content"] for m in reversed(store.messages(cid)) if m["role"] == "user"), "")
+            open_stream()
+            try:
+                source = "wikipedia" if where == "off" else "auto"
+                extra_notes = research.gather(asked, search=lambda q: web_search.web_notes(q, k=3, source=source, read=True),
+                                              on_step=lambda t, done, of: emit("research", {"step": t, "done": done, "of": of}),
+                                              year=time.gmtime(st.clock()).tm_year)
+            except (BrokenPipeError, ConnectionResetError):
+                return
+            extra_hint = research.REPORT_HINT
         try:
             q, stop, model, win, decision = start_turn(st, who, cid, text, str(body.get("model", "")), str(body.get("effort", "balanced")),
-                                             regenerate, body.get("regen_mode") or None, cont=bool(body.get("continue")), picture_only=picture_only)
+                                             regenerate, body.get("regen_mode") or None, cont=bool(body.get("continue")), picture_only=picture_only,
+                                             extra_notes=extra_notes, extra_hint=extra_hint)
         except ValueError as e:
-            return self._send(400, {"code": "bad_option", "message": str(e)})
+            return refuse(400, {"code": "bad_option", "message": str(e)})
         except KeyError:
-            return self._send(400, {"code": "bad_model", "message": "That model isn't available."})
+            return refuse(400, {"code": "bad_model", "message": "That model isn't available."})
         except Exception as e:
             status, headers, payload = error_payload(e)
-            return self._send(status, payload, headers=headers)
+            return refuse(status, payload, headers=headers)
         # wait a moment: limits and connection errors come back at once and deserve a proper HTTP status
         first = None
         try:
@@ -258,20 +301,8 @@ class RoutesChat:
             pass
         if first and first[0] == "error":
             status, headers, payload = error_payload(first[1])
-            return self._send(status, payload, headers=headers)
-        self.send_response(200)
-        self.send_header("Content-Type", "text/event-stream")
-        self.send_header("Cache-Control", "no-store")
-        self.send_header("X-Content-Type-Options", "nosniff")
-        for k, v in self._security_headers().items():
-            self.send_header(k, v)
-        self.send_header("Connection", "close")
-        self.end_headers()
-        self.close_connection = True
-
-        def emit(event, data):
-            self.wfile.write(f"event: {event}\ndata: {json.dumps(data)}\n\n".encode())
-            self.wfile.flush()
+            return refuse(status, payload, headers=headers)
+        open_stream()
         try:
             emit("thinking", {"min_first_s": decision["pause"], "effort": decision["effort"], "auto": decision["auto"],
                               "reason": decision["reason"], "temperature": decision["temperature"]})

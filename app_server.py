@@ -62,6 +62,7 @@ import code_secrets
 import model_code_test
 import chat_plus
 import phone_model
+import scheduled
 import web_push
 import shares
 import summary
@@ -158,6 +159,7 @@ class AppState(StateAccounts, StateSettings, StateApps, StatePC, StateCode, Stat
         contact = self.security.get("contact_email")
         self.push = web_push.WebPush(data_dir, self.secrets, ("mailto:" + contact) if contact else (self.security.get("public_url") or "https://emvryx.app"))   # pwa_push
         self.phone_sha = phone_model.Checksums(data_dir)       # android_offline_model: the phone model file's checksum, worked out once
+        self.schedules = scheduled.Schedules(data_dir)          # chat_schedule: messages answered by themselves at a set time
         self.panels = chat_plus.Panels()                     # chat_panel: pages from answers for the side panel's sealed frame
         self.code_test = model_code_test.Runner(os.path.join(data_dir, "code_test.json") if data_dir else None)   # model_code_test: Admin > Models
         self.code_secrets = code_secrets.ProjectSecrets(data_dir, self.secrets)      # vryxcode_secrets: per project, never shown to the model
@@ -768,6 +770,14 @@ def main():
     srv = make_server(state, args.host, args.port)
     threading.Thread(target=documents.warm_ocr, daemon=True).start()          # loads the picture reader now, so the first screenshot is quick
     state.sync_gaming()
+    def _schedule_loop():                                    # chat_schedule: the scheduled tasks whose time has come
+        while True:
+            time.sleep(30)
+            try:
+                scheduled.tick(state)
+            except Exception as e:                           # noqa: BLE001 - a hiccup here must never take the app down
+                print(f"(scheduled tasks check failed: {e})", flush=True)
+    threading.Thread(target=_schedule_loop, daemon=True).start()
     if state.runner:
         def _idle_loop():                                    # frees the graphics card when nobody has used the model for a while, and in Gaming mode
             while True:
