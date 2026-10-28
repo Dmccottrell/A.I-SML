@@ -64,7 +64,7 @@ class PhoneModel(private val context: Context, private val api: ApiClient) {
     private var loaded: Llama.Model? = null
     private var loadedId = ""
 
-    fun setAllowed(on: Boolean) {
+    fun rememberAllowed(on: Boolean) {
         allowed = on
         prefs.edit().putBoolean("allowed", on).apply()
     }

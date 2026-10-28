@@ -375,7 +375,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         applyLooks(s)
         state = s
         online = true
-        phone.setAllowed(s.on("android_offline_model"))                  // remembered for when the PC is off
+        phone.rememberAllowed(s.on("android_offline_model"))                  // remembered for when the PC is off
         if (phone.allowed) viewModelScope.launch { phone.refresh() }       // the newest instructions and memory for the phone's model
         chats = s.chats
         usage = s.usage
