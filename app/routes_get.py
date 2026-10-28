@@ -155,9 +155,9 @@ class RoutesGet:
         if path == "/api/schedules" and self.state.flags.on("chat_schedule", who):       # chat_schedule: this person's scheduled tasks
             return self._send(200, {"tasks": self.state.schedules.list(who["user"])})
         if path == "/api/phone-model" and self.state.flags.on("android_offline_model", who):    # android_offline_model: the model the phone runs itself
-            return self._send(200, phone_model.for_person(self.state, who))
+            return self._send(200, phone_model.for_person(self.state, who, (qs.get("model") or [None])[0]))
         if path == "/api/phone-model/file" and self.state.flags.on("android_offline_model", who):
-            f = phone_model.file_for(self.state)
+            f = phone_model.file_for(self.state, (qs.get("model") or [None])[0])
             if not f:
                 return self._send(404, {"code": "no_model", "message": "This PC has no model for phones yet."})
             return phone_model.serve_range(self, f, self.headers.get("Range"))

@@ -285,7 +285,8 @@ class ApiClient(private val session: SessionStore) {
 
     // ---- android_offline_model: the model the phone runs itself (app/phone_model.py)
 
-    suspend fun phoneKit(): app.emvryx.android.local.PhoneKit = get("/api/phone-model")
+    suspend fun phoneKit(model: String? = null): app.emvryx.android.local.PhoneKit =
+        get("/api/phone-model" + (model?.let { "?model=" + java.net.URLEncoder.encode(it, "UTF-8") } ?: ""))
 
     /** Messages written on the phone while the PC was off, added to the PC's chat (or a new one): the chat's id */
     suspend fun phoneSync(body: JsonObject): Long = post<PhoneSynced>("/api/phone-sync", body).chat
