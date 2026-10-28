@@ -13,7 +13,7 @@ import vryxcode
 from tests.test_app_server import Base, Client
 
 
-def wait_for(fn, seconds=15):
+def wait_for(fn, seconds=45):        # returns as soon as fn() is true; the long limit is for the shared Windows CI machine (4 test files at once)
     end = time.time() + seconds
     while time.time() < end:
         v = fn()
