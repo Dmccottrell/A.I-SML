@@ -46,7 +46,7 @@ def open_file(page, name):
 
 def ready(page):
     """The page has loaded and signed in (polled from Python: the page's own security rules block waiting on a script string)."""
-    wait_for(lambda: page.evaluate("typeof S !== 'undefined' && !!S.state"), 15)
+    wait_for(lambda: page.evaluate("typeof S !== 'undefined' && !!S.state"), 45)      # a busy Windows test machine took over 15 s now and then
     page.evaluate("S.tourChecked = true; openTour = () => {}; document.querySelectorAll('.tour').forEach((e) => e.remove())")      # the welcome tour must never cover a click
 
 
