@@ -72,6 +72,17 @@ class LocalPromptTest {
     }
 
     @Test
+    fun theChoicesRead() {
+        val json = Json { ignoreUnknownKeys = true; explicitNulls = false; coerceInputValues = true }
+        val k = json.decodeFromString<PhoneKit>("""{"available": true, "id": "flare-3", "choices": [
+            {"id": "flare-3", "name": "Flare", "version": 3, "size": 2040109465, "min_ram_gb": 4, "tagline": "Fastest"},
+            {"id": "equinox-3", "name": "Equinox", "version": 3, "size": 3543348019, "min_ram_gb": 6}]}""")
+        assertEquals(listOf("Flare 3", "Equinox 3"), k.choices.map { it.fullName })
+        assertEquals("1.9 GB", k.choices[0].sizeText)
+        assertEquals(6.0, k.choices[1].minRamGb, 0.0)
+    }
+
+    @Test
     fun theKitReadsAsTheServerSendsIt() {
         val json = Json { ignoreUnknownKeys = true; explicitNulls = false; coerceInputValues = true }
         val k = json.decodeFromString<PhoneKit>("""{"available": true, "id": "flare-3", "name": "Flare", "version": 3, "size": 2000000000,

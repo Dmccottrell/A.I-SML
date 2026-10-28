@@ -22,6 +22,7 @@ data class PhoneKit(
     @SerialName("min_ram_gb") val minRamGb: Double = 4.0,
     val hints: String = "",
     val memory: PhoneMemory = PhoneMemory(),
+    val choices: List<PhoneChoice> = emptyList(),
 ) {
     /** "Flare 3" */
     val fullName get() = listOfNotNull(name.ifEmpty { "Flare" }, version?.let { if (it % 1.0 == 0.0) it.toInt().toString() else it.toString() }).joinToString(" ")
@@ -36,6 +37,14 @@ data class ChatFormat(
     @SerialName("notes_intro") val notesIntro: String = "Notes:\n",
     @SerialName("question_intro") val questionIntro: String = "\n\nQuestion: ",
 )
+
+/** A model the phone may pick (Flare: fast; Equinox: smarter, needs a phone with more memory) */
+@Serializable
+data class PhoneChoice(val id: String, val name: String = "", val version: Double? = null, val size: Long = 0,
+                       @SerialName("min_ram_gb") val minRamGb: Double = 4.0, val tagline: String = "") {
+    val fullName get() = listOfNotNull(name.ifEmpty { "Flare" }, version?.let { if (it % 1.0 == 0.0) it.toInt().toString() else it.toString() }).joinToString(" ")
+    val sizeText get() = String.format(java.util.Locale.US, "%.1f GB", size / 1_073_741_824.0)
+}
 
 @Serializable
 data class PhoneMemory(val on: Boolean = false, val title: String = "", val facts: List<String> = emptyList(), val personal: String = "")

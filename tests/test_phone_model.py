@@ -121,6 +121,50 @@ class Serving(Base):
 
 
 
+class Choosing(Base):
+    """The phone picks Flare (fast) or Equinox (smarter); the big models are never offered or sent."""
+
+    def setUp(self):
+        super().setUp()
+        self.files = {}
+        for mid, size in (("flare-3", 1000), ("equinox-3", 3000), ("solstice-3", 5000)):
+            p = os.path.join(self.tmp.name, mid + ".gguf")
+            with open(p, "wb") as f:
+                f.write(mid.encode() * (size // len(mid)))
+            self.files[mid] = p
+        self.state.runner = types.SimpleNamespace(files=self.files)
+        self.state.flags.data["audiences"]["android_offline_model"] = "everyone"
+
+    def raw(self, path):
+        c = http.client.HTTPConnection("127.0.0.1", self.port, timeout=10)
+        c.request("GET", path, headers={"Authorization": "Bearer " + self.sam_key})
+        r = c.getresponse()
+        try:
+            return r.status, r.read()
+        finally:
+            c.close()
+
+    def test_flare_and_equinox_are_offered_never_the_big_ones(self):
+        s, j = self.sam.call("GET", "/api/phone-model")
+        self.assertEqual(s, 200)
+        self.assertEqual(j["id"], "flare-3")                                                # the default stays the small one
+        self.assertEqual([c["id"] for c in j["choices"]], ["flare-3", "equinox-3"])         # smallest first
+        self.assertGreater(j["choices"][1]["min_ram_gb"], j["choices"][0]["min_ram_gb"])
+        self.assertNotIn("base", str(j["choices"]))
+
+    def test_the_phone_gets_the_model_it_asked_for(self):
+        j = self.sam.call("GET", "/api/phone-model?model=equinox-3")[1]
+        self.assertEqual(j["id"], "equinox-3")
+        self.assertEqual(j["file"], "/api/phone-model/file?model=equinox-3")
+        s, body = self.raw(j["file"])
+        self.assertEqual(s, 200)
+        self.assertTrue(body.startswith(b"equinox-3"))
+
+    def test_a_big_model_is_never_sent(self):
+        self.assertEqual(self.sam.call("GET", "/api/phone-model?model=solstice-3")[1]["id"], "flare-3")    # asked for: the default instead
+        self.assertEqual(self.raw("/api/phone-model/file?model=solstice-3")[0], 404)
+
+
 class Syncing(Base):
     data_dir = True
 

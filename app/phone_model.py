@@ -25,8 +25,26 @@ PHONE_CONTEXT = 4096                                     # tokens the phone keep
 PHONE_REPLY = 1024
 
 
-def pick(manifest, files, want=None):
-    """The model for phones: {"id", ...} from models.json, or None when this PC has no file for one."""
+PHONE_TIERS = ("lite", "standard")                       # Flare (fast) and Equinox (smarter, needs a phone with about 8 GB): never the big ones
+
+
+def choices(manifest, files):
+    """The models a phone may pick: the newest open Lite and Standard model of each name whose file is on this PC, smallest first."""
+    have = lambda m: bool(files.get(m["id"])) and os.path.exists(files[m["id"]])     # noqa: E731
+    best = {}
+    for m in manifest.get("models", []):
+        if m.get("archived") or not m.get("open") or str(m.get("tier", "")).lower() not in PHONE_TIERS or not have(m):
+            continue
+        if m["name"] not in best or float(m.get("version") or 0) > float(best[m["name"]].get("version") or 0):
+            best[m["name"]] = m
+    return sorted(best.values(), key=lambda m: os.path.getsize(files[m["id"]]))
+
+
+def pick(manifest, files, want=None, asked=None):
+    """The model for phones: {"id", ...} from models.json, or None when this PC has no file for one. `asked`: the phone's own choice,
+    only ever one of `choices` (a phone can never fetch the big models)."""
+    if asked:
+        return next((m for m in choices(manifest, files) if m["id"] == asked), None)
     models = [m for m in manifest.get("models", []) if not m.get("archived")]
     want = want or manifest.get("phone_model")
     have = lambda m: bool(files.get(m["id"])) and os.path.exists(files[m["id"]])     # noqa: E731
@@ -114,7 +132,7 @@ def kit(model, size, sha256, hints, memory_facts, memory_on):
     """What GET /api/phone-model sends: the file to fetch and how to answer with it."""
     return {
         "available": True, "id": model["id"], "name": model.get("name", ""), "version": model.get("version"),
-        "size": size, "sha256": sha256, "preparing": sha256 is None, "file": "/api/phone-model/file",
+        "size": size, "sha256": sha256, "preparing": sha256 is None, "file": "/api/phone-model/file?model=" + model["id"],
         "format": chat_format(model), "sampling": sampling(model),
         "max_reply_tokens": min(PHONE_REPLY, int(model.get("max_reply_tokens") or PHONE_REPLY)), "context": PHONE_CONTEXT,
         "min_ram_gb": model.get("min_ram_gb") or 4,
@@ -172,10 +190,12 @@ def serve_range(handler, path, range_header):
             left -= len(block)
 
 
-def for_person(state, who):
-    """GET /api/phone-model for this person: {"available": False, "message"} when this PC has no model for phones, else the kit."""
+def for_person(state, who, asked=None):
+    """GET /api/phone-model for this person: {"available": False, "message"} when this PC has no model for phones, else the kit (of the model
+    the phone `asked` for, when it is one of the choices) with the choices."""
     files = getattr(state.runner, "files", None) or {} if state.runner else {}
-    model = pick(state.manifest, files)
+    model = pick(state.manifest, files, asked=asked) if asked else None
+    model = model or pick(state.manifest, files)
     if not model:
         return {"available": False, "message": "This PC has no model for phones yet (a small Flare model file is needed)."}
     path = files[model["id"]]
@@ -186,13 +206,16 @@ def for_person(state, who):
     hints = [app_skills.custom_hint(settings.get("custom_instructions")), memory.style_hint() if settings["memory"] else ""]
     if model.get("think") == "empty" and state.flags.on("chat_house_rules", who):
         hints.append(chat_turn.HOUSE_HINT)
-    return kit(model, os.path.getsize(path), state.phone_sha.get(path), "\n\n".join(h for h in hints if h),
-               memory.list() if settings["memory"] else [], settings["memory"])
+    out = kit(model, os.path.getsize(path), state.phone_sha.get(path), "\n\n".join(h for h in hints if h),
+              memory.list() if settings["memory"] else [], settings["memory"])
+    out["choices"] = [{"id": m["id"], "name": m.get("name", ""), "version": m.get("version"), "size": os.path.getsize(files[m["id"]]),
+                       "min_ram_gb": m.get("min_ram_gb") or 4, "tagline": m.get("tagline", "")} for m in choices(state.manifest, files)]
+    return out
 
 
-def file_for(state):
+def file_for(state, asked=None):
     files = getattr(state.runner, "files", None) or {} if state.runner else {}
-    model = pick(state.manifest, files)
+    model = (pick(state.manifest, files, asked=asked) if asked else None) or (None if asked else pick(state.manifest, files))
     return files[model["id"]] if model else None
 
 

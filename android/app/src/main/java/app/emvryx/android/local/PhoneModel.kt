@@ -74,7 +74,8 @@ class PhoneModel(private val context: Context, private val api: ApiClient) {
     /** The PC answered: keep the newest instructions, memory and format (the model file itself only changes with Download) */
     suspend fun refresh() {
         if (!allowed) return
-        val k = runCatching { api.phoneKit() }.getOrNull() ?: return
+        val k = runCatching { api.phoneKit(kit?.id ?: wanted) }.getOrNull() ?: return
+        choices = k.choices
         if (!k.available) return
         val have = kit ?: return                                          // nothing downloaded yet: nothing to keep up to date
         if (have.id != k.id || (k.sha256 != null && k.sha256 != have.sha256)) {
@@ -87,10 +88,30 @@ class PhoneModel(private val context: Context, private val api: ApiClient) {
     }
 
 
-    fun enoughRam(k: PhoneKit): Boolean {
+    fun enoughRam(k: PhoneKit): Boolean = enoughRam(k.minRamGb)
+
+    fun enoughRam(gb: Double): Boolean {
         val mi = ActivityManager.MemoryInfo()
         (context.getSystemService(Context.ACTIVITY_SERVICE) as ActivityManager).getMemoryInfo(mi)
-        return mi.totalMem >= (k.minRamGb * 0.9 * 1024 * 1024 * 1024).toLong()
+        return mi.totalMem >= (gb * 0.9 * 1024 * 1024 * 1024).toLong()
+    }
+
+    /** The models the PC offers for phones (Flare, Equinox), once it has been asked */
+    var choices by mutableStateOf<List<PhoneChoice>>(emptyList())
+        private set
+
+    /** The model picked in Settings > This phone (null: the PC's default, the small one) */
+    var wanted by mutableStateOf(prefs.getString("wanted", null))
+        private set
+
+    fun pick(id: String) {
+        wanted = id
+        prefs.edit().putString("wanted", id).apply()
+    }
+
+    suspend fun loadChoices() {
+        if (!allowed || choices.isNotEmpty()) return
+        runCatching { api.phoneKit(kit?.id ?: wanted) }.getOrNull()?.let { choices = it.choices }
     }
 
     fun freeSpace(): Long = StatFs(dir.path).availableBytes
@@ -102,12 +123,13 @@ class PhoneModel(private val context: Context, private val api: ApiClient) {
         if (job?.isActive == true) return
         job = scope.launch {
             try {
-                var k = api.phoneKit()
+                var k = api.phoneKit(wanted)
+                choices = k.choices
                 if (!k.available) { status = Status.Failed(k.message.ifEmpty { "The PC has no model for phones." }); return@launch }
                 while (k.sha256 == null && isActive) {                       // the PC works out the checksum the first time (a few seconds)
                     status = Status.Checking
                     delay(3000)
-                    k = api.phoneKit()
+                    k = api.phoneKit(wanted)
                 }
                 if (!canRun()) { status = Status.Failed("This phone cannot run the model (it needs a 64-bit phone)."); return@launch }
                 if (!enoughRam(k)) { status = Status.Failed("This phone has less memory than the model needs (${k.minRamGb.toInt()} GB)."); return@launch }

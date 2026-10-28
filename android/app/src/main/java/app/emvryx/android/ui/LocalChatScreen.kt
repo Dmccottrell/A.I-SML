@@ -107,6 +107,30 @@ private fun OfflineBar(vm: AppViewModel) {
 
 const val OFFLINE_CHECK_MS = 30_000L
 
+/** Flare (fast) or Equinox (smarter, needs a phone with more memory): only what this phone can run can be picked */
+@Composable
+private fun ModelChoice(phone: PhoneModel) {
+    LaunchedEffect(Unit) { phone.loadChoices() }
+    if (phone.choices.size < 2) return
+    val p = LocalPalette.current
+    val picked = phone.wanted ?: phone.choices.first().id
+    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        phone.choices.forEach { c ->
+            val fits = phone.enoughRam(c.minRamGb)
+            val on = c.id == picked
+            Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).border(1.dp, if (on) p.accent else Emvryx.line, RoundedCornerShape(12.dp))
+                .clickable(enabled = fits) { phone.pick(c.id) }.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
+                Column(Modifier.weight(1f)) {
+                    Text(c.fullName + "  ·  " + c.sizeText, fontWeight = FontWeight.SemiBold, fontSize = 14.sp, color = if (fits) Emvryx.text else Emvryx.muted)
+                    Text(if (fits) (if (c.id == phone.choices.first().id) "Fastest on a phone." else "Smarter, but slower on a phone.")
+                         else "Needs a phone with about ${c.minRamGb.toInt()} GB of memory.", color = Emvryx.muted, fontSize = 12.sp)
+                }
+                if (on) Text("✓", color = p.accentText, fontWeight = FontWeight.Bold)
+            }
+        }
+    }
+}
+
 /** Download, progress, remove: the model on this phone (also in Settings) */
 @Composable
 fun PhoneModelCard(phone: PhoneModel, online: Boolean) {
@@ -117,7 +141,8 @@ fun PhoneModelCard(phone: PhoneModel, online: Boolean) {
              "web, and the chats stay on the phone. It uses your instructions and what Emvryx remembers about you.", color = Emvryx.muted, fontSize = 13.sp)
         when (val s = phone.status) {
             PhoneModel.Status.None -> {
-                Text("About 2 GB, downloaded once from your PC. Wi-Fi is best.", color = Emvryx.muted, fontSize = 13.sp)
+                ModelChoice(phone)
+                Text("Downloaded once from your PC.", color = Emvryx.muted, fontSize = 13.sp)
                 PwaButton("Download", phone::download, Modifier.fillMaxWidth(), enabled = online)
                 if (!online) Text("The PC has to be on to download it.", color = Emvryx.muted, fontSize = 13.sp)
             }
@@ -132,9 +157,13 @@ fun PhoneModelCard(phone: PhoneModel, online: Boolean) {
             PhoneModel.Status.Ready -> {
                 Text("${phone.kit?.fullName ?: "The model"} is on this phone.", fontSize = 14.sp)
                 phone.newer?.let { Chip("Get the newer ${it.fullName}", phone::download) }
+                phone.choices.firstOrNull { it.id != phone.kit?.id && phone.enoughRam(it.minRamGb) }?.let { other ->
+                    Chip("Switch to ${other.fullName} (${other.sizeText})", { phone.pick(other.id); phone.download() })
+                }
                 Chip("Remove it from this phone", phone::remove)
             }
             is PhoneModel.Status.Failed -> {
+                ModelChoice(phone)
                 Text(s.message, color = Emvryx.muted, fontSize = 13.sp)
                 PwaButton("Try again", phone::download, Modifier.fillMaxWidth(), enabled = online)
             }
