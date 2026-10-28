@@ -187,7 +187,7 @@ private fun Screens(vm: AppViewModel, code: CodeViewModel) {
         when (s) {
             Screen.Starting -> StartingScreen()
             is Screen.Off -> OffScreen(s, onRetry = vm::start, onChangeServer = vm::changeServer,
-                onLocal = if (vm.phoneChats) ({ vm.open(Screen.Local) }) else null)
+                onLocal = if (vm.phoneChats) ({ vm.open(Screen.Local) }) else null, tip = vm.phoneTip)
             Screen.SignIn -> SignInScreen(vm)
             Screen.Chat -> ChatScreen(vm)
             Screen.Code -> CodeScreen(vm, code)

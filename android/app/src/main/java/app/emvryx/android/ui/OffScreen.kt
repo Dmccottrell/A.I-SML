@@ -35,7 +35,7 @@ fun StartingScreen() {
 
 /** The PC is off (no answer at all) or resting in Gaming mode */
 @Composable
-fun OffScreen(s: Screen.Off, onRetry: () -> Unit, onChangeServer: () -> Unit, onLocal: (() -> Unit)? = null) {
+fun OffScreen(s: Screen.Off, onRetry: () -> Unit, onChangeServer: () -> Unit, onLocal: (() -> Unit)? = null, tip: String? = null) {
     Box(Modifier.fillMaxSize().accentWash(LocalPalette.current.glow, 420.dp).safeDrawingPadding(), contentAlignment = Alignment.Center) {
         Column(
             Modifier.widthIn(max = 420.dp).padding(28.dp),
@@ -55,8 +55,16 @@ fun OffScreen(s: Screen.Off, onRetry: () -> Unit, onChangeServer: () -> Unit, on
             PwaButton("Try again", onRetry, Modifier.fillMaxWidth().padding(top = 6.dp))
             // android_offline_model: the model on this phone answers while the PC is off
             if (onLocal != null) PwaButton("Chat on this phone", onLocal, Modifier.fillMaxWidth(), ghost = true)
+            if (tip != null) Text(tip, color = Emvryx.muted, textAlign = TextAlign.Center, fontSize = 14.sp)
             Text(s.server.substringAfter("://"), color = Emvryx.muted, fontSize = 14.sp,
                 modifier = Modifier.clickable(onClick = onChangeServer).padding(8.dp))
         }
     }
+}
+
+/** android_offline_model: what the "off" screen says about the phone's own model when it cannot answer yet (null: nothing to say) */
+fun offTip(allowed: Boolean, ready: Boolean, downloading: Boolean): String? = when {
+    !allowed || ready -> null
+    downloading -> "The phone model is still downloading: it carries on when the PC is back, and then Emvryx answers here even with the PC off."
+    else -> "Tip: download the phone model while the PC is on (Settings > This phone), so Emvryx answers here next time the PC is off."
 }
