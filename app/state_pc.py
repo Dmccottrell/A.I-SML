@@ -70,7 +70,7 @@ class StatePC:
             return None
         now = time.time() if now is None else now
         if self.busy():
-            self.runner.touch()
+            self.runner.touch(now)                                    # used as of this check (not "now" read again: Windows' clock moves in steps)
             return None
         if self.sync_gaming():
             return "gaming" if self.unload_model("gaming mode") else None

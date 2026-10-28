@@ -49,8 +49,8 @@ class StubRunner:
     def loaded(self):
         return self.model_id
 
-    def touch(self):
-        self.last_used = time.time()
+    def touch(self, now=None):
+        self.last_used = time.time() if now is None else now
 
     def unload(self):
         if not self.model_id:
@@ -89,6 +89,17 @@ class Gaming(Base):
         self.assertEqual(self.state.idle_tick(self.runner.last_used + 11 * 60), "idle")
         self.assertEqual(self.runner.unloads, 1)
         self.assertEqual([e["kind"] for e in self.state.auth.events(5)][0], "model_unloaded")
+
+    def test_being_busy_counts_as_use_at_the_time_the_check_is_for(self):
+        # the Windows test job: its clock moves in steps of about 15 ms, so "now" read twice was the same and the check above failed
+        # now and then. Being busy now marks the model as used at the check's own time.
+        from unittest import mock
+        now = self.runner.last_used
+        self.state.stops["chat"] = object()
+        with mock.patch("time.time", return_value=now):                    # a clock that has not moved since
+            self.state.idle_tick(now + 3600)
+        del self.state.stops["chat"]
+        self.assertEqual(self.runner.last_used, now + 3600)
 
     def test_idle_unload_off_means_never(self):
         self.state.save_security(idle_unload_minutes=0)
