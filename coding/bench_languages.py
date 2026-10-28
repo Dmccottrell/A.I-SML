@@ -69,6 +69,11 @@ def env_for(folder):
                 PYTHONDONTWRITEBYTECODE="1")
 
 
+# The self-test checks that the reference programs are right, not how fast they start: on a busy Windows machine PHP and Ruby took more
+# than the usual 10 s just to start now and then (an "endless loop" that was not one)
+SELFTEST_TIMEOUT = 60
+
+
 def commands(lang, folder):
     """(build, run) for a language. On Windows a built program must be main.exe, run by its full path ("./main" is not found there)."""
     _, build, run, _, _ = LANGS[lang]
@@ -204,7 +209,7 @@ def selftest(out=print):
         work = tempfile.mkdtemp(prefix="vryxlang_")
         try:
             open(os.path.join(work, LANGS[lang][0]), "w").write(src)
-            r = score(lang, work, "sum")
+            r = score(lang, work, "sum", timeout=SELFTEST_TIMEOUT)
             checked += 1
             if not r["passed"]:
                 problems.append(f"{lang} reference for sum fails ({r['stage']}): {r['detail']}")
