@@ -71,4 +71,11 @@ class SseParserTest {
     fun anUnknownEventIsPassedOnByName() {
         assertEquals(listOf(ReplyEvent.Other("something_new")), parse("event: something_new\ndata: {\"used\": 3}\n"))
     }
+
+    @Test
+    fun deepResearchStepsAreReadOneByOne() {
+        // routes_chat.py emits these while Deep Research searches, before the report is written
+        assertEquals(listOf(ReplyEvent.Research("Searching: tallest mountains", 2, 7)),
+            parse("event: research\ndata: {\"step\": \"Searching: tallest mountains\", \"done\": 2, \"of\": 7}\n"))
+    }
 }

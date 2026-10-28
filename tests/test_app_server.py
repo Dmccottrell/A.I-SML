@@ -161,6 +161,7 @@ class Base(unittest.TestCase):
         self.state.flags.data["audiences"]["android_vryxcode"] = "off"
         self.state.flags.data["audiences"]["android_native"] = "off"
         self.state.flags.data["audiences"]["android_offline_model"] = "off"
+        self.state.flags.data["audiences"]["android_phone_vision"] = "off"
         self.state.flags.data["audiences"]["chat_research"] = "off"
         self.state.flags.data["audiences"]["chat_live_voice"] = "off"
         self.state.flags.data["audiences"]["chat_schedule"] = "off"

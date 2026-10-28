@@ -11,6 +11,8 @@
 
 #include "ggml-backend.h"
 #include "llama.h"
+#include "mtmd.h"
+#include "mtmd-helper.h"
 
 #ifdef __ANDROID__
 #include <android/log.h>
@@ -181,6 +183,101 @@ JNIEXPORT void JNICALL Java_app_emvryx_android_local_Llama_nativeFree(JNIEnv *, 
     llama_free(e->ctx);
     llama_model_free(e->model);
     delete e;
+}
+
+// android_phone_vision: looks at one picture and writes what it shows (the PC's vision.py helper, on the phone). The picture model is loaded,
+// used once and freed, so it never sits in the phone's memory next to the chat model. `prompt` is the instruction; the picture goes before it.
+// Returns 0: finished, 1: reached max_tokens, 2: stopped, -1: the picture could not be read, -2: the model failed to load or run.
+JNIEXPORT jint JNICALL Java_app_emvryx_android_local_Llama_nativeDescribe(JNIEnv *env, jclass, jstring jmodel, jstring jmmproj, jbyteArray jimage,
+                                                                         jstring jprompt, jint max_tokens, jobject sink) {
+    jclass cls = env->GetObjectClass(sink);
+    jmethodID piece = env->GetMethodID(cls, "piece", "([B)Z");
+    if (!piece) return -2;
+    std::vector<unsigned char> image((size_t) env->GetArrayLength(jimage));
+    env->GetByteArrayRegion(jimage, 0, (jsize) image.size(), reinterpret_cast<jbyte *>(image.data()));
+    int threads = std::max(2, std::min(6, (int) sysconf(_SC_NPROCESSORS_ONLN) - 2));
+
+    llama_model *model = llama_model_load_from_file(utf8(env, jmodel).c_str(), llama_model_default_params());
+    if (!model) return -2;
+    llama_context_params cp = llama_context_default_params();
+    cp.n_ctx = 4096;
+    cp.n_batch = 512;
+    cp.n_ubatch = 512;
+    cp.n_threads = threads;
+    cp.n_threads_batch = threads;
+    llama_context *ctx = llama_init_from_model(model, cp);
+    mtmd_context_params mp = mtmd_context_params_default();
+    mp.use_gpu = false;
+    mp.print_timings = false;
+    mp.warmup = false;
+    mp.n_threads = threads;
+    mp.image_max_tokens = 768;                    // a phone: fewer picture pieces read, a few seconds instead of a minute
+    mtmd_context *mctx = ctx ? mtmd_init_from_file(utf8(env, jmmproj).c_str(), model, mp) : nullptr;
+    auto done = [&](int r) {
+        if (mctx) mtmd_free(mctx);
+        if (ctx) llama_free(ctx);
+        llama_model_free(model);
+        return r;
+    };
+    if (!mctx || !mtmd_support_vision(mctx)) return done(-2);
+
+    mtmd_helper_bitmap_wrapper bm = mtmd_helper_bitmap_init_from_buf(mctx, image.data(), image.size(), false, mtmd_helper_init_opt_default());
+    if (!bm.bitmap) return done(-1);
+    // the picture model's own chat format (it is in the file); ChatML when the file has none
+    std::string user = std::string(mtmd_default_marker()) + "\n" + utf8(env, jprompt);
+    llama_chat_message msg{"user", user.c_str()};
+    std::string text;
+    const char *tmpl = llama_model_chat_template(model, nullptr);
+    int need = tmpl ? llama_chat_apply_template(tmpl, &msg, 1, true, nullptr, 0) : -1;
+    if (need > 0) {
+        text.resize((size_t) need);
+        llama_chat_apply_template(tmpl, &msg, 1, true, text.data(), need);
+    } else {
+        text = "<|im_start|>user\n" + user + "<|im_end|>\n<|im_start|>assistant\n";
+    }
+    mtmd_input_chunks *chunks = mtmd_input_chunks_init();
+    mtmd_input_text in{text.c_str(), text.size(), true, true};
+    const mtmd_bitmap *bitmaps[] = {bm.bitmap};
+    int tok = mtmd_tokenize(mctx, chunks, &in, bitmaps, 1);
+    mtmd_bitmap_free(bm.bitmap);
+    llama_pos n_past = 0;
+    if (tok != 0 || (int) mtmd_helper_get_n_pos(chunks) + 16 >= (int) cp.n_ctx ||
+        mtmd_helper_eval_chunks(mctx, ctx, chunks, 0, 0, (int32_t) cp.n_batch, true, &n_past) != 0) {
+        mtmd_input_chunks_free(chunks);
+        return done(tok == 2 ? -1 : -2);
+    }
+    mtmd_input_chunks_free(chunks);
+
+    const llama_vocab *vocab = llama_model_get_vocab(model);
+    llama_sampler *smpl = llama_sampler_chain_init(llama_sampler_chain_default_params());
+    llama_sampler_chain_add(smpl, llama_sampler_init_penalties(llama_vocab_n_tokens(vocab), 64, 1.05f, 0.0f, 0.0f));
+    llama_sampler_chain_add(smpl, llama_sampler_init_greedy());     // describing, not inventing: always the likeliest word
+    llama_batch one = llama_batch_init(1, 0, 1);
+    int result = 1;
+    char buf[256];
+    for (int i = 0; i < max_tokens; i++) {
+        if (n_past + 1 >= (llama_pos) cp.n_ctx) break;
+        llama_token t = llama_sampler_sample(smpl, ctx, -1);
+        if (llama_vocab_is_eog(vocab, t)) { result = 0; break; }
+        int n = llama_token_to_piece(vocab, t, buf, sizeof(buf), 0, false);
+        if (n > 0) {
+            jbyteArray bytes = env->NewByteArray(n);
+            env->SetByteArrayRegion(bytes, 0, n, reinterpret_cast<const jbyte *>(buf));
+            jboolean more = env->CallBooleanMethod(sink, piece, bytes);
+            env->DeleteLocalRef(bytes);
+            if (env->ExceptionCheck() || !more) { result = 2; break; }
+        }
+        one.n_tokens = 1;
+        one.token[0] = t;
+        one.pos[0] = n_past++;
+        one.n_seq_id[0] = 1;
+        one.seq_id[0][0] = 0;
+        one.logits[0] = true;
+        if (llama_decode(ctx, one) != 0) { result = -2; break; }
+    }
+    llama_batch_free(one);
+    llama_sampler_free(smpl);
+    return done(result);
 }
 
 }  // extern "C"

@@ -199,6 +199,9 @@ class PhoneModel(private val context: Context, private val api: ApiClient) {
         status = Status.None
     }
 
+    /** Frees the chat model's memory (the picture model is about to be loaded); it loads again on the next answer */
+    fun unload() = close()
+
     private fun close() {
         loaded?.close()
         loaded = null

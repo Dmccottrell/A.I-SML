@@ -19,6 +19,9 @@ set(LLAMA_CURL OFF CACHE BOOL "" FORCE)
 set(GGML_NATIVE OFF CACHE BOOL "" FORCE)
 set(GGML_OPENMP OFF CACHE BOOL "" FORCE)
 set(GGML_LLAMAFILE OFF CACHE BOOL "" FORCE)
+# android_phone_vision: the picture reader (tools/mtmd) as a library on its own, without its command-line tools or video
+set(LLAMA_BUILD_MTMD ON CACHE BOOL "" FORCE)
+set(MTMD_VIDEO OFF CACHE BOOL "" FORCE)
 if(ANDROID AND ANDROID_ABI STREQUAL "arm64-v8a")
     set(GGML_BACKEND_DL ON CACHE BOOL "" FORCE)
     set(GGML_CPU_ALL_VARIANTS ON CACHE BOOL "" FORCE)
@@ -31,7 +34,7 @@ FetchContent_Declare(llama GIT_REPOSITORY https://github.com/ggml-org/llama.cpp.
 FetchContent_MakeAvailable(llama)
 
 add_library(emvryx_llama SHARED emvryx_llama.cpp)
-target_link_libraries(emvryx_llama llama ggml)
+target_link_libraries(emvryx_llama llama ggml mtmd)
 if(ANDROID)
     target_link_libraries(emvryx_llama android log)
 endif()

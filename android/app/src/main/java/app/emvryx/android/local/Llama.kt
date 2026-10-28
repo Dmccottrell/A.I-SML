@@ -54,6 +54,17 @@ object Llama {
         }
     }
 
+    /** android_phone_vision: looks at [image] (a JPEG or PNG) with the picture model and its reader ([mmproj]), and writes what it shows. Loads
+     *  them, answers, frees them: slow, but never held in memory. */
+    fun describe(model: String, mmproj: String, image: ByteArray, prompt: String, maxTokens: Int, sink: Sink): End =
+        when (nativeDescribe(model, mmproj, image, prompt, maxTokens, sink)) {
+            0 -> End.Finished
+            1 -> End.Length
+            2 -> End.Stopped
+            -1 -> End.TooLong
+            else -> End.Failed
+        }
+
     /** Loads the model (a few seconds); null when it cannot be (not enough memory, a damaged file) */
     fun load(path: String, context: Int): Model? = nativeLoad(path, context, 0).takeIf { it != 0L }?.let { Model(it) }
 
@@ -64,4 +75,5 @@ object Llama {
     @JvmStatic private external fun nativeGenerate(h: Long, prompt: String, maxTokens: Int, temp: Float, topK: Int, topP: Float, minP: Float,
                                                    repeat: Float, presence: Float, seed: Int, sink: Sink): Int
     @JvmStatic private external fun nativeFree(h: Long)
+    @JvmStatic private external fun nativeDescribe(model: String, mmproj: String, image: ByteArray, prompt: String, maxTokens: Int, sink: Sink): Int
 }

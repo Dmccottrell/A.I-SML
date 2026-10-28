@@ -68,12 +68,12 @@ import kotlinx.serialization.json.JsonPrimitive
  */
 @Composable
 fun NativeScreen(vm: AppViewModel, kind: String) {
-    BackHandler { vm.backToChat() }
+    BackHandler { vm.backFromPanel() }
     val title = NATIVE_TITLES[kind] ?: "Emvryx"
     Column(Modifier.fillMaxSize().background(Emvryx.bg)) {
         Column(Modifier.statusBarsPadding()) {
             Row(Modifier.fillMaxWidth().height(56.dp).padding(horizontal = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-                IconButton(onClick = vm::backToChat) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back to the chat", tint = Emvryx.text) }
+                IconButton(onClick = vm::backFromPanel) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back", tint = Emvryx.text) }
                 Text(title, fontWeight = FontWeight.SemiBold, fontSize = 17.sp)
             }
             HorizontalDivider(color = Emvryx.line)
@@ -83,13 +83,15 @@ fun NativeScreen(vm: AppViewModel, kind: String) {
                 "memory" -> MemoryPane(vm)
                 "files" -> FilesPane(vm)
                 "skills" -> SkillsPane(vm)
+                "admin" -> AdminPane(vm)
+                "schedules" -> SchedulesPane(vm)
                 else -> SettingsPane(vm)
             }
         }
     }
 }
 
-val NATIVE_TITLES = mapOf("memory" to "Memory", "files" to "Documents", "skills" to "Skills", "settings" to "Settings")
+val NATIVE_TITLES = mapOf("memory" to "Memory", "files" to "Documents", "skills" to "Skills", "settings" to "Settings", "admin" to "Admin", "schedules" to "Scheduled tasks")
 
 /** Loads [what] once (and again when [reload] changes); shows a spinner, then the content or the error with Try again */
 @Composable
@@ -285,7 +287,7 @@ private fun SkillRow(s: Skill, start: () -> Unit) {
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-private fun Choice(options: List<Pair<String, String>>, value: String, pick: (String) -> Unit) {
+internal fun Choice(options: List<Pair<String, String>>, value: String, pick: (String) -> Unit) {
     val p = LocalPalette.current
     FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
         options.forEach { (id, label) ->
@@ -375,6 +377,11 @@ private fun SettingsPane(vm: AppViewModel) {
                     Section("This phone")
                     PhoneModelCard(phone, vm.online)
                     if (phone.status == app.emvryx.android.local.PhoneModel.Status.Ready) Chip("Open the chats on this phone", { vm.open(Screen.Local) })
+                    val vision = (LocalContext.current.applicationContext as EmvryxApp).vision
+                    if (vision.allowed && phone.status == app.emvryx.android.local.PhoneModel.Status.Ready) {
+                        Spacer(Modifier.height(8.dp))
+                        PhoneVisionCard(vision, vm.online)
+                    }
                 }
 
                 Section("More")

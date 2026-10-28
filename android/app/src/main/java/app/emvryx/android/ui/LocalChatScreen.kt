@@ -60,13 +60,17 @@ import androidx.compose.ui.unit.sp
 import app.emvryx.android.EmvryxApp
 import app.emvryx.android.local.PhoneModel
 import app.emvryx.android.local.PictureText
+import app.emvryx.android.local.PhoneVision
+import app.emvryx.android.local.Vision
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import app.emvryx.android.ui.theme.Emvryx
 import app.emvryx.android.ui.theme.LocalPalette
 import app.emvryx.android.ui.theme.Mono
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 /**
  * android_offline_model: chats answered by the model on this phone, for when the PC is off or there is no signal. They stay on the phone.
@@ -84,6 +88,7 @@ fun LocalChatScreen(vm: AppViewModel, onBack: () -> Unit) {
                     Text("On this phone", fontWeight = FontWeight.SemiBold, fontSize = 17.sp)
                     phone.kit?.let { Text(it.fullName + " · works without the PC", color = Emvryx.muted, fontSize = 12.sp) }
                 }
+                if (vm.adminKept) TextButton(onClick = { vm.open(Screen.Native("admin")) }) { Text("Admin") }
             }
             HorizontalDivider(color = Emvryx.line)
         }
@@ -251,9 +256,56 @@ fun PhoneModelCard(phone: PhoneModel, online: Boolean) {
     }
 }
 
+/** android_phone_vision: download, progress, remove: the picture model on this phone (also in Settings) */
+@Composable
+fun PhoneVisionCard(vision: PhoneVision, online: Boolean) {
+    val p = LocalPalette.current
+    Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(Emvryx.surface).padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Text("Looking at pictures with the PC off", fontWeight = FontWeight.SemiBold, fontSize = 15.sp)
+        Text("The PC's picture model on the phone: a picture you send in the phone's chats is looked at here, not only its words read. " +
+             "It takes a little while on a phone, and nothing leaves it.", color = Emvryx.muted, fontSize = 13.sp)
+        when (val s = vision.status) {
+            PhoneModel.Status.None -> {
+                PwaButton("Download (about ${vision.kit?.let { (it.size + (1 shl 29)) / (1 shl 30) } ?: 3} GB)", vision::download, Modifier.fillMaxWidth(), enabled = online)
+                if (!online) Text("The PC has to be on to download it.", color = Emvryx.muted, fontSize = 13.sp)
+            }
+            is PhoneModel.Status.Downloading -> {
+                val f = if (s.total > 0) s.done.toFloat() / s.total else 0f
+                LinearProgressIndicator(progress = { f }, Modifier.fillMaxWidth(), color = p.accent, trackColor = Emvryx.surface2)
+                Text("Downloading: ${s.done / (1 shl 20)} of ${s.total / (1 shl 20)} MB. If it stops, it carries on where it was.", color = Emvryx.muted, fontSize = 13.sp)
+                Chip("Stop", vision::cancel)
+            }
+            PhoneModel.Status.Checking -> Text("Checking the download…", color = Emvryx.muted, fontSize = 13.sp)
+            PhoneModel.Status.Ready -> {
+                Text("The picture model is on this phone.", fontSize = 14.sp)
+                Chip("Remove it from this phone", vision::remove)
+            }
+            is PhoneModel.Status.Failed -> {
+                Text(s.message, color = Emvryx.muted, fontSize = 13.sp)
+                PwaButton("Try again", vision::download, Modifier.fillMaxWidth(), enabled = online)
+            }
+        }
+    }
+}
+
+/** A picture, made small enough for the picture model (it reads about 1000 pixels a side at most) */
+private fun pictureBytes(context: android.content.Context, uri: android.net.Uri): ByteArray? = runCatching {
+    val bounds = android.graphics.BitmapFactory.Options().apply { inJustDecodeBounds = true }
+    context.contentResolver.openInputStream(uri)?.use { android.graphics.BitmapFactory.decodeStream(it, null, bounds) }
+    var sample = 1
+    while (maxOf(bounds.outWidth, bounds.outHeight) / (sample * 2) >= 1024) sample *= 2
+    val bmp = context.contentResolver.openInputStream(uri)?.use {
+        android.graphics.BitmapFactory.decodeStream(it, null, android.graphics.BitmapFactory.Options().apply { inSampleSize = sample })
+    } ?: return null
+    java.io.ByteArrayOutputStream().also { bmp.compress(android.graphics.Bitmap.CompressFormat.JPEG, 90, it); bmp.recycle() }.toByteArray()
+}.getOrNull()
+
 @Composable
 private fun LocalChats(phone: PhoneModel) {
     val scope = rememberCoroutineScope()
+    val vision = (LocalContext.current.applicationContext as EmvryxApp).vision
+    var seeing by remember { mutableStateOf<android.net.Uri?>(null) }   // a picture to look at with the picture model when the message goes
+    var looked by remember { mutableStateOf("") }
     var chatId by remember { mutableLongStateOf(phone.openChat ?: phone.chats.maxByOrNull { it.updated }?.id ?: phone.newChat().id) }
     var live by remember { mutableStateOf("") }
     var error by remember { mutableStateOf<String?>(null) }
@@ -307,6 +359,7 @@ private fun LocalChats(phone: PhoneModel) {
         val context = LocalContext.current
         val pick = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri ->
             if (uri == null) return@rememberLauncherForActivityResult
+            if (vision.usable) { seeing = uri; picture = null; error = null; return@rememberLauncherForActivityResult }
             reading = true
             scope.launch {
                 val got = PictureText.read(context, uri)
@@ -322,7 +375,13 @@ private fun LocalChats(phone: PhoneModel) {
                 TextButton(onClick = { picture = null }) { Text("Remove", fontSize = 13.sp) }
             }
         }
-        if (reading) Text("Reading the picture…", color = Emvryx.muted, fontSize = 13.sp, modifier = Modifier.padding(start = 16.dp, top = 6.dp))
+        if (seeing != null && !reading) Row(Modifier.padding(start = 14.dp, end = 14.dp, top = 6.dp).clip(RoundedCornerShape(999.dp)).background(Emvryx.surface2)
+            .padding(start = 12.dp, end = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+            Text("Picture: looked at on the phone when you send", fontSize = 13.sp, color = Emvryx.muted)
+            TextButton(onClick = { seeing = null }) { Text("Remove", fontSize = 13.sp) }
+        }
+        if (reading) Text(if (seeing != null) "Looking at the picture on the phone… " + looked.takeLast(160) else "Reading the picture…",
+            color = Emvryx.muted, fontSize = 13.sp, modifier = Modifier.padding(start = 16.dp, top = 6.dp, end = 16.dp))
         Row(Modifier.fillMaxWidth().padding(12.dp).clip(RoundedCornerShape(20.dp)).background(Emvryx.surface).border(1.dp, Emvryx.line, RoundedCornerShape(20.dp))
             .padding(start = 6.dp, end = 8.dp, top = 8.dp, bottom = 8.dp), verticalAlignment = Alignment.CenterVertically) {
             Box(Modifier.size(36.dp).clip(CircleShape).clickable(enabled = !phone.writing && !reading) {
@@ -333,9 +392,33 @@ private fun LocalChats(phone: PhoneModel) {
                 BasicTextField(text, { text = it }, Modifier.fillMaxWidth(), textStyle = MaterialTheme.typography.bodyLarge.copy(color = Emvryx.text),
                     cursorBrush = SolidColor(p.accent))
             }
-            Box(Modifier.size(40.dp).clip(CircleShape).background(if (phone.writing || text.isNotBlank() || picture != null) p.accent else Emvryx.surface2)
+            Box(Modifier.size(40.dp).clip(CircleShape).background(if (phone.writing || reading || text.isNotBlank() || picture != null || seeing != null) p.accent else Emvryx.surface2)
                 .clickable {
                     if (phone.writing) { phone.stop(); return@clickable }
+                    if (reading) { vision.stop(); return@clickable }
+                    val uri = seeing
+                    if (uri != null) {
+                        val asked = text
+                        text = ""
+                        error = null
+                        reading = true
+                        looked = ""
+                        scope.launch {
+                            val bytes = withContext(Dispatchers.IO) { pictureBytes(context, uri) }
+                            val seen = bytes?.let { vision.look(it, asked) { t -> looked = t } }
+                            val words = if (seen == null) PictureText.read(context, uri) else null      // the picture model failed: its words, at least
+                            reading = false
+                            seeing = null
+                            val q = when {
+                                seen != null -> Vision.withPicture(asked, seen)
+                                words != null -> PictureText.withPicture(asked, words)
+                                else -> { error = vision.error.ifEmpty { "That picture could not be read." }; text = asked; return@launch }
+                            }
+                            live = ""
+                            error = phone.answer(chatId, q) { live = it }
+                        }
+                        return@clickable
+                    }
                     val pic = picture
                     val q = if (pic != null) PictureText.withPicture(text, pic) else text.trim()
                     if (q.isEmpty()) return@clickable
@@ -345,7 +428,7 @@ private fun LocalChats(phone: PhoneModel) {
                     live = ""
                     scope.launch { error = phone.answer(chatId, q) { live = it } }
                 }, contentAlignment = Alignment.Center) {
-                Text(if (phone.writing) "■" else "↑", color = p.onAccent, fontWeight = FontWeight.Bold, fontSize = 18.sp)
+                Text(if (phone.writing || reading) "■" else "↑", color = p.onAccent, fontWeight = FontWeight.Bold, fontSize = 18.sp)
             }
         }
     }

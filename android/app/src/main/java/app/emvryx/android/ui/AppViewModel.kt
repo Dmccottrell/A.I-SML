@@ -59,10 +59,19 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     private val session = (app as EmvryxApp).session
     private val api = (app as EmvryxApp).api
     private val phone = (app as EmvryxApp).phone
+    private val adminCache = (app as EmvryxApp).admin
 
     /** The PC answered the last time it was asked (the phone's model is downloaded only then) */
     var online by mutableStateOf(false)
         private set
+
+    /** Back from one of the app's own screens: to the chat, or with the PC off to the phone's chats */
+    fun backFromPanel() {
+        if (online) backToChat() else screen = Screen.Local
+    }
+
+    /** Admin was read before (android_native), so it can be shown with the PC off */
+    val adminKept get() = adminCache.snap.at > 0
 
     /** The model is on this phone and may answer (android_offline_model) */
     val phoneReady get() = phone.allowed && phone.status == app.emvryx.android.local.PhoneModel.Status.Ready
@@ -404,10 +413,14 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         state = s
         online = true
         phone.rememberAllowed(s.on("android_offline_model"))                  // remembered for when the PC is off
+        (getApplication<EmvryxApp>()).vision.rememberAllowed(s.on("android_phone_vision"))
         if (phone.allowed) viewModelScope.launch {
             phone.refresh()                                                // the newest instructions and memory for the phone's model
             if (phone.syncUp() > 0) refreshChats()                         // chats written on the phone while the PC was off join the list
             phone.syncDrafts()                                             // VryxCode drafts written on the phone go to the PC, ready to run
+        }
+        if (isAdmin && adminCache.queued.isNotEmpty()) viewModelScope.launch {   // switch changes made in Admin with the PC off
+            adminCache.queued.toList().forEach { q -> runCatching { api.adminSetFlag(q.id, q.audience) }.onSuccess { adminCache.sent(q.id) } }
             phone.keepRecent(s.chats)                                      // copies of the recent chats, to read and carry on when the PC is off
         }
         chats = s.chats
@@ -872,13 +885,21 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         attached.addAll(c.docs.filter { it.id !in sent })               // attached but not sent yet
     }
 
+    /** chat_research: the next message is a Deep Research request (once: it turns itself off, as on the website) */
+    var research by mutableStateOf(false)
+    val canResearch get() = flag("chat_research") && !isPrivate
+    /** chat_live_voice: the Talk screen is open */
+    var talking by mutableStateOf(false)
+
     fun send(text: String) {
         val words = text.trim()
         if ((words.isEmpty() && attached.isEmpty()) || streaming) return
         bubbles.add(Bubble(nextKey--, mine = true, text = words, docs = attached.toList()))
         attached.clear()
         draft = ""
-        reply(words, regenerate = false)
+        val deep = research && canResearch
+        research = false
+        reply(words, regenerate = false, research = deep)
     }
 
     /** Write the last reply again, with the model and effort picked now; [mode] is how it should differ (Regenerate options) */
@@ -889,7 +910,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         reply("", regenerate = true, mode = mode)
     }
 
-    private fun reply(words: String, regenerate: Boolean, mode: String? = null, cont: Boolean = false) {
+    private fun reply(words: String, regenerate: Boolean, mode: String? = null, cont: Boolean = false, research: Boolean = false) {
         notice = null
         failure = null
         streaming = true
@@ -903,7 +924,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         replyJob = viewModelScope.launch {
             try {
                 val id = chatId ?: api.newChat(isPrivate, skill).also { chatId = it }
-                api.send(id, words, model, effort, regenerate, mode, cont).collect { ev ->
+                api.send(id, words, model, effort, regenerate, mode, cont, research).collect { ev ->
                     when (ev) {
                         is ReplyEvent.Thinking -> if (ev.auto) update(replyKey) {
                             it.copy(autoNote = "Auto chose " + ev.effort.replaceFirstChar { c -> c.uppercase() })
@@ -931,6 +952,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
                             ev.context?.let { ctx = it }
                             update(replyKey) { it.copy(streaming = false, cut = ev.cut, timing = ev.timing) }
                         }
+                        is ReplyEvent.Research -> working = app.emvryx.android.local.Speech.step(ev.step, ev.done, ev.of)
                         is ReplyEvent.Failed -> failure = Failure(ev.message, ev.action, ev.code)
                         is ReplyEvent.Other -> Unit
                     }

@@ -21,6 +21,7 @@ private val PATHS = mapOf(
     "code" to "M8 8l-4 4 4 4M16 8l4 4-4 4M13.5 6l-3 12",
     "lock" to "M7 11V8a5 5 0 0 1 10 0v3M6 11h12v9H6z",
     "chart" to "M5 20V10M12 20V4M19 20v-7",
+    "clock" to "M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18zM12 7v5l3 2",
     "brain" to "M12 4a3 3 0 0 0-3 3 3 3 0 0 0-3 3 3 3 0 0 0 1 5 3 3 0 0 0 5 2zM12 4a3 3 0 0 1 3 3 3 3 0 0 1 3 3 3 3 0 0 1-1 5 3 3 0 0 1-5 2z",
     "doc" to "M7 3h7l4 4v14H7zM14 3v4h4M9.5 12h5M9.5 16h5",
     "pencil" to "M4 20l1-4L16 5l3 3L8 19zM14 7l3 3",
