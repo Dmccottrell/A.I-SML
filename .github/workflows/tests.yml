@@ -111,4 +111,5 @@ jobs:
         timeout-minutes: 30
         env:
           PYTHONIOENCODING: utf-8
-        run: python scripts/run_tests.py
+        # two files at a time, not four: with four, the browser tests on this 4-core machine timed out waiting for pages (a different one each run)
+        run: python scripts/run_tests.py -j 2
