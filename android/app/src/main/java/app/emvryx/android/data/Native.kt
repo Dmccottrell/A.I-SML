@@ -46,3 +46,7 @@ fun docSize(chars: Long): String = when {
     chars < 6_000 -> "${maxOf(1, chars / 6)} words"
     else -> "${String.format(java.util.Locale.US, "%,d", chars / 6)} words"
 }
+
+/** POST /api/phone-sync */
+@Serializable
+data class PhoneSynced(val chat: Long)

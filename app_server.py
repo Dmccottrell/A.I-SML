@@ -160,6 +160,7 @@ class AppState(StateAccounts, StateSettings, StateApps, StatePC, StateCode, Stat
         self.secrets = secret_box.SecretBox(data_dir, require=self.security["require_encryption"])
         contact = self.security.get("contact_email")
         self.push = web_push.WebPush(data_dir, self.secrets, ("mailto:" + contact) if contact else (self.security.get("public_url") or "https://emvryx.app"))   # pwa_push
+        self.phone_synced = phone_model.Synced(data_dir)       # android_offline_model: phone chats already taken in (a retried sync is not added twice)
         self.phone_sha = phone_model.Checksums(data_dir)       # android_offline_model: the phone model file's checksum, worked out once
         self.schedules = scheduled.Schedules(data_dir)          # chat_schedule: messages answered by themselves at a set time
         self.panels = chat_plus.Panels()                     # chat_panel: pages from answers for the side panel's sealed frame

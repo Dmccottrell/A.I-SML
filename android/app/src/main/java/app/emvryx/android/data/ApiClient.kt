@@ -287,6 +287,9 @@ class ApiClient(private val session: SessionStore) {
 
     suspend fun phoneKit(): app.emvryx.android.local.PhoneKit = get("/api/phone-model")
 
+    /** Messages written on the phone while the PC was off, added to the PC's chat (or a new one): the chat's id */
+    suspend fun phoneSync(body: JsonObject): Long = post<PhoneSynced>("/api/phone-sync", body).chat
+
     /** The model file from byte [from] on (a download that stopped carries on). Blocking: call it off the main thread, and close the reply. */
     fun downloadFrom(path: String, from: Long): Response {
         val req = Request.Builder().url(base + path).get().apply { if (from > 0) header("Range", "bytes=$from-") }.build()

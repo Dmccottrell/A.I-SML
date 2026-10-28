@@ -20,6 +20,7 @@ import code_sandbox
 import model_code_test
 import github_link
 import scheduled
+import phone_model
 from app_shared import APP_PREFIX, MAX_TEXT
 from app_shared import UNHANDLED
 
@@ -110,6 +111,12 @@ class RoutesPost:
                 docs = (docs + [i for i in proj["docs"] if i not in docs and lib.info(i)])[:10]
             store.set_docs(cid, docs)
             return self._send(200, {"id": cid})
+        if path == "/api/phone-sync" and self.state.flags.on("android_offline_model", who):   # android_offline_model: chats written on the phone
+            try:
+                cid = phone_model.sync_chat(self.state.store(who["user"]), self.state.phone_synced, who["user"], body)
+            except ValueError as e:
+                return self._send(400, {"code": "bad_sync", "message": str(e)})
+            return self._send(200, {"chat": cid})
         if path.startswith("/api/schedules") and self.state.flags.on("chat_schedule", who):    # chat_schedule: scheduled tasks
             return self.post_schedules(who, path, body)
         if path.startswith("/api/push/") and self.state.flags.on("pwa_push", who):    # pwa_push: this browser on or off, and a test
