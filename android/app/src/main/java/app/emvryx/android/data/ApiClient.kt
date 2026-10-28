@@ -239,12 +239,13 @@ class ApiClient(private val session: SessionStore) {
     /** Sends one message and streams the reply. Refusals (limits, a model that is not available) throw [ApiException] before anything streams.
      *  [regenMode] is how a regenerated answer should differ (Regenerate options); [cont] carries on an answer that stopped at its length limit. */
     fun send(chatId: Long, text: String, model: String, effort: String, regenerate: Boolean = false, regenMode: String? = null,
-             cont: Boolean = false): Flow<ReplyEvent> = flow {
+             cont: Boolean = false, research: Boolean = false): Flow<ReplyEvent> = flow {
         val body = buildJsonObject {
             put("text", text); put("model", model); put("effort", effort)
             if (regenerate) put("regenerate", true)          // write the last reply again (api_send in app/routes_chat.py)
             if (regenMode != null) put("regen_mode", regenMode)
             if (cont) put("continue", true)
+            if (research) put("research", true)              // chat_research: search the web several ways and write a report
         }
         val call = stream.newCall(request("/api/chats/$chatId/send", body))
         val response = try {
@@ -288,6 +289,28 @@ class ApiClient(private val session: SessionStore) {
     suspend fun phoneKit(model: String? = null): app.emvryx.android.local.PhoneKit =
         get("/api/phone-model" + (model?.let { "?model=" + java.net.URLEncoder.encode(it, "UTF-8") } ?: ""))
 
+    // ---- the app's own Admin screen (android_native): the website's Admin calls
+
+    suspend fun adminOverview(): app.emvryx.android.local.AdminOverview = get("/api/admin/overview")
+
+    suspend fun adminFlags(): app.emvryx.android.local.AdminFlags = get("/api/admin/flags")
+
+    suspend fun adminSetFlag(id: String, audience: String): app.emvryx.android.local.AdminFlags =
+        post("/api/admin/flags", buildJsonObject { put("id", id); put("audience", audience) })
+
+    /** Admin > Previews > Publish all: everything in preview goes to everyone as one release */
+    suspend fun adminPublishAll(): app.emvryx.android.local.AdminFlags = post("/api/admin/flags", buildJsonObject { put("publish", "all"); put("kind", "minor") })
+
+    suspend fun adminPc(): app.emvryx.android.local.AdminPc = get("/api/admin/pc")
+
+    suspend fun adminSetPc(body: JsonObject): app.emvryx.android.local.AdminPc = post("/api/admin/pc", body)
+
+    suspend fun adminUsers(): app.emvryx.android.local.AdminUsers = get("/api/admin/users")
+
+    /** Admin > Crashes (the owner, with the admin_crashes switch on); null when it is not there for this person */
+    suspend fun adminCrashes(): app.emvryx.android.local.AdminCrashes? =
+        try { get("/api/admin/crashes") } catch (e: ApiException) { if (e.http == 404 || e.http == 403) null else throw e }
+
     /** A VryxCode draft written on the phone while the PC was off: its id on the PC */
     suspend fun codeDraft(body: JsonObject): String = post<DraftSaved>("/api/code/drafts", body).id
 
@@ -295,6 +318,16 @@ class ApiClient(private val session: SessionStore) {
     suspend fun codeDraftRun(id: String): CodeStarted = post("/api/code/drafts/$id/run", JsonObject(emptyMap()))
 
     /** Messages written on the phone while the PC was off, added to the PC's chat (or a new one): the chat's id */
+    suspend fun phoneVision(): app.emvryx.android.local.VisionKit = get("/api/phone-model/vision")
+
+    suspend fun schedules(): app.emvryx.android.local.Schedules = get("/api/schedules")
+
+    suspend fun scheduleAdd(body: JsonObject): app.emvryx.android.local.Schedules = post("/api/schedules", body)
+
+    /** [what]: delete, on (with [on]) or run */
+    suspend fun scheduleDo(id: String, what: String, on: Boolean = false): app.emvryx.android.local.Schedules =
+        post("/api/schedules/$id/$what", buildJsonObject { if (what == "on") put("on", on) })
+
     suspend fun phoneSync(body: JsonObject): Long = post<PhoneSynced>("/api/phone-sync", body).chat
 
     /** The model file from byte [from] on (a download that stopped carries on). Blocking: call it off the main thread, and close the reply. */
