@@ -10,6 +10,7 @@ WHAT THIS FILE DOES
       open_tokenizer.py, with the empty thinking block of the Emvryx 3 models), the sampling, the reply length, and this person's own
       instructions (custom instructions, how they like replies to sound, the house rules) and memory, copied to the phone for when the PC is off.
     * `serve_range` sends the file, or the rest of it from a byte offset (HTTP Range), so a download that stopped carries on where it was.
+    * `vision_kit` (android_phone_vision): the PC's picture helper files (vision.py), so the phone can look at a picture itself too.
     Only signed-in people with the switch on get any of it; nothing names the model's base to the person.
 """
 import hashlib
@@ -211,6 +212,28 @@ def for_person(state, who, asked=None):
     out["choices"] = [{"id": m["id"], "name": m.get("name", ""), "version": m.get("version"), "size": os.path.getsize(files[m["id"]]),
                        "min_ram_gb": m.get("min_ram_gb") or 4, "tagline": m.get("tagline", "")} for m in choices(state.manifest, files)]
     return out
+
+
+PHONE_VISION_REPLY = 600
+VISION_PARTS = ("model", "mmproj")
+
+
+def vision_kit(state):
+    """GET /api/phone-model/vision (android_phone_vision): the PC's picture helper (vision.py), its model and its picture reader ("mmproj"),
+    for the phone to look at pictures itself with the PC off. The same files and instructions the PC uses; never their names."""
+    paths = vision_paths(state)
+    if not paths:
+        return {"available": False, "message": "This PC has no picture model yet (see docs/VISION.md), so the phone reads only the words in pictures."}
+    parts = {k: {"size": os.path.getsize(p), "sha256": state.phone_sha.get(p), "file": "/api/phone-model/vision/file?part=" + k} for k, p in paths.items()}
+    import vision
+    return {"available": True, "parts": parts, "size": sum(x["size"] for x in parts.values()), "preparing": any(x["sha256"] is None for x in parts.values()),
+            "prompt": vision.PROMPT, "max_reply_tokens": PHONE_VISION_REPLY, "min_ram_gb": 6}
+
+
+def vision_paths(state):
+    v = getattr(state, "vision", None)
+    paths = {"model": getattr(v, "model", None), "mmproj": getattr(v, "mmproj", None)}
+    return paths if all(p and os.path.exists(p) for p in paths.values()) else None
 
 
 def file_for(state, asked=None):

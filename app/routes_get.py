@@ -161,6 +161,13 @@ class RoutesGet:
             if not f:
                 return self._send(404, {"code": "no_model", "message": "This PC has no model for phones yet."})
             return phone_model.serve_range(self, f, self.headers.get("Range"))
+        if path == "/api/phone-model/vision" and self.state.flags.on("android_phone_vision", who):    # android_phone_vision: the phone looks at pictures itself
+            return self._send(200, phone_model.vision_kit(self.state))
+        if path == "/api/phone-model/vision/file" and self.state.flags.on("android_phone_vision", who):
+            f = (phone_model.vision_paths(self.state) or {}).get((qs.get("part") or [""])[0])
+            if not f:
+                return self._send(404, {"code": "no_model", "message": "This PC has no picture model yet."})
+            return phone_model.serve_range(self, f, self.headers.get("Range"))
         if path == "/api/projects" and self.state.flags.on("chat_projects", who):
             return self._send(200, {"projects": self.state.store(who["user"]).projects()})
         m = re.fullmatch(r"/api/chats/(-?\d+)", path)
