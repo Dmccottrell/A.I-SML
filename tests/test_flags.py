@@ -1,5 +1,6 @@
 """Feature flags: who sees a new feature (owner, admins, everyone), who can change it, and the welcome tour setting."""
 import os, sys; sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), os.pardir)); import emvryx_paths  # noqa: E402,F401
+import private_files  # noqa: E402
 import tempfile
 import time
 import unittest, unittest.mock
@@ -54,7 +55,7 @@ class Rules(unittest.TestCase):
             path = os.path.join(d, "flags.json")
             a = F.Flags(path)
             a.set_audience("welcome_tour", "everyone", by="owner")
-            self.assertEqual(oct(os.stat(path).st_mode & 0o777), "0o600")
+            self.assertTrue(private_files.is_private(path, mode=0o600))
             b = F.Flags(path)
             self.assertEqual(b.audience("welcome_tour"), "everyone")
             self.assertEqual(b.listing()[0]["changed"]["by"], "owner")

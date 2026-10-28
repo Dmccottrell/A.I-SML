@@ -1,5 +1,6 @@
 """End-to-end tests for app_server.py: a real server on a local port, a fake model, real HTTP calls."""
 import os, sys; sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), os.pardir)); import emvryx_paths  # noqa: E402,F401  (the code folders become importable)
+import private_files  # noqa: E402
 import contextlib
 import http.client
 import io
@@ -522,7 +523,7 @@ class Privacy(Base):
 
     def test_keys_file_is_private_and_holds_no_key(self):
         path = os.path.join(self.tmp.name, "users.json")
-        self.assertEqual(os.stat(path).st_mode & 0o077, 0)
+        self.assertTrue(private_files.is_private(path))
         text = open(path).read()
         for key in (self.sam_key, self.state.owner_key()):
             self.assertNotIn(key, text)                                    # only the hash of a key is stored

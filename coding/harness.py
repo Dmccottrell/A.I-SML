@@ -896,10 +896,22 @@ OTHER_CHECKS = {
 # (a TypeScript type error, error TS2xxx, is not a broken file: it depends on the rest of the project, so only TS1xxx syntax errors count here)
 
 
+def tool_path(tool):
+    """Where a checking program is, or None. On Windows, bash.exe in System32 only starts WSL, which cannot read a Windows path: Git's bash is
+    used instead (none: no shell check, rather than a wrong one)."""
+    found = shutil.which(tool)
+    if tool == "bash" and os.name == "nt" and found and "system32" in found.lower():
+        git = shutil.which("git")
+        cand = os.path.join(os.path.dirname(os.path.dirname(git)), "bin", "bash.exe") if git else ""
+        return cand if cand and os.path.isfile(cand) else None
+    return found
+
+
 def _check_other(path, text):
     ext = os.path.splitext(str(path).lower())[1]
     spec = OTHER_CHECKS.get(ext)
-    if not spec or not shutil.which(spec[0]):
+    exe = tool_path(spec[0]) if spec else None
+    if not exe:
         return []
     import tempfile
     with tempfile.TemporaryDirectory() as d:
@@ -908,7 +920,10 @@ def _check_other(path, text):
         with open(f, "w", encoding="utf-8", newline="\n") as fh:
             fh.write(text)
         try:
-            r = subprocess.run(spec[1](f, d), capture_output=True, text=True, timeout=15, stdin=subprocess.DEVNULL, cwd=d)
+            argv = spec[1](f, d)
+            if argv and argv[0] == spec[0]:
+                argv = [exe] + argv[1:]
+            r = subprocess.run(argv, capture_output=True, text=True, timeout=15, stdin=subprocess.DEVNULL, cwd=d)
         except (OSError, subprocess.SubprocessError):
             return []
     if r.returncode == 0:

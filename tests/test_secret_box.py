@@ -1,5 +1,6 @@
 """Encrypted saved tokens (secret_box.py, github_link.Store) and GitHub's device sign-in."""
 import os, sys; sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), os.pardir)); import emvryx_paths  # noqa: E402,F401  (the code folders become importable)
+import private_files  # noqa: E402
 import json
 import os
 import stat
@@ -23,7 +24,7 @@ class Box(unittest.TestCase):
             self.assertTrue(blob.startswith("enc1:"))
             self.assertNotIn(TOKEN, blob)
             self.assertEqual(box.decrypt(blob), TOKEN)
-            self.assertEqual(stat.S_IMODE(os.stat(os.path.join(d, "secret.key")).st_mode), 0o600)
+            self.assertTrue(private_files.is_private(os.path.join(d, "secret.key"), mode=0o600))
             again = secret_box.SecretBox(d)                                    # the same key is read back
             self.assertEqual(again.decrypt(blob), TOKEN)
 

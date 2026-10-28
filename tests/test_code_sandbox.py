@@ -16,6 +16,15 @@ from tests.test_code_sessions import wait_for
 
 
 class Prefix(unittest.TestCase):
+    def test_on_windows_the_container_never_runs_as_root(self):
+        # Windows has no user ids to pass on, and the container ran as root (found by the Windows test job). Docker Desktop lets any user
+        # write the shared project folder, so it runs as an ordinary user (1000) there too.
+        from unittest import mock
+        with tempfile.TemporaryDirectory() as d, mock.patch.object(CS.os, "name", "nt"):
+            p = CS.docker_prefix("emvryx/code-sandbox:1", d)
+            self.assertIn("--user 1000:1000", " ".join(p))
+            self.assertIn("--user 1001:1002", " ".join(CS.docker_prefix("emvryx/code-sandbox:1", d, uid=1001, gid=1002)))
+
     def test_the_container_is_locked_down(self):
         with tempfile.TemporaryDirectory() as d:
             p = CS.docker_prefix("emvryx/code-sandbox:1", d, cpus="1", memory="512m", pids=64, uid=1000, gid=1000)

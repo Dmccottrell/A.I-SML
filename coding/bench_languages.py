@@ -69,9 +69,19 @@ def env_for(folder):
                 PYTHONDONTWRITEBYTECODE="1")
 
 
+def commands(lang, folder):
+    """(build, run) for a language. On Windows a built program must be main.exe, run by its full path ("./main" is not found there)."""
+    _, build, run, _, _ = LANGS[lang]
+    if os.name == "nt" and run == ["./main"]:
+        build = ["main.exe" if a == "main" else a for a in build]
+        run = [os.path.join(folder, "main.exe")]
+    return build, run
+
+
 def score(lang, folder, task, timeout=10):
     """{"passed", "passed_tests", "total", "stage", "detail"}: builds (if the language needs it) and runs every test."""
-    fname, build, run, _, _ = LANGS[lang]
+    fname = LANGS[lang][0]
+    build, run = commands(lang, folder)
     tests = TASKS[task][1]
     res = {"passed": False, "passed_tests": 0, "total": len(tests), "stage": "build", "detail": ""}
     if not os.path.exists(os.path.join(folder, fname)):

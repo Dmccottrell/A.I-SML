@@ -1,5 +1,6 @@
 """Download my data, delete my account, the privacy and terms pages, and backups."""
 import os, sys; sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), os.pardir)); import emvryx_paths  # noqa: E402,F401  (the code folders become importable)
+import private_files  # noqa: E402
 import io
 import json
 import os
@@ -150,7 +151,7 @@ class Backups(unittest.TestCase):
 
     def test_a_backup_is_consistent_private_and_leaves_the_key_out(self):
         target, count, removed = B.make_backup(self.data, self.out)
-        self.assertEqual(stat.S_IMODE(os.stat(target).st_mode) & 0o077, 0)
+        self.assertTrue(private_files.is_private(target))
         z = zipfile.ZipFile(target)
         names = set(z.namelist())
         self.assertIn("users.json", names)

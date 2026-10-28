@@ -62,6 +62,7 @@ import code_secrets
 import model_code_test
 import chat_plus
 import phone_model
+import private_files
 import scheduled
 import web_push
 import shares
@@ -115,6 +116,7 @@ class AppState(StateAccounts, StateSettings, StateApps, StatePC, StateCode, Stat
         self.data_dir = data_dir                              # None = keep everything in memory (tests)
         if data_dir:
             os.makedirs(data_dir, exist_ok=True)
+            private_files.lock_folder(data_dir)               # Windows: only this user may read the data folder (Linux: each file is 0600)
         self.manifest = manifest or M.load_manifest()
         self.cfg = cfg or U.load_limits()
         self.default_tok, self.root = tok, root

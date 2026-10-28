@@ -73,6 +73,20 @@ class SyntaxCheckOnEveryEdit(unittest.TestCase):
             problems = harness.check_text(path, bad)
             self.assertTrue(problems and "syntax error" in problems[0], (path, problems))
 
+    def test_on_windows_the_shell_check_uses_git_bash_not_the_wsl_launcher(self):
+        # Windows' own bash.exe (System32) starts WSL, which cannot read a Windows path, so the check quietly found nothing (the Windows test job)
+        from unittest import mock
+        d = tempfile.mkdtemp()
+        git_bash = os.path.join(d, "Git", "bin", "bash.exe")
+        os.makedirs(os.path.dirname(git_bash))
+        open(git_bash, "w").close()
+        found = {"bash": r"C:\Windows\System32\bash.exe", "git": os.path.join(d, "Git", "cmd", "git.exe")}
+        with mock.patch.object(harness.os, "name", "nt"), mock.patch.object(harness.shutil, "which", lambda t: found.get(t)):
+            self.assertEqual(harness.tool_path("bash"), git_bash)
+        with mock.patch.object(harness.os, "name", "nt"), mock.patch.object(harness.shutil, "which", lambda t: {"bash": found["bash"]}.get(t)):
+            self.assertIsNone(harness.tool_path("bash"))                                   # no Git bash: no shell check, rather than a wrong one
+        self.assertEqual(harness.tool_path("python"), shutil.which("python"))
+
     def test_type_errors_and_missing_things_are_not_reported_as_broken_syntax(self):
         if shutil.which("tsc"):
             self.assertEqual(harness.check_text("a.ts", "const n: number = 'text';\nimport x from './elsewhere';\nexport {};\n"), [])

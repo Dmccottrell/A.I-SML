@@ -1,5 +1,6 @@
 """vryxcode_secrets: secrets per project reach the programs VryxCode runs, never the model, and never come back to the page."""
 import os, sys; sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), os.pardir)); import emvryx_paths  # noqa: E402,F401
+import private_files  # noqa: E402
 import json
 import subprocess
 import tempfile
@@ -24,7 +25,7 @@ class Store(unittest.TestCase):
             with open(os.path.join(d, "code_secrets", "sam.json")) as f:
                 raw = f.read()
             self.assertNotIn(VALUE, raw)
-            self.assertEqual(oct(os.stat(os.path.join(d, "code_secrets", "sam.json")).st_mode & 0o777), "0o600")
+            self.assertTrue(private_files.is_private(os.path.join(d, "code_secrets", "sam.json"), mode=0o600))
             self.assertEqual(code_secrets.ProjectSecrets(d, secret_box.SecretBox(d)).values("sam", "demo"), {"API_KEY": VALUE})   # survives a restart
             s.delete("sam", "demo", "API_KEY")
             self.assertEqual(s.values("sam", "demo"), {})

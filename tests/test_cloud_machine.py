@@ -1,5 +1,6 @@
 """VryxCode's cloud machine: the SSH runner (cloud_run.py), its safety checks, and the settings. SSH itself is replaced by a stand-in `ssh` program that runs the remote command on this computer in a throwaway home folder."""
 import os, sys; sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), os.pardir)); import emvryx_paths  # noqa: E402,F401
+import private_files  # noqa: E402
 import io
 import shutil
 import stat
@@ -78,7 +79,8 @@ class Unpack(unittest.TestCase):
             self.assertEqual(names, ["a.py", "src/b.py"])
 
 
-@unittest.skipUnless(shutil.which("bash") and shutil.which("timeout") and shutil.which("python3"), "needs bash, timeout and python3")
+@unittest.skipUnless(os.name != "nt" and shutil.which("bash") and shutil.which("timeout") and shutil.which("python3"),
+                     "needs bash, timeout and python3, and a system that runs a script found on PATH (the stand-in ssh; Windows runs only .exe)")
 class Runner(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()
@@ -187,7 +189,7 @@ class Server(Base):
         self.assertTrue(j["public_key"].startswith("ssh-ed25519 "))
         self.assertNotIn("PRIVATE", str(j))
         private = os.path.join(self.tmp.name, "cloud_key")
-        self.assertEqual(stat.S_IMODE(os.stat(private).st_mode), 0o600)
+        self.assertTrue(private_files.is_private(private, mode=0o600))
         pub = j["public_key"]
         self.assertEqual(self.owner.call("POST", "/api/admin/cloud/keygen", {})[1]["public_key"], pub)         # asking again does not replace it
 
@@ -210,7 +212,7 @@ class Server(Base):
         self.stand_in_tools(home)
         s, j = self.owner.call("POST", "/api/admin/cloud/keygen", {})
         self.assertEqual((s, j["key_made"], j["public_key"]), (200, True, "ssh-ed25519 AAAAFAKEKEY emvryx-cloud"))
-        self.assertEqual(stat.S_IMODE(os.stat(os.path.join(self.tmp.name, "cloud_key")).st_mode), 0o600)
+        self.assertTrue(private_files.is_private(os.path.join(self.tmp.name, "cloud_key"), mode=0o600))
         self.assertEqual(self.owner.call("POST", "/api/admin/cloud/test", {})[0], 400)                         # no host yet
         self.owner.call("POST", "/api/admin/cloud", {"host": "gpu.example", "port": 22, "user": "root"})
         s, j = self.owner.call("POST", "/api/admin/cloud/test", {})

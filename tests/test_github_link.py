@@ -1,5 +1,6 @@
 """GitHub as a connected app: the saved token, the API calls (faked), git push/pull (against a local bare repo), and the guards."""
 import os, sys; sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), os.pardir)); import emvryx_paths  # noqa: E402,F401  (the code folders become importable)
+import private_files  # noqa: E402
 import json
 import os
 import stat
@@ -59,7 +60,7 @@ class StoreTests(unittest.TestCase):
             s = G.Store(d)
             s.connect("sam", TOKEN, "sam", 1)
             path = s._path("sam")
-            self.assertEqual(stat.S_IMODE(os.stat(path).st_mode), 0o600)
+            self.assertTrue(private_files.is_private(path, mode=0o600))
             self.assertNotIn(TOKEN, json.dumps(s.public("sam")))
             self.assertTrue(s.connected("sam"))
             s.log("sam", "pushed x")
