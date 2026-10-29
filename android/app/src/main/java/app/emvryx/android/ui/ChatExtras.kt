@@ -204,7 +204,9 @@ fun SideLink(icon: String, label: String, note: String = "", onClick: () -> Unit
         verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         PwaIcon(icon, Emvryx.muted)
-        Text(label, fontSize = 16.sp, fontWeight = FontWeight.Medium, modifier = Modifier.weight(1f))
-        if (note.isNotBlank()) Text(note, color = Emvryx.muted, fontSize = 12.sp)
+        // the name always gets its room on one line; the note takes what is left and ends in "…" (a long note squeezed "Scheduled tasks" to a letter per line)
+        Text(label, fontSize = 16.sp, fontWeight = FontWeight.Medium, maxLines = 1, softWrap = false)
+        Text(note, color = Emvryx.muted, fontSize = 12.sp, maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+            textAlign = androidx.compose.ui.text.style.TextAlign.End, modifier = Modifier.weight(1f))
     }
 }
