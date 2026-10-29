@@ -171,7 +171,7 @@ class RoutesCode:
                 allowed, why = st.code_allowed(who)
                 return self._send(200, {"allowed": allowed, "why_not": why, "sandbox": st.code.sandbox.get("mode", "none"),
                                         "usage": self._code_usage(who, None), "models": st.code_models(who), "projects": st.code.projects(user),
-                                        "running": run.id if run else None, "project": run.project if run else None, "environments": st.code.environments(who["admin"]),
+                                        "running": run.id if run else None, "project": run.project if run else None, "environments": st.code.environments(who["admin"], own_pc=self._own_pc(st, who)),
                                         "browser_check": browser_check.available(),
                                         "ci_watch": sorted(k.split("|", 1)[1] for k in st.ci_watcher().items if k.split("|", 1)[0] == user) if who["owner"] else [],
                                         "effort": {"auto": vryxcode.pick_auto(st.code_models(who)), "levels": [{"id": k, "name": k.title(), "note": v["note"]} for k, v in vryxcode.EFFORTS.items()]}
@@ -263,15 +263,22 @@ class RoutesCode:
             self._code_error(e)
 
     @staticmethod
+    def _own_pc(st, who):
+        """An admin may pick This computer although everyone else is run in the sandbox (vryxcode_owner_pc; the owner works from an admin
+        account), as may the owner with vryxcode_open_pc."""
+        return (bool(who.get("admin")) and st.flags.on("vryxcode_owner_pc", who)) or (bool(who.get("owner")) and st.flags.on("vryxcode_open_pc", who))
+
+    @staticmethod
     def _kit_flags(st, who):
         """The VryxCode switches that are on for this person, as _code_kit's keywords."""
         on = lambda fid: st.flags.on(fid, who)
         return {"fixes": on("vryxcode_fixes"), "preview": on("vryxcode_preview"), "guard": on("vryxcode_guardrails"), "servers": on("vryxcode_servers"),
-                "autocheck": on("vryxcode_autocheck"), "open_pc": bool(who.get("owner")) and on("vryxcode_open_pc"), "record": bool(who.get("owner")) and on("vryxcode_record"),
+                "autocheck": on("vryxcode_autocheck"), "open_pc": bool(who.get("owner")) and on("vryxcode_open_pc"),
+                "owner_pc": bool(who.get("admin")) and on("vryxcode_owner_pc"), "record": bool(who.get("owner")) and on("vryxcode_record"),
                 "secrets": on("vryxcode_secrets"), "autocontinue": on("vryxcode_autocontinue"), "options": on("vryxcode_options")}
 
     @staticmethod
-    def _code_kit(st, user, model, project, fixes=False, preview=False, guard=False, servers=False, autocheck=False, open_pc=False, record=False, secrets=False, autocontinue=False, options=False):
+    def _code_kit(st, user, model, project, fixes=False, preview=False, guard=False, servers=False, autocheck=False, open_pc=False, record=False, secrets=False, autocontinue=False, options=False, owner_pc=False):
         """What a session needs to work with this model in this project: the model call, the usage meter, its tools (GitHub, the browser check) and the git name."""
         box = {}
 
@@ -306,6 +313,7 @@ class RoutesCode:
         generate.guardrails = guard                    # vryxcode_guardrails: no going in circles, progress or stop, tests locked while fixing (coding/guardrails.py)
         generate.autocheck = autocheck                 # vryxcode_autocheck: the whole project is built after every change to code (harness.project_build_command)
         generate.open_pc = open_pc                     # vryxcode_open_pc: the OWNER's own sessions on "This computer" may run anything (harness.Sandbox open_host)
+        generate.owner_pc = owner_pc                   # vryxcode_owner_pc: ADMINS may pick This computer (the allowed programs) when everyone else is in the sandbox
         generate.record = record                       # vryxcode_record: the OWNER's own sessions are recorded whole, for replaying (tools/replay_vryx.py)
         generate.autocontinue = autocontinue           # vryxcode_autocontinue: out of steps, it carries on by itself (code_sessions AUTO_ROUNDS)
         generate.options = options                     # vryxcode_options: an open-ended message gets a question with choices first (code_options.py)
@@ -706,7 +714,8 @@ class RoutesCode:
                 allowed, why = st.code_allowed(who)
                 if not allowed:
                     raise code_sessions.CodeError(why, "Ask the owner about VryxCode access.")
-                return self._send(200, st.code.run_command(user, body.get("project"), body.get("command"), owner=who["admin"], env=str(body.get("env") or "local")))
+                return self._send(200, st.code.run_command(user, body.get("project"), body.get("command"), owner=who["admin"], env=str(body.get("env") or "local"),
+                                                                own_pc=self._own_pc(st, who)))
             if path == "/api/code/complete":                      # inline autocomplete (grey text at the cursor)
                 allowed, why = st.code_allowed(who)
                 if not allowed:
