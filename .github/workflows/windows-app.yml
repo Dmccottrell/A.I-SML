@@ -1,0 +1,55 @@
+# The Emvryx app for Windows (windows-app/): built on every pull request that touches it, and on main it replaces the windows-latest release with
+# Emvryx-Setup.exe and version.json (app_updates: the app compares its own build with it). Settings > Emvryx apps links to it. The cloud session
+# that writes the app has no Windows, so this is where it is compiled. Nothing here is paid for: the installer is not code-signed, so Windows
+# shows "Windows protected your PC" the first time (More info, Run anyway).
+name: windows-app
+
+on:
+  push:
+    branches: [main]
+    paths: ["windows-app/**", ".github/workflows/windows-app.yml"]
+  pull_request:
+    paths: ["windows-app/**", ".github/workflows/windows-app.yml"]
+  workflow_dispatch:
+
+concurrency:
+  group: windows-app-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: windows-latest
+    timeout-minutes: 30
+    permissions:
+      contents: write                 # only to replace the windows-latest release, on main
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build Emvryx.exe
+        shell: bash
+        run: |
+          cmake -S windows-app -B build -DEMVRYX_BUILT_FROM="$GITHUB_SHA"
+          cmake --build build --config Release
+          ls -la build/Release/Emvryx.exe
+      - name: The installer (Inno Setup, free)
+        shell: pwsh
+        run: |
+          $iscc = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe"
+          if (-not (Test-Path $iscc)) { choco install innosetup -y --no-progress | Out-Null }
+          $env:EMVRYX_VERSION = (Get-Date -Format "yyyy.M.d")
+          & $iscc windows-app\installer.iss
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          Get-Item dist\Emvryx-Setup.exe
+      - uses: actions/upload-artifact@v4
+        with:
+          name: emvryx-windows
+          path: dist/Emvryx-Setup.exe
+      - name: Replace the windows-latest release
+        if: github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          printf '{"sha": "%s", "built": "%s"}\n' "$GITHUB_SHA" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" > dist/version.json
+          gh release delete windows-latest --yes --cleanup-tag || true
+          gh release create windows-latest dist/Emvryx-Setup.exe dist/version.json --target "$GITHUB_SHA" --prerelease --title "Emvryx for Windows (newest)" \
+            --notes "The newest Windows app, built from ${GITHUB_SHA::7}. Download Emvryx-Setup.exe and open it. Windows may say it protected your PC the first time: More info, Run anyway."

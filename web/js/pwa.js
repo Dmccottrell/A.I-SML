@@ -124,6 +124,21 @@ function pwaLaunch() {
   });
 }
 
+// ---------------------------------------------------------------- app_updates: inside the Emvryx app for Windows (windows-app/main.cc)
+// The app tells the page which build it is; the server knows the newest one (app_updates.py). Later waits for the next build.
+async function winAppUpdate() {
+  const app = window.EMVRYX_APP;
+  if (!app || app.platform !== 'windows' || !app.builtFrom || !pwaOn('app_updates') || $('appUpdate')) return;
+  let j;
+  try { const r = await api('/api/app-latest?platform=windows'); if (!r.ok) return; j = await r.json(); } catch (e) { return; }
+  if (!j.sha || j.sha === app.builtFrom || pwaStore.get('emvryx_app_later') === j.sha) return;
+  const later = () => pwaStore.set('emvryx_app_later', j.sha);
+  const bar = el('div', {class: 'app-update', id: 'appUpdate', role: 'status'}, el('b', {}, 'A new version of Emvryx is ready'), el('span', {class: 'grow'}),
+    el('button', {class: 'chip', type: 'button', onclick: () => { later(); bar.remove(); }}, 'Later'),
+    el('a', {class: 'btn small', href: j.download, onclick: () => { later(); setTimeout(() => bar.remove(), 300); }}, 'Update'));
+  document.body.append(bar);
+}
+
 // ---------------------------------------------------------------- after sign-in
 function pwaReady() {
   if (!S.state) return;
@@ -131,7 +146,7 @@ function pwaReady() {
   pwaStore.set('emvryx_pwa_flags', {pwa_offline: pwaOn('pwa_offline')});         // offline, the switches cannot be asked for: remember this one
   if (!pwaOn('pwa_offline')) { try { localStorage.removeItem(PWA_KEPT()); } catch (e) { /* nothing kept */ } }
   pwaButtons(); pwaFlush();
-  if (!PWA.launched) { PWA.launched = true; pwaLaunch(); pwaWatchUpdates();
+  if (!PWA.launched) { PWA.launched = true; pwaLaunch(); pwaWatchUpdates(); winAppUpdate();
     if (location.hash === '#code') { history.replaceState(null, '', location.pathname); openCode(); } }      // a VryxCode notification was tapped
 }
 setInterval(() => { if (S.state && S.state !== pwaReady.seen) { pwaReady.seen = S.state; pwaReady(); } }, 500);

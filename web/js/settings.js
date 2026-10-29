@@ -59,14 +59,17 @@ async function sxAcct() { try { SX.acct = await (await api('/api/account')).json
 
 // A page is a list of sections; a section is {title, rows}; a row is {title, desc, ctl | node, keys, danger}. Search looks through every row.
 const APK_URL = 'https://github.com/Dmccottrell/A.I-SML/releases/download/android-latest/emvryx.apk';     // made by .github/workflows/android.yml (release job)
+const WIN_URL = 'https://github.com/Dmccottrell/A.I-SML/releases/download/windows-latest/Emvryx-Setup.exe';   // made by .github/workflows/windows-app.yml
 function sxSections(id) {
   const st = S.state, s = st.settings, w = st.window, a = SX.acct || {mfa: {}}, owner = st.admin;
   const A = {
     general: [...(featureOn('pwa_push') ? [{title: 'Notifications', rows: [   // pwa_push (pwa.js): this device is told when an answer or VryxCode is ready
       {title: 'Notifications on this device', desc: 'When an answer or a VryxCode session is ready while Emvryx is closed. Only a short line is sent, never the chat.', ctl: pwaPushRow(), keys: 'notifications push alerts phone'}]}] : []),
-      ...(featureOn('apk_link') ? [{title: 'Android app', rows: [      // apk_link: one fixed link, always the newest app (the android-latest release)
+      ...(featureOn('apk_link') ? [{title: 'Emvryx apps', rows: [      // apk_link: fixed links, always the newest apps (the android-latest and windows-latest releases)
+      {title: 'Get the Windows app', desc: 'Emvryx in its own window, with a Start menu icon, like Claude\u2019s desktop app. Always the newest version. Windows may say \u201cWindows protected your PC\u201d the first time: tap More info, then Run anyway.',
+        ctl: el('a', {class: 'sbtn', href: WIN_URL, rel: 'noopener'}, 'Download for Windows'), keys: 'windows desktop exe pc computer download install app'},
       {title: 'Get the Android app', desc: 'Always the newest version. On your phone, tap Download and open the file (allow installing from your browser if it asks). On a computer, scan the code with the phone.',
-        ctl: el('div', {style: 'display:flex;gap:8px;flex-wrap:wrap'}, el('a', {class: 'sbtn', href: APK_URL, rel: 'noopener'}, 'Download'),
+        ctl: el('div', {style: 'display:flex;gap:8px;flex-wrap:wrap'}, el('a', {class: 'sbtn', href: APK_URL, rel: 'noopener'}, 'Download for Android'),
           sxBtn('Show code', () => dialog([el('h2', {}, 'Scan with your phone'), el('div', {style: 'display:grid;place-items:center;margin:8px 0'}, qrSvg(APK_URL, 5)), el('small', {style: 'color:var(--muted);word-break:break-all'}, APK_URL)], 'Close'))),
         keys: 'android apk phone download install app'}]}] : []),
       {title: 'Welcome tour and what\u2019s new', rows: [{title: 'What\u2019s new', desc: 'Every release so far, newest first: new features and new model versions.', ctl: sxBtn('See releases', () => { closeSettings(); openWhatsNew(true); }), keys: 'whats new releases updates changes history version'}, ...(featureOn('welcome_tour') ? [{title: 'Welcome tour', desc: 'The short animated introduction to Emvryx: the models, answers with sources, making it yours and VryxCode.', ctl: sxBtn('Start the tour', () => { closeSettings(); openTour(true); }), keys: 'welcome tour introduction walk through intro'}] : [])]},

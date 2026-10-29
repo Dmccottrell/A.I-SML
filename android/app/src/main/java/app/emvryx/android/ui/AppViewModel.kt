@@ -208,6 +208,25 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     /** Auto is always there; otherwise a model may list the levels it offers */
     fun effortAllowed(id: String) = id == "auto" || currentModel?.efforts?.contains(id) ?: true
 
+    // ---- app_updates: "A new version of Emvryx is ready" (local/AppUpdate.kt), checked once each time the app opens
+    var updateReady by mutableStateOf<app.emvryx.android.local.AppUpdate.Latest?>(null)
+    private var updateChecked = false
+    private val updatePrefs get() = getApplication<EmvryxApp>().getSharedPreferences("emvryx_update", android.content.Context.MODE_PRIVATE)
+
+    private fun checkForUpdate() {
+        updateChecked = true
+        viewModelScope.launch {
+            val latest = app.emvryx.android.local.AppUpdate.latest()
+            if (app.emvryx.android.local.AppUpdate.newer(app.emvryx.android.BuildConfig.BUILT_FROM, latest, updatePrefs.getString("later", "").orEmpty())) updateReady = latest
+        }
+    }
+
+    /** Later: not asked again about this build (the next one is offered) */
+    fun updateLater() {
+        updateReady?.let { updatePrefs.edit().putString("later", it.sha).apply() }
+        updateReady = null
+    }
+
     // ---- model welcome tours (declared before init: loading the state reads them)
     var tour by mutableStateOf<ModelCard?>(null)
         private set
@@ -412,6 +431,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         applyLooks(s)
         state = s
         online = true
+        if (s.on("app_updates") && !updateChecked) checkForUpdate()
         phone.rememberAllowed(s.on("android_offline_model"))                  // remembered for when the PC is off
         (getApplication<EmvryxApp>()).vision.rememberAllowed(s.on("android_phone_vision"))
         if (phone.allowed) viewModelScope.launch {
