@@ -27,7 +27,7 @@ class Rules(unittest.TestCase):
         self.assertEqual(mp.publish(MANIFEST, "flare-2.6", by="owner"), "Flare 2.6")
         self.assertEqual(mp.status_of(MANIFEST["models"][1]), "stable")
         r = f.releases()[0]
-        self.assertEqual((r["kind"], r["model"], f.version()), ("model-new", "Flare 2.6", "1.0.0"))
+        self.assertEqual((r["kind"], r["model"], f.version()), ("model-new", "Flare 2.6", "1.0"))
         self.assertIn("Flare 2.5 moves to Other models", r["notes"])
         with self.assertRaises(ValueError):
             mp.publish(MANIFEST, "flare-2.6")                                        # already live
@@ -105,7 +105,7 @@ class Server(Base):
         self.assertIn("flare-2.6", cards)                                              # the new Flare card
         self.assertTrue(sam["flare-2.5"]["older"])                                     # and 2.5 moved to Other models, still usable
         self.assertEqual(sam["flare-2.5"]["state"], "ready")
-        self.assertEqual(self.state.flags.version(), "1.0.0")
+        self.assertEqual(self.state.flags.version(), "1.0")
         s, j = self.sam.call("GET", "/api/whats-new")
         self.assertEqual([r["model"] for r in j["releases"]], ["Flare 2.6"])
         self.assertIn("Faster.", j["releases"][0]["notes"])                           # the "What's new" points go out with the publish, not before

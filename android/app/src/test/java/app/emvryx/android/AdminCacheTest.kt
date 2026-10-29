@@ -32,7 +32,20 @@ class AdminCacheTest {
 
     @Test
     fun publishAllCountsOnlyAppFeaturesInPreview() {
-        assertEquals(1, AdminRules.inPreview(flags))                                // not the off one, not VryxCode's own (published with Push update)
+        assertEquals(1, AdminRules.inPreview(flags))                                // not the off one, not VryxCode's own (published with its own push)
+    }
+
+    @Test
+    fun newFeaturesAndBugFixesArePublishedSeparately() {
+        // features add 0.5 to the version, fixes 0.1 (app/flags.py): each button counts only its own kind, and a fix note counts as a fix
+        val mixed = flags + AdminFlag("chat_fixes", audience = "admins", kind = "fix")
+        assertEquals(1, AdminRules.inPreview(mixed, "feature"))
+        assertEquals(1, AdminRules.inPreview(mixed, "fix"))
+        assertEquals(3, AdminRules.fixesWaiting(AdminFlags(mixed, fixes = listOf("One", "Two"))))
+        val j = Json { ignoreUnknownKeys = true }.decodeFromString<AdminFlags>("""{"flags": [{"id": "chat_fixes", "kind": "fix"}], "version": "3.1",
+            "next": {"features": "3.6", "fixes": "3.2"}, "fixes": []}""")
+        assertEquals("fix", j.flags[0].kind)
+        assertEquals("3.2", j.next["fixes"])
     }
 
     @Test

@@ -85,8 +85,8 @@ FLAGS = [
     {"id": "vryxcode_owner_pc", "title": "VryxCode: This computer for admins", "desc": "When the PC runs everyone's VryxCode sessions in the isolated sandbox, admins can still pick This computer for their own sessions: it works in the project folder on the PC with the usual short list of allowed programs (not \u201cnothing blocked\u201d). Everyone else stays in the sandbox. Only admins ever get it, whatever the audience; set it to Owner to keep it to the owner account.", "default": "admins"},
     {"id": "model_code_test", "title": "Models: coding test from real sessions", "desc": "Admin > Models gets a Coding test: the recorded VryxCode sessions (only your own, recorded with the switch for it) are turned into tasks with checks, and each of your models is run on them, sealed, to show which one codes best. Only your own models are tested, and nothing from them is used for training.", "default": "admins"},
 ]
-# Bug fixes people would notice, in plain words. Each goes out with the next release of its part (product None: the next app release, from Previews;
-# "vryxcode": the next VryxCode version, Push update in Models) and shows under "Fixed" in What's new. Add one line here with every fix that ships.
+# Bug fixes people would notice, in plain words. Each goes out with the next bug-fix release of its part (product None: Publish bug fixes in Previews;
+# "vryxcode": Push bug fixes in Models > VryxCode) and shows under "Fixed" in What's new. Add one line here with every fix that ships.
 FIXES = [
     {"id": "android_menu_names", "product": None, "text": "In the Android app's side menu, names like \u201cScheduled tasks\u201d stay on one line; the grey note beside them gives way instead of squeezing the name to a letter per line."},
     {"id": "pwa_menu_solid", "product": None, "text": "On a phone, the menu in the modern look is solid: the chat behind it no longer shows through its rows."},
@@ -111,25 +111,51 @@ FIX_IDS = {f["id"] for f in FIXES}
 # Products that are released like a model: every unpublished feature of VryxCode is part of the next VryxCode version. Each feature still has its own switch
 # (for testing on the owner and admins); "Push update" in Admin > Models sends all of the waiting ones to everyone at once as, say, VryxCode 1.4.
 PRODUCTS = {"vryxcode": {"title": "VryxCode", "desc": "The coding agent. Its new features wait here and go out together as the next VryxCode version."}}
+# Bug-fix switches: they go out with a fixes release, never with new features (the owner's rule: features and fixes are pushed separately).
+FIX_FLAGS = {"chat_fixes", "photo_fixes", "vryxcode_fixes"}
 for _f in FLAGS:
     if _f["id"].startswith("vryxcode_"):
         _f.setdefault("model", "vryxcode")
+    _f.setdefault("kind", "fix" if _f["id"] in FIX_FLAGS else "feature")
 BY_ID = {f["id"]: f for f in FLAGS}
-VERSION_RE = re.compile(r"\d{1,3}\.\d{1,3}\.\d{1,3}")
-KINDS = ("major", "minor", "patch")
+VERSION_RE = re.compile(r"\d{1,3}\.\d{1,3}(?:\.\d{1,3})?")
+# Versions are counted in tenths: a features release adds 0.5 (3.0 -> 3.5), a fixes release adds 0.1 (3.1 -> 3.2, 3.9 -> 4.0), a major one goes to
+# the next whole number. "minor" and "patch" are the older names (saved schedules, the Android app) for features and fixes.
+KINDS = ("features", "fixes", "major", "minor", "patch")
+CATEGORY = {"features": "features", "minor": "features", "major": "features", "fixes": "fixes", "patch": "fixes"}
+
+
+def tenths(version):
+    """A version as tenths: "3.5" -> 35. An older number that tenths cannot say (1.4.2, 1.12) carries on from the next whole number, never backwards."""
+    parts = [int(x) for x in str(version).split(".")]
+    major, minor, patch = (parts + [0, 0])[:3]
+    if minor <= 9 and patch == 0:
+        return major * 10 + minor
+    return (major + 1) * 10
+
+
+def step(version, kind):
+    t = tenths(version)
+    t = (t // 10 + 1) * 10 if kind == "major" else t + (5 if CATEGORY[kind] == "features" else 1)
+    return f"{t // 10}.{t % 10}"
+
+
+def flag_kind(fid):
+    """The kind of release one switch goes out in when it is published alone: "features" or "fixes"."""
+    return "fixes" if BY_ID[fid]["kind"] == "fix" else "features"
 
 
 class Flags:
     def __init__(self, path=None, clock=time.time):
         self.path, self.lock, self.clock = path, threading.Lock(), clock
-        self.data = {"audiences": {}, "changed": {}, "scheduled": {}, "version": "1.0.0", "releases": [], "products": {}, "fixed": []}
+        self.data = {"audiences": {}, "changed": {}, "scheduled": {}, "version": "1.0", "releases": [], "products": {}, "fixed": []}
         if path and os.path.exists(path):
             try:
                 with open(path, encoding="utf-8") as f:
                     got = json.load(f)
                 self.data.update({k: got[k] for k in ("audiences", "changed", "scheduled", "releases", "products", "fixed") if isinstance(got.get(k), (dict, list))})
                 if isinstance(got.get("version"), str) and VERSION_RE.fullmatch(got["version"]):
-                    self.data["version"] = got["version"]
+                    self.data["version"] = got["version"]                 # an older 1.4.2 stays as it was until the next release moves it on
                 for i, r in enumerate(self.data["releases"], 1):         # releases saved before they were numbered
                     r.setdefault("seq", i)
             except (OSError, ValueError):
@@ -178,25 +204,24 @@ class Flags:
             self._apply(fid, audience, by, self.clock())
             self._save()
 
-    def _apply(self, fid, audience, by, at, kind="minor", notes=""):
+    def _apply(self, fid, audience, by, at, kind=None, notes=""):
         """Set one feature's audience (caller holds the lock). Going live for everyone is a release: the version goes up and the release history gets a line."""
         was = self.audience_raw(fid)
         self.data["audiences"][fid] = audience
         self.data["changed"][fid] = {"by": by, "at": at}
         if audience == "everyone" and was != "everyone":
-            self._release([fid], by, at, kind, notes)
+            self._release([fid], by, at, kind or flag_kind(fid), notes)
 
     def audience_raw(self, fid):
         a = self.data["audiences"].get(fid)
         return a if a in AUDIENCES else BY_ID[fid]["default"]
 
-    def _release(self, fids, by, at, kind="minor", notes=""):
-        major, minor, patch = (int(x) for x in self.data["version"].split("."))
-        major, minor, patch = (major + 1, 0, 0) if kind == "major" else (major, minor + 1, 0) if kind == "minor" else (major, minor, patch + 1)
-        self.data["version"] = f"{major}.{minor}.{patch}"
+    def _release(self, fids, by, at, kind="features", notes=""):
+        """One app release. A fixes release also carries the waiting fix notes (FIXES); a features release never does."""
+        self.data["version"] = step(self.data["version"], kind)
         items = [{"id": f, "title": BY_ID[f]["title"], "desc": BY_ID[f]["desc"]} for f in fids]
-        self.data["releases"].append({"seq": self.next_seq(), "version": self.data["version"], "kind": kind, "at": at, "by": by, "notes": notes, "items": items,
-                                      "fixes": self._take_fixes(None)})
+        self.data["releases"].append({"seq": self.next_seq(), "version": self.data["version"], "kind": CATEGORY[kind], "at": at, "by": by, "notes": notes, "items": items,
+                                      "fixes": self._take_fixes(None) if CATEGORY[kind] == "fixes" else []})
         del self.data["releases"][:-200]
 
     def next_seq(self):
@@ -232,8 +257,7 @@ class Flags:
 
     @staticmethod
     def next_product_version(version, kind):
-        major, minor = (int(x) for x in version.split("."))
-        return f"{major + 1}.0" if kind == "major" else f"{major}.{minor + 1}"
+        return step(version, kind)
 
     def products(self):
         """Admin > Models: each product with its version, the features waiting for its next version, the live ones and the ones switched off."""
@@ -241,24 +265,28 @@ class Flags:
         for pid, p in PRODUCTS.items():
             feats = [f for f in FLAGS if f.get("model") == pid]
             v = self.product_version(pid)
-            pick = lambda test: [{"id": f["id"], "title": f["title"], "desc": f["desc"], "audience": self.audience(f["id"])} for f in feats if test(self.audience(f["id"]))]
+            pick = lambda test, kind=None: [{"id": f["id"], "title": f["title"], "desc": f["desc"], "audience": self.audience(f["id"])} for f in feats
+                                            if test(self.audience(f["id"])) and (kind is None or f["kind"] == kind)]
             out.append({"id": pid, "title": p["title"], "desc": p["desc"], "version": v, "label": f"{p['title']} {v}",
-                        "next": {k: self.next_product_version(v, k) for k in ("minor", "major")},
-                        "waiting": pick(lambda a: a not in ("everyone", "off")), "live": pick(lambda a: a == "everyone"), "held": pick(lambda a: a == "off"),
+                        "next": {k: self.next_product_version(v, k) for k in ("features", "fixes")},
+                        "waiting": pick(lambda a: a not in ("everyone", "off"), "feature"), "waiting_fixes": pick(lambda a: a not in ("everyone", "off"), "fix"),
+                        "live": pick(lambda a: a == "everyone"), "held": pick(lambda a: a == "off"),
                         "fixes": [f["text"] for f in self.pending_fixes(pid)]})
         return out
 
-    def push_product(self, pid, by="", kind="minor", notes=""):
-        """Every waiting feature of the product goes live for everyone as its next version (a model update in the release history; the app's own version
-        does not change). A feature switched Off is on hold and stays out. Returns the new label ("VryxCode 1.4")."""
+    def push_product(self, pid, by="", kind="features", notes=""):
+        """The product's waiting new features (kind "features", +0.5) or its waiting fixes and fix notes ("fixes", +0.1) go live for everyone as its
+        next version (a model update in the release history; the app's own version does not change). A switch that is Off is on hold and stays out.
+        Returns the new label ("VryxCode 1.5")."""
         if pid not in PRODUCTS:
             raise ValueError("no such model")
-        if kind not in ("minor", "major"):
-            raise ValueError("choose minor or major")
-        title = PRODUCTS[pid]["title"]
-        ids = [f["id"] for f in FLAGS if f.get("model") == pid and self.audience(f["id"]) not in ("everyone", "off")]
-        if not ids and not self.pending_fixes(pid):
-            raise ValueError(f"nothing in {title} is waiting: every feature is live or switched off, and there are no new fixes")
+        if kind not in KINDS:
+            raise ValueError("choose features or fixes")
+        title, cat = PRODUCTS[pid]["title"], CATEGORY[kind]
+        want = "fix" if cat == "fixes" else "feature"
+        ids = [f["id"] for f in FLAGS if f.get("model") == pid and f["kind"] == want and self.audience(f["id"]) not in ("everyone", "off")]
+        if not ids and not (cat == "fixes" and self.pending_fixes(pid)):
+            raise ValueError(f"no {title} {'fixes' if cat == 'fixes' else 'new features'} are waiting")
         with self.lock:
             v = self.next_product_version(self.product_version(pid), kind)
             now = self.clock()
@@ -270,16 +298,18 @@ class Flags:
             label = f"{title} {v}"
             self.data["releases"].append({"seq": self.next_seq(), "version": self.data["version"], "kind": "model-update", "model": label, "product": pid, "at": now, "by": by,
                                           "notes": str(notes)[:500], "items": [{"id": f, "title": BY_ID[f]["title"], "desc": BY_ID[f]["desc"]} for f in ids],
-                                          "fixes": self._take_fixes(pid)})
+                                          "release": cat, "fixes": self._take_fixes(pid) if cat == "fixes" else []})
             del self.data["releases"][:-200]
             self._save()
         return label
 
     @staticmethod
     def next_version(version, kind):
-        """What publishing would make the version: 1.4.2 -> patch 1.4.3, minor 1.5.0, major 2.0.0."""
-        major, minor, patch = (int(x) for x in str(version).split("."))
-        return {"major": f"{major + 1}.0.0", "minor": f"{major}.{minor + 1}.0", "patch": f"{major}.{minor}.{patch + 1}"}[kind]
+        """What publishing would make the version: 3.0 -> features 3.5, fixes 3.1, major 4.0."""
+        return step(version, kind)
+
+    def next_versions(self):
+        return {k: step(self.data["version"], k) for k in ("features", "fixes")}
 
     def version(self):
         return self.data["version"]
@@ -290,13 +320,15 @@ class Flags:
     def preview_ids(self):
         return [f["id"] for f in FLAGS if self.audience(f["id"]) != "everyone"]
 
-    def publish_all(self, by="", kind="minor", notes=""):
-        """Everything still in preview goes live for everyone as ONE release. Returns the ids that went live."""
+    def publish_all(self, by="", kind="features", notes=""):
+        """Every app switch of one kind still in preview goes live for everyone as ONE release: the new features ("features", +0.5), or the bug-fix
+        switches with the waiting fix notes ("fixes", +0.1). Returns the ids that went live."""
         if kind not in KINDS:
-            raise ValueError("choose " + ", ".join(KINDS))
-        ids = [f for f in self.preview_ids() if self.audience(f) != "off" and not BY_ID[f].get("model")]   # Off = on hold; a product's features go with its own push
-        if not ids and not self.pending_fixes(None):
-            raise ValueError("nothing is waiting to be published")
+            raise ValueError("choose features or fixes")
+        want = "fix" if CATEGORY[kind] == "fixes" else "feature"
+        ids = [f for f in self.preview_ids() if self.audience(f) != "off" and not BY_ID[f].get("model") and BY_ID[f]["kind"] == want]   # Off = on hold; a product's go with its own push
+        if not ids and not (want == "fix" and self.pending_fixes(None)):
+            raise ValueError("no " + ("fixes" if want == "fix" else "new features") + " are waiting to be published")
         with self.lock:
             for f in ids:
                 self.data["scheduled"].pop(f, None)
@@ -313,16 +345,18 @@ class Flags:
         if due and self.clock() >= due["at"]:
             with self.lock:
                 del self.data["scheduled"][fid]
-                self._apply(fid, due["audience"], "schedule (set by %s)" % due.get("by", "?"), due["at"], due.get("kind", "minor"), due.get("notes", ""))
+                self._apply(fid, due["audience"], "schedule (set by %s)" % due.get("by", "?"), due["at"], due.get("kind") or None, due.get("notes", ""))
                 self._save()
             return due
         return None
 
-    def publish_now(self, fid, by="", kind="minor", notes=""):
+    def publish_now(self, fid, by="", kind=None, notes=""):
+        """One switch to everyone now; [kind] None: as what it is (a feature +0.5, a fix +0.1)."""
         if fid not in BY_ID:
             raise ValueError("no such feature")
+        kind = kind or flag_kind(fid)
         if kind not in KINDS:
-            raise ValueError("choose " + ", ".join(KINDS))
+            raise ValueError("choose features or fixes")
         with self.lock:
             self.data["scheduled"].pop(fid, None)
             if self.audience_raw(fid) != "everyone":
@@ -331,11 +365,12 @@ class Flags:
                 self._release([fid], by, self.clock(), kind, str(notes)[:500])
             self._save()
 
-    def schedule(self, fid, at, audience="everyone", by="", kind="minor", notes=""):
+    def schedule(self, fid, at, audience="everyone", by="", kind=None, notes=""):
         if fid not in BY_ID:
             raise ValueError("no such feature")
+        kind = kind or flag_kind(fid)
         if kind not in KINDS:
-            raise ValueError("choose " + ", ".join(KINDS))
+            raise ValueError("choose features or fixes")
         if audience not in AUDIENCES:
             raise ValueError("choose " + ", ".join(AUDIENCES))
         try:

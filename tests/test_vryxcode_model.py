@@ -22,20 +22,20 @@ class Product(unittest.TestCase):
         f.set_audience("vryxcode_suggest", "everyone")                                # already live
         app_version = f.version()
         p = f.products()[0]
-        self.assertEqual((p["id"], p["label"], p["next"]), ("vryxcode", "VryxCode 1.0", {"minor": "1.1", "major": "2.0"}))
+        self.assertEqual((p["id"], p["label"], p["next"]), ("vryxcode", "VryxCode 1.0", {"features": "1.5", "fixes": "1.1"}))
         waiting = [x["id"] for x in p["waiting"]]
         self.assertNotIn("vryxcode_lines", waiting)
         self.assertNotIn("vryxcode_suggest", waiting)
         self.assertIn("vryxcode_review", waiting)
         self.assertNotIn("welcome_tour", waiting)                                     # not part of VryxCode
-        self.assertEqual(f.push_product("vryxcode", by="owner", notes="hello"), "VryxCode 1.1")
+        self.assertEqual(f.push_product("vryxcode", by="owner", notes="hello"), "VryxCode 1.5")
         for fid in waiting:
             self.assertTrue(f.on(fid, who()), fid)
         self.assertFalse(f.on("vryxcode_lines", who()))
         self.assertFalse(f.on("welcome_tour", who()))
         self.assertEqual(f.version(), app_version)                                    # the app's own version stays
         r = f.releases()[0]
-        self.assertEqual((r["kind"], r["model"], r["product"], r["notes"], sorted(i["id"] for i in r["items"])), ("model-update", "VryxCode 1.1", "vryxcode", "hello", sorted(waiting)))
+        self.assertEqual((r["kind"], r["model"], r["product"], r["notes"], sorted(i["id"] for i in r["items"])), ("model-update", "VryxCode 1.5", "vryxcode", "hello", sorted(waiting)))
         with self.assertRaises(ValueError):
             f.push_product("vryxcode")                                                # nothing left waiting
         f.set_audience("vryxcode_lines", "admins")
@@ -47,7 +47,7 @@ class Product(unittest.TestCase):
         with tempfile.TemporaryDirectory() as d:
             path = os.path.join(d, "flags.json")
             F.Flags(path).push_product("vryxcode", by="owner")
-            self.assertEqual(F.Flags(path).products()[0]["label"], "VryxCode 1.1")
+            self.assertEqual(F.Flags(path).products()[0]["label"], "VryxCode 1.5")
 
 
 class ProductServer(Base):
@@ -57,10 +57,10 @@ class ProductServer(Base):
         self.assertEqual(self.sam.call("POST", "/api/admin/models", {"push_product": "vryxcode"})[0], 403)
         s, j = self.owner.call("POST", "/api/admin/models", {"push_product": "vryxcode", "notes": "faster"})
         self.assertEqual(s, 200, j)
-        self.assertEqual(j["products"][0]["label"], "VryxCode 1.1")
-        self.assertEqual(j["releases"][0]["model"], "VryxCode 1.1")
+        self.assertEqual(j["products"][0]["label"], "VryxCode 1.5")
+        self.assertEqual(j["releases"][0]["model"], "VryxCode 1.5")
         s, j = self.sam.call("GET", "/api/whats-new")
-        self.assertEqual([r["model"] for r in j["releases"]], ["VryxCode 1.1"])
+        self.assertEqual([r["model"] for r in j["releases"]], ["VryxCode 1.5"])
         s, j = self.owner.call("POST", "/api/admin/models", {"push_product": "vryxcode"})
         self.assertEqual(s, 400)
 
