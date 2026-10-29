@@ -16,6 +16,8 @@ android {
         versionCode = 1
         versionName = "0.1.0"
         buildConfigField("String", "DEFAULT_SERVER", "\"https://chat.emvryx.app\"")
+        // app_updates: the commit GitHub built this app from (-PemvryxSha=..., the release job); empty for a build made on a computer
+        buildConfigField("String", "BUILT_FROM", "\"" + ((project.findProperty("emvryxSha") as String?) ?: "").filter { it.isLetterOrDigit() } + "\"")
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         // android_offline_model: llama.cpp (src/main/cpp) for 64-bit ARM phones (nearly every phone since 2017), and x86_64 for the emulator
         ndk { abiFilters += listOf("arm64-v8a", "x86_64") }

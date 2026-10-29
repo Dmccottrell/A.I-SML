@@ -18,6 +18,7 @@ import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.material3.TextButton
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -163,6 +164,7 @@ fun ChatScreen(vm: AppViewModel) {
                 }
             }, onSaveAs = { onSaveAs(vm.chatAsText()) })
             if (vm.state?.demo == true) DemoBanner()
+            if (vm.updateReady != null) UpdateBanner(vm)
             Box(Modifier.weight(1f).fillMaxWidth()) {
                 Thread(vm, onRegen = { menu = Menu.Regen }, onEdit = { editing = it }, onReport = { reporting = it }, onSaveAs = onSaveAs)
                 if (menu != null) {
@@ -280,6 +282,23 @@ private fun TopBar(vm: AppViewModel, onMenu: () -> Unit, onSaveAs: () -> Unit) {
             dismissButton = { androidx.compose.material3.TextButton({ confirm = false }) { Text("Cancel") } },
         )
         HorizontalDivider(color = Emvryx.line)
+    }
+}
+
+/** app_updates: a newer Emvryx app is ready; Update opens its download (the phone asks to install it over this one) */
+@Composable
+private fun UpdateBanner(vm: AppViewModel) {
+    val context = LocalContext.current
+    val p = LocalPalette.current
+    Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 6.dp).clip(RoundedCornerShape(14.dp)).background(Emvryx.surface)
+        .border(1.dp, p.accent.copy(alpha = 0.5f), RoundedCornerShape(14.dp)).padding(start = 14.dp, end = 6.dp, top = 6.dp, bottom = 6.dp),
+        verticalAlignment = Alignment.CenterVertically) {
+        Text("A new version of Emvryx is ready", Modifier.weight(1f), fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+        TextButton(onClick = vm::updateLater) { Text("Later", color = Emvryx.muted) }
+        TextButton(onClick = {
+            runCatching { context.startActivity(android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse(app.emvryx.android.local.AppUpdate.APK_URL))) }
+            vm.updateLater()
+        }) { Text("Update", color = p.accentText, fontWeight = FontWeight.SemiBold) }
     }
 }
 

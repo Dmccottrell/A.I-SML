@@ -161,6 +161,8 @@ class RoutesGet:
             if not f:
                 return self._send(404, {"code": "no_model", "message": "This PC has no model for phones yet."})
             return phone_model.serve_range(self, f, self.headers.get("Range"))
+        if path == "/api/app-latest" and self.state.flags.on("app_updates", who):            # app_updates: the newest build of an Emvryx app
+            return self._send(200, self.state.updates.latest((qs.get("platform") or [""])[0]) or {"sha": ""})
         if path == "/api/phone-model/vision" and self.state.flags.on("android_phone_vision", who):    # android_phone_vision: the phone looks at pictures itself
             return self._send(200, phone_model.vision_kit(self.state))
         if path == "/api/phone-model/vision/file" and self.state.flags.on("android_phone_vision", who):

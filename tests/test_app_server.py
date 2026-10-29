@@ -165,6 +165,7 @@ class Base(unittest.TestCase):
         self.state.flags.data["audiences"]["vryxcode_side_list"] = "off"
         self.state.flags.data["audiences"]["vryxcode_owner_pc"] = "off"
         self.state.flags.data["audiences"]["vryxcode_downloads"] = "off"
+        self.state.flags.data["audiences"]["app_updates"] = "off"
         self.state.flags.data["audiences"]["chat_research"] = "off"
         self.state.flags.data["audiences"]["chat_live_voice"] = "off"
         self.state.flags.data["audiences"]["chat_schedule"] = "off"

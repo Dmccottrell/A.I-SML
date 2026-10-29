@@ -44,6 +44,7 @@ import urllib.request
 
 import auth
 import code_sandbox
+import app_updates
 import code_sessions
 import app_links
 import documents
@@ -163,6 +164,7 @@ class AppState(StateAccounts, StateSettings, StateApps, StatePC, StateCode, Stat
         self.push = web_push.WebPush(data_dir, self.secrets, ("mailto:" + contact) if contact else (self.security.get("public_url") or "https://emvryx.app"))   # pwa_push
         self.code_drafts = code_drafts.Drafts(data_dir)        # android_offline_model: VryxCode drafts written on the phone with the PC off
         self.phone_synced = phone_model.Synced(data_dir)       # android_offline_model: phone chats already taken in (a retried sync is not added twice)
+        self.updates = app_updates.Updates()                    # app_updates: the newest Windows and Android app builds, asked of GitHub once an hour
         self.phone_sha = phone_model.Checksums(data_dir)       # android_offline_model: the phone model file's checksum, worked out once
         self.schedules = scheduled.Schedules(data_dir)          # chat_schedule: messages answered by themselves at a set time
         self.panels = chat_plus.Panels()                     # chat_panel: pages from answers for the side panel's sealed frame

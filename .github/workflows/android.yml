@@ -76,13 +76,15 @@ jobs:
           if [ -n "$KEYSTORE" ]; then mkdir -p ~/.android && echo "$KEYSTORE" | base64 -d > ~/.android/debug.keystore; fi
       - name: Phone build
         working-directory: android
-        run: chmod +x gradlew && ./gradlew --no-daemon assemblePhone && cp app/build/outputs/apk/phone/*.apk ../emvryx.apk
+        run: |
+          chmod +x gradlew && ./gradlew --no-daemon assemblePhone -PemvryxSha="$GITHUB_SHA" && cp app/build/outputs/apk/phone/*.apk ../emvryx.apk
+          printf '{"sha": "%s", "built": "%s"}\n' "$GITHUB_SHA" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" > ../version.json     # app_updates: the app compares it with its own stamp
       - name: Replace the android-latest release
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           gh release delete android-latest --yes --cleanup-tag || true
-          gh release create android-latest emvryx.apk --target "$GITHUB_SHA" --prerelease --title "Emvryx for Android (newest)" \
+          gh release create android-latest emvryx.apk version.json --target "$GITHUB_SHA" --prerelease --title "Emvryx for Android (newest)" \
             --notes "The newest Android app, built from ${GITHUB_SHA::7}. Download emvryx.apk on your phone and open it."
 
   # Phone screenshots of the main screens: a demo Emvryx server (no model; a stand-in replies), an Android emulator with the app signed in to it,
