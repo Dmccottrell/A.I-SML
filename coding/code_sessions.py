@@ -847,7 +847,7 @@ class CodeManager:
             return {"path": rel, "text": "(a binary file)", "truncated": False}
         return {"path": rel, "text": data[:MAX_FILE_BYTES].decode("utf-8", "replace"), "truncated": len(data) > MAX_FILE_BYTES}
 
-    def run_command(self, user, project, command, owner=False, env="local"):
+    def run_command(self, user, project, command, owner=False, env="local", own_pc=False):
         """The editor's output panel: run one command in the project the way a session would (the same allowed programs, the same sandbox or cloud choice, no network where
         it can be cut), for the person, with no model involved. Refused while VryxCode is working in the same project. Returns {"command", "exit", "output", "secs", "env"}."""
         project = self.check_name(project)
@@ -857,13 +857,14 @@ class CodeManager:
         for x in self.sessions.values():
             if x.user == user and x.project == project and x.state in ("starting", "working", "asking"):
                 raise CodeError("VryxCode is working in this project right now.", "Wait for it to finish, or press Stop, then run it.")
-        ok, why = self.sandbox_ready()
+        mine = bool(owner) and bool(own_pc) and str(env or "local") == "local"     # the owner's own This computer (vryxcode_owner_pc)
+        ok, why = (True, "") if mine else self.sandbox_ready()
         if not ok:
             raise CodeError("The code sandbox isn't available, so nothing was run. " + why, "The owner needs to start Docker or build the sandbox image.")
-        env = self.resolve_env(env, owner)
+        env = "local" if mine else self.resolve_env(env, owner)
         workspace = self.project_path(user, project)
         os.makedirs(workspace, exist_ok=True)
-        prefix = self.cloud_prefix(user, project) if env == "cloud" else self.prefix_for(workspace, force=(env == "sandbox"))
+        prefix = None if mine else self.cloud_prefix(user, project) if env == "cloud" else self.prefix_for(workspace, force=(env == "sandbox"))
         kw = {}
         if prefix:
             kw.update(command_prefix=prefix, container=not env == "cloud", remote=(env == "cloud"))
@@ -1095,8 +1096,10 @@ class CodeManager:
     def _own_pc(self, generate, owner, env):
         """True when the owner turned on "nothing blocked on this computer" (vryxcode_open_pc, owner only: routes_code sets generate.open_pc) and
         picked This computer: it runs on the PC itself, even where the PC runs everyone else in Docker, and whether or not Docker is answering.
-        Their explicit choice, never a quiet fallback for anyone else; picking the isolated sandbox still means the sandbox."""
-        return bool(owner) and bool(getattr(generate, "open_pc", False)) and str(env or "local") == "local"
+        Their explicit choice, never a quiet fallback for anyone else; picking the isolated sandbox still means the sandbox.
+        vryxcode_owner_pc (generate.owner_pc, owner only) does the same with the usual short list of allowed programs."""
+        mine = bool(getattr(generate, "open_pc", False)) or bool(getattr(generate, "owner_pc", False))
+        return bool(owner) and mine and str(env or "local") == "local"
 
     def sandbox_ready(self):
         """(ok, message). In container mode Docker must answer (checked at most every 30 s); there is no quiet fallback to the host."""
@@ -1283,13 +1286,15 @@ class CodeManager:
         return [sys.executable, os.path.join(os.path.dirname(os.path.abspath(__file__)), "cloud_run.py"), "--host", c["host"], "--port", str(c.get("port", 22)), "--user", c.get("user", "root"),
                 "--key", c["key"], "--known-hosts", c["known_hosts"], "--workdir", work, "--timeout", str(c.get("timeout", 90)), "--"]
 
-    def environments(self, owner=False):
-        """The places a session can run, for the page: [{"id", "name", "available", "note"}]."""
+    def environments(self, owner=False, own_pc=False):
+        """The places a session can run, for the page: [{"id", "name", "available", "note"}]. [own_pc]: the owner may still pick This computer
+        while everyone else is run in the sandbox (vryxcode_owner_pc / vryxcode_open_pc)."""
         forced = self.sandbox.get("mode") == "docker"
         d_ok, d_why = (True, "ready") if forced else self._docker_ok()
         return [
-            {"id": "local", "name": "This computer", "available": not forced,
-             "note": "The owner runs every session in the sandbox." if forced else "Works in the project folder on the computer that runs Emvryx. Only a short list of programs may run."},
+            {"id": "local", "name": "This computer", "available": not forced or bool(own_pc),
+             "note": "Only you: works in the project folder on this computer. Everyone else runs in the sandbox." if forced and own_pc else
+                     "The owner runs every session in the sandbox." if forced else "Works in the project folder on the computer that runs Emvryx. Only a short list of programs may run."},
             {"id": "sandbox", "name": "Isolated sandbox", "available": bool(d_ok),
              "note": "Runs inside a locked container: no internet, limited memory and time." if d_ok else d_why},
             {"id": "cloud", "name": "Cloud machine", "available": self.cloud_ready(owner)[0],
