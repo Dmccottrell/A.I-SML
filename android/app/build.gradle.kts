@@ -85,4 +85,7 @@ dependencies {
     androidTestImplementation(libs.androidx.test.ext.junit)
     androidTestImplementation(libs.androidx.test.runner)
     androidTestImplementation(libs.androidx.test.rules)
+    androidTestImplementation(platform(libs.androidx.compose.bom))
+    androidTestImplementation(libs.androidx.compose.ui.test.junit4)     // screen tests that measure what is drawn (SideLinkTest)
+    debugImplementation(libs.androidx.compose.ui.test.manifest)
 }
