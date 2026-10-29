@@ -516,6 +516,13 @@ body.mbar.mbar .wash { background: radial-gradient(circle, var(--core) 0%, var(-
 .code .home .chead .menu { right: 0; left: auto; width: 200px; }
 .code .envs .chip { display: inline-flex; align-items: center; gap: 8px; } .code .envs .dot { width: 8px; height: 8px; border-radius: 999px; background: var(--muted); } .code .envs .dot.on { background: #3fb950; }
 .code .slist { display: flex; flex-direction: column; gap: 12px; }
+/* vryxcode_side_list: on a wide screen the sessions sit in a column on the left of the build box */
+@media (min-width: 1000px) {
+  .code.vxsl .home { padding: 8px 24px 110px; }
+  .code.vxsl .vx-homegrid { display: grid; grid-template-columns: minmax(280px, 340px) minmax(0, 1fr); gap: 32px; align-items: start; }
+  .code.vxsl .vx-homeside { order: -1; position: sticky; top: 0; max-height: calc(100vh - 150px); overflow-y: auto; padding-right: 4px; }
+  .code.vxsl .vx-homemain { max-width: 820px; width: 100%; justify-self: center; }
+}
 .code .scard { background: var(--surface); border: 1px solid var(--line); border-radius: 22px; padding: 14px; display: flex; flex-direction: column; gap: 12px; cursor: pointer; text-align: left; font: inherit; color: var(--text); width: 100%; }
 .code .scard:hover { border-color: var(--muted); }
 .code .scard .top { display: flex; gap: 12px; align-items: center; min-width: 0; }
@@ -846,6 +853,7 @@ body:not(.vxn) .vx-hero, body:not(.vxn) .vx-dots { display: none; }   /* the new
     <button class="chip" id="codeFilesBtn">Files</button>
   </div>
   <div class="home" id="codeHome">
+    <div class="vx-homegrid"><div class="vx-homemain">
     <div class="vx-hero">
       <h1>What should we <em>build</em>?</h1>
       <p>Describe it. VryxCode plans it, writes it, runs it and checks it, right here.</p>
@@ -857,8 +865,10 @@ body:not(.vxn) .vx-hero, body:not(.vxn) .vx-dots { display: none; }   /* the new
       <div class="vx-chips" id="vxChips"></div>
     </div>
     <div class="envs" id="codeEnvs"></div>
+    </div><div class="vx-homeside">
     <div class="chead"><span class="lbl">Sessions</span><div style="position:relative"><button class="chip" id="codeFilter" aria-haspopup="true">All \u25be</button><div class="menu" id="codeFilterMenu" hidden></div></div></div>
     <div class="slist" id="codeList"></div>
+    </div></div>
   </div>
   <button class="fab" id="codeNew"><span style="font-size:22px;line-height:1">+</span> New session</button>
   <div class="main2">

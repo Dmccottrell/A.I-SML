@@ -34,6 +34,7 @@ async function renderHome() {
   const [r, ri] = await Promise.all([api('/api/code/sessions'), api('/api/code')]); const sessions = (await r.json()).sessions || [], info = await ri.json();
   if (mine !== homeDraw) return;
   C.sessions = sessions; C.info = info;
+  $('code').classList.toggle('vxsl', !!(S.state && S.state.features && S.state.features.vryxcode_side_list));     // vryxcode_side_list: sessions on the left
   $('codeEnvs').replaceChildren(el('span', {class: 'lbl'}, 'Environments'), ...C.info.environments.map((e) => el('button', {class: 'chip', onclick: () => envInfo()}, el('span', {class: 'dot' + (e.available ? ' on' : '')}), e.name)));
   $('codeFilter').textContent = (FILTERS.find((f) => f[0] === C.filter) || FILTERS[0])[1] + ' \u25be';
   const live = ['starting', 'working'], pick = (x) => C.filter === 'all' || (C.filter === 'running' && live.includes(x.state)) || (C.filter === 'queued' && x.state === 'queued') || (C.filter === 'needs' && x.state === 'asking') || (C.filter === 'done' && !live.includes(x.state) && !['asking', 'queued'].includes(x.state));
