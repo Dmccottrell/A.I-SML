@@ -32,7 +32,8 @@ class SideLinkTest {
                 }
             }
         }
-        val name = compose.onNodeWithText("Scheduled tasks").getUnclippedBoundsInRoot()
-        assertTrue("the name was squeezed to ${name.width} wide, ${name.height} tall", name.height < 40.dp && name.width > 100.dp)
+        // useUnmergedTree: the row is one tappable item, so without it this measured the whole row instead of the name in it
+        val name = compose.onNodeWithText("Scheduled tasks", useUnmergedTree = true).getUnclippedBoundsInRoot()
+        assertTrue("the name was squeezed to ${name.width} wide, ${name.height} tall", name.height < 30.dp && name.width > 100.dp)       // one line of 16 sp is about 22 dp tall
     }
 }
