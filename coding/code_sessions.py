@@ -42,6 +42,37 @@ RESULT_TAGS = re.compile(r"<\|/?(?:end_)?tool_result\|>|<\|end_tool_result\|>")
 MAX_IMPORT_FILES, MAX_IMPORT_BYTES, MAX_ONE_FILE = 1000, 20_000_000, 2_000_000
 MAX_QUEUED = 5                                             # sessions that may wait in one person's queue
 SKIP_DIRS = {".git", "__pycache__", "node_modules", ".emvryx"}
+DOWNLOAD_NOTE = ("\n\nWhen you build a program (a Windows .exe, an Android .apk, a Linux or Mac program, a .jar), it is offered to the person with a Download "
+                 "button under your Done message, and a website or the whole project as a zip. Say where the built file is. Never say you cannot give them "
+                 "the file.")
+MAX_BUILT = 300_000_000                    # a built program bigger than this is not offered for download
+# vryxcode_downloads: what a built program is, by its name and the first bytes inside it (so a text file called .exe is not offered as a program)
+BUILT_EXT = {".exe": (b"MZ", "Windows program"), ".msi": (b"\xd0\xcf\x11\xe0", "Windows installer"), ".apk": (b"PK", "Android app"),
+             ".aab": (b"PK", "Android app bundle"), ".jar": (b"PK", "Java program"), ".appimage": (b"\x7fELF", "Linux program"),
+             ".deb": (b"!<arch>", "Linux installer"), ".dmg": (b"", "Mac app")}
+MACHO = (b"\xcf\xfa\xed\xfe", b"\xce\xfa\xed\xfe", b"\xfe\xed\xfa\xcf")
+
+
+def built_kind(path):
+    """"Windows program", "Android app" ... for a program VryxCode built, or None for anything else (source code, text, pictures)."""
+    try:
+        size = os.path.getsize(path)
+        with open(path, "rb") as f:
+            head = f.read(8)
+    except OSError:
+        return None
+    if not size or size > MAX_BUILT:
+        return None
+    ext = os.path.splitext(path)[1].lower()
+    if ext in BUILT_EXT:
+        magic, kind = BUILT_EXT[ext]
+        return kind if head.startswith(magic) else None
+    if not ext and os.access(path, os.X_OK):                # a program with no extension, as Linux and Mac compilers make them
+        if head.startswith(b"\x7fELF"):
+            return "Linux program"
+        if head[:4] in MACHO:
+            return "Mac program"
+    return None
 
 
 def remove_tree(path, tries=3):
@@ -610,7 +641,7 @@ class Session:
             line = languages.page_line(lang)
             if line:
                 self.emit("language", text=line, language=lang["name"], mode=lang["mode"])
-            result = vryxcode.run_task(model_text or self.expand(text), self.wrap(self.generate), self.workspace, self.ask, self.max_turns, self.context_tokens, self.extra_programs, lang_note=languages.note_for(lang) + self._memory_note() + (PREVIEW_NOTE if getattr(self.generate, "preview", False) else "") + (guardrails.PROMPT_NOTE if getattr(self.generate, "guardrails", False) else ""),
+            result = vryxcode.run_task(model_text or self.expand(text), self.wrap(self.generate), self.workspace, self.ask, self.max_turns, self.context_tokens, self.extra_programs, lang_note=languages.note_for(lang) + self._memory_note() + (PREVIEW_NOTE if getattr(self.generate, "preview", False) else "") + (DOWNLOAD_NOTE if getattr(self.generate, "downloads", False) else "") + (guardrails.PROMPT_NOTE if getattr(self.generate, "guardrails", False) else ""),
                                        out=lambda *_: None, tools=self._tools_now(),
                                        git_identity=self.identity,
                                        command_prefix=self.prefix, container=bool(self.prefix) and not self.remote, history=self.history, chat_mode=True, plan=plan, todo=True, remote=self.remote,
@@ -924,6 +955,33 @@ class CodeManager:
             f.write(data)
         os.replace(tmp, full)
         return {"path": name, "size": len(data), "created": not exists}
+
+    def built_files(self, user, project):
+        """vryxcode_downloads: the programs this project has built, to download: [{"path", "kind", "size"}]. A file counts by what is inside it,
+        not only its name (a .exe must really be a Windows program), and nothing in node_modules, .git or caches."""
+        root = self.project_path(user, project)
+        out, seen = [], 0
+        for dirpath, dirs, names in os.walk(root):
+            dirs[:] = sorted(d for d in dirs if d not in SKIP_DIRS and not os.path.islink(os.path.join(dirpath, d)))
+            for n in sorted(names):
+                full = os.path.join(dirpath, n)
+                seen += 1
+                if seen > 5000:
+                    return out
+                if os.path.islink(full):
+                    continue
+                kind = built_kind(full)
+                if kind:
+                    out.append({"path": os.path.relpath(full, root).replace(os.sep, "/"), "kind": kind, "size": os.path.getsize(full)})
+        return out
+
+    def built_path(self, user, project, rel):
+        """The full path of one built program in the project, or None (not built, not there, or outside the project)."""
+        root = os.path.realpath(self.project_path(user, project))
+        full = os.path.realpath(os.path.join(root, str(rel or "").replace("\\", "/")))
+        if not full.startswith(root + os.sep) or any(p in SKIP_DIRS for p in os.path.relpath(full, root).split(os.sep)):
+            return None
+        return full if os.path.isfile(full) and built_kind(full) else None
 
     def export_zip(self, user, project):
         """The whole project as zip bytes (without .git, caches and node_modules)."""

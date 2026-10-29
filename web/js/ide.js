@@ -358,6 +358,23 @@ function restoreBtn(e) {
     poll(); refreshFiles(); if (!$('codePv').hidden) reloadPreview();
   }}, icon('undo'), ' Restore');
 }
+// vryxcode_downloads: the programs a finished session built (a Windows .exe, an Android .apk ...) with a Download button each, and the website or
+// the whole project as a zip
+async function vxDownloads(box) {
+  if (!box.isConnected || !C.project) return;
+  let j;
+  try { const r = await api('/api/code/built?project=' + encodeURIComponent(C.project)); if (!r.ok) { box.remove(); return; } j = await r.json(); } catch (e) { box.remove(); return; }
+  if (!box.isConnected) return;
+  const q = (p) => '/api/code/download?project=' + encodeURIComponent(C.project) + '&path=' + encodeURIComponent(p);
+  const zip = '/api/code/zip?project=' + encodeURIComponent(C.project);
+  const mb = (n) => n >= 1048576 ? (n / 1048576).toFixed(1) + ' MB' : Math.max(1, Math.round(n / 1024)) + ' KB';
+  box.replaceChildren(el('div', {class: 'lead'}, '\u2B07 Ready to download'),
+    ...j.files.map((f) => el('a', {class: 'vx-dl-file', href: q(f.path), download: f.path.split('/').pop()},
+      el('b', {}, f.path.split('/').pop()), el('small', {}, f.kind + ' \u00b7 ' + mb(f.size) + (f.path.includes('/') ? ' \u00b7 ' + f.path : '')))),
+    el('div', {class: 'row'}, el('a', {class: 'chip', href: zip, download: C.project + '.zip'}, j.website ? 'Download the website (.zip)' : 'Download the project (.zip)')),
+    j.files.some((f) => f.kind === 'Windows program') ? el('small', {}, 'Windows may say \u201cWindows protected your PC\u201d the first time: tap More info, then Run anyway.') : '',
+    j.files.some((f) => f.kind.startsWith('Android')) ? el('small', {}, 'On your phone: open the downloaded .apk and allow installing from this browser when asked.') : '');
+}
 function cEvent(e) {
   if (e.kind === 'user' || e.kind === 'start') offerReply('');          // a new message: the last suggestion no longer fits
   const feed = $('codeIn'); C.events.push(e);
@@ -470,6 +487,11 @@ function cEvent(e) {
       if (e.finished && (featureOn('vryxcode_github') || featureOn('vryxcode_publish'))) feed.append(el('div', {class: 'vx-ship'},     // the work is done: keep it on GitHub, or put it online
         featureOn('vryxcode_github') ? el('button', {class: 'chip', onclick: () => saveToGithub()}, '\u2191 Save to GitHub') : '',
         featureOn('vryxcode_publish') ? el('button', {class: 'chip', onclick: () => publishSite()}, '\u{1F310} Publish') : ''));
+      if (e.finished && featureOn('vryxcode_downloads')) {     // what it built, ready to download (only under the newest Done line)
+        document.querySelectorAll('#codeIn .vx-dl').forEach((n) => n.remove());
+        const box = el('div', {class: 'vx-dl'}); feed.append(box);
+        clearTimeout(C.dlT); C.dlT = setTimeout(() => vxDownloads(box), 300);      // a whole history drawn at once asks only once
+      }
       if (e.report) feed.append(reportCard(e.report));
       if (e.verdict) {        // vryxcode_guardrails: a review ends on a verdict; only CRITICAL and MAJOR problems go back, test first, and style notes never loop
         const v = e.verdict, ok = v.status === 'APPROVED';
