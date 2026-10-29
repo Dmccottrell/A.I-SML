@@ -257,7 +257,8 @@ class RoutesGet:
             return self._send(200, {"events": self.state.auth.events(int((qs.get("limit") or ["100"])[0]), (qs.get("kind") or [None])[0])})
         if path == "/api/admin/flags" and who["admin"]:
             return self._send(200, {"flags": self.state.flags.listing(), "audiences": [[a, flags.AUDIENCE_NAMES[a]] for a in flags.AUDIENCES],
-                                    "version": self.state.flags.version(), "releases": self.state.flags.releases(), "fixes": [f["text"] for f in self.state.flags.pending_fixes(None)],
+                                    "version": self.state.flags.version(), "next": self.state.flags.next_versions(), "releases": self.state.flags.releases(),
+                                    "fixes": [f["text"] for f in self.state.flags.pending_fixes(None)],
                                     "people": sorted(u["user"] for u in self.state.users.values() if not u.get("app"))})
         if path == "/api/admin/models" and who["admin"]:
             return self._send(200, self.state.models_admin())

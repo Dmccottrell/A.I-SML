@@ -298,8 +298,8 @@ class ApiClient(private val session: SessionStore) {
     suspend fun adminSetFlag(id: String, audience: String): app.emvryx.android.local.AdminFlags =
         post("/api/admin/flags", buildJsonObject { put("id", id); put("audience", audience) })
 
-    /** Admin > Previews > Publish all: everything in preview goes to everyone as one release */
-    suspend fun adminPublishAll(): app.emvryx.android.local.AdminFlags = post("/api/admin/flags", buildJsonObject { put("publish", "all"); put("kind", "minor") })
+    /** Admin > Previews: the new features in preview ([kind] "features", +0.5) or the bug fixes ("fixes", +0.1) go to everyone as one release */
+    suspend fun adminPublish(kind: String): app.emvryx.android.local.AdminFlags = post("/api/admin/flags", buildJsonObject { put("publish", "all"); put("kind", kind) })
 
     suspend fun adminPc(): app.emvryx.android.local.AdminPc = get("/api/admin/pc")
 

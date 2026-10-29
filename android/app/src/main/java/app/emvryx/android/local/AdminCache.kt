@@ -28,10 +28,11 @@ data class AdminOverview(val people: Int = 0, val banned: Int = 0, val plans: Ma
 
 @Serializable
 data class AdminFlag(val id: String, val title: String = "", val desc: String = "", val default: String = "admins", val audience: String = "admins",
-                     val model: String? = null)
+                     val model: String? = null, val kind: String = "feature")
 
 @Serializable
-data class AdminFlags(val flags: List<AdminFlag> = emptyList(), val version: String = "", val fixes: List<String> = emptyList())
+data class AdminFlags(val flags: List<AdminFlag> = emptyList(), val version: String = "", val fixes: List<String> = emptyList(),
+                      val next: Map<String, String> = emptyMap())
 
 @Serializable
 data class AdminPc(val gaming: Boolean = false, @SerialName("loaded_label") val loaded: String? = null, @SerialName("idle_seconds") val idleSeconds: Long? = null,
@@ -74,8 +75,12 @@ object AdminRules {
         return if (flags.firstOrNull { it.id == id }?.audience == audience) rest else rest + QueuedSwitch(id, audience)
     }
 
-    /** How many switches are on for fewer than everyone (what Publish all would publish) */
-    fun inPreview(flags: List<AdminFlag>) = flags.count { it.audience != "everyone" && it.audience != "off" && it.model == null }
+    /** How many app switches of one kind ("feature" or "fix") are on for fewer than everyone: what its Publish button would publish */
+    fun inPreview(flags: List<AdminFlag>, kind: String = "feature") =
+        flags.count { it.audience != "everyone" && it.audience != "off" && it.model == null && it.kind == kind }
+
+    /** Everything a bug-fix release would send: the fix switches in preview and the fix notes waiting */
+    fun fixesWaiting(f: AdminFlags) = inPreview(f.flags, "fix") + f.fixes.size
 }
 
 class AdminCache(context: Context) {

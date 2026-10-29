@@ -31,6 +31,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import app.emvryx.android.EmvryxApp
+import app.emvryx.android.local.AdminFlags
 import app.emvryx.android.local.AdminRules
 import app.emvryx.android.local.AdminSnapshot
 import app.emvryx.android.ui.theme.Emvryx
@@ -55,7 +56,7 @@ fun AdminPane(vm: AppViewModel) {
     var tab by remember { mutableStateOf("overview") }
     var live by remember { mutableStateOf(false) }               // read from the PC just now (false: the last state kept on the phone)
     var note by remember { mutableStateOf<String?>(null) }
-    var publishing by remember { mutableStateOf(false) }
+    var publishing by remember { mutableStateOf<String?>(null) }        // "features" or "fixes": the Publish dialog is open
     var reload by remember { mutableStateOf(0) }
 
     LaunchedEffect(reload, vm.online) {
@@ -123,8 +124,12 @@ fun AdminPane(vm: AppViewModel) {
                     item {
                         AdminCard {
                             Text("Who gets each new feature. Changes here are made at once" + (if (live) "." else " when the PC is back."), color = Emvryx.muted, fontSize = 13.sp)
-                            val n = AdminRules.inPreview(flags)
-                            if (live && n > 0) Chip("Publish all ($n) to everyone", { publishing = true })
+                            // new features and bug fixes go out separately: features add 0.5 to the version, fixes 0.1
+                            val nf = AdminRules.inPreview(flags, "feature")
+                            val nx = AdminRules.fixesWaiting(s.flags ?: AdminFlags())
+                            val next = s.flags?.next.orEmpty()
+                            if (live && nf > 0) Chip("Publish new features ($nf)" + (next["features"]?.let { " · v$it" } ?: ""), { publishing = "features" })
+                            if (live && nx > 0) Chip("Publish bug fixes ($nx)" + (next["fixes"]?.let { " · v$it" } ?: ""), { publishing = "fixes" })
                             if (cache.queued.isNotEmpty()) Text("${cache.queued.size} change${if (cache.queued.size == 1) "" else "s"} waiting for the PC",
                                 color = LocalPalette.current.accentText, fontSize = 13.sp)
                         }
@@ -187,14 +192,18 @@ fun AdminPane(vm: AppViewModel) {
             }
         }
     }
-    if (publishing) AlertDialog(
-        onDismissRequest = { publishing = false },
-        containerColor = Emvryx.surface,
-        title = { Text("Publish all to everyone?") },
-        text = { Text("Every feature in preview goes to everyone now, as one release in What's new.") },
-        confirmButton = { TextButton(onClick = { publishing = false; act { cache.keep(cache.snap.copy(flags = api.adminPublishAll())); note = "Published." } }) { Text("Publish") } },
-        dismissButton = { TextButton(onClick = { publishing = false }) { Text("Cancel") } },
-    )
+    publishing?.let { kind ->
+        val fixes = kind == "fixes"
+        AlertDialog(
+            onDismissRequest = { publishing = null },
+            containerColor = Emvryx.surface,
+            title = { Text(if (fixes) "Publish the bug fixes to everyone?" else "Publish the new features to everyone?") },
+            text = { Text((if (fixes) "Every bug fix in preview goes to everyone now" else "Every new feature in preview goes to everyone now") +
+                (cache.snap.flags?.next?.get(kind)?.let { ", as v$it" } ?: "") + ", one release in What's new.") },
+            confirmButton = { TextButton(onClick = { publishing = null; act { cache.keep(cache.snap.copy(flags = api.adminPublish(kind))); note = "Published." } }) { Text("Publish") } },
+            dismissButton = { TextButton(onClick = { publishing = null }) { Text("Cancel") } },
+        )
+    }
 }
 
 @Composable

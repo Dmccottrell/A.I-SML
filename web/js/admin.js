@@ -26,11 +26,16 @@ const admAgo = (t) => { if (!t) return 'never'; const d = Date.now() / 1000 - t;
 const admDate = (t) => t ? new Date(t * 1000).toLocaleDateString([], {month: 'short', day: 'numeric', year: 'numeric'}) : 'an unknown date';
 async function admCopy(text, btn) { try { await navigator.clipboard.writeText(text); btn.textContent = 'Copied'; } catch (e) { btn.textContent = 'Press and hold to copy'; } setTimeout(() => { btn.textContent = 'Copy'; }, 1800); }
 
-// choosing what kind of release this is: patch (fixes), minor (new features) or major (big changes), with the version it becomes and optional notes
-const REL_KINDS = [['patch', 'Patch', 'Fixes and small polish'], ['minor', 'Minor', 'New features'], ['major', 'Major', 'Big changes']];
-function nextVersion(v, kind) { const [a, b, c] = String(v).split('.').map(Number); return kind === 'major' ? (a + 1) + '.0.0' : kind === 'minor' ? a + '.' + (b + 1) + '.0' : a + '.' + b + '.' + (c + 1); }
-function releaseDialog(title, version, verb, go) {
-  let kind = 'minor';
+// what kind of release this is: new features add 0.5 to the version (3.0 -> 3.5), bug fixes add 0.1 (3.1 -> 3.2), a big change goes to the next whole
+// number; each with the version it becomes and optional notes. [kind] is the one picked at first (what the switch is).
+const REL_KINDS = [['features', 'New features', 'Adds 0.5 to the version'], ['fixes', 'Bug fixes', 'Adds 0.1 to the version'], ['major', 'Big change', 'The next whole number']];
+function nextVersion(v, kind) {
+  const p = String(v).split('.').map(Number), t = (p[1] || 0) <= 9 && !(p[2] || 0) ? p[0] * 10 + (p[1] || 0) : (p[0] + 1) * 10;      // flags.py tenths()
+  const n = kind === 'major' ? (Math.floor(t / 10) + 1) * 10 : t + (kind === 'fixes' ? 1 : 5);
+  return Math.floor(n / 10) + '.' + (n % 10);
+}
+function releaseDialog(title, version, verb, go, first) {
+  let kind = first || 'features';
   const notes = el('textarea', {rows: 3, maxlength: 500, placeholder: 'What changed (optional, shown in What\u2019s new)', style: 'width:100%;border-radius:12px;padding:10px;background:var(--surface2);color:var(--text);border:1px solid var(--line);font:inherit'});
   const line = el('p', {style: 'margin:4px 0 0;font-weight:600'});
   const opts = el('div', {style: 'display:flex;flex-direction:column;gap:8px;margin:10px 0'});
@@ -43,6 +48,13 @@ function releaseDialog(title, version, verb, go) {
   const m = dialog([el('h2', {}, title), el('div', {style: 'color:var(--muted)'}, 'What kind of release is this?'), opts, line, notes], 'Cancel',
     el('button', {class: 'btn', style: 'margin-bottom:8px', onclick: () => { m.remove(); go(kind, notes.value.trim()); }}, verb));
 }
+// a push of one kind (all the waiting new features, or all the waiting fixes) with optional notes
+function pushDialog(title, line, verb, go) {
+  const notes = el('textarea', {rows: 3, maxlength: 500, placeholder: 'What changed (optional, shown in What\u2019s new)', style: 'width:100%;border-radius:12px;padding:10px;background:var(--surface2);color:var(--text);border:1px solid var(--line);font:inherit'});
+  const m = dialog([el('h2', {}, title), el('p', {style: 'margin:4px 0 10px;font-weight:600'}, line), notes], 'Cancel',
+    el('button', {class: 'btn', style: 'margin-bottom:8px', onclick: () => { m.remove(); go(notes.value.trim()); }}, verb));
+}
+const relCat = (f) => f.kind === 'fix' ? 'fixes' : 'features';
 async function admPreviews(body) {
   let j = await (await api('/api/admin/flags')).json(); let view = ADM.view || 'preview';
   const save = async (b) => { const r = await post('/api/admin/flags', b); const k = await r.json().catch(() => ({})); if (!r.ok) return toast(k.message || 'That did not work.'); Object.assign(j, k); draw(); toast('Saved. It applies at once.'); };
@@ -50,33 +62,42 @@ async function admPreviews(body) {
   const previewCard = (f) => {
     const when = sxInput('datetime-local', '', {'aria-label': 'Publish date and time for ' + f.title}); when.min = new Date(Date.now() + 60000 - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 16);
     return el('div', {class: 'adm-sub'}, el('b', {}, f.title, f.model ? ' ' : '', f.model ? el('span', {class: 'adm-tag'}, 'Part of VryxCode') : null), el('small', {}, f.desc),
-      el('small', {style: 'color:var(--accenttext)'}, f.model ? 'Only you and the admins see this. It goes to everyone with the next VryxCode version (Models > Push update), or publish it alone here.' : 'Only you see this until you publish it.'),
-      f.scheduled ? el('small', {style: 'color:var(--accenttext)'}, 'Goes live for everyone on ' + sxWhen(f.scheduled.at) + ' as a ' + (f.scheduled.kind || 'minor') + ' release (set by ' + f.scheduled.by + ').') : null,
+      el('small', {style: 'color:var(--accenttext)'}, f.model ? 'Only you and the admins see this. It goes to everyone with the next VryxCode push (Models > VryxCode), or publish it alone here.' : 'Only you see this until you publish it.'),
+      f.scheduled ? el('small', {style: 'color:var(--accenttext)'}, 'Goes live for everyone on ' + sxWhen(f.scheduled.at) + ' as a ' + (REL_KIND[f.scheduled.kind] || 'feature').toLowerCase() + ' release (set by ' + f.scheduled.by + ').') : null,
       el('div', {class: 'adm-acts'}, when,
         sxBtn('Schedule', () => { const t = new Date(when.value).getTime(); if (!when.value || !(t > Date.now())) return toast('Choose a date and time in the future.');
-          releaseDialog('Schedule "' + f.title + '"', j.version, 'Schedule it', (kind, notes) => save({id: f.id, schedule_at: t / 1000, kind, notes})); }),
+          releaseDialog('Schedule "' + f.title + '"', j.version, 'Schedule it', (kind, notes) => save({id: f.id, schedule_at: t / 1000, kind, notes}), relCat(f)); }),
         f.scheduled ? sxBtn('Cancel schedule', () => save({id: f.id, cancel_schedule: true})) : null,
-        sxBtn('Publish', () => releaseDialog('Publish "' + f.title + '" to everyone', j.version, 'Publish now', (kind, notes) => save({id: f.id, publish: 'now', kind, notes})), 'primary')));
+        sxBtn('Publish', () => releaseDialog('Publish "' + f.title + '" to everyone', j.version, 'Publish now', (kind, notes) => save({id: f.id, publish: 'now', kind, notes}), relCat(f)), 'primary')));
   };
   const pubCard = (f) => el('div', {class: 'adm-sub'}, el('b', {}, f.title, ' ', el('span', {class: 'adm-tag on'}, 'Live')), el('small', {}, f.desc),
     el('small', {}, f.changed ? 'Live since ' + admDate(f.changed.at) + ' (' + f.changed.by + ').' : 'Live for everyone.'),
     el('div', {class: 'adm-acts'}, sxBtn('Pull back to admins', () => { if (confirm('Take "' + f.title + '" away from everyone and keep it for admins?')) save({id: f.id, audience: 'admins'}); }, 'bad')));
   const draw = () => {
-    const ready2 = j.flags.filter((f) => f.audience !== 'everyone' && f.audience !== 'off' && !f.model), appRel = j.releases.filter((r) => !String(r.kind || '').startsWith('model'));
-    const fixes = j.fixes || [], what = ready2.length + (ready2.length === 1 ? ' feature' : ' features') + (fixes.length ? ' and ' + fixes.length + (fixes.length === 1 ? ' fix' : ' fixes') : '');
+    const waiting = j.flags.filter((f) => f.audience !== 'everyone' && f.audience !== 'off' && !f.model), appRel = j.releases.filter((r) => !String(r.kind || '').startsWith('model'));
+    const feats = waiting.filter((f) => f.kind !== 'fix'), fixFlags = waiting.filter((f) => f.kind === 'fix'), fixes = j.fixes || [];
+    const nx = j.next || {features: nextVersion(j.version, 'features'), fixes: nextVersion(j.version, 'fixes')};
+    const nFix = fixFlags.length + fixes.length;
+    const inPrev = (kind) => prev.filter((f) => kind === 'vryxcode' ? !!f.model : !f.model && (f.kind === 'fix') === (kind === 'fixes'));
     body.replaceChildren(
       el('div', {class: 'adm-card'}, el('h3', {}, '\u{1F9EA} Feature previews'),
-        el('p', {}, 'App updates: new features ship to the live app visible only to you and your admins first. Publish here once you are happy with one, so everyone starts seeing it too. New model versions are published under Models.'),
-        el('div', {class: 'adm-row'}, el('span', {style: 'color:var(--muted)'}, 'Current version: v' + j.version),
-          sxBtn('Publish all', () => { if (!ready2.length && !fixes.length) return toast('Nothing is waiting to publish.'); releaseDialog('Publish ' + what + ' to everyone', j.version, 'Publish all now', (kind, notes) => save({publish: 'all', kind, notes})); }, ready2.length || fixes.length ? 'primary' : '')),
-        fixes.length ? el('details', {class: 'adm-fixes', style: 'border:1px solid var(--line);border-radius:12px;padding:10px 12px;margin:8px 0'}, el('summary', {style: 'cursor:pointer'}, el('b', {}, 'Bug fixes waiting (' + fixes.length + ')'), el('small', {style: 'display:block'}, 'They go out with the next app release (Publish or Publish all) and show under Fixed in What\u2019s new.')),
+        el('p', {}, 'App updates ship to the live app visible only to you and your admins first. New features and bug fixes go out separately: new features add 0.5 to the version (v3.0 \u2192 v3.5), bug fixes add 0.1 (v3.1 \u2192 v3.2). New model versions are published under Models.'),
+        el('div', {class: 'adm-row'}, el('span', {style: 'color:var(--muted)'}, 'Current version: v' + j.version)),
+        el('div', {class: 'adm-acts', style: 'flex-wrap:wrap'},
+          sxBtn('Publish new features (' + feats.length + ') \u00b7 v' + nx.features, () => { if (!feats.length) return toast('No new features are waiting.');
+            pushDialog('Publish ' + feats.length + (feats.length === 1 ? ' new feature' : ' new features') + ' to everyone', 'v' + j.version + '  \u2192  v' + nx.features, 'Publish features', (notes) => save({publish: 'all', kind: 'features', notes})); }, feats.length ? 'primary' : ''),
+          sxBtn('Publish bug fixes (' + nFix + ') \u00b7 v' + nx.fixes, () => { if (!nFix) return toast('No bug fixes are waiting.');
+            pushDialog('Publish ' + nFix + (nFix === 1 ? ' bug fix' : ' bug fixes') + ' to everyone', 'v' + j.version + '  \u2192  v' + nx.fixes, 'Publish fixes', (notes) => save({publish: 'all', kind: 'fixes', notes})); }, nFix ? 'primary' : '')),
+        fixes.length ? el('details', {class: 'adm-fixes', style: 'border:1px solid var(--line);border-radius:12px;padding:10px 12px;margin:8px 0'}, el('summary', {style: 'cursor:pointer'}, el('b', {}, 'Fix notes waiting (' + fixes.length + ')'), el('small', {style: 'display:block'}, 'They go out with the next bug-fix release and show under Fixed in What\u2019s new.')),
           ...fixes.map((t) => el('small', {style: 'display:block;margin-top:6px'}, '\u2022 ' + t))) : null,
-        el('small', {style: 'color:var(--muted)'}, 'VryxCode\u2019s features and fixes go out with its own update: Models > VryxCode > Push update.'),
+        el('small', {style: 'color:var(--muted)'}, 'VryxCode\u2019s features and fixes go out with its own pushes: Models > VryxCode.'),
         sxSeg([['preview', 'In preview (' + prev.length + ')'], ['published', 'Published (' + pub.length + ')']], view, (v) => { view = ADM.view = v; draw(); }),
-        ...(view === 'preview' ? (prev.length ? prev.map(previewCard) : [el('p', {}, 'Nothing is in preview. New features appear here until you publish them.')])
+        ...(view === 'preview' ? (prev.length ? [['features', '\u2728 New features'], ['fixes', '\u{1F527} Bug fixes'], ['vryxcode', '\u{1F6E0} VryxCode (goes out with its own pushes under Models)']].flatMap(([k, name]) => inPrev(k).length
+              ? [el('h3', {style: 'font-size:16px;margin:14px 0 4px'}, name + ' (' + inPrev(k).length + ')'), ...inPrev(k).map(previewCard)] : [])
+              : [el('p', {}, 'Nothing is in preview. New features and fixes appear here until you publish them.')])
                               : (pub.length ? pub.map(pubCard) : [el('p', {}, 'Nothing has been published yet.')]))),
       el('div', {class: 'adm-card'}, el('h3', {}, '\u{1F4CB} App release history'), el('p', {}, 'Every app version published so far, with what went live in each one. Model versions and their updates are under Models.'),
-        ...(appRel.length ? appRel.map((r) => el('div', {class: 'adm-sub'}, el('div', {class: 'adm-row'}, el('span', {}, el('b', {}, relTitle(r)), ' ', el('span', {class: 'adm-tag'}, REL_KIND[r.kind] || r.kind)), el('small', {}, admDate(r.at))),
+        ...(appRel.length ? appRel.map((r) => el('div', {class: 'adm-sub'}, el('div', {class: 'adm-row'}, el('span', {}, el('b', {}, relTitle(r)), ' ', el('span', {class: 'adm-tag'}, relKind(r))), el('small', {}, admDate(r.at))),
           ...r.items.map((i) => el('small', {}, '\u2022 ' + i.title + ': ' + i.desc)), ...(r.fixes || []).map((t) => el('small', {}, '\u2022 Fixed: ' + t)), r.notes ? el('small', {}, r.notes) : null, el('small', {}, 'Published by ' + r.by))) : [el('p', {}, 'No app releases yet.')])));
   };
   draw();
@@ -174,25 +195,19 @@ async function admModels(body) {
   };
   // a product released like a model (VryxCode): its waiting features go out together as its next version
   const productCard = (p) => el('div', {class: 'adm-card'}, el('h3', {}, '\u{1F6E0} ' + p.label),
-    el('p', {}, p.desc + ' Each feature keeps its own switch under Previews (for trying it on you and the admins); Push update sends every waiting one to everyone as ' + p.title + ' ' + p.next.minor + '.'),
-    el('h3', {style: 'font-size:16px'}, 'Waiting for the next version (' + p.waiting.length + ')'),
+    el('p', {}, p.desc +  ' Each feature keeps its own switch under Previews (for trying it on you and the admins); its new features and its bug fixes go to everyone in separate pushes: new features add 0.5 to the version (' + p.title + ' ' + p.next.features + '), bug fixes add 0.1 (' + p.title + ' ' + p.next.fixes + ').'),
+    el('h3', {style: 'font-size:16px'}, '\u2728 New features waiting (' + p.waiting.length + ')'),
     ...(p.waiting.length ? p.waiting.map((f) => el('div', {class: 'adm-sub'}, el('b', {}, f.title, ' ', el('span', {class: 'adm-tag'}, f.audience === 'owner' ? 'Owner' : 'Admins')), el('small', {}, f.desc)))
-                         : [el('p', {}, 'Nothing is waiting. New ' + p.title + ' features appear here.')]),
+                         : [el('p', {}, 'No new features are waiting. New ' + p.title + ' features appear here.')]),
+    el('h3', {style: 'font-size:16px'}, '\u{1F527} Bug fixes waiting (' + ((p.waiting_fixes || []).length + (p.fixes || []).length) + ')'),
+    ...(p.waiting_fixes || []).map((f) => el('div', {class: 'adm-sub'}, el('b', {}, f.title), el('small', {}, f.desc))),
+    ...(p.fixes || []).map((t) => el('small', {style: 'display:block;margin-top:6px'}, '\u2022 ' + t)),
     p.held.length ? el('small', {style: 'color:var(--muted)'}, 'Switched off, so left out: ' + p.held.map((f) => f.title).join(', ')) : null,
-    (p.fixes || []).length ? el('details', {class: 'adm-sub'}, el('summary', {style: 'cursor:pointer'}, el('b', {}, 'Bug fixes going out with it (' + p.fixes.length + ')')),
-      ...p.fixes.map((t) => el('small', {style: 'display:block;margin-top:6px'}, '\u2022 ' + t))) : null,
-    el('div', {class: 'adm-acts'}, sxBtn('Push update', () => {
-      if (!p.waiting.length && !(p.fixes || []).length) return toast('Nothing is waiting to push.');
-      let kind = 'minor';
-      const notes = el('textarea', {rows: 3, maxlength: 500, placeholder: 'What changed (optional, shown in What\u2019s new)', style: 'width:100%;border-radius:12px;padding:10px;background:var(--surface2);color:var(--text);border:1px solid var(--line);font:inherit'});
-      const opts = el('div', {style: 'display:flex;flex-direction:column;gap:8px;margin:10px 0'});
-      const paint = () => opts.replaceChildren(...[['minor', 'Update', 'New features and fixes'], ['major', 'Big version', 'A big change']].map(([k, n, w]) => el('button', {type: 'button', class: 'opt' + (k === kind ? ' sel' : ''), onclick: () => { kind = k; paint(); }},
-        el('span', {class: 'grow'}, el('b', {}, n + '  \u00b7  ' + p.title + ' ' + p.next[k]), el('small', {}, w)))));
-      paint();
-      const nf = (p.fixes || []).length;
-      const m = dialog([el('h2', {}, 'Push ' + p.title + ' to everyone'), el('div', {style: 'color:var(--muted)'}, p.waiting.length + ' feature' + (p.waiting.length === 1 ? '' : 's') + (nf ? ' and ' + nf + ' fix' + (nf === 1 ? '' : 'es') : '') + ' go live for everyone.'), opts, notes], 'Cancel',
-        el('button', {class: 'btn', style: 'margin-bottom:8px', onclick: () => { m.remove(); save({push_product: p.id, kind, notes: notes.value.trim()}); }}, 'Push update'));
-    }, p.waiting.length || (p.fixes || []).length ? 'primary' : '')),
+    el('div', {class: 'adm-acts', style: 'flex-wrap:wrap'}, ...[['features', 'Push new features', p.waiting.length], ['fixes', 'Push bug fixes', (p.waiting_fixes || []).length + (p.fixes || []).length]].map(([k, verb, n]) =>
+      sxBtn(verb + ' \u00b7 ' + p.title + ' ' + p.next[k], () => {
+        if (!n) return toast(k === 'fixes' ? 'No bug fixes are waiting.' : 'No new features are waiting.');
+        pushDialog(verb + ' to everyone', p.label + '  \u2192  ' + p.title + ' ' + p.next[k], verb, (notes) => save({push_product: p.id, kind: k, notes}));
+      }, n ? 'primary' : ''))),
     p.live.length ? el('details', {}, el('summary', {style: 'cursor:pointer;color:var(--muted);font-size:14px'}, 'Live for everyone (' + p.live.length + ')'), ...p.live.map((f) => el('small', {style: 'display:block;margin-top:6px'}, '\u2022 ' + f.title))) : null);
   const draw = () => {
     clearTimeout(timer);
@@ -214,7 +229,7 @@ async function admModels(body) {
           m.changes ? el('small', {style: 'color:var(--accenttext)'}, 'Changed since the last update: ' + m.changes) : null,
           m.guard && m.guard.state !== 'none' ? guardBox(m) : null))),
       el('div', {class: 'adm-card'}, el('h3', {}, 'Model release history'),
-        ...(j.releases.length ? j.releases.map((r) => el('div', {class: 'adm-sub'}, el('div', {class: 'adm-row'}, el('span', {}, el('b', {}, relTitle(r)), ' ', el('span', {class: 'adm-tag'}, REL_KIND[r.kind] || r.kind)), el('small', {}, admDate(r.at))),
+        ...(j.releases.length ? j.releases.map((r) => el('div', {class: 'adm-sub'}, el('div', {class: 'adm-row'}, el('span', {}, el('b', {}, relTitle(r)), ' ', el('span', {class: 'adm-tag'}, relKind(r))), el('small', {}, admDate(r.at))),
           ...(r.product ? (r.items || []).map((i) => el('small', {}, '\u2022 ' + i.title)) : []), ...(r.fixes || []).map((t) => el('small', {}, '\u2022 Fixed: ' + t)), r.notes ? el('small', {}, r.notes) : null, el('small', {}, 'By ' + r.by))) : [el('p', {}, 'No model releases yet.')])));
     if (j.checks_running && body.isConnected) timer = setTimeout(() => { if (body.isConnected) refresh(); }, 3000);
   };

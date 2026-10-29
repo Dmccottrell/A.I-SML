@@ -165,10 +165,11 @@ function maybeTour() {   // the first time someone signs in (and only while the 
 }
 
 // ---------------------------------------------------------------- what's new: published releases, shown once when someone opens the app after a release
-const REL_KIND = {major: 'Major', minor: 'Minor', patch: 'Patch', 'model-new': 'New model', 'model-update': 'Model update'};
+const REL_KIND = {features: 'New features', fixes: 'Bug fixes', major: 'Major', minor: 'Minor', patch: 'Patch', 'model-new': 'New model', 'model-update': 'Model update'};
+const relKind = (r) => REL_KIND[r.release || r.kind] || r.kind;      // a VryxCode push says whether it brought new features or fixes
 const relTitle = (r) => r.model ? r.model : 'v' + r.version;
 function whatsNewList(releases) {
-  return releases.length ? releases.map((r) => el('div', {class: 'adm-sub', style: 'margin:0 0 10px'}, el('div', {class: 'adm-row'}, el('span', {}, el('b', {}, relTitle(r)), ' ', el('span', {class: 'adm-tag'}, REL_KIND[r.kind] || r.kind)), el('small', {}, admDate(r.at))),
+  return releases.length ? releases.map((r) => el('div', {class: 'adm-sub', style: 'margin:0 0 10px'}, el('div', {class: 'adm-row'}, el('span', {}, el('b', {}, relTitle(r)), ' ', el('span', {class: 'adm-tag'}, relKind(r))), el('small', {}, admDate(r.at))),
     ...(r.model && !r.product ? [] : (r.items || []).map((i) => el('div', {}, el('b', {style: 'font-size:15px'}, i.title), el('br'), el('small', {}, i.desc)))),
     ...((r.fixes || []).length ? [el('b', {style: 'font-size:15px'}, 'Fixed'), ...r.fixes.map((t) => el('small', {style: 'display:block'}, '\u2022 ' + t))] : []),
     r.notes ? el('small', {}, r.notes) : null)) : [el('p', {style: 'color:var(--muted)'}, 'Nothing has been released yet.')];

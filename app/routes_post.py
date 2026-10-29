@@ -442,25 +442,25 @@ class RoutesPost:
             if path == "/api/admin/flags":                                   # any admin may widen or narrow who sees a new feature
                 try:
                     if body.get("publish") == "all":                                      # everything in preview, as one release
-                        ids = self.state.flags.publish_all(by=who["user"], kind=str(body.get("kind") or "minor"), notes=str(body.get("notes") or ""))
+                        ids = self.state.flags.publish_all(by=who["user"], kind=str(body.get("kind") or "features"), notes=str(body.get("notes") or ""))
                         self.state.auth.event("flag_changed", who["user"], self._ip(), "published all: " + ", ".join(ids))
                     elif body.get("id") and body.get("publish") == "now":                # publish to everyone straight away
-                        self.state.flags.publish_now(str(body["id"]), by=who["user"], kind=str(body.get("kind") or "minor"), notes=str(body.get("notes") or ""))
+                        self.state.flags.publish_now(str(body["id"]), by=who["user"], kind=body.get("kind") and str(body["kind"]), notes=str(body.get("notes") or ""))
                         self.state.auth.event("flag_changed", who["user"], self._ip(), f"{body['id']} -> everyone (published)")
                     elif body.get("id") and body.get("cancel_schedule"):
                         self.state.flags.cancel_schedule(str(body["id"]))
                         self.state.auth.event("flag_changed", who["user"], self._ip(), f"{body['id']}: schedule cancelled")
                     elif body.get("id") and "schedule_at" in body:                       # publish at a chosen time (seconds since 1970)
                         self.state.flags.schedule(str(body["id"]), body.get("schedule_at"), str(body.get("audience") or "everyone"), by=who["user"],
-                                                 kind=str(body.get("kind") or "minor"), notes=str(body.get("notes") or ""))
+                                                 kind=body.get("kind") and str(body["kind"]), notes=str(body.get("notes") or ""))
                         self.state.auth.event("flag_changed", who["user"], self._ip(), f"{body['id']}: scheduled for {time.strftime('%Y-%m-%d %H:%M', time.localtime(float(body['schedule_at'])))}")
                     elif body.get("id"):
                         self.state.flags.set_audience(str(body["id"]), str(body.get("audience", "")), by=who["user"])
                         self.state.auth.event("flag_changed", who["user"], self._ip(), f"{body['id']} -> {body.get('audience')}")
                 except ValueError as e:
                     return self._send(400, {"code": "bad_request", "message": str(e)})
-                return self._send(200, {"flags": self.state.flags.listing(), "version": self.state.flags.version(), "releases": self.state.flags.releases(),
-                                        "fixes": [f["text"] for f in self.state.flags.pending_fixes(None)]})
+                return self._send(200, {"flags": self.state.flags.listing(), "version": self.state.flags.version(), "next": self.state.flags.next_versions(),
+                                        "releases": self.state.flags.releases(), "fixes": [f["text"] for f in self.state.flags.pending_fixes(None)]})
             if path == "/api/admin/apps":                                     # make, change, switch off, rotate the key of, or remove an app
                 st, act = self.state, str(body.get("action", ""))
                 try:
@@ -534,7 +534,7 @@ class RoutesPost:
                 mp, man, mid, by = self.state.models_pub, self.state.manifest, str(body.get("id", "")), who["user"]
                 try:
                     if body.get("push_product"):                                   # VryxCode: every waiting feature goes out as its next version
-                        label = self.state.flags.push_product(str(body["push_product"]), by=by, kind=str(body.get("kind") or "minor"), notes=str(body.get("notes") or ""))
+                        label = self.state.flags.push_product(str(body["push_product"]), by=by, kind=str(body.get("kind") or "features"), notes=str(body.get("notes") or ""))
                         self.state.auth.event("model_published", by, self._ip(), label + " pushed")
                     elif body.get("run_checks"):
                         self.state.start_guard(mid, by=by)
