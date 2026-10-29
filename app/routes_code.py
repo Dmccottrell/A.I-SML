@@ -264,8 +264,9 @@ class RoutesCode:
 
     @staticmethod
     def _own_pc(st, who):
-        """The owner may pick This computer although everyone else is run in the sandbox (vryxcode_owner_pc, or vryxcode_open_pc)."""
-        return bool(who.get("owner")) and (st.flags.on("vryxcode_owner_pc", who) or st.flags.on("vryxcode_open_pc", who))
+        """An admin may pick This computer although everyone else is run in the sandbox (vryxcode_owner_pc; the owner works from an admin
+        account), as may the owner with vryxcode_open_pc."""
+        return (bool(who.get("admin")) and st.flags.on("vryxcode_owner_pc", who)) or (bool(who.get("owner")) and st.flags.on("vryxcode_open_pc", who))
 
     @staticmethod
     def _kit_flags(st, who):
@@ -273,7 +274,7 @@ class RoutesCode:
         on = lambda fid: st.flags.on(fid, who)
         return {"fixes": on("vryxcode_fixes"), "preview": on("vryxcode_preview"), "guard": on("vryxcode_guardrails"), "servers": on("vryxcode_servers"),
                 "autocheck": on("vryxcode_autocheck"), "open_pc": bool(who.get("owner")) and on("vryxcode_open_pc"),
-                "owner_pc": bool(who.get("owner")) and on("vryxcode_owner_pc"), "record": bool(who.get("owner")) and on("vryxcode_record"),
+                "owner_pc": bool(who.get("admin")) and on("vryxcode_owner_pc"), "record": bool(who.get("owner")) and on("vryxcode_record"),
                 "secrets": on("vryxcode_secrets"), "autocontinue": on("vryxcode_autocontinue"), "options": on("vryxcode_options")}
 
     @staticmethod
@@ -312,7 +313,7 @@ class RoutesCode:
         generate.guardrails = guard                    # vryxcode_guardrails: no going in circles, progress or stop, tests locked while fixing (coding/guardrails.py)
         generate.autocheck = autocheck                 # vryxcode_autocheck: the whole project is built after every change to code (harness.project_build_command)
         generate.open_pc = open_pc                     # vryxcode_open_pc: the OWNER's own sessions on "This computer" may run anything (harness.Sandbox open_host)
-        generate.owner_pc = owner_pc                   # vryxcode_owner_pc: the OWNER may pick This computer (the allowed programs) when everyone else is in the sandbox
+        generate.owner_pc = owner_pc                   # vryxcode_owner_pc: ADMINS may pick This computer (the allowed programs) when everyone else is in the sandbox
         generate.record = record                       # vryxcode_record: the OWNER's own sessions are recorded whole, for replaying (tools/replay_vryx.py)
         generate.autocontinue = autocontinue           # vryxcode_autocontinue: out of steps, it carries on by itself (code_sessions AUTO_ROUNDS)
         generate.options = options                     # vryxcode_options: an open-ended message gets a question with choices first (code_options.py)

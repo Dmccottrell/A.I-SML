@@ -1097,7 +1097,7 @@ class CodeManager:
         """True when the owner turned on "nothing blocked on this computer" (vryxcode_open_pc, owner only: routes_code sets generate.open_pc) and
         picked This computer: it runs on the PC itself, even where the PC runs everyone else in Docker, and whether or not Docker is answering.
         Their explicit choice, never a quiet fallback for anyone else; picking the isolated sandbox still means the sandbox.
-        vryxcode_owner_pc (generate.owner_pc, owner only) does the same with the usual short list of allowed programs."""
+        vryxcode_owner_pc (generate.owner_pc, admins only) does the same with the usual short list of allowed programs."""
         mine = bool(getattr(generate, "open_pc", False)) or bool(getattr(generate, "owner_pc", False))
         return bool(owner) and mine and str(env or "local") == "local"
 
@@ -1288,12 +1288,12 @@ class CodeManager:
 
     def environments(self, owner=False, own_pc=False):
         """The places a session can run, for the page: [{"id", "name", "available", "note"}]. [own_pc]: the owner may still pick This computer
-        while everyone else is run in the sandbox (vryxcode_owner_pc / vryxcode_open_pc)."""
+        while everyone else is run in the sandbox (vryxcode_owner_pc for admins / vryxcode_open_pc)."""
         forced = self.sandbox.get("mode") == "docker"
         d_ok, d_why = (True, "ready") if forced else self._docker_ok()
         return [
             {"id": "local", "name": "This computer", "available": not forced or bool(own_pc),
-             "note": "Only you: works in the project folder on this computer. Everyone else runs in the sandbox." if forced and own_pc else
+             "note": "Only admins: works in the project folder on this computer. Everyone else runs in the sandbox." if forced and own_pc else
                      "The owner runs every session in the sandbox." if forced else "Works in the project folder on the computer that runs Emvryx. Only a short list of programs may run."},
             {"id": "sandbox", "name": "Isolated sandbox", "available": bool(d_ok),
              "note": "Runs inside a locked container: no internet, limited memory and time." if d_ok else d_why},

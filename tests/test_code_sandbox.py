@@ -151,29 +151,34 @@ class Gating(Base):
             self.assertEqual(self.start(self.owner, env="local")[0], 400)
 
 
-    def test_the_owner_may_pick_this_computer_with_its_allowed_programs(self):
-        # vryxcode_owner_pc: the PC runs everyone in Docker, yet the owner picks This computer for their own sessions. It runs in the project
-        # folder with the usual short list of programs (not "nothing blocked"); other people, and admins who are not the owner, stay in the sandbox.
+    def test_admins_may_pick_this_computer_with_its_allowed_programs(self):
+        # vryxcode_owner_pc: the PC runs everyone in Docker, yet an admin (the owner works from an admin account, not the owner one) picks This
+        # computer for their own sessions. It runs in the project folder with the usual short list of programs (not "nothing blocked"); everyone
+        # who is not an admin stays in the sandbox, whatever the switch's audience.
         self.state.code.sandbox = {"mode": "docker", "image": "img"}
         self.state.flags.data["audiences"]["vryxcode_owner_pc"] = "everyone"
+        st, j = self.owner.call("POST", "/api/admin/users", {"user": "boss", "tier": "pro"})
+        self.assertEqual(self.owner.call("POST", "/api/admin/access", {"user": "boss", "admin": True})[0], 200)
+        boss = Client(self.port, j["key"])
         envs = lambda c: {e["id"]: e for e in c.call("GET", "/api/code")[1]["environments"]}     # noqa: E731
+        self.assertTrue(envs(boss)["local"]["available"])
         self.assertTrue(envs(self.owner)["local"]["available"])
         self.assertFalse(envs(self.pro)["local"]["available"])
         with mock.patch("code_sandbox.available", return_value=(False, "Docker did not answer.")):
-            st, j = self.start(self.owner, env="local")
+            st, j = self.start(boss, env="local")
             self.assertEqual(st, 200, j)
             sess = self.state.code.sessions[j["id"]]
             self.assertEqual((sess.prefix, sess.env), (None, "local"))                         # on the PC itself
             self.assertFalse(getattr(sess.generate, "open_pc", False))                         # with the allowed programs only
-            wait_for(lambda: self.owner.call("GET", "/api/code")[1]["running"] is None)
-            st, j = self.owner.call("POST", "/api/code/run", {"project": "demo", "command": "python -c \"print(6*7)\"", "env": "local"})
+            wait_for(lambda: boss.call("GET", "/api/code")[1]["running"] is None)
+            st, j = boss.call("POST", "/api/code/run", {"project": "demo", "command": "python -c \"print(6*7)\"", "env": "local"})
             self.assertEqual((st, j.get("env")), (200, "local"), j)
             self.assertIn("42", j["output"])
             st, j = self.start(self.pro, env="local")
             self.assertEqual(st, 400)                                                          # everyone else: the sandbox, and Docker is down
             self.state.flags.data["audiences"]["vryxcode_owner_pc"] = "off"
-            self.assertEqual(self.start(self.owner, env="local")[0], 400)
-            self.assertFalse(envs(self.owner)["local"]["available"])
+            self.assertEqual(self.start(boss, env="local")[0], 400)
+            self.assertFalse(envs(boss)["local"]["available"])
 
 
 class Quota(Base):
