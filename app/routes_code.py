@@ -23,6 +23,7 @@ import browser_check
 import code_ci
 import code_extras
 import code_web
+import phone_model
 import usage_limits as U
 from app_errors import AppError
 from app_shared import Cancelled
@@ -202,6 +203,16 @@ class RoutesCode:
                 except github_link.GitHubError as e:
                     status = {"repo": True, "linked": False, "problem": e.message}
                 return self._send(200, {"connected": st.github.connected(user), "login": st.github.get(user).get("login"), **status})
+            if path == "/api/code/built" and st.flags.on("vryxcode_downloads", who):    # vryxcode_downloads: the programs this project built
+                project = st.code.check_name(arg("project"))
+                root = st.code.project_path(user, project)
+                site = os.path.isdir(root) and any(n.lower().endswith((".html", ".htm")) for n in os.listdir(root))
+                return self._send(200, {"files": st.code.built_files(user, project) if os.path.isdir(root) else [], "website": bool(site)})
+            if path == "/api/code/download" and st.flags.on("vryxcode_downloads", who):  # one built program, saved under its own name
+                full = st.code.built_path(user, st.code.check_name(arg("project")), arg("path"))
+                if not full:
+                    return self._send(404, {"code": "not_found", "message": "That program is not in the project (any more).", "action": "Ask VryxCode to build it again."})
+                return phone_model.serve_range(self, full, self.headers.get("Range"), filename=os.path.basename(full))
             if path == "/api/code/zip":
                 project = st.code.check_name(arg("project"))
                 return self._send(200, st.code.export_zip(user, project), "application/zip",
@@ -274,11 +285,11 @@ class RoutesCode:
         on = lambda fid: st.flags.on(fid, who)
         return {"fixes": on("vryxcode_fixes"), "preview": on("vryxcode_preview"), "guard": on("vryxcode_guardrails"), "servers": on("vryxcode_servers"),
                 "autocheck": on("vryxcode_autocheck"), "open_pc": bool(who.get("owner")) and on("vryxcode_open_pc"),
-                "owner_pc": bool(who.get("admin")) and on("vryxcode_owner_pc"), "record": bool(who.get("owner")) and on("vryxcode_record"),
+                "owner_pc": bool(who.get("admin")) and on("vryxcode_owner_pc"), "downloads": on("vryxcode_downloads"), "record": bool(who.get("owner")) and on("vryxcode_record"),
                 "secrets": on("vryxcode_secrets"), "autocontinue": on("vryxcode_autocontinue"), "options": on("vryxcode_options")}
 
     @staticmethod
-    def _code_kit(st, user, model, project, fixes=False, preview=False, guard=False, servers=False, autocheck=False, open_pc=False, record=False, secrets=False, autocontinue=False, options=False, owner_pc=False):
+    def _code_kit(st, user, model, project, fixes=False, preview=False, guard=False, servers=False, autocheck=False, open_pc=False, record=False, secrets=False, autocontinue=False, options=False, owner_pc=False, downloads=False):
         """What a session needs to work with this model in this project: the model call, the usage meter, its tools (GitHub, the browser check) and the git name."""
         box = {}
 
@@ -313,6 +324,7 @@ class RoutesCode:
         generate.guardrails = guard                    # vryxcode_guardrails: no going in circles, progress or stop, tests locked while fixing (coding/guardrails.py)
         generate.autocheck = autocheck                 # vryxcode_autocheck: the whole project is built after every change to code (harness.project_build_command)
         generate.open_pc = open_pc                     # vryxcode_open_pc: the OWNER's own sessions on "This computer" may run anything (harness.Sandbox open_host)
+        generate.downloads = downloads                 # vryxcode_downloads: the model is told its programs are offered for download (code_sessions DOWNLOAD_NOTE)
         generate.owner_pc = owner_pc                   # vryxcode_owner_pc: ADMINS may pick This computer (the allowed programs) when everyone else is in the sandbox
         generate.record = record                       # vryxcode_record: the OWNER's own sessions are recorded whole, for replaying (tools/replay_vryx.py)
         generate.autocontinue = autocontinue           # vryxcode_autocontinue: out of steps, it carries on by itself (code_sessions AUTO_ROUNDS)

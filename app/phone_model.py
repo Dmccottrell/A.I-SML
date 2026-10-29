@@ -158,8 +158,9 @@ def byte_range(header, size):
     return start, end
 
 
-def serve_range(handler, path, range_header):
-    """Sends the file (200) or the asked-for part of it (206) on a BaseHTTPRequestHandler, in 1 MB pieces."""
+def serve_range(handler, path, range_header, filename=None):
+    """Sends the file (200) or the asked-for part of it (206) on a BaseHTTPRequestHandler, in 1 MB pieces. [filename]: saved under that name
+    (a download, not shown in the browser)."""
     size = os.path.getsize(path)
     r = byte_range(range_header, size)
     if r == "bad":
@@ -174,6 +175,10 @@ def serve_range(handler, path, range_header):
     handler.send_header("Content-Length", str(end - start + 1))
     handler.send_header("Accept-Ranges", "bytes")
     handler.send_header("Cache-Control", "no-store")
+    handler.send_header("X-Content-Type-Options", "nosniff")
+    if filename:
+        safe = re.sub(r'[^A-Za-z0-9._ -]', "_", filename)[:120] or "download"
+        handler.send_header("Content-Disposition", f'attachment; filename="{safe}"')
     if r:
         handler.send_header("Content-Range", f"bytes {start}-{end}/{size}")
     handler.end_headers()
