@@ -88,6 +88,8 @@ FLAGS = [
 # Bug fixes people would notice, in plain words. Each goes out with the next release of its part (product None: the next app release, from Previews;
 # "vryxcode": the next VryxCode version, Push update in Models) and shows under "Fixed" in What's new. Add one line here with every fix that ships.
 FIXES = [
+    {"id": "android_menu_names", "product": None, "text": "In the Android app's side menu, names like \u201cScheduled tasks\u201d stay on one line; the grey note beside them gives way instead of squeezing the name to a letter per line."},
+    {"id": "pwa_menu_solid", "product": None, "text": "On a phone, the menu in the modern look is solid: the chat behind it no longer shows through its rows."},
     {"id": "vx_windows_full_path", "product": "vryxcode", "text": "On a Windows PC, a file VryxCode names by its full path (C:\\...\\your project\\index.html) is that file, instead of a copy in a new folder inside the project."},
     {"id": "android_black_panel", "product": None, "text": "In the Android app, Admin, Settings and the other pages no longer end on a black screen when Emvryx is slow to answer: they say so, with Try again."},
     {"id": "pwa_offline_scripts", "product": None, "text": "The installed app (Install / Add to Home screen) keeps every part of the page for offline use, and takes an update as soon as there is one."},

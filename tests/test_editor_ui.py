@@ -242,6 +242,26 @@ class EditorUi(Base):
             finally:
                 b.close()
 
+    def test_the_modern_menu_on_a_phone_hides_the_chat_behind_it(self):
+        # on a phone the side menu slides over the chat: it was see-through glass there, and the chat's words showed through its rows
+        from playwright.sync_api import sync_playwright
+        self.state.flags.set_audience("modern_look", "owner", "test")
+        with sync_playwright() as p:
+            b = p.chromium.launch(executable_path=find_browser())
+            try:
+                for width, solid in ((420, True), (850, True), (1200, False)):          # beside the chat on a wide screen, the glass stays
+                    page = b.new_context(viewport={"width": width, "height": 850}, extra_http_headers={"Authorization": "Bearer " + self.state.owner_key()}).new_page()
+                    page.goto(f"http://127.0.0.1:{self.port}/")
+                    ready(page)
+                    eventually(lambda: self.assertTrue(page.evaluate("document.body.classList.contains('ml') && !!document.getElementById('cssModern')")))
+                    page.evaluate("document.body.classList.add('menu-open')")
+                    page.wait_for_timeout(400)
+                    bg = page.evaluate("getComputedStyle(document.querySelector('.side')).backgroundColor")
+                    alpha = 1.0 if bg.startswith("rgb(") else float(bg.rstrip(")").split(",")[-1].split("/")[-1])
+                    self.assertEqual(alpha >= 0.99, solid, (width, bg))
+            finally:
+                b.close()
+
     def test_modern_look_is_a_flag_and_the_empty_chat_offers_ideas(self):
         from playwright.sync_api import sync_playwright
         st, h, css = Client(self.port).call("GET", "/modern.css", raw=True)
