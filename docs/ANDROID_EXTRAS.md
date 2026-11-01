@@ -12,6 +12,7 @@ All of these are switches in **Admin > Previews**, on for admins first (default 
 | `android_camera_scan` | **Take a photo** and **Scan a document** (Google's scanner finds, straightens and crops the page) in the + menu, and 📷 🧾 in the phone's own chats. | The + by the message box. |
 | `android_background_sync` | Chats and VryxCode drafts written with the PC off go to it by themselves, even with the app closed (about every 15 minutes, only with a connection). Needs `android_offline_model` too. | Nothing to tap. |
 | `android_offline_talk` | **Talk** in the phone's own chats: speak, the model on the phone answers out loud. No PC. | Chats on this phone > 🗣 Talk. |
+| `android_auto_offline` | **Offline ready by itself.** A phone with the room fetches the small phone model and asks Google for its offline speech pack. Only on Wi-Fi, only a model the phone has the memory and free space for (2 GB kept spare), the smallest that fits unless one was picked in Settings. Asked once first; admins are not asked. Stop, Remove and "No thanks" stop it for good. The picture model is never fetched on its own. Needs `android_offline_model`. | A banner the first time; Settings > Answers with the PC off. |
 
 ## Voice commands (the assistant bar)
 
@@ -56,6 +57,8 @@ model you last used; with the PC off the model on the phone answers. **Open Emvr
 - "Hey Emvryx" (a wake word, hands-free) is **not** done: it needs the microphone on all the time and Android only lets the phone's maker's
   assistant do that well. Holding the button is the way in.
 - The scanner needs Google Play services (almost every Android phone has it).
+- Auto offline downloads while the app is open (the download carries on where it stopped the next time it opens); there is no download
+  notification yet. Google's speech pack can be asked for on Android 13 and later; older phones get the Settings page instead.
 - Background sync runs when Android allows it (battery saver can delay it).
 
 ## Not done: a faster model on the phone's graphics chip (GPU)

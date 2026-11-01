@@ -7,7 +7,7 @@ import android.content.Context
  * or the assistant button) or with the app closed (a reply typed in a notification, the sync in the background).
  */
 object NativeFlags {
-    val IDS = setOf("android_text_menu", "android_quick_launch", "android_reply_inline", "android_camera_scan", "android_background_sync", "android_offline_talk", "android_assistant")
+    val IDS = setOf("android_text_menu", "android_quick_launch", "android_reply_inline", "android_camera_scan", "android_background_sync", "android_offline_talk", "android_assistant", "android_auto_offline")
 
     /** The ones that are on, from the PC's list (state.features) */
     fun pick(features: Map<String, Boolean>): Set<String> = IDS.filter { features[it] == true }.toSet()
