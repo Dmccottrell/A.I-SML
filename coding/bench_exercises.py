@@ -12,6 +12,8 @@ WHAT THIS FILE DOES
 Get exercises:  git clone https://github.com/exercism/python   then   --exercises python/exercises/practice
 Usage:  python coding/bench_exercises.py --exercises python/exercises/practice --model solstice-2 --llama http://127.0.0.1:8080 --limit 20 --out logs/exercises.json
 """
+# This first line puts the project root on Python's search path so "emvryx_paths" can be imported; that module then
+# makes the other code folders importable too. (Directive comment on the line is kept.)
 import os, sys; sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), os.pardir)); import emvryx_paths  # noqa: E402,F401  (the code folders become importable)
 import argparse
 import json
@@ -21,24 +23,32 @@ import subprocess
 import sys
 import tempfile
 
+# V is the VryxCode agent: it runs a task with tools, talks to the model and checks the model is allowed to be scored.
 import vryxcode as V
 
+# The first message sent to the model for an exercise. The {names} are filled in with .format() later.
 PROMPT = ("Implement the exercise in {solution}. Read the instructions below and the existing file, then edit {solution} (only that file) so the tests in {tests} pass. "
           "Run the tests with: python -m unittest {module}. When they pass, call finish.\n\nInstructions:\n{instructions}")
+# The second message (attempt 2): shows the failing test output so the model can fix its work.
 RETRY = ("The tests still fail. Here is the output of `python -m unittest {module}`:\n{output}\n\nFix {solution} so they pass (do not edit the tests), run them again, then call finish.")
 
 
 def load_exercise(path):
     """{"slug", "solution": [files], "tests": [files], "instructions"} for an Exercism practice exercise folder, or None if it is not one."""
+    # The slug is the folder name, e.g. "two-fer". Trailing slashes are removed first so basename is not empty.
     slug = os.path.basename(path.rstrip("/\\"))
     cfg_path = os.path.join(path, ".meta", "config.json")
+    # Default file names guessed from the slug (dashes become underscores). The config file may override them.
     solution, tests = [f"{slug.replace('-', '_')}.py"], [f"{slug.replace('-', '_')}_test.py"]
+    # .meta/config.json names the real solution and test files.
     if os.path.exists(cfg_path):
         with open(cfg_path, encoding="utf-8") as f:
             files = json.load(f).get("files", {})
         solution, tests = files.get("solution", solution), files.get("test", tests)
+    # Not an exercise if a test file is missing (e.g. the folder is something else).
     if not all(os.path.exists(os.path.join(path, t)) for t in tests):
         return None
+    # Join the instruction files into one block of text for the prompt.
     text = ""
     for name in ("instructions.md", "instructions.append.md"):
         p = os.path.join(path, ".docs", name)
@@ -49,6 +59,7 @@ def load_exercise(path):
 
 
 def find_exercises(root):
+    """List of (folder path, exercise dict) for every valid exercise folder inside root, sorted by name."""
     out = []
     for name in sorted(os.listdir(root)):
         ex = load_exercise(os.path.join(root, name))
@@ -59,6 +70,7 @@ def find_exercises(root):
 
 def stage(path, ex):
     """A temp copy with only what the model should see: the instructions, the stub and the tests (not .meta, which holds the example solution)."""
+    # mkdtemp makes a fresh empty temp folder; the copy goes inside it. Returns both so the caller can delete work.
     work = tempfile.mkdtemp(prefix="vryxex_")
     dest = os.path.join(work, ex["slug"])
     shutil.copytree(path, dest, ignore=shutil.ignore_patterns(".meta", "__pycache__"))
@@ -69,20 +81,26 @@ def run_tests(folder, module, timeout=60):
     """(passed, output) from running the exercise's tests with python's unittest.
 
     Cached bytecode is removed first and not written: an edit made in the same second with the same file size would otherwise leave Python running the OLD code."""
+    # Walk every folder and delete each __pycache__. Copying dirs first (list(dirs)) lets us remove from it safely,
+    # and removing the name from dirs stops os.walk from going into the deleted folder.
     for root, dirs, _ in os.walk(folder):
         for d in list(dirs):
             if d == "__pycache__":
                 shutil.rmtree(os.path.join(root, d), ignore_errors=True)
                 dirs.remove(d)
+    # Run "python -m unittest <module>" in the exercise folder. -B and the env variable both stop Python writing
+    # bytecode. capture_output keeps the text; timeout stops a never-ending test from hanging the benchmark.
     try:
         r = subprocess.run([sys.executable, "-B", "-m", "unittest", module], cwd=folder, capture_output=True, text=True, timeout=timeout,
                            env={**os.environ, "PYTHONDONTWRITEBYTECODE": "1"})
     except subprocess.TimeoutExpired:
         return False, "the tests ran too long (an endless loop?)"
+    # Exit code 0 means every test passed. Only the last 1500 characters of output are kept (the end has the errors).
     return r.returncode == 0, (r.stdout + r.stderr)[-1500:]
 
 
 def read_files(folder, names):
+    """{file name: its text, or None if it does not exist}. Used to see whether an attempt changed anything."""
     out = {}
     for n in names:
         p = os.path.join(folder, n)
@@ -93,31 +111,42 @@ def read_files(folder, names):
 def run_exercise(path, ex, generate, max_turns=12, context_tokens=None, tries=2):
     """Result for one exercise: {"slug", "passed_first", "passed", "attempts", "unchanged": [bool per attempt]}."""
     work, folder = stage(path, ex)
+    # Module name for unittest = the test file name without ".py" (the last 3 characters).
     module = ex["tests"][0][:-3]
     solution = ", ".join(ex["solution"])
     attempts, unchanged, passed, output = 0, [], False, ""
     try:
         for attempt in range(tries):
+            # Remember the solution files so we can tell afterwards if the model changed them.
             before = read_files(folder, ex["solution"])
+            # Attempt 0 gets the full instructions; later attempts get the failing test output instead.
             task = (PROMPT.format(solution=solution, tests=", ".join(ex["tests"]), module=module, instructions=ex["instructions"]) if attempt == 0
                     else RETRY.format(module=module, output=output, solution=solution))
+            # Let VryxCode work on the folder. ask=make_ask(True) auto-approves tool permission questions and out=
+            # throws its printed output away.
             V.run_task(task, generate, folder, V.make_ask(True), max_turns, context_tokens, out=lambda *_: None, checks=False)   # no self-checks: a benchmark measures the model alone
             attempts += 1
+            # True for this attempt if the solution files are exactly as before (the model did nothing useful).
             unchanged.append(read_files(folder, ex["solution"]) == before)
+            # We run the tests ourselves; we do not trust the model saying that they pass.
             passed, output = run_tests(folder, module)
             if passed:
                 break
     finally:
+        # Always delete the temp copy, even if something crashed.
         shutil.rmtree(work, ignore_errors=True)
     return {"slug": ex["slug"], "passed_first": passed and attempts == 1, "passed": passed, "attempts": attempts, "unchanged": unchanged}
 
 
 def summarize(results):
+    """Turn the list of per-exercise results into totals and percentages (one dict, ready to print or save)."""
     n = len(results)
     if not n:
         return {"exercises": 0}
+    # Booleans add up as 1/0, so sum() counts how many are True.
     first = sum(r["passed_first"] for r in results)
     total = sum(r["passed"] for r in results)
+    # Count attempts (over all exercises) where nothing was changed.
     nochange = sum(1 for r in results for u in r["unchanged"] if u)
     attempts = sum(r["attempts"] for r in results)
     return {"exercises": n, "passed_first_try": first, "passed_after_second_try": total, "pct_first": round(100 * first / n, 1),
@@ -125,6 +154,8 @@ def summarize(results):
 
 
 def main(argv=None):
+    """Command-line entry point: run the benchmark and save the results. Returns 0 (the exit code)."""
+    # The command-line options (see Usage in the top comment).
     p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     p.add_argument("--exercises", required=True, help="a folder of Exercism practice exercises (python/exercises/practice)")
     p.add_argument("--model", default="solstice-2", help="equinox-2, solstice-2 or apogee-2")
@@ -135,27 +166,33 @@ def main(argv=None):
     p.add_argument("--out", default="logs/exercises.json")
     p.add_argument("--coder", default=None, metavar="LABEL", help="score an outside coding model that llama-server is running, under this label")
     a = p.parse_args(argv)
+    # gate() refuses to score a model that is not allowed or not ready; SystemExit stops the program with the note.
     ok, note = V.gate(a.model, a.coder)
     if not ok:
         raise SystemExit(note)
     items = find_exercises(a.exercises)
+    # --limit keeps only the first N exercises (for quick trial runs).
     if a.limit:
         items = items[:a.limit]
     if not items:
         raise SystemExit(f"no exercises found in {a.exercises} (each needs a *_test.py and .meta/config.json)")
+    # generate(messages) asks the llama-server (the program that runs the model) for the next reply.
     generate = V.LlamaChat(a.llama)
     results = []
     for path, ex in items:
         r = run_exercise(path, ex, generate, a.max_turns, a.context)
         results.append(r)
+        # One progress line per exercise; :28s pads the name to 28 characters so the results line up.
         print(f"{ex['slug']:28s} {'PASS (1st try)' if r['passed_first'] else 'PASS (2nd try)' if r['passed'] else 'fail'}", flush=True)
     s = summarize(results)
     print(json.dumps(s, indent=2))
+    # Save everything as JSON; "or '.'" covers an --out path with no folder part.
     os.makedirs(os.path.dirname(a.out) or ".", exist_ok=True)
     with open(a.out, "w", encoding="utf-8") as f:
         json.dump({"model": a.coder or a.model, "outside_model": bool(a.coder), "summary": s, "results": results}, f, indent=2)
     return 0
 
 
+# Only run main() when the file is started directly, not when another file imports it.
 if __name__ == "__main__":
     sys.exit(main())

@@ -11,7 +11,13 @@ WHAT THIS FILE DOES
     * Edits and runs ask first unless the person chose "auto-approve edits" for the session; running the tests never asks.
     * A person has one running session at a time. "Stop" ends it at the next step.
     * Nothing here sends code anywhere: the model is the llama-server on the same computer.
+
+    Main parts, top to bottom: small helpers (built_kind, remove_tree, clip...), Meter (counts usage against the plan), Session (one running task:
+    its events, questions and background thread), and CodeManager (starts, finds, stops and lists sessions and projects).
 """
+# What the standard-library imports are for: base64 = turns binary data into text and back; io = in-memory files; os = files and folders;
+# re = regular expressions (text patterns); shutil = copy/delete whole folders; sys = Python version info; threading = background threads and locks;
+# time = clock and sleeping; zipfile = make and read .zip files.
 import base64
 import io
 import os
@@ -22,6 +28,11 @@ import threading
 import time
 import zipfile
 
+# The project's own modules (all in the coding/ folder or on its path): code_extras = memory notes and extra tools; code_log = the session history
+# kept on disk; code_report = the written summary of a session; code_map = a map of the project's files; code_options = per-person settings;
+# code_review = the automatic review of a finished change; code_sandbox = the Docker container the commands run in; guardrails = the brakes against
+# going in circles; harness = the agent loop and its tools; languages = which programming languages are known; usage_limits (U) = the plan limits;
+# vryxcode = the terminal version of the agent, sharing the same engine.
 import code_extras
 import code_log
 import code_report
@@ -35,38 +46,56 @@ import languages
 import usage_limits as U
 import vryxcode
 
+# A project or session name: 1 to 40 letters, digits, dashes or underscores. (Used with fullmatch, so nothing else may appear; this also blocks
+# "../" tricks that would escape the person's folder.)
 NAME_OK = re.compile(r"[A-Za-z0-9_-]{1,40}")
+# The largest file (200,000 bytes) the page may open in its file viewer.
 MAX_FILE_BYTES = 200_000
+# The longest text kept in one event shown on the page (6000 characters); longer text is cut by clip().
 MAX_EVENT_TEXT = 6000
+# Finds the special marker words the model's chat format puts around tool results (<|tool_result|>, <|end_tool_result|> ...), so they can be
+# removed from text before showing it. `(?:...)` is a group that is not remembered; `/?` and `end_` are optional parts.
 RESULT_TAGS = re.compile(r"<\|/?(?:end_)?tool_result\|>|<\|end_tool_result\|>")
+# Limits when a person imports a project: at most 1000 files, 20 MB in all, and 2 MB for any one file.
 MAX_IMPORT_FILES, MAX_IMPORT_BYTES, MAX_ONE_FILE = 1000, 20_000_000, 2_000_000
 MAX_QUEUED = 5                                             # sessions that may wait in one person's queue
+# Folders left out of file lists, zips and imports: version history, caches, installed packages, Emvryx's own bookkeeping.
 SKIP_DIRS = {".git", "__pycache__", "node_modules", ".emvryx"}
+# Text added to the model's instructions so it knows built programs are offered for download and it should say where the file is.
 DOWNLOAD_NOTE = ("\n\nWhen you build a program (a Windows .exe, an Android .apk, a Linux or Mac program, a .jar), it is offered to the person with a Download "
                  "button under your Done message, and a website or the whole project as a zip. Say where the built file is. Never say you cannot give them "
                  "the file.")
 MAX_BUILT = 300_000_000                    # a built program bigger than this is not offered for download
 # vryxcode_downloads: what a built program is, by its name and the first bytes inside it (so a text file called .exe is not offered as a program)
+# Each file ending maps to (the bytes the file must start with, a plain-words name). "MZ" starts every Windows program, "PK" starts every zip-based
+# file (.apk and .jar are zips), \x7fELF starts Linux programs, "!<arch>" starts .deb files. b"" (nothing) accepts any .dmg.
 BUILT_EXT = {".exe": (b"MZ", "Windows program"), ".msi": (b"\xd0\xcf\x11\xe0", "Windows installer"), ".apk": (b"PK", "Android app"),
              ".aab": (b"PK", "Android app bundle"), ".jar": (b"PK", "Java program"), ".appimage": (b"\x7fELF", "Linux program"),
              ".deb": (b"!<arch>", "Linux installer"), ".dmg": (b"", "Mac app")}
+# The first 4 bytes ("magic number") of a Mac executable in its different forms (32-bit/64-bit, either byte order). Used to spot Mac programs.
 MACHO = (b"\xcf\xfa\xed\xfe", b"\xce\xfa\xed\xfe", b"\xfe\xed\xfa\xcf")
 
 
 def built_kind(path):
-    """"Windows program", "Android app" ... for a program VryxCode built, or None for anything else (source code, text, pictures)."""
+    """"Windows program", "Android app" ... for a program VryxCode built, or None for anything else (source code, text, pictures).
+
+    In: the path of a file. The decision uses both the file ending and the first bytes, so a text file renamed to .exe is not offered.
+    """
     try:
         size = os.path.getsize(path)
+        # Read only the first 8 bytes: enough to tell the file type.
         with open(path, "rb") as f:
             head = f.read(8)
     except OSError:
         return None
+    # An empty file, or one over the download limit, is not offered.
     if not size or size > MAX_BUILT:
         return None
     ext = os.path.splitext(path)[1].lower()
     if ext in BUILT_EXT:
         magic, kind = BUILT_EXT[ext]
         return kind if head.startswith(magic) else None
+    # os.access(path, os.X_OK) asks "is this file marked executable?"; Linux and Mac programs have no ending but are marked that way.
     if not ext and os.access(path, os.X_OK):                # a program with no extension, as Linux and Mac compilers make them
         if head.startswith(b"\x7fELF"):
             return "Linux program"
@@ -77,41 +106,54 @@ def built_kind(path):
 
 def remove_tree(path, tries=3):
     """Delete a folder and everything in it. True when it is gone. On Windows, files a git checkout made read-only (.git/objects) stop a plain
-    rmtree, so they are made writable and tried again; a file another program has open is retried after a short wait."""
+    rmtree, so they are made writable and tried again; a file another program has open is retried after a short wait.
+
+    In: the folder path and how many times to try (default 3). Out: True if the folder no longer exists, False if it could not be removed.
+    """
     import stat
 
     def unlock(func, p, *_):
+        """Called by rmtree for each thing it could not delete: make it writable, then try deleting it once more (`func` is the failed delete)."""
         try:
             os.chmod(p, stat.S_IWRITE | stat.S_IREAD)
             func(p)
         except OSError:
             pass
     for n in range(tries):
+        # Python 3.12 renamed rmtree's error-handler option from onerror to onexc, so pick the right name for this version.
         if sys.version_info >= (3, 12):
             shutil.rmtree(path, onexc=unlock)
         else:
             shutil.rmtree(path, onerror=unlock)
         if not os.path.exists(path):
             return True
+        # Wait a little longer each time (0.3s, 0.6s, 0.9s) before trying again.
         time.sleep(0.3 * (n + 1))
     return False
 
 
+# File endings that count as web pages and their scripts/styles; changing one of these triggers the page check and refreshes the Preview.
 WEB_FILES = (".html", ".htm", ".js", ".mjs", ".css", ".jsx")
+# Matches the wording of the page check's report when it found problems (case ignored). `a|b` means "a or b".
 PAGE_TROUBLE = re.compile(r"loaded, with problems|did not finish loading", re.I)
+# How many times VryxCode is asked to fix a page automatically after the page check reports trouble.
 PAGE_FIX_TRIES = 2
 AUTO_ROUNDS = 5                                            # vryxcode_autocontinue: at most this many extra rounds of steps per message
+# The message sent to the model on its automatic extra round when it ran out of steps before finishing.
 CONTINUE_TEXT = ("You used all your steps for this round and the task is not finished. Carry on from exactly where you stopped (do not start over), "
                  "and finish the task. When it is really done and checked, call finish with what you did.")
 
 
 class CodeError(Exception):
+    """An error with words for the person: `message` says what went wrong, `action` (optional) says what they can do about it."""
+
     def __init__(self, message, action=""):
         super().__init__(message)
         self.message, self.action = message, action
 
 
 class Stopped(Exception):
+    """Raised inside a session when the person pressed Stop, to jump out of the work at once."""
     pass
 
 
@@ -124,28 +166,37 @@ class QuotaStop(Exception):
 
 
 def clip(text, limit=MAX_EVENT_TEXT):
+    """`text` cut to at most `limit` characters, with a note of how many were left out. Keeps events and page data from growing huge."""
     text = str(text)
     return text if len(text) <= limit else text[:limit] + f"\n... ({len(text) - limit} more characters)"
 
 
 def context_meter(used, window):
     """How full the model's memory is for the meter by the task box: harness.run_agent folds the older steps at harness.fold_point (75%, at most 96K)."""
+    # `used` = tokens now in the conversation, `window` = the model's memory size in tokens. Keep used >= 0 and window >= 1 (so no divide by zero).
     used, window = max(0, int(used)), max(1, int(window))
+    # pct is the percent full (at most 100, one decimal); compact_at is the size at which older steps get folded into a short summary.
     return {"used": used, "window": window, "pct": round(min(100.0, 100.0 * used / window), 1), "compact_at": harness.fold_point(window)}
 
 
 def change_counts(workspace, name, args):
     """{"add", "del"}: the lines a write or an edit adds and takes away (for "+52 -3" in the session list and the file chips), worked out before it runs.
-    {} for any other step."""
+    {} for any other step.
+
+    In: the project folder, the tool's name and its arguments dict. Out: {"add": n, "del": n} or {}.
+    """
     if name not in ("write_file", "edit_file") or not isinstance(args, dict):
         return {}
     import difflib
     if name == "edit_file":
+        # edit_file swaps the text `old` for `new`: compare those two.
         old, new = str(args.get("old", "")).splitlines(), str(args.get("new", "")).splitlines()
     else:
         new, old = str(args.get("content", "")).splitlines(), []
+        # A write that is not an "append" replaces the whole file, so the old lines are what the file holds now (none if it is new).
         if not args.get("append"):
             try:
+                # realpath resolves symlinks and "..", and the startswith check makes sure the file is really inside the project folder.
                 full = os.path.realpath(os.path.join(workspace, str(args.get("path", ""))))
                 if full.startswith(os.path.realpath(workspace) + os.sep) and os.path.isfile(full):
                     with open(full, encoding="utf-8", errors="replace") as f:
@@ -153,6 +204,8 @@ def change_counts(workspace, name, args):
             except (OSError, ValueError):
                 old = []
     add = rem = 0
+    # get_opcodes() lists the differences: each has a kind (tag) and the range of old lines (i1..i2) and new lines (j1..j2) it covers.
+    # Lines in the old range are removed; lines in the new range are added.
     for tag, i1, i2, j1, j2 in difflib.SequenceMatcher(None, old, new, autojunk=False).get_opcodes():
         if tag in ("replace", "delete"):
             rem += i2 - i1
@@ -163,9 +216,11 @@ def change_counts(workspace, name, args):
 
 def _folded_steps(messages):
     """How many old steps are listed under "Earlier steps" in the task message (harness.compact puts them there); 0 when nothing was folded."""
+    # The task message is the first "user" message; next(..., None) takes the first match or None.
     first = next((m for m in messages if m.get("role") == "user"), None)
     if not first or "\n\nEarlier steps:\n" not in str(first.get("content", "")):
         return 0
+    # Count the non-empty lines after the "Earlier steps:" heading.
     return len([l for l in str(first["content"]).split("\n\nEarlier steps:\n", 1)[1].split("\n") if l.strip()])
 
 
@@ -173,34 +228,52 @@ class Meter:
     """Counts a coding session against the person's plan, step by step, exactly like chat messages (same tank, same week, same model weight).
     Before each model call the likely cost is held; afterwards the real counts (from llama-server when it reports them) replace the hold.
     Steps count at limits.json code_rate, and the hold counts what the last step already sent as cached: each step resends the same project,
-    so counting it all as new text again emptied a Mega tank in a handful of Apogee steps."""
+    so counting it all as new text again emptied a Mega tank in a handful of Apogee steps.
+
+    `limiter` is the shared usage limiter (the plan rules), `user` the person, `model_key` the model, `clock` a time function (replaced in tests),
+    `max_new` the most new tokens one step may write, `effort` the effort level (it scales the cost). A token is a small piece of text (about 4 characters).
+    """
 
     def __init__(self, limiter, user, model_key, clock=time.time, max_new=1024, effort="balanced"):
         self.limiter, self.user, self.key, self.clock, self.max_new, self.effort = limiter, user, model_key, clock, max_new, effort
-        self.counted = 0.0
-        self.steps = 0
+        self.counted = 0.0                                 # total usage charged to the plan so far in this session
+        self.steps = 0                                     # model calls settled so far
         self.seen = 0                                      # tokens the last step sent and got back (llama-server keeps them cached)
 
     @staticmethod
     def tokens(messages):
+        """A rough token count of a list of chat messages: about 1 token per 4 characters, plus 4 per message for the chat format's own markers."""
         return sum(len(str(m.get("content", ""))) for m in messages) // 4 + 4 * len(messages)
 
     def reserve(self, messages):
+        """Before a model call: hold the likely cost against the plan. Returns the limiter's reservation (to settle or cancel later).
+
+        The model server remembers text it saw last step ("cached"), and cached text is charged at a cheaper rate (the "cached_in" multiplier).
+        """
         total = self.tokens(messages)
         cached = min(total, self.seen)
+        # held = new text at full price + cached text at the cheaper price + the most the reply could add.
         held = total - cached + cached * self.limiter.cfg["multipliers"]["cached_in"] + self.max_new
+        # Scale by the model's weight, the effort level and the code rate (limits.json) to get the cost in plan units.
         est = held * self.limiter.weight(self.key) * self.limiter.cfg["effort"][self.effort] * self.limiter.code_rate()
         return self.limiter.reserve(self.user, self.key, self.effort, est, self.clock())
 
     def cancel(self, res):
+        """Give the held amount back (the model call did not happen or failed)."""
         self.limiter.cancel(res, self.clock())
 
     def settle(self, res, generate, messages, reply):
+        """After a model call: replace the hold with the real cost.
+
+        `generate` may carry a `usage` dict with the true counts from llama-server (fresh input, cached input, output tokens); when it does not,
+        the counts are estimated from the text length.
+        """
         u = getattr(generate, "usage", None) or {}
         fresh = u.get("fresh_in", self.tokens(messages))
         out = u.get("out", len(reply) // 4)
         self.counted += self.limiter.settle(res, fresh, u.get("cached_in", 0), out, self.effort, self.clock(), rate=self.limiter.code_rate())
         self.steps += 1
+        # Remember how much text this step sent plus its reply: llama-server will have cached it, so the next step's hold counts it as cached.
         self.seen = self.tokens(messages) + len(reply) // 4
 
 
@@ -212,8 +285,19 @@ PREVIEW_NOTE = ("\nThe person sees a live Preview of this project's web pages in
                 "find the file on their computer. Web pages (HTML, CSS, JavaScript) show there; a Python or Node server cannot, so for those build the "
                 "page in HTML and JavaScript where you can.")
 
+
 class Session:
-    """One task being worked on. `events` only ever grows; the page asks for the ones after the last it saw."""
+    """One task being worked on. `events` only ever grows; the page asks for the ones after the last it saw.
+
+    A Session holds everything about one coding task: the events the page shows, the open question (if any), the stop flag, the conversation so far,
+    and the settings it runs with. The work itself runs on a background thread (a thread is a second line of execution running at the same time as
+    the web server); the web requests only read events and answer questions. A `threading.Condition` (self.cv) lets the two sides wait for each other.
+    Argument meanings: sid = session id, user/project = whose and which folder, task = the person's request, model_id = which model,
+    workspace = the project's folder path, auto_edits = approve edits without asking, meter = usage counting, tools = extra tools,
+    identity = git author for commits, prefix = docker words for commands (None = run locally), quotas = limits checker, base = the person's
+    projects folder, env = "local" or "sandbox", log = history on disk, snapshot = function that zips the project, plan = plan-only first turn,
+    expand = function that expands @file mentions, remote = commands run on the cloud machine over SSH.
+    """
 
     def __init__(self, sid, user, project, task, model_id, workspace, auto_edits=False, meter=None, tools=None, identity=None, prefix=None, quotas=None, base=None,
                  env="local", log=None, snapshot=None, plan=False, expand=None, remote=False):
@@ -245,18 +329,26 @@ class Session:
         self.notify, self.on_notify = False, None       # tell the owner's phone when a turn ends or it needs an answer (set by the server)
 
     def emit(self, kind, **data):
+        """Add an event (a step, a result, a question, "end"...) for the page to show. Numbered in order; wakes anyone waiting; saves history."""
+        # `with self.cv` takes the lock so another thread cannot change events at the same moment.
         with self.cv:
+            # n = position in the list, t = seconds since the session started; **data adds the event's own fields.
             self.events.append({"n": len(self.events), "kind": kind, "t": round(time.time() - self.started, 1), **data})
             self.updated = time.time()
+            # Wake up any thread waiting on this condition (for example one waiting for an answer) so it checks again.
             self.cv.notify_all()
+        # Important moments are saved to disk at once; others at most every 2 seconds (see persist).
         self.persist(force=kind in ("start", "user", "end", "rewind"))
 
     # ---- the history on disk (the Sessions list)
     def meta(self):
+        """The summary row of this session for the Sessions list: title, state, step count, files touched, lines added/removed, checkpoints."""
         steps, files, snippet, added, removed, pending = 0, set(), "", 0, 0, None
         for e in self.events:
+            # A real step is one that used a tool (the closing "finish" does not count).
             if e["kind"] == "step" and e.get("tool") and e.get("tool") != "finish":
                 steps += 1
+                # The preview text starts "write <file>" or "edit <file>"; capture the file name to count distinct files.
                 m = re.match(r"(?:write|edit) (\S+)", str(e.get("preview", "")))
                 if m:
                     files.add(m.group(1))
@@ -267,6 +359,7 @@ class Session:
                 pending = None
             if e["kind"] == "end" and e.get("summary"):
                 snippet = e["summary"]
+        # The title is the task with all runs of whitespace squeezed to single spaces, cut to 70 characters.
         title = " ".join(str(self.task).split())[:70]
         return {"id": self.id, "title": title, "project": self.project, "model": self.model_id, "env": self.env, "state": self.state, "started": self.started,
                 "updated": self.updated, "snippet": clip(snippet, 220), "steps": steps, "files": len(files), "checkpoints": list(self.checkpoints),
@@ -275,6 +368,7 @@ class Session:
     _save_lock = threading.Lock()                         # one save or delete of a session's history at a time (shared: saves are short)
 
     def persist(self, force=False):
+        """Save this session's history to disk (if a log is set). Unless `force`, at most once every 2 seconds, so a busy session is not slowed down."""
         if not self.log:
             return
         now = time.time()
@@ -282,6 +376,7 @@ class Session:
             return
         self._saved_at = now
         try:
+            # Copy the events while holding the lock, then write the copy without holding it.
             with self.cv:
                 events = list(self.events)
             with Session._save_lock:
@@ -295,18 +390,24 @@ class Session:
             pass                                          # the history is a convenience: never stop the work for it
 
     def _checkpoint(self, label):
-        """The project as it is before this message, so Rewind can bring it back."""
+        """The project as it is before this message, so Rewind can bring it back.
+
+        `label` is the message text, shortened to 60 characters for the list. Needs a history log and a snapshot function; otherwise does nothing.
+        """
         if not (self.log and self.snapshot_fn):
             return
         try:
+            # snapshot_fn() returns the project zipped into bytes; save_checkpoint stores it on disk and says whether it worked.
             data = self.snapshot_fn()
             if data and self.log.save_checkpoint(self.id, self.turns_run, data):
                 self.checkpoints.append({"turn": self.turns_run, "t": round(time.time(), 1), "label": " ".join(str(label).split())[:60]})
+                # Keep only the newest few checkpoints (a negative slice takes the last N).
                 self.checkpoints = self.checkpoints[-code_log.MAX_CHECKPOINTS:]
         except (CodeError, OSError):
             pass
 
     def _on_delta(self, info):
+        """Called as the model writes its reply, piece by piece ("delta" = a new piece). Stores the latest text so the page's spinner can show it."""
         live = self.live
         if live is not None and live.get("phase") != "running":
             live.update(text=info.get("text", ""), chunks=info.get("chunks", 0), thinking=info.get("thinking_chars", 0))
@@ -317,26 +418,38 @@ class Session:
         if not live:
             return None
         secs = round(time.time() - live["since"], 1)
+        # A tool (a command or edit) is running: nothing to stream, just say which one.
         if live["phase"] == "running":
             return {"phase": "running", "secs": secs, "tokens": 0, "text": "", "tool": live.get("tool", ""), "target": live.get("target", "")}
         text = live.get("text", "")
+        # The model writes plain words first, then a tool call after a marker. Find where the marker starts (-1 = no tool call yet);
+        # `if i >= 0` drops the "not found" results and default=-1 covers the case where both were dropped.
         cut = min([i for i in (text.find("<|tool_call|>"), text.find("<tool_call>")) if i >= 0], default=-1)
+        # Only the words before the marker are shown, never the raw tool-call JSON.
         prose = (text if cut < 0 else text[:cut]).strip()
         tool = target = ""
         if cut >= 0:
+            # Pull the tool's name out of the partly written JSON with a regex: "name" : "word".
             m = re.search(r'"name"\s*:\s*"(\w+)"', text[cut:])
             tool = m.group(1) if m else ""
             t = re.search(r'"(?:path|command)"\s*:\s*"([^"]{1,120})', text[cut:])      # the file or command, as soon as it has been written
             target = t.group(1) if t else ""
+        # calling = writing a tool call; writing = writing words; thinking = nothing written yet.
         phase = "calling" if cut >= 0 else ("writing" if prose else "thinking")
         return {"phase": phase, "secs": secs, "tokens": live.get("chunks", 0), "text": clip(prose, 400), "tool": tool, "target": target}
 
     def since(self, after):
+        """For the page's polling: (events after position `after`, the session state, the open question or None)."""
         with self.cv:
             return list(self.events[after:]), self.state, self.pending
 
     def respond(self, qid, allow, always=False, choice=None):
+        """The person's answer to the open question `qid`. Returns False if that question is not open (already answered or stale), else True.
+
+        Yes/no questions use `allow` (and `always` = "do not ask again for this kind"); a multiple-choice question uses `choice` (the option text).
+        """
         with self.cv:
+            # Ignore an answer that is for an old question.
             if not self.pending or self.pending["id"] != qid:
                 return False
             if self.pending.get("tool") == "ask_user":           # a multiple-choice question: the answer is the option picked (or the person's own words)
@@ -346,20 +459,25 @@ class Session:
                 self.answer = ("choice", text)
             else:
                 self.answer = (bool(allow), bool(always))
+            # Wake the work thread, which is waiting for this answer.
             self.cv.notify_all()
             return True
 
     def ask_choice(self, question=None, options=None):
         """The ask_user tool (the full agent): the person picks one of 2 to 4 options, or writes their own answer."""
+        # Clean the inputs: the question is cut to 400 characters; options must be a list, each cut to 120, empty ones dropped, at most 4 kept.
         question = clip(str(question or "").strip(), 400)
         opts = [clip(str(o).strip(), 120) for o in (options if isinstance(options, list) else []) if str(o).strip()][:4]
         if not question or len(opts) < 2:
             raise harness.ToolError('ask_user needs a question and 2 to 4 options, like {"question": "Which database?", "options": ["SQLite", "PostgreSQL"]}')
+        # The question's id is the current number of events, which is unique because events only grow.
         qid = len(self.events)
         with self.cv:
             self.pending, self.answer, self.state = {"id": qid, "tool": "ask_user", "question": question, "options": opts}, None, "asking"
         self.emit("choose", id=qid, question=question, options=opts)
         self._tell("asking")
+        # Wait here (this is the work thread) until respond() sets an answer or Stop is pressed. wait(0.5) sleeps up to half a second or until woken,
+        # then the loop checks again.
         with self.cv:
             while self.answer is None and not self.stop.is_set():
                 self.cv.wait(0.5)
@@ -374,22 +492,29 @@ class Session:
 
     def _tools_now(self):
         """The extra tools this turn: the full agent adds the multiple-choice question and its memory."""
+        # getattr(self, "full", False): `full` is only set on the full-agent sessions, so default to False when it was never set.
         if not getattr(self, "full", False):
             return self.tools
         extra = {"ask_user": self.ask_choice}
+        # The memory tool needs the person's projects folder to store notes in.
         if self.base:
             extra["remember"] = lambda note=None: code_extras.remember(self.base, note)
+        # dict(a, **b) = a copy of a with b's entries added (an empty dict if there were no tools).
         return dict(self.tools or {}, **extra)
 
     def _memory_note(self):
+        """Text added to the model's instructions in the full agent: how to use its memory tool plus what it remembered earlier. "" otherwise."""
         if not getattr(self, "full", False) or not self.base:
             return ""
         return code_extras.MEMORY_TOOL_NOTE + code_extras.memory_note(self.base)
 
+    # The line added to the message when pictures are attached; {n} is replaced by how many.
     PICTURE_MARK = "[The person attached {n} picture(s) to this message: look at them.]"
 
     def attach_pictures(self, urls):
         """Screenshots sent with the next message (the full agent): data: URLs of PNG, JPEG, WebP or GIF, up to 3, 5 MB each. Returns the line added to the message."""
+        # Keep a URL only if it is text, looks like data:image/<png|jpg|jpeg|webp|gif>;base64,<base64 characters> (the regex), and is under about
+        # 7 million characters (a 5 MB picture grows by about a third in base64); then keep at most 3.
         good = [u for u in (urls or []) if isinstance(u, str) and re.match(r"^data:image/(png|jpe?g|webp|gif);base64,[A-Za-z0-9+/=]+$", u) and len(u) <= 7_000_000][:3]
         if not good:
             self._pictures = None
@@ -398,6 +523,7 @@ class Session:
         self._pictures = (mark, good)
         return mark
 
+    # The words placed in front of a message the person typed while the model was already working.
     STEER = "While you were working, the person added: "
 
     def steer(self, text):
@@ -410,6 +536,7 @@ class Session:
         with self.cv:
             if self.state not in ("starting", "working", "asking"):
                 raise CodeError("It is not working right now.", "Send it as a normal message.")
+            # Queue it; the work loop picks the queued messages up before the next step. getattr gives [] the first time.
             self._steers = getattr(self, "_steers", []) + [text]
         self.emit("user", text=text, steer=True)
 
