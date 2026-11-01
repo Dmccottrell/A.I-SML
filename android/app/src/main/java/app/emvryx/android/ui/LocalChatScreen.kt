@@ -60,6 +60,7 @@ import androidx.compose.ui.unit.sp
 import app.emvryx.android.EmvryxApp
 import app.emvryx.android.local.PhoneModel
 import app.emvryx.android.local.NativeFlags
+import app.emvryx.android.local.AutoOffline
 import app.emvryx.android.assist.Voice
 import app.emvryx.android.local.PictureText
 import app.emvryx.android.local.PhoneVision
@@ -222,6 +223,11 @@ private fun ModelChoice(phone: PhoneModel) {
 @Composable
 fun PhoneModelCard(phone: PhoneModel, online: Boolean) {
     val p = LocalPalette.current
+    val ctx = LocalContext.current
+    val auto = remember { NativeFlags.on(ctx, "android_auto_offline") }
+    // Stop and Remove are remembered: android_auto_offline never starts the download again against that
+    val stop = { AutoOffline.setAnswer(ctx, false); phone.cancel() }
+    val removeIt = { AutoOffline.setAnswer(ctx, false); phone.remove() }
     Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(Emvryx.surface).padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Text("Answers with the PC off", fontWeight = FontWeight.SemiBold, fontSize = 15.sp)
         Text("Your small Flare model runs on the phone itself: when the PC is off or there is no signal, chats still get answers. It does not search the " +
@@ -238,7 +244,7 @@ fun PhoneModelCard(phone: PhoneModel, online: Boolean) {
                 LinearProgressIndicator(progress = { f }, Modifier.fillMaxWidth(), color = p.accent, trackColor = Emvryx.surface2)
                 Text("Downloading: ${s.done / (1 shl 20)} of ${s.total / (1 shl 20)} MB. You can leave this screen; if it stops, it carries on where it was.",
                     color = Emvryx.muted, fontSize = 13.sp)
-                Chip("Stop", phone::cancel)
+                Chip("Stop", stop)
             }
             PhoneModel.Status.Checking -> Text("Checking the download…", color = Emvryx.muted, fontSize = 13.sp)
             PhoneModel.Status.Ready -> {
@@ -247,7 +253,8 @@ fun PhoneModelCard(phone: PhoneModel, online: Boolean) {
                 phone.choices.firstOrNull { it.id != phone.kit?.id && phone.enoughRam(it.minRamGb) }?.let { other ->
                     Chip("Switch to ${other.fullName} (${other.sizeText})", { phone.pick(other.id); phone.download() })
                 }
-                Chip("Remove it from this phone", phone::remove)
+                if (auto) Chip("Get offline speech (Google's, for talking with no signal)", { Voice.getOfflineSpeech(ctx, openSettings = true) })
+                Chip("Remove it from this phone", removeIt)
             }
             is PhoneModel.Status.Failed -> {
                 ModelChoice(phone)

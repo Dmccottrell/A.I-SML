@@ -82,6 +82,7 @@ class PhoneVision(private val context: Context, private val api: ApiClient, priv
 
     fun download() {
         if (job?.isActive == true) return
+        app.emvryx.android.DownloadService.start(context)
         job = scope.launch {
             try {
                 var k = api.phoneVision()

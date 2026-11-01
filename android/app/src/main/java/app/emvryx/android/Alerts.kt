@@ -21,6 +21,7 @@ object Alerts {
     const val CODE = "vryxcode"            // channels, each switchable in the phone's settings
     const val WORKING = "vryxcode_working"
     const val CHAT = "chat"
+    const val DOWNLOADS = "downloads"
     const val EXTRA_SESSION = "emvryx.session"
     const val EXTRA_CHAT = "emvryx.chat"
     const val ONGOING_ID = 1
@@ -33,6 +34,7 @@ object Alerts {
         m.createNotificationChannels(listOf(
             NotificationChannel(CODE, "VryxCode", NotificationManager.IMPORTANCE_HIGH).apply { description = "A session finished, needs you, or stopped" },
             NotificationChannel(WORKING, "VryxCode working", NotificationManager.IMPORTANCE_LOW).apply { description = "While a session works in the background"; setShowBadge(false) },
+            NotificationChannel(DOWNLOADS, "Downloads", NotificationManager.IMPORTANCE_LOW).apply { description = "The offline model downloading, and when it is ready"; setShowBadge(false) },
             NotificationChannel(CHAT, "Chat answers", NotificationManager.IMPORTANCE_DEFAULT).apply { description = "An answer is ready while the app is in the background" },
         ))
     }

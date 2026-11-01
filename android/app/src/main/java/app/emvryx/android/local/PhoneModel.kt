@@ -121,6 +121,7 @@ class PhoneModel(private val context: Context, private val api: ApiClient) {
     /** Downloads the model from the PC, carrying on from what is already here, then checks it */
     fun download() {
         if (job?.isActive == true) return
+        app.emvryx.android.DownloadService.start(context)                  // keeps going with the app closed, with a notification
         job = scope.launch {
             try {
                 var k = api.phoneKit(wanted)

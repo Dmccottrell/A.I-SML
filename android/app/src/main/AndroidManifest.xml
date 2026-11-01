@@ -69,6 +69,11 @@
             <!-- Long-press the icon: New chat, Talk, VryxCode, Chats on this phone (android_quick_launch) -->
             <meta-data android:name="android.app.shortcuts" android:resource="@xml/shortcuts" />
         </activity>
+        <!-- Keeps the offline model's download going with the app closed (DownloadService.kt) -->
+        <service
+            android:name=".DownloadService"
+            android:exported="false"
+            android:foregroundServiceType="dataSync" />
         <!-- The home-screen widget (android_quick_launch) -->
         <receiver android:name=".AskWidget" android:exported="false" android:label="@string/widget_ask">
             <intent-filter><action android:name="android.appwidget.action.APPWIDGET_UPDATE" /></intent-filter>

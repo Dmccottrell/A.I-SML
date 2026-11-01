@@ -87,6 +87,29 @@ class Voice(private val ctx: Context, private val offline: Boolean = false) {
         fun retryOffline(error: Int, alreadyOffline: Boolean): Boolean = !alreadyOffline &&
             (error == SpeechRecognizer.ERROR_NETWORK || error == SpeechRecognizer.ERROR_NETWORK_TIMEOUT || error == SpeechRecognizer.ERROR_SERVER)
 
+        /**
+         * Ask the phone to download its offline speech pack (Android 13 and later can be asked; if the phone's speech typing says no, or it is older,
+         * [openSettings] opens the Settings page for it). Call from the main thread. Returns true when the phone took the request.
+         */
+        fun getOfflineSpeech(ctx: Context, openSettings: Boolean): Boolean {
+            if (android.os.Build.VERSION.SDK_INT >= 33) {
+                val target = recognizer(ctx)
+                val r = runCatching { if (target != null) SpeechRecognizer.createSpeechRecognizer(ctx, target) else SpeechRecognizer.createSpeechRecognizer(ctx) }.getOrNull()
+                if (r != null) {
+                    val ok = runCatching {
+                        r.triggerModelDownload(Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH)
+                            .putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
+                            .putExtra(RecognizerIntent.EXTRA_LANGUAGE, java.util.Locale.getDefault().toLanguageTag()))
+                    }.isSuccess
+                    Handler(Looper.getMainLooper()).postDelayed({ runCatching { r.destroy() } }, 120_000)       // let it start the download first
+                    if (ok) return true
+                    runCatching { r.destroy() }
+                }
+            }
+            if (openSettings) runCatching { ctx.startActivity(Intent("android.settings.VOICE_INPUT_SETTINGS").addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }
+            return false
+        }
+
         @Suppress("DEPRECATION")
         fun hasInternet(ctx: Context): Boolean = runCatching {
             val cm = ctx.getSystemService(android.net.ConnectivityManager::class.java)

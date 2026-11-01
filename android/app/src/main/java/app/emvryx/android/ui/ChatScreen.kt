@@ -171,6 +171,7 @@ fun ChatScreen(vm: AppViewModel) {
             }, onSaveAs = { onSaveAs(vm.chatAsText()) })
             if (vm.state?.demo == true) DemoBanner()
             if (vm.updateReady != null) UpdateBanner(vm)
+            vm.offlineOffer?.let { OfflineBanner(vm, it) }
             Box(Modifier.weight(1f).fillMaxWidth()) {
                 Thread(vm, onRegen = { menu = Menu.Regen }, onEdit = { editing = it }, onReport = { reporting = it }, onSaveAs = onSaveAs)
                 if (menu != null) {
@@ -321,6 +322,19 @@ private fun UpdateBanner(vm: AppViewModel) {
             runCatching { context.startActivity(android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse(app.emvryx.android.local.AppUpdate.APK_URL))) }
             vm.updateLater()
         }) { Text("Update", color = p.accentText, fontWeight = FontWeight.SemiBold) }
+    }
+}
+
+/** android_auto_offline: asked once before the model comes by itself (on Wi-Fi or mobile data) */
+@Composable
+private fun OfflineBanner(vm: AppViewModel, model: app.emvryx.android.local.PhoneChoice) {
+    val p = LocalPalette.current
+    Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 6.dp).clip(RoundedCornerShape(14.dp)).background(Emvryx.surface)
+        .border(1.dp, p.accent.copy(alpha = 0.5f), RoundedCornerShape(14.dp)).padding(start = 14.dp, end = 6.dp, top = 6.dp, bottom = 6.dp),
+        verticalAlignment = Alignment.CenterVertically) {
+        Text("Get Emvryx ready for offline? About ${model.sizeText}, it may use mobile data. You can remove it any time.", Modifier.weight(1f), fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+        TextButton(onClick = { vm.answerOffline(false) }) { Text("No thanks", color = Emvryx.muted) }
+        TextButton(onClick = { vm.answerOffline(true) }) { Text("Get it", color = p.accentText, fontWeight = FontWeight.SemiBold) }
     }
 }
 

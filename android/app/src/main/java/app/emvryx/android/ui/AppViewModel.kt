@@ -1,5 +1,7 @@
 package app.emvryx.android.ui
 
+import app.emvryx.android.local.AutoOffline
+import app.emvryx.android.local.PhoneModel
 import android.app.Application
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateListOf
@@ -211,6 +213,37 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     // ---- app_updates: "A new version of Emvryx is ready" (local/AppUpdate.kt), checked once each time the app opens
     var updateReady by mutableStateOf<app.emvryx.android.local.AppUpdate.Latest?>(null)
     private var updateChecked = false
+
+    /** android_auto_offline: the model to offer ("Get Emvryx ready for offline?"), asked once; null when there is nothing to ask */
+    var offlineOffer by mutableStateOf<app.emvryx.android.local.PhoneChoice?>(null)
+
+    fun answerOffline(yes: Boolean) {
+        val c = offlineOffer ?: return
+        offlineOffer = null
+        val ctx = getApplication<EmvryxApp>()
+        app.emvryx.android.local.AutoOffline.setAnswer(ctx, yes)
+        if (yes) startOffline(c)
+    }
+
+    private fun startOffline(c: app.emvryx.android.local.PhoneChoice) {
+        val phone = getApplication<EmvryxApp>().phone
+        phone.pick(c.id)
+        phone.download()
+        app.emvryx.android.assist.Voice.getOfflineSpeech(getApplication(), openSettings = false)
+    }
+
+    /** The phone has the room and a good connection: the PC-off model (and Google's offline speech) come by themselves, after one question */
+    private suspend fun autoOffline() {
+        val app = getApplication<EmvryxApp>()
+        val phone = app.phone
+        val needs = phone.status == PhoneModel.Status.None || phone.status is PhoneModel.Status.Failed
+        val step = AutoOffline.step(state?.on("android_auto_offline") == true && state?.on("android_offline_model") == true,
+            AutoOffline.connected(app), needs, AutoOffline.answer(app), isAdmin)
+        if (step == AutoOffline.Step.Nothing) return
+        phone.loadChoices()
+        val c = AutoOffline.pick(phone.choices, phone.wanted, phone.freeSpace()) { phone.enoughRam(it) } ?: return
+        if (step == AutoOffline.Step.Ask) offlineOffer = c else startOffline(c)
+    }
     private val updatePrefs get() = getApplication<EmvryxApp>().getSharedPreferences("emvryx_update", android.content.Context.MODE_PRIVATE)
 
     private fun checkForUpdate() {
@@ -441,6 +474,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
             phone.refresh()                                                // the newest instructions and memory for the phone's model
             if (phone.syncUp() > 0) refreshChats()                         // chats written on the phone while the PC was off join the list
             phone.syncDrafts()                                             // VryxCode drafts written on the phone go to the PC, ready to run
+            autoOffline()
         }
         if (isAdmin && adminCache.queued.isNotEmpty()) viewModelScope.launch {   // switch changes made in Admin with the PC off
             adminCache.queued.toList().forEach { q -> runCatching { api.adminSetFlag(q.id, q.audience) }.onSuccess { adminCache.sent(q.id) } }
