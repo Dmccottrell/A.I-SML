@@ -1,34 +1,58 @@
 # Builds the Android app (android/) on every pull request that touches it: its unit tests, then a debug .apk you can install on your phone
 # (Actions > this run > Artifacts > emvryx-android-debug). The cloud session that writes the app cannot download Google's Android SDK, so this is
 # where it is compiled. Locally the same thing is: cd android && gradlew testDebugUnitTest assembleDebug
+# How to read this file: it is a GitHub Actions workflow. GitHub reads it and runs the listed jobs on its own computers ("runners") whenever a
+# trigger below happens. YAML is a plain-text format: indentation shows what belongs to what, "- " starts a list item, and "key: value" sets a value.
+# The label shown for this workflow in the Actions tab on GitHub.
 name: android
 
+# "on" lists the events that start this workflow.
+# (The "paths" lists below mean: only start when a changed file matches one of them, so a Python-only change does not wait for an Android build.)
 on:
+  # When someone pushes to main (for example after a pull request is merged).
   push:
     branches: [main]
     paths: ["android/**", ".github/workflows/android.yml"]
+  # When a pull request is opened or updated.
   pull_request:
     paths: ["android/**", ".github/workflows/android.yml"]
+  # Lets a person start this workflow by hand from the Actions tab (no extra settings needed).
   workflow_dispatch:
 
+# Only one run per pull request (or per branch) at a time. If a newer run starts, the older one is cancelled, which saves build minutes.
+# The group name uses the pull request number when there is one, and the branch/tag name (github.ref) otherwise.
 concurrency:
   group: android-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 
+# A job is a group of steps that runs on one fresh machine. This file has three: build, release and screens.
 jobs:
+  # Job 1, build: compile the app and run its unit tests. Pull requests rely on this one to know the Android code still builds.
   build:
+    # Which kind of GitHub machine to use (a Linux computer; the Android SDK is already installed on it).
     runs-on: ubuntu-latest
+    # Stop the job if it takes longer than 30 minutes, so a hung step cannot run for hours.
     timeout-minutes: 30
+    # Settings that apply to every "run:" step of this job.
     defaults:
       run:
+        # Run every shell command inside the android/ folder (where gradlew, the Gradle build script, lives).
         working-directory: android
+    # Steps run one after another; if one fails, the later ones are skipped (unless they say "if: always()" or similar).
     steps:
+      # Download this repository's code onto the machine.
       - uses: actions/checkout@v4
+      # Install Java 17 (Android's build tool Gradle needs it). "temurin" is the free OpenJDK build; "cache: gradle" keeps downloaded libraries
+      # between runs so later builds are faster.
       - uses: actions/setup-java@v5
         with:
           distribution: temurin
           java-version: "17"
           cache: gradle
+      # The NDK is Google's kit for compiling C/C++ code for Android; the on-phone model engine is written in C++ and needs it.
+      # Google's download sometimes arrives broken, so the shell loop below tries up to 3 times: it installs the NDK, checks that a file that must exist
+      # (source.properties) is really there, and stops looping ("break") when it is. Output is hidden (> /dev/null 2>&1) because the installer is very noisy;
+      # "yes |" answers "y" to the licence question the installer asks.
       - name: The NDK for the phone model's engine (Google's download sometimes arrives broken; it is tried again)
         run: |
           for i in 1 2 3; do
@@ -36,14 +60,19 @@ jobs:
               [ -f "$ANDROID_HOME/ndk/27.0.12077973/source.properties" ] && break
             echo "The download failed (try $i of 3): trying again"; sleep 15
           done
+      # Run the app's unit tests (testDebugUnitTest) and build a debug .apk (assembleDebug). "chmod +x" makes the gradlew script runnable (git may drop that flag).
+      # --no-daemon stops Gradle leaving a background process behind, which is pointless on a one-off CI machine.
       - name: Unit tests and the debug app
         run: chmod +x gradlew && ./gradlew --no-daemon testDebugUnitTest assembleDebug
+      # Save the debug .apk as a download on the run page. "always()" means: do this even if an earlier step failed, so a half-built result can still be inspected.
+      # "ignore" means: do not fail if there is no file to upload.
       - uses: actions/upload-artifact@v4
         if: always()
         with:
           name: emvryx-android-debug
           path: android/app/build/outputs/apk/debug/*.apk
           if-no-files-found: ignore
+      # Only when something failed: save the test reports (HTML pages that show which test broke and why) so they can be read afterwards.
       - uses: actions/upload-artifact@v4
         if: failure()
         with:
@@ -51,34 +80,48 @@ jobs:
           path: android/app/build/reports/
           if-no-files-found: ignore
 
+  # Job 2, release: after build succeeds, and only on main, make the optimized "phone" app and publish it as the release called android-latest.
   # apk_link: the phone build (optimized, installs over the debug build) as one fixed link that is always the newest app:
   # https://github.com/<owner>/<repo>/releases/download/android-latest/emvryx.apk  (Settings > Android app). Only from main.
   # A phone can only update an app signed with the same key. Each CI machine makes its own debug key, so without the optional secret
   # ANDROID_DEBUG_KEYSTORE (a debug.keystore, base64) an update may need the old app removed first.
   release:
+    # Wait for the build job and run only if it passed.
     needs: build
+    # Run only for main, and only for a push or a hand-started run (never for a pull request), so unmerged code is never published.
     if: github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
     runs-on: ubuntu-latest
     permissions:
+      # This job may change the repository's releases; the other jobs only read.
       contents: write                 # only to replace the android-latest release
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
+      # Java 17 again, for Gradle (each job starts on a clean machine, so it is repeated).
       - uses: actions/setup-java@v5
         with:
           distribution: temurin
           java-version: "17"
           cache: gradle
+      # An Android app must be signed, and a phone only accepts an update signed with the same key as the installed one. If the repository secret
+      # ANDROID_DEBUG_KEYSTORE is set (the key file, base64 text), it is decoded into the place Android's build looks for it. Passing it through
+      # "env" keeps the secret out of the command text. [ -n ... ] means "the variable is not empty"; base64 -d turns the text back into the file.
       - name: The same signing key every time (when the secret is set)
         env:
           KEYSTORE: ${{ secrets.ANDROID_DEBUG_KEYSTORE }}
         run: |
           if [ -n "$KEYSTORE" ]; then mkdir -p ~/.android && echo "$KEYSTORE" | base64 -d > ~/.android/debug.keystore; fi
+      # Build the optimized phone app (assemblePhone). -PemvryxSha passes the git commit id into the build, so the app knows which version it is.
+      # The finished .apk is copied to the repo root as emvryx.apk. Then version.json is written (commit id plus the UTC time, in a fixed format)
+      # so the app can ask "is there something newer than me?" by comparing it with its own stamp.
       - name: Phone build
         working-directory: android
         run: |
           chmod +x gradlew && ./gradlew --no-daemon assemblePhone -PemvryxSha="$GITHUB_SHA" && cp app/build/outputs/apk/phone/*.apk ../emvryx.apk
           printf '{"sha": "%s", "built": "%s"}\n' "$GITHUB_SHA" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" > ../version.json     # app_updates: the app compares it with its own stamp
+      # Delete the old android-latest release (and its tag; "|| true" ignores the error when none exists yet), then create it again with the new files.
+      # "gh" is GitHub's command line tool; it logs in with the token given in GH_TOKEN. ${GITHUB_SHA::7} is the first 7 characters of the commit id.
+      # It is marked a pre-release so GitHub does not show it as the project's "Latest" release.
       - name: Replace the android-latest release
         env:
           GH_TOKEN: ${{ github.token }}
@@ -87,6 +130,7 @@ jobs:
           gh release create android-latest emvryx.apk version.json --target "$GITHUB_SHA" --prerelease --title "Emvryx for Android (newest)" \
             --notes "The newest Android app, built from ${GITHUB_SHA::7}. Download emvryx.apk on your phone and open it."
 
+  # Job 3, screens: take real screenshots of the app on a fake phone (an emulator) for documentation, and keep them where a cloud session can fetch them.
   # Phone screenshots of the main screens: a demo Emvryx server (no model; a stand-in replies), an Android emulator with the app signed in to it,
   # and app/src/androidTest/.../ScreensTest.kt walking through the screens. Artifacts > emvryx-android-screens.
   screens:
@@ -96,9 +140,11 @@ jobs:
       contents: write                 # only to save the pictures under refs/screens/latest (not a branch), where a cloud session can fetch them
     timeout-minutes: 40
     steps:
+      # GitHub's machines are short on disk. Delete big tools this job never uses (.NET, Haskell, Boost, CodeQL ...) to make room for the emulator.
       - name: Free disk space (the emulator's phone storage needs several GB)
         run: sudo rm -rf /usr/share/dotnet /opt/ghc /usr/local/share/boost /usr/local/lib/node_modules /opt/hostedtoolcache/CodeQL && df -h / | tail -1
       - uses: actions/checkout@v4
+      # Install Python 3.11 (the demo Emvryx server is a Python program); "cache: pip" reuses downloaded packages.
       - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
@@ -108,6 +154,13 @@ jobs:
           distribution: temurin
           java-version: "17"
           cache: gradle
+      # Start a stand-in Emvryx server on this machine for the app to sign in to. Steps in order:
+      # 1) install the Python packages (torch is the CPU-only build, which is much smaller);
+      # 2) create a test user called "shots" and capture the output, which contains the user's one-time key;
+      # 3) make that user an admin with no limits ("|| true" keeps going if that fails);
+      # 4) cut the key out of the output with sed (a text-editing tool) and delete the file so the key is not left lying around;
+      # 5) "::add-mask::" tells GitHub to hide this value in every log, and the key is saved in SHOTS_KEY for later steps;
+      # 6) start the server in the background (nohup ... &) and poll the front page every 2 seconds, up to 60 times, until it answers.
       - name: Demo server
         run: |
           python -m pip install --upgrade pip
@@ -121,11 +174,14 @@ jobs:
           echo "SHOTS_KEY=$KEY" >> "$GITHUB_ENV"
           nohup python app_server.py --data .shots --port 8000 > server.log 2>&1 &
           for i in $(seq 1 60); do curl -sf http://127.0.0.1:8000/ > /dev/null && break; sleep 2; done
+      # KVM lets the emulator use the processor's virtual-machine support, which makes it run many times faster. These lines give every user permission to use it.
       - name: Enable KVM
         run: |
           echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
           sudo udevadm control --reload-rules
           sudo udevadm trigger --name-match=kvm
+      # Install the emulator program, the Android 34 phone system image (Google APIs, 64-bit) and the NDK. Same retry idea as above:
+      # try up to 3 times and stop once the emulator program and the NDK file really exist.
       - name: The emulator, its phone image and the NDK (Google's downloads sometimes arrive broken; they are tried again)
         run: |
           for i in 1 2 3; do
@@ -133,6 +189,9 @@ jobs:
               [ -x "$ANDROID_HOME/emulator/emulator" ] && [ -f "$ANDROID_HOME/ndk/27.0.12077973/source.properties" ] && break
             echo "The download failed (try $i of 3): trying again"; sleep 15
           done
+      # Start the emulator with the settings below (Android 34, a Pixel 6 profile, animations off so screenshots are steady, 4 CPU cores) and run the script
+      # in it. The script runs the phone-side test (connectedDebugAndroidTest), giving it the demo user's key as the test argument "key", then copies the
+      # screenshots off the phone (adb pull; "|| true" so a missing folder does not fail the step).
       - name: Screenshots on an emulator
         uses: reactivecircus/android-emulator-runner@v2
         with:
@@ -148,6 +207,7 @@ jobs:
             chmod +x gradlew
             ./gradlew --no-daemon connectedDebugAndroidTest -Pandroid.testInstrumentationRunnerArguments.key=$SHOTS_KEY
             adb pull /data/local/tmp/emvryx-screens ../screens || true
+      # Save the screenshots and the demo server's log as a download (always, even after a failure, to help find out what went wrong).
       - uses: actions/upload-artifact@v4
         if: always()
         with:
@@ -156,6 +216,9 @@ jobs:
             screens/
             server.log
           if-no-files-found: ignore
+      # Publish the PNG pictures under the special ref refs/screens/latest (it is not a branch, so it does not clutter the branch list). Only when
+      # there are pictures. It makes a tiny throw-away git repo in screens/, commits the PNGs, and force-pushes (-f) over the old pictures using the
+      # run's own token. The name and email given with -c are only labels for the commit; ".invalid" is a reserved address that can never receive mail.
       - name: Save the pictures where a cloud session can fetch them (git fetch origin refs/screens/latest)
         if: always() && hashFiles('screens/*.png') != ''
         run: |

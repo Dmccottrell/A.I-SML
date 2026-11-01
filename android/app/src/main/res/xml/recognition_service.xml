@@ -1,2 +1,4 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!-- Settings file for the speech recognition service (EmvryxRecognition). It needs no options; Android just requires the file to exist.
+     It is listed in the manifest and referenced from interaction_service.xml. -->
 <recognition-service xmlns:android="http://schemas.android.com/apk/res/android" />

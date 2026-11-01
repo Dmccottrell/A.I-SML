@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!-- android_quick_launch: VryxCode (icon shortcuts and the widget) -->
+<!-- Drawn as angle brackets with a slash, like </>: outline only (stroke), no fill, in the app's violet. Used for the long-press icon shortcuts and the widget buttons. -->
 <vector xmlns:android="http://schemas.android.com/apk/res/android" android:width="24dp" android:height="24dp" android:viewportWidth="24" android:viewportHeight="24">
     <path android:pathData="M8,8l-4,4 4,4 M16,8l4,4 -4,4 M13.5,6l-3,12" android:strokeColor="#FF8B5CF6" android:strokeWidth="2" android:strokeLineCap="round" android:strokeLineJoin="round" android:fillColor="#00000000" />
 </vector>

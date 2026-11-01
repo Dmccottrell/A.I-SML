@@ -2,34 +2,55 @@
 # Emvryx-Setup.exe and version.json (app_updates: the app compares its own build with it). Settings > Emvryx apps links to it. The cloud session
 # that writes the app has no Windows, so this is where it is compiled. Nothing here is paid for: the installer is not code-signed, so Windows
 # shows "Windows protected your PC" the first time (More info, Run anyway).
+# How to read this file: a GitHub Actions workflow (GitHub runs the jobs below on its own computers when a trigger happens). YAML uses indentation
+# to show what belongs to what, "- " starts a list item, and "key: value" sets a value.
+# The label shown for this workflow in the Actions tab.
 name: windows-app
 
+# The events that start this workflow.
 on:
+  # After a merge into main, but only if the Windows app (or this file) changed.
   push:
     branches: [main]
     paths: ["windows-app/**", ".github/workflows/windows-app.yml"]
+  # For pull requests, but only if the Windows app (or this file) changed.
   pull_request:
     paths: ["windows-app/**", ".github/workflows/windows-app.yml"]
+  # Also lets a person start it by hand from the Actions tab.
   workflow_dispatch:
 
+# One run per pull request (or per branch) at a time; a newer push cancels the older run.
 concurrency:
   group: windows-app-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 
+# A job is a group of steps run on one fresh machine.
 jobs:
+  # The only job: compile the app, wrap it in an installer, and (on main only) publish it.
   build:
+    # A Windows machine from GitHub, because the app is a Windows program.
     runs-on: windows-latest
+    # Give up after 30 minutes.
     timeout-minutes: 30
+    # What the job's automatic GitHub token may do. Without this line it can only read.
     permissions:
       contents: write                 # only to replace the windows-latest release, on main
+    # Steps run one after another; if one fails, the later ones are skipped.
     steps:
+      # Download this repository's code onto the machine.
       - uses: actions/checkout@v4
+      # CMake is a tool that prepares a C++ build. First command: set up the build in the folder build/ and pass in the commit id (EMVRYX_BUILT_FROM) so
+      # the app knows which version it is. Second: compile the optimized "Release" version. Third: list the result, which fails the step if Emvryx.exe is missing.
+      # "shell: bash" is used so these lines run the same as on Linux.
       - name: Build Emvryx.exe
         shell: bash
         run: |
           cmake -S windows-app -B build -DEMVRYX_BUILT_FROM="$GITHUB_SHA"
           cmake --build build --config Release
           ls -la build/Release/Emvryx.exe
+      # Inno Setup is a free tool that turns the app into one Emvryx-Setup.exe installer. This script (PowerShell, Windows' own shell) finds the tool,
+      # installs it with Chocolatey (a Windows package installer) only if it is missing, and sets the version to today's date (like 2026.11.1).
+      # Then it builds the installer from installer.iss. $LASTEXITCODE is the tool's exit code; a non-zero one is passed on so the step fails properly.
       - name: The installer (Inno Setup, free)
         shell: pwsh
         run: |
@@ -39,10 +60,15 @@ jobs:
           & $iscc windows-app\installer.iss
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           Get-Item dist\Emvryx-Setup.exe
+      # Save the installer as a download on the run page (Artifacts > emvryx-windows).
       - uses: actions/upload-artifact@v4
         with:
           name: emvryx-windows
           path: dist/Emvryx-Setup.exe
+      # Only on main: write version.json (commit id plus UTC time) which the app compares with its own build to know if it is out of date, delete the
+      # old windows-latest release and its tag ("|| true" ignores the error when none exists), then create it again with the new files. "gh" is GitHub's
+      # command line tool and logs in with the token in GH_TOKEN. ${GITHUB_SHA::7} is the first 7 characters of the commit id. It is marked a pre-release
+      # so GitHub does not show it as the project's "Latest" release.
       - name: Replace the windows-latest release
         if: github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
         shell: bash

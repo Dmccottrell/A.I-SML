@@ -115,15 +115,29 @@ import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
 
+// ChatScreen.kt: the main chat screen of the Android app. It builds the top bar, the message list ("thread"), the message box
+// (composer), the pop-up menus above it, the usage line and the sliding chat list (sidebar).
+// Jargon: Jetpack Compose is Android's way of drawing screens with Kotlin functions. A function marked @Composable describes a
+// piece of screen; Compose runs it again whenever the data it reads changes. A "ViewModel" (vm) is the object that holds the
+// app's data and logic, so the screen functions only draw. A Modifier is a chain of layout and drawing settings (size, padding, clicks).
 // The PWA's chat screen (web/index.html, web/js/chat.js) on a phone: the top bar with the chat's title, the thread,
 // the message box with the model and effort pills under it, the usage line, and the chat list sliding in from the left.
 
+// Which pop-up menu above the message box is open (only one at a time; null means none).
 private enum class Menu { Model, Effort, Memory, Regen, Attach }
 
+/**
+ * The whole chat screen. [vm] is the app ViewModel with the chats, messages and settings.
+ * It holds the screen's small remembered states (which menu is open, which message is being edited ...), sets up the
+ * pickers for pictures, files, camera and scanner, and lays out the drawer, top bar, thread, composer and dialogs.
+ */
 @Composable
 fun ChatScreen(vm: AppViewModel) {
+    // State of the slide-in chat list (open or closed), and a scope used to start coroutines (small tasks that can pause) from click handlers.
     val drawer = rememberDrawerState(DrawerValue.Closed)
     val scope = rememberCoroutineScope()
+    // `remember { mutableStateOf(...) }` makes a value that survives redraws, and changing it redraws whatever reads it.
+    // menu = open pop-up; editing / reporting = the message being edited or reported; showUsage = usage dialog; the rest drive Save as and Move to folder.
     var menu by remember { mutableStateOf<Menu?>(null) }
     var editing by remember { mutableStateOf<Bubble?>(null) }
     var reporting by remember { mutableStateOf<Bubble?>(null) }
@@ -132,36 +146,51 @@ fun ChatScreen(vm: AppViewModel) {
     var folderFor by remember { mutableStateOf<ChatSummary?>(null) }
     var saveText by remember { mutableStateOf("") }
     var saveFormat by remember { mutableStateOf("pdf") }
+    // A launcher asks Android to open a system screen (here: pick where to save a file) and calls us back with the result.
+    // If the user picked a place (uri is not null), the server-made document is saved there.
     val saveFile = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/octet-stream")) { uri ->
         uri?.let { vm.saveAs(it, saveText, saveFormat) }
     }
+    // Opening Save as just remembers the text to save; SaveAsDialog is drawn further down when `saving` is not null.
     val onSaveAs: (String) -> Unit = { saving = it }
     // the pickers live here, not in the menu: the menu closes as soon as one opens, and its result must still arrive
+    // The Android Context is the handle apps need to reach the system (files, activities ...).
     val context = LocalContext.current
+    // Picker for up to 3 pictures; each picked one is read into (name, bytes) and attached to the message box.
     val pickPicture = rememberLauncherForActivityResult(ActivityResultContracts.PickMultipleVisualMedia(3)) { uris ->
         uris.forEach { u -> readPicked(context, u)?.let { (n, b) -> vm.attach(n, b) } }
     }
+    // Picker for any one document (PDF, Word ...), attached the same way.
     val pickFile = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { u ->
         u?.let { readPicked(context, it)?.let { (n, b) -> vm.attach(n, b) } }
     }
+    // Camera: the photo is attached as photo.jpg. `(_, b)` ignores the name and keeps only the bytes.
     val camera = rememberCamera { u -> readPicked(context, u)?.let { (_, b) -> vm.attach("photo.jpg", b) } }
+    // Document scanner: errors go to the toast (the little message at the bottom); the result is either one PDF or a list of page pictures.
     val scanner = rememberScanner({ vm.toast = it }) { pages, pdf ->
         val doc = pdf?.let { readPicked(context, it) }
         if (doc != null) vm.attach("scan.pdf", doc.second)                      // the whole scan as one PDF: Emvryx reads every page
         else pages.take(3).forEachIndexed { i, u -> readPicked(context, u)?.let { (_, b) -> vm.attach("scan-${i + 1}.jpg", b) } }
+    // (end of the scanner setup)
     }
+    // Android's Back button: first close the open chat list, then close an open menu, instead of leaving the screen.
     BackHandler(drawer.isOpen) { scope.launch { drawer.close() } }
     BackHandler(menu != null) { menu = null }
+    // Once, when the screen first shows, ask the server which sign-in options exist.
     LaunchedEffect(Unit) { vm.checkSignInOptions() }
 
+    // ModalNavigationDrawer = the chat list that slides in from the left, dimming the chat behind it (scrim).
     ModalNavigationDrawer(
         drawerState = drawer,
         scrimColor = Color.Black.copy(alpha = 0.55f),
         drawerContent = { Sidebar(vm, onDone = { scope.launch { drawer.close() } }, onFolder = { folderFor = it }) },
     ) {
+        // The colour palette for the current model.
         val p = LocalPalette.current
         Box(Modifier.fillMaxSize()) {
+        // Page background plus a soft coloured glow (modern look) or wash (classic look) at the top; imePadding moves everything up when the keyboard shows.
         Column(Modifier.fillMaxSize().background(Emvryx.bg).then(if (Emvryx.modern) Modifier.modernGlow(p.accent) else Modifier.accentWash(p.glow)).imePadding()) {
+            // Top bar. Tapping its menu button opens the chat list; the list was already loaded, so it slides in first and refreshes after.
             TopBar(vm, onMenu = {
                 menu = null
                 scope.launch {
@@ -169,20 +198,25 @@ fun ChatScreen(vm: AppViewModel) {
                     vm.refreshChats()
                 }
             }, onSaveAs = { onSaveAs(vm.chatAsText()) })
+            // Banners at the top: demo mode, a new app version, an offer to download the offline model.
             if (vm.state?.demo == true) DemoBanner()
             if (vm.updateReady != null) UpdateBanner(vm)
             vm.offlineOffer?.let { OfflineBanner(vm, it) }
+            // The message list takes all the space left between the top bar and the message box (weight(1f)).
             Box(Modifier.weight(1f).fillMaxWidth()) {
                 Thread(vm, onRegen = { menu = Menu.Regen }, onEdit = { editing = it }, onReport = { reporting = it }, onSaveAs = onSaveAs)
+                // When a menu is open: a transparent full-size layer that closes it on any tap outside, and the menu itself at the bottom.
                 if (menu != null) {
                     // tapping anywhere else closes the menu, as on the website
                     Box(Modifier.fillMaxSize().clickable(remember { MutableInteractionSource() }, null) { menu = null })
                     PopMenu(Modifier.align(Alignment.BottomCenter)) {
+                        // Show the body for whichever menu is open.
                         when (menu) {
                             Menu.Model -> ModelMenu(vm) { menu = null }
                             Menu.Effort -> EffortMenu(vm) { menu = null }
                             Menu.Memory -> vm.shownCtx?.let { c -> MemoryDetails(vm, c) { menu = null } }
                             Menu.Regen -> RegenMenuBody(vm) { menu = null }
+                            // The + menu. The camera and scan options appear only when the android_camera_scan feature flag (an on/off switch for a feature) is on.
                             Menu.Attach -> AttachMenu(
                                 onPicture = { pickPicture.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) },
                                 onFile = { pickFile.launch(arrayOf("*/*")) },
@@ -194,14 +228,20 @@ fun ChatScreen(vm: AppViewModel) {
                     }
                 }
             }
+            // Message box with the model/effort pills; tapping the already-open pill closes it.
             Composer(vm, menu, onMenu = { menu = if (menu == it) null else it })
+            // The thin usage bar; tapping it opens the usage dialog.
             UsageLine(vm, onClick = { showUsage = true })
         }
+        // A colour sweep that plays when another model is picked.
         ModelWash(vm.washes, vm.currentModel?.name)
         }
     }
+    // Dialogs and overlays that sit on top of the screen, each drawn only when its state says so.
     if (vm.talking) TalkOverlay(vm)
     if (showUsage) vm.usage?.let { UsageDialog(it) { showUsage = false } }
+    // Save as: after the user picks a format, ask Android where to save. The file name is the chat title with unsafe characters removed
+    // (the regex keeps only letters, digits, space, underscore and dash), cut to 60 characters, or "document" if nothing is left.
     saving?.let { text ->
         SaveAsDialog(text, onPick = { f ->
             saveText = text
@@ -212,6 +252,7 @@ fun ChatScreen(vm: AppViewModel) {
     ShareDialog(vm)
     ArchivedDialog(vm, onOpen = vm::openChat)
     folderFor?.let { c -> FolderDialog(c.folder, onSave = { vm.moveToFolder(c, it) }, onClose = { folderFor = null }) }
+    // A toast: a short message at the bottom that hides itself after 3 seconds. The effect restarts whenever the text changes.
     vm.toast?.let { t ->
         LaunchedEffect(t) { kotlinx.coroutines.delay(3000); vm.toast = null }
         Box(Modifier.fillMaxSize().navigationBarsPadding().padding(bottom = 90.dp), contentAlignment = Alignment.BottomCenter) {
@@ -219,16 +260,19 @@ fun ChatScreen(vm: AppViewModel) {
                 .border(1.dp, Emvryx.line, RoundedCornerShape(14.dp)).padding(horizontal = 16.dp, vertical = 10.dp))
         }
     }
+    // Edit dialog for an earlier message; it warns if later answers will be replaced (the message is not the last one).
     editing?.let { b ->
         EditDialog(b.text, laterAnswers = vm.bubbles.indexOf(b) < vm.bubbles.lastIndex, onSave = { vm.edit(b, it) }, onClose = { editing = null })
     }
+    // Report dialog: sends the kind of problem and a note to the server.
     reporting?.let { b -> ReportDialog(onSend = { kind, note -> vm.report(b, kind, note) }, onClose = { reporting = null }) }
 }
 
-/** + by the message box: a picture from the phone, a photo, or a file (web/js/documents.js) */
+/** The + menu by the message box: take a photo, scan a document, pick a picture or screenshot, or pick a file (web/js/documents.js). Each callback runs the action; [close] hides the menu. */
 @Composable
 private fun AttachMenu(onPicture: () -> Unit, onFile: () -> Unit, onCamera: (() -> Unit)? = null, onScan: (() -> Unit)? = null, close: () -> Unit) {
     MenuHead("ADD TO YOUR MESSAGE")
+    // Each option is a row with an emoji icon, a bold title and a grey explanation. Camera and scan show only if their callback was given.
     if (onCamera != null) Opt(selected = false, onClick = { onCamera(); close() }) {
         Text("📷", fontSize = 20.sp)
         Column(Modifier.weight(1f)) {
@@ -261,12 +305,16 @@ private fun AttachMenu(onPicture: () -> Unit, onFile: () -> Unit, onCamera: (() 
 
 // ---------------------------------------------------------------- top
 
+// The top bar of the chat screen. [onMenu] opens the chat list, [onSaveAs] starts Save as for the whole chat.
 @Composable
 private fun TopBar(vm: AppViewModel, onMenu: () -> Unit, onSaveAs: () -> Unit) {
+    // more = the ... drop-down is open; confirm = the delete-chat confirmation is open.
     var more by remember { mutableStateOf(false) }
     var confirm by remember { mutableStateOf(false) }
+    // statusBarsPadding keeps the bar below the phone's clock and battery strip.
     Column(Modifier.statusBarsPadding()) {
         Row(Modifier.fillMaxWidth().height(60.dp).padding(horizontal = 12.dp), verticalAlignment = Alignment.CenterVertically) {
+            // Menu button (opens the chat list), then the chat title cut with ... if too long.
             IconButton(onClick = onMenu) { Icon(Icons.Default.Menu, "Chats", tint = Emvryx.text) }
             Text(
                 vm.title, fontWeight = FontWeight.SemiBold, fontSize = 17.sp, maxLines = 1, overflow = TextOverflow.Ellipsis,
@@ -275,8 +323,10 @@ private fun TopBar(vm: AppViewModel, onMenu: () -> Unit, onSaveAs: () -> Unit) {
             IconButton(onClick = vm::toggleLight) {                  // the website's moon: switch dark or light
                 val ink = Emvryx.text
                 Canvas(Modifier.size(20.dp)) {                       // a crescent: a disc with a second disc taken out of it
+                    // Draws the website's moon icon by hand: r is the radius of the big disc, c is the centre of the drawing area.
                     val r = size.minDimension * 0.42f
                     val c = Offset(size.width / 2, size.height / 2)
+                    // A Path is a shape. The moon = a big circle with a second, smaller circle cut out (PathOperation.Difference), leaving a crescent.
                     val moon = androidx.compose.ui.graphics.Path().apply {
                         op(
                             androidx.compose.ui.graphics.Path().apply { addOval(androidx.compose.ui.geometry.Rect(c, r)) },
@@ -284,9 +334,11 @@ private fun TopBar(vm: AppViewModel, onMenu: () -> Unit, onSaveAs: () -> Unit) {
                             androidx.compose.ui.graphics.PathOperation.Difference,
                         )
                     }
+                    // Draw only the outline (Stroke) in the text colour, 1.8 dp wide (toPx converts dp to real pixels).
                     drawPath(moon, ink, style = androidx.compose.ui.graphics.drawscope.Stroke(1.8.dp.toPx()))
                 }
             }
+            // The ... menu appears only in a chat that has messages. Share, Archive and Delete are hidden in private chats because those are never saved.
             if (vm.chatId != null && vm.bubbles.isNotEmpty()) Box {
                 IconButton(onClick = { more = true }) { Text("⋯", fontSize = 22.sp, color = Emvryx.text) }
                 DropdownMenu(more, { more = false }, containerColor = Emvryx.surface) {
@@ -296,19 +348,22 @@ private fun TopBar(vm: AppViewModel, onMenu: () -> Unit, onSaveAs: () -> Unit) {
                     if (!vm.isPrivate) DropdownMenuItem({ Text("Delete this chat", color = Emvryx.danger) }, { more = false; confirm = true })
                 }
             }
+            // New chat button (disabled while an answer is streaming in).
             IconButton(onClick = { vm.newChat() }, enabled = !vm.streaming) { Icon(Icons.Default.Add, "New chat", tint = Emvryx.text) }
         }
+        // Delete confirmation dialog: removes the current chat only if there is an id, then closes.
         if (confirm) androidx.compose.material3.AlertDialog(
             onDismissRequest = { confirm = false }, containerColor = Emvryx.surface,
             title = { Text("Delete this chat?") }, text = { Text("\"${vm.title}\" and its messages are deleted. This can't be undone.") },
             confirmButton = { androidx.compose.material3.TextButton({ vm.chatId?.let { vm.delete(ChatSummary(it, vm.title)) }; confirm = false }) { Text("Delete", color = Emvryx.danger) } },
             dismissButton = { androidx.compose.material3.TextButton({ confirm = false }) { Text("Cancel") } },
         )
+        // A thin line under the bar.
         HorizontalDivider(color = Emvryx.line)
     }
 }
 
-/** app_updates: a newer Emvryx app is ready; Update opens its download (the phone asks to install it over this one) */
+/** app_updates: a newer Emvryx app is ready; Update opens its download (the phone asks to install it over this one). Later hides the banner. */
 @Composable
 private fun UpdateBanner(vm: AppViewModel) {
     val context = LocalContext.current
@@ -318,6 +373,7 @@ private fun UpdateBanner(vm: AppViewModel) {
         verticalAlignment = Alignment.CenterVertically) {
         Text("A new version of Emvryx is ready", Modifier.weight(1f), fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
         TextButton(onClick = vm::updateLater) { Text("Later", color = Emvryx.muted) }
+        // Open the download address in the phone's browser; runCatching swallows any error (for example no app can open it) so the app does not crash.
         TextButton(onClick = {
             runCatching { context.startActivity(android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse(app.emvryx.android.local.AppUpdate.APK_URL))) }
             vm.updateLater()
@@ -325,7 +381,7 @@ private fun UpdateBanner(vm: AppViewModel) {
     }
 }
 
-/** android_auto_offline: asked once before the model comes by itself (on Wi-Fi or mobile data) */
+/** android_auto_offline: asked once before the model comes by itself (on Wi-Fi or mobile data). [model] says which offline model and how big it is; the buttons answer yes or no. */
 @Composable
 private fun OfflineBanner(vm: AppViewModel, model: app.emvryx.android.local.PhoneChoice) {
     val p = LocalPalette.current
@@ -338,6 +394,7 @@ private fun OfflineBanner(vm: AppViewModel, model: app.emvryx.android.local.Phon
     }
 }
 
+// A grey strip shown when the server has no real model attached. buildAnnotatedString lets one line of text have two styles (bold accent first part, normal rest).
 @Composable
 private fun DemoBanner() {
     val p = LocalPalette.current
@@ -356,28 +413,41 @@ private fun DemoBanner() {
 
 // ---------------------------------------------------------------- the thread
 
+/**
+ * The list of messages. [onRegen], [onEdit] and [onReport] are called when the user taps those actions on a message; [onSaveAs] starts Save as.
+ * An empty chat shows the greeting screen instead.
+ */
 @Composable
 private fun Thread(vm: AppViewModel, onRegen: () -> Unit, onEdit: (Bubble) -> Unit, onReport: (Bubble) -> Unit, onSaveAs: (String) -> Unit) {
+    // The scroll position of the list.
     val list = rememberLazyListState()
     val scope = rememberCoroutineScope()
     val last = vm.bubbles.lastOrNull()
+    // follow the newest words while you are at the bottom; once you scroll up to read, it stays put and offers "Jump to the newest".
+    // atEnd is true when one of the last two items is on screen (derivedStateOf recalculates only when what it reads changes).
     // follow the newest words while you are at the bottom; once you scroll up to read, it stays put and offers "Jump to the newest"
     val atEnd by remember { derivedStateOf { list.layoutInfo.visibleItemsInfo.lastOrNull()?.let { it.index >= list.layoutInfo.totalItemsCount - 2 } ?: true } }
+    // Scroll to the bottom whenever a message is added, the last message grows (streaming), or a failure appears; only if the user was at the end or sent the message himself/herself.
     LaunchedEffect(vm.bubbles.size, last?.text?.length, vm.failure) {
         if (vm.bubbles.isNotEmpty() && (atEnd || last?.mine == true)) list.scrollToItem(list.layoutInfo.totalItemsCount.coerceAtLeast(1) - 1, Int.MAX_VALUE / 2)
     }
+    // Nothing to list yet: draw the greeting and stop (return leaves the function).
     if (vm.bubbles.isEmpty()) {
         Empty(vm)
         return
     }
+    // Position of the last message from the model (not from the user); only that one gets Regenerate.
     val lastReply = vm.bubbles.indexOfLast { !it.mine }
     Box(Modifier.fillMaxSize()) {
+    // LazyColumn only draws the rows that are on screen, so long chats stay fast. Each row has a key so Compose can match rows between redraws.
     LazyColumn(
         Modifier.fillMaxSize(), state = list,
         contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 24.dp, bottom = 8.dp),
         verticalArrangement = Arrangement.spacedBy(22.dp),
     ) {
+        // First row: a reminder note in private chats.
         if (vm.isPrivate) item(key = "private") { Note("Private chat: not saved, and gone when you leave it") }
+        // One row per message. A user message that starts with the summary marker is shown as a note; other user messages as bubbles; model messages as cards.
         items(vm.bubbles.size, key = { vm.bubbles[it].key }) { i ->
             val b = vm.bubbles[i]
             if (b.mine) {
@@ -386,6 +456,7 @@ private fun Thread(vm: AppViewModel, onRegen: () -> Unit, onEdit: (Bubble) -> Un
             }
             else AiMessage(vm, b, isLast = i == lastReply && i == vm.bubbles.lastIndex, onRegen = onRegen, onReport = onReport, onSaveAs = onSaveAs)
         }
+        // After the messages: the error card, then any plain notice text.
         vm.failure?.let { f -> item(key = "failure") { FailureCard(vm, f) } }
         vm.notice?.let { n ->
             item(key = "notice") {
@@ -397,6 +468,7 @@ private fun Thread(vm: AppViewModel, onRegen: () -> Unit, onEdit: (Bubble) -> Un
             }
         }
     }
+    // A round down-arrow button at the bottom right to jump to the newest message, shown only when scrolled away from the end.
     if (!atEnd) Box(                                                    // "Jump to the newest message"
         Modifier.align(Alignment.BottomEnd).padding(16.dp).size(44.dp).clip(CircleShape).background(Emvryx.surface2)
             .border(1.dp, Emvryx.line, CircleShape).clickable { scope.launch { list.animateScrollToItem(list.layoutInfo.totalItemsCount.coerceAtLeast(1) - 1) } },
@@ -405,6 +477,7 @@ private fun Thread(vm: AppViewModel, onRegen: () -> Unit, onEdit: (Bubble) -> Un
     }
 }
 
+// The greeting screen shown when the chat has no messages: logo, headline, hint text, optional notices and idea buttons.
 @Composable
 private fun Empty(vm: AppViewModel) {
     Column(

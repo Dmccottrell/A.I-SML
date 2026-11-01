@@ -1,4 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!-- Describes the home-screen widget to Android: its layout, size (about 4 cells wide, 1 tall; it may be stretched sideways) and
+     that it never refreshes by timer (updatePeriodMillis 0), because it shows fixed buttons and no live data. -->
 <appwidget-provider xmlns:android="http://schemas.android.com/apk/res/android"
     android:description="@string/widget_desc"
     android:initialLayout="@layout/widget_ask"

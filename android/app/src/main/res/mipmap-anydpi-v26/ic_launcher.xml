@@ -1,4 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!-- The app icon for Android 8 and newer. An adaptive icon has layers that the phone crops into its own shape (circle, square...).
+     Background: a solid dark colour. Foreground: the logo. Monochrome: the same logo, which Android 13+ tints for "themed icons". -->
 <adaptive-icon xmlns:android="http://schemas.android.com/apk/res/android">
     <background android:drawable="@color/bg" />
     <foreground android:drawable="@drawable/ic_launcher_foreground" />
