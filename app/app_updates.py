@@ -34,6 +34,7 @@ class Updates:
     `fetch` and `clock` are passed in (and default to the real ones) so tests can use a fake download and a fake clock."""
 
     def __init__(self, fetch=_fetch, clock=time.time):
+        """fetch = function that downloads a web address (default: the real one); clock = function giving the current time in seconds."""
         # The lock stops two web requests (running on different threads) from changing `kept` at the same moment.
         # `kept` maps platform -> (time we asked, answer).
         self.fetch, self.clock, self.lock, self.kept = fetch, clock, threading.Lock(), {}

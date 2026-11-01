@@ -69,6 +69,7 @@ class DemoBackend:
     """A stand-in used when no model is attached. It always says so."""
 
     def __init__(self, question=""):
+        """Build the fixed demo reply text, echoing back the first 80 characters of the question (extra spaces squashed)."""
         q = " ".join(question.split())[:80]
         # Build the one fixed reply. `" ".join(question.split())` squashes whitespace; [:80] keeps only the first 80 characters of the question.
         self.text = ("Demo mode: no model is connected, so this is a stand-in reply. "

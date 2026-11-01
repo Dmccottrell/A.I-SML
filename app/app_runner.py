@@ -27,6 +27,8 @@ class ModelRunner:
     a small PC is not asked to hold two models). `files` is {model id: path to a .gguf}."""
 
     def __init__(self, llama_bin, files, start_timeout=180, extra_args=(), host="127.0.0.1"):
+        """llama_bin = path to the llama-server program; files = {model id: .gguf path}; start_timeout = seconds to wait for a model to load;
+        extra_args = extra command-line options for llama-server; host = address it listens on (this computer only by default)."""
         # Keep the settings: path to the llama-server program, model id -> .gguf file, seconds to wait for a load, extra command-line options, and the address to listen on.
         self.bin, self.files, self.timeout, self.extra, self.host = llama_bin, dict(files), start_timeout, list(extra_args), host
         # State of the running server: the process, which model it holds, its web address, and its context size (how many tokens of conversation it keeps).

@@ -17,48 +17,62 @@ import urllib.parse
 
 import github_link
 
+# Only files with these endings are ever published: the kinds a browser can show.
 WEB_FILES = (".html", ".htm", ".css", ".js", ".mjs", ".json", ".txt", ".md", ".svg", ".png", ".jpg", ".jpeg", ".gif", ".webp", ".avif", ".ico",
              ".woff", ".woff2", ".ttf", ".otf", ".mp3", ".ogg", ".wav", ".mp4", ".webm", ".webmanifest", ".xml", ".map", ".wasm")
+# File names that are never published even though their ending is allowed (settings, possible secrets, notes for the coding agent). Lower-case.
 NEVER = {"package.json", "package-lock.json", "tsconfig.json", "composer.json", "secrets.json", "credentials.json", "vryx.md", "emvryx.md", "agents.md"}
+# Folders skipped completely (libraries, caches, tests).
 SKIP_DIRS = {"node_modules", "__pycache__", "venv", "env", "tests", "test"}
+# Limits for one site: 400 files and 50 MB (50 * 1024 * 1024 bytes).
 MAX_FILES, MAX_BYTES = 400, 50 * 1024 * 1024
 
 
 def site_repo(project):
+    """Name of the public GitHub repository that holds the published copy of `project`, e.g. "mysite-site"."""
     return f"{project}-site"
 
 
 def plan(folder):
     """{"files": [...], "skipped": [...], "entry"}: what would be public. Raises GitHubError when there is nothing a browser could show."""
     files, skipped, size = [], [], 0
+    # os.walk visits the folder and every folder inside it: dirpath = the current folder, dirs = its sub-folders, names = its files.
     for dirpath, dirs, names in os.walk(folder):
         rel_dir = os.path.relpath(dirpath, folder)
         keep = []
+        # Sub-folders: hidden ones (starting with "."), skip-listed ones and symbolic links (shortcuts that could point outside the project)
+        # are recorded as skipped; the rest are kept so the walk goes into them.
         for d in sorted(dirs):
             if d.startswith(".") or d.lower() in SKIP_DIRS or os.path.islink(os.path.join(dirpath, d)):
                 skipped.append(os.path.normpath(os.path.join(rel_dir, d)).replace(os.sep, "/") + "/")
             else:
                 keep.append(d)
+        # Assigning into dirs[:] (not dirs = ...) changes the list os.walk is using, so it will not enter the skipped folders.
         dirs[:] = keep
+        # Files: skip hidden files, links, never-publish names and anything that is not a web file type.
         for n in sorted(names):
             full = os.path.join(dirpath, n)
             rel = os.path.normpath(os.path.join(rel_dir, n)).replace(os.sep, "/")
             if n.startswith(".") or os.path.islink(full) or n.lower() in NEVER or not n.lower().endswith(WEB_FILES):
                 skipped.append(rel)
                 continue
+            # Count the total size so we can refuse an oversized site below.
             size += os.path.getsize(full)
             files.append(rel)
+    # GitHub Pages only serves static pages, so there must be at least one HTML file.
     if not any(f.lower().endswith((".html", ".htm")) for f in files):
         raise github_link.GitHubError("There is no web page (.html) in this project, so there is nothing to publish.",
                                       "Pages shows web pages only. A server (Flask, Express) needs the cloud machine instead.")
     if len(files) > MAX_FILES or size > MAX_BYTES:
         raise github_link.GitHubError(f"That is too much to publish (at most {MAX_FILES} files and 50 MB).", "Remove big files you do not need.")
+    # The entry is the page people land on: index.html if there is one, else the first HTML file found.
     entry = "index.html" if "index.html" in files else next(f for f in files if f.lower().endswith((".html", ".htm")))
     return {"files": files, "skipped": skipped, "entry": entry}
 
 
 def status(api, login, project):
     """{"published": bool, "url"} for the project's site repository."""
+    # Ask GitHub about the Pages site of the repository; an error (for example 404 "not found") means nothing is published.
     try:
         d = api.call("GET", f"/repos/{login}/{site_repo(project)}/pages")
     except github_link.GitHubError:
@@ -68,13 +82,16 @@ def status(api, login, project):
 
 def publish(api, git_factory, login, project, folder):
     """Copy the web files into the public <project>-site repository and switch GitHub Pages on. Returns {"url", "files"}."""
+    # First work out (and check) exactly which files will go public.
     p = plan(folder)
     repo = site_repo(project)
+    # If the site repository exists, make sure it is public (Pages is free only for public repos); if the GET fails, create it as public.
     try:
         api.call("GET", f"/repos/{login}/{repo}")
         api.call("PATCH", f"/repos/{login}/{repo}", {"private": False})
     except github_link.GitHubError:
         api.create_repo(repo, private=False, description=f"{project}, published from VryxCode")
+    # Stage the files in a fresh temporary folder, so only the approved files (and no .git history of the project) are pushed.
     tmp = tempfile.mkdtemp(prefix="site_")
     try:
         for rel in p["files"]:
@@ -82,23 +99,30 @@ def publish(api, git_factory, login, project, folder):
             os.makedirs(os.path.dirname(dst), exist_ok=True)
             shutil.copyfile(os.path.join(folder, rel), dst)
         if p["entry"] != "index.html":                 # Pages opens index.html: a small one that goes to the real first page
+            # quote() turns spaces and odd characters into %-codes so the file name is safe inside a web address.
             to = urllib.parse.quote(p["entry"])
             with open(os.path.join(tmp, "index.html"), "w", encoding="utf-8") as f:
                 f.write(f'<!doctype html><meta http-equiv="refresh" content="0; url={to}"><a href="{to}">Open</a>\n')
+        # An empty ".nojekyll" file tells GitHub Pages not to run its Jekyll site builder (which hides files starting with _).
         open(os.path.join(tmp, ".nojekyll"), "w").close()         # serve the files as they are
+        # Make a new git repository in the temp folder, commit everything as one commit and push it. "--force" replaces whatever was there before
+        # (publishing again replaces the old site); "--" stops an odd-looking URL from being read as an option.
         g = git_factory(tmp)
         url = g.init_and_link(login, repo)
         g.run(["add", "-A"])
         g.run(["commit", "-q", "-m", "Publish from VryxCode"])
         g.run(["push", "--force", "--", url, "refs/heads/main:refs/heads/main"])
+    # finally: always delete the temporary folder, even if something above failed.
     finally:
         shutil.rmtree(tmp, ignore_errors=True)
+    # Switch Pages on (serving the main branch root) if it is not already on.
     if not status(api, login, project)["published"]:
         api.call("POST", f"/repos/{login}/{repo}/pages", {"source": {"branch": "main", "path": "/"}})
     return {"url": f"https://{login}.github.io/{repo}/", "files": p["files"]}
 
 
 def unpublish(api, login, project):
+    """Take the site down: switch Pages off, then make the repository private so its files are no longer public."""
     repo = site_repo(project)
     try:
         api.call("DELETE", f"/repos/{login}/{repo}/pages")

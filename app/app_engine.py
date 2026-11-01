@@ -288,6 +288,7 @@ class Guard:
         self.loop_span = loop_span                     # chat_fixes: LOOP_SPAN, so formatting is never taken for a loop
 
     def __iter__(self):
+        """Run the guarded stream: yield each piece to the caller, and stop (setting `reason`) at a Stop press, a bleed marker, the length cap or a loop."""
         try:
             for piece in self.pieces:
                 if self.stop is not None and self.stop.is_set():
