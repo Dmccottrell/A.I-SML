@@ -13,6 +13,9 @@ WHAT THIS FILE DOES
     A mode changes only what the model is asked for this one time: a short hint added to the end of the question (the saved chat
     still shows the original question, never the hint), how much it may write, and how adventurous the wording is.
 """
+# One entry per Regenerate choice. Fields: label and blurb are the words on the menu; hint is the extra sentence added to the question;
+# temp is added to the base temperature (temperature = how adventurous/random the wording is; higher = more varied);
+# length multiplies how many words the model may write (1.0 = same as normal).
 MODES = {
     "again": {"label": "Try again", "blurb": "Same question, a fresh answer", "hint": "", "temp": 0.15, "length": 1.0},
     "different": {"label": "A different answer", "blurb": "Another take, with more variety",
@@ -28,7 +31,9 @@ MODES = {
     "choices": {"label": "Give me choices", "blurb": "Three different options to pick from",
                 "hint": "Give three different options, numbered 1, 2 and 3.", "temp": 0.2, "length": 1.4},
 }
+# The order the choices appear in the menu.
 ORDER = ("again", "different", "other_way", "simpler", "detail", "shorter", "choices")
+# Upper limit for the temperature after adding a mode's extra, so answers never turn into nonsense.
 MAX_TEMPERATURE = 1.1
 
 
@@ -39,23 +44,28 @@ def menu():
 
 def get(mode):
     """The settings for a mode (None or "" means plain Regenerate = "again"). Unknown modes are an error."""
+    # No mode (None or empty text) means the plain Regenerate button.
     mode = mode or "again"
     if mode not in MODES:
+        # Refuse anything that is not on the menu, so a typo or a made-up value from the page is caught early.
         raise ValueError("unknown regenerate option")
     return MODES[mode]
 
 
 def hinted(question, mode):
     """The question as the model sees it this once: the original, plus the mode's hint."""
+    # Plain regenerate has an empty hint: leave the question alone. Otherwise add the hint after a blank line (rstrip drops trailing spaces first).
     hint = get(mode)["hint"]
     return question if not hint else f"{question.rstrip()}\n\n{hint}"
 
 
 def sampling_for(base_temperature, mode):
     """A little more adventurous wording for modes that want a different answer (never above MAX_TEMPERATURE)."""
+    # Add the mode's extra, cap it at MAX_TEMPERATURE, and round to 2 decimals to avoid long floating point tails like 0.30000000000000004.
     return round(min(MAX_TEMPERATURE, base_temperature + get(mode)["temp"]), 2)
 
 
 def length_for(max_new, mode):
     """How much it may write: shorter for 'shorter', longer for 'detail' and 'choices' (never below 32)."""
+    # Scale the allowed length by the mode, turn it back into a whole number, and never go below 32 so an answer is not cut to nothing.
     return max(32, int(max_new * get(mode)["length"]))

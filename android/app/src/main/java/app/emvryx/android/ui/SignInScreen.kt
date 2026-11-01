@@ -42,10 +42,18 @@ import app.emvryx.android.ui.theme.Emvryx
 import app.emvryx.android.ui.theme.Heading
 import app.emvryx.android.ui.theme.LocalPalette
 
-/** The PWA's sign-in card (web/index.html .auth .card): "Welcome back", name and password, or an access key. */
+// SignInScreen.kt: the screen shown when nobody is signed in. It collects the details and hands them to the AppViewModel (vm), which talks
+// to the server. The screen itself holds only what the user has typed so far. The PWA is the website version of the app.
+
+/**
+ * The PWA's sign-in card (web/index.html .auth .card): "Welcome back", name and password, or an access key.
+ * Also covers the email-code way and the second step (a code from an authenticator app) when the account asks for it.
+ * [vm] is the app's shared state holder (a ViewModel): it keeps the sign-in progress, errors and server address, and does the actual sign-in calls.
+ */
 @Composable
 fun SignInScreen(vm: AppViewModel) {
     val p = LocalPalette.current
+    // The screen's own state. rememberSaveable keeps it across redraws and even a screen rotation. way = how the user signs in (password, access key or emailed code); the others are what has been typed or toggled.
     var way by rememberSaveable { mutableStateOf(SignInWay.Password) }
     var id by rememberSaveable { mutableStateOf("") }
     var secret by rememberSaveable { mutableStateOf("") }
@@ -53,9 +61,12 @@ fun SignInScreen(vm: AppViewModel) {
     var show by rememberSaveable { mutableStateOf(false) }
     var showServer by rememberSaveable { mutableStateOf(false) }
     var email by rememberSaveable { mutableStateOf("") }
+    // LaunchedEffect runs its block when the screen appears and again whenever vm.server changes. It asks the server which sign-in ways it offers.
     LaunchedEffect(vm.server) { vm.checkSignInOptions() }        // does this server send sign-in codes by email?
+    // twoStep: the password was right but the account also needs a second code. codeSent: an email code has been sent and we wait for it.
     val twoStep = vm.twoStepTicket != null
     val codeSent = vm.emailSentTo != null
+    // submit: what the main button and the keyboard's Done key do, depending on the step we are in.
     val submit = {
         when {
             twoStep -> vm.submitTwoStep(code)
@@ -64,27 +75,33 @@ fun SignInScreen(vm: AppViewModel) {
             else -> vm.signIn(way, id, secret)
         }
     }
+    // ready: is there enough typed to press the button? (A key needs only the secret; a password also needs a name.)
     val ready = when {
         twoStep -> code.isNotBlank()
         way == SignInWay.Email -> if (codeSent) code.isNotBlank() else email.contains('@')
         else -> secret.isNotBlank() && (way == SignInWay.Key || id.isNotBlank())
     }
 
+    // Page: soft glow behind, kept clear of system bars and the on-screen keyboard (imePadding), card centred.
     Box(Modifier.fillMaxSize().accentWash(p.glow, 420.dp).safeDrawingPadding().imePadding(), contentAlignment = Alignment.Center) {
+        // Scrollable column so the card is reachable on small screens or with the keyboard open.
         Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(horizontal = 20.dp, vertical = 32.dp),
             horizontalAlignment = Alignment.CenterHorizontally) {
             Column(
+                // The card: at most 420 dp wide, with a rounded outline.
                 Modifier.widthIn(max = 420.dp).fillMaxWidth()
                     .border(1.dp, Emvryx.line, RoundedCornerShape(22.dp))
                     .padding(horizontal = 20.dp, vertical = 24.dp),
                 verticalArrangement = Arrangement.spacedBy(16.dp),
             ) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
+                    // Header row: logo and the app name.
                     Logo(Modifier.size(32.dp))
                     Spacer(Modifier.size(10.dp))
                     Text("Emvryx", fontFamily = Heading, fontWeight = FontWeight.Bold, fontSize = 22.sp)
                 }
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    // Title and short explanation; the words change for the second step.
                     Text(if (twoStep) "Two-step check" else "Welcome back", fontFamily = Heading, fontWeight = FontWeight.Bold, fontSize = 28.sp)
                     Text(
                         if (twoStep) "Enter the 6-digit code from your authenticator app, or one of your recovery codes."
@@ -94,6 +111,7 @@ fun SignInScreen(vm: AppViewModel) {
                 }
 
                 when {
+                    // Show the input boxes that match the current step: the two-step code, name + password, the emailed code, the email address, or an access key.
                     twoStep -> Field(
                         "Code", code, { code = it }, placeholder = "123456",
                         keyboard = KeyboardOptions(keyboardType = KeyboardType.Number, imeAction = ImeAction.Done),
@@ -105,6 +123,7 @@ fun SignInScreen(vm: AppViewModel) {
                             keyboard = KeyboardOptions(keyboardType = KeyboardType.Email, imeAction = ImeAction.Next),
                         )
                         Field(
+                            // Password box. The trailing Show/Hide text toggles whether the password is readable.
                             "Password", secret, { secret = it }, placeholder = "Your password", hidden = !show,
                             keyboard = KeyboardOptions(keyboardType = KeyboardType.Password, imeAction = ImeAction.Done),
                             actions = KeyboardActions(onDone = { submit() }),
@@ -135,18 +154,22 @@ fun SignInScreen(vm: AppViewModel) {
                     )
                 }
 
+                // If the last attempt failed, show the error in red (?.let runs only when there is a message).
                 vm.signInError?.let { Text(it, color = MaterialTheme.colorScheme.error) }
 
+                // The main button's text depends on the step.
                 val label = when {
                     twoStep -> "Continue"
                     way == SignInWay.Email && !codeSent -> "Email me a code"
                     else -> "Sign in"
                 }
+                // Main button. While a request is running (signInBusy) it shows a spinner and is disabled; also disabled until enough is typed.
                 PwaButton(label, submit, Modifier.fillMaxWidth().height(50.dp), enabled = !vm.signInBusy && ready) {
                     if (vm.signInBusy) CircularProgressIndicator(Modifier.size(20.dp), strokeWidth = 2.dp, color = LocalContentColor.current)
                     else Text(label, fontWeight = FontWeight.SemiBold, fontSize = 16.sp)
                 }
 
+                // In the second step offer only Back. Otherwise show the "or" divider and the other ways to sign in.
                 if (twoStep) {
                     PwaButton("Back", vm::cancelTwoStep, Modifier.fillMaxWidth(), ghost = true)
                 } else {
@@ -155,10 +178,12 @@ fun SignInScreen(vm: AppViewModel) {
                         Text("or", color = Emvryx.muted, modifier = Modifier.padding(horizontal = 12.dp))
                         HorizontalDivider(Modifier.weight(1f), color = Emvryx.line)
                     }
+                    // Each button below switches the way and clears what was typed; cancelEmailCode forgets a half-finished email-code attempt.
                     if (way != SignInWay.Password) PwaButton("Sign in with a password", { way = SignInWay.Password; secret = ""; vm.cancelEmailCode() },
                         Modifier.fillMaxWidth(), ghost = true)
                     if (way != SignInWay.Key) PwaButton("Use an access key", { way = SignInWay.Key; secret = ""; vm.cancelEmailCode() },
                         Modifier.fillMaxWidth(), ghost = true)
+                    // Only offered when this server can send sign-in codes by email.
                     if (vm.emailOffered && way != SignInWay.Email) PwaButton("Email me a sign-in code", { way = SignInWay.Email; code = "" },
                         Modifier.fillMaxWidth(), ghost = true)
                     Text(
@@ -166,6 +191,7 @@ fun SignInScreen(vm: AppViewModel) {
                         color = Emvryx.muted, fontSize = 15.sp,
                     )
                 }
+                // Optional server address box (for when the app should talk to another server).
                 if (showServer) {
                     Field(
                         "Server address", vm.server, { vm.server = it }, placeholder = "https://chat.emvryx.app",
@@ -174,6 +200,7 @@ fun SignInScreen(vm: AppViewModel) {
                 }
             }
             Text(
+                // Small tappable line under the card: shows the current server and toggles the address box.
                 if (showServer) "Hide server address" else "Server: ${vm.server.substringAfter("://")}",
                 color = Emvryx.muted, fontSize = 14.sp,
                 modifier = Modifier.padding(top = 14.dp).clickable { showServer = !showServer }.padding(8.dp),

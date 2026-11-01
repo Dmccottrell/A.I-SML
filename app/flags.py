@@ -7,17 +7,23 @@ WHAT THIS FILE DOES
     * An audience is one of: off (nobody, a quick way to roll something back), owner (only the PC owner), admins (the owner and every admin) or everyone.
     * The choices are kept in flags.json in the data folder. Nothing here needs a restart.
 """
+# json reads and writes flags.json; re is for matching version numbers; os is for files; threading gives us a lock so two requests cannot save at once;
+# time gives the clock that scheduled publishing compares against.
 import json
 import re
 import os
 import threading
 import time
 
+# The four possible audiences, from the narrowest to the widest. A feature is shown to a person only if their kind of account is inside its audience.
 AUDIENCES = ("off", "owner", "admins", "everyone")
+# The same four audiences as the words shown on screen (the keys above are what is stored in flags.json).
 AUDIENCE_NAMES = {"off": "Off", "owner": "Owner", "admins": "Admins", "everyone": "Everyone"}
 
 # id, what the owner sees, what it does, and where it starts. New features start with the owner and the admins, never with everyone: the owner publishes
 # each one when it is ready (tests/test_release_gate.py fails if a flag starts at "everyone"). New models do the same through "status": "preview".
+# Each entry is a dict (a small record) with: "id" (the short name the code uses), "title" and "desc" (shown in Admin > Previews) and "default" (the audience
+# used until the owner picks another one). Further down, a loop adds "model" and "kind" to every entry.
 FLAGS = [
     {"id": "welcome_tour", "title": "Welcome tour", "desc": "The animated introduction and walk-through people see the first time they sign in (and can replay in Settings).", "default": "admins"},
     {"id": "violet_theme", "title": "Violet look", "desc": "The whole chat app and the sign-in screen in electric violet instead of amber: buttons, the message box, glows and the Emvryx logo. Each model's logo keeps its own colour.", "default": "admins"},
@@ -95,6 +101,8 @@ FLAGS = [
     {"id": "android_auto_offline", "title": "Android: get offline ready by itself", "desc": "A phone with the room fetches what it needs for answers with the PC off by itself: the small phone model and Google\u2019s offline speech. On Wi-Fi or mobile data, only a model the phone has the memory and free space for, asked once first (admins are not asked). Stop or Remove in Settings stops it for good. The download keeps going with the app closed, with a progress notification and a Stop button. Needs the offline model switch.", "default": "admins"},
     {"id": "model_code_test", "title": "Models: coding test from real sessions", "desc": "Admin > Models gets a Coding test: the recorded VryxCode sessions (only your own, recorded with the switch for it) are turned into tasks with checks, and each of your models is run on them, sealed, to show which one codes best. Only your own models are tested, and nothing from them is used for training.", "default": "admins"},
 ]
+# FIXES: one dict per bug fix: "id" (short name, must be unique), "product" (None for the app, or a product id like "vryxcode") and "text" (the plain line shown
+# under "Fixed" in What's new). The \u201c style escapes in the text are just curly quote marks written in a way that is safe in any file encoding.
 # Bug fixes people would notice, in plain words. Each goes out with the next bug-fix release of its part (product None: Publish bug fixes in Previews;
 # "vryxcode": Push bug fixes in Models > VryxCode) and shows under "Fixed" in What's new. Add one line here with every fix that ships.
 FIXES = [
@@ -116,37 +124,54 @@ FIXES = [
     {"id": "vx_deleted_returns", "product": "vryxcode", "text": "A session you delete just as it finishes no longer comes back in the list."},
     {"id": "vx_old_list", "product": "vryxcode", "text": "The sessions list no longer shows an older list for a moment."},
 ]
+# A set of every fix id, so the tests (and callers) can check quickly that an id exists.
 FIX_IDS = {f["id"] for f in FIXES}
 
 # Products that are released like a model: every unpublished feature of VryxCode is part of the next VryxCode version. Each feature still has its own switch
 # (for testing on the owner and admins); "Push update" in Admin > Models sends all of the waiting ones to everyone at once as, say, VryxCode 1.4.
+# A "product" is a group of features released together under one version number (here only VryxCode). Keyed by product id.
 PRODUCTS = {"vryxcode": {"title": "VryxCode", "desc": "The coding agent. Its new features wait here and go out together as the next VryxCode version."}}
 # Bug-fix switches: they go out with a fixes release, never with new features (the owner's rule: features and fixes are pushed separately).
 FIX_FLAGS = {"chat_fixes", "photo_fixes", "vryxcode_fixes"}
+# Fill in two fields on every flag when the file loads. setdefault only sets a key if it is not there already, so an entry can still choose its own value.
 for _f in FLAGS:
+    # Every flag whose id starts with "vryxcode_" belongs to the VryxCode product (released together as one version).
     if _f["id"].startswith("vryxcode_"):
         _f.setdefault("model", "vryxcode")
+    # "fix" for the bug-fix switches, "feature" for everything else.
     _f.setdefault("kind", "fix" if _f["id"] in FIX_FLAGS else "feature")
+# Look a flag up by its id in one step instead of searching the list every time.
 BY_ID = {f["id"]: f for f in FLAGS}
+# A regex (a text pattern) for a version like "3.5" or "1.4.2": one to three digits, a dot, one to three digits, and optionally another dot and digits.
+# (?:...) groups without remembering, and the trailing ? makes that last part optional.
 VERSION_RE = re.compile(r"\d{1,3}\.\d{1,3}(?:\.\d{1,3})?")
 # Versions are counted in tenths: a features release adds 0.5 (3.0 -> 3.5), a fixes release adds 0.1 (3.1 -> 3.2, 3.9 -> 4.0), a major one goes to
 # the next whole number. "minor" and "patch" are the older names (saved schedules, the Android app) for features and fixes.
+# The release kinds the callers may ask for. Two are new names ("features", "fixes"); "minor" and "patch" are the older names still accepted.
 KINDS = ("features", "fixes", "major", "minor", "patch")
+# Maps every kind name to one of the two categories, so the code only has to think about "features" and "fixes" ("major" counts as features).
 CATEGORY = {"features": "features", "minor": "features", "major": "features", "fixes": "fixes", "patch": "fixes"}
 
 
 def tenths(version):
     """A version as tenths: "3.5" -> 35. An older number that tenths cannot say (1.4.2, 1.12) carries on from the next whole number, never backwards."""
+    # Split "1.4.2" into [1, 4, 2] numbers.
     parts = [int(x) for x in str(version).split(".")]
+    # Pad with zeros and keep only three, so "3.5" becomes major 3, minor 5, patch 0.
     major, minor, patch = (parts + [0, 0])[:3]
+    # A plain "major.tenth" version is just major*10 + tenth (3.5 -> 35).
     if minor <= 9 and patch == 0:
         return major * 10 + minor
+    # Anything else cannot be said in tenths: go to the next whole number so the version never moves backwards.
     return (major + 1) * 10
 
 
 def step(version, kind):
+    """The next version after [version] for a release of [kind]: features add 0.5, fixes add 0.1, major goes to the next whole number ("3.5" -> "4.0")."""
     t = tenths(version)
+    # // is whole-number division. "major" rounds up to the next multiple of 10; otherwise add 5 tenths (features) or 1 tenth (fixes).
     t = (t // 10 + 1) * 10 if kind == "major" else t + (5 if CATEGORY[kind] == "features" else 1)
+    # Turn the tenths back into text: 40 -> "4.0" (// is the whole part, % the remainder).
     return f"{t // 10}.{t % 10}"
 
 
@@ -156,35 +181,48 @@ def flag_kind(fid):
 
 
 class Flags:
+    """The live state of all feature switches: who sees what, the schedules, the app version and the release history. It is kept in memory and saved to
+    flags.json after each change. One instance is shared by the whole server, so every change takes self.lock first."""
+
     def __init__(self, path=None, clock=time.time):
+        """[path]: where flags.json lives (None: keep everything in memory only, used by tests). [clock]: a function that returns "now" in seconds; tests pass a fake one."""
+        # Remember the file path, make a lock (only one thread may change the data at a time) and keep the clock.
         self.path, self.lock, self.clock = path, threading.Lock(), clock
+        # Start with empty state; anything found in the file below replaces these.
         self.data = {"audiences": {}, "changed": {}, "scheduled": {}, "version": "1.0", "releases": [], "products": {}, "fixed": []}
         if path and os.path.exists(path):
             try:
                 with open(path, encoding="utf-8") as f:
                     got = json.load(f)
+                # Copy over only the known keys, and only if they hold the right kind of value (a dict or list), so a damaged file cannot break the app.
                 self.data.update({k: got[k] for k in ("audiences", "changed", "scheduled", "releases", "products", "fixed") if isinstance(got.get(k), (dict, list))})
                 if isinstance(got.get("version"), str) and VERSION_RE.fullmatch(got["version"]):
                     self.data["version"] = got["version"]                 # an older 1.4.2 stays as it was until the next release moves it on
                 for i, r in enumerate(self.data["releases"], 1):         # releases saved before they were numbered
                     r.setdefault("seq", i)
             except (OSError, ValueError):
+                # An unreadable or broken file is ignored: we carry on with the defaults rather than refuse to start.
                 pass
 
     def _save(self):
+        """Write the data to flags.json (the caller already holds the lock). Does nothing when there is no file path."""
         if not self.path:
             return
+        # Write to a temporary file first, then swap it in with os.replace. The swap is all-or-nothing, so a crash half way never leaves a broken flags.json.
         tmp = self.path + ".tmp"
+        # 0o600 is a file permission: only the owner of the file may read or write it.
         fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
         with os.fdopen(fd, "w", encoding="utf-8") as f:
             json.dump(self.data, f, indent=2)
         os.replace(tmp, self.path)
 
     def audience(self, fid):
+        """The audience ("off", "owner", "admins" or "everyone") a feature has right now. Unknown ids are "off". Also applies a schedule that has come due."""
         if fid not in BY_ID:
             return "off"
         self._run_schedule(fid)
         a = self.data["audiences"].get(fid)
+        # A saved value that is not a real audience (old or damaged data) falls back to the feature's default.
         return a if a in AUDIENCES else BY_ID[fid]["default"]
 
     def on(self, fid, who):
@@ -192,19 +230,24 @@ class Flags:
         a = self.audience(fid)
         if a == "everyone":
             return True
+        # Nobody is allowed when it is off, and a visitor who is not signed in (no [who]) only ever gets "everyone" features.
         if a == "off" or not who:
             return False
         if a == "owner":
             return bool(who.get("founder") or who.get("granter"))
+        # The only audience left is "admins".
         return bool(who.get("admin"))
 
     def mapping(self, who):
+        """A dict {flag id: True/False} for one person: what the web page and the Android app use to show or hide each feature."""
         return {f["id"]: self.on(f["id"], who) for f in FLAGS}
 
     def listing(self):
+        """Every flag with its current audience, when it last changed and any schedule: the list shown in Admin > Previews."""
         return [dict(f, audience=self.audience(f["id"]), changed=self.data["changed"].get(f["id"]), scheduled=self.data["scheduled"].get(f["id"])) for f in FLAGS]
 
     def set_audience(self, fid, audience, by=""):
+        """The owner picks a new audience for one feature. [by] is who did it (kept in the history). Raises ValueError for an unknown feature or audience."""
         if fid not in BY_ID:
             raise ValueError("no such feature")
         if audience not in AUDIENCES:
@@ -216,6 +259,7 @@ class Flags:
 
     def _apply(self, fid, audience, by, at, kind=None, notes=""):
         """Set one feature's audience (caller holds the lock). Going live for everyone is a release: the version goes up and the release history gets a line."""
+        # audience_raw (not audience) because audience() would check the schedule again and we are already inside that check.
         was = self.audience_raw(fid)
         self.data["audiences"][fid] = audience
         self.data["changed"][fid] = {"by": by, "at": at}
@@ -223,21 +267,26 @@ class Flags:
             self._release([fid], by, at, kind or flag_kind(fid), notes)
 
     def audience_raw(self, fid):
+        """Like audience() but without looking at schedules, so it is safe to call while a schedule is being applied."""
         a = self.data["audiences"].get(fid)
         return a if a in AUDIENCES else BY_ID[fid]["default"]
 
     def _release(self, fids, by, at, kind="features", notes=""):
         """One app release. A fixes release also carries the waiting fix notes (FIXES); a features release never does."""
+        # Move the app version forward, then note which features went live in this release.
         self.data["version"] = step(self.data["version"], kind)
         items = [{"id": f, "title": BY_ID[f]["title"], "desc": BY_ID[f]["desc"]} for f in fids]
         self.data["releases"].append({"seq": self.next_seq(), "version": self.data["version"], "kind": CATEGORY[kind], "at": at, "by": by, "notes": notes, "items": items,
                                       "fixes": self._take_fixes(None) if CATEGORY[kind] == "fixes" else []})
+        # Keep only the newest 200 releases so the file does not grow forever (del list[:-200] removes everything except the last 200).
         del self.data["releases"][:-200]
 
     def next_seq(self):
+        """The number for the next release line: one more than the highest used so far (1 when there are none)."""
         return max((r.get("seq", 0) for r in self.data["releases"]), default=0) + 1
 
     def last_seq(self):
+        """The number of the newest release line (0 when there are none). Clients compare it with what they last saw to know if something is new."""
         return max((r.get("seq", 0) for r in self.data["releases"]), default=0)
 
     def record_model_release(self, model_id, label, kind, by, notes="", desc=""):
@@ -245,6 +294,7 @@ class Flags:
         if kind not in ("model-new", "model-update"):
             raise ValueError("choose model-new or model-update")
         with self.lock:
+            # Notes are cut to 500 characters so one long note cannot bloat the file.
             self.data["releases"].append({"seq": self.next_seq(), "version": self.data["version"], "kind": kind, "model": label, "at": self.clock(), "by": by, "notes": str(notes)[:500],
                                           "items": [{"id": model_id, "title": label, "desc": desc}]})
             del self.data["releases"][:-200]
@@ -252,6 +302,7 @@ class Flags:
 
     def pending_fixes(self, product=None):
         """The fixes that have not been in a release yet, for this part (None: the app, or a product id)."""
+        # "fixed" holds the ids already shipped; a set makes the "is it in there" check fast.
         done = set(self.data["fixed"])
         return [f for f in FIXES if f["product"] == product and f["id"] not in done]
 
@@ -262,11 +313,13 @@ class Flags:
         return [f["text"] for f in got]
 
     def product_version(self, pid):
+        """The version of a product (like VryxCode) as text, "1.0" when it has never been released or the saved value looks wrong."""
         v = (self.data["products"].get(pid) or {}).get("version")
         return v if isinstance(v, str) and re.fullmatch(r"\d{1,3}\.\d{1,3}", v) else "1.0"
 
     @staticmethod
     def next_product_version(version, kind):
+        """What a product's version would become for a release of [kind] (same rules as the app version)."""
         return step(version, kind)
 
     def products(self):
@@ -275,6 +328,7 @@ class Flags:
         for pid, p in PRODUCTS.items():
             feats = [f for f in FLAGS if f.get("model") == pid]
             v = self.product_version(pid)
+            # pick(test, kind) lists this product's features whose audience passes [test] (a small function), optionally only of one kind. A lambda is a one-line function.
             pick = lambda test, kind=None: [{"id": f["id"], "title": f["title"], "desc": f["desc"], "audience": self.audience(f["id"])} for f in feats
                                             if test(self.audience(f["id"])) and (kind is None or f["kind"] == kind)]
             out.append({"id": pid, "title": p["title"], "desc": p["desc"], "version": v, "label": f"{p['title']} {v}",
@@ -293,13 +347,16 @@ class Flags:
         if kind not in KINDS:
             raise ValueError("choose features or fixes")
         title, cat = PRODUCTS[pid]["title"], CATEGORY[kind]
+        # Fix releases pick the "fix" switches, feature releases pick the "feature" ones.
         want = "fix" if cat == "fixes" else "feature"
         ids = [f["id"] for f in FLAGS if f.get("model") == pid and f["kind"] == want and self.audience(f["id"]) not in ("everyone", "off")]
+        # Nothing to publish: no switches waiting and (for a fixes release) no fix notes waiting either.
         if not ids and not (cat == "fixes" and self.pending_fixes(pid)):
             raise ValueError(f"no {title} {'fixes' if cat == 'fixes' else 'new features'} are waiting")
         with self.lock:
             v = self.next_product_version(self.product_version(pid), kind)
             now = self.clock()
+            # Put every waiting switch live for everyone and drop any schedule it had.
             for f in ids:
                 self.data["scheduled"].pop(f, None)
                 self.data["audiences"][f] = "everyone"
@@ -319,15 +376,19 @@ class Flags:
         return step(version, kind)
 
     def next_versions(self):
+        """The versions the app would get from a features release and from a fixes release, for the Publish buttons."""
         return {k: step(self.data["version"], k) for k in ("features", "fixes")}
 
     def version(self):
+        """The app's current version as text, e.g. "3.5"."""
         return self.data["version"]
 
     def releases(self):
+        """The release history, newest first (a copy, so callers cannot change the saved list)."""
         return list(reversed(self.data["releases"]))
 
     def preview_ids(self):
+        """The ids of every feature that is not yet live for everyone."""
         return [f["id"] for f in FLAGS if self.audience(f["id"]) != "everyone"]
 
     def publish_all(self, by="", kind="features", notes=""):
@@ -336,6 +397,7 @@ class Flags:
         if kind not in KINDS:
             raise ValueError("choose features or fixes")
         want = "fix" if CATEGORY[kind] == "fixes" else "feature"
+        # Switches that are in preview, not on hold ("off"), not part of a product (those go out with the product's own push) and of the wanted kind.
         ids = [f for f in self.preview_ids() if self.audience(f) != "off" and not BY_ID[f].get("model") and BY_ID[f]["kind"] == want]   # Off = on hold; a product's go with its own push
         if not ids and not (want == "fix" and self.pending_fixes(None)):
             raise ValueError("no " + ("fixes" if want == "fix" else "new features") + " are waiting to be published")
@@ -351,6 +413,7 @@ class Flags:
     # Scheduled publishing: at a chosen time a feature moves to a wider audience (normally Everyone) by itself. Nothing needs to run in the
     # background: the time is checked whenever the feature is asked about, so it goes live on the first look after the time has passed.
     def _run_schedule(self, fid):
+        """If this feature has a schedule whose time has passed, carry it out now and return it; otherwise return None."""
         due = self.data["scheduled"].get(fid)
         if due and self.clock() >= due["at"]:
             with self.lock:
@@ -369,6 +432,7 @@ class Flags:
             raise ValueError("choose features or fixes")
         with self.lock:
             self.data["scheduled"].pop(fid, None)
+            # Only make a release if it was not already live; publishing twice must not bump the version twice.
             if self.audience_raw(fid) != "everyone":
                 self.data["audiences"][fid] = "everyone"
                 self.data["changed"][fid] = {"by": by, "at": self.clock()}
@@ -376,6 +440,8 @@ class Flags:
             self._save()
 
     def schedule(self, fid, at, audience="everyone", by="", kind=None, notes=""):
+        """Plan a feature to move to [audience] at time [at] (seconds since 1970, the usual computer clock). Raises ValueError for a bad id, kind, audience or time
+        (the time must be in the future and within a year)."""
         if fid not in BY_ID:
             raise ValueError("no such feature")
         kind = kind or flag_kind(fid)
@@ -383,6 +449,7 @@ class Flags:
             raise ValueError("choose features or fixes")
         if audience not in AUDIENCES:
             raise ValueError("choose " + ", ".join(AUDIENCES))
+        # The time may arrive as text from a web form; turn it into a number or complain in plain words.
         try:
             at = float(at)
         except (TypeError, ValueError):
@@ -390,6 +457,7 @@ class Flags:
         now = self.clock()
         if at <= now:
             raise ValueError("choose a time in the future")
+        # 86400 is the number of seconds in a day, so this is "more than a year ahead".
         if at > now + 366 * 86400:
             raise ValueError("choose a time within the next year")
         with self.lock:
@@ -397,6 +465,7 @@ class Flags:
             self._save()
 
     def cancel_schedule(self, fid):
+        """Remove a planned change for this feature (does nothing if there was none)."""
         with self.lock:
             if self.data["scheduled"].pop(fid, None) is not None:
                 self._save()
