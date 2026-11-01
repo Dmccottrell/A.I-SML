@@ -1,3 +1,7 @@
+// Icons.kt: the small line icons used all over the Android app.
+// They are the same pictures the website uses (web/js/core.js), written as SVG path strings (a path string is a
+// tiny drawing recipe: M = move the pen, L/l = draw a line, a = draw an arc, z = close the shape).
+// PwaIcon() at the bottom is the one function the screens call to draw an icon by name.
 package app.emvryx.android.ui
 
 import androidx.compose.foundation.layout.size
@@ -15,6 +19,8 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 
 // The website's own line icons (web/js/core.js ICONS): 24 x 24, drawn with a 1.8 stroke and round ends, in the text colour.
+// This map goes from an icon's short name (the key) to its path recipe (the value). A private top-level val is visible
+// only inside this file, so other files must go through PwaIcon() instead.
 private val PATHS = mapOf(
     "signout" to "M10 4H5v16h5M15 8l4 4-4 4M19 12H9",
     "folder" to "M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z",
@@ -32,21 +38,36 @@ private val PATHS = mapOf(
     "chevron" to "M6 15l6-6 6 6",
 )
 
+// Already-built icons, kept by name so each one is parsed only once (parsing a path string costs a little time).
+// Only touched from the UI thread, so a plain HashMap is safe here.
 private val cache = HashMap<String, ImageVector>()
 
+// Builds (or fetches from the cache) the ImageVector for an icon name. An ImageVector is Compose's own vector picture type.
+// getOrPut means: return the cached one if there is one, otherwise run the block, store its result and return it.
 private fun vector(name: String): ImageVector = cache.getOrPut(name) {
+    // A 24 x 24 dp icon on a 24 x 24 drawing grid; apply { } lets us call addPath on the builder, then build() finishes it.
     ImageVector.Builder(name, 24.dp, 24.dp, 24f, 24f).apply {
         addPath(
+            // Look up the recipe by name; an unknown name falls back to the "doc" icon so a typo still shows something.
+            // parsePathString turns the text into drawing steps ("nodes"), which addPath then draws.
             PathParser().parsePathString(PATHS[name] ?: PATHS.getValue("doc")).toNodes(),
+            // fill = null: draw outlines only, not solid shapes. The stroke colour is plain white because PwaIcon() later
+            // replaces it with the real colour (the tint). Width 1.8 and round ends/corners match the website's icons.
             fill = null, stroke = SolidColor(Color.White), strokeLineWidth = 1.8f,
             strokeLineCap = StrokeCap.Round, strokeLineJoin = StrokeJoin.Round,
         )
     }.build()
 }
 
-/** One of the website's icons; [tint] colours it (the stroke above is replaced by the tint) */
+/**
+ * Draws one of the website's icons.
+ * [name] picks the icon from PATHS above; [tint] is the colour of the lines (it replaces the white stroke used when building);
+ * [size] is how big to draw it (20 dp default); [contentDescription] is the text a screen reader says, or null for a purely decorative icon.
+ */
 @Composable
 fun PwaIcon(name: String, tint: Color, size: Dp = 20.dp, contentDescription: String? = null) {
+    // remember(name) keeps the built icon between redraws, and only rebuilds it if the name changes.
     val v = remember(name) { vector(name) }
+    // Icon() is Compose Material's widget for drawing a vector picture; the modifier sets its width and height.
     Icon(v, contentDescription, tint = tint, modifier = Modifier.size(size))
 }

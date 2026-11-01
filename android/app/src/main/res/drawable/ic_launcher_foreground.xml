@@ -1,26 +1,33 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!-- The Emvryx mark from web/icon.svg (64 x 64), in violet, centred in the adaptive icon's 66dp safe zone -->
+<!-- A "vector drawable": a picture described as drawing instructions (paths) instead of pixels, so it stays sharp at any size.
+     This one is the foreground layer of the app icon. Android puts it on top of the background colour (see mipmap-anydpi-v26/ic_launcher.xml). -->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
     android:width="108dp"
     android:height="108dp"
     android:viewportWidth="108"
     android:viewportHeight="108">
+    <!-- The canvas is 108 x 108 units. A group moves and scales everything inside it: the 64-unit logo is nudged right and down by 21
+         so it sits in the middle, and made 3 percent bigger. -->
     <group
         android:scaleX="1.03"
         android:scaleY="1.03"
         android:translateX="21"
         android:translateY="21">
+        <!-- The letter E: top bar, bottom bar and the vertical stroke (M = move pen to a point, H = draw a horizontal line to x, V = vertical line to y). Thick round-ended lines in the text colour. -->
         <path
             android:pathData="M15,15 H42 M15,49 H42 M15,15 V49"
             android:strokeColor="@color/text"
             android:strokeWidth="8"
             android:strokeLineCap="round"
             android:strokeLineJoin="round" />
+        <!-- The middle bar of the E, in the accent colour. -->
         <path
             android:pathData="M15,32 H34"
             android:strokeColor="@color/accent"
             android:strokeWidth="8"
             android:strokeLineCap="round" />
+        <!-- The dot to the right: a circle drawn with two arcs (a = arc, z = close the shape) and filled with the accent colour. -->
         <path
             android:pathData="M49,25.5 a6.5,6.5 0 1,1 0,13 a6.5,6.5 0 1,1 0,-13 z"
             android:fillColor="@color/accent" />

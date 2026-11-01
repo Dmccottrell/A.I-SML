@@ -1,5 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!-- Take a photo (android_camera_scan): the camera app writes the picture here, in the app's own cache -->
+<!-- This tells Android's FileProvider (a safe way to hand a file to another app) which folders it may share. Here only the "camera" folder
+     inside the app's cache. The folder name in the link is "camera"; the real path is cache/camera/. -->
 <paths>
     <cache-path name="camera" path="camera/" />
 </paths>

@@ -1,4 +1,6 @@
+<!-- Every piece of text that Android itself shows (app name under the icon, shortcut labels, widget text). Keeping them here lets them be translated. -->
 <resources>
+    <!-- The name shown under the app icon. -->
     <string name="app_name">Emvryx</string>
     <!-- android_quick_launch: the icon's shortcuts and the widget -->
     <string name="sc_new">New chat</string>

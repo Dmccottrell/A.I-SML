@@ -1,5 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!-- Debug builds only: plain http to the PC, so `python app_server.py` can be tried from the emulator (http://10.0.2.2:8000) or a phone on the same Wi-Fi -->
+<!-- Why it is needed: since Android 9 the phone refuses plain http (no encryption) unless a file like this allows it. This file lives in the
+     "debug" folder, so it is only packed into test builds; the release app keeps the safe default (https only). -->
 <network-security-config>
     <base-config cleartextTrafficPermitted="true" />
 </network-security-config>

@@ -9,12 +9,14 @@
     android:orientation="horizontal"
     android:paddingStart="18dp"
     android:paddingEnd="8dp">
+    <!-- Small Emvryx logo on the left, tinted violet. It is decoration only, so it has no spoken description. -->
     <ImageView
         android:layout_width="26dp"
         android:layout_height="26dp"
         android:contentDescription="@null"
         android:src="@drawable/ic_notify"
         android:tint="#FF8B5CF6" />
+    <!-- The "Ask Emvryx" text. Width 0dp with weight 1 means "take all the space left over", which pushes the two buttons to the right edge. -->
     <TextView
         android:id="@+id/widget_ask"
         android:layout_width="0dp"
@@ -25,6 +27,7 @@
         android:text="@string/widget_ask"
         android:textColor="#FFEEF0F6"
         android:textSize="18sp" />
+    <!-- Microphone button: starts talk mode. contentDescription is what screen readers say. -->
     <ImageView
         android:id="@+id/widget_talk"
         android:layout_width="48dp"
@@ -33,6 +36,7 @@
         android:contentDescription="@string/sc_talk"
         android:padding="12dp"
         android:src="@drawable/ic_sc_talk" />
+    <!-- VryxCode button: opens the coding agent. -->
     <ImageView
         android:id="@+id/widget_code"
         android:layout_width="48dp"

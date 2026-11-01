@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!-- Release builds talk only over HTTPS (https://chat.emvryx.app). The debug build replaces this file (src/debug) so it can reach a test server on the PC. -->
+<!-- cleartextTrafficPermitted="false" means plain http:// is refused for every address; only encrypted https:// works. -->
 <network-security-config>
     <base-config cleartextTrafficPermitted="false" />
 </network-security-config>

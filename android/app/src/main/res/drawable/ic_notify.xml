@@ -1,16 +1,20 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!-- The Emvryx mark in one colour for the status bar (Android tints it): web/icon.svg's 64 x 64 drawing scaled to 24dp -->
+<!-- Android shows notification icons as a single colour and only uses the shape (the alpha), so everything here is plain white. It is
+     also reused as the small logo inside the home-screen widget (layout/widget_ask.xml). -->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
     android:width="24dp"
     android:height="24dp"
     android:viewportWidth="64"
     android:viewportHeight="64">
+    <!-- The letter E (three strokes plus the middle bar) as thick round-ended lines. -->
     <path
         android:pathData="M15,15 H42 M15,49 H42 M15,15 V49 M15,32 H34"
         android:strokeColor="#FFFFFFFF"
         android:strokeWidth="8"
         android:strokeLineCap="round"
         android:strokeLineJoin="round" />
+    <!-- The dot, drawn as a filled circle made of two arcs. -->
     <path
         android:pathData="M49,25.5 a6.5,6.5 0 1,1 0,13 a6.5,6.5 0 1,1 0,-13 z"
         android:fillColor="#FFFFFFFF" />

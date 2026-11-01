@@ -1,4 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!-- A plain dark round (oval) background behind the two small buttons (talk and VryxCode) on the home-screen widget. -->
 <shape xmlns:android="http://schemas.android.com/apk/res/android" android:shape="oval">
     <solid android:color="#FF1B1E2C" />
 </shape>

@@ -1,16 +1,22 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!-- The app's ID card for Android: lists what the app is allowed to do (permissions), its screens (activities), background jobs (services),
+     and which other apps may start it. Android reads this file before running any code. -->
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <!-- Basic network access: talk to the Emvryx server, and check whether the phone is online -->
 
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
     <!-- Notifications (flag phone_alerts): a VryxCode session done, needing you or stopped, and a chat answer ready while the app is away -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <!-- A foreground service is a background job that shows a notification so Android does not stop it; "dataSync" is its type: moving data -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
     <!-- Talk (flag chat_live_voice): the phone's own speech typing hears you; asked for only when Talk is first opened -->
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
     <!-- Set a timer or an alarm by voice (android_assistant): the phone's clock app does it -->
     <uses-permission android:name="com.android.alarm.permission.SET_ALARM" />
+    <!-- Since Android 11 an app can only see other apps it declares here; these let Emvryx find launchers, the camera, and speech/voice engines -->
     <queries>
         <!-- Open an app by its name (android_assistant) -->
         <intent><action android:name="android.intent.action.MAIN" /><category android:name="android.intent.category.LAUNCHER" /></intent>
@@ -19,6 +25,7 @@
         <intent><action android:name="android.intent.action.TTS_SERVICE" /></intent>
     </queries>
 
+    <!-- allowBackup=false: the saved login must not be copied into cloud backups. networkSecurityConfig: the debug build adds a file that allows plain http. -->
     <application
         android:name=".EmvryxApp"
         android:allowBackup="false"
@@ -28,11 +35,14 @@
         android:networkSecurityConfig="@xml/network_security_config"
         android:supportsRtl="true"
         android:theme="@style/Theme.Emvryx">
+        <!-- The one and only screen. singleTask: if it is already open, reuse it instead of stacking a second copy. adjustResize: shrink the
+             layout when the keyboard opens so the text box stays visible. -->
         <activity
             android:name=".MainActivity"
             android:exported="true"
             android:launchMode="singleTask"
             android:windowSoftInputMode="adjustResize">
+            <!-- The normal app icon in the launcher -->
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />

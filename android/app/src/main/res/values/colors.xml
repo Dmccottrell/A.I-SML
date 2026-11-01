@@ -1,5 +1,8 @@
+<!-- The few colours the Android resources (icon, window) need. The app screens take their colours from ui/theme/Theme.kt. -->
 <resources>
+    <!-- Page background: near black. -->
     <color name="bg">#07080D</color>
+    <!-- Main text colour: soft white. -->
     <color name="text">#EEF0F6</color>
     <!-- the Emvryx amber, as the app and website use before a model is picked (ui/theme/Theme.kt Palettes.brand) -->
     <color name="accent">#F5A524</color>
