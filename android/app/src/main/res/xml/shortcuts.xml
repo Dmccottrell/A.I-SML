@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!-- android_quick_launch: long-press the Emvryx icon (MainActivity reads emvryx.shortcut; with the switch off the app just opens) -->
-<!-- Each shortcut below is one entry in the menu. It starts MainActivity (the app's only screen host) with an extra value
+<!-- Each shortcut below is one entry in the menu. It starts MainActivity with an extra value
      called emvryx.shortcut ("new", "talk", "code", "local") that tells the app where to go. Labels come from strings.xml, icons from drawable/. -->
 <shortcuts xmlns:android="http://schemas.android.com/apk/res/android">
     <shortcut android:shortcutId="new" android:enabled="true" android:icon="@drawable/ic_sc_chat"

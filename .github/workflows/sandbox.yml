@@ -1,28 +1,48 @@
 # Builds the VryxCode sandbox image and proves every language in it builds and runs, sealed the way VryxCode runs commands, and that a Flask
 # app started with start_app answers through the Preview (tools/sandbox_smoke.py). Only when the image or the sandbox code changes: it is big.
+# How to read this file: a GitHub Actions workflow (GitHub runs the jobs below on its own computers when a trigger happens). YAML uses indentation
+# to show what belongs to what. The "sandbox" is the sealed Docker container VryxCode runs the user's code in; this checks it still works.
+# The label shown for this workflow in the Actions tab.
 name: sandbox
 
+# The events that start this workflow.
 on:
+  # Only for pull requests that change the sandbox image (docker/), the sandbox code, the smoke-test script or this file. Other changes skip it
+  # because building the image is slow and large.
   pull_request:
     paths: ["docker/**", "coding/code_sandbox.py", "coding/code_servers.py", "tools/sandbox_smoke.py", ".github/workflows/sandbox.yml"]
+  # Also lets a person start it by hand from the Actions tab.
   workflow_dispatch:
 
+# One run per pull request at a time: a newer push cancels the older, still-running one. The group name uses the pull request number,
+# or the branch name when there is no pull request.
 concurrency:
   group: sandbox-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 
+# A job is a group of steps run on one fresh machine.
 jobs:
+  # The only job: build the sandbox image, then run the smoke test (a quick check that the basics work) against it.
   image:
+    # A Linux machine from GitHub (Docker is already installed on it).
     runs-on: ubuntu-latest
+    # Give up on the whole job after an hour so a hang cannot run forever.
     timeout-minutes: 60
+    # Steps run in order; a failed step stops the rest.
     steps:
+      # Download this repository's code onto the machine.
       - uses: actions/checkout@v4
+      # Install Python 3.11, which the smoke-test script (tools/sandbox_smoke.py) needs.
       - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
+      # Build the Docker image from the recipe in docker/code-sandbox and tag it emvryx/code-sandbox:1 (the name and version the sandbox code looks for).
+      # The step is given its own, shorter 40-minute limit because this is the slow part.
       - name: Build the sandbox image
         timeout-minutes: 40
         run: docker build -t emvryx/code-sandbox:1 docker/code-sandbox
+      # Run the smoke test: for each supported language it compiles and runs a small program inside the image, locked down the same way VryxCode locks
+      # it down for real, and it starts a small Flask web app to check the Preview answers. The script exits with an error if anything fails.
       - name: Every language builds and runs, sealed
         timeout-minutes: 15
         run: python tools/sandbox_smoke.py

@@ -1,3 +1,6 @@
+// All of the phone's notifications (the messages in the top bar) in one place: building them, the channels they belong to, and what they say.
+// A "notification channel" is a category the person can switch on or off in the phone's settings; Android 8+ requires every notification to
+// belong to one. Used by WatchService (VryxCode sessions), DownloadService (offline model) and the chat code (answer ready).
 package app.emvryx.android
 
 import android.Manifest
@@ -16,20 +19,31 @@ import app.emvryx.android.data.CodeSessionRow
 /**
  * The phone's own notifications (flag phone_alerts): a VryxCode session finished, needs you or stopped, the live "working on it" one while it runs,
  * and a chat answer ready while the app is away. Tapping one opens that session or chat (MainActivity reads [EXTRA_SESSION] / [EXTRA_CHAT]).
+ * An `object` in Kotlin is a single shared instance (no need to create it), so callers just write Alerts.chat(...).
  */
 object Alerts {
+    // Channel ids: short names that tie a notification to its channel
+
     const val CODE = "vryxcode"            // channels, each switchable in the phone's settings
     const val WORKING = "vryxcode_working"
     const val CHAT = "chat"
     const val DOWNLOADS = "downloads"
+    // Keys for the small labelled values ("extras") a tapped notification carries into MainActivity, so it knows which session or chat to open
     const val EXTRA_SESSION = "emvryx.session"
     const val EXTRA_CHAT = "emvryx.chat"
+    // The notification number of the live "VryxCode is working" one (the same number each time so it updates instead of piling up)
     const val ONGOING_ID = 1
 
     /** True while the app is on screen (MainActivity onStart/onStop): then the app itself shows what happened, no notification */
+    // @Volatile: written on the main thread and read from background threads, so every thread must always see the latest value
     @Volatile var visible = false
 
+    /**
+     * Creates the four notification channels. Safe to call again and again: Android ignores a channel that already exists.
+     * `ctx` is the Context (a handle to the app and the phone's services). Importance sets how loud: HIGH pops up, LOW is silent.
+     */
     fun channels(ctx: Context) {
+        // Ask Android for its notification manager; if the phone gives none, there is nothing to do
         val m = ctx.getSystemService(NotificationManager::class.java) ?: return
         m.createNotificationChannels(listOf(
             NotificationChannel(CODE, "VryxCode", NotificationManager.IMPORTANCE_HIGH).apply { description = "A session finished, needs you, or stopped" },
@@ -39,22 +53,41 @@ object Alerts {
         ))
     }
 
-    /** May the app show notifications? (Android 13 and later ask the person first) */
+    /**
+     * May the app show notifications? (Android 13 and later ask the person first.)
+     * Needs both: the permission (only asked on Android 13 = API 33 and later; older phones allow it by default) and the person not having
+     * switched the app's notifications off in settings.
+     */
     fun allowed(ctx: Context): Boolean =
         (Build.VERSION.SDK_INT < 33 || ContextCompat.checkSelfPermission(ctx, Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED) &&
             NotificationManagerCompat.from(ctx).areNotificationsEnabled()
 
+    /**
+     * Builds the "what happens when the notification is tapped" action: open MainActivity with one extra value (key = value, e.g. which session).
+     * A PendingIntent is a ready-made action that Android carries out later on the app's behalf. `code` makes each one distinct, otherwise two
+     * notifications would share one action. SINGLE_TOP reuses the open screen. IMMUTABLE is required for safety on newer Android;
+     * UPDATE_CURRENT swaps in the new extra if the same action already exists.
+     */
     fun open(ctx: Context, key: String, value: String, code: Int): PendingIntent =
         PendingIntent.getActivity(ctx, code, Intent(ctx, MainActivity::class.java).putExtra(key, value).addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP),
             PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
 
-    /** A session changed from [was] to its state now: what to say, or null for nothing (stopped by the person, or still going) */
+    /**
+     * A session changed from [was] to its state now: what to say, or null for nothing (stopped by the person, or still going).
+     * Returns a pair (notification title, notification text). Only moves that matter to the person give news: it needs an answer, it finished,
+     * or it failed. Moving between busy states (queued to working) is silent, so the phone does not buzz for every step.
+     */
     fun sessionNews(s: CodeSessionRow, was: String): Pair<String, String>? {
+        // Same state as before: nothing happened
         if (was == s.state) return null
+        // States that mean "the agent is still going"
         val busy = setOf("starting", "working", "queued")
+        // Sessions may have no name yet, so fall back to a generic one
         val title = s.title.ifBlank { "Your session" }
+        // A short summary line such as "+12 −3 · 2 files changed": lines added/removed, then how many files, left out when zero. "·" joins the parts.
         val lines = listOfNotNull(if (s.added > 0 || s.removed > 0) "+${s.added} −${s.removed}" else null,
                                   if (s.files > 0) "${s.files} " + (if (s.files == 1) "file" else "files") + " changed" else null).joinToString(" · ")
+        // Pick the message by the new state ("to" builds a Pair). take(160) cuts long text so it fits in a notification.
         return when {
             s.state == "asking" -> "Needs you: $title" to "VryxCode is waiting for your answer before it carries on."
             s.state == "done" && (was in busy || was == "asking") -> "Finished: $title" to listOf(lines, s.snippet.take(160)).filter { it.isNotBlank() }.joinToString(" · ").ifEmpty { "Ready to look at." }
@@ -63,47 +96,65 @@ object Alerts {
         }
     }
 
+    /** Shows one notification about a VryxCode session [s] with the given title and text; tapping it opens that session */
     fun session(ctx: Context, s: CodeSessionRow, title: String, text: String) {
+        // No permission: stay quiet
         if (!allowed(ctx)) return
+        // Builder pattern: each .setX() adds one detail. The colour is a purple brand colour (0xAARRGGBB, the leading FF = fully solid).
         val n = NotificationCompat.Builder(ctx, CODE).setSmallIcon(R.drawable.ic_notify).setColor(0xFF8B5CF6.toInt())
             .setContentTitle(title).setContentText(text).setStyle(NotificationCompat.BigTextStyle().bigText(text)).setSubText(s.project)
             .setCategory(NotificationCompat.CATEGORY_STATUS).setAutoCancel(true).setContentIntent(open(ctx, EXTRA_SESSION, s.id, s.id.hashCode()))
             .build()
+        // notify(tag, number, notification): the tag + number pair identify it, so a newer notice for the same session replaces the older one.
+        // runCatching swallows any error (for example the permission being taken away just now): a failed notification must never crash the app.
         runCatching { NotificationManagerCompat.from(ctx).notify("vx", s.id.hashCode(), n) }
     }
 
+    /** Shows "your chat answer is ready" with a one-line preview of the answer; tapping it opens that chat (chatId 0 means a chat with no saved id) */
     fun chat(ctx: Context, chatId: Long, title: String, text: String) {
         if (!allowed(ctx)) return
+        // Preview: take the first line that has words, dropping Markdown leading marks (# headings, * and - bullets, > quotes), at most 200 characters
         val body = text.lineSequence().map { it.trim().trimStart('#', '*', '-', '>', ' ') }.firstOrNull { it.isNotBlank() }.orEmpty().take(200)
         val n = NotificationCompat.Builder(ctx, CHAT).setSmallIcon(R.drawable.ic_notify).setColor(0xFFF59E0B.toInt())
             .setContentTitle(title.ifBlank { "Your answer is ready" }).setContentText(body).setStyle(NotificationCompat.BigTextStyle().bigText(body))
             .setCategory(NotificationCompat.CATEGORY_MESSAGE).setAutoCancel(true).setContentIntent(open(ctx, EXTRA_CHAT, chatId.toString(), chatId.toInt()))
+            // Add the inline "Reply" button only for a real chat and only when the android_reply_inline switch is on
             .apply { if (chatId != 0L && app.emvryx.android.local.NativeFlags.on(ctx, "android_reply_inline")) addAction(reply(ctx, chatId)) }
             .build()
+        // Same as above: replaces an older notice for this chat and never throws
         runCatching { NotificationManagerCompat.from(ctx).notify("chat", chatId.toInt(), n) }
     }
 
     /** android_reply_inline: Reply, typed in the notification itself (assist/Background.kt ReplyReceiver) */
     private fun reply(ctx: Context, chatId: Long): NotificationCompat.Action {
+        // RemoteInput is the little text box inside the notification; the typed words come back under the key ReplyReceiver.KEY
         val input = androidx.core.app.RemoteInput.Builder(app.emvryx.android.assist.ReplyReceiver.KEY).setLabel("Reply to Emvryx").build()
+        // Sending the reply is a "broadcast" (a message Android delivers to ReplyReceiver, even if the app is closed)
         val pi = PendingIntent.getBroadcast(ctx, chatId.toInt(), Intent(ctx, app.emvryx.android.assist.ReplyReceiver::class.java).putExtra(EXTRA_CHAT, chatId),
             PendingIntent.FLAG_MUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)          // mutable: Android puts the typed words in it
         return NotificationCompat.Action.Builder(R.drawable.ic_notify, "Reply", pi).addRemoteInput(input).setAllowGeneratedReplies(false)
             .setSemanticAction(NotificationCompat.Action.SEMANTIC_ACTION_REPLY).build()
     }
 
-    /** The live one while sessions work: their names and a moving bar */
+    /**
+     * The live notification shown while sessions work: their names and a moving bar. It is returned (not shown here) because WatchService
+     * needs it as the foreground-service notification. `live` is the list of sessions still working or waiting for an answer.
+     */
     fun ongoing(ctx: Context, live: List<CodeSessionRow>): android.app.Notification {
+        // The text line lists session names; the title changes with how many are working or whether one is waiting for the person
         val text = if (live.isEmpty()) "Checking on your sessions" else live.joinToString(" · ") { it.title.ifBlank { "Session" } }
         val title = when {
             live.any { it.state == "asking" } -> "VryxCode needs you"
             live.size > 1 -> "VryxCode is working on ${live.size} sessions"
             else -> "VryxCode is working"
         }
+        // Tapping opens the first live session (none if the list is empty)
         val tap = live.firstOrNull()?.let { open(ctx, EXTRA_SESSION, it.id, ONGOING_ID) }
         return NotificationCompat.Builder(ctx, WORKING).setSmallIcon(R.drawable.ic_notify).setColor(0xFF8B5CF6.toInt())
             .setContentTitle(title).setContentText(text).setOngoing(true).setOnlyAlertOnce(true).setSilent(true)
+            // Progress bar: the last value true means "indeterminate" (a moving bar with no percent); it stops moving when only waiting for an answer
             .setProgress(0, 0, live.any { it.state != "asking" }).setCategory(NotificationCompat.CATEGORY_PROGRESS)
+            // Show right away instead of after Android's short delay for foreground services
             .setForegroundServiceBehavior(NotificationCompat.FOREGROUND_SERVICE_IMMEDIATE)
             .apply { if (tap != null) setContentIntent(tap) }
             .build()
