@@ -5,8 +5,7 @@ import android.net.ConnectivityManager
 import android.net.NetworkCapabilities
 
 /**
- * android_auto_offline: a phone with the room gets what it needs for the PC-off answers by itself. Only on Wi-Fi (or any connection that is not
- * metered), only a model the phone has the memory and the free space for (with [SPARE] to spare), the smallest that fits unless a model was picked
+ * android_auto_offline: a phone with the room gets what it needs for the PC-off answers by itself. On Wi-Fi or mobile data (any working connection), only a model the phone has the memory and the free space for (with [SPARE] to spare), the smallest that fits unless a model was picked
  * in Settings. The picture model is not fetched on its own: it is big and few people need it. The first time the person is asked once
  * (admins are not); "No thanks", Stop and Remove are remembered, so it never starts again against their wish.
  */
@@ -22,8 +21,8 @@ object AutoOffline {
     }
 
     /** [needs]: no model on the phone yet (or the last try failed). [answer]: what the person said before ("yes", "no" or nothing) */
-    fun step(on: Boolean, unmetered: Boolean, needs: Boolean, answer: String?, admin: Boolean): Step = when {
-        !on || !unmetered || !needs || answer == "no" -> Step.Nothing
+    fun step(on: Boolean, connected: Boolean, needs: Boolean, answer: String?, admin: Boolean): Step = when {
+        !on || !connected || !needs || answer == "no" -> Step.Nothing
         admin || answer == "yes" -> Step.Go
         else -> Step.Ask
     }
@@ -34,10 +33,10 @@ object AutoOffline {
 
     fun setAnswer(ctx: Context, yes: Boolean) = prefs(ctx).edit().putString("answer", if (yes) "yes" else "no").apply()
 
-    /** Wi-Fi or any other connection the phone does not count as metered, with the internet working */
-    fun unmetered(ctx: Context): Boolean = runCatching {
+    /** Any connection with the internet working: Wi-Fi or mobile data */
+    fun connected(ctx: Context): Boolean = runCatching {
         val cm = ctx.getSystemService(ConnectivityManager::class.java)
         val c = cm.getNetworkCapabilities(cm.activeNetwork)
-        c != null && c.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET) && c.hasCapability(NetworkCapabilities.NET_CAPABILITY_NOT_METERED)
+        c != null && c.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)
     }.getOrDefault(false)
 }

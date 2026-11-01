@@ -31,12 +31,13 @@ class AutoOfflineTest {
     }
 
     @Test
-    fun itAsksOnceStartsOnlyOnWifiAndNeverAgainstANo() {
+    fun itAsksOnceNeedsAConnectionAndNeverGoesAgainstANo() {
         assertEquals(Step.Ask, AutoOffline.step(true, true, true, null, admin = false))
         assertEquals(Step.Go, AutoOffline.step(true, true, true, null, admin = true))            // the owner's own accounts are not asked
         assertEquals(Step.Go, AutoOffline.step(true, true, true, "yes", admin = false))
         assertEquals(Step.Nothing, AutoOffline.step(true, true, true, "no", admin = true))        // Stop, Remove and No thanks are final
-        assertEquals(Step.Nothing, AutoOffline.step(true, false, true, "yes", admin = true))      // mobile data: never
+        assertEquals(Step.Go, AutoOffline.step(true, true, true, "yes", admin = true))            // Wi-Fi or mobile data: both count as a connection
+        assertEquals(Step.Nothing, AutoOffline.step(true, false, true, "yes", admin = true))      // no connection: nothing to download with
         assertEquals(Step.Nothing, AutoOffline.step(true, true, false, null, admin = true))       // already on the phone
         assertEquals(Step.Nothing, AutoOffline.step(false, true, true, "yes", admin = true))      // switch off
     }

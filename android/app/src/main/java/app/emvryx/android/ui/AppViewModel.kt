@@ -238,7 +238,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         val phone = app.phone
         val needs = phone.status == PhoneModel.Status.None || phone.status is PhoneModel.Status.Failed
         val step = AutoOffline.step(state?.on("android_auto_offline") == true && state?.on("android_offline_model") == true,
-            AutoOffline.unmetered(app), needs, AutoOffline.answer(app), isAdmin)
+            AutoOffline.connected(app), needs, AutoOffline.answer(app), isAdmin)
         if (step == AutoOffline.Step.Nothing) return
         phone.loadChoices()
         val c = AutoOffline.pick(phone.choices, phone.wanted, phone.freeSpace()) { phone.enoughRam(it) } ?: return

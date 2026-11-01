@@ -325,14 +325,14 @@ private fun UpdateBanner(vm: AppViewModel) {
     }
 }
 
-/** android_auto_offline: asked once before the model comes by itself (on Wi-Fi only) */
+/** android_auto_offline: asked once before the model comes by itself (on Wi-Fi or mobile data) */
 @Composable
 private fun OfflineBanner(vm: AppViewModel, model: app.emvryx.android.local.PhoneChoice) {
     val p = LocalPalette.current
     Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 6.dp).clip(RoundedCornerShape(14.dp)).background(Emvryx.surface)
         .border(1.dp, p.accent.copy(alpha = 0.5f), RoundedCornerShape(14.dp)).padding(start = 14.dp, end = 6.dp, top = 6.dp, bottom = 6.dp),
         verticalAlignment = Alignment.CenterVertically) {
-        Text("Get Emvryx ready for offline? About ${model.sizeText}, on Wi-Fi only. You can remove it any time.", Modifier.weight(1f), fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+        Text("Get Emvryx ready for offline? About ${model.sizeText}, it may use mobile data. You can remove it any time.", Modifier.weight(1f), fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
         TextButton(onClick = { vm.answerOffline(false) }) { Text("No thanks", color = Emvryx.muted) }
         TextButton(onClick = { vm.answerOffline(true) }) { Text("Get it", color = p.accentText, fontWeight = FontWeight.SemiBold) }
     }
