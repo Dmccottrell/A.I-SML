@@ -26,7 +26,10 @@ class Voice(private val ctx: Context, private val offline: Boolean = false) {
     private val tts = TextToSpeech(ctx) { ttsReady = it == TextToSpeech.SUCCESS }
 
     /** Listen once: [partial] while the person speaks, [done] with what was said ("" for nothing), [failed] with a plain reason */
-    fun listen(partial: (String) -> Unit, done: (String) -> Unit, failed: (String) -> Unit) {
+    fun listen(partial: (String) -> Unit, done: (String) -> Unit, failed: (String) -> Unit) =
+        start(offline || !hasInternet(ctx), partial, done, failed)          // no internet: ask for the phone's offline speech first
+
+    private fun start(preferOffline: Boolean, partial: (String) -> Unit, done: (String) -> Unit, failed: (String) -> Unit) {
         main.post {
             runCatching { rec?.destroy() }
             val r = Voice.recognizer(ctx)?.let { SpeechRecognizer.createSpeechRecognizer(ctx, it) } ?: SpeechRecognizer.createSpeechRecognizer(ctx)
@@ -34,7 +37,7 @@ class Voice(private val ctx: Context, private val offline: Boolean = false) {
             r.setRecognitionListener(object : RecognitionListener {
                 override fun onResults(results: Bundle?) = done(results?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)?.firstOrNull().orEmpty().trim())
                 override fun onPartialResults(p: Bundle?) { p?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)?.firstOrNull()?.let(partial) }
-                override fun onError(error: Int) = when (error) {
+                override fun onError(error: Int) = if (retryOffline(error, preferOffline)) start(true, partial, done, failed) else when (error) {
                     SpeechRecognizer.ERROR_NO_MATCH, SpeechRecognizer.ERROR_SPEECH_TIMEOUT -> done("")
                     SpeechRecognizer.ERROR_INSUFFICIENT_PERMISSIONS -> failed("Emvryx needs the microphone. Allow it in the phone's Settings > Apps > Emvryx > Permissions.")
                     SpeechRecognizer.ERROR_NETWORK, SpeechRecognizer.ERROR_NETWORK_TIMEOUT, SpeechRecognizer.ERROR_SERVER ->
@@ -51,7 +54,7 @@ class Voice(private val ctx: Context, private val offline: Boolean = false) {
             r.startListening(Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
                 putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
                 putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, true)
-                if (offline) putExtra(RecognizerIntent.EXTRA_PREFER_OFFLINE, true)
+                if (preferOffline) putExtra(RecognizerIntent.EXTRA_PREFER_OFFLINE, true)
             })
         }
     }
@@ -80,6 +83,16 @@ class Voice(private val ctx: Context, private val offline: Boolean = false) {
     }
 
     companion object {
+        /** The online speech failed on the connection (or the server): try once more asking for the phone's offline speech */
+        fun retryOffline(error: Int, alreadyOffline: Boolean): Boolean = !alreadyOffline &&
+            (error == SpeechRecognizer.ERROR_NETWORK || error == SpeechRecognizer.ERROR_NETWORK_TIMEOUT || error == SpeechRecognizer.ERROR_SERVER)
+
+        @Suppress("DEPRECATION")
+        fun hasInternet(ctx: Context): Boolean = runCatching {
+            val cm = ctx.getSystemService(android.net.ConnectivityManager::class.java)
+            cm.getNetworkCapabilities(cm.activeNetwork)?.hasCapability(android.net.NetworkCapabilities.NET_CAPABILITY_INTERNET) == true
+        }.getOrDefault(true)
+
         /** Does the phone have speech typing at all? */
         fun canListen(ctx: Context): Boolean = recognizer(ctx) != null || SpeechRecognizer.isRecognitionAvailable(ctx)
 

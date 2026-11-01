@@ -40,6 +40,14 @@ model you last used; with the PC off the model on the phone answers. **Open Emvr
 - `ui/CameraScan.kt`: the camera and the scanner.
 - Tests: `VoiceCommandsTest`, `AssistantPartsTest`, `NativeExtrasTest` (on the computer) and `NativeExtrasDeviceTest` (on the CI phone).
 
+## Offline
+
+- Works with no signal: phone commands (open an app, timer, alarm, torch), reading answers out loud (if the phone's voice is installed), and
+  questions answered by the model on the phone (needs it downloaded and `android_offline_model` on).
+- Voice to words uses the phone's own speech typing. With no internet the bar asks for the offline speech first, and if the online one fails on the
+  connection it tries the offline one once. That needs the offline speech pack (Settings > Google > Voice > Offline speech); without it the bar says so.
+- Needs internet: navigate, search, YouTube (those apps), Ask about this screen (the picture goes to the PC).
+
 ## Limits
 
 - The bar cannot read other apps' screens unless **Use screenshot** is on in the assistant settings. The picture goes to the PC to be looked at

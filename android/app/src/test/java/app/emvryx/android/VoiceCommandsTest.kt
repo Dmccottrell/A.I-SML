@@ -86,4 +86,13 @@ class AssistantPartsTest {
         assertEquals(false, a.opensScreen(app.emvryx.android.local.Command.Torch(true)))
         assertEquals(false, a.opensScreen(app.emvryx.android.local.Command.Ask("why is the sky blue")))
     }
+
+    @Test
+    fun aFailedConnectionTriesTheOfflineSpeechOnceBeforeGivingUp() {
+        val v = app.emvryx.android.assist.Voice
+        assertEquals(true, v.retryOffline(android.speech.SpeechRecognizer.ERROR_NETWORK, false))
+        assertEquals(true, v.retryOffline(android.speech.SpeechRecognizer.ERROR_SERVER, false))
+        assertEquals(false, v.retryOffline(android.speech.SpeechRecognizer.ERROR_NETWORK, true))      // already offline: say so, do not loop
+        assertEquals(false, v.retryOffline(android.speech.SpeechRecognizer.ERROR_NO_MATCH, false))
+    }
 }
