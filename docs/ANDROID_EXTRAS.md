@@ -57,8 +57,9 @@ model you last used; with the PC off the model on the phone answers. **Open Emvr
 - "Hey Emvryx" (a wake word, hands-free) is **not** done: it needs the microphone on all the time and Android only lets the phone's maker's
   assistant do that well. Holding the button is the way in.
 - The scanner needs Google Play services (almost every Android phone has it).
-- Auto offline downloads while the app is open (the download carries on where it stopped the next time it opens); there is no download
-  notification yet. Google's speech pack can be asked for on Android 13 and later; older phones get the Settings page instead.
+- Downloads keep going with the app closed (`DownloadService`, a data-sync foreground service): a progress notification with Stop, and a last
+  one saying ready or why it stopped. If Android still ends the app, the download carries on where it was (a `.part` file) the next time it
+  starts. The models stay 4-bit (Q4) for now; a 3-bit file or a smaller phone model is for later. Google's speech pack can be asked for on Android 13 and later; older phones get the Settings page instead.
 - Background sync runs when Android allows it (battery saver can delay it).
 
 ## Not done: a faster model on the phone's graphics chip (GPU)
