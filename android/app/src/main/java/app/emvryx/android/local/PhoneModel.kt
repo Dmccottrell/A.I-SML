@@ -295,6 +295,8 @@ class PhoneModel(private val context: Context, private val api: ApiClient) {
 
     /** The chat the phone's chat screen opens next, and a question to answer there at once (the PC dropped while it was being sent) */
     var openChat by mutableStateOf<Long?>(null)
+    /** Text to put in the phone chat's message box (selected in another app with the PC off: android_text_menu) */
+    var draft by mutableStateOf<String?>(null)
     var ask by mutableStateOf<String?>(null)
 
     /** Carries a chat on here: the PC's chat [serverId] with the [turns] it has (or a new chat), then [question] is answered on the phone */

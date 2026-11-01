@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- android_assistant: Emvryx as the phone's assistant (assist/Assistant.kt). The speech typing service only passes the words on (EmvryxRecognition). -->
+<voice-interaction-service xmlns:android="http://schemas.android.com/apk/res/android"
+    android:sessionService="app.emvryx.android.assist.EmvryxSessionService"
+    android:recognitionService="app.emvryx.android.assist.EmvryxRecognition"
+    android:supportsAssist="true"
+    android:supportsLaunchVoiceAssistFromKeyguard="false" />

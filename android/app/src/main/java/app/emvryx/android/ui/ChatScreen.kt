@@ -144,6 +144,12 @@ fun ChatScreen(vm: AppViewModel) {
     val pickFile = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { u ->
         u?.let { readPicked(context, it)?.let { (n, b) -> vm.attach(n, b) } }
     }
+    val camera = rememberCamera { u -> readPicked(context, u)?.let { (_, b) -> vm.attach("photo.jpg", b) } }
+    val scanner = rememberScanner({ vm.toast = it }) { pages, pdf ->
+        val doc = pdf?.let { readPicked(context, it) }
+        if (doc != null) vm.attach("scan.pdf", doc.second)                      // the whole scan as one PDF: Emvryx reads every page
+        else pages.take(3).forEachIndexed { i, u -> readPicked(context, u)?.let { (_, b) -> vm.attach("scan-${i + 1}.jpg", b) } }
+    }
     BackHandler(drawer.isOpen) { scope.launch { drawer.close() } }
     BackHandler(menu != null) { menu = null }
     LaunchedEffect(Unit) { vm.checkSignInOptions() }
@@ -179,6 +185,8 @@ fun ChatScreen(vm: AppViewModel) {
                             Menu.Attach -> AttachMenu(
                                 onPicture = { pickPicture.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) },
                                 onFile = { pickFile.launch(arrayOf("*/*")) },
+                                onCamera = if (vm.flag("android_camera_scan")) camera else null,
+                                onScan = if (vm.flag("android_camera_scan")) scanner else null,
                             ) { menu = null }
                             null -> Unit
                         }
@@ -218,8 +226,22 @@ fun ChatScreen(vm: AppViewModel) {
 
 /** + by the message box: a picture from the phone, a photo, or a file (web/js/documents.js) */
 @Composable
-private fun AttachMenu(onPicture: () -> Unit, onFile: () -> Unit, close: () -> Unit) {
+private fun AttachMenu(onPicture: () -> Unit, onFile: () -> Unit, onCamera: (() -> Unit)? = null, onScan: (() -> Unit)? = null, close: () -> Unit) {
     MenuHead("ADD TO YOUR MESSAGE")
+    if (onCamera != null) Opt(selected = false, onClick = { onCamera(); close() }) {
+        Text("📷", fontSize = 20.sp)
+        Column(Modifier.weight(1f)) {
+            Text("Take a photo", fontWeight = FontWeight.Bold, fontSize = 16.sp)
+            Text("With the camera, straight into your message.", color = Emvryx.muted, fontSize = 14.sp)
+        }
+    }
+    if (onScan != null) Opt(selected = false, onClick = { onScan(); close() }) {
+        Text("🧾", fontSize = 20.sp)
+        Column(Modifier.weight(1f)) {
+            Text("Scan a document", fontWeight = FontWeight.Bold, fontSize = 16.sp)
+            Text("A letter, a receipt, a form: the page is found, straightened and cropped.", color = Emvryx.muted, fontSize = 14.sp)
+        }
+    }
     Opt(selected = false, onClick = { onPicture(); close() }) {
         Text("🖼", fontSize = 20.sp)
         Column(Modifier.weight(1f)) {

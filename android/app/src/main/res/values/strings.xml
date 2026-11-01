@@ -1,3 +1,15 @@
 <resources>
     <string name="app_name">Emvryx</string>
+    <!-- android_quick_launch: the icon's shortcuts and the widget -->
+    <string name="sc_new">New chat</string>
+    <string name="sc_talk">Talk</string>
+    <string name="sc_code">VryxCode</string>
+    <string name="sc_local">On this phone</string>
+    <string name="sc_local_long">Chats on this phone</string>
+    <string name="widget_ask">Ask Emvryx</string>
+    <string name="widget_desc">Ask Emvryx, talk, or open VryxCode</string>
+    <!-- android_text_menu: in the menu of selected text in any app -->
+    <string name="ask_emvryx">Ask Emvryx</string>
+    <!-- android_assistant: the assistant bar -->
+    <string name="assistant_name">Emvryx</string>
 </resources>

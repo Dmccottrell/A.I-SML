@@ -59,6 +59,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import app.emvryx.android.EmvryxApp
 import app.emvryx.android.local.PhoneModel
+import app.emvryx.android.local.NativeFlags
+import app.emvryx.android.assist.Voice
 import app.emvryx.android.local.PictureText
 import app.emvryx.android.local.PhoneVision
 import app.emvryx.android.local.Vision
@@ -101,7 +103,7 @@ fun LocalChatScreen(vm: AppViewModel, onBack: () -> Unit) {
                         TabChip("Chats", tab == 0) { tab = 0 }
                         TabChip("Code drafts", tab == 1) { tab = 1 }
                     }
-                    if (tab == 0) LocalChats(phone) else DraftsPane(vm, phone)
+                    if (tab == 0) LocalChats(vm, phone) else DraftsPane(vm, phone)
                 }
             } else Column(Modifier.padding(16.dp)) { PhoneModelCard(phone, vm.online) }
         }
@@ -301,7 +303,7 @@ private fun pictureBytes(context: android.content.Context, uri: android.net.Uri)
 }.getOrNull()
 
 @Composable
-private fun LocalChats(phone: PhoneModel) {
+private fun LocalChats(vm: AppViewModel, phone: PhoneModel) {
     val scope = rememberCoroutineScope()
     val vision = (LocalContext.current.applicationContext as EmvryxApp).vision
     var seeing by remember { mutableStateOf<android.net.Uri?>(null) }   // a picture to look at with the picture model when the message goes
@@ -317,6 +319,13 @@ private fun LocalChats(phone: PhoneModel) {
     val list = rememberLazyListState()
     val turns = chat.turns
     LaunchedEffect(turns.size, live.length / 80) { if (turns.isNotEmpty()) list.scrollToItem(turns.size - 1) }
+    LaunchedEffect(phone.draft) { phone.draft?.let { text = it; phone.draft = null } }        // selected in another app (android_text_menu)
+    val ctx = LocalContext.current
+    val canTalk = remember { NativeFlags.on(ctx, "android_offline_talk") && Voice.canListen(ctx) }
+    if (vm.localTalking) {                                          // Talk with the PC off (android_offline_talk), or opened from Talk with it off
+        if (canTalk) { PhoneTalk(phone, chatId) { vm.localTalking = false }; return }
+        vm.localTalking = false
+    }
     LaunchedEffect(phone.ask) {                                      // the PC dropped while this was being sent: it is answered here
         val q = phone.ask ?: return@LaunchedEffect
         phone.openChat?.let { chatId = it }
@@ -341,6 +350,7 @@ private fun LocalChats(phone: PhoneModel) {
                         onClick = { menu = false; phone.deleteChat(chat.id); chatId = phone.chats.lastOrNull()?.id ?: phone.newChat().id })
                 }
             }
+            if (canTalk) TextButton(onClick = { if (!phone.writing) vm.localTalking = true }) { Text("🗣 Talk") }
             TextButton(onClick = { if (!phone.writing) chatId = phone.newChat().id }) { Text("New chat") }
         }
         LazyColumn(Modifier.weight(1f).fillMaxWidth().padding(horizontal = 14.dp), state = list, verticalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -357,9 +367,8 @@ private fun LocalChats(phone: PhoneModel) {
         val p = LocalPalette.current
         // a picture: its words are read here on the phone and go with the next message (the phone's model reads the words, it cannot see)
         val context = LocalContext.current
-        val pick = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri ->
-            if (uri == null) return@rememberLauncherForActivityResult
-            if (vision.usable) { seeing = uri; picture = null; error = null; return@rememberLauncherForActivityResult }
+        val picked: (android.net.Uri) -> Unit = picked@{ uri ->
+            if (vision.usable) { seeing = uri; picture = null; error = null; return@picked }
             reading = true
             scope.launch {
                 val got = PictureText.read(context, uri)
@@ -368,6 +377,10 @@ private fun LocalChats(phone: PhoneModel) {
                 else { picture = got; error = null }
             }
         }
+        val pick = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri -> uri?.let(picked) }
+        val cameraOn = remember { NativeFlags.on(context, "android_camera_scan") }      // android_camera_scan: a photo, or a scanned page, read the same way
+        val camera = rememberCamera(picked)
+        val scanner = rememberScanner({ error = it }) { pages, _ -> pages.firstOrNull()?.let(picked) }
         picture?.let { t ->
             Row(Modifier.padding(start = 14.dp, end = 14.dp, top = 6.dp).clip(RoundedCornerShape(999.dp)).background(Emvryx.surface2)
                 .padding(start = 12.dp, end = 4.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -387,6 +400,14 @@ private fun LocalChats(phone: PhoneModel) {
             Box(Modifier.size(36.dp).clip(CircleShape).clickable(enabled = !phone.writing && !reading) {
                 pick.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
             }, contentAlignment = Alignment.Center) { Text("+", fontSize = 22.sp, color = Emvryx.muted) }
+            if (cameraOn) {
+                Box(Modifier.size(36.dp).clip(CircleShape).clickable(enabled = !phone.writing && !reading) { camera() }, contentAlignment = Alignment.Center) {
+                    Text("📷", fontSize = 17.sp)
+                }
+                Box(Modifier.size(36.dp).clip(CircleShape).clickable(enabled = !phone.writing && !reading) { scanner() }, contentAlignment = Alignment.Center) {
+                    Text("🧾", fontSize = 17.sp)
+                }
+            }
             Box(Modifier.weight(1f).padding(start = 6.dp).heightIn(min = 24.dp, max = 140.dp)) {
                 if (text.isEmpty()) Text("Message the phone's model…", color = Emvryx.muted, style = MaterialTheme.typography.bodyLarge)
                 BasicTextField(text, { text = it }, Modifier.fillMaxWidth(), textStyle = MaterialTheme.typography.bodyLarge.copy(color = Emvryx.text),
@@ -460,4 +481,66 @@ private fun LocalBubble(mine: Boolean, text: String, streaming: Boolean) {
         }
     }
     Spacer(Modifier.height(2.dp))
+}
+
+/**
+ * android_offline_talk: Talk in the phone's own chats. You speak, the model on the phone answers out loud, then it listens again; the phone's own
+ * speech typing (offline where the phone has it) and voice, no PC. Everything said stays in this chat.
+ */
+@Composable
+private fun PhoneTalk(phone: PhoneModel, chatId: Long, onEnd: () -> Unit) {
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    val voice = remember { Voice(context, offline = true) }
+    var state by remember { mutableStateOf("Listening…") }
+    var heard by remember { mutableStateOf("") }
+    var phase by remember { mutableStateOf("listen") }               // listen, think, speak, stopped
+    var allowed by remember { mutableStateOf(androidx.core.content.ContextCompat.checkSelfPermission(context, android.Manifest.permission.RECORD_AUDIO) ==
+        android.content.pm.PackageManager.PERMISSION_GRANTED) }
+    var listen: () -> Unit = {}
+    val ask = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { ok ->
+        allowed = ok
+        if (ok) listen() else { state = "Emvryx needs the microphone to talk. Allow it in the phone's Settings > Apps > Emvryx."; phase = "stopped" }
+    }
+    fun end() {
+        phase = "stopped"
+        voice.quiet()
+        if (phone.writing) phone.stop()
+        onEnd()
+    }
+    listen = listen@{
+        if (phase == "stopped" || !allowed) return@listen
+        phase = "listen"; state = "Listening…"; heard = ""
+        voice.listen(partial = { heard = it }, failed = { why -> if (phase != "stopped") { state = why; phase = "paused" } }, done = done@{ said ->
+            if (phase == "stopped") return@done
+            if (said.isEmpty()) { listen(); return@done }
+            heard = said
+            phase = "think"; state = "Thinking on the phone…"
+            scope.launch {
+                val problem = phone.answer(chatId, said) { }
+                if (phase == "stopped") return@launch
+                val answer = phone.chats.firstOrNull { it.id == chatId }?.turns?.lastOrNull()?.takeIf { !it.mine }?.text
+                if (problem != null || answer.isNullOrBlank()) { state = problem ?: "No answer came."; phase = "paused"; return@launch }
+                phase = "speak"; state = "Speaking… (tap the circle to interrupt)"
+                voice.speak(answer) { listen() }
+            }
+        })
+    }
+    LaunchedEffect(Unit) { if (allowed) listen() else ask.launch(android.Manifest.permission.RECORD_AUDIO) }
+    androidx.compose.runtime.DisposableEffect(Unit) { onDispose { phase = "stopped"; voice.close() } }
+    BackHandler { end() }
+
+    val p = LocalPalette.current
+    Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+        Column(Modifier.padding(28.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(16.dp)) {
+            val ring = when (phase) { "listen" -> p.accent; "speak" -> p.accent.copy(alpha = 0.6f); else -> Emvryx.line }
+            Box(Modifier.size(150.dp).clip(CircleShape).background(p.accent.copy(alpha = if (phase == "think") 0.08f else 0.18f)).border(3.dp, ring, CircleShape)
+                .clickable { if (phase == "speak") { voice.quiet(); listen() } else if (phase == "paused") listen() })
+            Text(state, fontSize = 18.sp, fontWeight = FontWeight.SemiBold, textAlign = androidx.compose.ui.text.style.TextAlign.Center)
+            Text(heard, color = Emvryx.muted, fontSize = 16.sp, textAlign = androidx.compose.ui.text.style.TextAlign.Center)
+            Text(if (phase == "paused") "Tap the circle to try again." else "No PC needed: the model on this phone answers out loud. Pause when you are done speaking.",
+                color = Emvryx.muted, fontSize = 13.sp, textAlign = androidx.compose.ui.text.style.TextAlign.Center)
+            TextButton(onClick = { end() }) { Text("End") }
+        }
+    }
 }

@@ -288,6 +288,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
                 online = false
                 // android_offline_model: with the model on the phone, it goes straight to the phone's chats instead of "Emvryx is off"
                 screen = if (phoneReady) Screen.Local else Screen.Off(resting = false, server = url)
+                if (screen == Screen.Local) applyLaunch()
             } catch (e: ApiException) {
                 if (e.signedOut) session.forget()
                 screen = Screen.SignIn
@@ -433,6 +434,8 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         online = true
         if (s.on("app_updates") && !updateChecked) checkForUpdate()
         phone.rememberAllowed(s.on("android_offline_model"))                  // remembered for when the PC is off
+        app.emvryx.android.local.NativeFlags.remember(getApplication(), app.emvryx.android.local.NativeFlags.pick(s.features))    // the phone's own extras, for when the app opens from outside or is closed
+        app.emvryx.android.assist.SyncWorker.schedule(getApplication(), s.on("android_background_sync") && s.on("android_offline_model"))
         (getApplication<EmvryxApp>()).vision.rememberAllowed(s.on("android_phone_vision"))
         if (phone.allowed) viewModelScope.launch {
             phone.refresh()                                                // the newest instructions and memory for the phone's model
@@ -726,8 +729,34 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
+    // ---- the ways in from outside the app (local/NativeExtras.kt Launch): selected text, the assistant button, the icon's shortcuts, the widget
+    private var pendingLaunch: app.emvryx.android.local.Launch? = null
+    /** Talk in the phone's own chats (android_offline_talk), opened from outside the app with the PC off */
+    var localTalking by mutableStateOf(false)
+
+    fun launch(l: app.emvryx.android.local.Launch) {
+        if (l == app.emvryx.android.local.Launch.None) return
+        pendingLaunch = l
+        if (screen == Screen.Chat || screen == Screen.Code || screen is Screen.Web || screen == Screen.Local || screen is Screen.Native) applyLaunch()
+    }
+
+    private fun applyLaunch() {
+        val l = pendingLaunch ?: return
+        pendingLaunch = null
+        val offline = screen == Screen.Local
+        when (l) {
+            is app.emvryx.android.local.Launch.Text -> if (offline) phone.draft = l.text else { screen = Screen.Chat; newChat(); draft = l.text }
+            app.emvryx.android.local.Launch.Talk -> if (offline) localTalking = true else { screen = Screen.Chat; newChat(); talking = true }
+            app.emvryx.android.local.Launch.NewChat -> if (!offline) { screen = Screen.Chat; newChat() }
+            app.emvryx.android.local.Launch.Code -> if (!offline) screen = Screen.Code
+            app.emvryx.android.local.Launch.Local -> if (phoneChats) screen = Screen.Local
+            app.emvryx.android.local.Launch.None -> Unit
+        }
+    }
+
     private fun applyShare() {
         applyAlert()
+        applyLaunch()
         val (text, files) = pendingShare ?: return
         pendingShare = null
         screen = Screen.Chat
@@ -941,6 +970,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         var finished = false
         var lost = false
         var got = false
+        app.emvryx.android.local.LastChoice.remember(getApplication(), model, effort)       // for the assistant bar and notification replies
         replyJob = viewModelScope.launch {
             try {
                 val id = chatId ?: api.newChat(isPrivate, skill).also { chatId = it }
