@@ -13,3 +13,5 @@ captures/
 *.jks
 *.keystore
 keystore.properties
+# the native build's scratch folder (CMake output, a clone of llama.cpp)
+.cxx/

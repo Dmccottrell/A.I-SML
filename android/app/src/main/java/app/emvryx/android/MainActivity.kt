@@ -70,6 +70,7 @@ class MainActivity : FragmentActivity() {
         if (savedInstanceState == null) {
             shared(intent)
             tapped(intent)
+            launched(intent)
         }
     }
 
@@ -120,6 +121,16 @@ class MainActivity : FragmentActivity() {
         super.onNewIntent(intent)
         shared(intent)
         tapped(intent)
+        launched(intent)
+    }
+
+    /** Opened from outside: selected text's Ask Emvryx, the assistant button, a shortcut on the icon or the widget (local/NativeExtras.kt) */
+    private fun launched(intent: Intent?) {
+        intent ?: return
+        val l = app.emvryx.android.local.Launch.from(intent.action, intent.getStringExtra(app.emvryx.android.local.Launch.SHORTCUT),
+            intent.getCharSequenceExtra(Intent.EXTRA_PROCESS_TEXT), app.emvryx.android.local.NativeFlags.on(this))
+        intent.removeExtra(app.emvryx.android.local.Launch.SHORTCUT)
+        vm.launch(l)
     }
 
     /** "Share to Emvryx" from another app: text goes in the message box, pictures and files are attached to a new chat */

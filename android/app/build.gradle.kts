@@ -16,6 +16,7 @@ android {
         versionCode = 1
         versionName = "0.1.0"
         buildConfigField("String", "DEFAULT_SERVER", "\"https://chat.emvryx.app\"")
+        resValue("string", "package_name", "app.emvryx.android")      // the icon's shortcuts name the app's own package (res/xml/shortcuts.xml)
         // app_updates: the commit GitHub built this app from (-PemvryxSha=..., the release job); empty for a build made on a computer
         buildConfigField("String", "BUILT_FROM", "\"" + ((project.findProperty("emvryxSha") as String?) ?: "").filter { it.isLetterOrDigit() } + "\"")
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
@@ -34,6 +35,7 @@ android {
     buildTypes {
         debug {
             applicationIdSuffix = ".debug"   // installs next to a release build
+            resValue("string", "package_name", "app.emvryx.android.debug")
             // The emulator reaches the PC's own `python app_server.py` here
             buildConfigField("String", "DEFAULT_SERVER", "\"http://10.0.2.2:8000\"")
         }
@@ -47,6 +49,7 @@ android {
         create("phone") {
             initWith(getByName("release"))
             applicationIdSuffix = ".debug"
+            resValue("string", "package_name", "app.emvryx.android.debug")
             signingConfig = signingConfigs.getByName("debug")
             matchingFallbacks += listOf("release")
             buildConfigField("String", "DEFAULT_SERVER", "\"http://10.0.2.2:8000\"")    // on a real phone it starts at chat.emvryx.app instead
@@ -78,6 +81,8 @@ dependencies {
     implementation(libs.androidx.security.crypto)
     implementation(libs.androidx.biometric)
     implementation(libs.mlkit.text.recognition)
+    implementation(libs.mlkit.doc.scanner)
+    implementation(libs.androidx.work)
     implementation(libs.okhttp)
     implementation(libs.kotlinx.serialization.json)
     implementation(libs.kotlinx.coroutines.android)

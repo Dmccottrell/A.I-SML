@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- android_quick_launch: long-press the Emvryx icon (MainActivity reads emvryx.shortcut; with the switch off the app just opens) -->
+<shortcuts xmlns:android="http://schemas.android.com/apk/res/android">
+    <shortcut android:shortcutId="new" android:enabled="true" android:icon="@drawable/ic_sc_chat"
+        android:shortcutShortLabel="@string/sc_new" android:shortcutLongLabel="@string/sc_new">
+        <intent android:action="android.intent.action.VIEW" android:targetPackage="@string/package_name" android:targetClass="app.emvryx.android.MainActivity">
+            <extra android:name="emvryx.shortcut" android:value="new" />
+        </intent>
+    </shortcut>
+    <shortcut android:shortcutId="talk" android:enabled="true" android:icon="@drawable/ic_sc_talk"
+        android:shortcutShortLabel="@string/sc_talk" android:shortcutLongLabel="@string/sc_talk">
+        <intent android:action="android.intent.action.VIEW" android:targetPackage="@string/package_name" android:targetClass="app.emvryx.android.MainActivity">
+            <extra android:name="emvryx.shortcut" android:value="talk" />
+        </intent>
+    </shortcut>
+    <shortcut android:shortcutId="code" android:enabled="true" android:icon="@drawable/ic_sc_code"
+        android:shortcutShortLabel="@string/sc_code" android:shortcutLongLabel="@string/sc_code">
+        <intent android:action="android.intent.action.VIEW" android:targetPackage="@string/package_name" android:targetClass="app.emvryx.android.MainActivity">
+            <extra android:name="emvryx.shortcut" android:value="code" />
+        </intent>
+    </shortcut>
+    <shortcut android:shortcutId="local" android:enabled="true" android:icon="@drawable/ic_sc_phone"
+        android:shortcutShortLabel="@string/sc_local" android:shortcutLongLabel="@string/sc_local_long">
+        <intent android:action="android.intent.action.VIEW" android:targetPackage="@string/package_name" android:targetClass="app.emvryx.android.MainActivity">
+            <extra android:name="emvryx.shortcut" android:value="local" />
+        </intent>
+    </shortcut>
+</shortcuts>

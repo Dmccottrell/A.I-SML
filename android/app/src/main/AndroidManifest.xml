@@ -8,7 +8,12 @@
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
     <!-- Talk (flag chat_live_voice): the phone's own speech typing hears you; asked for only when Talk is first opened -->
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
+    <!-- Set a timer or an alarm by voice (android_assistant): the phone's clock app does it -->
+    <uses-permission android:name="com.android.alarm.permission.SET_ALARM" />
     <queries>
+        <!-- Open an app by its name (android_assistant) -->
+        <intent><action android:name="android.intent.action.MAIN" /><category android:name="android.intent.category.LAUNCHER" /></intent>
+        <intent><action android:name="android.media.action.IMAGE_CAPTURE" /></intent>
         <intent><action android:name="android.speech.RecognitionService" /></intent>
         <intent><action android:name="android.intent.action.TTS_SERVICE" /></intent>
     </queries>
@@ -48,7 +53,57 @@
                 <category android:name="android.intent.category.DEFAULT" />
                 <data android:mimeType="application/pdf" />
             </intent-filter>
+            <!-- Select words in any app, then Ask Emvryx (android_text_menu) -->
+            <intent-filter android:label="@string/ask_emvryx">
+                <action android:name="android.intent.action.PROCESS_TEXT" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="text/plain" />
+            </intent-filter>
+            <!-- Emvryx as the assist app, opened with Talk (android_quick_launch) -->
+            <intent-filter>
+                <action android:name="android.intent.action.ASSIST" />
+                <action android:name="android.intent.action.VOICE_COMMAND" />
+                <category android:name="android.intent.category.DEFAULT" />
+            </intent-filter>
+            <!-- Long-press the icon: New chat, Talk, VryxCode, Chats on this phone (android_quick_launch) -->
+            <meta-data android:name="android.app.shortcuts" android:resource="@xml/shortcuts" />
         </activity>
+        <!-- The home-screen widget (android_quick_launch) -->
+        <receiver android:name=".AskWidget" android:exported="false" android:label="@string/widget_ask">
+            <intent-filter><action android:name="android.appwidget.action.APPWIDGET_UPDATE" /></intent-filter>
+            <meta-data android:name="android.appwidget.provider" android:resource="@xml/widget_ask" />
+        </receiver>
+        <!-- Emvryx as the phone's assistant, like Gemini or Bixby (android_assistant, assist/Assistant.kt) -->
+        <service
+            android:name=".assist.EmvryxVoiceService"
+            android:exported="true"
+            android:label="@string/assistant_name"
+            android:permission="android.permission.BIND_VOICE_INTERACTION">
+            <meta-data android:name="android.voice_interaction" android:resource="@xml/interaction_service" />
+            <intent-filter><action android:name="android.service.voice.VoiceInteractionService" /></intent-filter>
+        </service>
+        <service
+            android:name=".assist.EmvryxSessionService"
+            android:exported="true"
+            android:permission="android.permission.BIND_VOICE_INTERACTION" />
+        <!-- Only passes speech typing on to the phone's own service (assist/EmvryxRecognition.kt) -->
+        <service
+            android:name=".assist.EmvryxRecognition"
+            android:exported="true"
+            android:label="@string/assistant_name">
+            <intent-filter><action android:name="android.speech.RecognitionService" /></intent-filter>
+            <meta-data android:name="android.speech" android:resource="@xml/recognition_service" />
+        </service>
+        <!-- A reply typed in a notification (android_reply_inline) -->
+        <receiver android:name=".assist.ReplyReceiver" android:exported="false" />
+        <!-- Take a photo (android_camera_scan): the camera app writes the picture through this -->
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="${applicationId}.files"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data android:name="android.support.FILE_PROVIDER_PATHS" android:resource="@xml/file_paths" />
+        </provider>
         <!-- Keeps an eye on working VryxCode sessions while the app is in the background (WatchService.kt) -->
         <service
             android:name=".WatchService"

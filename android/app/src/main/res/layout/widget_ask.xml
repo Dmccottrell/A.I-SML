@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- android_quick_launch: the home-screen widget, like the Ask Gemini bar: tap the words to type, the microphone to talk, </> for VryxCode -->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/widget_root"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@drawable/widget_bg"
+    android:gravity="center_vertical"
+    android:orientation="horizontal"
+    android:paddingStart="18dp"
+    android:paddingEnd="8dp">
+    <ImageView
+        android:layout_width="26dp"
+        android:layout_height="26dp"
+        android:contentDescription="@null"
+        android:src="@drawable/ic_notify"
+        android:tint="#FF8B5CF6" />
+    <TextView
+        android:id="@+id/widget_ask"
+        android:layout_width="0dp"
+        android:layout_height="match_parent"
+        android:layout_weight="1"
+        android:gravity="center_vertical"
+        android:paddingStart="12dp"
+        android:text="@string/widget_ask"
+        android:textColor="#FFEEF0F6"
+        android:textSize="18sp" />
+    <ImageView
+        android:id="@+id/widget_talk"
+        android:layout_width="48dp"
+        android:layout_height="48dp"
+        android:background="@drawable/widget_btn"
+        android:contentDescription="@string/sc_talk"
+        android:padding="12dp"
+        android:src="@drawable/ic_sc_talk" />
+    <ImageView
+        android:id="@+id/widget_code"
+        android:layout_width="48dp"
+        android:layout_height="48dp"
+        android:layout_marginStart="6dp"
+        android:background="@drawable/widget_btn"
+        android:contentDescription="@string/sc_code"
+        android:padding="12dp"
+        android:src="@drawable/ic_sc_code" />
+</LinearLayout>

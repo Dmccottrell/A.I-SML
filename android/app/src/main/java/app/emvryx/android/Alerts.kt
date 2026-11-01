@@ -76,8 +76,18 @@ object Alerts {
         val n = NotificationCompat.Builder(ctx, CHAT).setSmallIcon(R.drawable.ic_notify).setColor(0xFFF59E0B.toInt())
             .setContentTitle(title.ifBlank { "Your answer is ready" }).setContentText(body).setStyle(NotificationCompat.BigTextStyle().bigText(body))
             .setCategory(NotificationCompat.CATEGORY_MESSAGE).setAutoCancel(true).setContentIntent(open(ctx, EXTRA_CHAT, chatId.toString(), chatId.toInt()))
+            .apply { if (chatId != 0L && app.emvryx.android.local.NativeFlags.on(ctx, "android_reply_inline")) addAction(reply(ctx, chatId)) }
             .build()
         runCatching { NotificationManagerCompat.from(ctx).notify("chat", chatId.toInt(), n) }
+    }
+
+    /** android_reply_inline: Reply, typed in the notification itself (assist/Background.kt ReplyReceiver) */
+    private fun reply(ctx: Context, chatId: Long): NotificationCompat.Action {
+        val input = androidx.core.app.RemoteInput.Builder(app.emvryx.android.assist.ReplyReceiver.KEY).setLabel("Reply to Emvryx").build()
+        val pi = PendingIntent.getBroadcast(ctx, chatId.toInt(), Intent(ctx, app.emvryx.android.assist.ReplyReceiver::class.java).putExtra(EXTRA_CHAT, chatId),
+            PendingIntent.FLAG_MUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)          // mutable: Android puts the typed words in it
+        return NotificationCompat.Action.Builder(R.drawable.ic_notify, "Reply", pi).addRemoteInput(input).setAllowGeneratedReplies(false)
+            .setSemanticAction(NotificationCompat.Action.SEMANTIC_ACTION_REPLY).build()
     }
 
     /** The live one while sessions work: their names and a moving bar */
