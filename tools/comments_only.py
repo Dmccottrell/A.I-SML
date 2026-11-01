@@ -1,9 +1,10 @@
 """Proves that a change only added or edited comments (and blank lines), so explaining the code can never change what it does.
 
-    python tools/comments_only.py [BASE]        # compares every changed .py / .kt / .js file with BASE (default: origin/main)
+    python tools/comments_only.py [BASE] [PATH ...]   # compares every changed code file (or just the PATHs) with BASE (default: origin/main)
 
 For each changed file it takes the old version (from git) and the new one, throws away every comment and all spacing, and checks that what is
-left is identical. Python is compared as a syntax tree (docstrings removed), Kotlin and JavaScript as text with comments stripped.
+left is identical. Python is compared as a syntax tree (docstrings removed); Kotlin, JavaScript, CSS, C++ as text with comments stripped; HTML and XML with <!-- -->
+comments (and the comments inside <script> / <style>) stripped; YAML, shell, TOML and the like with whole-line # comments stripped.
 Exit code 0: only comments changed. Exit code 1: something besides comments changed (the files are listed).
 """
 import ast
@@ -64,18 +65,50 @@ def c_like_shape(text):
     return re.sub(r"\s+", "", "".join(out))
 
 
+def squeeze(text):
+    """All spacing removed, so that only the real characters are compared."""
+    return re.sub(r"\s+", "", text)
+
+
+def xml_shape(text):
+    """An XML file without its <!-- --> comments or spacing."""
+    return squeeze(re.sub(r"<!--.*?-->", "", text, flags=re.S))
+
+
+def html_shape(text):
+    """An HTML page without <!-- --> comments; the code inside <script> and <style> is compared with its own comments stripped too."""
+    text = re.sub(r"<!--.*?-->", "", text, flags=re.S)
+    parts = re.split(r"(<(?:script|style)\b[^>]*>.*?</(?:script|style)>)", text, flags=re.S | re.I)
+    # parts alternates: ordinary html, a script/style block, ordinary html... Blocks are compared as code, the rest as squeezed text
+    return "|".join(c_like_shape(p) if re.match(r"<(?:script|style)\b", p, re.I) else squeeze(p) for p in parts)
+
+
+def hash_shape(text):
+    """A YAML / shell / TOML-like file without whole-line # comments (a first line #! stays: it is code) or blank lines."""
+    keep = [ln.rstrip() for ln in text.splitlines() if ln.strip() and (not ln.lstrip().startswith("#") or ln.startswith("#!"))]
+    return "\n".join(keep)
+
+
 def shape(path, text):
     """The comment-free form of a file, or None for kinds of file this check does not understand."""
     if path.endswith(".py"):
         return python_shape(text)
-    if path.endswith((".kt", ".kts", ".js")):
+    if path.endswith((".kt", ".kts", ".js", ".css", ".cc", ".cpp", ".h")):
         return c_like_shape(text)
+    if path.endswith((".html", ".htm")):
+        return html_shape(text)
+    if path.endswith(".xml"):
+        return xml_shape(text)
+    if path.endswith((".yml", ".yaml", ".sh", ".toml", ".properties", ".pro", ".txt")) or os.path.basename(path) in ("Dockerfile", ".gitignore"):
+        return hash_shape(text)
     return None
 
 
 def main():
     base = sys.argv[1] if len(sys.argv) > 1 else "origin/main"
-    changed = [p for p in git("diff", "--name-only", base).splitlines() + git("ls-files", "--others", "--exclude-standard").splitlines() if shape(p, "") is not None or p.endswith(".py")]
+    only = sys.argv[2:]                                     # when paths are given, check just those
+    names = only or git("diff", "--name-only", base).splitlines() + git("ls-files", "--others", "--exclude-standard").splitlines()
+    changed = [p for p in names if shape(p, "") is not None]
     bad = []
     for path in sorted(set(changed)):
         full = os.path.join(ROOT, path)

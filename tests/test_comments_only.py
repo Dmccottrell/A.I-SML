@@ -31,5 +31,15 @@ class CLike(unittest.TestCase):
         self.assertNotEqual(co.c_like_shape('val s = """a // b"""'), co.c_like_shape('val s = """a """'))
 
 
+class OtherKinds(unittest.TestCase):
+    def test_html_xml_and_hash_files(self):
+        self.assertEqual(co.shape("a.html", "<p>hi</p><script>var a = 1;</script>"), co.shape("a.html", "<!-- note -->\n<p>hi</p>\n<script>\n// say\nvar a = 1;\n</script>"))
+        self.assertNotEqual(co.shape("a.html", "<script>var a = 1;</script>"), co.shape("a.html", "<script>var a = 2;</script>"))
+        self.assertEqual(co.shape("a.xml", "<a><b/></a>"), co.shape("a.xml", "<!-- why -->\n<a>\n  <b/>\n</a>"))
+        self.assertEqual(co.shape("a.yml", "on: push\njobs: x"), co.shape("a.yml", "# what\non: push\n\n  # more\njobs: x"))
+        self.assertNotEqual(co.shape("a.yml", "on: push"), co.shape("a.yml", "on: pull"))
+        self.assertEqual(co.shape("a.css", "a { color: red; }"), co.shape("a.css", "/* links */ a { color: red; }"))
+
+
 if __name__ == "__main__":
     unittest.main()
