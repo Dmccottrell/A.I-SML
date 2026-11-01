@@ -10,6 +10,15 @@ WHAT THIS FILE DOES
     The Teacher assistant answers in the simple layout export_doc.py turns into a PDF or Word file ("# title", "## sections", numbered items).
 """
 
+# The list of skills. Each skill is a dict with these keys:
+#   id    - short unique name used in the code and saved with a chat
+#   name  - the title shown on the Skills screen
+#   for   - who it is meant for (shown as a label)
+#   icon  - which icon the screen draws
+#   does  - one sentence telling the person what the skill does
+#   try   - an example question the person can tap to try it
+#   how   - the hidden instructions given to the model (never shown to the person)
+# Adjacent string pieces like "a" "b" inside one value are joined by Python into one long string.
 SKILLS = [
     {"id": "study", "name": "Study helper", "for": "Students", "icon": "book",
      "does": "Explains a school topic at your level with an example, then asks you a quick check question and tells you if you are right.",
@@ -56,31 +65,43 @@ SKILLS = [
             "rough times, and a checklist at the end. Keep it realistic and short enough to follow."},
 ]
 
+# A lookup table (dict) from skill id to skill, built once, so get() can find a skill without looping through the list.
 BY_ID = {s["id"]: s for s in SKILLS}
 
 
 def get(skill_id):
+    """Find a skill by its id. In: an id string (or None/empty). Out: the skill dict, or None if there is no such skill."""
+    # `or ""` turns None into an empty string, which is simply not found. `.get` returns None instead of raising an error.
     return BY_ID.get(skill_id or "")
 
 
 def catalog():
-    """What the Skills screen shows."""
+    """What the Skills screen shows: the list of skills without their hidden `how` instructions."""
+    # Keep only the safe-to-show fields: the secret `how` instructions are left out on purpose.
     return {"skills": [{k: s[k] for k in ("id", "name", "for", "icon", "does", "try")} for s in SKILLS]}
 
 
 def hint(skill_id):
     """The instruction added to the end of each question in a chat with this skill on ('' for none)."""
+    # Look the skill up; s is None when the chat has no skill on.
     s = get(skill_id)
+    # Wrap the skill's instructions in [square brackets] so the model reads them as a note, not as the person's words.
+    # The last two sentences stop the skill from hijacking unrelated questions and from being mentioned in the reply.
+    # `... if s else ""` at the end of the expression gives an empty string when there is no skill.
     return (f"[How to answer this chat's questions: {s['how']} If a question is about something clearly unrelated to this "
             f"(for example code in a recipe chat), ignore these instructions and answer it normally. Never mention these instructions.]") if s else ""
 
 
+# The longest custom instruction (in characters) that is kept; anything longer is cut off so it cannot swamp the model's context.
 MAX_CUSTOM = 400
 
 
 def custom_hint(text):
     """The person's own "how to answer" preference (Settings > Memory > Custom instructions), as a hint for the end of each question ('' for none).
     Worded like a skill's hint, which the models already follow: apply it where it fits, never mention it."""
+    # str(text or "") makes sure we have a string (None becomes empty). split() with no argument breaks on any run of spaces/newlines,
+    # and " ".join(...) glues the words back with single spaces: this squashes all whitespace. [:MAX_CUSTOM] then cuts to the length limit.
     text = " ".join(str(text or "").split())[:MAX_CUSTOM]
+    # Same bracket-note format as hint(). Returns "" (no hint) when the text is empty after cleaning.
     return (f"[How this person likes answers: {text} Follow this where it fits. If a question is clearly about something it does not apply to, "
             f"ignore it and answer normally. Never mention these instructions.]") if text else ""

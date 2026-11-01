@@ -47,6 +47,7 @@ LOG_KEPT = 30
 
 
 class LinkError(Exception):
+    """A plain-words failure for a connected app. `message` says what went wrong; `action` says what the person can do next."""
     def __init__(self, message, action=""):
         super().__init__(message)
         self.message, self.action = message, action
@@ -54,6 +55,8 @@ class LinkError(Exception):
 
 # ---------------------------------------------------------------- the network (with the guard for links people type)
 def is_public_host(host, resolver=socket.getaddrinfo):
+    """True if the host name points only to public internet addresses (never a private network, this computer, or an internal address).
+    `resolver` looks the name up and is a parameter so tests can use a fake. Any lookup failure counts as not public."""
     try:
         infos = resolver(host, None)
     except OSError:
@@ -78,11 +81,15 @@ def public_url(url, resolver=socket.getaddrinfo):
 
 
 class _Redirects(urllib.request.HTTPRedirectHandler):
+    """Makes the web client check every redirect (a server saying 'go to this other address') with the same public-address rule,
+    so a good-looking link cannot bounce the server onto a private address."""
     def __init__(self, guard, resolver):
+        """guard = whether to apply the public-address check; resolver = the name-lookup function."""
         super().__init__()
         self.guard, self.resolver = guard, resolver
 
     def redirect_request(self, req, fp, code, msg, headers, newurl):
+        """Called by urllib for each redirect: check the new address first (public_url raises LinkError if it is not allowed), then let the normal handling continue."""
         if self.guard:
             public_url(newurl, self.resolver)
         return super().redirect_request(req, fp, code, msg, headers, newurl)
@@ -115,13 +122,17 @@ class Ctx:
     """What a service function gets: its credentials, a way to ask for JSON, the time and the person's time zone."""
 
     def __init__(self, creds, http=fetch, now=None, tz_minutes=0, guard=False, imap=None, name=""):
+        """creds = the saved secrets for this service; http = the function that makes web requests (tests pass a fake);
+        tz_minutes = the person's offset from UTC; guard = apply the public-address rule; imap = optional mail-connection factory; name = service name for messages."""
         self.creds, self.http, self.tz, self.guard, self.imap_factory, self.name = dict(creds), http, int(tz_minutes or 0), guard, imap, name
         self.now = time.time() if now is None else now
 
     def local_now(self):
+        """The current time in the person's own time zone, as a plain date-time with no zone attached."""
         return datetime.fromtimestamp(self.now, timezone.utc).replace(tzinfo=None) + timedelta(minutes=self.tz)
 
     def raw(self, method, url, headers=None, body=None):
+        """Make a request through self.http and turn error codes into plain LinkErrors (refused, too many requests, other errors). Returns (status, bytes) when it worked."""
         status, data = (self.http(method, url, headers, body, self.guard) if self.guard else self.http(method, url, headers, body))
         if status in (401, 403):
             raise LinkError(f"{self.name or 'The service'} refused that. The token may be wrong, expired or missing a permission.", "Make a new one and connect again.")
@@ -132,6 +143,7 @@ class Ctx:
         return status, data
 
     def json(self, method, url, headers=None, body=None):
+        """Like raw(), but decode the answer as JSON. An empty answer gives {}; unreadable text raises a LinkError."""
         status, data = self.raw(method, url, headers, body)
         if not data:
             return {}
@@ -142,19 +154,23 @@ class Ctx:
 
 
 def bearer(c, extra=None):
+    """The standard 'Authorization: Bearer <token>' header for this service's token, plus any extra headers."""
     return dict({"Authorization": "Bearer " + c.creds.get("token", "")}, **(extra or {}))
 
 
 def clip(text, n=240):
+    """Squash whitespace and shorten to at most n characters, ending with an ellipsis if it was cut."""
     text = " ".join(str(text or "").split())
     return text if len(text) <= n else text[:n - 1].rstrip() + "…"
 
 
 def day_word(iso):
+    """The date part (first 10 characters, YYYY-MM-DD) of an ISO date-time text."""
     return str(iso or "")[:10]
 
 
 def match_words(query):
+    """Split a search question into lower-case words of 3+ characters (letters, digits, ' _ -) for matching; shorter words are ignored."""
     return [w for w in re.findall(r"[a-z0-9][a-z0-9'_-]{2,}", str(query or "").lower())]
 
 
@@ -170,10 +186,12 @@ def keep(items, query, fields=("title", "text")):
 
 # ---------------------------------------------------------------- Notion
 def notion_headers(c):
+    """Request headers for Notion: the token plus the API version it expects."""
     return bearer(c, {"Notion-Version": "2022-06-28"})
 
 
 def notion_title(obj):
+    """Find a Notion page's or database's title text in whichever place Notion put it."""
     for p in (obj.get("properties") or {}).values():
         if isinstance(p, dict) and p.get("type") == "title":
             return "".join(t.get("plain_text", "") for t in p.get("title", []))
@@ -182,11 +200,14 @@ def notion_title(obj):
 
 
 def notion_verify(c):
+    """Connection check: ask Notion who we are. Returns a short name to show the person."""
     j = c.json("GET", "https://api.notion.com/v1/users/me", notion_headers(c))
     return j.get("name") or (j.get("bot") or {}).get("workspace_name") or "Notion"
 
 
 def notion_search(c, query, k):
+    """Search Notion for pages matching the question (newest-edited first). Returns up to k {title, text, url} items;
+    for the first two pages it also reads a bit of their text."""
     body = {"page_size": k, "sort": {"direction": "descending", "timestamp": "last_edited_time"}}
     if query.strip():
         body["query"] = query.strip()
@@ -213,6 +234,7 @@ def notion_search(c, query, k):
 
 # ---------------------------------------------------------------- Slack
 def slack_call(c, method, params=None):
+    """Call one Slack API method (a GET) and return its JSON. Slack replies {ok: false, error: ...} on failure, which becomes a LinkError."""
     q = ("?" + urllib.parse.urlencode(params)) if params else ""
     j = c.json("GET", f"https://slack.com/api/{method}{q}", bearer(c))
     if not j.get("ok"):
@@ -222,11 +244,13 @@ def slack_call(c, method, params=None):
 
 
 def slack_verify(c):
+    """Connection check: who is this token, and which workspace."""
     j = slack_call(c, "auth.test")
     return f"{j.get('user', 'Slack')} in {j.get('team', 'your workspace')}"
 
 
 def slack_search(c, query, k):
+    """Search Slack. A user token (xoxp...) can search messages; otherwise look at the latest messages of channels whose name matches, or of the first two channels the bot is in."""
     if c.creds.get("token", "").startswith("xoxp") and query.strip():
         j = slack_call(c, "search.messages", {"query": query.strip(), "count": k, "sort": "timestamp"})
         return [{"title": "#" + (m.get("channel") or {}).get("name", "?") + " from " + (m.get("username") or "someone"), "text": clip(m.get("text"), 300), "url": m.get("permalink")}
@@ -243,6 +267,7 @@ def slack_search(c, query, k):
 
 # ---------------------------------------------------------------- Todoist
 def todoist_tasks(c):
+    """All open tasks from Todoist. Tries the newer API address first and falls back to the older one when it answers 'not found'."""
     h = bearer(c)
     for base in ("https://api.todoist.com/api/v1/tasks", "https://api.todoist.com/rest/v2/tasks"):        # the newer address first, the older one as a fallback
         status, data = c.http("GET", base, h, None)
@@ -258,10 +283,12 @@ def todoist_tasks(c):
 
 
 def todoist_verify(c):
+    """Connection check: how many open tasks there are."""
     return f"{len(todoist_tasks(c))} open tasks"
 
 
 def todoist_search(c, query, k):
+    """Todoist tasks matching the question, or the soonest-due tasks when the question has no usable words."""
     items = []
     for t in todoist_tasks(c):
         due = (t.get("due") or {}).get("string") or (t.get("due") or {}).get("date") or ""
@@ -273,6 +300,7 @@ def todoist_search(c, query, k):
 
 # ---------------------------------------------------------------- Linear
 def linear(c, query, variables=None):
+    """Send one GraphQL request to Linear (GraphQL = a way of asking an API for exactly the fields you want) and return its 'data' part."""
     j = c.json("POST", "https://api.linear.app/graphql", {"Authorization": c.creds.get("token", "")}, {"query": query, "variables": variables or {}})
     if j.get("errors"):
         raise LinkError("Linear said: " + clip((j["errors"][0] or {}).get("message", "error"), 120), "Check the key and try again.")
@@ -280,10 +308,12 @@ def linear(c, query, variables=None):
 
 
 def linear_verify(c):
+    """Connection check: the name of the person who owns the key."""
     return linear(c, "{ viewer { name } }").get("viewer", {}).get("name") or "Linear"
 
 
 def linear_search(c, query, k):
+    """Linear issues whose title contains the question, or the person's open assigned issues when the question is empty."""
     fields = "identifier title url dueDate state { name }"
     if query.strip():
         nodes = linear(c, "query($q:String!,$n:Int!){ issues(first:$n, filter:{title:{containsIgnoreCase:$q}}){ nodes{ %s } } }" % fields, {"q": query.strip(), "n": k}).get("issues", {}).get("nodes", [])
@@ -294,14 +324,17 @@ def linear_search(c, query, k):
 
 # ---------------------------------------------------------------- GitLab
 def gitlab_h(c):
+    """GitLab request header carrying the token."""
     return {"PRIVATE-TOKEN": c.creds.get("token", "")}
 
 
 def gitlab_verify(c):
+    """Connection check: the GitLab username, shown as @name."""
     return "@" + c.json("GET", "https://gitlab.com/api/v4/user", gitlab_h(c)).get("username", "gitlab")
 
 
 def gitlab_search(c, query, k):
+    """GitLab issues matching the question, or issues assigned to the person that are still open."""
     if query.strip():
         rows = c.json("GET", "https://gitlab.com/api/v4/search?" + urllib.parse.urlencode({"scope": "issues", "search": query.strip(), "per_page": k}), gitlab_h(c))
     else:
@@ -311,10 +344,12 @@ def gitlab_search(c, query, k):
 
 # ---------------------------------------------------------------- Asana
 def asana_verify(c):
+    """Connection check: the person's name in Asana."""
     return c.json("GET", "https://app.asana.com/api/1.0/users/me", bearer(c)).get("data", {}).get("name", "Asana")
 
 
 def asana_search(c, query, k):
+    """Asana tasks assigned to the person (first workspace), filtered by the question."""
     me = c.json("GET", "https://app.asana.com/api/1.0/users/me", bearer(c)).get("data", {})
     ws = (me.get("workspaces") or [{}])[0].get("gid")
     if not ws:
@@ -326,14 +361,17 @@ def asana_search(c, query, k):
 
 # ---------------------------------------------------------------- ClickUp
 def clickup_h(c):
+    """ClickUp request header carrying the token."""
     return {"Authorization": c.creds.get("token", "")}
 
 
 def clickup_verify(c):
+    """Connection check: the ClickUp username."""
     return c.json("GET", "https://api.clickup.com/api/v2/user", clickup_h(c)).get("user", {}).get("username", "ClickUp")
 
 
 def clickup_search(c, query, k):
+    """ClickUp tasks assigned to the person (first team), filtered by the question."""
     me = c.json("GET", "https://api.clickup.com/api/v2/user", clickup_h(c)).get("user", {})
     teams = c.json("GET", "https://api.clickup.com/api/v2/team", clickup_h(c)).get("teams", [])
     if not teams:
@@ -348,14 +386,17 @@ def clickup_search(c, query, k):
 
 # ---------------------------------------------------------------- Trello (a key and a token)
 def trello_q(c, extra=None):
+    """Trello puts its key and token in the web address itself; this builds that '?key=...&token=...' text (URL-encoded), plus any extra parameters."""
     return urllib.parse.urlencode(dict({"key": c.creds.get("key", ""), "token": c.creds.get("token", "")}, **(extra or {})))
 
 
 def trello_verify(c):
+    """Connection check: the person's full name in Trello."""
     return c.json("GET", "https://api.trello.com/1/members/me?" + trello_q(c, {"fields": "fullName"})).get("fullName", "Trello")
 
 
 def trello_search(c, query, k):
+    """Trello cards matching the question, or the person's open cards when the question is empty."""
     if query.strip():
         cards = c.json("GET", "https://api.trello.com/1/search?" + trello_q(c, {"query": query.strip(), "modelTypes": "cards", "cards_limit": k, "card_fields": "name,due,url,desc"})).get("cards", [])
     else:
@@ -368,6 +409,7 @@ JIRA_HOST = re.compile(r"[a-z0-9][a-z0-9-]{0,60}\.atlassian\.net")
 
 
 def jira_base(c):
+    """The https address of the person's Jira site, checked against JIRA_HOST so only a real name.atlassian.net site is ever contacted."""
     site = re.sub(r"^https?://", "", c.creds.get("site", "").strip().lower()).strip("/")
     if not JIRA_HOST.fullmatch(site):
         raise LinkError("The Jira site must look like yourname.atlassian.net.", "Copy it from your Jira address.")
@@ -375,6 +417,7 @@ def jira_base(c):
 
 
 def jira_h(c):
+    """Jira request header: HTTP 'Basic' login, which is the email and API token joined with a colon and base64-encoded."""
     return {"Authorization": "Basic " + base64.b64encode(f"{c.creds.get('email', '')}:{c.creds.get('token', '')}".encode()).decode()}
 
 
