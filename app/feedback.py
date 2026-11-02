@@ -18,7 +18,11 @@ import time
 
 # The kinds of problem a person can report: the stored code name -> the words shown on the page.
 KINDS = {"wrong_fact": "Wrong fact", "ignored": "Ignored my question", "too_long": "Too long", "too_short": "Too short or vague", "cut_off": "Cut off", "unsafe": "Not appropriate",
-         "other": "Something else"}
+         "other": "Something else",
+         # send_feedback: general feedback about the app itself (not an answer)
+         "bug": "A bug in the app", "idea": "An idea", "confusing": "Something confusing"}
+# The model name stored for feedback about the app itself; such reports have no question/answer pair, so they are left out of the lessons export.
+APP = "app"
 
 
 class Feedback:
@@ -45,6 +49,16 @@ class Feedback:
                                   (time.time(), user, str(model)[:40], kind, str(note or "")[:500], str(question or "")[:4000], str(answer or "")[:8000], json.dumps(notes_used or [])[:4000]))
             self.db.commit()
             return cur.lastrowid
+
+    def add_app(self, user, kind, note, where):
+        """send_feedback: save feedback about the app itself. `where` says which screen and app it came from (for example "VryxCode, Android 1.2"); it goes in the
+        question column so the owner's list shows it. Returns the report id."""
+        return self.add(user, APP, kind if kind in ("bug", "idea", "confusing") else "other", note, where, "")
+
+    def recent(self, user, seconds=3600):
+        """How many reports this person sent in the last `seconds` (used to stop a flood of reports)."""
+        with self.lock:
+            return self.db.execute("SELECT COUNT(*) FROM feedback WHERE user = ? AND at > ?", (user, time.time() - seconds)).fetchone()[0]
 
     def list(self, limit=50, status=None, kind=None, model=None):
         """Reports, newest first, as dicts. Optional filters: status, kind, model. `limit` is kept between 1 and 500."""
@@ -83,7 +97,7 @@ class Feedback:
         """One JSON line per report, in the chat format the lesson builders read, plus the kind and what was wrong: a starting point for corrected answers (a person still writes the right answer)."""
         # Each line is a separate JSON object, so the file can be read one report at a time (the .jsonl format).
         with self.lock:
-            rows = self.db.execute("SELECT id, kind, note, model, question, answer FROM feedback WHERE status = ? ORDER BY id", (status,)).fetchall()
+            rows = self.db.execute("SELECT id, kind, note, model, question, answer FROM feedback WHERE status = ? AND model != ? ORDER BY id", (status, APP)).fetchall()
         return [json.dumps({"source": "feedback", "id": r[0], "kind": r[1], "note": r[2], "model": r[3], "messages": [{"role": "user", "content": r[4]}, {"role": "assistant", "content": r[5]}],
                             "needs": "a corrected assistant answer"}, ensure_ascii=False) for r in rows]
 

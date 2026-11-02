@@ -481,6 +481,17 @@ class RoutesPost:
             store.set_flag(cid, mid, "fb", kind if kind in feedback.KINDS else "other")
             self.state.auth.event("feedback", who["user"], self._ip(), kind)
             return self._send(200, {"ok": True})
+        # send_feedback: feedback about the app itself (a bug, an idea, something confusing), from any screen. At most 10 an hour per person.
+        if path == "/api/feedback" and self.state.flags.on("send_feedback", who):
+            note = str(body.get("note", "")).strip()
+            if not note:
+                return self._send(400, {"code": "bad_request", "message": "Write a few words about what happened."})
+            if self.state.feedback.recent(who["user"]) >= 10:
+                return self._send(429, {"code": "slow_down", "message": "That is a lot of reports for one hour.", "action": "Try again a little later."})
+            where = str(body.get("where", ""))[:200]
+            self.state.feedback.add_app(who["user"], str(body.get("kind", "other")), note, where)
+            self.state.auth.event("feedback", who["user"], self._ip(), "app")
+            return self._send(200, {"ok": True})
         # Switch which version of an edited question is shown.
         m = re.fullmatch(r"/api/chats/(-?\d+)/messages/(\d+)/version", path)
         if m and self.state.flags.on("chat_versions", who):               # ‹ 1/2 ›: show another version of an edited question and its answers

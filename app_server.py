@@ -237,7 +237,7 @@ class Handler(RoutesGet, RoutesPost, RoutesCode, RoutesAccount, RoutesAdmin, Rou
         h = {"Content-Security-Policy": csp or "default-src 'none'; frame-ancestors 'none'; base-uri 'none'",
              "X-Frame-Options": "DENY", "Referrer-Policy": "no-referrer", "Cross-Origin-Opener-Policy": "same-origin",
              "Cross-Origin-Resource-Policy": "same-origin", "X-Robots-Tag": "noindex, nofollow",
-             "Permissions-Policy": "camera=(), microphone=(), geolocation=(), payment=(), usb=()"}
+             "Permissions-Policy": "camera=(), microphone=(self), geolocation=(), payment=(), usb=()"}
         if self._https():
             h["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
         return h

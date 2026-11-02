@@ -132,7 +132,10 @@ class Page(Base):
         self.assertNotEqual(style(".msg.user .bubble", "boxShadow"), "none")
         # 4: the buttons under a reply have no pill and are muted grey
         self.assertEqual(style(".msg.ai .acts .chip", "backgroundColor"), "rgba(0, 0, 0, 0)")
-        self.assertEqual(style(".msg.ai .acts .chip", "color"), "rgb(113, 113, 122)")
+        r, g, b = [int(x) for x in style(".msg.ai .acts .chip", "color")[4:-1].split(",")]
+        lum = lambda c: sum(w * ((v / 255 / 12.92) if v / 255 <= .03928 else ((v / 255 + .055) / 1.055) ** 2.4) for w, v in zip((.2126, .7152, .0722), c))
+        for bg in ((0, 0, 0), (12, 12, 16)):                                  # on pure black and on a carbon card the muted grey stays readable (WCAG 4.5:1)
+            self.assertGreaterEqual((lum((r, g, b)) + .05) / (lum(bg) + .05), 4.5, bg)
         # 3: the title is centred and bold; the usage pill is not in the top bar
         box = page.evaluate("(() => { const r = document.querySelector('.top .title').getBoundingClientRect(); return (r.left + r.right) / 2; })()")
         self.assertLess(abs(box - 210), 3)
