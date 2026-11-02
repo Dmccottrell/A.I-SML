@@ -5,9 +5,10 @@ import unittest
 
 import browser_check
 import flags
+import vryxcode
 from tests.test_app_server import Base
 from tests.test_browser_check import find_browser
-from tests.test_code_sessions import wait_for
+from tests.test_code_sessions import open_to_everyone, wait_for
 
 
 class Flag(unittest.TestCase):
@@ -142,6 +143,57 @@ class Page(Base):
         self.assertEqual(style("#nudge", "position"), "absolute")
         self.assertIn("blur(30px)", style("#nudge", "backdropFilter"))
         self.assertEqual(errors, [])
+
+    def build_a_session(self):
+        """A coding session that wrote one file and now waits at "Allow this?" (the permission card), so the building screen has real content."""
+        open_to_everyone(self.state)
+        self.state.flags.data["audiences"]["vryxcode_projects"] = "admins"        # the project list with its dense rows
+        page_html = "<!doctype html><html><body><h1>Bill splitter</h1></body></html>\n"
+        self.state.code_generate = lambda model: vryxcode.ScriptedChat([vryxcode.harness_call("write_file", path="index.html", content=page_html), vryxcode.harness_call("finish", summary="Built it.")])
+        s, j = self.owner.call("POST", "/api/code/start", {"project": "tips", "task": "A bill splitter with tip", "model": "solstice-2"})
+        self.assertEqual(s, 200, j)
+        wait_for(lambda: self.state.code.sessions[j["id"]].state in ("asking", "done"))
+
+    def test_vryxcode_with_the_switch_off_is_as_before(self):
+        self.build_a_session()
+        page = self.open("off")
+        page.evaluate("openCode()")
+        page.wait_for_selector(".vx-prow, .scard")
+        page.evaluate("document.querySelector('.vx-prow, .scard').click()")
+        page.wait_for_selector("#codeIn .cc-user")
+        self.assertNotEqual(page.evaluate("getComputedStyle(document.querySelector('#code > .composer, #code .composer')).position"), "absolute")
+        self.assertNotEqual(page.evaluate("getComputedStyle(document.querySelector('#codeIn .cc-user')).backgroundColor"), "rgb(22, 22, 29)")
+        self.assertEqual(self.errors, [])
+
+    def test_vryxcode_wears_the_2027_look_home_and_building_screen(self):
+        self.build_a_session()
+        page = self.open("owner")
+        wait_for(lambda: page.evaluate("document.body.classList.contains('d27')"))
+        style = lambda q, prop: page.evaluate("([q, p]) => getComputedStyle(document.querySelector(q))[p]", [q, prop])
+        page.evaluate("openCode()")
+        page.wait_for_selector(".vx-prow, .scard")
+        # home: pure black, the main button is a hollow ghost, the template cards are carbon, session rows are flat with a hairline
+        self.assertEqual(style("#code", "backgroundColor"), "rgb(0, 0, 0)")
+        self.assertEqual(style("#codeGo", "backgroundColor"), "rgba(0, 0, 0, 0)")
+        self.assertEqual(style(".vx-prow", "borderBottomWidth"), "1px")
+        self.assertEqual(style(".vx-prow", "borderRadius"), "0px")
+        # the building screen: open the session
+        page.evaluate("document.querySelector('.vx-prow, .scard').click()")
+        page.wait_for_selector("#codeIn .cc-user")
+        wait_for(lambda: page.evaluate("!!document.querySelector('#codeIn .cc-ask button')"))
+        # your task is solid carbon with a shadow
+        self.assertEqual(style("#codeIn .cc-user", "backgroundColor"), "rgb(22, 22, 29)")
+        self.assertNotEqual(style("#codeIn .cc-user", "boxShadow"), "none")
+        # the message bar floats and is translucent glass with the 40 px blur
+        bar = lambda prop: page.evaluate("(p) => getComputedStyle(document.getElementById('codeTask').closest('.composer'))[p]", prop)      # the session's own bar (the home screen has another)
+        card = lambda prop: page.evaluate("(p) => getComputedStyle(document.getElementById('codeTask').closest('.card'))[p]", prop)
+        self.assertEqual(bar("position"), "absolute")
+        self.assertEqual(card("backgroundColor"), "rgba(10, 10, 14, 0.4)")
+        self.assertIn("blur(40px)", card("backdropFilter"))
+        # "Allow this?" is a carbon card with hollow ghost answers
+        self.assertEqual(style("#codeIn .cc-ask", "backgroundColor"), "rgb(12, 12, 16)")
+        self.assertEqual(style("#codeIn .cc-ask button", "backgroundColor"), "rgba(0, 0, 0, 0)")
+        self.assertEqual(self.errors, [])
 
 
 if __name__ == "__main__":

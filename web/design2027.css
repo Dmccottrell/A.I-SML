@@ -169,3 +169,22 @@ body.d27 .msg .acts .chip, body.d27 .msg .cp-ver .icon, body.d27 .msg .cp-chips 
   transition: color .15s;
 }
 body.d27 .msg .acts .chip:hover, body.d27 .msg .acts .chip:active, body.d27 .msg .acts .chip:focus-visible, body.d27 .msg .cp-ver .icon:active, body.d27 .msg .cp-chips .chip:active { color: #E4E4E7; filter: none; }
+
+/* ---------- 6  VryxCode's building screen: the same language as chat ---------- */
+/* your task: a solid matte carbon card with a lit top edge and a soft shadow (no purple wash, no divider line) */
+body.d27 .code .cc-user, body.d27.vxl .code .cc-user {
+  background: #16161D !important; border: 1px solid rgba(255, 255, 255, .06) !important; border-top-color: rgba(255, 255, 255, .16) !important; border-radius: 16px; padding: 12px 14px; margin-bottom: 8px;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .08), 0 12px 28px -10px rgba(0, 0, 0, .9), 0 2px 6px rgba(0, 0, 0, .5) !important;
+}
+/* what it did: flat dense rows with hairline borders; the file card keeps its violet edge, the rest go quiet */
+body.d27 .code .cc-tool { background: transparent; border-radius: 0; border-left-color: var(--d-hair); border-bottom: 1px solid var(--d-hair); }
+body.d27 .code .cc-file { background: #0C0C10; border-color: var(--d-hair); border-top-color: var(--d-top); border-radius: 12px !important; }
+/* a question or "Allow this?": a carbon card, the answers are hollow ghost buttons (the main one keeps a soft glow) */
+body.d27 .code .cc-ask { background: #0C0C10; border: 1px solid var(--d-hair); border-top-color: var(--d-top); border-radius: 18px; box-shadow: 0 14px 36px -16px rgba(0, 0, 0, .9), 0 0 26px -14px var(--d-glow); }
+body.d27 .code .cc-ask pre { background: #000; border: 1px solid var(--d-hair); border-radius: 10px; padding: 8px 10px; font-size: 12.5px; }
+body.d27 .code .cc-ask button { background: transparent !important; color: var(--d-amethyst) !important; border: 1px solid rgba(167, 139, 250, .32) !important; border-top-color: rgba(255, 255, 255, .26) !important; border-radius: 999px; box-shadow: none !important; }
+body.d27 .code .cc-ask button:first-of-type { border-color: rgba(167, 139, 250, .6) !important; box-shadow: 0 0 18px -6px var(--d-glow) !important; }
+/* the message bar floats over the feed as dark glass, like in chat; the feed scrolls up clear of it */
+body.d27 .code:not(.home):not(.ide) .composer { position: absolute; left: 0; right: 0; bottom: 12px; padding: 0 16px; pointer-events: none; z-index: 6; background: transparent; }
+body.d27 .code:not(.home):not(.ide) .composer .box { pointer-events: auto; }
+body.d27 .code:not(.home):not(.ide) .feed { padding-bottom: 190px; }

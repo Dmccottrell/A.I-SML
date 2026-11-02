@@ -35,3 +35,8 @@ Respects "reduce motion" on the website. Light mode keeps the normal colours (th
 3. The top bar carries only the menu, a centred bold title and the icons. The usage pill moved to the sidebar, just above your name. The "Protect the owner
    account" banner (website) is a floating dark-glass card under the header with ghost buttons. (The Android app has no such banner.)
 4. The buttons under a reply (Copy, Right, Regenerate) and the Edit button are not pills any more: muted #71717A text that lights up (#E4E4E7) when touched.
+
+
+## VryxCode building screen (web)
+
+The screen where VryxCode works now matches chat: your task is a solid carbon card (#16161D) with a lit top edge and shadow; the message bar floats as 40% dark glass with a 40px blur over the feed; "Allow this?" and questions are carbon cards with hollow ghost answers; tool rows are flat with hairlines. Tests: `tests/test_design_2027.py` (VryxCode home and building screen, plus the switch-off check).
