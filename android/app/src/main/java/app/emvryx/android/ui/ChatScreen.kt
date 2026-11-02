@@ -189,7 +189,7 @@ fun ChatScreen(vm: AppViewModel) {
         val p = LocalPalette.current
         Box(Modifier.fillMaxSize()) {
         // Page background plus a soft coloured glow (modern look) or wash (classic look) at the top; imePadding moves everything up when the keyboard shows.
-        Column(Modifier.fillMaxSize().background(Emvryx.bg).then(if (Emvryx.modern) Modifier.modernGlow(p.accent) else Modifier.accentWash(p.glow)).imePadding()) {
+        Column(Modifier.fillMaxSize().background(Emvryx.bg).then(if (Emvryx.d27) Modifier.d27Glow(vm.streaming) else if (Emvryx.modern) Modifier.modernGlow(p.accent) else Modifier.accentWash(p.glow)).imePadding()) {
             // Top bar. Tapping its menu button opens the chat list; the list was already loaded, so it slides in first and refreshes after.
             TopBar(vm, onMenu = {
                 menu = null
@@ -231,7 +231,7 @@ fun ChatScreen(vm: AppViewModel) {
             // Message box with the model/effort pills; tapping the already-open pill closes it.
             Composer(vm, menu, onMenu = { menu = if (menu == it) null else it })
             // The thin usage bar; tapping it opens the usage dialog.
-            UsageLine(vm, onClick = { showUsage = true })
+            if (!Emvryx.d27) UsageLine(vm, onClick = { showUsage = true })        // design_2027: the usage is a pill at the top instead
         }
         // A colour sweep that plays when another model is picked.
         ModelWash(vm.washes, vm.currentModel?.name)
@@ -320,6 +320,8 @@ private fun TopBar(vm: AppViewModel, onMenu: () -> Unit, onSaveAs: () -> Unit) {
                 vm.title, fontWeight = FontWeight.SemiBold, fontSize = 17.sp, maxLines = 1, overflow = TextOverflow.Ellipsis,
                 modifier = Modifier.weight(1f).padding(horizontal = 8.dp),
             )
+            // design_2027: the usage as a sleek pill near the top, with digits that do not shift as they change
+            if (Emvryx.d27) vm.usage?.let { u -> D27UsagePill(u.fraction.toFloat(), u.label, !u.exempt && u.fraction <= 0.2, Modifier.widthIn(max = 150.dp)) }
             IconButton(onClick = vm::toggleLight) {                  // the website's moon: switch dark or light
                 val ink = Emvryx.text
                 Canvas(Modifier.size(20.dp)) {                       // a crescent: a disc with a second disc taken out of it
@@ -455,6 +457,13 @@ private fun Thread(vm: AppViewModel, onRegen: () -> Unit, onEdit: (Bubble) -> Un
                 else UserMessage(vm, b, onEdit)
             }
             else AiMessage(vm, b, isLast = i == lastReply && i == vm.bubbles.lastIndex, onRegen = onRegen, onReport = onReport, onSaveAs = onSaveAs)
+        }
+        // design_2027: the speed line under the newest reply, a tiny dark-glass pill in monospace
+        if (Emvryx.d27 && !vm.streaming) vm.telemetry?.let { t ->
+            item(key = "telemetry") {
+                Text(t, color = Emvryx.muted, fontSize = 11.sp, fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace, maxLines = 1,
+                    modifier = Modifier.clip(RoundedCornerShape(999.dp)).background(D27Glass).border(1.dp, D27Hair, RoundedCornerShape(999.dp)).padding(horizontal = 10.dp, vertical = 3.dp))
+            }
         }
         // After the messages: the error card, then any plain notice text.
         vm.failure?.let { f -> item(key = "failure") { FailureCard(vm, f) } }
@@ -652,7 +661,12 @@ private fun Composer(vm: AppViewModel, open: Menu?, onMenu: (Menu) -> Unit) {
     }
     val ring = if (pulse.value > 0.01f) Modifier.border((2 + 6 * pulse.value).dp, bar.copy(alpha = 0.45f * pulse.value), RoundedCornerShape(32.dp)) else Modifier
     Column(
-        if (modern) Modifier.fillMaxWidth().padding(start = 12.dp, end = 12.dp, top = 8.dp).then(ring)
+        if (Emvryx.d27) Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 16.dp)      // design_2027: detached from the bottom edge, frosted carbon glass
+            .clip(RoundedCornerShape(26.dp)).background(D27Glass)
+            .border(1.dp, if (focused) D27Amethyst.copy(alpha = 0.5f) else Color.Transparent, RoundedCornerShape(26.dp))
+            .border(1.dp, d27Edge(), RoundedCornerShape(26.dp))                                                    // the lit top edge
+            .padding(start = 16.dp, end = 10.dp, top = 12.dp, bottom = 10.dp)
+        else if (modern) Modifier.fillMaxWidth().padding(start = 12.dp, end = 12.dp, top = 8.dp).then(ring)
             // modern: a glass card with an edge in the model's colour; it lights up while you type (modern.css .composer .card)
             .then(if (focused) Modifier.border(4.dp, Look.soft(bar), RoundedCornerShape(32.dp)).padding(4.dp) else Modifier.padding(4.dp))
             .shadow(if (focused) 18.dp else 12.dp, shape, ambientColor = if (focused || Emvryx.modelBar) bar else Color.Black, spotColor = if (focused || Emvryx.modelBar) bar else Color.Black)
@@ -712,8 +726,9 @@ private fun Composer(vm: AppViewModel, open: Menu?, onMenu: (Menu) -> Unit) {
 private fun Pill(open: Boolean, filled: Boolean, onClick: () -> Unit, modifier: Modifier = Modifier, content: @Composable RowScope.() -> Unit) {
     val p = LocalPalette.current
     Row(
-        modifier.heightIn(min = 44.dp).clip(CircleShape)
-            .then(if (Emvryx.modern) {                                 // modern: soft round pills with no outline (modern.css .pill)
+        modifier.heightIn(min = if (Emvryx.d27) 28.dp else 44.dp).clip(CircleShape)
+            .then(if (Emvryx.d27) Modifier.background(D27Amethyst.copy(alpha = 0.08f)).border(1.dp, D27Amethyst.copy(alpha = 0.28f), CircleShape)     // design_2027: a tiny glowing tag
+              else if (Emvryx.modern) {                                 // modern: soft round pills with no outline (modern.css .pill)
                 Modifier.background(if (open) Look.soft(p.accent) else if (filled) Emvryx.surface2.copy(alpha = 0.6f) else Color.Transparent)
                     .then(if (open) Modifier.border(1.dp, p.accent, CircleShape) else Modifier)
             } else Modifier.then(if (filled) Modifier.background(Emvryx.surface2) else Modifier)
@@ -730,6 +745,24 @@ private fun Pill(open: Boolean, filled: Boolean, onClick: () -> Unit, modifier: 
 @Composable
 private fun SendButton(stop: Boolean, enabled: Boolean, onClick: () -> Unit) {
     val p = LocalPalette.current
+    if (Emvryx.d27) {                       // design_2027: no solid fill, a bright amethyst ring that pulses while the model writes
+        val glow = if (stop) rememberInfiniteTransition(label = "send").animateFloat(0.3f, 1f, infiniteRepeatable(tween(1100), RepeatMode.Reverse), label = "g").value else 0.5f
+        val ink = if (enabled || stop) D27Amethyst else Emvryx.muted
+        Box(
+            Modifier.size(44.dp).then(if (enabled || stop) Modifier.shadow((6 + 14 * glow).dp, CircleShape, ambientColor = D27Amethyst, spotColor = D27Amethyst) else Modifier)
+                .clip(CircleShape).border(2.dp, if (enabled || stop) D27Amethyst else Color(0x24FFFFFF), CircleShape).clickable(enabled = enabled, onClick = onClick),
+            contentAlignment = Alignment.Center,
+        ) {
+            if (stop) Box(Modifier.size(12.dp).clip(RoundedCornerShape(2.dp)).background(ink))
+            else Canvas(Modifier.size(20.dp)) {
+                val w = 2.4.dp.toPx()
+                drawLine(ink, Offset(size.width / 2, size.height * 0.85f), Offset(size.width / 2, size.height * 0.15f), w, StrokeCap.Round)
+                drawLine(ink, Offset(size.width / 2, size.height * 0.15f), Offset(size.width * 0.2f, size.height * 0.45f), w, StrokeCap.Round)
+                drawLine(ink, Offset(size.width / 2, size.height * 0.15f), Offset(size.width * 0.8f, size.height * 0.45f), w, StrokeCap.Round)
+            }
+        }
+        return
+    }
     val modern = Emvryx.modern
     val shape = if (modern) CircleShape else RoundedCornerShape(12.dp)
     val lit = modern && enabled && !stop
@@ -885,12 +918,13 @@ private fun Sidebar(vm: AppViewModel, onDone: () -> Unit, onFolder: (ChatSummary
             }
             Box(
                 Modifier.fillMaxWidth().padding(start = 14.dp, end = 14.dp, top = 12.dp, bottom = 6.dp).heightIn(min = if (Emvryx.modern) 48.dp else 46.dp)
-                    .then(if (Emvryx.modern) Modifier.shadow(12.dp, RoundedCornerShape(16.dp), ambientColor = p.accent, spotColor = p.accent)
+                    .then(if (Emvryx.d27) Modifier.clip(RoundedCornerShape(16.dp)).border(1.dp, d27Edge(), RoundedCornerShape(16.dp))        // design_2027: a hollow ghost button
+                        else if (Emvryx.modern) Modifier.shadow(12.dp, RoundedCornerShape(16.dp), ambientColor = p.accent, spotColor = p.accent)
                         .clip(RoundedCornerShape(16.dp)).background(Look.shine(p.accent))       // modern: a shining button with a halo
                         else Modifier.clip(RoundedCornerShape(14.dp)).background(p.accent))
                     .clickable { vm.newChat(); onDone() },
                 contentAlignment = Alignment.Center,
-            ) { Text("+ New chat", color = p.onAccent, fontWeight = FontWeight.SemiBold, fontSize = 16.sp) }
+            ) { Text("+ New chat", color = if (Emvryx.d27) D27Amethyst else p.onAccent, fontWeight = FontWeight.SemiBold, fontSize = 16.sp) }
             Row(
                 Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 6.dp).heightIn(min = 40.dp)
                     .clip(RoundedCornerShape(12.dp)).background(Emvryx.surface).border(1.dp, Emvryx.line, RoundedCornerShape(12.dp))
@@ -934,15 +968,32 @@ private fun Sidebar(vm: AppViewModel, onDone: () -> Unit, onFolder: (ChatSummary
             }
             HorizontalDivider(color = Emvryx.line)
             // the tools, as in the website's menu (tour.js renderLinks); Usage, Memory, Settings and Admin are under your name
-            Column(Modifier.padding(horizontal = 8.dp, vertical = 6.dp)) {
-                SideLink("lock", "Private chat", "Never saved") { vm.newChat(private = true); onDone() }
-                SideLink("code", "VryxCode") { vm.open(Screen.Code); onDone() }
-                if (vm.phoneChats) SideLink("lock", "On this phone", "Works with the PC off") { vm.open(Screen.Local); onDone() }
-                SideLink("spark", "Skills") { vm.open(vm.panel("skills", Screen.Web("/", "Skills", "openSkills()", panel = true))); onDone() }
-                SideLink("pencil", "Teacher mode") { vm.open(Screen.Web("/", "Teacher mode", "newChat(false, 'teacher')")); onDone() }
-                SideLink("doc", "Documents") { vm.open(vm.panel("files", Screen.Web("/", "Documents", "openDocs()", panel = true))); onDone() }
-                if (vm.flag("chat_schedule")) SideLink("clock", "Scheduled tasks", "Answered by itself at a set time") {
-                    vm.open(vm.panel("schedules", Screen.Web("/", "Scheduled tasks", "openSchedules()", panel = true))); onDone()
+            // design_2027: the tools in two bento blocks (chat tools, then developer tools) instead of one flat list; otherwise one list as always
+            val block: @Composable (@Composable () -> Unit) -> Unit = { inner ->
+                if (Emvryx.d27) Column(Modifier.fillMaxWidth().padding(vertical = 4.dp).clip(RoundedCornerShape(18.dp)).background(D27Carbon).border(1.dp, d27Edge(), RoundedCornerShape(18.dp)).padding(6.dp)) { inner() }
+                else inner()
+            }
+            Column(Modifier.padding(horizontal = if (Emvryx.d27) 12.dp else 8.dp, vertical = 6.dp)) {
+                block {
+                    Column {
+                        if (Emvryx.d27) {
+                            SideLink("pencil", "Teacher mode") { vm.open(Screen.Web("/", "Teacher mode", "newChat(false, 'teacher')")); onDone() }
+                            SideLink("doc", "Documents") { vm.open(vm.panel("files", Screen.Web("/", "Documents", "openDocs()", panel = true))); onDone() }
+                            SideLink("lock", "Private chat", "Never saved") { vm.newChat(private = true); onDone() }
+                        } else SideLink("lock", "Private chat", "Never saved") { vm.newChat(private = true); onDone() }
+                    }
+                }
+                block {
+                    Column {
+                        SideLink("code", "VryxCode") { vm.open(Screen.Code); onDone() }
+                        if (vm.phoneChats) SideLink("lock", "On this phone", "Works with the PC off") { vm.open(Screen.Local); onDone() }
+                        SideLink("spark", "Skills") { vm.open(vm.panel("skills", Screen.Web("/", "Skills", "openSkills()", panel = true))); onDone() }
+                        if (!Emvryx.d27) SideLink("pencil", "Teacher mode") { vm.open(Screen.Web("/", "Teacher mode", "newChat(false, 'teacher')")); onDone() }
+                        if (!Emvryx.d27) SideLink("doc", "Documents") { vm.open(vm.panel("files", Screen.Web("/", "Documents", "openDocs()", panel = true))); onDone() }
+                        if (vm.flag("chat_schedule")) SideLink("clock", "Scheduled tasks", "Answered by itself at a set time") {
+                            vm.open(vm.panel("schedules", Screen.Web("/", "Scheduled tasks", "openSchedules()", panel = true))); onDone()
+                        }
+                    }
                 }
             }
             HorizontalDivider(color = Emvryx.line)

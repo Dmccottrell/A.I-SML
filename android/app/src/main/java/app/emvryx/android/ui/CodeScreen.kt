@@ -60,6 +60,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEventType
@@ -181,11 +183,13 @@ fun CodeScreen(app: AppViewModel, vm: CodeViewModel) {
                 SessionList(vm)
                 Row(
                     Modifier.align(Alignment.BottomEnd).navigationBarsPadding().padding(18.dp).heightIn(min = 52.dp).clip(CircleShape)
-                        .background(Violet).clickable { vm.newSession() }.padding(horizontal = 22.dp),
+                        .then(if (Emvryx.d27) Modifier.background(Color(0xCC000000)).border(1.dp, d27Edge(), CircleShape)         // design_2027: a hollow ghost button
+                              else Modifier.background(Violet))
+                        .clickable { vm.newSession() }.padding(horizontal = 22.dp),
                     verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
-                    Text("+", color = Color.White, fontSize = 22.sp)
-                    Text("New session", color = Color.White, fontWeight = FontWeight.SemiBold, fontSize = 16.sp)
+                    Text("+", color = if (Emvryx.d27) D27Amethyst else Color.White, fontSize = 22.sp)
+                    Text("New session", color = if (Emvryx.d27) D27Amethyst else Color.White, fontWeight = FontWeight.SemiBold, fontSize = 16.sp)
                 }
             }
         }
@@ -321,7 +325,10 @@ private fun Organizer(vm: CodeViewModel) {
                 item(key = s.id) {
                     // "Ready for review": finished, changed something, and not opened since it last changed.
                     val ready = s.state !in busy && s.state == "done" && (s.added > 0 || s.removed > 0 || s.files > 0) && vm.reviewed[s.id] != s.updated
-                    Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp)).clickable { vm.openSession(s) }.padding(start = 8.dp, end = 8.dp, top = 9.dp, bottom = 9.dp),
+                    val d27 = Emvryx.d27                           // design_2027: tighter rows with a razor-thin line between them, numbers in a monospace face
+                    val mono = if (d27) androidx.compose.ui.text.font.FontFamily.Monospace else null
+                    Row(Modifier.fillMaxWidth().then(if (d27) Modifier.drawBehind { drawLine(D27Hair, Offset(0f, size.height), Offset(size.width, size.height), 1.dp.toPx()) } else Modifier.clip(RoundedCornerShape(10.dp)))
+                        .clickable { vm.openSession(s) }.padding(start = 8.dp, end = 8.dp, top = if (d27) 6.dp else 9.dp, bottom = if (d27) 6.dp else 9.dp),
                         verticalAlignment = Alignment.CenterVertically) {
                         Box(Modifier.width(22.dp), contentAlignment = Alignment.Center) {
                             when {
@@ -338,14 +345,14 @@ private fun Organizer(vm: CodeViewModel) {
                         // Lines added (green) and removed (red), like a code review.
                         if (s.added > 0 || s.removed > 0) {
                             Spacer(Modifier.width(8.dp))
-                            Text("+${s.added}", color = Green, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
-                            Text(" −${s.removed}", color = Emvryx.danger, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+                            Text("+${s.added}", color = Green, fontSize = 12.sp, fontWeight = FontWeight.SemiBold, fontFamily = mono)
+                            Text(" −${s.removed}", color = Emvryx.danger, fontSize = 12.sp, fontWeight = FontWeight.SemiBold, fontFamily = mono)
                         }
                         Spacer(Modifier.width(8.dp))
-                        Text(s.age, color = Emvryx.muted, fontSize = 12.sp)
+                        Text(s.age, color = Emvryx.muted, fontSize = 12.sp, fontFamily = mono)
                         // vryxcode_archive: the ⋯ opens Archive / Delete (not for a session that is still working)
                         if (vm.archiveOn && !s.live) MoreDots { vm.menuFor = s }
-                        Text(num.toString(), color = Emvryx.muted, fontSize = 11.sp, modifier = Modifier.padding(start = 8.dp).widthIn(min = 16.dp),
+                        Text(num.toString(), color = Emvryx.muted, fontSize = 11.sp, modifier = Modifier.padding(start = 8.dp).widthIn(min = 16.dp), fontFamily = mono,
                             textAlign = androidx.compose.ui.text.style.TextAlign.End)
                     }
                 }
@@ -379,12 +386,12 @@ private fun androidx.compose.foundation.lazy.LazyListScope.homeHero(vm: CodeView
                     BasicTextField(vm.draft, { vm.draft = it }, Modifier.fillMaxWidth(), textStyle = androidx.compose.ui.text.TextStyle(color = Emvryx.text, fontSize = 16.sp),
                         cursorBrush = SolidColor(Violet))
                 }
-                Box(Modifier.heightIn(min = 46.dp).clip(RoundedCornerShape(18.dp)).background(Violet).clickable(enabled = vm.draft.isNotBlank()) {
+                Box(Modifier.heightIn(min = 46.dp).clip(RoundedCornerShape(18.dp)).then(if (Emvryx.d27) Modifier.border(1.dp, d27Edge(), RoundedCornerShape(18.dp)) else Modifier.background(Violet)).clickable(enabled = vm.draft.isNotBlank()) {
                     val words = vm.draft
                     vm.draft = ""
                     vm.newSession()
                     vm.send(words)
-                }.padding(horizontal = 20.dp), contentAlignment = Alignment.Center) { Text("Build it", color = Color.White, fontWeight = FontWeight.SemiBold, fontSize = 16.sp) }
+                }.padding(horizontal = 20.dp), contentAlignment = Alignment.Center) { Text("Build it", color = if (Emvryx.d27) D27Amethyst else Color.White, fontWeight = FontWeight.SemiBold, fontSize = 16.sp) }
             }
             // Effort: how hard VryxCode thinks (only when it picks the model itself).
             if (vm.oneModel) {
@@ -423,7 +430,8 @@ private fun androidx.compose.foundation.lazy.LazyListScope.homeHero(vm: CodeView
                         pair.forEach { t ->
                             val on = vm.template == t.id
                             val card = RoundedCornerShape(18.dp)
-                            Column(Modifier.weight(1f).heightIn(min = 120.dp).clip(card).background(Emvryx.surface).border(1.dp, if (on) Violet else Emvryx.line, card)
+                            Column(Modifier.weight(1f).heightIn(min = 120.dp).clip(card).background(if (Emvryx.d27) D27Carbon else Emvryx.surface)
+                                .then(if (Emvryx.d27 && !on) Modifier.border(1.dp, d27Edge(), card) else Modifier.border(1.dp, if (on) Violet else Emvryx.line, card))
                                 .clickable { vm.template = if (on) null else t.id }.padding(14.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                                 Text(t.icon, fontSize = 26.sp)
                                 Text(t.name, fontWeight = FontWeight.SemiBold, fontSize = 17.sp)
@@ -593,6 +601,8 @@ private fun Feed(vm: CodeViewModel) {
     // The agent's to-do list, when the taskbox part is on.
     val plan = if ("vryxcode_taskbox" in vm.parity) planSteps(vm.events, vm.working) else emptyList()
     LazyColumn(Modifier.fillMaxSize(), state = list, contentPadding = PaddingValues(14.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        // design_2027: while a session spins up and nothing has come back yet, shimmering lines like a code block instead of an empty page
+        if (Emvryx.d27 && vm.events.isEmpty() && vm.working) item(key = "skeleton") { D27Skeleton() }
         if (plan.isNotEmpty()) item { PlanBox(plan) }
         // Review view / Claude Code style lines: events are turned into richer items (quiet lines, file chips, a "Changed N files" summary).
         if (vm.review || "vryxcode_lines" in vm.parity) {
