@@ -127,6 +127,12 @@
     const meta = document.querySelector('meta[name=theme-color]'); if (meta && dark()) meta.content = '#000000';
     pill(); groups();
   };
+  // a change VryxCode wrote is one quiet line; tapping it opens or closes the code (the line's own handler does it for file chips)
+  document.addEventListener('click', (ev) => {
+    if (!on() || !ev.target.closest) return;
+    const head = ev.target.closest('.code .cc-tool > .cc-head'), row = head && head.parentNode;
+    if (row && row.querySelector(':scope > .cc-diff')) row.classList.toggle('open');
+  });
   const links = document.getElementById('links');
   if (links) new MutationObserver(groups).observe(links, {childList: true});
 })();

@@ -25,6 +25,14 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.material3.Text
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.LinearOutSlowInEasing
+import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -39,6 +47,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import app.emvryx.android.ui.theme.Emvryx
 
 // design_2027 (feature flag, owner only until it has been reviewed): the pieces of the 2027 look that several screens share.
 // The same look as the website (web/design2027.css). Everything here is only used while Emvryx.d27 is on, so the normal look is untouched.
@@ -136,11 +145,25 @@ fun Modifier.d27Card(shape: Shape, fill: Color = D27Carbon): Modifier = this.cli
 /** Your own message in a session: solid matte carbon (#16161D) with a lit top edge and a soft shadow, like the chat bubble */
 fun Modifier.d27Bubble(shape: Shape): Modifier = this.shadow(10.dp, shape, ambientColor = Color.Black, spotColor = Color.Black).clip(shape).background(Color(0xFF16161D)).border(1.dp, d27Edge(), shape)
 
-/** The answer buttons of a question card: a hollow ghost pill with an amethyst word; [main] gives the first answer a soft glow ring */
+/** The answer buttons of a question card: a hairline pill with plain text; only the main answer ([main]) is amethyst, so the card stays calm */
 @Composable
 fun D27GhostAnswer(text: String, onClick: () -> Unit, main: Boolean = false, modifier: Modifier = Modifier) {
-    Box(modifier.heightIn(min = 40.dp).clip(CircleShape).border(1.dp, if (main) D27Amethyst.copy(alpha = 0.6f) else D27Amethyst.copy(alpha = 0.3f), CircleShape)
+    Box(modifier.heightIn(min = 40.dp).clip(CircleShape).border(1.dp, if (main) D27Amethyst.copy(alpha = 0.5f) else D27Hair, CircleShape)
         .clickable(onClick = onClick).padding(horizontal = 16.dp), contentAlignment = Alignment.Center) {
-        Text(text, color = D27Amethyst, fontSize = 15.sp, fontWeight = if (main) FontWeight.SemiBold else FontWeight.Normal)
+        Text(text, color = if (main) D27Amethyst else Color(0xFFE4E4E7), fontSize = 15.sp, fontWeight = if (main) FontWeight.SemiBold else FontWeight.Normal)
     }
+}
+
+/**
+ * New things print in VryxCode's colour: text that has just appeared starts amethyst and settles to its normal colour over about 1.8 s (like the website's d27ink).
+ * [normal] is the colour it settles to. It plays once per line (rememberSaveable keeps that across scrolling), and only while the 2027 look is on.
+ */
+@Composable
+fun d27Ink(normal: Color): Color {
+    var played by rememberSaveable { mutableStateOf(false) }
+    val fade = remember { Animatable(0f) }
+    LaunchedEffect(Unit) {
+        if (Emvryx.d27 && !played) { played = true; fade.snapTo(1f); fade.animateTo(0f, tween(1800, easing = LinearOutSlowInEasing)) }
+    }
+    return lerp(normal, Color(0xFFB79CFF), fade.value)
 }

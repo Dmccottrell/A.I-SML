@@ -648,29 +648,35 @@ private fun EventRow(e: JsonObject, all: List<JsonObject>, vm: CodeViewModel) {
         // What the person asked (shown unless it was sent automatically), with a Restore button on their messages.
         "start", "user" -> if (!e.bool("auto")) Row(Modifier.fillMaxWidth().then(if (Emvryx.d27) Modifier.d27Bubble(shape) else Modifier.clip(shape).background(Emvryx.surface2)).padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
             Text((if (e.bool("plan")) "[Plan] " else "") + e.str("task").ifEmpty { e.str("text") } + (if (e.bool("steer")) "  (while it worked)" else ""),
-                fontSize = 15.sp, modifier = Modifier.weight(1f))
+                fontSize = 15.sp, color = d27Ink(Emvryx.text), modifier = Modifier.weight(1f))
             if ("vryxcode_restore" in vm.parity && e.int("turn") > 0) RestorePill(vm, e.int("turn"))
         }
         // A tool the agent used (such as writing a file): its name, how long it took, and a preview of what it did.
-        "step" -> Column(Modifier.fillMaxWidth().then(if (Emvryx.d27) Modifier.d27Card(shape) else Modifier.clip(shape).background(Emvryx.surface).border(1.dp, Emvryx.line, shape)).padding(12.dp),
+        "step" -> {
+          // design_2027: a step is one quiet line (no box); a change's code opens only when the line is tapped
+          var open by remember { mutableStateOf(!Emvryx.d27) }
+          val inkTool = d27Ink(Emvryx.text)
+          val preview = e.str("preview")
+          Column(Modifier.fillMaxWidth().then(if (Emvryx.d27) Modifier.clip(RoundedCornerShape(8.dp)).clickable(enabled = preview.isNotBlank()) { open = !open }.padding(vertical = 3.dp, horizontal = 2.dp)
+                  else Modifier.clip(shape).background(Emvryx.surface).border(1.dp, Emvryx.line, shape).padding(12.dp)),
             verticalArrangement = Arrangement.spacedBy(6.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Text("● " + e.str("tool"), color = Green, fontWeight = FontWeight.SemiBold, fontSize = 14.sp)
+                Text((if (Emvryx.d27) "" else "● ") + e.str("tool"), color = if (Emvryx.d27) inkTool else Green, fontWeight = if (Emvryx.d27) FontWeight.Medium else FontWeight.SemiBold, fontSize = 14.sp)
                 // how long the step took and the tokens it wrote, as on the website (ide.js: "3s · 1,234 tokens")
                 val took = listOfNotNull(e.num("secs").takeIf { e.containsKey("secs") }?.let { "${Math.round(it)}s" },
                     e.int("words").takeIf { it > 0 }?.let { "%,d tokens".format(it) }).joinToString(" · ")
                 if (took.isNotEmpty()) Text("   $took", color = Emvryx.muted, fontSize = 13.sp)
             }
             // A grey code-style preview, cut at 1,500 characters, that scrolls sideways.
-            val preview = e.str("preview")
-            if (preview.isNotBlank()) Text(preview.take(1500), style = Mono, color = Emvryx.muted,
+            if (open && preview.isNotBlank()) Text(preview.take(1500), style = Mono, color = Emvryx.muted,
                 modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp)).background(Emvryx.bg).horizontalScroll(rememberScrollState()).padding(10.dp))
+          }
         }
         // The tool's output, cut to 600 characters and 8 lines.
         "result" -> Text("→ " + e.str("text").take(600), style = Mono, color = Emvryx.muted, maxLines = 8, overflow = TextOverflow.Ellipsis)
         // Small grey notices: a retry, a note, being queued, earlier steps summarised, the model changing, files rewound.
         "retry" -> Text("↻ " + e.str("why"), color = Emvryx.muted, fontSize = 13.sp)
-        "note", "language" -> Text(e.str("text"), color = Emvryx.muted, fontSize = 14.sp)
+        "note", "language" -> Text(e.str("text"), color = d27Ink(Emvryx.muted), fontSize = 14.sp)
         "queued" -> Text("Queued: it starts when the session before it finishes.", color = Emvryx.muted, fontSize = 14.sp)
         "compacted" -> Text("Summarized earlier steps to make room.", color = Emvryx.muted, fontSize = 13.sp)
         "model" -> Text("Now using ${e.str("model")}.", color = Emvryx.muted, fontSize = 13.sp)
@@ -730,7 +736,7 @@ private fun GroupLine(g: ReviewItem.Group) {
     var open by remember { mutableStateOf(false) }
     val bad = g.lines.any { it.bad }
     Column(Modifier.padding(horizontal = 4.dp).clickable { open = !open }) {
-        Text((if (bad) "✗ " else "") + groupTitle(g) + if (open) "  ⌄" else "  ›", color = if (bad) Emvryx.danger else Emvryx.muted, fontSize = 13.sp)
+        Text((if (bad) "✗ " else "") + groupTitle(g) + if (open) "  ⌄" else "  ›", color = if (bad) Emvryx.danger else d27Ink(Emvryx.muted), fontSize = 13.sp)
         if (open) g.lines.forEach { QuietLine(it) }
     }
 }
@@ -794,7 +800,7 @@ private fun EndExtras(e: JsonObject, vm: CodeViewModel) {
 @Composable
 private fun QuietLine(r: ReviewItem.Quiet) {
     Column(Modifier.padding(horizontal = 4.dp)) {
-        Text((if (r.bad) "✗ " else "") + r.text, color = if (r.bad) Emvryx.danger else Emvryx.muted, fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        Text((if (r.bad) "✗ " else "") + r.text, color = if (r.bad) Emvryx.danger else d27Ink(Emvryx.muted), fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
         if (r.why.isNotBlank()) Text(r.why, color = Emvryx.muted, fontSize = 12.sp, style = Mono, maxLines = 2)
     }
 }
@@ -805,13 +811,13 @@ private fun FileChip(r: ReviewItem.File) {
     var open by remember { mutableStateOf(false) }
     val shape = RoundedCornerShape(12.dp)
     // A card with a red outline if the change failed; tapping opens or closes the diff (only when there are lines to show).
-    Column(Modifier.fillMaxWidth().then(if (Emvryx.d27) Modifier.d27Card(shape).then(if (r.bad) Modifier.border(1.dp, Emvryx.danger.copy(alpha = 0.6f), shape) else Modifier)
+    Column(Modifier.fillMaxWidth().then(if (Emvryx.d27) Modifier.clip(RoundedCornerShape(8.dp)).then(if (r.bad) Modifier.border(1.dp, Emvryx.danger.copy(alpha = 0.6f), RoundedCornerShape(8.dp)) else Modifier)     // design_2027: a quiet row, no box
             else Modifier.clip(shape).background(Emvryx.surface).border(1.dp, if (r.bad) Emvryx.danger.copy(alpha = 0.6f) else Emvryx.line, shape))
         .clickable(enabled = r.diff.isNotEmpty()) { open = !open }.padding(horizontal = 12.dp, vertical = 10.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             PwaIcon("doc", Emvryx.muted, 16.dp)
             Spacer(Modifier.width(8.dp))
-            Text(r.path, style = Mono, fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+            Text(r.path, style = Mono, color = d27Ink(Emvryx.text), fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
             Text("+${r.add}", color = Green, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
             Text(" −${r.del}", color = Emvryx.danger, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
         }
@@ -829,7 +835,7 @@ private fun FileChip(r: ReviewItem.File) {
 @Composable
 private fun DoneLine(r: ReviewItem.Done) {
     val shape = RoundedCornerShape(14.dp)
-    Column(Modifier.fillMaxWidth().then(if (Emvryx.d27) Modifier.d27Card(shape) else Modifier.clip(shape).background(Emvryx.surface).border(1.dp, Emvryx.line, shape)).padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+    Column(Modifier.fillMaxWidth().then(if (Emvryx.d27) Modifier else Modifier.clip(shape).background(Emvryx.surface).border(1.dp, Emvryx.line, shape)).padding(if (Emvryx.d27) 2.dp else 12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text("Changed ${r.files.size} " + if (r.files.size == 1) "file" else "files", fontWeight = FontWeight.SemiBold, fontSize = 14.sp)
             Spacer(Modifier.width(8.dp))

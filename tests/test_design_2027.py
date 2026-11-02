@@ -190,8 +190,17 @@ class Page(Base):
         self.assertEqual(bar("position"), "absolute")
         self.assertEqual(card("backgroundColor"), "rgba(10, 10, 14, 0.4)")
         self.assertIn("blur(40px)", card("backdropFilter"))
+        # what it did is one quiet line: no box, no side bar, no outline; its code opens only when tapped; new text prints in the VryxCode colour
+        self.assertEqual(style("#codeIn .cc-tool", "borderTopWidth"), "0px")
+        self.assertEqual(style("#codeIn .cc-tool", "borderLeftWidth"), "0px")
+        self.assertEqual(style("#codeIn .cc-tool", "boxShadow"), "none")
+        self.assertEqual(style("#codeIn .cc-tool .cc-diff", "display"), "none")
+        page.evaluate("document.querySelector('#codeIn .cc-tool .cc-head').click()")
+        self.assertEqual(style("#codeIn .cc-tool .cc-diff", "display"), "block")
+        self.assertEqual(style("#codeIn .cc-tool .cc-verb", "animationName"), "d27ink")
+        self.assertNotIn("mono", style("#codeIn", "fontFamily").lower())        # the code font is only for names and code
         # "Allow this?" is a carbon card with hollow ghost answers
-        self.assertEqual(style("#codeIn .cc-ask", "backgroundColor"), "rgb(12, 12, 16)")
+        self.assertEqual(style("#codeIn .cc-ask", "backgroundColor"), "rgb(10, 10, 14)")
         self.assertEqual(style("#codeIn .cc-ask button", "backgroundColor"), "rgba(0, 0, 0, 0)")
         self.assertEqual(self.errors, [])
 
