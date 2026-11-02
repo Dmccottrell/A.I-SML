@@ -77,16 +77,17 @@
     const loose = [...l.querySelectorAll(':scope > .link')];                    // links that are not in a block yet (new ones are added later by other scripts too)
     if (!loose.length) return;
     const block = (k) => l.querySelector('.d27-block.' + k) || l.appendChild(el('div', {class: 'd27-block ' + k}));
-    const chat = block('chat'), code = block('code');
-    for (const b of loose) ((DEV.includes((b.querySelector('span') || b).textContent.trim()) ? code : chat)).append(b);
-    l.append(chat, code);                                                       // chat tools first
+    const chat = block('tools'), dev = block('dev');            // (not 'code': VryxCode's full-screen layer already owns that class name)
+    for (const b of loose) ((DEV.includes((b.querySelector('span') || b).textContent.trim()) ? dev : chat)).append(b);
+    l.append(chat, dev);                                                       // chat tools first
   }
 
-  // 5. the usage line becomes a pill at the top of the chat (the element is moved, so everything that updates it by id keeps working)
+  // 5. the usage line becomes a pill in the sidebar, just above your name (the element is moved, so everything that updates it by id keeps working);
+  //    the top bar keeps only the menu, the title and the icons
   function pill() {
-    const u = $('usage'), top = $('themeBtn') && $('themeBtn').parentNode;
-    if (!u || !top || !on() || u.classList.contains('d27-pill')) return;
-    u.classList.add('d27-pill'); top.prepend(u);
+    const u = $('usage'), acct = $('account');
+    if (!u || !acct || !on() || u.classList.contains('d27-pill')) return;
+    u.classList.add('d27-pill'); acct.before(u);
   }
 
   // 6. cards that grow into the next page: where the browser has the View Transitions API, the tapped session morphs into the page header

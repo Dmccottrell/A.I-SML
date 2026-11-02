@@ -13,7 +13,10 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
@@ -46,8 +49,11 @@ val D27Hair = Color(0x14FFFFFF)
 /** The lit top edge of a card or a ghost button: a border that is brighter at the top and fades down the sides */
 fun d27Edge() = Brush.verticalGradient(listOf(Color(0x40FFFFFF), Color(0x14FFFFFF)))
 
-/** Glass for the message bar: carbon at 70% (rgba(12, 12, 16, 0.7)) */
+/** Glass for small pills: carbon at 70% (rgba(12, 12, 16, 0.7)) */
 val D27Glass = Color(0xB30C0C10)
+
+/** The message bar: highly translucent carbon (rgba(10, 10, 14, 0.4)). Android cannot blur what is behind a view, so on the phone it is translucency and the lit edge only */
+val D27Bar = Color(0x660A0A0E)
 
 /**
  * The ambient glow at the top of the screen: a heavily soft radial gradient that drifts slowly sideways. Cool violet at rest; warm amber
@@ -103,5 +109,19 @@ fun D27Skeleton(modifier: Modifier = Modifier) {
         listOf(0.86f, 0.62f, 0.74f, 0.48f, 0.8f).forEach { w ->
             Box(Modifier.fillMaxWidth(w).height(11.dp).clip(RoundedCornerShape(6.dp)).background(Color.White.copy(alpha = shimmer)))
         }
+    }
+}
+
+/**
+ * A nearly invisible action (Copy, Regenerate...): no pill, muted grey (#71717A) that lights up (#E4E4E7) while it is touched.
+ * Used under replies when the 2027 look is on.
+ */
+@Composable
+fun QuietAction(text: String, onClick: () -> Unit, modifier: Modifier = Modifier) {
+    val source = androidx.compose.runtime.remember { androidx.compose.foundation.interaction.MutableInteractionSource() }
+    val pressed by source.collectIsPressedAsState()
+    Box(modifier.heightIn(min = 36.dp).clip(RoundedCornerShape(999.dp)).clickable(interactionSource = source, indication = null, onClick = onClick).padding(horizontal = 10.dp, vertical = 6.dp),
+        contentAlignment = Alignment.Center) {
+        Text(text, color = if (pressed) Color(0xFFE4E4E7) else Color(0xFF71717A), fontSize = 14.sp)
     }
 }

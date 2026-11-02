@@ -26,3 +26,12 @@ Website files: `web/design2027.css` (the look), `web/js/design2027.js` (the few 
 | Shimmering skeleton instead of a spinner | Yes (opening a session) | Yes (a session that is starting) |
 
 Respects "reduce motion" on the website. Light mode keeps the normal colours (the look is dark-first).
+
+## First review fixes (website and Android)
+
+1. The user's message is a tactile matte carbon bubble (#16161D) with a lit top edge and a soft shadow, so it no longer melts into the glow.
+2. The message bar is translucent carbon at 40% with a 40 px blur (the website also on touch phones, where the older look had switched the blur off).
+   Android has the translucency and the lit edge but cannot blur what is behind the bar.
+3. The top bar carries only the menu, a centred bold title and the icons. The usage pill moved to the sidebar, just above your name. The "Protect the owner
+   account" banner (website) is a floating dark-glass card under the header with ghost buttons. (The Android app has no such banner.)
+4. The buttons under a reply (Copy, Right, Regenerate) and the Edit button are not pills any more: muted #71717A text that lights up (#E4E4E7) when touched.

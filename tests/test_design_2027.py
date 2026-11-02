@@ -68,9 +68,11 @@ class Page(Base):
         if page.evaluate("document.documentElement.dataset.mode") == "dark":
             wait_for(lambda: page.evaluate("getComputedStyle(document.body).backgroundColor") == "rgb(0, 0, 0)")                  # pure OLED black (the page fades to it)
         wait_for(lambda: page.evaluate("document.querySelectorAll('#links .d27-block').length") == 2)                              # two bento blocks
-        self.assertEqual(page.evaluate("document.querySelector('#links .d27-block.code').innerText.includes('VryxCode')"), True)
-        self.assertEqual(page.evaluate("document.querySelector('#links .d27-block.chat').innerText.includes('Private chat')"), True)
-        self.assertEqual(page.evaluate("document.getElementById('usage').parentNode === document.getElementById('themeBtn').parentNode"), True)   # the usage pill at the top
+        self.assertEqual(page.evaluate("getComputedStyle(document.querySelector('#links .d27-block.dev')).position"), "static")           # in the list, not covering the sidebar (a block once took VryxCode's full-screen class)
+        self.assertEqual(page.evaluate("document.querySelector('#links .d27-block.dev').innerText.includes('VryxCode')"), True)
+        self.assertEqual(page.evaluate("document.querySelector('#links .d27-block.tools').innerText.includes('Private chat')"), True)
+        self.assertEqual(page.evaluate("document.getElementById('usage').nextElementSibling === document.getElementById('account')"), True)   # the usage pill sits in the sidebar, above your name
+        self.assertEqual(page.evaluate("document.querySelector('.top #usage')"), None)                                                       # ...and is gone from the top bar
         self.assertEqual(self.errors, [])
 
     def test_only_the_new_words_fade_in(self):
@@ -101,6 +103,45 @@ class Page(Base):
         wait_for(lambda: page.evaluate("document.querySelectorAll('.d27-tel').length") == 1)             # tokens a second, the model, the first word
         self.assertIn("tok/s", page.inner_text(".d27-tel"))
         self.assertEqual(self.errors, [])
+
+    def test_the_four_review_fixes(self):
+        """The first review: a tactile user bubble, a glass bar that really blurs (also on a touch phone), a centred title with a floating glass banner, quiet buttons under replies."""
+        from playwright.sync_api import sync_playwright
+        self.state.flags.data["audiences"]["design_2027"] = "owner"
+        p = sync_playwright().start()
+        self.addCleanup(p.stop)
+        b = p.chromium.launch(executable_path=find_browser())
+        self.addCleanup(b.close)
+        # a touch phone: the older look switches the blur off there, so this is the case that matters
+        page = b.new_context(viewport={"width": 420, "height": 860}, has_touch=True, is_mobile=True,
+                             extra_http_headers={"Authorization": "Bearer " + self.state.owner_key()}).new_page()
+        errors = []
+        page.on("pageerror", lambda e: errors.append(str(e)))
+        page.goto(f"http://127.0.0.1:{self.port}/")
+        wait_for(lambda: page.evaluate("typeof S !== 'undefined' && !!S.state"))
+        page.evaluate("document.querySelectorAll('.tour').forEach((e) => e.remove())")
+        wait_for(lambda: page.evaluate("document.body.classList.contains('d27')"))
+        page.evaluate("""() => { S.messages = [{id: 1, role: 'user', content: 'Hello, tell me something'}, {id: 2, role: 'assistant', content: 'Sure.', status: 'done'}]; renderThread(); }""")
+        style = lambda q, prop: page.evaluate("([q, p]) => getComputedStyle(document.querySelector(q))[p]", [q, prop])
+        # 2: the bar is a translucent carbon with the 40 px blur
+        wait_for(lambda: "blur(40px)" in style(".composer .card", "backdropFilter"))
+        self.assertEqual(style(".composer .card", "backgroundColor"), "rgba(10, 10, 14, 0.4)")
+        # 1: the user's bubble is solid matte carbon #16161D with a shadow
+        self.assertEqual(style(".msg.user .bubble", "backgroundColor"), "rgb(22, 22, 29)")
+        self.assertNotEqual(style(".msg.user .bubble", "boxShadow"), "none")
+        # 4: the buttons under a reply have no pill and are muted grey
+        self.assertEqual(style(".msg.ai .acts .chip", "backgroundColor"), "rgba(0, 0, 0, 0)")
+        self.assertEqual(style(".msg.ai .acts .chip", "color"), "rgb(113, 113, 122)")
+        # 3: the title is centred and bold; the usage pill is not in the top bar
+        box = page.evaluate("(() => { const r = document.querySelector('.top .title').getBoundingClientRect(); return (r.left + r.right) / 2; })()")
+        self.assertLess(abs(box - 210), 3)
+        self.assertEqual(style(".top .title", "fontWeight"), "700")
+        # ...and the security banner floats as a glass card
+        page.evaluate("localStorage.removeItem('emvryx_nudge'); S.state.admin = true; maybeNudge()")
+        wait_for(lambda: page.evaluate("!!document.getElementById('nudge')"))
+        self.assertEqual(style("#nudge", "position"), "absolute")
+        self.assertIn("blur(30px)", style("#nudge", "backdropFilter"))
+        self.assertEqual(errors, [])
 
 
 if __name__ == "__main__":
