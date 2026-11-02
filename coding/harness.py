@@ -1347,6 +1347,40 @@ def fenced_call(text):
     return None
 
 
+# A model that has seen many programs sometimes "calls" a tool the way Python would: run("python test.py") in a code block. Nothing ran when this was not understood, and
+# the model went on as if it had. The arguments are read as plain values only (nothing is evaluated), in the order each tool takes them.
+_ARG_ORDER = {"run": ("command",), "read_file": ("path", "start", "end"), "list_files": ("path",), "write_file": ("path", "content"),
+              "edit_file": ("path", "old", "new"), "finish": ("summary",)}
+_PY_FENCE = re.compile(r"```[A-Za-z0-9_+-]*[^\n]*\n(.*?)```", re.S)
+
+
+def python_call(text):
+    """A tool call written as one function call alone in a code block -> _Found, or None. Only a plain call of a known tool with plain values (text, numbers,
+    true/false) counts: anything that would have to be evaluated, or a block that holds more than the call, is left alone."""
+    import ast
+    for m in _PY_FENCE.finditer(text or ""):
+        try:
+            node = ast.parse(m.group(1).strip(), mode="eval").body
+        except SyntaxError:
+            continue
+        if not isinstance(node, ast.Call) or not isinstance(node.func, ast.Name):
+            continue
+        name = TOOL_ALIASES.get(node.func.id, node.func.id)
+        order = _ARG_ORDER.get(name)
+        if not order or len(node.args) > len(order):
+            continue
+        try:
+            args = {k: ast.literal_eval(v) for k, v in zip(order, node.args)}
+            for kw in node.keywords:
+                if kw.arg is None:
+                    raise ValueError("**kwargs")
+                args[kw.arg] = ast.literal_eval(kw.value)
+        except (ValueError, TypeError, SyntaxError):
+            continue
+        return _Found(json.dumps({"name": name, "args": args}))
+    return None
+
+
 PROMISE_NUDGES = 3
 PROMISE_NUDGE = ("You said what you will do next but did not do it: nothing was changed. Do it now with a tool call, and keep going step by step until the "
                  "task is finished or you need an answer from me. Only stop with words alone to ask me something or to say it is all done.")
@@ -1368,7 +1402,7 @@ def promises_work(words):
 
 def parse_tool_call(text):
     """The first tool call in the model's text -> (name, args). Raises ToolError if it can't be read."""
-    m = TOOL_CALL.search(text) or QWEN_TOOL_CALL.search(text) or fenced_call(text)
+    m = TOOL_CALL.search(text) or QWEN_TOOL_CALL.search(text) or fenced_call(text) or python_call(text)
     if not m and ("<|tool_call|>" in text or "<tool_call>" in text):
         raise ToolError("the tool call was cut off before its end (it was too long). Send it again in smaller parts: write_file for the first part, "
                         "then write_file with append=true for each next part, about 60 lines at a time.")
@@ -1654,6 +1688,22 @@ def pasted_code(words):
     return False
 
 
+# Words that say the work is finished or checked ("I've fixed the code ... the tests pass"). With nothing saved and nothing run in this task that is not true.
+_CLAIM = re.compile(r"\b(?:i(?:'ve| have)\s+(?:fixed|updated|added|created|written|changed|implemented|corrected|resolved|refactored|rewritten)|(?:has|have|is|are) been (?:fixed|updated|added|created|corrected|resolved)"
+                    r"|(?:the )?tests? (?:now )?(?:pass|passed|ran|run successfully)|works? (?:correctly|as expected)|(?:is|are) now (?:fixed|working)|code works)\b", re.I)
+CLAIM_NUDGE = ("You said the work is done, but in this task you did not save or change any file and did not run anything, so there is nothing in the project. "
+               "Do it now with tool calls: read the file, fix it with edit_file or write_file, run it or its tests with run, then finish. "
+               "If you cannot, say plainly that nothing was changed.")
+CLAIM_HONEST = ("VryxCode did not save any file or run anything in this task, so there is nothing new in Preview or the editor, and nothing was fixed. "
+                "What it wrote below is only a message, not work that was done. Tell it which file to fix (or attach the file), and what is wrong, and ask it to save the fix and run the tests.\n\nIt said: ")
+
+
+def claims_work(words):
+    """True when a reply in words says the work is done or tested (not when it asks a question)."""
+    tail = (words or "").strip()
+    return bool(_CLAIM.search(tail)) and not tail.rstrip().endswith("?")
+
+
 CODE_NUDGE = ("Do not paste code into the chat. Save it in the project with write_file (one file per call), then run it or its tests. "
               "If you really cannot do this, say so in a sentence and say what the user could do.")
 
@@ -1804,6 +1854,7 @@ def run_agent(task, generate, sandbox, max_turns=8, system=None, project=True, h
         messages = ([{"role": "system", "content": system}] if system else []) + [{"role": "user", "content": first}]
     episodes = []
     used_tools, nudged = 0, False
+    did_work, claim_nudged = False, False                            # a file saved or a program run in this task; the false-claim nudge was used
     edited_since_test, test_nudged = False, False
     web_unchecked, page_nudges = False, 0                            # a web file changed since the page was last checked (proof before "done")
     plan_items, step_fails = None, 0                                 # the model's todo list (steady mode) and failures in a row
@@ -1926,6 +1977,13 @@ def run_agent(task, generate, sandbox, max_turns=8, system=None, project=True, h
                     promised += 1
                     messages.append({"role": "user", "content": PROMISE_NUDGE})
                     continue
+                if not did_work and claims_work(words):                                 # "I've fixed it, the tests pass" with nothing saved or run: not true
+                    if not claim_nudged:
+                        claim_nudged = True
+                        messages.append({"role": "user", "content": CLAIM_NUDGE})
+                        continue
+                    return {"finished": False, "said": True, "summary": CLAIM_HONEST + '"' + " ".join(words.split())[:300] + '"', "turns": turn, "messages": messages, "episodes": episodes,
+                            "nothing_done": True}
                 return {"finished": False, "said": True, "summary": words, "turns": turn, "messages": messages, "episodes": episodes}
             if str(e).startswith("the tool call was cut off"):
                 part = salvage_cut_off(reply)                            # keep what was written and ask for the rest, instead of starting the file again
@@ -1979,6 +2037,7 @@ def run_agent(task, generate, sandbox, max_turns=8, system=None, project=True, h
             bad_calls = 0
             step_fails = 0
             used_tools += 1
+            did_work = did_work or name in ("write_file", "edit_file", "run")
             if steady:
                 if name == "todo" and isinstance(args, dict) and isinstance(args.get("items"), list):
                     plan_items = [it if isinstance(it, dict) else {"text": str(it)} for it in args["items"]]
