@@ -364,6 +364,7 @@ class CodeViewModel(app: Application) : AndroidViewModel(app) {
         when (e.str("kind")) {
             "user", "start" -> offer = ""
             "end" -> if (e.bool("finished") || e.bool("plan")) offer = if (!suggestOn) "" else if (e.bool("plan")) "Go ahead and build it as planned." else e.strings("next").firstOrNull().orEmpty().take(200)
+                     else if (endState(e) == EndState.Waiting && "vryxcode_autocontinue" in parity) offer = if (suggestOn) waitingReplies(e.str("summary")).first() else ""      // waiting for an answer: recommend one
         }
     }
 

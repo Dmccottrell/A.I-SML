@@ -3,6 +3,8 @@
 
 package app.emvryx.android.local
 
+import android.content.Context
+import android.os.Build
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.Serializable
@@ -32,6 +34,28 @@ object AppUpdate {
     fun newer(installed: String, latest: Latest?, dismissed: String): Boolean =
         // All of these must hold: we have our own stamp, we got an answer, the answer names a commit, and that commit is neither ours nor one the person dismissed.
         installed.isNotBlank() && latest != null && latest.sha.isNotBlank() && latest.sha != installed && latest.sha != dismissed
+
+    // The app that installed this one: "com.android.vending" is the Google Play Store. An app put on the phone by hand (the install file) has another installer or none.
+    const val PLAY_STORE = "com.android.vending"
+
+    /** True when the Play Store installed this app: its updates must come from the Play Store too, not from a downloaded install file */
+    fun fromPlayStore(installer: String?): Boolean = installer == PLAY_STORE
+
+    /** The words in the banner: a store app is told to go to the store; an app installed by hand is offered the download */
+    fun title(fromStore: Boolean): String = if (fromStore) "A new version of Emvryx is in the Play Store" else "A new version of Emvryx is ready"
+
+    /** The button's words (see [title]) */
+    fun action(fromStore: Boolean): String = if (fromStore) "Open Play Store" else "Update"
+
+    /** The Play Store app's own address for this app (opens the store app straight on it) and the web address as a fallback when no store app answers */
+    fun storeUri(pkg: String): String = "market://details?id=$pkg"
+    fun storeWebUrl(pkg: String): String = "https://play.google.com/store/apps/details?id=$pkg"
+
+    /** Who installed this app (null when unknown): from Android 11 the install-source record, before that the older installer name */
+    fun installer(ctx: Context): String? = runCatching {
+        if (Build.VERSION.SDK_INT >= 30) ctx.packageManager.getInstallSourceInfo(ctx.packageName).installingPackageName
+        else @Suppress("DEPRECATION") ctx.packageManager.getInstallerPackageName(ctx.packageName)
+    }.getOrNull()
 
     // Lenient JSON reader: ignore fields we do not know.
     private val json = Json { ignoreUnknownKeys = true }

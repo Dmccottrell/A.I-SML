@@ -111,7 +111,8 @@ class RoutesGet:
             st = self.state
             # Count ready models, using a made-up 'viewer' record (no real person) so no sign-in is needed.
             ready = sum(1 for m in st.catalog({"user": "", "owner": True, "tier": "mega", "banned": False})["cards"] if m["state"] == "ready")
-            return self._send(200, {"up": True, "paused": bool(st.cfg.get("paused")), "resting": bool(st.cfg.get("gaming")), "demo": bool(st.demo), "models_ready": ready, "signup": st.signup_mode()},
+            return self._send(200, {"up": True, "paused": bool(st.cfg.get("paused")), "resting": bool(st.cfg.get("gaming")), "demo": bool(st.demo), "models_ready": ready, "signup": st.signup_mode(),
+                                    "shell": shell_version()},         # the version of the page's files: an open page compares it with the one it started with ("a new version is ready")
                               # Allow any website to read this harmless answer (CORS), and never cache it.
                               headers={"Access-Control-Allow-Origin": "*", "Cache-Control": "no-store"})
         # Tells the sign-in page which sign-in methods to offer.

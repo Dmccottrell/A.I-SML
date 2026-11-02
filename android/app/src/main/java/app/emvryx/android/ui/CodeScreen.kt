@@ -770,7 +770,14 @@ private fun EndExtras(e: JsonObject, vm: CodeViewModel) {
     // Auto-continue: say clearly if the task finished, is waiting for you, or ran out of steps (with a Continue button).
     if ("vryxcode_autocontinue" in on) when (val st = endState(e)) {
         EndState.Finished -> Text("✓ Done: the task is finished", color = Green, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
-        EndState.Waiting -> Text("● Not finished yet: it is waiting for your answer", color = Violet, fontSize = 14.sp)
+        EndState.Waiting -> {
+            Text("● Not finished yet: it is waiting for your answer", color = Violet, fontSize = 14.sp)
+            // say what you could answer: one tap sends it (the first one is also greyed in the message box)
+            Text("You could answer:", color = Emvryx.muted, fontSize = 13.sp)
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                waitingReplies(e.str("summary")).forEach { r -> SmallPill(r) { vm.send(r) } }
+            }
+        }
         is EndState.OutOfSteps -> {
             Text("■ Not finished: it used all its steps" + (if (st.rounds > 0) " and carried on ${st.rounds} time" + (if (st.rounds == 1) "" else "s") + " by itself" else "") +
                 ". Your files so far are kept.", fontSize = 14.sp)

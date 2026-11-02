@@ -368,21 +368,29 @@ private fun TopBar(vm: AppViewModel, onMenu: () -> Unit, onSaveAs: () -> Unit) {
     }
 }
 
-/** app_updates: a newer Emvryx app is ready; Update opens its download (the phone asks to install it over this one). Later hides the banner. */
+/**
+ * app_updates: a newer Emvryx app is ready. An app installed by hand (the install file) opens the download; an app that came from the Play Store is told to
+ * update there ("Open Play Store"), because an app the store installed is only updated by the store. Later hides the banner.
+ */
 @Composable
 private fun UpdateBanner(vm: AppViewModel) {
     val context = LocalContext.current
     val p = LocalPalette.current
+    // Was this app put here by the Play Store? (asked once)
+    val fromStore = androidx.compose.runtime.remember { app.emvryx.android.local.AppUpdate.fromPlayStore(app.emvryx.android.local.AppUpdate.installer(context)) }
     Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 6.dp).clip(RoundedCornerShape(14.dp)).background(Emvryx.surface)
         .border(1.dp, p.accent.copy(alpha = 0.5f), RoundedCornerShape(14.dp)).padding(start = 14.dp, end = 6.dp, top = 6.dp, bottom = 6.dp),
         verticalAlignment = Alignment.CenterVertically) {
-        Text("A new version of Emvryx is ready", Modifier.weight(1f), fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+        Text(app.emvryx.android.local.AppUpdate.title(fromStore), Modifier.weight(1f), fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
         TextButton(onClick = vm::updateLater) { Text("Later", color = Emvryx.muted) }
-        // Open the download address in the phone's browser; runCatching swallows any error (for example no app can open it) so the app does not crash.
+        // Open the store page, or the download address in the phone's browser; runCatching swallows any error (for example no app can open it) so the app does not crash.
         TextButton(onClick = {
-            runCatching { context.startActivity(android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse(app.emvryx.android.local.AppUpdate.APK_URL))) }
+            val open = { url: String -> context.startActivity(android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse(url))) }
+            if (fromStore) runCatching { open(app.emvryx.android.local.AppUpdate.storeUri(context.packageName)) }
+                .onFailure { runCatching { open(app.emvryx.android.local.AppUpdate.storeWebUrl(context.packageName)) } }
+            else runCatching { open(app.emvryx.android.local.AppUpdate.APK_URL) }
             vm.updateLater()
-        }) { Text("Update", color = p.accentText, fontWeight = FontWeight.SemiBold) }
+        }) { Text(app.emvryx.android.local.AppUpdate.action(fromStore), color = p.accentText, fontWeight = FontWeight.SemiBold) }
     }
 }
 

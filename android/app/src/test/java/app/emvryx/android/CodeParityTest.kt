@@ -82,4 +82,16 @@ class CodeParityTest {
         assertEquals(e, folded[1])
         assertTrue(folded[2] is ReviewItem.Quiet)                       // one on its own stays a plain line
     }
+
+    @Test
+    // Proves: a question gets "Yes, go ahead." first; a plain statement gets a push to save the work, run the tests and explain; always three replies.
+    fun waitingForAnAnswerRecommendsReplies() {
+        val q = app.emvryx.android.ui.waitingReplies("I found two files that could be the problem. Which one should I fix first?")
+        assertEquals("Yes, go ahead.", q.first())
+        assertEquals(3, q.size)
+        val s = app.emvryx.android.ui.waitingReplies("The function is in utils.py and it looks fine to me.")
+        assertTrue(s.first().contains("save"))
+        assertTrue(s.any { it.contains("Explain") })
+        assertEquals(3, s.size)
+    }
 }

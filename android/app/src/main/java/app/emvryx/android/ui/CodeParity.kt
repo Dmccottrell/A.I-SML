@@ -125,3 +125,14 @@ fun groupTitle(g: ReviewItem.Group): String {
     // Join the parts with commas and make the first letter a capital.
     return parts.joinToString(", ").replaceFirstChar { it.uppercase() }
 }
+
+/**
+ * What to answer when VryxCode stops with "Not finished yet: it is waiting for your answer", given what it said ([text]): replies one tap sends, the first also greyed
+ * in the message box. A question gets "Yes, go ahead."; anything else is a push to really save the work, run it and explain what was wrong. (The same words as the website's.)
+ */
+fun waitingReplies(text: String): List<String> {
+    val tail = text.trim().takeLast(400)
+    val asks = tail.endsWith("?") || Regex("\\b(would you like|do you want|shall i|should i|let me know|which (one|option|file))\\b", RegexOption.IGNORE_CASE).containsMatchIn(tail)
+    return if (asks) listOf("Yes, go ahead.", "Explain your options first.", "No, I want something different.")
+    else listOf("Please save the fix to the project files, run the tests, and tell me what was wrong.", "Explain in plain words what was wrong.", "Show me what you changed.")
+}

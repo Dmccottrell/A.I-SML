@@ -80,3 +80,16 @@ phone against the current one.
 4. **What iPhone does not allow:** being the phone's assistant (Siri only; Emvryx can add Siri Shortcuts: "Hey Siri, ask Emvryx"), an app
    running on its own in the background, or a downloaded app outside the App Store/TestFlight.
 5. **The phone model on iPhone:** llama.cpp runs well on iPhones (Metal, the iPhone GPU), so the offline model may be faster there than on Android.
+
+## "A new version is ready" on every platform
+
+- **Website, installed app (PWA) and the Windows app** (one page): when the server is updated, an open page notices (the server's page version in `/api/status`
+  changed; checked every minute and when you come back to it) and shows "A new version of Emvryx is ready." with **Update now**, which fetches the newest
+  files and reloads the page. Later hides it. Switch: `pwa_install`.
+- **Android app installed by hand** (the install file): the existing banner, **Update** opens the download.
+- **Android app installed from the Play Store**: the banner says "A new version of Emvryx is in the Play Store" with **Open Play Store** (the store page, with the web
+  address as a fallback), because only the store can update a store app. The "is there a newer build" check still compares against the newest GitHub build, which can be
+  a little ahead of what the Play Store has published; once the app is on the Play Store, switch this check to Google's in-app update API (`play-core` app update)
+  so it only speaks when the store really has the update.
+- **iPhone (when the iOS app exists)**: the same banner with **Open App Store**. An iOS app can only be updated through the App Store, and the page version
+  check above already covers the PWA on an iPhone.

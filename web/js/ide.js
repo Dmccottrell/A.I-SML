@@ -375,6 +375,14 @@ async function vxDownloads(box) {
     j.files.some((f) => f.kind === 'Windows program') ? el('small', {}, 'Windows may say \u201cWindows protected your PC\u201d the first time: tap More info, then Run anyway.') : '',
     j.files.some((f) => f.kind.startsWith('Android')) ? el('small', {}, 'On your phone: open the downloaded .apk and allow installing from this browser when asked.') : '');
 }
+// What to answer when VryxCode stops with "Not finished yet: it is waiting for your answer": a few replies one tap sends, the first also greyed in the message box.
+// A question gets "Yes, go ahead."; anything else is a push to really save the work, run it and explain what was wrong.
+function vxWaitingReplies(text) {
+  const tail = String(text || '').trim().slice(-400);
+  const asks = /\?\s*$/.test(tail) || /\b(would you like|do you want|shall i|should i|let me know|which (one|option|file))\b/i.test(tail);
+  return asks ? ['Yes, go ahead.', 'Explain your options first.', 'No, I want something different.']
+              : ['Please save the fix to the project files, run the tests, and tell me what was wrong.', 'Explain in plain words what was wrong.', 'Show me what you changed.'];
+}
 function cEvent(e) {
   if (e.kind === 'user' || e.kind === 'start') offerReply('');          // a new message: the last suggestion no longer fits
   const feed = $('codeIn'); C.events.push(e);
@@ -477,6 +485,11 @@ function cEvent(e) {
       feed.append(renderMessage(e.summary || 'Done.', e.finished));
       if (featureOn('vryxcode_autocontinue') && !e.plan) feed.append(el('div', {class: 'vx-state ' + (e.finished ? 'ok' : 'wait')},     // plainly: finished, or waiting for you
         e.finished ? '\u2713 Done: the task is finished' : '\u25CF Not finished yet: it is waiting for your answer'));
+      if (!e.finished && !e.plan && featureOn('vryxcode_autocontinue')) {           // waiting for you: say what you could answer (one tap sends it), and recommend one in the box
+        const rs = vxWaitingReplies(e.summary); offerReply(rs[0]);
+        feed.append(el('div', {class: 'cc-next vx-replies'}, el('span', {class: 'lead'}, 'You could answer:'),
+          ...rs.map((t) => el('button', {class: 'chip', onclick: () => { $('codeTask').value = t; $('codeGo').click(); }}, t))));
+      }
       const changed = Object.entries(C.turnFiles || {});
       if (vxReview() && e.finished && changed.length) {          // the Done line: every file this message changed, each one opens the change
         const add = changed.reduce((n, [, f]) => n + f.add, 0), del = changed.reduce((n, [, f]) => n + f.del, 0);
