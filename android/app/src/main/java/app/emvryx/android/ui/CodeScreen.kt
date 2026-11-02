@@ -65,6 +65,7 @@ import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.isShiftPressed
 import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
@@ -388,7 +389,10 @@ private fun androidx.compose.foundation.lazy.LazyListScope.homeHero(vm: CodeView
                 verticalAlignment = Alignment.CenterVertically) {
                 Box(Modifier.weight(1f).heightIn(min = 52.dp, max = 160.dp).padding(end = 8.dp), contentAlignment = Alignment.CenterStart) {
                     if (vm.draft.isEmpty()) Text("A bill splitter with tip, a habit tracker, a snake game...", color = Emvryx.muted, fontSize = 16.sp)
-                    BasicTextField(vm.draft, { vm.draft = it }, Modifier.fillMaxWidth(), textStyle = androidx.compose.ui.text.TextStyle(color = Emvryx.text, fontSize = 16.sp),
+                    BasicTextField(vm.draft, { vm.draft = it }, Modifier.fillMaxWidth().onPreviewKeyEvent {
+                        // Enter on a keyboard starts the build (Shift+Enter is a new line)
+                        if (it.type == KeyEventType.KeyDown && it.key == Key.Enter && !it.isShiftPressed && vm.draft.isNotBlank()) { val words = vm.draft; vm.draft = ""; vm.newSession(); vm.send(words); true } else false
+                    }, textStyle = androidx.compose.ui.text.TextStyle(color = Emvryx.text, fontSize = 16.sp),
                         cursorBrush = SolidColor(Violet))
                 }
                 Box(Modifier.heightIn(min = 46.dp).clip(RoundedCornerShape(18.dp)).then(if (Emvryx.d27) Modifier.border(1.dp, d27Edge(), RoundedCornerShape(18.dp)) else Modifier.background(Violet)).clickable(enabled = vm.draft.isNotBlank()) {
@@ -1001,7 +1005,11 @@ private fun CodeComposer(vm: CodeViewModel) {
             if (text.isEmpty()) Text(vm.offer.ifEmpty { if (vm.working && vm.full) "Tell it something while it works…" else "Ask, answer, or tell VryxCode what to build or fix" },
                 color = Emvryx.muted, style = MaterialTheme.typography.bodyLarge)
             // The real text input. Pressing Tab on a hardware keyboard takes the suggestion (onPreviewKeyEvent sees the key first).
-            BasicTextField(field, { field = it }, Modifier.fillMaxWidth().onPreviewKeyEvent { it.key == Key.Tab && it.type == KeyEventType.KeyDown && takeOffer() },
+            BasicTextField(field, { field = it }, Modifier.fillMaxWidth().onPreviewKeyEvent {
+                // Tab takes the suggestion; Enter on a keyboard sends (Shift+Enter is a new line, like the website); the on-screen keyboard's Enter stays a new line
+                if (it.type == KeyEventType.KeyDown && it.key == Key.Enter && !it.isShiftPressed && text.isNotBlank() && (!vm.working || vm.full)) { vm.send(text); fill(""); true }
+                else it.key == Key.Tab && it.type == KeyEventType.KeyDown && takeOffer()
+            },
                 textStyle = MaterialTheme.typography.bodyLarge.copy(color = Emvryx.text), cursorBrush = SolidColor(Violet))
         }
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {

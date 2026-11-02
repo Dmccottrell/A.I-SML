@@ -52,7 +52,13 @@ window.addEventListener('message', (e) => {
 $('codePreviewBtn').onclick = openPreview; $('pvBack').onclick = () => { $('codePv').hidden = true; }; $('pvReload').onclick = reloadPreview;
 document.querySelectorAll('#codePv .pvbar [data-size]').forEach((b) => { b.onclick = () => setPvSize(b.dataset.size); });
 $('codeStop').onclick = () => { if (!C.sid || C.stopping) return; C.stopping = true; $('codeStop').disabled = true; paintLive(); post('/api/code/sessions/' + C.sid + '/stop').then(() => poll()); };
-$('codeTask').addEventListener('keydown', (e) => { if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); $('codeGo').click(); } });
+// Enter sends (Shift+Enter starts a new line), like the chat. Not while an input method is composing a word, not when Enter is picking a suggestion, and not when there is nothing to send to.
+$('codeTask').addEventListener('keydown', (e) => {
+  if (e.key !== 'Enter' || e.shiftKey || e.isComposing || e.defaultPrevented) return;
+  if (!$('codeSuggest').hidden) return;
+  if ($('codeGo').hidden || $('codeGo').disabled || !$('codeTask').value.trim()) return;
+  e.preventDefault(); $('codeGo').click();
+});
 const b64 = (buf) => { let s = '', a = new Uint8Array(buf); for (let i = 0; i < a.length; i += 0x8000) s += String.fromCharCode.apply(null, a.subarray(i, i + 0x8000)); return btoa(s); };
 async function sendImport(body) {
   const r = await post('/api/code/import', Object.assign({project: C.project}, body)); const j = await r.json();

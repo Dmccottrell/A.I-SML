@@ -290,6 +290,7 @@ class CodeViewModel(app: Application) : AndroidViewModel(app) {
                     if (error != null && error == pollError) error = null      // the connection came back: the old warning goes
                     pollError = null
                     // Append the new events and count them, so the next request starts after them.
+                    if (v.events.isNotEmpty()) events.removeAll { it.bool("pending") }          // the server's copy of what was just sent replaces the one shown at once
                     events.addAll(v.events)
                     v.events.forEach(::offerFrom)
                     seen += v.events.size
@@ -331,6 +332,9 @@ class CodeViewModel(app: Application) : AndroidViewModel(app) {
         // A /command that the app answers itself is handled here and not sent to the server.
         if (words.startsWith("/") && runSlash(words)) return
         offer = ""
+        // The message is on screen the moment it is sent (it is replaced by the server's own copy when that arrives), not after the server has answered.
+        val shown = buildJsonObject { put("kind", JsonPrimitive("user")); put("text", JsonPrimitive(words)); put("pending", JsonPrimitive(true)) }
+        if (words.isNotEmpty()) events.add(shown)
         viewModelScope.launch {
             try {
                 // Pick what sending means: a steering note to a working full agent, the next message of an open session, or the first message of a new one.
@@ -350,6 +354,7 @@ class CodeViewModel(app: Application) : AndroidViewModel(app) {
                         val r = api.codeStart(body(words, start = true))
                         sid = r.id
                         events.clear()
+                        if (words.isNotEmpty()) events.add(shown)
                         seen = 0
                     }
                 }
@@ -358,6 +363,8 @@ class CodeViewModel(app: Application) : AndroidViewModel(app) {
                 poll()
                 if (alerts) app.emvryx.android.WatchService.start(getApplication())    // the phone keeps an eye on it, and says when it is done
             } catch (e: Exception) {
+                events.remove(shown)
+                if (words.isNotEmpty()) draft = words          // the send failed: the words go back in the box
                 error = describe(e)
             }
         }
