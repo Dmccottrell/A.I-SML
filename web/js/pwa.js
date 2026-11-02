@@ -22,13 +22,27 @@ function pwaButtons() {
   };
   $('chatSearchBox').after(b);
 }
+// The version of the page's files, as the server says it right now ("" when it cannot be asked: offline, the server restarting).
+async function pwaShellVersion() { try { const r = await fetch('/api/status', {cache: 'no-store'}); return r.ok ? String((await r.json()).shell || '') : ''; } catch (e) { return ''; } }
+// "Update now": ask the browser to fetch the newest files, then reload the page (the installed app and the Windows app are this same page).
+function pwaRestart() {
+  const go = () => location.reload();
+  if (!('serviceWorker' in navigator)) return go();
+  navigator.serviceWorker.getRegistration().then((reg) => (reg ? reg.update().catch(() => {}) : null)).then(go, go);
+}
 function pwaWatchUpdates() {
+  // The notice: shown once, anywhere in the app. Later hides it until the next update.
+  const ready = () => { if (!pwaOn('pwa_install') || $('pwaUpdate')) return;
+    document.body.append(el('div', {class: 'pwa-update', id: 'pwaUpdate', role: 'status'}, el('span', {}, 'A new version of Emvryx is ready.'),
+      el('button', {class: 'btn small', onclick: pwaRestart}, 'Update now'), el('button', {class: 'icon', 'aria-label': 'Later', onclick: () => $('pwaUpdate').remove()}, '\u00d7'))); };
+  // The page remembers the version it started with; when the server's differs, the server was updated: say so at once (checked every minute and when you come back to the page).
+  let base = null;
+  const look = async () => { const v = await pwaShellVersion(); if (!v) return; if (base === null) base = v; else if (v !== base) ready(); };
+  window.pwaCheckUpdate = look;
+  look(); setInterval(look, 60 * 1000); document.addEventListener('visibilitychange', () => { if (!document.hidden) look(); });
   if (!('serviceWorker' in navigator)) return;
   navigator.serviceWorker.getRegistration().then((reg) => {
     if (!reg) return;
-    const ready = () => { if (!pwaOn('pwa_install') || $('pwaUpdate')) return;
-      document.body.append(el('div', {class: 'pwa-update', id: 'pwaUpdate', role: 'status'}, el('span', {}, 'Emvryx was updated.'),
-        el('button', {class: 'btn small', onclick: () => location.reload()}, 'Refresh'), el('button', {class: 'icon', 'aria-label': 'Later', onclick: () => $('pwaUpdate').remove()}, '×'))); };
     reg.addEventListener('updatefound', () => { const w = reg.installing; if (w) w.addEventListener('statechange', () => { if (w.state === 'activated' && navigator.serviceWorker.controller) ready(); }); });
     setInterval(() => reg.update().catch(() => {}), 30 * 60 * 1000);
     document.addEventListener('visibilitychange', () => { if (!document.hidden) reg.update().catch(() => {}); });

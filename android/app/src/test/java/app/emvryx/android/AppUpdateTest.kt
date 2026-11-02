@@ -43,4 +43,18 @@ class AppUpdateTest {
         assertEquals("abc123", j.sha)
         assertEquals(AppUpdate.APK_URL.substringBeforeLast('/') + "/version.json", AppUpdate.VERSION_URL)
     }
+
+    @Test
+    // Proves: an app the Play Store installed is told to update in the Play Store (with its own address), and an app installed by hand is offered the download.
+    fun aStoreAppIsToldToUseTheStore() {
+        assertTrue(AppUpdate.fromPlayStore("com.android.vending"))
+        assertFalse(AppUpdate.fromPlayStore(null))                                      // put on by hand: no installer is recorded
+        assertFalse(AppUpdate.fromPlayStore("com.google.android.packageinstaller"))     // the phone's own installer: a downloaded file
+        assertEquals("A new version of Emvryx is in the Play Store", AppUpdate.title(true))
+        assertEquals("Open Play Store", AppUpdate.action(true))
+        assertEquals("A new version of Emvryx is ready", AppUpdate.title(false))
+        assertEquals("Update", AppUpdate.action(false))
+        assertEquals("market://details?id=app.emvryx.android", AppUpdate.storeUri("app.emvryx.android"))
+        assertEquals("https://play.google.com/store/apps/details?id=app.emvryx.android", AppUpdate.storeWebUrl("app.emvryx.android"))
+    }
 }

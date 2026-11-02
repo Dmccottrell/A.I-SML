@@ -131,7 +131,8 @@ class Ops(Base):
         s, h, body = Client(self.port).call("GET", "/api/status", raw=True)
         j = json.loads(body)
         self.assertEqual((s, j["up"], h.get("Access-Control-Allow-Origin")), (200, True, "*"))
-        self.assertEqual(set(j), {"up", "paused", "resting", "demo", "models_ready", "signup"})            # nothing about people or data
+        self.assertEqual(set(j), {"up", "paused", "resting", "demo", "models_ready", "signup", "shell"})   # nothing about people or data; "shell" is only the page version
+        self.assertRegex(j["shell"], r"^[0-9a-f]{12}$")                                                    # a short fingerprint of the page's files (the "new version is ready" notice)
 
     def test_the_owner_can_really_test_the_sources_and_nobody_else(self):
         import live_data
