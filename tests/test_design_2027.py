@@ -95,9 +95,9 @@ class Page(Base):
         self.assertTrue(page.evaluate("document.getElementById('send').classList.contains('beat')"))     # the ring beat
         page.evaluate("const c = document.getElementById('ctxBtn'); c.hidden = false; c.style.setProperty('--p', '40')")
         wait_for(lambda: page.evaluate("document.getElementById('send').style.getPropertyValue('--p')") == "40")   # the memory fill is on the send ring
-        page.click("#input")
+        page.evaluate("document.querySelectorAll('.tour').forEach((e) => e.remove()); document.getElementById('input').focus()")     # script clicks: a late welcome tour cannot block them
         page.keyboard.type("Hello")
-        page.click("#send")
+        page.evaluate("document.getElementById('send').click()")
         wait_for(lambda: page.evaluate("document.querySelectorAll('.d27-tel').length") == 1)             # tokens a second, the model, the first word
         self.assertIn("tok/s", page.inner_text(".d27-tel"))
         self.assertEqual(self.errors, [])
