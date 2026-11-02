@@ -41,10 +41,10 @@ jobs:
     # Steps run one after another; if one fails, the later ones are skipped (unless they say "if: always()" or similar).
     steps:
       # Download this repository's code onto the machine.
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       # Install Java 17 (Android's build tool Gradle needs it). "temurin" is the free OpenJDK build; "cache: gradle" keeps downloaded libraries
       # between runs so later builds are faster.
-      - uses: actions/setup-java@v5
+      - uses: actions/setup-java@v6
         with:
           distribution: temurin
           java-version: "17"
@@ -66,14 +66,14 @@ jobs:
         run: chmod +x gradlew && ./gradlew --no-daemon testDebugUnitTest assembleDebug
       # Save the debug .apk as a download on the run page. "always()" means: do this even if an earlier step failed, so a half-built result can still be inspected.
       # "ignore" means: do not fail if there is no file to upload.
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         if: always()
         with:
           name: emvryx-android-debug
           path: android/app/build/outputs/apk/debug/*.apk
           if-no-files-found: ignore
       # Only when something failed: save the test reports (HTML pages that show which test broke and why) so they can be read afterwards.
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         if: failure()
         with:
           name: android-test-reports
@@ -96,9 +96,9 @@ jobs:
       contents: write                 # only to replace the android-latest release
     timeout-minutes: 30
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       # Java 17 again, for Gradle (each job starts on a clean machine, so it is repeated).
-      - uses: actions/setup-java@v5
+      - uses: actions/setup-java@v6
         with:
           distribution: temurin
           java-version: "17"
@@ -143,13 +143,13 @@ jobs:
       # GitHub's machines are short on disk. Delete big tools this job never uses (.NET, Haskell, Boost, CodeQL ...) to make room for the emulator.
       - name: Free disk space (the emulator's phone storage needs several GB)
         run: sudo rm -rf /usr/share/dotnet /opt/ghc /usr/local/share/boost /usr/local/lib/node_modules /opt/hostedtoolcache/CodeQL && df -h / | tail -1
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       # Install Python 3.11 (the demo Emvryx server is a Python program); "cache: pip" reuses downloaded packages.
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v7
         with:
           python-version: "3.11"
           cache: pip
-      - uses: actions/setup-java@v5
+      - uses: actions/setup-java@v6
         with:
           distribution: temurin
           java-version: "17"
@@ -208,7 +208,7 @@ jobs:
             ./gradlew --no-daemon connectedDebugAndroidTest -Pandroid.testInstrumentationRunnerArguments.key=$SHOTS_KEY
             adb pull /data/local/tmp/emvryx-screens ../screens || true
       # Save the screenshots and the demo server's log as a download (always, even after a failure, to help find out what went wrong).
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         if: always()
         with:
           name: emvryx-android-screens
