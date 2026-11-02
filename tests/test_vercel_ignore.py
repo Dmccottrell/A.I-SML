@@ -17,6 +17,7 @@ def _bash_works():
         return False
 
 
+BASH = shutil.which("bash") or "bash"          # the bash that was checked above: on Windows a bare "bash" can be the Linux-subsystem stub instead
 READY = _bash_works() and shutil.which("git") is not None
 
 
@@ -48,7 +49,7 @@ class Ignore(unittest.TestCase):
     def run_script(self, cwd="site", **env):
         e = {k: v for k, v in os.environ.items() if not k.startswith("VERCEL_")}
         e.update(env)
-        return subprocess.run(["bash", "ignore-build.sh" if cwd == "site" else "site/ignore-build.sh"], cwd=os.path.join(self.repo, cwd) if cwd != "." else self.repo, env=e, capture_output=True, text=True)
+        return subprocess.run([BASH, "ignore-build.sh" if cwd == "site" else "site/ignore-build.sh"], cwd=os.path.join(self.repo, cwd) if cwd != "." else self.repo, env=e, capture_output=True, text=True)
 
     def test_a_change_outside_site_skips_the_build(self):
         self.commit("app/server.py", "two\n")
@@ -78,12 +79,12 @@ class Ignore(unittest.TestCase):
         r = self.run_script(VERCEL_GIT_PREVIOUS_SHA="0" * 40)                      # a commit that is not in this clone
         self.assertEqual(r.returncode, 1, r.stdout + r.stderr)
         self.assertIn("not in this clone", r.stdout)
-        first = subprocess.run(["bash", "ignore-build.sh"], cwd=os.path.join(self.repo, "site"), env={**os.environ, "VERCEL_GIT_COMMIT_SHA": git(self.repo, "rev-list", "--max-parents=0", "HEAD")}, capture_output=True, text=True)
+        first = subprocess.run([BASH, "ignore-build.sh"], cwd=os.path.join(self.repo, "site"), env={**os.environ, "VERCEL_GIT_COMMIT_SHA": git(self.repo, "rev-list", "--max-parents=0", "HEAD")}, capture_output=True, text=True)
         self.assertEqual(first.returncode, 1)                                      # the very first commit has nothing before it
         outside = tempfile.mkdtemp()
         self.addCleanup(shutil.rmtree, outside, True)
         shutil.copy(SCRIPT, outside)
-        r = subprocess.run(["bash", os.path.join(outside, "ignore-build.sh")], cwd=outside, capture_output=True, text=True)
+        r = subprocess.run([BASH, os.path.join(outside, "ignore-build.sh")], cwd=outside, capture_output=True, text=True)
         self.assertEqual(r.returncode, 1)                                          # not a git checkout at all
 
 

@@ -16,7 +16,22 @@ from tests.test_browser_check import find_browser
 from tests.test_code_sessions import wait_for
 
 REMOTE = "https://github.com/Dmccottrell/A.I-SML.git"
-HAVE_GPG = shutil.which("gpg") is not None and shutil.which("git") is not None
+def gpg_can_sign():
+    """True when git and gpg are here AND this computer's gpg can make a signing key in a fresh folder (on the Windows test machine Git's gpg stops with an error
+    on that, so these tests, which sign real commits, are skipped there: they need the machine's gpg, they do not test it)."""
+    if not (shutil.which("gpg") and shutil.which("git")):
+        return False
+    home = tempfile.mkdtemp()
+    try:
+        return subprocess.run(["gpg", "--homedir", home, "--batch", "--passphrase", "", "--quick-generate-key", "probe <probe@example.test>", "ed25519", "sign", "never"],
+                              capture_output=True, timeout=60).returncode == 0
+    except (OSError, subprocess.SubprocessError):
+        return False
+    finally:
+        shutil.rmtree(home, ignore_errors=True)
+
+
+HAVE_GPG = gpg_can_sign()
 
 
 def run(cwd, *args, env=None):
