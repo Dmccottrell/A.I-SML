@@ -50,6 +50,38 @@ class CodeViewModel(app: Application) : AndroidViewModel(app) {
     // The list of coding sessions shown on the sessions screen.
     var sessions by mutableStateOf<List<CodeSessionRow>>(emptyList())
         private set
+
+    // ---- vryxcode_archive: tuck sessions away or delete them
+    /** The switch, copied from the server's list by the screen */
+    var archiveOn by mutableStateOf(false)
+    /** The sessions in the Archived list (read only when the switch is on) */
+    var archived by mutableStateOf<List<CodeSessionRow>>(emptyList())
+    /** Whether the Archived part at the bottom of the list is open */
+    var showArchived by mutableStateOf(false)
+    /** The session whose menu (Archive / Restore / Delete) is open, or null */
+    var menuFor by mutableStateOf<CodeSessionRow?>(null)
+
+    /** Reads the normal list (and the Archived one when the switch is on) again */
+    private suspend fun refreshLists() {
+        sessions = api.codeSessions()
+        archived = if (archiveOn) runCatching { api.codeSessions(archived = true) }.getOrDefault(emptyList()) else emptyList()
+    }
+
+    /** Archives a session (on = true) or brings it back (on = false), then reloads the lists; a problem becomes a message in [error] */
+    fun archive(s: CodeSessionRow, on: Boolean) {
+        menuFor = null
+        viewModelScope.launch {
+            try { api.codeArchive(s.id, on); refreshLists() } catch (e: Exception) { error = describe(e) }
+        }
+    }
+
+    /** Deletes a session and its history for good (the project's files stay), then reloads the lists */
+    fun deleteSession(s: CodeSessionRow) {
+        menuFor = null
+        viewModelScope.launch {
+            try { api.codeDeleteSession(s.id); refreshLists() } catch (e: Exception) { error = describe(e) }
+        }
+    }
     // A plain-words error message to show, or null when all is well.
     var error by mutableStateOf<String?>(null)
         private set
@@ -145,7 +177,7 @@ class CodeViewModel(app: Application) : AndroidViewModel(app) {
                 // If the chosen place to run is not available, go back to "local" (this computer).
                 if (i.environments.none { it.id == env && it.available }) env = "local"
                 // Fetch the session list.
-                sessions = api.codeSessions()
+                refreshLists()
                 // If notifications are on and a session is still running, start the background watcher that will notify when it finishes.
                 if (alerts && sessions.any { it.live }) app.emvryx.android.WatchService.start(getApplication())   // one still working: keep an eye on it
                 // Fetch the /commands; runCatching turns a failure into a result we can default, so a missing list never blocks loading.
@@ -217,7 +249,7 @@ class CodeViewModel(app: Application) : AndroidViewModel(app) {
         stopPolling()
         inSession = false
         sid = null
-        viewModelScope.launch { runCatching { api.codeSessions() }.onSuccess { sessions = it } }
+        viewModelScope.launch { runCatching { refreshLists() } }
     }
 
     // Cancels the polling loop, if one is running.

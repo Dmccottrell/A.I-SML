@@ -243,7 +243,17 @@ class ApiClient(private val session: SessionStore) {
     // General info, the session list, one session's view (only events after number [after], so each poll sends just what is new), then start / reply to a session.
     suspend fun codeInfo(): CodeInfo = get("/api/code")
 
-    suspend fun codeSessions(): List<CodeSessionRow> = get<CodeSessions>("/api/code/sessions").sessions
+    // [archived] = true asks for the Archived list instead of the normal one (flag vryxcode_archive)
+    suspend fun codeSessions(archived: Boolean = false): List<CodeSessionRow> = get<CodeSessions>("/api/code/sessions" + if (archived) "?archived=1" else "").sessions
+
+    // vryxcode_archive: tuck a session away (on = true) or bring it back; and delete one for good. Both only for a session that is not running.
+    suspend fun codeArchive(id: String, on: Boolean) {
+        post<JsonObject>("/api/code/sessions/$id/archive", buildJsonObject { put("archived", on) })
+    }
+
+    suspend fun codeDeleteSession(id: String) {
+        post<JsonObject>("/api/code/sessions/$id/delete", JsonObject(emptyMap()))
+    }
 
     suspend fun codeView(id: String, after: Int): CodeView = get("/api/code/sessions/$id?after=$after")
 

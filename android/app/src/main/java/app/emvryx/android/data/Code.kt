@@ -93,6 +93,7 @@ data class CodeSessionRow(
     val added: Int = 0,                 // lines this session added and took away (flag vryxcode_review: +52 -3)
     val removed: Int = 0,
     val updated: Double = 0.0,          // when it last changed: Ready for review until it is opened after that
+    val archived: Boolean = false,      // vryxcode_archive: in the Archived list
 ) {
     // True while the session is still busy (not finished or stopped).
     val live get() = state in setOf("starting", "working", "asking", "queued")

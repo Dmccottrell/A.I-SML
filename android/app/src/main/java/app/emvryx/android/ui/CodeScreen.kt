@@ -121,6 +121,7 @@ fun CodeScreen(app: AppViewModel, vm: CodeViewModel) {
         vm.review = app.flag("vryxcode_review")
         vm.projects = app.flag("vryxcode_projects")
         vm.alerts = app.flag("phone_alerts")
+        vm.archiveOn = app.flag("vryxcode_archive")               // vryxcode_archive: archive or delete any session (the ⋯ on each row)
         // `parity` = the set of newer website features the app shows: all off unless android_vryxcode is on, then each follows its own switch.
         vm.parity = if (!app.flag("android_vryxcode")) emptySet() else PARITY_FLAGS.filter { app.flag(it) }.toSet()     // each part follows its own switch
         // Let the ViewModel open a page of the website inside the app (used by Preview, Save to GitHub, Publish).
@@ -189,6 +190,7 @@ fun CodeScreen(app: AppViewModel, vm: CodeViewModel) {
     }
     // Dialogs that appear only while their data is set (the notes VryxCode saved, and this project's permission rules).
     vm.memory?.let { MemoryDialog(vm, it) }
+    vm.menuFor?.let { SessionMenu(vm, it) }                         // vryxcode_archive: Archive / Restore / Delete
     vm.rules?.let { RulesDialog(vm) }
 }
 
@@ -257,7 +259,7 @@ private fun ProjectRow(vm: CodeViewModel) {
 @Composable
 private fun SessionList(vm: CodeViewModel) {
     // No sessions yet: the welcome page with ideas to start from.
-    if (vm.sessions.isEmpty()) {
+    if (vm.sessions.isEmpty() && vm.archived.isEmpty()) {
         Welcome(vm, "Describe it. VryxCode plans it, writes it, runs it and checks it.")
         return
     }
@@ -276,8 +278,9 @@ private fun SessionList(vm: CodeViewModel) {
                 Text("$label · ${rows.size}", color = if (label == "READY FOR REVIEW") Violet else Emvryx.muted, fontSize = 11.sp,
                     fontWeight = FontWeight.SemiBold, letterSpacing = 1.1.sp, modifier = Modifier.padding(start = 4.dp, top = 6.dp))
             }
-            items(rows, key = { it.id }) { s -> SessionCard(s, vm.review) { vm.openSession(s) } }
+            items(rows, key = { it.id }) { s -> SessionCard(s, vm.review, onMore = if (vm.archiveOn && !s.live) ({ vm.menuFor = s }) else null) { vm.openSession(s) } }
         }
+        archivedBlock(vm)
     }
 }
 
@@ -336,13 +339,74 @@ private fun Organizer(vm: CodeViewModel) {
                         }
                         Spacer(Modifier.width(8.dp))
                         Text(s.age, color = Emvryx.muted, fontSize = 12.sp)
+                        // vryxcode_archive: the ⋯ opens Archive / Delete (not for a session that is still working)
+                        if (vm.archiveOn && !s.live) MoreDots { vm.menuFor = s }
                         Text(num.toString(), color = Emvryx.muted, fontSize = 11.sp, modifier = Modifier.padding(start = 8.dp).widthIn(min = 16.dp),
                             textAlign = androidx.compose.ui.text.style.TextAlign.End)
                     }
                 }
             }
         }
+        archivedBlock(vm)                                            // vryxcode_archive: the Archived part at the end
     }
+}
+
+/** A small ⋯ button at the end of a session row: opens that session's menu */
+@Composable
+private fun MoreDots(onClick: () -> Unit) {
+    Box(Modifier.size(32.dp).clip(CircleShape).clickable(onClick = onClick), contentAlignment = Alignment.Center) {
+        Text("⋯", color = Emvryx.muted, fontSize = 18.sp)
+    }
+}
+
+/**
+ * vryxcode_archive: the end of the list. "Archived · N" opens or closes the sessions that were tucked away; each has a ⋯ with Restore and Delete.
+ * Written as an extension of the list builder so both list layouts (the organizer and the plain one) can add it as their last items.
+ */
+private fun androidx.compose.foundation.lazy.LazyListScope.archivedBlock(vm: CodeViewModel) {
+    if (!vm.archiveOn || vm.archived.isEmpty()) return
+    item(key = "archived-head") {
+        Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp)).clickable { vm.showArchived = !vm.showArchived }.padding(start = 6.dp, top = 16.dp, bottom = 8.dp),
+            verticalAlignment = Alignment.CenterVertically) {
+            Text("ARCHIVED · ${vm.archived.size}", color = Emvryx.muted, fontSize = 11.sp, fontWeight = FontWeight.SemiBold, letterSpacing = 1.1.sp, modifier = Modifier.weight(1f))
+            Text(if (vm.showArchived) "Hide" else "Show", color = Emvryx.muted, fontSize = 12.sp, modifier = Modifier.padding(end = 8.dp))
+        }
+    }
+    if (vm.showArchived) items(vm.archived, key = { "archived-" + it.id }) { s ->
+        Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp)).clickable { vm.openSession(s) }.padding(start = 8.dp, end = 8.dp, top = 9.dp, bottom = 9.dp),
+            verticalAlignment = Alignment.CenterVertically) {
+            Text(s.title.ifBlank { "Session" }, fontSize = 15.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f), color = Emvryx.muted)
+            Spacer(Modifier.width(8.dp))
+            Text(s.age, color = Emvryx.muted, fontSize = 12.sp)
+            MoreDots { vm.menuFor = s }
+        }
+    }
+}
+
+/** The menu of one session (vryxcode_archive): Archive (or Restore, in the Archived list), Delete for good (asks once more), Cancel */
+@Composable
+private fun SessionMenu(vm: CodeViewModel, s: CodeSessionRow) {
+    // The second tap on Delete is the real one: the first only changes the words.
+    var sure by remember(s.id) { mutableStateOf(false) }
+    AlertDialog(
+        onDismissRequest = { vm.menuFor = null }, containerColor = Emvryx.surface,
+        title = { Text(s.title.ifBlank { "Session" }, maxLines = 2, overflow = TextOverflow.Ellipsis, fontSize = 17.sp) },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                Text(if (sure) "Delete this session and its history for good? Your project files are kept."
+                     else if (s.archived) "It is in the Archived list. Restore it to put it back, or delete it for good."
+                     else "Archive tucks it away (files and history are kept; find it under Archived at the bottom). Delete removes it for good.",
+                    color = Emvryx.muted, fontSize = 14.sp)
+            }
+        },
+        confirmButton = {
+            Row {
+                if (!sure) TextButton({ vm.archive(s, !s.archived) }) { Text(if (s.archived) "Restore" else "Archive") }
+                TextButton({ if (sure) vm.deleteSession(s) else sure = true }) { Text(if (sure) "Yes, delete" else "Delete", color = Emvryx.danger) }
+            }
+        },
+        dismissButton = { TextButton({ vm.menuFor = null }) { Text("Cancel", color = Emvryx.muted) } },
+    )
 }
 
 // Starter ideas on the welcome page: a short name, then the full request that is put into the message box when tapped.
@@ -384,7 +448,7 @@ private fun Welcome(vm: CodeViewModel, lead: String) {
 
 /** One session in the plain list: a coloured status dot and word, title, age, project/model/place, a snippet, and counts. [review] adds the +/- line counts. */
 @Composable
-private fun SessionCard(s: CodeSessionRow, review: Boolean, onClick: () -> Unit) {
+private fun SessionCard(s: CodeSessionRow, review: Boolean, onMore: (() -> Unit)? = null, onClick: () -> Unit) {
     val shape = RoundedCornerShape(16.dp)
     Column(Modifier.fillMaxWidth().clip(shape).background(Emvryx.surface).border(1.dp, Emvryx.line, shape).clickable(onClick = onClick).padding(14.dp),
         verticalArrangement = Arrangement.spacedBy(4.dp)) {
@@ -402,6 +466,7 @@ private fun SessionCard(s: CodeSessionRow, review: Boolean, onClick: () -> Unit)
             Text(s.title, fontWeight = FontWeight.SemiBold, fontSize = 16.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
             Spacer(Modifier.width(8.dp))
             Text(word + " · " + s.age, color = Emvryx.muted, fontSize = 12.sp)
+            if (onMore != null) MoreDots(onMore)                         // vryxcode_archive
         }
         Text(s.project + " · " + s.model + " · " + s.env, color = Emvryx.muted, fontSize = 13.sp, maxLines = 1)
         if (s.snippet.isNotBlank()) Text(s.snippet, color = Emvryx.muted, fontSize = 14.sp, maxLines = 2, overflow = TextOverflow.Ellipsis)
