@@ -1,7 +1,7 @@
 # Design 2027 (switch `design_2027`, admins and the owner first)
 
-One new look for the website, the installed app (PWA) and the Android app. It is a single switch in Admin > Previews, **Owner** to start with,
-so nobody else sees it. Off, everything looks exactly as before. **This is not merged to main until the owner has reviewed it.**
+One new look for the website, the installed app (PWA) and the Android app. It is a single switch in Admin > Previews, **Admins** (and the owner) for now,
+so nobody else sees it. Off, everything looks exactly as before. **It is merged to main (Nov 2026); the switch keeps it hidden from everyone else.**
 
 Website files: `web/design2027.css` (the look), `web/js/design2027.js` (the few things CSS cannot do). Android: `ui/Design2027.kt` and small changes in
 `ChatScreen.kt`, `CodeScreen.kt`, `theme/Theme.kt`, `AppViewModel.kt`.

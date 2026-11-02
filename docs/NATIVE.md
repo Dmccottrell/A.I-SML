@@ -1,5 +1,7 @@
 # Native apps (Android first, then iPhone): what is needed
 
+> **Status (Nov 2026):** the Android app is built (Kotlin + Compose) and published by GitHub as the `android-latest` download; see [ANDROID_EXTRAS.md](ANDROID_EXTRAS.md). The iPhone app is not started. The rest of this page is the original plan.
+
 Decision (Oct 2026): both apps are built natively, like the big AI apps: **Kotlin + Jetpack Compose** on Android, **Swift + SwiftUI** on iPhone. Capacitor was the cheaper road (see [ANDROID.md](ANDROID.md)); this is the polished one. Nothing here has to be built today.
 
 ## Where it is built matters
