@@ -60,6 +60,35 @@ jobs:
           & $iscc windows-app\installer.iss
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           Get-Item dist\Emvryx-Setup.exe
+      # The Microsoft Store package (free to submit; Microsoft signs it, so no certificate is bought). The identity must match what Partner Center gave
+      # when the app name was reserved: set the repository variables MSIX_IDENTITY_NAME, MSIX_PUBLISHER (like CN=XXXXXXXX-...) and MSIX_PUBLISHER_DISPLAY
+      # (Settings > Secrets and variables > Actions > Variables). Without them the package is still built, with test names, so this step always proves the
+      # packaging works. makeappx.exe comes with the Windows SDK that is already on GitHub's Windows machine. The Store wants a 4-part version ending in .0.
+      - name: The Microsoft Store package (MSIX)
+        shell: pwsh
+        env:
+          MSIX_IDENTITY_NAME: ${{ vars.MSIX_IDENTITY_NAME }}
+          MSIX_PUBLISHER: ${{ vars.MSIX_PUBLISHER }}
+          MSIX_PUBLISHER_DISPLAY: ${{ vars.MSIX_PUBLISHER_DISPLAY }}
+        run: |
+          $name = if ($env:MSIX_IDENTITY_NAME) { $env:MSIX_IDENTITY_NAME } else { "Emvryx.Test" }
+          $pub = if ($env:MSIX_PUBLISHER) { $env:MSIX_PUBLISHER } else { "CN=Emvryx" }
+          $disp = if ($env:MSIX_PUBLISHER_DISPLAY) { $env:MSIX_PUBLISHER_DISPLAY } else { "Emvryx" }
+          $version = (Get-Date -Format "yyyy.M.d") + ".0"
+          $layout = "dist\msix-layout"
+          New-Item -ItemType Directory -Force $layout | Out-Null
+          Copy-Item build\Release\Emvryx.exe $layout
+          Copy-Item -Recurse windows-app\msix\Assets $layout\Assets
+          (Get-Content windows-app\msix\AppxManifest.xml -Raw).Replace("{{IDENTITY_NAME}}", $name).Replace("{{PUBLISHER}}", $pub).Replace("{{PUBLISHER_DISPLAY}}", $disp).Replace("{{VERSION}}", $version) | Set-Content -Encoding utf8 $layout\AppxManifest.xml
+          $makeappx = Get-ChildItem "${env:ProgramFiles(x86)}\Windows Kits\10\bin\*\x64\makeappx.exe" | Sort-Object FullName | Select-Object -Last 1
+          & $makeappx.FullName pack /d $layout /p dist\Emvryx.msix /o
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          Get-Item dist\Emvryx.msix
+      # Save the Store package as a download on the run page (Artifacts > emvryx-msix); upload this file in Partner Center.
+      - uses: actions/upload-artifact@v4
+        with:
+          name: emvryx-msix
+          path: dist/Emvryx.msix
       # Save the installer as a download on the run page (Artifacts > emvryx-windows).
       - uses: actions/upload-artifact@v4
         with:

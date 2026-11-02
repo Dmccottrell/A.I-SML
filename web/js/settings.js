@@ -128,9 +128,23 @@ function sxSections(id) {
       {title: 'Delete my account', desc: 'Removes your chats, notes, memory, projects, GitHub link and devices. This cannot be undone.', danger: true, ctl: sxBtn('Delete account', () => deleteDialog(), 'bad')}]}])],
     about: [{title: 'Emvryx', rows: [
       {title: 'One family of four models', desc: 'Flare, Equinox, Solstice and Apogee are the Emvryx models; VryxCode builds projects with them.'},
-      {title: 'Your server', desc: st.demo ? 'Demo mode: no model is attached.' : 'Connected.', ctl: st.contact ? el('a', {class: 'sbtn', href: 'mailto:' + st.contact}, 'Report a problem') : null}]}]
+      {title: 'Your server', desc: st.demo ? 'Demo mode: no model is attached.' : 'Connected.', ctl: st.contact ? el('a', {class: 'sbtn', href: 'mailto:' + st.contact}, 'Report a problem') : null},
+      ...(st.features && st.features.send_feedback ? [{title: 'Send feedback', desc: 'A bug, something confusing or an idea: it goes to the owner of this Emvryx.', ctl: sxBtn('Send feedback', () => sendFeedback(), 'primary')}] : [])]}]
   };
   return A[id] || [];
+}
+function sendFeedback() {   // send_feedback: tell the owner about a bug, an idea or something confusing (works from any screen; Android's Settings opens it too)
+  const KINDS = [['bug', 'A bug'], ['confusing', 'Something confusing'], ['idea', 'An idea'], ['other', 'Something else']];
+  let kind = 'bug';
+  const note = el('textarea', {class: 'f', maxlength: '500', placeholder: 'What happened, or what would you like?', 'aria-label': 'Your feedback', style: 'width:100%;min-height:90px;background:var(--bg);border:1px solid var(--line);border-radius:12px;color:var(--text);padding:10px;font:inherit'});
+  const out = el('div', {role: 'status', style: 'color:var(--muted);font-size:14px'});
+  const kinds = el('div', {class: 'kinds'}, ...KINDS.map(([id, label]) => el('button', {class: 'chip' + (id === kind ? ' on' : ''), type: 'button', onclick: (e) => { kind = id; [...kinds.children].forEach((b) => b.classList.remove('on')); e.currentTarget.classList.add('on'); }}, label)));
+  const where = () => (typeof C !== 'undefined' && C.view && document.getElementById('code') && !document.getElementById('code').hidden ? 'VryxCode' : 'Chat') + ', ' + (navigator.userAgent.includes('Android') ? 'Android' : /Windows/.test(navigator.userAgent) ? 'Windows' : 'web');
+  const d = dialog([el('h2', {}, 'Send feedback'), el('div', {style: 'color:var(--muted);font-size:14px'}, 'This goes to the owner of this Emvryx. Only what you write here and the screen you are on are sent, never your chats.'), kinds, note, out,
+    el('button', {class: 'btn', type: 'button', onclick: async () => {
+      if (!note.value.trim()) { out.style.color = 'var(--danger)'; out.textContent = 'Write a few words first.'; return; }
+      const r = await post('/api/feedback', {kind, note: note.value, where: where()}); const j = await r.json().catch(() => ({}));
+      if (!r.ok) { out.style.color = 'var(--danger)'; out.textContent = j.message || 'That did not work.'; return; } d.remove(); toast('Thanks. The owner will see it.'); }}, 'Send')], 'Cancel');
 }
 const SX_NAV = [['general', 'General', 'gear'], ['chat', 'Chat and lookups', 'spark'], ['memory', 'Memory', 'brain'], ['data', 'Data controls', 'folder'], ['apps', 'Connected apps', 'code'], ['security', 'Security', 'lock'], ['account', 'Account', 'eye'], ['about', 'About', 'doc']];
 const SX_OWNER = [['a-overview', 'Overview', 'chart'], ['a-flags', 'Previews (Admin screen)', 'spark'], ['a-people', 'People (Admin screen)', 'eye'], ['a-signups', 'Sign-ups and invites', 'pencil'], ['a-feedback', 'Answer reports', 'pencil'], ['a-backups', 'Backups', 'folder'], ['a-cloud', 'Cloud machine', 'cloud'], ['a-log', 'Security log', 'lock']];
