@@ -109,7 +109,7 @@ class Page(Base):
                 page.wait_for_selector("#codeList .scard")                                    # ...but is under Archived (shown as a plain card list)
                 self.assertEqual(page.locator("#codeList .scard").count(), 1)
                 self.assertIn("two", page.inner_text("#codeList .scard"))
-                page.click("#codeList .scard .more")
+                page.evaluate("document.querySelector('#codeList .scard .more').click()")        # a script click: the welcome tour may still be on top on a slow machine
                 page.wait_for_selector(".dialog >> text=Restore to the list")
                 self.assertEqual(errors, [])
             finally:
