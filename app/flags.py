@@ -111,6 +111,7 @@ FLAGS = [
 # Bug fixes people would notice, in plain words. Each goes out with the next bug-fix release of its part (product None: Publish bug fixes in Previews;
 # "vryxcode": Push bug fixes in Models > VryxCode) and shows under "Fixed" in What's new. Add one line here with every fix that ships.
 FIXES = [
+    {"id": "web_voice_mic", "product": None, "text": "Voice typing and live voice on the website can start: the page no longer blocks its own microphone before you can be asked."},
     {"id": "android_menu_names", "product": None, "text": "In the Android app's side menu, names like \u201cScheduled tasks\u201d stay on one line; the grey note beside them gives way instead of squeezing the name to a letter per line."},
     {"id": "pwa_menu_solid", "product": None, "text": "On a phone, the menu in the modern look is solid: the chat behind it no longer shows through its rows."},
     {"id": "vx_windows_full_path", "product": "vryxcode", "text": "On a Windows PC, a file VryxCode names by its full path (C:\\...\\your project\\index.html) is that file, instead of a copy in a new folder inside the project."},

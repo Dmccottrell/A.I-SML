@@ -48,3 +48,23 @@ Settings > Answer reports (also shows app feedback): mark each one handled when 
 - [ ] Every "bug" report is handled or consciously left.
 - [ ] A backup restore was tried once (`python tools/backup_data.py --restore ...`).
 - [ ] The privacy and terms pages say what the app does today (read them once).
+
+## Tools for the owner (free, on the PC)
+- **Restore drill** (once before inviting testers, then monthly): `python tools/restore_drill.py --out backups` unpacks the newest backup into a throw-away folder,
+  checks every database and says how old the backup is. It never touches the live data.
+- **Load test** (to learn how many people the PC can serve): set `EMVRYX_KEY` to a *test* account's key, then
+  `python tools/load_test.py --url https://chat.emvryx.app --users 3 --rounds 2 --scenario pages`, and again with `--scenario chat` (that one uses the model).
+  Raise `--users` slowly. It prints typical and slow waits and how many requests failed.
+
+## What Claude checked in the first pass (and what is left for a person)
+Done and kept as automatic tests:
+- Every API address in the code answers "not signed in" without a sign-in (only the three public sign-in addresses are open), and a normal person
+  cannot reach any admin address (`tests/test_route_access.py`; new routes are found by themselves).
+- File addresses cannot be tricked into serving the server's own source files.
+- The page carries the protective headers (no framing, strict script policy, no referrer). One real bug was found and fixed: the page blocked its own
+  microphone, so voice typing could not start in Chrome (`tests/test_voice_permission.py`).
+- Text contrast in the new design: the only misses were the muted grey of the small buttons under replies (4.2:1); it is now #7C7C86 (4.7:1 on black).
+- Backups: restoring is tested, and the drill above checks a real backup.
+
+Still for a person (not something code can judge): a screen-reader walk through sign-in, chat and VryxCode; checking on a real phone with the largest
+text size; an outside penetration test before many strangers sign up (that one costs money).

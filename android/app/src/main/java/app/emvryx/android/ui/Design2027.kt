@@ -126,7 +126,7 @@ fun D27Skeleton(modifier: Modifier = Modifier) {
 }
 
 /**
- * A nearly invisible action (Copy, Regenerate...): no pill, muted grey (#71717A) that lights up (#E4E4E7) while it is touched.
+ * A nearly invisible action (Copy, Regenerate...): no pill, muted grey (#7C7C86) that lights up (#E4E4E7) while it is touched.
  * Used under replies when the 2027 look is on.
  */
 @Composable
@@ -135,7 +135,7 @@ fun QuietAction(text: String, onClick: () -> Unit, modifier: Modifier = Modifier
     val pressed by source.collectIsPressedAsState()
     Box(modifier.heightIn(min = 36.dp).clip(RoundedCornerShape(999.dp)).clickable(interactionSource = source, indication = null, onClick = onClick).padding(horizontal = 10.dp, vertical = 6.dp),
         contentAlignment = Alignment.Center) {
-        Text(text, color = if (pressed) Color(0xFFE4E4E7) else Color(0xFF71717A), fontSize = 14.sp)
+        Text(text, color = if (pressed) Color(0xFFE4E4E7) else Color(0xFF7C7C86), fontSize = 14.sp)
     }
 }
 
