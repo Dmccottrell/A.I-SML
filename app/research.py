@@ -12,12 +12,15 @@ WHAT THIS FILE DOES
     Only the search words leave the PC (as with the web search in chat). Private chats never research.
 """
 import re
+import threading
+import time
 
 import web_search
 
 # Limits: at most 5 searches per report, 10 notes kept, and each note cut to 900 characters so the model's input stays small.
 MAX_SEARCHES = 5
 MAX_NOTES = 10
+REPORT_BUDGET = 30        # seconds all the searches of one report may take together (they run at the same time)
 NOTE_CHARS = 900
 
 # Text added to the end of the question so the model writes a structured report instead of a short answer. The notes come with it.
@@ -80,16 +83,28 @@ def gather(question, search=None, on_step=None, year=None):
     # Default search: web_search.web_notes reads up to 3 pages per search. A different function can be passed in (tests do this).
     search = search or (lambda q: web_search.web_notes(q, k=3, read=True))
     queries = plan(question, year)
+    # The searches are started all at once (they wait on the internet, not on each other), then read in order: the best query's pages come first, and `on_step`
+    # still moves from search to search. A search that is slower than the whole report may take is given up on.
+    slots = [{"done": threading.Event(), "found": []} for _ in queries]
+
+    def run(q, slot):
+        try:
+            slot["found"] = search(q) or []
+        except Exception:                                       # one search failing does not stop the report
+            slot["found"] = []
+        slot["done"].set()
+
+    for q, slot in zip(queries, slots):
+        threading.Thread(target=run, args=(q, slot), daemon=True).start()
+    end = time.monotonic() + REPORT_BUDGET
     # `seen` holds page keys already used so the same page is never added twice.
     notes, seen = [], set()
-    # Run the searches one by one; i is the step number for the progress message.
-    for i, q in enumerate(queries):
+    # Take the searches in order; i is the step number for the progress message.
+    for i, (q, slot) in enumerate(zip(queries, slots)):
         if on_step:
             on_step(f"Searching: {q}", i, len(queries))
-        try:
-            found = search(q) or []
-        except Exception:                                       # one search failing does not stop the report
-            found = []
+        slot["done"].wait(max(0.0, end - time.monotonic()))
+        found = slot["found"] if slot["done"].is_set() else []
         for n in found:
             # A page is identified by its address without a #fragment and trailing slash, lower case; if there is no address, its title.
             key = (n.get("url") or n.get("title") or "").split("#")[0].rstrip("/").lower()
@@ -99,7 +114,7 @@ def gather(question, search=None, on_step=None, year=None):
             seen.add(key)
             # Keep a cleaned-up note: title cut to 160 characters, text cut to NOTE_CHARS.
             notes.append({"title": str(n.get("title", ""))[:160], "text": str(n["text"])[:NOTE_CHARS], "url": n.get("url", "")})
-        # Enough notes already: skip the remaining searches.
+        # Enough notes already: the remaining searches are not needed.
         if len(notes) >= MAX_NOTES:
             break
     # Tell the page the final count (the search is finished, so done equals the total).

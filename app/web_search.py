@@ -54,6 +54,8 @@ import html
 import json
 import os
 import re
+import threading
+import time
 import urllib.parse
 import urllib.request
 from datetime import datetime
@@ -232,16 +234,64 @@ def page_text(raw_html):
 
 
 # ------------------------------------------------------------------ the internet
-def get(url, headers=None, limit=2_000_000):
-    """Download `url` (at most `limit` bytes) and return it as text."""
+# What was just downloaded is remembered for a short time, so the same address asked twice a moment apart (a follow-up, a retry, two parts of one answer looking
+# up the same place or page) is not downloaded twice. Short on purpose: prices and scores must still be fresh. Only successful, small answers are kept.
+CACHE_SECONDS = 45
+CACHE_MAX = 200
+CACHE_BIGGEST = 300_000
+_recent = {}
+_recent_lock = threading.Lock()
+
+
+def forget_recent():
+    """Empty the memory of recent downloads (tests, and "Check again")."""
+    with _recent_lock:
+        _recent.clear()
+
+
+def get(url, headers=None, limit=2_000_000, timeout=None):
+    """Download `url` (at most `limit` bytes) and return it as text. An answer from the last CACHE_SECONDS is reused; `timeout` is how long one wait may take."""
+    key = (url, tuple(sorted((headers or {}).items())), limit)
+    now = time.monotonic()
+    with _recent_lock:
+        hit = _recent.get(key)
+        if hit and now - hit[0] < CACHE_SECONDS:
+            return hit[1]
     # Build the request with our polite User-Agent plus any extra headers (the ** unpacks a dict into the dict being built).
     req = urllib.request.Request(url, headers={"User-Agent": USER_AGENT, **(headers or {})})
-    # Open the address, waiting at most TIMEOUT seconds.
-    with urllib.request.urlopen(req, timeout=TIMEOUT) as r:
+    # Open the address, waiting at most `timeout` (TIMEOUT) seconds.
+    with urllib.request.urlopen(req, timeout=timeout or TIMEOUT) as r:
         # Use the encoding the site declares (UTF-8 if it says nothing).
         charset = r.headers.get_content_charset() or "utf-8"
         # Read at most `limit` bytes (about 2 MB) so a huge page cannot use all memory; "replace" swaps unreadable bytes for a placeholder instead of crashing.
-        return r.read(limit).decode(charset, "replace")
+        text = r.read(limit).decode(charset, "replace")
+    if len(text) <= CACHE_BIGGEST:
+        with _recent_lock:
+            if len(_recent) >= CACHE_MAX:                         # full: drop what is already out of date, or the oldest
+                for k in [k for k, v in _recent.items() if now - v[0] >= CACHE_SECONDS] or [min(_recent, key=lambda k: _recent[k][0])]:
+                    _recent.pop(k, None)
+            _recent[key] = (now, text)
+    return text
+
+
+def run_together(jobs, budget):
+    """Run the functions in `jobs` (no arguments each) at the same time and wait for all of them, but no longer than `budget` seconds in all.
+    Returns one entry per job, in the same order: its result, or None when it failed or was still not finished (it is left to end by itself)."""
+    out = [None] * len(jobs)
+
+    def work(i, fn):
+        try:
+            out[i] = fn()
+        except Exception:
+            out[i] = None
+
+    threads = [threading.Thread(target=work, args=(i, fn), daemon=True) for i, fn in enumerate(jobs)]
+    for t in threads:
+        t.start()
+    end = time.monotonic() + budget
+    for t in threads:
+        t.join(max(0.0, end - time.monotonic()))
+    return list(out)
 
 
 def get_json(url, headers=None):
@@ -362,17 +412,18 @@ def pick_source(name="auto"):
     return name
 
 
-def read_pages(results, question, fetch_page=get):
-    """Open each result's page and keep its best-matching passage (better than a short snippet)."""
-    # Visit each result's page.
-    for r in results:
-        try:
-            # Download the page and reduce it to its readable paragraphs.
-            text = page_text(fetch_page(r["url"]))
-        except Exception:
-            continue             # the page didn't load: keep the snippet
-        # Only use the page if it gave at least 40 words; otherwise the short search snippet stays.
-        if len(text.split()) >= 40:
+PAGE_BUDGET = 8        # seconds in all for opening the result pages (they are opened together); a page that is slower keeps its short search snippet
+PAGE_BYTES = 800_000   # a page is read up to this size (the best passage is near the top; reading 2 MB only costs time)
+
+
+def read_pages(results, question, fetch_page=None, budget=PAGE_BUDGET):
+    """Open each result's page and keep its best-matching passage (better than a short snippet). The pages are opened at the same time, so one slow site no longer
+    holds up the others; after `budget` seconds the pages still loading are given up on and keep their snippet."""
+    fetch_page = fetch_page or (lambda url: get(url, limit=PAGE_BYTES, timeout=budget))
+    pages = run_together([(lambda u=r["url"]: page_text(fetch_page(u))) for r in results], budget)
+    for r, text in zip(results, pages):
+        # Only use the page if it gave at least 40 words; otherwise the short search snippet stays (a page that failed or was too slow gave None).
+        if text and len(text.split()) >= 40:
             r["text"] = best_passage(text, question)
     return results
 
@@ -411,7 +462,7 @@ def web_notes(question, k=3, source="auto", read=False, fetch=None, fetch_page=N
         results = rank(results, k, one_per_site=name != "wikipedia")   # Wikipedia: every result is one site
         # Optionally read the whole pages for better passages.
         if read:
-            results = read_pages(results, question, fetch_page or get)
+            results = read_pages(results, question, fetch_page)
     except Exception as e:                 # offline, a timeout, a bad key, a changed API...
         # Print the problem for the person running the server, and carry on with no notes.
         print(f"(web search failed: {e})")
