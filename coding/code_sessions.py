@@ -326,6 +326,7 @@ class Session:
         self._auto_tries = 0                            # automatic second tries after an unexpected failure, this message
         self._auto_rounds = 0                           # vryxcode_autocontinue: times it carried on by itself after using all its steps, this message
         self._page_tries = 0                            # automatic fixes after the app's own page check found problems, this message
+        self.archived = False                           # vryxcode_archive: tucked away in the Archived list (kept, not shown in the normal list)
         self.notify, self.on_notify = False, None       # tell the owner's phone when a turn ends or it needs an answer (set by the server)
 
     def emit(self, kind, **data):
@@ -361,9 +362,12 @@ class Session:
                 snippet = e["summary"]
         # The title is the task with all runs of whitespace squeezed to single spaces, cut to 70 characters.
         title = " ".join(str(self.task).split())[:70]
-        return {"id": self.id, "title": title, "project": self.project, "model": self.model_id, "env": self.env, "state": self.state, "started": self.started,
-                "updated": self.updated, "snippet": clip(snippet, 220), "steps": steps, "files": len(files), "checkpoints": list(self.checkpoints),
-                "added": added, "removed": removed}
+        row = {"id": self.id, "title": title, "project": self.project, "model": self.model_id, "env": self.env, "state": self.state, "started": self.started,
+               "updated": self.updated, "snippet": clip(snippet, 220), "steps": steps, "files": len(files), "checkpoints": list(self.checkpoints),
+               "added": added, "removed": removed}
+        if self.archived:
+            row["archived"] = True                       # only present when on: a session that was never archived has the same summary as always
+        return row
 
     _save_lock = threading.Lock()                         # one save or delete of a session's history at a time (shared: saves are short)
 
@@ -1557,6 +1561,7 @@ class CodeManager:
             s.events = list(d["events"])
             s.checkpoints = list(meta.get("checkpoints") or [])
             s.started = meta.get("started") or s.started
+            s.archived = bool(meta.get("archived"))
             # The turn counter continues from the highest checkpoint turn, or from the number of messages seen so far.
             s.turns_run = max([c.get("turn", 0) for c in s.checkpoints] + [sum(1 for e in s.events if e["kind"] in ("start", "user"))])
             s.generate, s.max_turns, s.context_tokens = generate, int(build_steps or turns or self.max_turns), context_tokens
@@ -1715,8 +1720,9 @@ class CodeManager:
         except CodeError:
             return None
 
-    def list_sessions(self, user):
-        """Newest first: the running ones from memory, the rest from the history on disk."""
+    def list_sessions(self, user, archived=None):
+        """Newest first: the running ones from memory, the rest from the history on disk.
+        archived=None gives all of them; False only the ones in the normal list; True only the archived ones."""
         now, out = time.time(), {}
         # First the saved rows from disk, keyed by session id.
         for m in self.log(user).metas():
@@ -1731,6 +1737,8 @@ class CodeManager:
                     out[sid]["position"] = self.queue_position(user, sid)
         # Newest first, capped at the maximum the list shows; each row gets a words-style age such as "5 minutes ago".
         rows = sorted(out.values(), key=lambda m: m.get("updated", 0), reverse=True)[:code_log.MAX_SESSIONS]
+        if archived is not None:
+            rows = [m for m in rows if bool(m.get("archived")) == bool(archived)]
         for m in rows:
             m["age"] = code_log.age_words(now, m.get("updated", now))
         return rows
@@ -1756,6 +1764,22 @@ class CodeManager:
                 live.deleted = True                       # its worker may still save once as it finishes (persist checks this)
             self.sessions.pop(sid, None)
             self.log(user).delete(sid)
+
+    def set_archived(self, user, sid, on):
+        """Tuck a session away into the Archived list (on=True) or bring it back (on=False). Its files and history are kept either way.
+        A running session must be stopped first, like deleting one."""
+        live = self.sessions.get(sid)
+        if live and live.user != user:
+            live = None                                   # someone else's session id: treated as not found below
+        if live and live.state in ("starting", "working", "asking", "queued"):
+            raise CodeError("That session is running.", "Stop it first.")
+        if live:
+            live.archived = bool(on)                      # in memory: saving it writes the new summary (persist takes the save lock itself)
+            live.persist(force=True)
+            return
+        with Session._save_lock:                          # on disk only: the same lock the saving code uses, so a save cannot overlap
+            if not self.log(user).set_flag(sid, "archived", bool(on)):
+                raise CodeError("That session isn't here.")
 
     def _before_and_after(self, user, sid):
         """(workspace, the zip of the project before the session's first message, {path: text} then, {path: text} now)."""

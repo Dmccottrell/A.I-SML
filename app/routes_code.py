@@ -242,6 +242,8 @@ class RoutesCode:
             if path == "/api/code/templates":
                 return self._send(200, {"templates": templates.list_templates()})
             if path == "/api/code/sessions":
+                if st.flags.on("vryxcode_archive", who):                          # vryxcode_archive: the normal list, or (?archived=1) the Archived list
+                    return self._send(200, {"sessions": st.code.list_sessions(user, archived=arg("archived") == "1")})
                 return self._send(200, {"sessions": st.code.list_sessions(user)})
             if path == "/api/code/github/repos":
                 try:
@@ -966,6 +968,11 @@ class RoutesCode:
             m = re.fullmatch(r"/api/code/sessions/([\w-]+)/rewind", path)
             if m:
                 return self._send(200, st.code.rewind(user, m.group(1), int(body.get("turn", -1))))
+            # vryxcode_archive: tuck a session into the Archived list, or bring it back.
+            m = re.fullmatch(r"/api/code/sessions/([\w-]+)/archive", path)
+            if m and st.flags.on("vryxcode_archive", who):
+                st.code.set_archived(user, m.group(1), bool(body.get("archived", True)))
+                return self._send(200, {"ok": True, "archived": bool(body.get("archived", True))})
             # Delete a session from history.
             m = re.fullmatch(r"/api/code/sessions/([\w-]+)/delete", path)
             if m:

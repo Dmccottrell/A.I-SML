@@ -22,6 +22,17 @@ async function openCode() {
 // ---- the Sessions list: where VryxCode opens, like a to-do list of everything it has worked on
 const ENV_NAME = {local: 'This computer', sandbox: 'Isolated sandbox', cloud: 'Cloud machine'};
 const FILTERS = [['all', 'All'], ['running', 'Running'], ['queued', 'Queued'], ['needs', 'Needs you'], ['done', 'Finished']];
+const vxArchiveOn = () => !!(S.state && S.state.features && S.state.features.vryxcode_archive);
+const vxFilters = () => FILTERS.concat(vxArchiveOn() ? [['archived', 'Archived']] : []);      // vryxcode_archive adds an Archived filter at the end
+// vryxcode_archive: the small menu on every session that is not running: Archive (or Restore, in the Archived list) and Delete for good
+function vxSessionMenu(m) {
+  const archived = !!m.archived || C.filter === 'archived';
+  const done = async (path, body) => { const r = await post(path, body); if (r && r.ok === false) { const j = await r.json().catch(() => ({})); alert(j.message || 'That did not work.'); } renderHome(); };
+  const dlg = dialog([el('h2', {}, (m.title || 'Session').slice(0, 60)),
+    el('button', {class: 'opt', onclick: () => { dlg.remove(); done('/api/code/sessions/' + m.id + '/archive', {archived: !archived}); }}, el('span', {class: 'grow'}, el('b', {}, archived ? 'Restore to the list' : 'Archive'), el('small', {}, archived ? 'Put it back in the normal list.' : 'Tuck it away. Its files and history are kept; find it under Archived.'))),
+    el('button', {class: 'opt', onclick: () => { dlg.remove(); if (!confirm('Delete this session for good? Your project files are kept.')) return; done('/api/code/sessions/' + m.id + '/delete', {}); }}, el('span', {class: 'grow'}, el('b', {style: 'color:var(--danger)'}, 'Delete'), el('small', {}, 'Removes the session and its history for good. Your project files are kept.')))], 'Cancel');
+}
+const vxMoreButton = (m) => el('button', {type: 'button', class: 'more', title: 'Archive or delete', 'aria-label': 'Archive or delete this session', onclick: (ev) => { ev.stopPropagation(); vxSessionMenu(m); }}, '\u22ef');
 async function showHome() {
   clearTimeout(C.timer); C.view = 'home'; $('code').classList.remove('ide'); $('code').classList.add('home'); closeCodeMenus(); $('codePv').hidden = true; showDrawer(false);
   $('vxSide').hidden = true; $('codeTitle').textContent = 'Code'; $('codeBack').setAttribute('aria-label', 'Back to chats'); await renderHome();
@@ -31,14 +42,17 @@ function ENV_ICON(id) { return id === 'sandbox' ? 'box' : id === 'cloud' ? 'clou
 let homeDraw = 0;
 async function renderHome() {
   const mine = ++homeDraw;                         // two loads at once (opening, then a filter): only the newest is drawn, an older slow answer never replaces it
-  const [r, ri] = await Promise.all([api('/api/code/sessions'), api('/api/code')]); const sessions = (await r.json()).sessions || [], info = await ri.json();
+  const arch = vxArchiveOn();       // vryxcode_archive: the Archived list is fetched too, for the Archived filter
+  const [r, ri, ra] = await Promise.all([api('/api/code/sessions'), api('/api/code'), arch ? api('/api/code/sessions?archived=1') : null]);
+  const sessions = (await r.json()).sessions || [], info = await ri.json(), archived = ra ? ((await ra.json().catch(() => ({}))).sessions || []) : [];
   if (mine !== homeDraw) return;
-  C.sessions = sessions; C.info = info;
+  C.sessions = sessions; C.info = info; C.archived = archived;
   $('code').classList.toggle('vxsl', !!(S.state && S.state.features && S.state.features.vryxcode_side_list));     // vryxcode_side_list: sessions on the left
   $('codeEnvs').replaceChildren(el('span', {class: 'lbl'}, 'Environments'), ...C.info.environments.map((e) => el('button', {class: 'chip', onclick: () => envInfo()}, el('span', {class: 'dot' + (e.available ? ' on' : '')}), e.name)));
-  $('codeFilter').textContent = (FILTERS.find((f) => f[0] === C.filter) || FILTERS[0])[1] + ' \u25be';
+  if (!vxFilters().some((f) => f[0] === C.filter)) C.filter = 'all';                 // the Archived filter is gone when the switch is off
+  $('codeFilter').textContent = (vxFilters().find((f) => f[0] === C.filter) || FILTERS[0])[1] + ' \u25be';
   const live = ['starting', 'working'], pick = (x) => C.filter === 'all' || (C.filter === 'running' && live.includes(x.state)) || (C.filter === 'queued' && x.state === 'queued') || (C.filter === 'needs' && x.state === 'asking') || (C.filter === 'done' && !live.includes(x.state) && !['asking', 'queued'].includes(x.state));
-  const rows = C.sessions.filter(pick);
+  const rows = C.filter === 'archived' ? (C.archived || []) : C.sessions.filter(pick);       // vryxcode_archive: the Archived filter shows the tucked-away ones
   vxWhere();
   if (vxProjectsOn() && C.filter === 'all') { $('codeList').replaceChildren(...vxOrganizer(rows)); return; }
   if (vxReviewOn() && C.filter === 'all' && rows.length) {        // vryxcode_review: Working, Ready for review (finished with changes you have not opened yet), Done
@@ -61,7 +75,7 @@ function sessionCard(m) {
   return el('div', {class: 'scard', role: 'button', tabindex: '0', onclick: () => openSession(m), onkeydown: (ev) => { if (ev.key === 'Enter') openSession(m); }},
     el('div', {class: 'top'}, el('span', {class: 'sicon'}, ic), el('div', {class: 'mid'}, el('div', {class: 't'}, m.title), el('div', {class: 'sub'}, icon(ENV_ICON(env.id)), el('span', {}, m.project + ' \u00b7 ' + modelName(m.model) + ' \u00b7 ' + env.name))), el('span', {class: 'age'}, m.age)),
     m.snippet ? el('div', {class: 'snip'}, m.snippet) : '',
-    el('div', {class: 'foot'}, badge, lines, el('span', {}, stats), el('span', {class: 'grow'}), live || ask ? '' : el('button', {class: 'del', 'aria-label': 'Delete this session', onclick: async (ev) => { ev.stopPropagation(); if (!confirm('Delete this session from the list? Your files are kept.')) return; await post('/api/code/sessions/' + m.id + '/delete', {}); renderHome(); }}, '\u00d7')));
+    el('div', {class: 'foot'}, badge, lines, el('span', {}, stats), el('span', {class: 'grow'}), live || ask ? '' : vxArchiveOn() ? vxMoreButton(m) : el('button', {class: 'del', 'aria-label': 'Delete this session', onclick: async (ev) => { ev.stopPropagation(); if (!confirm('Delete this session from the list? Your files are kept.')) return; await post('/api/code/sessions/' + m.id + '/delete', {}); renderHome(); }}, '\u00d7')));
 }
 function envInfo() {
   dialog([el('h2', {}, 'Environments'), el('div', {style: 'color:var(--muted)'}, 'Where VryxCode runs the code it writes. Pick one when you start a session.'),
@@ -88,7 +102,7 @@ function vxOrganizer(rows) {   // vryxcode_projects: every project with its sess
         busy(m) ? el('span', {class: 'spin', 'aria-label': 'Working'}) : ready ? el('span', {class: 'dot', title: 'Ready for review'}) : '',
         el('span', {class: 't'}, m.title || 'Session'),
         m.added || m.removed ? el('span', {class: 'vx-lines'}, el('span', {class: 'a'}, '+' + (m.added || 0)), ' ', el('span', {class: 'd'}, '\u2212' + (m.removed || 0))) : '',
-        el('span', {class: 'age'}, m.age || ''), el('span', {class: 'num'}, String(n)));
+        el('span', {class: 'age'}, m.age || ''), vxArchiveOn() && !busy(m) && m.state !== 'asking' ? vxMoreButton(m) : '', el('span', {class: 'num'}, String(n)));
     }) : [el('div', {class: 'vx-pempty'}, 'No sessions yet')])));
 }
 const vxReviewOn = () => !!(S.state && S.state.features && S.state.features.vryxcode_review);
@@ -103,7 +117,7 @@ function openSession(m) {
 $('codeNew').onclick = newSession;
 $('codeFilter').onclick = (e) => {
   e.stopPropagation(); const m = $('codeFilterMenu'); if (!m.hidden) { m.hidden = true; return; } closeCodeMenus();
-  m.replaceChildren(...FILTERS.map(([id, name]) => el('button', {class: 'opt' + (id === C.filter ? ' sel' : ''), onclick: () => { C.filter = id; closeCodeMenus(); renderHome(); }}, el('span', {class: 'grow'}, name)))); m.hidden = false;
+  m.replaceChildren(...vxFilters().map(([id, name]) => el('button', {class: 'opt' + (id === C.filter ? ' sel' : ''), onclick: () => { C.filter = id; closeCodeMenus(); renderHome(); }}, el('span', {class: 'grow'}, name)))); m.hidden = false;
 };
 $('codeEnv').onclick = (e) => {
   e.stopPropagation(); const m = $('codeEnvMenu'); if (!m.hidden) { m.hidden = true; return; } closeCodeMenus(); if (C.sid && !C.saved) return;

@@ -59,6 +59,23 @@ class SessionLog:
         except (OSError, ValueError):
             return None
 
+    def set_flag(self, sid, key, value):
+        """Change one fact in a saved session's summary (for example "archived") and keep everything else as it was. False if the session is not saved."""
+        d = self.load(sid)
+        if not d or not d.get("meta"):
+            return False
+        # Only keep the key when it is on, so an unarchived session looks exactly as it did before archiving existed.
+        if value:
+            d["meta"][key] = value
+        else:
+            d["meta"].pop(key, None)
+        path = self._json(sid)
+        tmp = path + ".tmp"
+        with open(tmp, "w", encoding="utf-8") as f:
+            json.dump(d, f)
+        os.replace(tmp, path)
+        return True
+
     def metas(self):
         """The summary (meta) of every stored session, in no particular order."""
         out = []
