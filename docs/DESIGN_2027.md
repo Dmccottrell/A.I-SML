@@ -40,3 +40,5 @@ Respects "reduce motion" on the website. Light mode keeps the normal colours (th
 ## VryxCode building screen (web)
 
 The screen where VryxCode works now matches chat: your task is a solid carbon card (#16161D) with a lit top edge and shadow; the message bar floats as 40% dark glass with a 40px blur over the feed; "Allow this?" and questions are carbon cards with hollow ghost answers; tool rows are flat with hairlines. Tests: `tests/test_design_2027.py` (VryxCode home and building screen, plus the switch-off check).
+
+Android: the same building screen (carbon task card, floating glass message bar with the glowing ring, carbon cards for steps, files and the end card, ghost answers on "Allow this?"). Wide editor layout (web): carbon panels, hairline lines, hollow mono tags for every small button, amethyst underline on the open tab, black code area.

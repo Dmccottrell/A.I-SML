@@ -188,3 +188,28 @@ body.d27 .code .cc-ask button:first-of-type { border-color: rgba(167, 139, 250, 
 body.d27 .code:not(.home):not(.ide) .composer { position: absolute; left: 0; right: 0; bottom: 12px; padding: 0 16px; pointer-events: none; z-index: 6; background: transparent; }
 body.d27 .code:not(.home):not(.ide) .composer .box { pointer-events: auto; }
 body.d27 .code:not(.home):not(.ide) .feed { padding-bottom: 190px; }
+
+/* ---------- 7  the wide-screen editor layout (files | editor | VryxCode | preview) ---------- */
+/* panels: carbon with a hairline border, the code area pure black */
+body.d27 .code.ide .ide-tree, body.d27 .code.ide .ide-ed, body.d27 .code.ide .col, body.d27 .code.ide .pv { background: #07070A; border-color: var(--d-hair); }
+body.d27 .code.ide .ide-ed .ed, body.d27 .code.ide .ide-ed .ed * { background-color: transparent; }
+body.d27 .code.ide .ide-ed .ed { background: #000; }
+/* every little button in the editor is a hollow mono tag: hairline, muted, lit when touched */
+body.d27 .code.ide .chip, body.d27 .code.ide .ith button, body.d27 .code.ide .itabs button.add, body.d27 .code.ide #codeIdeBtn {
+  background: transparent !important; color: var(--muted); border: 1px solid var(--d-hair) !important; border-top-color: var(--d-top) !important; border-radius: 999px; box-shadow: none !important;
+  font-family: ui-monospace, 'JetBrains Mono', Menlo, Consolas, monospace; font-size: 12px; letter-spacing: -.01em;
+}
+body.d27 .code.ide .chip:hover, body.d27 .code.ide .ith button:hover, body.d27 .code.ide .chip:active, body.d27 .code.ide #codeIdeBtn.on { color: var(--text) !important; border-color: rgba(167, 139, 250, .45) !important; }
+body.d27 .code.ide .iai .chip.go { color: var(--d-amethyst); border-color: rgba(167, 139, 250, .5) !important; }
+/* the header of the file list, the tabs, the AI box and the output panel: razor-thin lines, mono numbers and names */
+body.d27 .code.ide .ith { font-weight: 600; letter-spacing: -.01em; border-bottom: 1px solid var(--d-hair); }
+body.d27 .code .itabs, body.d27 .code .iai, body.d27 .code .iout, body.d27 .code .iout .oh { background: #07070A; border-color: var(--d-hair); }
+body.d27 .code .itab { border-right-color: var(--d-hair); }
+body.d27 .code .itab.on { background: #000; box-shadow: inset 0 -2px 0 var(--d-amethyst); }
+body.d27 .code .itl .ifile { border-radius: 0; }
+body.d27 .code .itl .ifile:hover { background: rgba(255, 255, 255, .04); }
+body.d27 .code .itl .ifile.on { background: rgba(167, 139, 250, .08); box-shadow: inset 2px 0 0 var(--d-amethyst); }
+body.d27 .code .iout .ol, body.d27 .code .iout .oi .badge2 { font-variant-numeric: tabular-nums; }
+body.d27 .code .iout .oi .badge2 { background: transparent; border: 1px solid var(--d-hair); }
+body.d27 .code .iai input { background: #000; border-color: var(--d-hair); border-radius: 10px; }
+body.d27 .code.ide .cc-ask button { font-family: inherit; font-size: 15px; letter-spacing: 0; }      /* the answers keep the same look as on the phone */

@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -28,10 +29,13 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -123,5 +127,20 @@ fun QuietAction(text: String, onClick: () -> Unit, modifier: Modifier = Modifier
     Box(modifier.heightIn(min = 36.dp).clip(RoundedCornerShape(999.dp)).clickable(interactionSource = source, indication = null, onClick = onClick).padding(horizontal = 10.dp, vertical = 6.dp),
         contentAlignment = Alignment.Center) {
         Text(text, color = if (pressed) Color(0xFFE4E4E7) else Color(0xFF71717A), fontSize = 14.sp)
+    }
+}
+
+/** A matte carbon card with the lit top edge: the fill plus the razor-thin border (the website's tactile card). [fill] is carbon unless a screen wants another */
+fun Modifier.d27Card(shape: Shape, fill: Color = D27Carbon): Modifier = this.clip(shape).background(fill).border(1.dp, d27Edge(), shape)
+
+/** Your own message in a session: solid matte carbon (#16161D) with a lit top edge and a soft shadow, like the chat bubble */
+fun Modifier.d27Bubble(shape: Shape): Modifier = this.shadow(10.dp, shape, ambientColor = Color.Black, spotColor = Color.Black).clip(shape).background(Color(0xFF16161D)).border(1.dp, d27Edge(), shape)
+
+/** The answer buttons of a question card: a hollow ghost pill with an amethyst word; [main] gives the first answer a soft glow ring */
+@Composable
+fun D27GhostAnswer(text: String, onClick: () -> Unit, main: Boolean = false, modifier: Modifier = Modifier) {
+    Box(modifier.heightIn(min = 40.dp).clip(CircleShape).border(1.dp, if (main) D27Amethyst.copy(alpha = 0.6f) else D27Amethyst.copy(alpha = 0.3f), CircleShape)
+        .clickable(onClick = onClick).padding(horizontal = 16.dp), contentAlignment = Alignment.Center) {
+        Text(text, color = D27Amethyst, fontSize = 15.sp, fontWeight = if (main) FontWeight.SemiBold else FontWeight.Normal)
     }
 }

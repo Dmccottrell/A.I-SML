@@ -752,7 +752,7 @@ private fun Pill(open: Boolean, filled: Boolean, onClick: () -> Unit, modifier: 
 
 /** .send: a rounded square in the model's colour with an up arrow; while a reply is written it is .send.stop */
 @Composable
-private fun SendButton(stop: Boolean, enabled: Boolean, onClick: () -> Unit) {
+internal fun SendButton(stop: Boolean, enabled: Boolean, onClick: () -> Unit) {
     val p = LocalPalette.current
     if (Emvryx.d27) {                       // design_2027: no solid fill, a bright amethyst ring that pulses while the model writes
         val glow = if (stop) rememberInfiniteTransition(label = "send").animateFloat(0.3f, 1f, infiniteRepeatable(tween(1100), RepeatMode.Reverse), label = "g").value else 0.5f

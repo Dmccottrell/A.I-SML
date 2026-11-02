@@ -195,6 +195,27 @@ class Page(Base):
         self.assertEqual(style("#codeIn .cc-ask button", "backgroundColor"), "rgba(0, 0, 0, 0)")
         self.assertEqual(self.errors, [])
 
+    def test_vryxcode_wide_editor_layout_wears_the_2027_look(self):
+        self.build_a_session()
+        page = self.open("owner")
+        page.set_viewport_size({"width": 1440, "height": 900})
+        wait_for(lambda: page.evaluate("document.body.classList.contains('d27')"))
+        style = lambda q, prop: page.evaluate("([q, p]) => getComputedStyle(document.querySelector(q))[p]", [q, prop])
+        page.evaluate("localStorage.setItem('emvryx_ide', '1'); IDE.want = true; openCode()")
+        page.wait_for_selector(".vx-prow, .scard")
+        page.evaluate("document.querySelector('.vx-prow, .scard').click()")
+        wait_for(lambda: page.evaluate("document.getElementById('code').classList.contains('ide')"))
+        # the panels are carbon with a hairline; the file-list buttons are hollow mono tags
+        self.assertEqual(style(".ide-tree", "backgroundColor"), "rgb(7, 7, 10)")
+        self.assertEqual(style(".ide-tree .ith .chip", "backgroundColor"), "rgba(0, 0, 0, 0)")
+        self.assertIn("mono", style(".ide-tree .ith .chip", "fontFamily").lower())
+        # the wide layout keeps VryxCode's bar in its column (it floats only on the phone-style screen)
+        self.assertNotEqual(page.evaluate("getComputedStyle(document.getElementById('codeTask').closest('.composer')).position"), "absolute")
+        # your task is still the carbon card in the right-hand column
+        wait_for(lambda: page.evaluate("!!document.querySelector('#codeIn .cc-user')"))
+        self.assertEqual(style("#codeIn .cc-user", "backgroundColor"), "rgb(22, 22, 29)")
+        self.assertEqual(self.errors, [])
+
 
 if __name__ == "__main__":
     unittest.main()
