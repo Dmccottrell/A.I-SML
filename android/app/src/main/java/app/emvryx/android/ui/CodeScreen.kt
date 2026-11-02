@@ -630,9 +630,29 @@ private fun Feed(vm: CodeViewModel) {
             when {
                 q != null && q.str("tool") == "ask_user" -> ChoiceCard(vm, q)
                 q != null -> AskCard(vm, q)
-                vm.working -> Text("● " + (vm.liveLine?.ifBlank { null } ?: "Working…"), color = Violet, fontSize = 14.sp)
+                vm.working -> WorkingLine(vm)
             }
         }
+    }
+}
+
+/**
+ * The working line under the newest step, like Claude's: the Emvryx E with its three dots, what it is running ("Running python test.py…") and the seconds, which tick on their own.
+ * It is one fixed item in the feed, so nothing about it restarts or blinks between looks at the server.
+ */
+@Composable
+private fun WorkingLine(vm: CodeViewModel) {
+    val info = vm.liveInfo
+    // A clock that ticks twice a second, so the seconds count up between looks at the server.
+    var now by remember { mutableStateOf(android.os.SystemClock.elapsedRealtime()) }
+    LaunchedEffect(Unit) { while (true) { kotlinx.coroutines.delay(500); now = android.os.SystemClock.elapsedRealtime() } }
+    val secs = if (info != null && vm.liveAt != 0L) ((now - vm.liveAt) / 1000).toInt().coerceAtLeast(0) else 0
+    val words = if (info != null) liveHeadline(info, secs, vm.stopping) else if (vm.stopping) "Stopping…" else "Working…"
+    val tokens = info?.int("tokens") ?: 0
+    Row(Modifier.fillMaxWidth().padding(vertical = 4.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+        WorkingMark(22.dp)
+        Text(words, color = Emvryx.muted, fontSize = 14.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
+        if (info != null) Text("${secs}s" + if (tokens > 0) "  ·  %,d tokens".format(tokens) else "", color = Emvryx.muted, fontSize = 13.sp)
     }
 }
 

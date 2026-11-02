@@ -114,6 +114,11 @@ class CodeViewModel(app: Application) : AndroidViewModel(app) {
         private set
     // The live line under the newest step ("Calling · write_file ..."), or null.
     var liveLine by mutableStateOf<String?>(null)
+    // The live details from the server (phase, tool, target, secs, tokens) and when its clock started (elapsedRealtime), so the seconds tick on their own between looks. null when idle.
+    var liveInfo by mutableStateOf<JsonObject?>(null)
+    var liveAt by mutableStateOf(0L)
+    // True from pressing Stop until the agent has stopped: the line says "Stopping…"
+    var stopping by mutableStateOf(false)
     /** The usage line under the box, as fresh as the last look at the server */
     var usage by mutableStateOf<CodeUsage?>(null)
         private set
@@ -208,6 +213,7 @@ class CodeViewModel(app: Application) : AndroidViewModel(app) {
         state = ""
         pending = null
         liveLine = null
+        liveInfo = null; liveAt = 0L; stopping = false
         offer = ""
         pictures.clear()
         docs.clear()
@@ -293,6 +299,7 @@ class CodeViewModel(app: Application) : AndroidViewModel(app) {
                     full = v.full
                     v.usage?.let { usage = it }
                     liveLine = v.live?.let(::liveText)
+                    setLive(v.live)
                     // Finished or stopped: leave the loop. Otherwise wait before asking again (longer while waiting on the person, 1500 ms vs 400 ms, to save battery).
                     if (!v.working) break
                     delay(if (v.state == "asking") 1500 else 400)
@@ -394,9 +401,23 @@ class CodeViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
+    /**
+     * Keeps the working line's clock like the website (ide.js renderLive): the server counts whole seconds, so its number is often a second behind ours; keep ours unless the
+     * server is ahead or a new step has started (a clearly smaller number).
+     */
+    private fun setLive(live: JsonObject?) {
+        if (live == null) { liveInfo = null; liveAt = 0L; stopping = false; return }
+        val now = android.os.SystemClock.elapsedRealtime()
+        val server = live.num("secs")
+        val mine = if (liveAt == 0L) -1.0 else (now - liveAt) / 1000.0
+        if (mine < 0 || server > mine || mine - server > 2.5) liveAt = now - (server * 1000).toLong()
+        liveInfo = live
+    }
+
     /** Asks the server to stop the working agent, then polls once to show the new state. */
     fun stop() {
         val id = sid ?: return
+        stopping = true
         viewModelScope.launch { runCatching { api.codeStop(id) }; poll() }
     }
 
@@ -546,4 +567,44 @@ internal fun liveText(l: JsonObject): String {
     // Join the non-empty parts with a middle dot; the target is cut to its first line and 60 characters, and tokens use thousands commas.
     return listOf(phase, l.str("tool"), l.str("target").lineSequence().firstOrNull().orEmpty().take(60), "${secs}s",
         if (tokens > 0) "%,d tokens".format(tokens) else "").filter { it.isNotBlank() }.joinToString(" · ")
+}
+
+// ---------------------------------------------------------------- the working line: "Running python test.py… 7s" (the website's ide.js paintLive, the same words)
+
+// The words for what it is doing, by kind of work. The line shows one, changing only every 6 seconds.
+private val NOW_WORDS = mapOf(
+    "thinking" to listOf("Thinking", "Pondering", "Working it out", "Mulling it over", "Sketching a plan", "Weighing it up", "Figuring it out"),
+    "writing" to listOf("Writing", "Drafting", "Composing", "Putting it into words", "Shaping a reply"),
+    "build" to listOf("Building", "Crafting", "Assembling", "Putting together", "Shaping"),
+    "test" to listOf("Running the tests", "Testing it", "Checking it works", "Trying it out", "Putting it through its paces"),
+    "run" to listOf("Running", "Executing", "Trying", "Working on"),
+    "read" to listOf("Reading", "Studying", "Looking through", "Taking a look at"),
+    "look" to listOf("Looking around", "Scanning the project", "Seeing what is here"),
+    "git" to listOf("Working with git", "Handling git"), "github" to listOf("Talking to GitHub", "Syncing with GitHub"), "check" to listOf("Checking", "Looking for problems"),
+)
+// Which kind of work each tool is.
+private val TOOL_KIND = mapOf("write_file" to "build", "edit_file" to "build", "run" to "run", "read_file" to "read", "list_files" to "look", "git" to "git", "github" to "github", "diagnostics" to "check")
+// With a file or command named, a plain verb is used instead of a word: "Running python test.py…".
+private val TARGET_VERBS = mapOf("read" to "Reading", "build" to "Writing", "test" to "Running", "run" to "Running", "look" to "Looking through", "check" to "Checking", "git" to "Running git on", "search" to "Searching")
+
+/** The kind of work a live object describes: thinking and writing by phase, otherwise by tool (a test command is its own kind) */
+internal fun liveKind(l: JsonObject): String {
+    if (l.str("phase") == "thinking") return "thinking"
+    if (l.str("phase") == "writing") return "writing"
+    val k = TOOL_KIND[l.str("tool")] ?: "run"
+    return if (k == "run" && Regex("unittest|pytest|\\btest", RegexOption.IGNORE_CASE).containsMatchIn(l.str("target"))) "test" else k
+}
+
+/**
+ * The words of the working line for live object [l] after [secs] seconds. With a file or command named: a plain verb and the target ("Running python test.py…");
+ * otherwise a word for the kind of work that changes every 6 seconds. [stopping] (Stop was pressed) wins with "Stopping…".
+ */
+internal fun liveHeadline(l: JsonObject, secs: Int, stopping: Boolean = false): String {
+    if (stopping) return "Stopping…"
+    val kind = liveKind(l)
+    val target = l.str("target").lineSequence().firstOrNull().orEmpty().take(60)
+    val verb = TARGET_VERBS[kind]
+    if (target.isNotEmpty() && verb != null) return "$verb $target…"
+    val words = NOW_WORDS[kind] ?: NOW_WORDS.getValue("thinking")
+    return words[(secs / 6) % words.size] + "…"
 }
