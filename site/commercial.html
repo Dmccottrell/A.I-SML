@@ -1,0 +1,191 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title>Emvryx 15 second ad</title>
+<link rel="icon" href="/icon.svg" type="image/svg+xml">
+<style>
+/* The 15 second Emvryx ad, 1080 x 1920 (9:16, for phones, Reels, Shorts and TikTok). Everything on screen is worked out from ONE number, the time in seconds, by render(t) below:
+   so the page plays by itself, a scrubber can jump anywhere, and tools/render_commercial.py can ask for exactly frame 0, 1, 2 ... and make the same video every time.
+   The colours are the app's own (web/design2027.css and the website). */
+:root { --bg:#07080D; --surface:#0F1119; --carbon:#16161D; --line:rgba(255,255,255,.10); --text:#EEF0F6; --muted:#9AA3BC; --violet:#8B5CF6; --amethyst:#B79CFF; --amber:#F5A524; --teal:#2DD4BF; }
+* { box-sizing: border-box; }
+html, body { margin: 0; height: 100%; background: #000; color: var(--text); font-family: 'Sora', 'DM Sans', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif; overflow: hidden; }
+#frame { position: fixed; inset: 0; display: grid; place-items: center; }
+#stage { width: 1080px; height: 1920px; position: relative; overflow: hidden; background: var(--bg); transform-origin: center; flex: none; }
+.abs { position: absolute; }
+.glow { position: absolute; border-radius: 50%; filter: blur(110px); pointer-events: none; }
+.scene { position: absolute; inset: 0; opacity: 0; }
+.logo { position: absolute; left: 50%; top: 50%; width: 300px; height: 300px; margin: -150px 0 0 -150px; }
+.big { font-weight: 700; letter-spacing: -.03em; line-height: 1.05; }
+.card { position: absolute; left: 90px; right: 90px; border-radius: 44px; background: linear-gradient(180deg, #14141B, #0C0C10); border: 1px solid var(--line); box-shadow: inset 0 2px 0 rgba(255,255,255,.07), 0 40px 90px -30px #000; padding: 54px; }
+.bubble { background: var(--carbon); border: 1px solid var(--line); border-radius: 36px; padding: 34px 40px; font-size: 46px; line-height: 1.35; box-shadow: inset 0 2px 0 rgba(255,255,255,.07); }
+.you { margin-left: 120px; }
+.ai { font-size: 50px; line-height: 1.45; color: var(--text); padding: 6px 6px; }
+.tag { display: inline-flex; align-items: center; gap: 14px; padding: 12px 26px; border-radius: 999px; font-size: 32px; letter-spacing: .02em; color: var(--amethyst); background: rgba(167,139,250,.10); border: 1px solid rgba(167,139,250,.35); }
+.dots i { display: inline-block; width: 12px; height: 12px; border-radius: 50%; background: var(--amethyst); margin-right: 8px; }
+.row { display: flex; align-items: center; gap: 28px; padding: 30px 6px; border-bottom: 1px solid var(--line); font-size: 46px; color: var(--muted); opacity: 0; }
+.row b { color: var(--text); font-weight: 500; }
+.row .mono { font-family: 'Geist Mono', ui-monospace, Menlo, Consolas, monospace; font-size: 42px; }
+.row .add { margin-left: auto; color: var(--teal); font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 40px; }
+.tick { width: 54px; height: 54px; flex: none; }
+.pill { position: absolute; left: 90px; right: 90px; height: 190px; border-radius: 48px; display: flex; align-items: center; gap: 36px; padding: 0 56px; font-size: 54px; font-weight: 600; letter-spacing: -.01em;
+  background: linear-gradient(180deg, #14141B, #0C0C10); border: 1px solid var(--line); box-shadow: inset 0 2px 0 rgba(255,255,255,.07), 0 30px 70px -30px #000; opacity: 0; }
+.pill small { display: block; font-size: 34px; font-weight: 400; color: var(--muted); margin-top: 6px; letter-spacing: 0; }
+.pill svg { width: 84px; height: 84px; flex: none; }
+.cta { display: inline-block; padding: 34px 84px; border-radius: 999px; font-size: 60px; font-weight: 600; color: #fff; background: var(--violet); box-shadow: 0 0 80px rgba(139,92,246,.55); }
+/* the page around the stage (hidden for the video render with ?clean) */
+#bar { position: fixed; left: 0; right: 0; bottom: 0; display: flex; gap: 12px; align-items: center; padding: 12px 16px; background: rgba(0,0,0,.65); z-index: 5; font: 15px system-ui, sans-serif; }
+#bar button { min-height: 44px; min-width: 88px; border-radius: 999px; border: 1px solid #444; background: #1b1b24; color: #fff; font: inherit; cursor: pointer; }
+#bar input { flex: 1; min-height: 44px; }
+body.clean #bar { display: none; }
+</style>
+</head>
+<body>
+<div id="frame"><div id="stage" aria-label="A 15 second advert for Emvryx" role="img">
+  <div class="glow" id="g1" style="width:1100px;height:1100px;left:-250px;top:150px;background:rgba(139,92,246,.55)"></div>
+  <div class="glow" id="g2" style="width:900px;height:900px;left:380px;top:900px;background:rgba(34,211,238,.20)"></div>
+  <div class="glow" id="g3" style="width:1000px;height:1000px;left:-100px;top:700px;background:rgba(245,165,36,.0)"></div>
+
+  <!-- 1  the mark -->
+  <div class="scene" id="s1">
+    <svg class="logo" id="logo" viewBox="0 0 64 64" fill="none" style="top:760px">
+      <path id="lE" d="M15 15 H42 M15 49 H42 M15 15 V49" stroke="#EEF0F6" stroke-width="8" stroke-linecap="round" stroke-linejoin="round" pathLength="100" stroke-dasharray="100" stroke-dashoffset="100"/>
+      <path id="lBar" d="M15 32 H34" stroke="#8B5CF6" stroke-width="8" stroke-linecap="round" pathLength="100" stroke-dasharray="100" stroke-dashoffset="100"/>
+      <circle id="lDot" cx="49" cy="32" r="6.5" fill="#8B5CF6"/>
+    </svg>
+    <div class="abs big" id="meet" style="left:0;right:0;top:1100px;text-align:center;font-size:130px">Meet Emvryx</div>
+    <div class="abs" id="meet2" style="left:0;right:0;top:1290px;text-align:center;font-size:50px;color:var(--muted)">A small AI that does big things</div>
+  </div>
+
+  <!-- 2  chat -->
+  <div class="scene" id="s2">
+    <div class="abs big" style="left:90px;top:260px;font-size:84px">Ask anything.</div>
+    <div class="abs" style="left:90px;top:390px"><span class="tag"><span class="dots"><i></i><i></i><i></i></span>Chat</span></div>
+    <div class="card" style="top:560px;height:840px">
+      <div class="bubble you" id="you"></div>
+      <div class="ai" id="ai" style="margin-top:56px"></div>
+    </div>
+  </div>
+
+  <!-- 3  VryxCode -->
+  <div class="scene" id="s3">
+    <div class="abs big" style="left:90px;top:260px;font-size:84px">Build anything.</div>
+    <div class="abs" style="left:90px;top:390px"><span class="tag" style="color:#5EEAD4;background:rgba(45,212,191,.10);border-color:rgba(45,212,191,.35)">&lt;/&gt; VryxCode</span></div>
+    <div class="card" style="top:560px;height:860px">
+      <div class="bubble you" id="task" style="margin-left:0"></div>
+      <div id="rows" style="margin-top:40px">
+        <div class="row" id="r1"><svg class="tick" viewBox="0 0 24 24" fill="none" stroke="#9AA3BC" stroke-width="2"><path d="M4 4h12l4 4v12H4z"/><path d="M8 13h8M8 17h5"/></svg><span>Wrote <b class="mono">index.html</b></span><span class="add">+52</span></div>
+        <div class="row" id="r2"><svg class="tick" viewBox="0 0 24 24" fill="none" stroke="#2DD4BF" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M8 12.5l3 3 5-6"/></svg><span>Checked the page</span></div>
+        <div class="row" id="r3"><svg class="tick" viewBox="0 0 24 24" fill="none" stroke="#2DD4BF" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M8 12.5l3 3 5-6"/></svg><span>Ran the tests</span></div>
+      </div>
+      <div id="done" style="margin-top:46px;font-size:56px;font-weight:600;color:#5EEAD4;opacity:0">&#10003; Done. Your bill splitter is ready.</div>
+    </div>
+  </div>
+
+  <!-- 4  why -->
+  <div class="scene" id="s4">
+    <div class="abs big" style="left:90px;top:260px;font-size:84px">Made for you.</div>
+    <div class="pill" id="p1" style="top:540px"><svg viewBox="0 0 48 48" fill="none" stroke="#B79CFF" stroke-width="3.4" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="21" width="30" height="21" rx="6"/><path d="M16 21v-6a8 8 0 0 1 16 0v6"/></svg><div>Private chat<small>Never saved. Just between you and it.</small></div></div>
+    <div class="pill" id="p2" style="top:780px"><svg viewBox="0 0 48 48" fill="none" stroke="#B79CFF" stroke-width="3.4" stroke-linecap="round" stroke-linejoin="round"><rect x="14" y="4" width="20" height="40" rx="5"/><path d="M21 38h6"/></svg><div>On your phone<small>It even works with no internet.</small></div></div>
+    <div class="pill" id="p3" style="top:1020px"><svg viewBox="0 0 48 48" fill="none" stroke="#B79CFF" stroke-width="3.4" stroke-linecap="round" stroke-linejoin="round"><circle cx="24" cy="24" r="6"/><path d="M24 5v6M24 37v6M5 24h6M37 24h6M10.5 10.5l4.2 4.2M33.3 33.3l4.2 4.2M10.5 37.5l4.2-4.2M33.3 14.7l4.2-4.2"/></svg><div>Pick your model<small>Flare, Equinox, Solstice, Apogee.</small></div></div>
+    <div class="pill" id="p4" style="top:1260px"><svg viewBox="0 0 48 48" fill="none" stroke="#B79CFF" stroke-width="3.4" stroke-linecap="round" stroke-linejoin="round"><circle cx="21" cy="21" r="12"/><path d="M30 30l11 11"/></svg><div>Research and code<small>Looks things up. Builds what you ask.</small></div></div>
+  </div>
+
+  <!-- 5  sign-off -->
+  <div class="scene" id="s5">
+    <svg class="logo" id="logo2" viewBox="0 0 64 64" fill="none" style="top:700px;width:340px;height:340px;margin:-170px 0 0 -170px">
+      <path d="M15 15 H42 M15 49 H42 M15 15 V49" stroke="#EEF0F6" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"/>
+      <path d="M15 32 H34" stroke="#8B5CF6" stroke-width="8" stroke-linecap="round"/><circle cx="49" cy="32" r="6.5" fill="#8B5CF6"/>
+    </svg>
+    <div class="abs big" id="o1" style="left:0;right:0;top:960px;text-align:center;font-size:150px">Emvryx</div>
+    <div class="abs" id="o2" style="left:0;right:0;top:1160px;text-align:center;font-size:62px;color:var(--muted)">Small models. Real help.</div>
+    <div class="abs" id="o3" style="left:0;right:0;top:1380px;text-align:center"><span class="cta">emvryx.app</span></div>
+  </div>
+</div></div>
+
+<div id="bar"><button id="play">Replay</button><input id="scrub" type="range" min="0" max="15" step="0.01" value="0" aria-label="Time in the advert"><span id="clock">0.0 / 15 s</span></div>
+
+<script>
+'use strict';
+const DURATION = 15;
+const $ = (id) => document.getElementById(id);
+const clamp = (x) => Math.min(1, Math.max(0, x));
+const seg = (t, a, b) => clamp((t - a) / (b - a));                         // 0 before a, 1 after b, a straight line between
+const out3 = (x) => 1 - Math.pow(1 - x, 3);                                // starts fast, settles
+const back = (x) => 1 + 2.2 * Math.pow(x - 1, 3) + 1.2 * Math.pow(x - 1, 2);  // a little overshoot, like a pop
+const vis = (t, a, b, fi = .45, fo = .45) => Math.min(seg(t, a, a + fi), 1 - seg(t, b - fo, b));     // a scene: fades in at a, out before b
+const set = (el, s) => { for (const k in s) el.style[k] = s[k]; };
+
+const YOU = "Explain how vaccines work like I’m twelve.";
+const AI = "Your body learns to spot a germ by meeting a harmless practice version first. If the real one ever shows up, your defences already know the plan.".split(' ');
+const TASK = "Build me a bill splitter with tip.";
+
+function render(t) {
+  t = Math.min(DURATION, Math.max(0, t));
+  // the glow behind everything: drifts all the time; turns warm in the chat and teal while it codes
+  $('g1').style.transform = `translate(${Math.sin(t * .45) * 90}px, ${Math.cos(t * .35) * 70}px) scale(${1 + Math.sin(t * .6) * .06})`;
+  $('g2').style.transform = `translate(${Math.cos(t * .5) * 110}px, ${Math.sin(t * .4) * 80}px)`;
+  const warm = vis(t, 3.0, 6.4, .5, .5) * .5, teal = vis(t, 6.2, 9.8, .5, .5) * .5;
+  $('g3').style.background = `rgba(${teal ? '45,212,191' : '245,165,36'},${Math.max(warm, teal)})`;
+
+  // 1  the mark draws itself, the dot pops, then the words
+  const s1 = vis(t, 0, 2.9, .01, .45);
+  set($('s1'), {opacity: s1});
+  $('lE').style.strokeDashoffset = 100 * (1 - out3(seg(t, .15, 1.0)));
+  $('lBar').style.strokeDashoffset = 100 * (1 - out3(seg(t, .85, 1.35)));
+  $('lDot').style.transform = `scale(${back(seg(t, 1.25, 1.7))})`; $('lDot').style.transformOrigin = '49px 32px';
+  const mt = out3(seg(t, 1.4, 1.95)); set($('meet'), {opacity: mt, transform: `translateY(${(1 - mt) * 40}px)`});
+  const mt2 = out3(seg(t, 1.85, 2.4)); set($('meet2'), {opacity: mt2, transform: `translateY(${(1 - mt2) * 30}px)`});
+
+  // 2  a question is typed, the answer arrives word by word
+  set($('s2'), {opacity: vis(t, 2.6, 6.4), transform: `translateY(${(1 - out3(seg(t, 2.6, 3.2))) * 60}px)`});
+  const n = Math.floor(YOU.length * seg(t, 3.1, 4.3));
+  $('you').textContent = YOU.slice(0, n) + (n < YOU.length && Math.floor(t * 3) % 2 ? '▏' : '');
+  $('you').style.opacity = n ? 1 : 0;
+  const w = AI.length * seg(t, 4.5, 6.0);
+  $('ai').innerHTML = AI.map((word, i) => `<span style="opacity:${clamp(w - i)}">${word}</span>`).join(' ');
+
+  // 3  VryxCode works: a task, then each step lands
+  set($('s3'), {opacity: vis(t, 6.2, 9.9), transform: `translateY(${(1 - out3(seg(t, 6.2, 6.8))) * 60}px)`});
+  const k = Math.floor(TASK.length * seg(t, 6.6, 7.4));
+  $('task').textContent = TASK.slice(0, k); $('task').style.opacity = k ? 1 : 0;
+  [[7.6, 'r1'], [8.2, 'r2'], [8.8, 'r3']].forEach(([a, id]) => { const p = out3(seg(t, a, a + .35)); set($(id), {opacity: p, transform: `translateX(${(1 - p) * 60}px)`}); });
+  const dn = out3(seg(t, 9.15, 9.5)); set($('done'), {opacity: dn, transform: `translateY(${(1 - dn) * 24}px)`});
+
+  // 4  four reasons, each pops in
+  set($('s4'), {opacity: vis(t, 9.7, 12.5)});
+  [['p1', 9.95], ['p2', 10.3], ['p3', 10.65], ['p4', 11.0]].forEach(([id, a]) => { const p = back(seg(t, a, a + .5)); set($(id), {opacity: clamp(seg(t, a, a + .25)), transform: `translateY(${(1 - p) * 70}px) scale(${.92 + .08 * p})`}); });
+
+  // 5  sign-off
+  set($('s5'), {opacity: vis(t, 12.3, 15.01, .5, 0)});
+  const l2 = back(seg(t, 12.45, 13.1)); $('logo2').style.transform = `scale(${l2})`;
+  [['o1', 12.9], ['o2', 13.3], ['o3', 13.7]].forEach(([id, a]) => { const p = out3(seg(t, a, a + .5)); set($(id), {opacity: p, transform: `translateY(${(1 - p) * 40}px)`}); });
+  $('o3').firstElementChild.style.boxShadow = `0 0 ${60 + Math.sin(t * 6) * 22}px rgba(139,92,246,.55)`;
+  $('clock').textContent = t.toFixed(1) + ' / ' + DURATION + ' s'; $('scrub').value = t;
+}
+
+// the stage is 1080 x 1920; scale it to fit whatever the window is (the video render uses a 1080 x 1920 window, so the scale is exactly 1)
+function fit() { const s = Math.min(innerWidth / 1080, (innerHeight - (document.body.classList.contains('clean') ? 0 : 70)) / 1920); $('stage').style.transform = `scale(${s})`; }
+addEventListener('resize', fit);
+if (/[?&]clean/.test(location.search)) document.body.classList.add('clean');
+fit();
+
+let t0 = 0, raf = 0, playing = false;
+function tick(now) { const t = (now - t0) / 1000; render(t); if (t < DURATION) raf = requestAnimationFrame(tick); else { playing = false; $('play').textContent = 'Replay'; } }
+function play(from = 0) { cancelAnimationFrame(raf); playing = true; $('play').textContent = 'Replay'; t0 = performance.now() - from * 1000; raf = requestAnimationFrame(tick); }
+$('play').onclick = () => play(0);
+$('scrub').oninput = (e) => { cancelAnimationFrame(raf); render(+e.target.value); };
+window.__seek = (t) => { cancelAnimationFrame(raf); render(t); return t; };           // the video render asks for exact moments
+window.__duration = DURATION;
+
+const q = /[?&]t=([\d.]+)/.exec(location.search);
+if (q) render(+q[1]);                                                                // ?t=8.9 shows that moment
+else if (matchMedia('(prefers-reduced-motion: reduce)').matches) render(DURATION);        // no motion asked for: the last frame, still
+else if (!/[?&]clean/.test(location.search)) play(0);
+else render(0);
+</script>
+</body>
+</html>

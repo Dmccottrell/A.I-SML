@@ -1350,7 +1350,7 @@ def fenced_call(text):
 # A model that has seen many programs sometimes "calls" a tool the way Python would: run("python test.py") in a code block. Nothing ran when this was not understood, and
 # the model went on as if it had. The arguments are read as plain values only (nothing is evaluated), in the order each tool takes them.
 _ARG_ORDER = {"run": ("command",), "read_file": ("path", "start", "end"), "list_files": ("path",), "write_file": ("path", "content"),
-              "edit_file": ("path", "old", "new"), "finish": ("summary",)}
+              "edit_file": ("path", "old", "new"), "finish": ("summary",), "git": ("args",)}
 _PY_FENCE = re.compile(r"```[A-Za-z0-9_+-]*[^\n]*\n(.*?)```", re.S)
 
 
@@ -1419,11 +1419,32 @@ def parse_tool_call(text):
             return normalize_call(call["name"], args)
         except (json.JSONDecodeError, KeyError, TypeError, AttributeError):
             continue
-    salvaged = _salvage_write(body)
+    salvaged = _salvage_write(body) or _salvage_text_arg(body)
     if salvaged:
         return normalize_call(*salvaged)
     raise ToolError('the tool call is not valid JSON with a "name". Example: {"name": "read_file", "args": {"path": "main.py"}}. '
                     'Inside "content", write line breaks as \\n and quotes as \\", or keep each call small: write_file for the first part, then write_file with append=true for the rest.')
+
+
+_TEXT_ARG_TOOLS = {"git": "args", "run": "command"}          # tools whose one argument is a line of text: its quotes (commit -m "...") are what break the JSON
+
+
+def _salvage_text_arg(body):
+    """A git or run call whose JSON is broken because the command holds quotes that were not escaped (git commit -m "a message"): the text between
+    "args": " (or "command": ") and the closing "}} is the command. (name, args) or None; a call cut off before its end is not guessed at."""
+    n = re.search(r'"name"\s*:\s*"(git|run)"', body)
+    if not n:
+        return None
+    key = _TEXT_ARG_TOOLS[n.group(1)]
+    k = re.search(r'"' + key + r'"\s*:\s*"', body)
+    if not k:
+        return None
+    text = body[k.end():]
+    end = re.search(r'"\s*\}\s*\}?\s*$', text)
+    if not end:
+        return None
+    text = re.sub(r"\\(n|t|r|\"|\\)", lambda m: {"n": "\n", "t": "\t", "r": "\r", '"': '"', "\\": "\\"}[m.group(1)], text[:end.start()])
+    return n.group(1), {key: text}
 
 
 _WRITE_NAME = re.compile(r'"name"\s*:\s*"write_file"')
@@ -1704,6 +1725,20 @@ def claims_work(words):
     return bool(_CLAIM.search(tail)) and not tail.rstrip().endswith("?")
 
 
+# A reply that hands the commands back to the person ("I'm unable to execute the git command... please run these in your terminal") when the git tool is right there.
+_HANDS_BACK = re.compile(r"\b(?:please\s+)?run\s+(?:the\s+following|these|this)\s+(?:commands?|in\s+your)|\bin\s+your\s+(?:own\s+)?terminal\b|"
+                         r"\bi(?:'m|\s+am)\s+(?:unable|not\s+able)\s+to\s+(?:execute|run|commit|push)|\bi\s+(?:can't|cannot|can\s+not)\s+(?:execute|run|commit|push)\b", re.I)
+HANDS_BACK_NUDGE = ("You can do this yourself with the git tool, so do not hand the commands to me. Send the arguments as a list, which needs no quoting: "
+                    '{"name": "git", "args": {"args": ["add", "."]}}, then {"name": "git", "args": {"args": ["commit", "-m", "your message"]}}. '
+                    "To send it to GitHub use the github tool with action push if you have it (I am asked to allow it). Do it now with tool calls; "
+                    "only say you cannot if a tool call really came back with an error, and then say what that error was.")
+
+
+def hands_back(words):
+    """True when a reply tells the person to run the commands themselves ("please run the following commands in your terminal", "I'm unable to execute")."""
+    return bool(_HANDS_BACK.search(words or ""))
+
+
 CODE_NUDGE = ("Do not paste code into the chat. Save it in the project with write_file (one file per call), then run it or its tests. "
               "If you really cannot do this, say so in a sentence and say what the user could do.")
 
@@ -1854,7 +1889,7 @@ def run_agent(task, generate, sandbox, max_turns=8, system=None, project=True, h
         messages = ([{"role": "system", "content": system}] if system else []) + [{"role": "user", "content": first}]
     episodes = []
     used_tools, nudged = 0, False
-    did_work, claim_nudged = False, False                            # a file saved or a program run in this task; the false-claim nudge was used
+    did_work, claim_nudged, handed_back_nudged = False, False, False                            # a file saved or a program run in this task; the false-claim nudge was used
     edited_since_test, test_nudged = False, False
     web_unchecked, page_nudges = False, 0                            # a web file changed since the page was last checked (proof before "done")
     plan_items, step_fails = None, 0                                 # the model's todo list (steady mode) and failures in a row
@@ -1976,6 +2011,10 @@ def run_agent(task, generate, sandbox, max_turns=8, system=None, project=True, h
                 if fixes and promised < PROMISE_NUDGES and promises_work(words):       # "Now I'll add the quests." and then nothing: it is not done, it stopped
                     promised += 1
                     messages.append({"role": "user", "content": PROMISE_NUDGE})
+                    continue
+                if not handed_back_nudged and hands_back(words):                        # "run these commands in your terminal": it has the tools, so it is told how, once
+                    handed_back_nudged = True
+                    messages.append({"role": "user", "content": HANDS_BACK_NUDGE})
                     continue
                 if not did_work and claims_work(words):                                 # "I've fixed it, the tests pass" with nothing saved or run: not true
                     if not claim_nudged:

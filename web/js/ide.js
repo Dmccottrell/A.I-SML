@@ -409,7 +409,7 @@ function cEvent(e) {
   if (e.kind === 'context') { codeCtx(e); return; }
   if (e.kind === 'model') { feed.append(el('div', {class: 'note', style: 'align-self:center;margin:6px auto'}, 'Now using ' + modelName(e.model) + (e.previous ? ' (was ' + modelName(e.previous) + ')' : ''))); C.last = null; return; }
   if (e.kind === 'note' || (e.kind === 'user' && e.auto)) { if (e.kind === 'note') feed.append(el('div', {class: 'note', style: 'align-self:center;margin:6px auto;max-width:92%'}, '\u21bb ' + e.text)); C.last = null; return; }
-  if (e.kind === 'user') { feed.append(el('div', {class: 'cc-user'}, el('span', {class: 'ember'}), el('span', {}, (e.plan ? '[Plan] ' : '') + e.text), e.steer ? el('small', {style: 'color:var(--muted);margin-left:6px'}, '(while it worked)') : '', restoreBtn(e))); C.last = null; return; }
+  if (e.kind === 'user') { feed.querySelectorAll('.cc-user.pending').forEach((n) => n.remove()); feed.append(el('div', {class: 'cc-user'}, el('span', {class: 'ember'}), el('span', {}, (e.plan ? '[Plan] ' : '') + e.text), e.steer ? el('small', {style: 'color:var(--muted);margin-left:6px'}, '(while it worked)') : '', restoreBtn(e))); C.last = null; return; }
   if (e.kind === 'choose') {          // the full agent asks the person to pick: one tap answers, or they write their own
     const pick = (choice) => { if (!String(choice || '').trim()) return; post('/api/code/sessions/' + C.sid + '/answer', {id: e.id, choice}).then(() => poll()); };
     const other = el('input', {type: 'text', placeholder: 'Or write your own answer', 'aria-label': 'Your own answer',
@@ -644,22 +644,36 @@ async function poll() {
   $('codeGo').hidden = live && !(C.full && j.state !== 'queued'); $('codeStop').hidden = !live;      // the full agent can be told something while it works if (!live) { C.stopping = false; $('codeStop').disabled = false; }
   if (live) C.timer = setTimeout(poll, j.state === 'asking' ? 1500 : 350);
 }
+// The moment you send, your message is on screen (grey until the server has it) and the box is empty: the page does not wait for the server to show it. If the send fails the words go back in the box.
+function vxPending(text) {
+  if (!text) return null;
+  const feed = $('codeIn');
+  feed.querySelectorAll('.empty').forEach((n) => { n.style.display = 'none'; n.dataset.hid = '1'; });          // the first message of a new session: the "What should we build?" page steps aside
+  const node = el('div', {class: 'cc-user pending', style: 'opacity:.7'}, el('span', {class: 'ember'}), el('span', {}, text));
+  feed.append(node); node.scrollIntoView({block: 'end'});
+  return node;
+}
+function vxUnsent(node, text) { if (node) node.remove(); $('codeIn').querySelectorAll('.empty[data-hid]').forEach((n) => { n.style.display = ''; delete n.dataset.hid; }); $('codeTask').value = text; }
 $('codeGo').onclick = async () => {
   const task = $('codeTask').value.trim(); if ((!task && !C.startTemplate) || !C.model) return;
   offerReply('');
   if (C.sid && C.live && C.full) {     // it is working: the message is read before its next step, without stopping it
+    $('codeTask').value = ''; const sent = vxPending(task);
     const r = await post('/api/code/sessions/' + C.sid + '/steer', {text: task}); const j = await r.json().catch(() => ({}));
-    if (r.ok) { $('codeTask').value = ''; poll(); return; }
-    note('bad', 'Could not send', (j.message || '') + ' ' + (j.action || '')); return;
+    if (r.ok) { poll(); return; }
+    vxUnsent(sent, task); note('bad', 'Could not send', (j.message || '') + ' ' + (j.action || '')); return;
   }
   if (C.sid) {         // a session is open: this is its next message, whatever the model (a different model takes over the same conversation; an old session comes back to life)
+    $('codeTask').value = ''; const sent = vxPending(task);
     const r = await post('/api/code/sessions/' + C.sid + '/message', {text: task, plan: C.mode === 'plan', notify: vxNotifyOn(), model: C.model, effort: C.effort, auto_edits: C.mode === 'auto', images: C.pics.length ? C.pics : undefined, docs: (C.docs || []).length ? C.docs.map((d) => d.id) : undefined}); const j = await r.json().catch(() => ({}));
     if (r.ok) { C.pics = []; C.docs = []; renderPics(); C.stopping = false; $('codeStop').disabled = false; $('codeTask').value = ''; C.chatKey = C.project + '|' + C.model; if (j.revived) { C.saved = false; C.seen = 0; $('codeIn').replaceChildren(); } poll(); return; }
+    vxUnsent(sent, task);
     if (r.status === 400 && /still working/i.test(j.message || '')) { note('bad', 'Still working', 'Press Stop first, or wait for it to finish.'); return; }
     note('bad', 'Could not send', (j.message || '') + ' ' + (j.action || '')); return;
   }
-  const r = await post('/api/code/start', {project: C.project, task, model: C.model, effort: C.effort, images: C.pics.length ? C.pics : undefined, docs: (C.docs || []).length ? C.docs.map((d) => d.id) : undefined, auto_edits: C.mode === 'auto', plan: C.mode === 'plan', env: C.env, queue: true, notify: vxNotifyOn(), template: C.startTemplate || undefined}); const j = await r.json(); C.startTemplate = null;
-  if (!r.ok) { note('bad', 'Could not start', j.message + ' ' + (j.action || '')); return; }
+  $('codeTask').value = ''; const sent = vxPending(task);
+  const r = await post('/api/code/start', {project: C.project, task, model: C.model, effort: C.effort, images: C.pics.length ? C.pics : undefined, docs: (C.docs || []).length ? C.docs.map((d) => d.id) : undefined, auto_edits: C.mode === 'auto', plan: C.mode === 'plan', env: C.env, queue: true, notify: vxNotifyOn(), template: C.startTemplate || undefined}); const j = await r.json().catch(() => ({message: 'No answer from the server.'})); C.startTemplate = null;
+  if (!r.ok) { vxUnsent(sent, task); note('bad', 'Could not start', j.message + ' ' + (j.action || '')); return; }
   C.pics = []; C.docs = []; renderPics(); C.sid = j.id; C.saved = false; C.checkpoints = []; C.pvAuto = false; C.chatKey = C.project + '|' + C.model; C.seen = 0; C.stopping = false; $('codeStop').disabled = false; $('codeTask').value = ''; $('codeIn').replaceChildren(); poll();
 };
 // the preview follows the work: on a wide screen it opens beside the chat by itself and refreshes after each change; on a phone the Preview button lights up
