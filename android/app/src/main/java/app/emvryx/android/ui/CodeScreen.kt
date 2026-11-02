@@ -70,6 +70,7 @@ import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -121,6 +122,7 @@ fun CodeScreen(app: AppViewModel, vm: CodeViewModel) {
         vm.review = app.flag("vryxcode_review")
         vm.projects = app.flag("vryxcode_projects")
         vm.alerts = app.flag("phone_alerts")
+        vm.homeLike = app.flag("android_vryxcode_home")           // android_vryxcode_home: the home looks like the website's
         vm.archiveOn = app.flag("vryxcode_archive")               // vryxcode_archive: archive or delete any session (the ⋯ on each row)
         // `parity` = the set of newer website features the app shows: all off unless android_vryxcode is on, then each follows its own switch.
         vm.parity = if (!app.flag("android_vryxcode")) emptySet() else PARITY_FLAGS.filter { app.flag(it) }.toSet()     // each part follows its own switch
@@ -259,7 +261,7 @@ private fun ProjectRow(vm: CodeViewModel) {
 @Composable
 private fun SessionList(vm: CodeViewModel) {
     // No sessions yet: the welcome page with ideas to start from.
-    if (vm.sessions.isEmpty() && vm.archived.isEmpty()) {
+    if (vm.sessions.isEmpty() && vm.archived.isEmpty() && !vm.homeLike) {
         Welcome(vm, "Describe it. VryxCode plans it, writes it, runs it and checks it.")
         return
     }
@@ -270,6 +272,7 @@ private fun SessionList(vm: CodeViewModel) {
     }
     LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 6.dp, bottom = 96.dp),
         verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        homeHero(vm)                                                 // android_vryxcode_home: What should we build? and the starters, above the sessions
         // With the review view on, sessions are grouped (Working / Ready for review / Done); otherwise one SESSIONS group.
         val groups = if (vm.review) sessionGroups(vm.sessions, vm.reviewed) else listOf("SESSIONS" to vm.sessions)
         groups.forEach { (label, rows) ->
@@ -295,6 +298,7 @@ private fun Organizer(vm: CodeViewModel) {
     // Pairs of (project name, its sessions), busiest project first.
     val groups = projectGroups(vm.sessions, vm.info?.projects.orEmpty())
     LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(start = 12.dp, end = 12.dp, top = 6.dp, bottom = 96.dp)) {
+        homeHero(vm)                                                 // android_vryxcode_home: What should we build? and the starters, above the projects
         // A running counter so the sessions are numbered 1, 2, 3 down the whole list.
         var n = 0
         groups.forEach { (p, rows) ->
@@ -348,6 +352,90 @@ private fun Organizer(vm: CodeViewModel) {
             }
         }
         archivedBlock(vm)                                            // vryxcode_archive: the Archived part at the end
+    }
+}
+
+/**
+ * android_vryxcode_home: the top of the VryxCode home, as on the website: "What should we build?", the build box with Build it, the Effort pick,
+ * where it builds ("Builds in a new project · use X instead"), and the project starters to begin from. Added as the first items of the list.
+ */
+private fun androidx.compose.foundation.lazy.LazyListScope.homeHero(vm: CodeViewModel) {
+    if (!vm.homeLike) return
+    item(key = "home-hero") {
+        Column(Modifier.fillMaxWidth().padding(horizontal = 4.dp, vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
+            // The big question; the word "build" is violet, as on the website.
+            Text(androidx.compose.ui.text.buildAnnotatedString {
+                append("What should we ")
+                withStyle(androidx.compose.ui.text.SpanStyle(color = Violet)) { append("build") }
+                append("?")
+            }, fontFamily = Heading, fontWeight = FontWeight.Bold, fontSize = 32.sp, lineHeight = 38.sp)
+            Text("Describe it. VryxCode plans it, writes it, runs it and checks it, right here.", color = Emvryx.muted, fontSize = 16.sp)
+            // The build box: the words, and the Build it button (it opens a new session and sends them).
+            val shape = RoundedCornerShape(22.dp)
+            Row(Modifier.fillMaxWidth().clip(shape).border(1.dp, Violet.copy(alpha = 0.4f), shape).padding(start = 16.dp, end = 8.dp, top = 8.dp, bottom = 8.dp),
+                verticalAlignment = Alignment.CenterVertically) {
+                Box(Modifier.weight(1f).heightIn(min = 52.dp, max = 160.dp).padding(end = 8.dp), contentAlignment = Alignment.CenterStart) {
+                    if (vm.draft.isEmpty()) Text("A bill splitter with tip, a habit tracker, a snake game...", color = Emvryx.muted, fontSize = 16.sp)
+                    BasicTextField(vm.draft, { vm.draft = it }, Modifier.fillMaxWidth(), textStyle = androidx.compose.ui.text.TextStyle(color = Emvryx.text, fontSize = 16.sp),
+                        cursorBrush = SolidColor(Violet))
+                }
+                Box(Modifier.heightIn(min = 46.dp).clip(RoundedCornerShape(18.dp)).background(Violet).clickable(enabled = vm.draft.isNotBlank()) {
+                    val words = vm.draft
+                    vm.draft = ""
+                    vm.newSession()
+                    vm.send(words)
+                }.padding(horizontal = 20.dp), contentAlignment = Alignment.Center) { Text("Build it", color = Color.White, fontWeight = FontWeight.SemiBold, fontSize = 16.sp) }
+            }
+            // Effort: how hard VryxCode thinks (only when it picks the model itself).
+            if (vm.oneModel) {
+                var open by remember { mutableStateOf(false) }
+                val name = vm.info?.effort?.levels?.firstOrNull { it.id == vm.effort }?.name ?: "Balanced"
+                Box {
+                    Row(Modifier.clip(RoundedCornerShape(999.dp)).border(1.dp, Violet.copy(alpha = 0.4f), RoundedCornerShape(999.dp)).clickable { open = true }
+                        .padding(horizontal = 16.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Text("Effort  ", color = Emvryx.muted, fontSize = 15.sp)
+                        Text(name, color = Violet, fontWeight = FontWeight.SemiBold, fontSize = 15.sp)
+                        Text("  ▾", color = Emvryx.muted, fontSize = 12.sp)
+                    }
+                    DropdownMenu(open, { open = false }, containerColor = Emvryx.surface) {
+                        vm.info?.effort?.levels.orEmpty().forEach { l ->
+                            DropdownMenuItem({ Column { Text(l.name, fontWeight = FontWeight.Bold); Text(l.note, color = Emvryx.muted, fontSize = 13.sp) } }, { vm.effort = l.id; open = false })
+                        }
+                    }
+                }
+            }
+            // Where it builds: with the projects organizer a new idea gets its own project, unless the person chose this one.
+            if (vm.projects) {
+                if (vm.buildHere) Text(androidx.compose.ui.text.buildAnnotatedString {
+                    append("Builds in ${vm.project} · ")
+                    withStyle(androidx.compose.ui.text.SpanStyle(color = Violet, textDecoration = androidx.compose.ui.text.style.TextDecoration.Underline)) { append("a new project instead") }
+                }, fontSize = 15.sp, color = Emvryx.muted, modifier = Modifier.clickable { vm.buildHere = false })
+                else Text(androidx.compose.ui.text.buildAnnotatedString {
+                    append("Builds in a new project · ")
+                    withStyle(androidx.compose.ui.text.SpanStyle(color = Violet, textDecoration = androidx.compose.ui.text.style.TextDecoration.Underline)) { append("use ${vm.project} instead") }
+                }, fontSize = 15.sp, color = Emvryx.muted, modifier = Modifier.clickable { vm.buildHere = true })
+            }
+            // The project starters, two to a row: tap one, say what you want, press Build it.
+            if (vm.templates.isNotEmpty()) {
+                Text("OR START FROM A TEMPLATE", color = Emvryx.muted, fontSize = 12.sp, fontWeight = FontWeight.SemiBold, letterSpacing = 1.4.sp, modifier = Modifier.padding(top = 6.dp))
+                vm.templates.chunked(2).forEach { pair ->
+                    Row(horizontalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.fillMaxWidth()) {
+                        pair.forEach { t ->
+                            val on = vm.template == t.id
+                            val card = RoundedCornerShape(18.dp)
+                            Column(Modifier.weight(1f).heightIn(min = 120.dp).clip(card).background(Emvryx.surface).border(1.dp, if (on) Violet else Emvryx.line, card)
+                                .clickable { vm.template = if (on) null else t.id }.padding(14.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                                Text(t.icon, fontSize = 26.sp)
+                                Text(t.name, fontWeight = FontWeight.SemiBold, fontSize = 17.sp)
+                                Text(t.desc, color = Emvryx.muted, fontSize = 14.sp)
+                            }
+                        }
+                        if (pair.size == 1) Spacer(Modifier.weight(1f))               // an odd last card keeps its half width
+                    }
+                }
+            }
+            if (vm.sessions.isNotEmpty()) Text("YOUR SESSIONS", color = Emvryx.muted, fontSize = 12.sp, fontWeight = FontWeight.SemiBold, letterSpacing = 1.4.sp, modifier = Modifier.padding(top = 10.dp))
+        }
     }
 }
 

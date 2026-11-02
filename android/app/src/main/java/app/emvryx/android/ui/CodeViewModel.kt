@@ -51,6 +51,14 @@ class CodeViewModel(app: Application) : AndroidViewModel(app) {
     var sessions by mutableStateOf<List<CodeSessionRow>>(emptyList())
         private set
 
+    // ---- android_vryxcode_home: the home like the website's (What should we build? with starters)
+    /** The switch, copied from the server's list by the screen */
+    var homeLike by mutableStateOf(false)
+    /** The project starters offered on the home (read when the screen loads) */
+    var templates by mutableStateOf<List<app.emvryx.android.data.CodeTemplate>>(emptyList())
+    /** The starter picked on the home (sent with the first message), or null */
+    var template by mutableStateOf<String?>(null)
+
     // ---- vryxcode_archive: tuck sessions away or delete them
     /** The switch, copied from the server's list by the screen */
     var archiveOn by mutableStateOf(false)
@@ -178,6 +186,7 @@ class CodeViewModel(app: Application) : AndroidViewModel(app) {
                 if (i.environments.none { it.id == env && it.available }) env = "local"
                 // Fetch the session list.
                 refreshLists()
+                if (homeLike && templates.isEmpty()) templates = runCatching { api.codeTemplates() }.getOrDefault(emptyList())     // the starters on the home
                 // If notifications are on and a session is still running, start the background watcher that will notify when it finishes.
                 if (alerts && sessions.any { it.live }) app.emvryx.android.WatchService.start(getApplication())   // one still working: keep an eye on it
                 // Fetch the /commands; runCatching turns a failure into a result we can default, so a missing list never blocks loading.
@@ -363,6 +372,8 @@ class CodeViewModel(app: Application) : AndroidViewModel(app) {
     private fun body(text: String, start: Boolean): JsonObject = buildJsonObject {
         if (start) {
             put("project", project); put("task", text); put("env", env); put("queue", true)
+            template?.let { put("template", it) }                         // a starter picked on the home: the server writes its files first
+            template = null
         } else put("text", text)
         put("model", model); put("effort", effort)
         put("auto_edits", mode == "auto"); put("plan", mode == "plan")

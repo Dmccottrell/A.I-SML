@@ -99,6 +99,14 @@ data class CodeSessionRow(
     val live get() = state in setOf("starting", "working", "asking", "queued")
 }
 
+/** A project starter on the VryxCode home (GET /api/code/templates): its [icon] (an emoji), name, one-line [desc], and an [idea] to suggest in the box. */
+@Serializable
+data class CodeTemplate(val id: String, val name: String = "", val icon: String = "", val desc: String = "", val idea: String = "")
+
+/** The reply of the starters call. */
+@Serializable
+data class CodeTemplates(val templates: List<CodeTemplate> = emptyList())
+
 /** The reply of the session-list call. */
 @Serializable
 data class CodeSessions(val sessions: List<CodeSessionRow> = emptyList())

@@ -255,6 +255,9 @@ class ApiClient(private val session: SessionStore) {
         post<JsonObject>("/api/code/sessions/$id/delete", JsonObject(emptyMap()))
     }
 
+    // The project starters (coding/templates.py) the home offers: a small working project the model then fills in
+    suspend fun codeTemplates(): List<CodeTemplate> = get<CodeTemplates>("/api/code/templates").templates
+
     suspend fun codeView(id: String, after: Int): CodeView = get("/api/code/sessions/$id?after=$after")
 
     suspend fun codeStart(body: JsonObject): CodeStarted = post("/api/code/start", body)

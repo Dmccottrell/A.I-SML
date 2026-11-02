@@ -25,6 +25,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
@@ -83,6 +84,10 @@ import kotlinx.coroutines.withContext
 fun LocalChatScreen(vm: AppViewModel, onBack: () -> Unit) {
     BackHandler(onBack = onBack)
     val phone = (LocalContext.current.applicationContext as EmvryxApp).phone
+    var showModel by remember { mutableStateOf(false) }
+    if (showModel) androidx.compose.material3.AlertDialog(onDismissRequest = { showModel = false }, containerColor = Emvryx.surface,
+        text = { Column(Modifier.verticalScroll(rememberScrollState())) { PhoneModelCard(phone, vm.online) } },
+        confirmButton = { TextButton(onClick = { showModel = false }) { Text("Close") } })
     Column(Modifier.fillMaxSize().background(Emvryx.bg)) {
         Column(Modifier.statusBarsPadding()) {
             Row(Modifier.fillMaxWidth().height(56.dp).padding(horizontal = 8.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -91,6 +96,8 @@ fun LocalChatScreen(vm: AppViewModel, onBack: () -> Unit) {
                     Text("On this phone", fontWeight = FontWeight.SemiBold, fontSize = 17.sp)
                     phone.kit?.let { Text(it.fullName + " · works without the PC", color = Emvryx.muted, fontSize = 12.sp) }
                 }
+                // android_full_settings: the phone model's own card (download, switch, remove) lives here, since Settings now opens the full list
+                if (vm.flag("android_full_settings") && phone.status == PhoneModel.Status.Ready) TextButton(onClick = { showModel = true }) { Text("Model") }
                 if (vm.adminKept) TextButton(onClick = { vm.open(Screen.Native("admin")) }) { Text("Admin") }
             }
             HorizontalDivider(color = Emvryx.line)
