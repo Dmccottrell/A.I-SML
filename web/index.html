@@ -476,6 +476,8 @@ body.mbar.mbar .wash { background: radial-gradient(circle, var(--core) 0%, var(-
 .code .pvfoot .good { color: #3fb950; } .code .pvfoot .bad { color: var(--danger); background: none; border: 0; padding: 0; display: block; }
 .code .pvfoot ul { margin: 0; padding-left: 18px; color: var(--muted); font: 13px ui-monospace, Menlo, Consolas, monospace; max-height: 96px; overflow: auto; word-break: break-word; }
 .code #codePreviewBtn.pulse { border-color: var(--accent); animation: ccglow 1.2s ease-in-out 4; }
+/* the working line is moved when a step is added: its animations carry on from the clock (--t is set when it moves), so nothing restarts or blinks */
+.code .cc-live .mark, .code .cc-live .what, .code .cc-live::after { animation-delay: calc(var(--t, 0) * -1s) !important; }
 @keyframes ccglow { 50% { opacity: .55; } } @keyframes ccpulse { 50% { transform: scale(.82); opacity: .7; } }
 @media (max-width: 900px) { .code .drawer { width: 100%; box-shadow: none; } }
 /* dialogs */

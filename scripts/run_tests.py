@@ -34,6 +34,13 @@ WEIGHT = {"test_editor_ui": 35, "test_agent": 25, "test_accounts": 22, "test_app
           "test_model_runner": 11, "test_code_sessions": 11, "test_code_history": 10, "test_cloud_mode": 10, "test_site_fx": 9, "test_code_complete_run": 8, "test_flags": 8}
 
 
+def is_browser(name):
+    """True when the test file drives a real browser (it uses the playwright helper or finds a Chromium), so it needs a browser installed and is slower."""
+    with open(os.path.join(ROOT, "tests", name + ".py"), encoding="utf-8") as f:
+        src = f.read()
+    return "find_browser" in src or "playwright" in src or "browser_check" in src
+
+
 def summary(out):
     """["test_x (module.Class): ValueError: ...", ...] from unittest's output: each failing test and the last line of its error."""
     lines, got = out.splitlines(), []
@@ -51,13 +58,21 @@ def main(argv=None):
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("files", nargs="*", help="test file names (without .py); default: all")
     ap.add_argument("-j", type=int, default=min(6, os.cpu_count() or 2), help="how many files at once")
+    ap.add_argument("--kind", choices=("all", "plain", "browser"), default="all",
+                    help="plain = the test files that need no browser; browser = the ones that drive a real browser (they start Chromium); all = both (default). The gate in CI gives the browser suites to its second shard")
+    ap.add_argument("--list", action="store_true", help="only print which test files would run (after --kind and --shard), then stop")
     ap.add_argument("--shard", default="", metavar="I/N", help="run only part I of N (CI runs the halves side by side); files are dealt out biggest first so the parts take about as long")
     a = ap.parse_args(argv)
     names = a.files or sorted(os.path.splitext(os.path.basename(p))[0] for p in glob.glob(os.path.join(ROOT, "tests", "test_*.py")))
+    if a.kind != "all":
+        names = [m for m in names if is_browser(m) == (a.kind == "browser")]
     if a.shard:
         i, n = (int(x) for x in a.shard.split("/"))
         dealt = sorted(names, key=lambda m: (-WEIGHT.get(m, 0), -os.path.getsize(os.path.join(ROOT, "tests", m + ".py"))))
         names = [m for k, m in enumerate(dealt) if k % n == i - 1]
+    if a.list:
+        print("\n".join(sorted(names)))
+        return 0
     started = time.time()
     results = []
     with concurrent.futures.ThreadPoolExecutor(max_workers=max(1, a.j)) as pool:

@@ -1,0 +1,30 @@
+# Dependabot keeps the pinned versions fresh (a pinned action never updates by itself) and opens a pull request for each security fix in a package. Each pull request goes
+# through the same gate as any other change. Weekly, and few at a time, so there is never a pile.
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directories:
+      - "/"
+      - "/.github/actions/*"
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 3
+    commit-message:
+      prefix: "ci"
+    groups:
+      actions:
+        patterns: ["*"]
+  - package-ecosystem: pip
+    directory: "/"
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 3
+    commit-message:
+      prefix: "deps"
+  - package-ecosystem: gradle
+    directory: "/android"
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 3
+    commit-message:
+      prefix: "deps"

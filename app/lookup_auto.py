@@ -206,6 +206,18 @@ def gather(question, wiki=None, web=None, mode="auto", private=False, max_notes=
     if lazy and not saved_notes:                                # the model answers from its own knowledge first
         info["asked"] = False
         return [], info
+    # Is the web certain to be used? Then it is started now, in a second thread, while the local Wikipedia index is searched: the two waits overlap instead of adding up.
+    # (When the web is only used if Wikipedia finds too little, it has to wait for Wikipedia, as before.)
+    web_certain = web is not None and not private and mode != "off" and not lazy and (mode == "always" or force_web or recent)
+    web_box = {}
+    if web_certain:
+        def ask_web():
+            try:
+                web_box["notes"] = [{"title": n["title"], "text": n["text"], "kind": "web", "url": n.get("url")} for n in (web(question, max_notes) or [])]
+            except Exception as e:                                  # offline, a timeout, a bad key...
+                print(f"(web search failed: {e})")
+        web_thread = threading.Thread(target=ask_web, daemon=True)
+        web_thread.start()
     if wiki is not None and not lazy:
         try:
             wiki_notes = [{"title": n["title"], "text": n["text"], "kind": "wikipedia", "url": None}
@@ -218,11 +230,15 @@ def gather(question, wiki=None, web=None, mode="auto", private=False, max_notes=
         mode == "always" or force_web or recent or notes_weak(saved_notes + wiki_notes, question))
     if use_web:
         info["web_tried"] = True
-        try:
-            web_notes = [{"title": n["title"], "text": n["text"], "kind": "web", "url": n.get("url")}
-                         for n in (web(question, max_notes) or [])]
-        except Exception as e:                                  # offline, a timeout, a bad key...
-            print(f"(web search failed: {e})")
+        if web_certain:
+            web_thread.join()
+            web_notes = web_box.get("notes", [])
+        else:
+            try:
+                web_notes = [{"title": n["title"], "text": n["text"], "kind": "web", "url": n.get("url")}
+                             for n in (web(question, max_notes) or [])]
+            except Exception as e:                                  # offline, a timeout, a bad key...
+                print(f"(web search failed: {e})")
     # Which group is read first. Recent things: the web. A second try (the model was not sure): also the web, because a search engine fixes a misspelt
     # name and ranks the famous page first, where the local Wikipedia index matches the letters exactly (and may find a different person).
     first, second = (web_notes, wiki_notes) if (recent or force_notes) else (wiki_notes, web_notes)

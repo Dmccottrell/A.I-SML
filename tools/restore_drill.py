@@ -42,15 +42,18 @@ def drill(zip_path):
                     continue
                 dbs += 1
                 full, rel = os.path.join(dirpath, n), os.path.relpath(os.path.join(dirpath, n), dest)
+                db = None
                 try:
                     db = sqlite3.connect(f"file:{full}?mode=ro", uri=True)
                     check = db.execute("PRAGMA integrity_check").fetchone()[0]
                     tables = [r[0] for r in db.execute("SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%'")]
                     rows = {t: db.execute(f'SELECT COUNT(*) FROM "{t}"').fetchone()[0] for t in tables}
-                    db.close()
                 except sqlite3.Error as e:
                     problems.append(f"{rel}: cannot be read ({e})")
                     continue
+                finally:
+                    if db is not None:
+                        db.close()                              # always: on Windows an open file cannot be deleted with the temporary folder
                 if check != "ok":
                     problems.append(f"{rel}: the database is damaged ({check})")
                 report.append(f"{rel}: ok, " + (", ".join(f"{t} {c}" for t, c in rows.items()) or "no tables"))

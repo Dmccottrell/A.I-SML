@@ -6,12 +6,17 @@ WHAT THIS FILE DOES
       computer, a different branch, a copy that is ahead or has split from main, replies or coding sessions in progress).
     * apply(expected): runs `git pull --ff-only` (it can only move forward, it never merges or overwrites), but only when the newest change is the one the person saw
       and was shown, then restarts the app by itself. The restart is handed to a separate one-off Windows task so it survives the app stopping.
+    * Before anything is installed, update_verify.py proves the newest commit is the project's own (pinned address, certificate check on, a valid signature from
+      a pinned key), when the owner has pinned keys on this computer. With "enforce" an update that fails is refused; the update then moves to exactly the commit
+      that was checked (`git merge --ff-only <that commit>`), never to whatever `git pull` would fetch a moment later.
     * Nothing here runs unless the owner presses the button and confirms.
 """
 import os
 import subprocess
 import tempfile
 import threading
+
+import update_verify
 
 BRANCH = "main"             # the git branch that holds the released code
 TASK = "Emvryx App"         # name of the Windows Task Scheduler task that runs the app
@@ -63,7 +68,7 @@ class Updater:
     def check(self):
         """{"can_update", "reason", "branch", "current", "latest", "behind", "incoming": [{"sha", "subject"}], "dirty": [...], "deps_changed", "busy"}"""
         # `out` starts as "cannot update"; each step below fills in more. Returning early leaves a "reason" the screen shows to the person.
-        out = {"can_update": False, "reason": "", "branch": "", "current": "", "latest": "", "behind": 0, "ahead": 0, "incoming": [], "dirty": [], "deps_changed": False,
+        out = {"can_update": False, "reason": "", "branch": "", "current": "", "latest": "", "latest_full": "", "verification": {"mode": "off", "ok": None, "signer": "", "reason": "", "checks": []}, "behind": 0, "ahead": 0, "incoming": [], "dirty": [], "deps_changed": False,
                "busy": bool(self.busy()), "restart": self.can_restart()}
         # No .git folder means the code was copied, not cloned, so git cannot update it.
         if not os.path.isdir(os.path.join(self.root, ".git")):
@@ -82,6 +87,7 @@ class Updater:
         # The newest commit on GitHub's main (origin/main is our local record of it, just refreshed by the fetch).
         rc, latest, _ = self._g("rev-parse", f"origin/{BRANCH}")
         out["latest"] = latest[:12]
+        out["latest_full"] = latest
         # Count commits on each side of "HEAD...origin/main": the output is two numbers, "ahead behind" (ahead = ours not on GitHub,
         # behind = on GitHub but not here).
         rc, counts, _ = self._g("rev-list", "--left-right", "--count", f"HEAD...origin/{BRANCH}")
@@ -90,6 +96,8 @@ class Updater:
         except ValueError:
             out["reason"] = "Could not compare with GitHub."
             return out
+        # Something new to install: prove it is the project's own before offering it (only when the owner pinned keys on this computer; see update_verify.py).
+        out["verification"] = update_verify.verify(self.root, latest, self.runner) if out["behind"] else {"mode": "off", "ok": None, "signer": "", "reason": "", "checks": []}
         # The new changes (up to 30): a short id and a one-line description each. \x1f is an invisible "unit separator" character used to
         # split the two parts safely, because a description may contain any normal character.
         rc, log, _ = self._g("log", "--format=%h\x1f%s", "--max-count=30", f"HEAD..origin/{BRANCH}")
@@ -109,6 +117,8 @@ class Updater:
             out["reason"] = "Files on this computer were edited by hand (" + ", ".join(out["dirty"][:3]) + "), so it will not be changed."
         elif not out["behind"]:
             out["reason"] = "Already up to date."
+        elif out["verification"]["mode"] == "enforce" and not out["verification"]["ok"]:
+            out["reason"] = "The newest change could not be proven to be the project's own (" + out["verification"]["reason"] + "), so it will not be installed."
         else:
             out["can_update"] = True
         return out
@@ -138,7 +148,11 @@ class Updater:
             if now["busy"] and not force:
                 raise UpdateError("Emvryx is busy right now (a reply or a coding session is running).", "Wait for it to finish, or choose Update anyway.", "busy")
             # --ff-only = "fast-forward only": git just moves forward to the newer commits and refuses anything that needs merging.
-            rc, out, err = self._g("pull", "--ff-only", "--quiet", "origin", BRANCH)
+            # With keys pinned, move to exactly the commit that was just verified (a second `pull` could fetch a newer, unchecked one in between).
+            if now["verification"]["mode"] in ("warn", "enforce"):
+                rc, out, err = self._g("merge", "--ff-only", "--quiet", now["latest_full"])
+            else:
+                rc, out, err = self._g("pull", "--ff-only", "--quiet", "origin", BRANCH)
             if rc:
                 raise UpdateError("The update could not be applied: " + (err.splitlines() or ["git said no"])[-1][:200], "Nothing was changed.", "pull_failed")
             # Restart the app if it can be done; if the restart fails, the update still counts and we report restarting=False.

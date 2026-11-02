@@ -1,0 +1,55 @@
+# Builds the Windows app: Emvryx.exe, the Inno Setup installer and the Microsoft Store package (MSIX), all into dist/. Runs on a Windows machine.
+# Nothing here is signed: the installer shows "Windows protected your PC" the first time, and the Store signs the MSIX itself (docs/MICROSOFT_STORE.md).
+name: build-windows
+description: Compile the Windows app, its installer and its Store package
+inputs:
+  identity-name:
+    description: "Partner Center package identity name (the repository variable MSIX_IDENTITY_NAME); empty builds with test names"
+    required: false
+    default: ""
+  publisher:
+    description: "Partner Center publisher (MSIX_PUBLISHER)"
+    required: false
+    default: ""
+  publisher-display:
+    description: "Partner Center publisher display name (MSIX_PUBLISHER_DISPLAY)"
+    required: false
+    default: ""
+runs:
+  using: composite
+  steps:
+    - name: Build Emvryx.exe
+      shell: bash
+      run: |
+        cmake -S windows-app -B build -DEMVRYX_BUILT_FROM="$GITHUB_SHA"
+        cmake --build build --config Release
+        ls -la build/Release/Emvryx.exe
+    - name: The installer (Inno Setup)
+      shell: pwsh
+      run: |
+        $iscc = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe"
+        if (-not (Test-Path $iscc)) { choco install innosetup -y --no-progress | Out-Null }
+        $env:EMVRYX_VERSION = (Get-Date -Format "yyyy.M.d")
+        & $iscc windows-app\installer.iss
+        if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+        Get-Item dist\Emvryx-Setup.exe
+    - name: The Microsoft Store package (MSIX)
+      shell: pwsh
+      env:
+        IDENTITY: ${{ inputs.identity-name }}
+        PUBLISHER: ${{ inputs.publisher }}
+        DISPLAY: ${{ inputs.publisher-display }}
+      run: |
+        $name = if ($env:IDENTITY) { $env:IDENTITY } else { "Emvryx.Test" }
+        $pub = if ($env:PUBLISHER) { $env:PUBLISHER } else { "CN=Emvryx" }
+        $disp = if ($env:DISPLAY) { $env:DISPLAY } else { "Emvryx" }
+        $version = (Get-Date -Format "yyyy.M.d") + ".0"
+        $layout = "dist\msix-layout"
+        New-Item -ItemType Directory -Force $layout | Out-Null
+        Copy-Item build\Release\Emvryx.exe $layout
+        Copy-Item -Recurse windows-app\msix\Assets $layout\Assets
+        (Get-Content windows-app\msix\AppxManifest.xml -Raw).Replace("{{IDENTITY_NAME}}", $name).Replace("{{PUBLISHER}}", $pub).Replace("{{PUBLISHER_DISPLAY}}", $disp).Replace("{{VERSION}}", $version) | Set-Content -Encoding utf8 $layout\AppxManifest.xml
+        $makeappx = Get-ChildItem "${env:ProgramFiles(x86)}\Windows Kits\10\bin\*\x64\makeappx.exe" | Sort-Object FullName | Select-Object -Last 1
+        & $makeappx.FullName pack /d $layout /p dist\Emvryx.msix /o
+        if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+        Get-Item dist\Emvryx.msix

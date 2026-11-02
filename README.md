@@ -13,14 +13,30 @@ you and your testers, or public). Where it runs is a choice per chat, not a prop
 | **v3-long** | v3 stretched to 8K → 16K → 32K tokens after it finishes (the rehearsal for v3.5's 75K–100K) | Code ready, tested on small models: see **[docs/LONG_CONTEXT.md](docs/LONG_CONTEXT.md)** |
 | **v3.5** | ~1.12B (24 layers), ~20B tokens (75,000 steps, 8K context), Muon optimizer; then stretched to 32K+ (goal 75K–100K) | Code ready, data build in progress: see **[docs/V3_5.md](docs/V3_5.md)** |
 
-## Where the project is now (Oct 2026)
-- **Live:** the Emvryx app (`python app_server.py`, served at chat.emvryx.app from the home PC) with four models: **Flare 2.5, Equinox 2, Solstice 2, Apogee 2** (the 2.x series on open bases). Plans and usage limits, accounts with passwords, two-step sign-in and passkeys, Skills, Teacher mode, documents, 21 connected apps, live facts, and **VryxCode** (the coding assistant with its editor, output panel, live preview, review, queue and "+" new projects). The owner can update the PC from the phone (Admin > PC > Software update). New things ship behind feature flags (Admin > Previews; see [docs/FEATURE_FLAGS.md](docs/FEATURE_FLAGS.md)).
-- **Website:** emvryx.app, built from `design/` by `python tools/build_site.py` into `site/` (Vercel). Violet look; chat is still amber behind the "Violet look" flag.
+## Where the project is now (Nov 2026)
+- **Live:** the Emvryx app (`python app_server.py`, served at chat.emvryx.app from the home PC) with four models: **Flare 2.5, Equinox 2, Solstice 2, Apogee 2** (the 2.x series on open bases). Plans and usage limits, accounts with passwords, two-step sign-in and passkeys, Skills, Teacher mode, documents, 21 connected apps, live facts, and **VryxCode** (the coding assistant with its editor, output panel, live preview, review, queue and "+" new projects). The owner can update the PC from the phone (Admin > PC > Software update). New things ship behind feature flags (Admin > Previews; see [docs/FEATURE_FLAGS.md](docs/FEATURE_FLAGS.md)): 77 feature flags and 3 fix flags today, plus a plain-words "Fixed" list (20 entries) shown in What's new.
+- **Apps on every device (one chat, four ways in):** the **website and installed web app** (PWA: installs from the browser, works offline, push notifications, share target), the **Android app** (native Kotlin and Jetpack Compose in `android/`, see below), the **Windows app** (a small WebView2 window, `windows-app/`, plus a Microsoft Store package) and the plain browser. The iPhone app is planned, not started ([docs/ANDROID_EXTRAS.md](docs/ANDROID_EXTRAS.md), "Tomorrow: iOS").
+- **The Android app (built and shipping from GitHub, `android/`):** chat, VryxCode (its own screens, a web-style home, sessions you can archive or delete), Settings and Admin, the **phone model** (Flare runs on the phone with no PC; it downloads by itself in the background, on Wi-Fi or mobile data, and chats switch to it automatically when the PC is off, then sync back), the **assistant** (set Emvryx as the phone's assistant: voice commands, "Ask Emvryx" from the assistant bar), reply from a notification, a home-screen widget, camera scan, background sync, and "a new version is ready" (Play Store aware). Details: [docs/ANDROID_EXTRAS.md](docs/ANDROID_EXTRAS.md); the original plan is [docs/ANDROID.md](docs/ANDROID.md) and [docs/NATIVE.md](docs/NATIVE.md).
+- **Design 2027 (switch `design_2027`, admins and the owner first):** the new look across the website, the installed app and Android: a floating frosted-glass message bar, OLED black with a slow ambient glow, carbon cards, a ring send button that shows how full the chat's memory is, a calmer VryxCode (quiet step lines, new text printing in VryxCode's colour). What is and is not on each platform: [docs/DESIGN_2027.md](docs/DESIGN_2027.md).
+- **VryxCode, recently:** archive or delete any session; a web-style home on Android; "A new version is ready" with an **Update now** button; the working line (the E mark with what it is running and the seconds) no longer blinks; a command written as `run("...")` really runs; a claim of "I fixed it" with nothing saved is sent back and then reported plainly; "Not finished yet, waiting for your answer" now offers replies to tap; pasted code is saved, fixed and explained. See [docs/VRYXCODE.md](docs/VRYXCODE.md).
+- **Ready for real testers:** a Send feedback button (switch `send_feedback`), the tester checklist [docs/TESTING.md](docs/TESTING.md), the free Microsoft Store route [docs/MICROSOFT_STORE.md](docs/MICROSOFT_STORE.md), a backup restore drill and a load test (`tools/`), a sweep that proves every API address needs a sign-in, and the microphone fix (voice typing works in Chrome).
+- **CI/CD, security and monitoring:** a one-gate CI, signed downloads, a verified PC update, alerts and uptime: see [the section below](#cicd-security-and-monitoring) and [docs/DEVSECOPS.md](docs/DEVSECOPS.md).
+- **Website:** emvryx.app, built from `design/` by `python tools/build_site.py` into `site/` (Vercel; it builds only when `site/` changed). Violet look; chat is still amber behind the "Violet look" flag.
 - **Next models (3.x):** Flare 3 (Qwen3.5 2B, training now) and Equinox 3 (4B) on the RTX 4070; Solstice 3 (9B, major tune) and the flagship **Apogee 3** (Qwen3.5 9B grown to about 12B, new layers + major tune + preference training) on an RTX 5090. Every model still chats on the 4070 with a 128K window. Runbook: [docs/EMVRYX3_RUNBOOK.md](docs/EMVRYX3_RUNBOOK.md).
 - **VryxCode 3:** one dedicated coding model (on top of Apogee 3) that builds whole multi-file projects, trained on projects the teacher Qwen3.6 27B builds in VryxCode's own loop, kept only when hidden tests pass. Built so far: the long-build loop (150 steps, checkpoints and rollback, a step back when stuck, the plan kept through long sessions), a 15-project test with hidden tests (`coding/bench_projects.py`) and the build factory (`coding/project_factory.py`). See [docs/VRYXCODE.md](docs/VRYXCODE.md).
 - **Lessons 4 and the Emvryx Constitution:** the next lessons are written to Emvryx's own written character ([docs/EMVRYX_CONSTITUTION.md](docs/EMVRYX_CONSTITUTION.md)): every answer judged and rewritten, code run, maths verified, facts checked, plus preference pairs (DPO), in one Emvryx voice. Plan, flagship and Apogee 3.5: [docs/LESSONS_4.md](docs/LESSONS_4.md).
-- **Native apps:** Android (Kotlin) first, then iPhone (Swift); planned, not started: [docs/NATIVE.md](docs/NATIVE.md).
 - The v1 to v3.5 rows in the table above are the from-scratch line; the v3.5 run was stopped.
+
+### The project in numbers (Nov 2026)
+
+| | |
+|---|---|
+| Code (tracked files, comments and blank lines included) | **654 files, about 114,000 lines**: Python 452 files / 83,400 lines (server, VryxCode, training, tools, tests), Kotlin 90 / 15,900 (the Android app), HTML 29 / 5,800, JavaScript 29 / 5,400 (the website's code), CSS 6, XML 23, C++ 2 (the Windows app), YAML 13 (CI/CD), shell, PowerShell and installer scripts |
+| Automatic tests | **2,114 tests in 194 files** (`python scripts/run_tests.py`), plus the Android unit tests; 230 test files (194 Python, 36 Android) and about 31,000 lines are tests |
+| Feature switches | 80 in `app/flags.py` (77 features, 3 fixes), each with an audience: off, owner, admins or everyone |
+| Docs | 48 guides in `docs/` (index [below](#docs-index)) |
+| CI/CD | 4 workflows run on pull requests today (`tests`, `android`, `windows-app`, `sandbox`), and the new gate, delivery, alert and uptime workflows (`supreme-*`, `alert-router`, `monitor-uptime`) with 4 shared actions in `.github/actions/` |
+| Model versions | unchanged: Flare 2.5, Equinox 2, Solstice 2, Apogee 2 in the app; Ember 2 and Flare 2 from scratch; v3.5 stopped |
 
 **After v3's pretraining:** average the last snapshots → chat fine-tune (with NEFTune) → DPO → `evaluation/compare.py --old v2 --new v3`. Steps in [docs/V3.md](docs/V3.md).
 
@@ -72,18 +88,21 @@ The code lives in folders by job. Run everything from the project folder, for ex
 
 | Folder | What is in it |
 |---|---|
-| `app_server.py`, `web/` | The Emvryx app: the server (`python app_server.py`, which holds the start-up, the request handler's plumbing and the page and file routes) and the chat page. Kept in the project folder because the Windows start-up task runs it from there. The page's code is split by part into `web/js/` (`core`, `chat`, `settings`, `admin`, `code`, `ide`, `auth`...; loaded in that order by `web/index.html`; there is no inline script) |
+| `app_server.py`, `web/` | The Emvryx app: the server (`python app_server.py`, which holds the start-up, the request handler's plumbing and the page and file routes) and the chat page. Kept in the project folder because the Windows start-up task runs it from there. The page's code is split by part into `web/js/` (`core`, `chat`, `settings`, `admin`, `code`, `ide`, `auth`, `pwa`, `design2027`...; loaded in that order by `web/index.html`; there is no inline script); the styles are `web/vryx.css`, `web/modern.css` and `web/design2027.css`; `web/sw.js` is the offline service worker; `web/privacy.html` and `web/terms.html` are the policy pages |
 | `app/` | The server's other parts, split out of `app_server.py` by job: `state_*.py` (what `AppState` does: accounts, settings, apps, the PC and models, VryxCode, operations), `routes_*.py` (the web routes: chat, account and sign-in, admin, VryxCode), `chat_turn.py` (one chat turn), `app_runner.py` (starting llama-server), `app_shared.py` (limits and small helpers). Also everything behind the chat page: reliability and errors, sign-in and plans, usage limits, memory, look-ups (Wikipedia, web search), **live facts**, **Skills**, **Teacher mode**, **Documents**, saving answers as PDF or Word, connected apps |
 | `coding/` | **VryxCode**: the coding assistant, its tools and loop, the safe sandbox, live preview, and the coding benchmarks |
 | `core/` | The model itself: the transformer, tokenizer, chat format, settings for each version, LoRA, and the open-base model list |
 | `training/` | Pretraining, fine-tuning (from scratch and on open bases), preference training, run supervision, backups and cloud hand-off |
 | `data_prep/` | Building the training data and the chat lessons (including the open-base lessons) |
 | `evaluation/` | The exams, test sheets, public benchmarks and the side-by-side comparison |
-| `tools/` | Export and convert (Hugging Face layout, GGUF), generate text, build the website, back up server data |
-| `scripts/` | The shell scripts for cloud runs (`chain_open.sh`, `wrap_open.sh`, `bench_all.sh`, `cloud_setup.sh`) |
-| `tests/` | The automatic tests. Fast way: `python scripts/run_tests.py` (runs the files side by side, about 2 minutes, lists the slowest); reference: `python -m unittest discover -s tests -t .`. `python tools/lint.py` checks for unused imports and undefined names. GitHub runs both on every push (`.github/workflows/tests.yml`) |
-| `docs/` | The guides: [Family guide](docs/FAMILY_GUIDE.md), versions, roadmap, benchmarks, how each feature works |
-| `site/`, `design/` | The website (built pages and design sources) and the brand |
+| `tools/` | Export and convert (Hugging Face layout, GGUF), generate text, build the website, back up server data; and the project's own checks: `lint.py`, `lint_polyglot.py`, `guard_repo.py`, `comments_only.py`, `restore_drill.py`, `load_test.py` |
+| `scripts/` | The shell scripts for cloud runs (`chain_open.sh`, `wrap_open.sh`, `bench_all.sh`, `cloud_setup.sh`), the test runner (`run_tests.py`) and `scripts/security/` (GitHub hardening, pinning the update key) |
+| `tests/` | The automatic tests (2,114). Fast way: `python scripts/run_tests.py` (runs the files side by side, about 5 minutes, lists the slowest; `--kind plain` or `--kind browser` and `--shard 1/2` for part of it); reference: `python -m unittest discover -s tests -t .`. `python tools/lint.py` and `python tools/lint_polyglot.py` are the linters. GitHub runs all of it on every pull request (see CI/CD below) |
+| `docs/` | The guides: [Family guide](docs/FAMILY_GUIDE.md), versions, roadmap, benchmarks, how each feature works; a full [index](#docs-index) is below |
+| `site/`, `design/` | The website (built pages and design sources) and the brand; `site/ignore-build.sh` tells Vercel when not to build |
+| `android/` | The **Android app**: Kotlin and Jetpack Compose (`app/src/main/java/app/emvryx/android/`: `ui/` screens, `data/` the server client, `local/` the phone model and offline sync, `assist/` the phone assistant and background work), the C++ model engine, unit tests (`src/test/`) and screenshot tests (`src/androidTest/`) |
+| `windows-app/` | The **Windows app**: a small C++ WebView2 window onto chat.emvryx.app (`main.cc`), its Inno Setup installer and the Microsoft Store package (`msix/`) |
+| `.github/` | CI/CD: workflows (`supreme-ci-gate.yml`, `supreme-cd-release.yml`, `alert-router.yml`, `monitor-uptime.yml`, plus the older `tests`, `android`, `windows-app`, `sandbox`), shared actions (`actions/`) and `dependabot.yml` |
 | `eval/`, `examples/`, `docker/`, `windows/` | Test sheets, sample data, the VryxCode sandbox image, the Windows start-up installer |
 
 Each script starts with `import emvryx_paths`, which makes all the code folders importable by plain name (`import chat`), so the files did not have to change how they find each other.
@@ -144,7 +163,7 @@ Each script starts with `import emvryx_paths`, which makes all the code folders 
 | `evaluation/evaluate.py` + `eval/prompts.jsonl` | 6–7 | 20-question test sheet that scores a chat model |
 | `evaluation/exam.py` | 6 | HellaSwag, a public common-sense test (works on pretrained models; compare versions) |
 | `data_prep/wiki_index.py` | v3 | Searchable copy of Wikipedia for lookups (build + search) |
-| `app/web_search.py` | v3 | Web search for online mode (Wikipedia's free search or Brave Search); results become notes |
+| `app/web_search.py` | v3 | Web search for online mode (Wikipedia's free search or Brave Search); results become notes. Pages are opened together, and a download is remembered for 45 seconds |
 | `data_prep/typo_lessons.py` | v3 | Chat lessons for messy typing: copies of ordinary lessons with the user's message typed carelessly (slips, no apostrophes, text-speak) and the clean answer; on by default in `data_prep/make_chat_data_v3.py` (`--typos`) |
 | `data_prep/web_lessons.py` | v3 | Chat lessons for reading web results and honest answers about other AIs (used by data_prep/make_chat_data_v3.py) |
 | `data_prep/make_teacher_data.py` | v3 | The teacher model (a 7B open model via llama.cpp, or rented per token from a hosting API) writes practice examples |
@@ -157,10 +176,44 @@ Each script starts with `import emvryx_paths`, which makes all the code folders 
 | `tools/export_hf.py` | 8 | Save in standard Llama layout (safetensors + tokenizer.json) |
 | `tools/to_gguf.py` | 8 | Convert to GGUF with llama.cpp for phone apps |
 | `examples/chat_sample.jsonl` | 7 | Example fine-tuning data format |
+| `android/` (see "Where things are") | app | The native Android app, built by GitHub (`android.yml`) into the public download (the `android-latest` release, file emvryx.apk); its phone model engine is llama.cpp compiled with the NDK |
+| `windows-app/main.cc`, `windows-app/installer.iss`, `windows-app/msix/` | app | The Windows app, its installer, and the Microsoft Store package (see [docs/MICROSOFT_STORE.md](docs/MICROSOFT_STORE.md)) |
+| `web/design2027.css`, `web/js/design2027.js`, `android/app/src/main/java/app/emvryx/android/ui/Design2027.kt` | app | Design 2027: the new look on the website and Android, behind the `design_2027` switch (see [docs/DESIGN_2027.md](docs/DESIGN_2027.md)) |
+| `web/js/pwa.js`, `web/sw.js`, `web/manifest.webmanifest` | app | The installed web app: install button, offline chats and outbox, push, share target, and the "A new version is ready" notice |
+| `app/updater.py`, `app/update_verify.py`, `scripts/security/pin_update_keys.py` | 9 | Admin > PC > Software update, and the check that the newest commit is the project's own (pinned address, certificate check, signature from a pinned key) before it is installed |
+| `app/observability.py` | 9 | Optional error reports to Sentry, with the message, variables, request data and keys removed on the PC first (off unless `EMVRYX_SENTRY_DSN` is set) |
+| `app/feedback.py` | app | Reports from people: answer reports and, with `send_feedback`, general feedback about the app |
+| `app/flags.py` | all | Every feature switch and its audience, the plain-words "Fixed" list and the version numbers (features +0.5, fixes +0.1) |
+| `coding/code_sessions.py`, `coding/harness.py`, `coding/vryxcode.py` | 7 | VryxCode's sessions (including archive and delete), its loop (function-style commands, no false "fixed"), and its instructions |
+| `tools/lint_polyglot.py`, `tools/restore_drill.py`, `tools/load_test.py`, `tools/comments_only.py` | 9 | Lint for JavaScript, JSON, YAML, XML, CSS, shell and HTML; prove a backup restores; measure how many people the PC serves; prove a change only added comments |
+| `scripts/security/github_hardening.py` | 9 | Sets up the GitHub side of the security design (the ruleset on `main`, the `release` environment, secret scanning) with exact API calls: `plan` then `apply` |
+| `.github/workflows/supreme-ci-gate.yml`, `supreme-cd-release.yml`, `alert-router.yml`, `monitor-uptime.yml`, `.github/actions/*`, `.github/dependabot.yml` | 9 | The CI gate, signed delivery, alerts and uptime check (see "CI/CD, security and monitoring") |
+| `site/ignore-build.sh`, `site/vercel.json` | 9 | Vercel builds the website only when something in `site/` changed |
+| `CLAUDE.md` | all | The rules for anyone who changes the project, people and AI alike: tests first, switches for new features, web and Android together, the owner's standing rules |
 
 Version side-by-side: [`docs/VERSIONS.md`](docs/VERSIONS.md) (with the settings each version trains with). What we learned along the way: [`docs/LESSONS.md`](docs/LESSONS.md). Where the project is heading: [`docs/ROADMAP.md`](docs/ROADMAP.md).
 
 New to the code? Start with [`docs/HOW_IT_WORKS.md`](docs/HOW_IT_WORKS.md). Every function also has a docstring explaining what it does.
+
+## Docs index
+
+Every guide in `docs/`, grouped. (A test, `tests/test_readme.py`, fails if a guide is missing from this list.)
+
+| Group | Guides |
+|---|---|
+| **Start here** | [FAMILY_GUIDE](docs/FAMILY_GUIDE.md) (plain-language tour), [HOW_IT_WORKS](docs/HOW_IT_WORKS.md), [WHATS_NEW](docs/WHATS_NEW.md) (what people see), [CHANGELOG](docs/CHANGELOG.md) (what changed, newest first), [ROADMAP](docs/ROADMAP.md), [VISION](docs/VISION.md), [IDEAS](docs/IDEAS.md) |
+| **The app and its features** | [APP](docs/APP.md), [APP_SPEC](docs/APP_SPEC.md), [FEATURE_FLAGS](docs/FEATURE_FLAGS.md), [CHAT_TOOLS](docs/CHAT_TOOLS.md), [SKILLS](docs/SKILLS.md), [TEACHER_MODE](docs/TEACHER_MODE.md), [DOCUMENTS](docs/DOCUMENTS.md), [LIVE_DATA](docs/LIVE_DATA.md), [CONNECTED_APPS](docs/CONNECTED_APPS.md), [API](docs/API.md) (use Emvryx inside your own apps), [VRYXCODE](docs/VRYXCODE.md) |
+| **Phones, Windows and design** | [ANDROID](docs/ANDROID.md) (the plan), [ANDROID_EXTRAS](docs/ANDROID_EXTRAS.md) (what the Android app does, offline, assistant, updates, iOS plan), [NATIVE](docs/NATIVE.md), [PHONE](docs/PHONE.md), [DESIGN_2027](docs/DESIGN_2027.md), [MICROSOFT_STORE](docs/MICROSOFT_STORE.md), [EMVRYX_STYLE](docs/EMVRYX_STYLE.md) |
+| **Running, testing and shipping** | [DEPLOY](docs/DEPLOY.md) (Vercel, Cloudflare tunnel, the PC), [TESTING](docs/TESTING.md) (tester checklist, backup drill, load test), [DEVSECOPS](docs/DEVSECOPS.md) (the gate, signed delivery, update check, alerts), [SECURITY](docs/SECURITY.md), [ACCOUNTS](docs/ACCOUNTS.md), [CLOUD](docs/CLOUD.md), [VAST_FIRST_TIME](docs/VAST_FIRST_TIME.md) |
+| **Models and training** | [VERSIONS](docs/VERSIONS.md), [V2](docs/V2.md), [V3](docs/V3.md), [V3_5](docs/V3_5.md), [LONG_CONTEXT](docs/LONG_CONTEXT.md), [OPEN_MODEL](docs/OPEN_MODEL.md), [IDENTITY](docs/IDENTITY.md), [LESSONS](docs/LESSONS.md), [LESSONS_4](docs/LESSONS_4.md), [OPEN_LESSONS](docs/OPEN_LESSONS.md), [EMVRYX_CONSTITUTION](docs/EMVRYX_CONSTITUTION.md), [EMVRYX3_PILOT](docs/EMVRYX3_PILOT.md), [EMVRYX3_RUNBOOK](docs/EMVRYX3_RUNBOOK.md) |
+| **Measurements and names** | [BENCHMARKS](docs/BENCHMARKS.md), [SCORECARD](docs/SCORECARD.md), [TRADEMARK](docs/TRADEMARK.md) |
+
+## Rules for changing the project
+
+Written in [`CLAUDE.md`](CLAUDE.md) and enforced by `tools/guard_repo.py` in CI: run `python scripts/run_tests.py`, `python tools/lint.py` and `python tools/guard_repo.py` before every commit;
+a new feature goes behind a switch in `app/flags.py` (default admins); a bug fix people would notice gets a plain line in `FIXES`; a bug is proved by a failing test first; tests are never deleted,
+weakened or skipped to get green; a test that fails sometimes has a race, which is fixed rather than re-run; every change people see is made on the website **and** in the Android app. The owner's standing rules:
+no keys, tokens or passwords in the code (they live in `keys.env` on the PC), no spending without approval, never train on Claude or ChatGPT output, no arbitrary command execution, and the base model family is not named to users.
 
 ## Quick start on your PC (NVIDIA GPU, 8GB+ VRAM)
 
@@ -244,6 +297,45 @@ all use `checkpoints/dev/` and `export/dev/`. When a checkpoint passes your test
 to `checkpoints/staging/`; when a `.gguf` works well on your phone, copy it to
 `checkpoints/production/`. To work from another stage later, change `STAGE` in `training/stage.py`. `data/`, `checkpoints/` and `export/` are
 git-ignored because they're large.
+
+## CI/CD, security and monitoring
+
+How a change gets from a pull request to people's hands, and how the project defends and watches itself. The full design, every exact command and what was and was not
+verified is in **[docs/DEVSECOPS.md](docs/DEVSECOPS.md)**; this is the map. Nothing here costs money unless it says **paid**.
+
+**1. The gate (every pull request to `main`)** &mdash; `.github/workflows/supreme-ci-gate.yml`
+- `security-scan` (TruffleHog, live secrets only) &rarr; `guard` (the repository's own rules) &rarr; the tests in two parallel shards: shard 1 runs the linters plus half of the tests,
+  shard 2 runs the other half plus every browser suite. `gate: result` is the one check to require.
+- The Android, Windows app and sandbox builds run only when their folders change. `windows-tests`, `screens`, `windows-app`, `sandbox` and `workers-cloudflare` only report; they never block a merge.
+- Every action is pinned to a full commit, the gate holds no secrets, and `tests/test_workflows.py` fails if any of these rules is broken.
+
+**2. Signed commits and secrets**
+- `main` takes changes only through a pull request, with signed commits, squash merges and no force-push. `python scripts/security/github_hardening.py plan` shows the exact GitHub calls; `apply` sends them.
+- The Android signing key lives in a protected GitHub environment called `release` that only `main` can read. The chat server's own keys stay in `.emvryx/keys.env` on the PC, never in GitHub or Vercel.
+
+**3. Delivery** &mdash; `.github/workflows/supreme-cd-release.yml` (off until the repository variable `SUPREME_CD` is `true`)
+- After a merge it builds `android-latest` and `windows-latest`, refuses an app signed by the wrong key, adds checksums, `version.json` and a free Sigstore signature, and checks the public download.
+- **The website:** `site/ignore-build.sh` makes Vercel build only when something in `site/` changed.
+- **The PC server updates by hand** (Admin &gt; PC &gt; Software update). Before installing, `app/update_verify.py` checks the pinned repository address, that the certificate check is on, and that the newest commit is signed by a key you pinned.
+  Set it up once with `python scripts/security/pin_update_keys.py`.
+
+**4. Monitoring and alerts**
+- Error reports (Sentry) are off unless you set `EMVRYX_SENTRY_DSN` in `keys.env`; the message, variables, request data and keys are removed on the PC before anything is sent.
+- **P1** (a live secret leaked, production down) rings the phone through ntfy; **P2** (a failed build of `main`, a new error) goes to Slack; **P3** (a failed preview branch) goes to the run summary and Better Stack.
+  `monitor-uptime.yml` checks `chat.emvryx.app` and `emvryx.app` every five minutes.
+- Not set up because they cost money (**paid**): Vercel Log Drains, Datadog, a Windows code-signing certificate.
+
+**Tools you can run yourself**
+
+| Command | What it does |
+|---|---|
+| `python scripts/run_tests.py --kind plain --shard 1/2` | the same half of the tests the gate runs (`--kind browser` for the browser suites, `--list` to only list them) |
+| `python tools/lint.py` and `python tools/lint_polyglot.py` | the linters: Python, then JavaScript, JSON, YAML, XML, CSS, shell and HTML |
+| `python tools/guard_repo.py` | the repository's own rules, as CI runs them |
+| `python tools/restore_drill.py --out backups` | proves the newest backup really restores, without touching live data |
+| `python tools/load_test.py --url https://chat.emvryx.app --users 3 --rounds 2` | how many people the PC can serve (use a test account's key in `EMVRYX_KEY`) |
+
+**Before inviting real testers:** [docs/TESTING.md](docs/TESTING.md) is the checklist, and [docs/MICROSOFT_STORE.md](docs/MICROSOFT_STORE.md) is the free route to a Windows app without the "unknown publisher" warning.
 
 ## Troubleshooting
 

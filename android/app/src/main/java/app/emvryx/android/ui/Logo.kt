@@ -1,11 +1,13 @@
 package app.emvryx.android.ui
 
 import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.StartOffset
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.layout.size
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
@@ -14,6 +16,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.unit.Dp
 import app.emvryx.android.ui.theme.Emvryx
 import app.emvryx.android.ui.theme.LocalPalette
 import app.emvryx.android.ui.theme.Palettes
@@ -110,5 +113,30 @@ private fun DrawScope.rays(r1: Float, r2: Float, n: Int, c: Color, u: Float) {
         // A point on a circle is (centre + radius * cos(angle), centre + radius * sin(angle)); draw from the inner radius to the outer radius.
         line(c, Offset((46 + r1 * cos(a)).toFloat() * u, (32 + r1 * sin(a)).toFloat() * u),
             Offset((46 + r2 * cos(a)).toFloat() * u, (32 + r2 * sin(a)).toFloat() * u), 2 * u)
+    }
+}
+
+/**
+ * The working mark (the website's logoDots): the E, its middle arm in Emvryx's colour, and three dots that light up in turn, like a typing indicator made of the logo.
+ * [size] is its height; it is a quarter wider than tall. Shown on VryxCode's working line.
+ */
+@Composable
+fun WorkingMark(size: Dp) {
+    val sun = Palettes.forModel(null, Emvryx.light, Emvryx.violet).sun
+    val text = Emvryx.text
+    val t = rememberInfiniteTransition(label = "workmark")
+    // Each dot goes dim -> bright -> dim over 1.2 s, the next one 0.2 s later.
+    val a0 by t.animateFloat(0.3f, 1f, infiniteRepeatable(tween(600), RepeatMode.Reverse, initialStartOffset = StartOffset(0)), label = "d0")
+    val a1 by t.animateFloat(0.3f, 1f, infiniteRepeatable(tween(600), RepeatMode.Reverse, initialStartOffset = StartOffset(200)), label = "d1")
+    val a2 by t.animateFloat(0.3f, 1f, infiniteRepeatable(tween(600), RepeatMode.Reverse, initialStartOffset = StartOffset(400)), label = "d2")
+    Canvas(Modifier.size(size * 1.25f, size)) {
+        val u = this.size.height / 64f
+        fun o(x: Float, y: Float) = Offset(x * u, y * u)
+        val w = 6f * u
+        drawLine(text, o(10f, 16f), o(32f, 16f), w, StrokeCap.Round)
+        drawLine(text, o(10f, 48f), o(32f, 48f), w, StrokeCap.Round)
+        drawLine(text, o(10f, 16f), o(10f, 48f), w, StrokeCap.Round)
+        drawLine(sun, o(10f, 32f), o(28f, 32f), w, StrokeCap.Round)
+        listOf(42f to a0, 56f to a1, 70f to a2).forEach { (x, v) -> drawCircle(sun.copy(alpha = v), (4.6f + 1.6f * (v - 0.3f) / 0.7f) * u, o(x, 32f)) }
     }
 }

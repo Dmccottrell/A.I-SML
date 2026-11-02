@@ -76,6 +76,7 @@ import usage_limits as U
 from app_errors import AppError  # noqa: F401  (tests reach it through app_server)
 from tokenizer import BPETokenizer
 from open_tokenizer import OpenTokenizer  # noqa: F401  (tests reach it through app_server)
+import observability
 from app_shared import UNHANDLED, Cancelled, DemoBackend, HERE, KEY_NAMES, MAX_BODY, MAX_DOC_BODY, MAX_TEXT, MAX_UPLOAD, WEB, demo_tokenizer, free_memory_gb, total_memory_gb  # noqa: F401  (the app server hands these on, and uses them below)
 from state_accounts import StateAccounts
 from state_settings import StateSettings
@@ -212,6 +213,7 @@ def log_crash(method, path):
     import traceback
     sys.stderr.write(time.strftime("%Y-%m-%d %H:%M:%S") + f" request failed: {method} {str(path).split('?', 1)[0]}\n" + traceback.format_exc())
     sys.stderr.flush()
+    observability.capture()                                                   # only when the owner turned error reports on; carries no message, no variables, no request data
 
 
 class Handler(RoutesGet, RoutesPost, RoutesCode, RoutesAccount, RoutesAdmin, RoutesChat, http.server.BaseHTTPRequestHandler):
@@ -695,6 +697,9 @@ def main():
         if note:
             print("Speed: " + note, flush=True)
     got = load_keys_file(os.path.join(args.data, "keys.env"))
+    reports = observability.init(os.environ)
+    if reports != "off":
+        print("Error reports: " + reports, flush=True)                                  # never the address itself
     if got:
         print("Keys loaded from " + os.path.join(args.data, "keys.env") + ": " + ", ".join(got), flush=True)      # the names only, never the keys
     state = AppState(args.data, args.llama, args.llama_key, tok, manifest=manifest, ram_gb=args.ram, runner=runner)

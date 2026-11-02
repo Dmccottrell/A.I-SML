@@ -34,4 +34,5 @@ in `android/`. The owner is not a programmer and reads on a phone: reply in shor
 - Never use Claude or ChatGPT outputs as training data.
 - Never open router port 3389. No arbitrary command execution in Emvryx; VryxCode's real shell runs only in Docker or the cloud machine.
 - Do not name the base model family to users.
+- Every change that people see is made on the website/PWA **and** in the Android app in the same pull request, and the other way round; do not ask, just do both. If a part truly cannot exist on one of them (for example real blur on Android, or the security banner), say so in the pull request.
 - Commit and pull request trailers as the session instructions give them.

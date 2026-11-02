@@ -1,5 +1,7 @@
 # Emvryx on Android: what it would look like, and how to get there
 
+> **Status (Nov 2026):** the native Android app now exists (see [NATIVE.md](NATIVE.md) and [ANDROID_EXTRAS.md](ANDROID_EXTRAS.md)). This page is the earlier thinking about web versus app.
+
 ## What you already have (today, on an Android phone)
 Emvryx is already a phone-sized app: the same screens run in Chrome on Android and install to the home screen (Chrome menu > *Install app*), full screen with its own icon. These are the real screens at Pixel size (412 x 860), not mock-ups:
 

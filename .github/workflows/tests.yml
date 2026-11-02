@@ -54,7 +54,7 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install torch --index-url https://download.pytorch.org/whl/cpu
-          pip install -r requirements.txt peft playwright pyflakes
+          pip install -r requirements.txt peft playwright pyflakes pyyaml
       # Keep the downloaded test browser between runs; the key changes when requirements.txt does, which forces a fresh download.
       - name: Cache the browser
         uses: actions/cache@v4
@@ -139,7 +139,7 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install torch --index-url https://download.pytorch.org/whl/cpu
-          pip install -r requirements.txt peft playwright pyflakes
+          pip install -r requirements.txt peft playwright pyflakes pyyaml
       # Download Chromium for the browser tests (no extra system libraries are needed on Windows).
       - name: Install the browser
         timeout-minutes: 10

@@ -12,15 +12,15 @@ from tests.test_code_sessions import open_to_everyone, wait_for
 
 @unittest.skipUnless(browser_check.available() and find_browser(), "needs the playwright package and a Chromium, Edge or Chrome")
 class Page(Base):
-    def waiting_page(self, words):
+    def waiting_page(self, words, task="fix my code"):
         from playwright.sync_api import sync_playwright
         open_to_everyone(self.state)
         for flag in ("vryxcode_autocontinue", "vryxcode_suggest"):
             self.state.flags.data["audiences"][flag] = "admins"
         self.state.code_generate = lambda model: vryxcode.ScriptedChat([words])
-        s, j = self.owner.call("POST", "/api/code/start", {"project": "tips", "task": "fix my code", "model": "solstice-2"})
+        s, j = self.owner.call("POST", "/api/code/start", {"project": "tips", "task": task, "model": "solstice-2"})
         self.assertEqual(s, 200, j)
-        wait_for(lambda: self.state.code.sessions[j["id"]].state in ("done", "stopped"))
+        wait_for(lambda: self.state.code.sessions[j["id"]].state in ("done", "stopped"), 90)          # a slow shared machine (the Windows runner) needs more than the usual wait
         p = sync_playwright().start()
         self.addCleanup(p.stop)
         b = p.chromium.launch(executable_path=find_browser())
@@ -33,7 +33,7 @@ class Page(Base):
         page.evaluate("document.querySelectorAll('.tour').forEach((e) => e.remove()); openCode()")
         page.wait_for_selector(".vx-prow, .scard")
         page.evaluate("document.querySelector('.vx-prow, .scard').click()")
-        page.wait_for_selector("#codeIn .vx-state.wait")
+        page.wait_for_selector("#codeIn .vx-replies")
         return page
 
     def test_a_question_gets_yes_go_ahead_first(self):
@@ -56,6 +56,23 @@ class Page(Base):
         wait_for(lambda: len(sent) == 1)
         self.assertEqual(sent[0], chips[0])                                                                         # one tap puts it in the box and sends it
         self.assertEqual(self.errors, [])
+
+    def test_a_question_that_was_answered_is_not_left_waiting(self):
+        """After "why did it fail" and a plain explanation there is no "Not finished yet" line and no repeat of what was just asked; "Show me what you changed" opens the changes."""
+        page = self.waiting_page("The test was wrong because the address had no @ symbol.", task="why did it fail")
+        page.wait_for_selector("#codeIn .vx-replies")
+        self.assertEqual(page.evaluate("document.querySelectorAll('#codeIn .vx-state.wait').length"), 0)
+        chips = page.evaluate("[...document.querySelectorAll('#codeIn .vx-replies .chip')].map((b) => b.textContent)")
+        self.assertIn("Show me what you changed.", chips)
+        self.assertFalse(any("save the fix" in c for c in chips))
+        page.evaluate("document.querySelector('#codeIn .vx-replies .chip').click()")
+        wait_for(lambda: page.evaluate("!!document.getElementById('codeDrawer') && !document.getElementById('codeDrawer').hidden"))
+        self.assertEqual(page.evaluate("document.querySelectorAll('#codeIn .cc-user').length"), 1)          # nothing was sent to the model
+        self.assertEqual(self.errors, [])
+
+    def test_a_task_that_stopped_is_still_waiting(self):
+        page = self.waiting_page("The function is in utils.py and it looks fine to me.", task="fix my code")
+        self.assertEqual(page.evaluate("document.querySelectorAll('#codeIn .vx-state.wait').length"), 1)
 
 
 if __name__ == "__main__":

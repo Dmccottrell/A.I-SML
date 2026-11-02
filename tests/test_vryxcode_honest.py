@@ -6,6 +6,7 @@ import tempfile
 import unittest
 
 import harness
+import vryxcode
 
 
 def call(name, args):
@@ -74,6 +75,35 @@ class Claims(unittest.TestCase):
         replies = [call("write_file", {"path": "a.py", "content": "print(1)\n"}), "I've fixed it: a.py now prints 1."]
         r, _ = self.go(replies)
         self.assertNotIn("did not save any file", r["summary"])
+
+
+class PastedCode(unittest.TestCase):
+    """The owner pasted three small functions into the box with "fix this code:" in an empty project. The model must save them as a file, fix them there, run them, and
+    say what was wrong: it is told so in its instructions, and a session that does it ends with the file saved and the reasons in the summary."""
+    def test_the_instructions_say_what_to_do_with_pasted_code(self):
+        text = vryxcode.SYSTEM.lower()
+        self.assertIn("pastes code", text)
+        self.assertIn("save", text.split("pastes code")[1][:300].lower())
+        self.assertIn("what was wrong", text)
+        self.assertIn("fixed code in a code block", text)
+
+    def test_a_session_that_follows_them_saves_the_file_runs_it_and_explains(self):
+        original = "def validate_email(email):\n    return '@' in email and '.' in email\n"
+        fixed = "def validate_email(email):\n    return isinstance(email, str) and '@' in email and '.' in email\n"
+        chat = vryxcode.ScriptedChat([harness_call("write_file", path="fixed_code.py", content=original),
+                                      harness_call("edit_file", path="fixed_code.py", old=original, new=fixed),
+                                      harness_call("run", command="python -c \"import fixed_code; print(fixed_code.validate_email(None))\""),
+                                      harness_call("finish", summary="What was wrong: validate_email crashed on None. I made it return False for anything that is not text. Saved in fixed_code.py.")])
+        d = tempfile.mkdtemp()
+        with harness.Sandbox(workspace=d) as box:
+            r = harness.run_agent("fix this code: def validate_email(email): ...", chat, box, max_turns=6, chat_mode=True)
+            self.assertTrue(r["finished"], r.get("summary"))
+            self.assertIn("isinstance", open(os.path.join(box.root, "fixed_code.py")).read())
+        self.assertIn("What was wrong", r["summary"])
+
+
+def harness_call(name, **args):
+    return vryxcode.harness_call(name, **args)
 
 
 if __name__ == "__main__":

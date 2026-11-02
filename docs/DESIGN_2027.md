@@ -1,7 +1,7 @@
 # Design 2027 (switch `design_2027`, admins and the owner first)
 
-One new look for the website, the installed app (PWA) and the Android app. It is a single switch in Admin > Previews, **Owner** to start with,
-so nobody else sees it. Off, everything looks exactly as before. **This is not merged to main until the owner has reviewed it.**
+One new look for the website, the installed app (PWA) and the Android app. It is a single switch in Admin > Previews, **Admins** (and the owner) for now,
+so nobody else sees it. Off, everything looks exactly as before. **It is merged to main (Nov 2026); the switch keeps it hidden from everyone else.**
 
 Website files: `web/design2027.css` (the look), `web/js/design2027.js` (the few things CSS cannot do). Android: `ui/Design2027.kt` and small changes in
 `ChatScreen.kt`, `CodeScreen.kt`, `theme/Theme.kt`, `AppViewModel.kt`.
@@ -46,3 +46,6 @@ Android: the same building screen (carbon task card, floating glass message bar 
 ### Calmer, more like Claude (VryxCode screen)
 
 Steps and file changes are one quiet line of text (no box, no side bar); a change's code opens only when the line is tapped. The code font is only for names and code. "Allow this?" is a plain hairline card; only the main answer is amethyst. New text prints in VryxCode's colour (amethyst) and settles to its normal colour in about 1.8 seconds (web: `d27ink` animation; Android: `d27Ink`).
+
+## Light mode
+The look was drawn for dark mode (carbon cards, pure black). With the light theme it now has its own colours, on the website (`web/design2027.css`, section 8) and in the Android app (`ui/Design2027.kt`, which reads `Emvryx.light`): cards are soft white with a fine grey edge, your message is a pale violet paper, the glass bar is frosted white, code sits on a light well, and the violet is deeper (#6D28D9) so it can be read on white. `tests/test_design_2027_light.py` reads every piece of visible text on the chat and on VryxCode in light mode and fails if any is below a 4.5:1 contrast.

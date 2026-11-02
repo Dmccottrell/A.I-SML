@@ -1,0 +1,65 @@
+# alert-router: reads how another workflow ended and sends the alert the priority matrix says (docs/DEVSECOPS.md, section 4):
+#   P1  a verified secret was found in a pull request (the security-scan job of supreme-ci-gate failed)             -> ntfy, highest priority (rings the phone)
+#   P2  a build of main failed (tests, android, windows-app, sandbox or supreme-cd-release on a push to main)       -> Slack
+#   P3  anything else that failed (a preview or pull request branch)                                                  -> the run summary, and Better Stack logs when set up
+# Why a separate workflow: it runs from the code on main (never from a pull request's own copy), so the alert secrets are never reachable by a pull request, and
+# it only reads the result of the other run. The branch name and the other run's text are untrusted and are only ever used as data.
+name: alert-router
+
+on:
+  workflow_run:
+    workflows: [tests, android, windows-app, sandbox, supreme-ci-gate, supreme-cd-release]
+    types: [completed]
+
+permissions: {}
+
+jobs:
+  route:
+    name: "alerts: route"
+    if: github.event.workflow_run.conclusion == 'failure'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      actions: read
+      contents: read
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
+      - name: Decide the priority
+        id: pick
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          RUN_ID: ${{ github.event.workflow_run.id }}
+          WORKFLOW: ${{ github.event.workflow_run.name }}
+          BRANCH: ${{ github.event.workflow_run.head_branch }}
+          EVENT: ${{ github.event.workflow_run.event }}
+        run: |
+          failed="$(gh api "repos/$REPO/actions/runs/$RUN_ID/jobs" --paginate --jq '.jobs[] | select(.conclusion == "failure") | .name' | tr '\n' ';')"
+          priority=p3
+          title="A check failed on a branch: $WORKFLOW"
+          if printf '%s' "$failed" | grep -q 'security-scan'; then
+            priority=p1
+            title="A live secret was found in a pull request"
+          elif [ "$BRANCH" = "main" ] && [ "$EVENT" = "push" ]; then
+            priority=p2
+            title="main is broken: $WORKFLOW failed"
+          fi
+          {
+            echo "priority=$priority"
+            echo "title=$title"
+            echo "failed=$failed"
+          } >> "$GITHUB_OUTPUT"
+      - uses: ./.github/actions/notify
+        env:
+          NTFY_TOPIC_P1: ${{ secrets.NTFY_TOPIC_P1 }}
+          NTFY_TOKEN: ${{ secrets.NTFY_TOKEN }}
+          SLACK_WEBHOOK_P2: ${{ secrets.SLACK_WEBHOOK_P2 }}
+          BETTERSTACK_SOURCE_TOKEN: ${{ secrets.BETTERSTACK_SOURCE_TOKEN }}
+          BETTERSTACK_INGEST_HOST: ${{ vars.BETTERSTACK_INGEST_HOST }}
+        with:
+          priority: ${{ steps.pick.outputs.priority }}
+          title: ${{ steps.pick.outputs.title }}
+          message: "${{ format('Branch {0}. Failed jobs: {1}', github.event.workflow_run.head_branch, steps.pick.outputs.failed) }}"
+          url: ${{ github.event.workflow_run.html_url }}

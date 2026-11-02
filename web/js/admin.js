@@ -294,12 +294,16 @@ function updateCard() {
     if (j.restarting) { show([el('p', {}, 'Updated (' + j.changes + (j.changes === 1 ? ' change' : ' changes') + '). Restarting now: this page reloads by itself when Emvryx is back.' + (j.deps_changed ? ' Note: requirements changed, run pip install -r requirements.txt on the PC.' : ''))]); waitBack(); }
     else show([el('p', {}, 'Updated (' + j.changes + (j.changes === 1 ? ' change' : ' changes') + '), but it cannot restart itself here. Restart the app on the PC to use it.' + (j.deps_changed ? ' Also run pip install -r requirements.txt.' : ''))]);
   };
+  // the proof that the newest change is the project's own (app/update_verify.py): shown whenever keys are pinned on this computer, and never hidden when it failed
+  const proof = (v) => !v || v.mode === 'off' ? null : el('p', {class: 'update-proof', style: 'font-size:14px;color:' + (v.ok ? '#3fb950' : 'var(--danger)')},
+    v.ok ? '\u2713 Proven to be the project\u2019s own: ' + v.checks.join(', ') + '.' : '\u26A0 Not proven (' + v.mode + ' mode): ' + v.reason + '.');
   const check = async () => {
     show([el('p', {}, 'Checking GitHub\u2026')]);
     const r = await api('/api/admin/update'); info = await r.json().catch(() => ({}));
-    if (!info.can_update) return show([el('p', {}, info.reason || 'Nothing to update.'), el('div', {class: 'adm-acts'}, sxBtn('Check again', check))]);
+    if (!info.can_update) return show([el('p', {}, info.reason || 'Nothing to update.'), proof(info.verification), el('div', {class: 'adm-acts'}, sxBtn('Check again', check))]);
     show([el('p', {}, el('b', {}, info.behind + (info.behind === 1 ? ' new change' : ' new changes')), ' ready (you have ' + info.current + ', newest is ' + info.latest + '):'),
       el('ul', {style: 'margin:6px 0 10px 18px;padding:0;font-size:14px'}, ...info.incoming.slice(0, 12).map((c) => el('li', {}, c.subject))),
+      proof(info.verification),
       info.busy ? el('p', {style: 'color:var(--muted);font-size:14px'}, 'A reply or coding session is running now, so it will ask before updating.') : null,
       info.restart ? null : el('p', {style: 'color:var(--muted);font-size:14px'}, 'This computer cannot restart the app by itself (no "Emvryx App" scheduled task), so you will need to restart it after.'),
       el('div', {class: 'adm-acts'}, sxBtn('Update and restart', () => { if (confirm('Update Emvryx to the newest version and restart it now? Everyone is disconnected for a few seconds.')) apply(false); }, 'primary'), sxBtn('Check again', check))]);

@@ -546,7 +546,7 @@ private fun UserMessage(vm: AppViewModel, b: Bubble, onEdit: (Bubble) -> Unit) {
                         .then(if (Emvryx.d27) {
                             // design_2027: a matte carbon bubble (#16161D) with a crisp lit top edge and a soft shadow that lifts it off the glowing canvas
                             val s = RoundedCornerShape(22.dp, 22.dp, 6.dp, 22.dp)
-                            Modifier.shadow(12.dp, s, ambientColor = Color.Black, spotColor = Color.Black).clip(s).background(Color(0xFF16161D)).border(1.dp, d27Edge(), s)
+                            Modifier.shadow(12.dp, s, ambientColor = D27Shadow, spotColor = D27Shadow).clip(s).background(D27Paper).border(1.dp, d27Edge(), s)
                         } else if (Emvryx.modern) {
                             // modern: a bubble tinted with the model's colour, with a fine edge (modern.css .msg.user .bubble)
                             val p = LocalPalette.current
@@ -767,7 +767,7 @@ internal fun SendButton(stop: Boolean, enabled: Boolean, onClick: () -> Unit) {
         val ink = if (enabled || stop) D27Amethyst else Emvryx.muted
         Box(
             Modifier.size(44.dp).then(if (enabled || stop) Modifier.shadow((6 + 14 * glow).dp, CircleShape, ambientColor = D27Amethyst, spotColor = D27Amethyst) else Modifier)
-                .clip(CircleShape).border(2.dp, if (enabled || stop) D27Amethyst else Color(0x24FFFFFF), CircleShape).clickable(enabled = enabled, onClick = onClick),
+                .clip(CircleShape).border(2.dp, if (enabled || stop) D27Amethyst else D27Track, CircleShape).clickable(enabled = enabled, onClick = onClick),
             contentAlignment = Alignment.Center,
         ) {
             if (stop) Box(Modifier.size(12.dp).clip(RoundedCornerShape(2.dp)).background(ink))

@@ -14,6 +14,7 @@ import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.jsonObject
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -93,5 +94,24 @@ class CodeParityTest {
         assertTrue(s.first().contains("save"))
         assertTrue(s.any { it.contains("Explain") })
         assertEquals(3, s.size)
+    }
+
+    @Test
+    // Proves: when the person asked a question and VryxCode only explained, that is an answer (no "Not finished yet"), the follow-ups leave out what was just asked, and a task
+    // that stopped without finishing (or a reply that asks something back) still counts as waiting.
+    fun aQuestionThatWasAnsweredIsNotWaiting() {
+        fun end(summary: String) = kotlinx.serialization.json.buildJsonObject {
+            put("kind", kotlinx.serialization.json.JsonPrimitive("end")); put("said", kotlinx.serialization.json.JsonPrimitive(true)); put("summary", kotlinx.serialization.json.JsonPrimitive(summary))
+        }
+        fun said(kind: String, text: String) = kotlinx.serialization.json.buildJsonObject { put("kind", kotlinx.serialization.json.JsonPrimitive(kind)); put("text", kotlinx.serialization.json.JsonPrimitive(text)) }
+        val explained = end("The test was wrong because it used an address without an @ symbol.")
+        assertTrue(app.emvryx.android.ui.justAnswered(explained, listOf(said("user", "why did it fail"), explained)))
+        val task = end("The function is in utils.py and it looks fine to me.")
+        assertFalse(app.emvryx.android.ui.justAnswered(task, listOf(said("start", "fix my code"), task)))
+        val asks = end("Which file should I fix first?")
+        assertFalse(app.emvryx.android.ui.justAnswered(asks, listOf(said("user", "why did it fail"), asks)))
+        val f = app.emvryx.android.ui.followUps("explain in plain words what was wrong.", "It was the test.")
+        assertFalse(f.any { it.startsWith("Explain") })
+        assertTrue(f.isNotEmpty() && f.size <= 3)
     }
 }

@@ -2,6 +2,18 @@
 
 What changed, newest first. Measured numbers live in [BENCHMARKS.md](BENCHMARKS.md); each model's details are in [VERSIONS.md](VERSIONS.md).
 
+## November 2026
+
+- **Web and API lookups are faster (Nov 2, the server, so the website and the Android app both get it):** everything used to wait its turn. The pages of a web search were opened one after another (three slow sites could take 30 seconds), the five searches of a Research report ran one by one, Wikipedia and the web were searched one after the other, and the same address asked twice was downloaded twice. Now the pages are opened at the same time with an 8-second limit in all (a page that is too slow keeps its short snippet), the Research searches run together and still come out in the same order, Wikipedia and the web are searched together when the web will be used anyway, and an answer is remembered for 45 seconds (only good, small answers; prices and scores stay fresh). 9 new tests (tests/test_web_speed.py), each with pretend pages that take a fixed time.
+- **Light mode for the new look, and VryxCode answers (Nov 2, website and Android):** with the light theme, Design 2027's cards, the sidebar blocks, your message and the message bar were dark with dark text; they are now soft white with a deeper violet (a test reads every piece of text in light mode on the chat and VryxCode). In VryxCode, a question you ask (“why did it fail?”) that it simply answers no longer shows “Not finished yet: it is waiting for your answer” or repeats the same three buttons; it offers new things to ask, and “Show me what you changed” opens the changes at once.
+- **Design 2027 is merged (flag `design_2027`, admins and the owner).** The new look on the website, the installed app and Android, off for everyone else. In VryxCode: a building screen, a wide editor, calmer rows like Claude's (quiet grey tool lines, tap a change to open it), a floating glass message box, and new text printing in VryxCode's own colours. Details in [DESIGN_2027.md](DESIGN_2027.md).
+- **Send feedback (flag `send_feedback`, admins first):** Settings > About > Send feedback (bug, idea or confusing) goes to the owner's Admin screen. Website and Android.
+- **A new version notice (website and Android):** when the server has a newer version, the website shows "A new version of Emvryx is ready." with an Update now button that restarts it. The Android app says a new version is available and sends people to the Play Store.
+- **VryxCode fixes (website and Android):** it no longer says "done" when it did nothing (it is asked once to do the work, otherwise it says honestly what it did not do); when it waits for your answer it shows tap-to-send reply chips; pasted code is saved, fixed and run, and the finish explains what was wrong with the fixed code; the live working line no longer flickers (Reading, Writing, Running, Looking through, Checking, Searching, with the file it is on).
+- **Voice microphone on the website** works again (the browser rules blocked it).
+- **Testing readiness:** a restore drill, a load test, route-access tests, a Microsoft Store package (see [MICROSOFT_STORE.md](MICROSOFT_STORE.md)), [TESTING.md](TESTING.md).
+- **CI/CD, security and monitoring ([DEVSECOPS.md](DEVSECOPS.md)):** one CI gate (secret scan, repo guard, tests split in two, Android build, report-only Windows and screenshots), signed delivery (off until the owner turns it on), a Vercel ignored build step, a check of every PC update (signer and connection), optional scrubbed Sentry reports, alerts and an uptime check every 5 minutes, and the setup tools. 80 switches now (77 features, 3 fixes). 2,114 tests in 194 files.
+
 ## October 2026 (late)
 
 ### Latest
