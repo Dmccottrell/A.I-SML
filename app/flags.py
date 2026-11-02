@@ -111,6 +111,7 @@ FLAGS = [
 # Bug fixes people would notice, in plain words. Each goes out with the next bug-fix release of its part (product None: Publish bug fixes in Previews;
 # "vryxcode": Push bug fixes in Models > VryxCode) and shows under "Fixed" in What's new. Add one line here with every fix that ships.
 FIXES = [
+    {"id": "vx_live_flicker", "product": "vryxcode", "text": "VryxCode's working line (the E with its three dots) no longer blinks very fast while it works, and it says what it is running, like \u201cRunning python test.py\u2026\u201d with the seconds beside it."},
     {"id": "vx_false_done", "product": "vryxcode", "text": "VryxCode no longer says it fixed your code when it saved nothing: a command it wrote like run(\"python test.py\") now really runs, and a claim of finished work with no file saved is sent back once, then reported plainly (so Preview and the editor are never left empty with no explanation)."},
     {"id": "web_voice_mic", "product": None, "text": "Voice typing and live voice on the website can start: the page no longer blocks its own microphone before you can be asked."},
     {"id": "android_menu_names", "product": None, "text": "In the Android app's side menu, names like \u201cScheduled tasks\u201d stay on one line; the grey note beside them gives way instead of squeezing the name to a letter per line."},

@@ -72,8 +72,9 @@ const logoDots = (size) => {
   s.setAttribute('width', Math.round(size * 1.25)); s.setAttribute('height', size); s.setAttribute('viewBox', '0 0 80 64'); s.setAttribute('fill', 'none');
   s.setAttribute('aria-hidden', 'true'); s.setAttribute('class', 'logo-dots');
   const sun = violetOn() ? '#8B5CF6' : '#F5A524';
-  const dot = (cx, begin) => `<circle cx="${cx}" cy="32" r="4.6" fill="${sun}" opacity="0.3"><animate attributeName="opacity" values="0.3;1;0.3" dur="1.2s" begin="${begin}s" repeatCount="indefinite"/>`
-    + `<animate attributeName="r" values="4.6;6.2;4.6" dur="1.2s" begin="${begin}s" repeatCount="indefinite"/></circle>`;
+  const ph = (performance.now() / 1000) % 1.2;                           // where the shared 1.2 s beat is now, so a mark made later (or moved) carries on in step
+  const dot = (cx, begin) => `<circle cx="${cx}" cy="32" r="4.6" fill="${sun}" opacity="0.3"><animate attributeName="opacity" values="0.3;1;0.3" dur="1.2s" begin="${(begin - ph).toFixed(3)}s" repeatCount="indefinite"/>`
+    + `<animate attributeName="r" values="4.6;6.2;4.6" dur="1.2s" begin="${(begin - ph).toFixed(3)}s" repeatCount="indefinite"/></circle>`;
   s.innerHTML = `<path d="M10 16 H32 M10 48 H32 M10 16 V48" stroke="var(--text)" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/>
     <path d="M10 32 H28" stroke="${sun}" stroke-width="6" stroke-linecap="round"/>${dot(42, 0)}${dot(56, 0.2)}${dot(70, 0.4)}`;
   return s;
