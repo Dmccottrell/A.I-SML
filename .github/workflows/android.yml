@@ -89,7 +89,7 @@ jobs:
     # Wait for the build job and run only if it passed.
     needs: build
     # Run only for main, and only for a push or a hand-started run (never for a pull request), so unmerged code is never published.
-    if: github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
+    if: github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && vars.SUPREME_CD != 'true'     # supreme-cd-release.yml takes over when SUPREME_CD is true
     runs-on: ubuntu-latest
     permissions:
       # This job may change the repository's releases; the other jobs only read.

@@ -1,4 +1,5 @@
 {
+  "ignoreCommand": "bash ignore-build.sh",
   "cleanUrls": true,
   "trailingSlash": false,
   "headers": [

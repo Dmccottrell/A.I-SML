@@ -1,0 +1,14 @@
+# Google's NDK (the kit that compiles the phone model's C++ engine). Google's download sometimes arrives broken, so it is tried up to three times.
+name: android-ndk
+description: Install the Android NDK the app's native engine needs, with retries
+runs:
+  using: composite
+  steps:
+    - shell: bash
+      run: |
+        for i in 1 2 3; do
+          yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --install "ndk;27.0.12077973" > /dev/null 2>&1 && \
+            [ -f "$ANDROID_HOME/ndk/27.0.12077973/source.properties" ] && exit 0
+          echo "The download failed (try $i of 3): trying again"; sleep 15
+        done
+        echo "::error::The NDK could not be installed"; exit 1

@@ -1,0 +1,271 @@
+# supreme-cd-release: after a merge to main, build the public downloads, sign them, say how to check them, and replace the two download targets:
+#   android-latest   emvryx.apk        + version.json + sha256 + a Sigstore signature of each
+#   windows-latest   Emvryx-Setup.exe  + version.json + sha256 + a Sigstore signature of each
+# The apps compare themselves with version.json to say "a new version is ready" (app_updates); the people who download check the signature (docs/DEVSECOPS.md, 3).
+#
+# This workflow is switched OFF until the owner sets the repository variable SUPREME_CD to true. While it is off the older release jobs (android.yml, windows-app.yml)
+# keep publishing exactly as before; when it is on, they stand down (their `if` says `vars.SUPREME_CD != 'true'`), so only one workflow ever writes the downloads.
+#
+# What "signed" means here, in three layers:
+#   1. The Android app is signed with the project's own key (the repository secret ANDROID_DEBUG_KEYSTORE, kept in the `release` environment). A phone accepts an update
+#      only from the same key, so the key's fingerprint is pinned in the repository variable ANDROID_CERT_SHA256 and the job REFUSES to publish an app signed by any other key.
+#   2. Every published file gets a keyless Sigstore signature made by this exact workflow on main (GitHub's own identity token, no key to steal), and a GitHub
+#      build-provenance attestation. Anyone can check with `cosign verify-blob` that the file came from this workflow in this repository.
+#   3. The Windows installer is additionally Authenticode-signed when the secrets WINDOWS_PFX_BASE64 and WINDOWS_PFX_PASSWORD exist (a paid certificate; not set today).
+name: supreme-cd-release
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+# Two releases never write the same download at once, and a running one is never cut short.
+concurrency:
+  group: supreme-cd-release
+  cancel-in-progress: false
+
+permissions: {}
+
+env:
+  SIGN_IDENTITY: https://github.com/${{ github.repository }}/.github/workflows/supreme-cd-release.yml@refs/heads/main
+  SIGN_ISSUER: https://token.actions.githubusercontent.com
+
+jobs:
+  # ---------------------------------------------------------------------------------------------------------------- what changed
+  plan:
+    name: "cd: plan"
+    if: vars.SUPREME_CD == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    outputs:
+      android: ${{ github.event_name == 'workflow_dispatch' || steps.filter.outputs.android == 'true' }}
+      windows: ${{ github.event_name == 'workflow_dispatch' || steps.filter.outputs.windows == 'true' }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
+      - uses: dorny/paths-filter@0e4a8c6effa4802afeda77dc8d303f8176d7dfad # v3.0.4
+        id: filter
+        if: github.event_name == 'push'
+        with:
+          filters: |
+            android:
+              - 'android/**'
+              - '.github/workflows/supreme-cd-release.yml'
+            windows:
+              - 'windows-app/**'
+              - '.github/workflows/supreme-cd-release.yml'
+              - '.github/actions/build-windows/**'
+
+  # ---------------------------------------------------------------------------------------------------------------- Android
+  release-android:
+    name: "cd: release-android"
+    needs: plan
+    if: needs.plan.outputs.android == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    environment: release                                   # the keystore secret lives in this environment and is only handed to jobs that run on main
+    permissions:
+      contents: write                                      # only to replace the android-latest release
+      id-token: write                                      # only to get the identity token Sigstore signs with
+      attestations: write                                  # only to store the build-provenance attestation
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
+      - uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961 # v5.7.0
+        with:
+          distribution: temurin
+          java-version: "17"
+          cache: gradle
+      - uses: ./.github/actions/android-ndk
+      # The key comes out of the encrypted secret only here, into a file only this job's user can read, and is deleted again after the build. Without the secret the job
+      # stops: an app signed with a throw-away key could never update the apps already on phones.
+      - name: The signing key (from the encrypted secret)
+        env:
+          KEYSTORE: ${{ secrets.ANDROID_DEBUG_KEYSTORE }}
+        run: |
+          if [ -z "$KEYSTORE" ]; then
+            echo "::error::The secret ANDROID_DEBUG_KEYSTORE is not set in the release environment, so no app is published (see docs/DEVSECOPS.md, 3)."
+            exit 1
+          fi
+          umask 077
+          mkdir -p ~/.android
+          printf '%s' "$KEYSTORE" | base64 -d > ~/.android/debug.keystore
+      - name: Build the phone app
+        working-directory: android
+        run: |
+          chmod +x gradlew
+          ./gradlew --no-daemon assemblePhone -PemvryxSha="$GITHUB_SHA"
+          mkdir -p ../dist
+          cp app/build/outputs/apk/phone/*.apk ../dist/emvryx.apk
+      - name: Remove the signing key from this machine
+        if: always()
+        run: rm -f ~/.android/debug.keystore
+      # The app must be signed by the pinned key. apksigner (Google's own tool) reads the signature out of the finished file; the fingerprint is compared with the
+      # repository variable. A mismatch, or no variable, stops the release.
+      - name: The app is signed by the pinned key
+        id: cert
+        env:
+          PINNED: ${{ vars.ANDROID_CERT_SHA256 }}
+        run: |
+          apksigner="$(ls -d "$ANDROID_HOME"/build-tools/*/apksigner | sort -V | tail -1)"
+          "$apksigner" verify --verbose --print-certs dist/emvryx.apk | tee dist/apksigner.txt
+          actual="$(sed -n 's/^Signer #1 certificate SHA-256 digest: //p' dist/apksigner.txt | tr -d ' :' | tr 'A-F' 'a-f' | head -1)"
+          pinned="$(printf '%s' "$PINNED" | tr -d ' :' | tr 'A-F' 'a-f')"
+          if [ -z "$actual" ]; then echo "::error::apksigner did not report a signing certificate"; exit 1; fi
+          if [ -z "$pinned" ]; then
+            echo "::error::Set the repository variable ANDROID_CERT_SHA256 to $actual (the fingerprint of the signing key), then run this workflow again."
+            exit 1
+          fi
+          if [ "$actual" != "$pinned" ]; then
+            echo "::error::The app is signed by $actual, not by the pinned key $pinned. Nothing is published."
+            exit 1
+          fi
+          echo "cert_sha256=$actual" >> "$GITHUB_OUTPUT"
+      - name: Checksums and version.json
+        env:
+          CERT: ${{ steps.cert.outputs.cert_sha256 }}
+          REPO: ${{ github.repository }}
+          RUN_ID: ${{ github.run_id }}
+        run: |
+          cd dist
+          sha256sum emvryx.apk > emvryx.apk.sha256
+          python3 - <<'PY'
+          import datetime, hashlib, json, os
+          apk = hashlib.sha256(open("emvryx.apk", "rb").read()).hexdigest()
+          json.dump({"sha": os.environ["GITHUB_SHA"], "built": datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+                     "apk_sha256": apk, "cert_sha256": os.environ["CERT"],
+                     "run": f"https://github.com/{os.environ['REPO']}/actions/runs/{os.environ['RUN_ID']}"}, open("version.json", "w"))
+          PY
+          cat version.json
+      - uses: sigstore/cosign-installer@7e8b541eb2e61bf99390e1afd4be13a184e9ebc5 # v3.10.1
+      - name: "Sign with Sigstore (keyless, with this workflow's own identity)"
+        run: |
+          cosign sign-blob --yes --bundle dist/emvryx.apk.sigstore.json dist/emvryx.apk
+          cosign sign-blob --yes --bundle dist/version.json.sigstore.json dist/version.json
+      - uses: actions/attest-build-provenance@e8998f949152b193b063cb0ec769d69d929409be # v2.4.0
+        with:
+          subject-path: dist/emvryx.apk
+      - name: Replace the android-latest download
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          CERT: ${{ steps.cert.outputs.cert_sha256 }}
+        run: |
+          set -euo pipefail
+          files=(dist/emvryx.apk dist/emvryx.apk.sha256 dist/emvryx.apk.sigstore.json dist/version.json dist/version.json.sigstore.json)
+          notes="The newest Android app, built from ${GITHUB_SHA::7} by this repository's release workflow. Signing key fingerprint (SHA-256): ${CERT}. Check the download: cosign verify-blob --bundle emvryx.apk.sigstore.json --certificate-identity ${SIGN_IDENTITY} --certificate-oidc-issuer ${SIGN_ISSUER} emvryx.apk"
+          if gh release view android-latest --repo "$REPO" > /dev/null 2>&1; then
+            gh release upload android-latest "${files[@]}" --clobber --repo "$REPO"
+            gh release edit android-latest --notes "$notes" --prerelease --repo "$REPO"
+            gh api -X PATCH "repos/$REPO/git/refs/tags/android-latest" -f sha="$GITHUB_SHA" -F force=true > /dev/null
+          else
+            gh release create android-latest "${files[@]}" --target "$GITHUB_SHA" --prerelease --title "Emvryx for Android (newest)" --notes "$notes" --repo "$REPO"
+          fi
+      # The last step downloads what the PUBLIC link now serves and checks it the way a stranger would: the checksum and the signature.
+      - name: Check the public download
+        env:
+          REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          mkdir -p check && cd check
+          for f in emvryx.apk emvryx.apk.sha256 emvryx.apk.sigstore.json; do curl -fsSL -o "$f" "https://github.com/$REPO/releases/download/android-latest/$f"; done
+          sha256sum -c emvryx.apk.sha256
+          cosign verify-blob --bundle emvryx.apk.sigstore.json --certificate-identity "$SIGN_IDENTITY" --certificate-oidc-issuer "$SIGN_ISSUER" emvryx.apk
+
+  # ---------------------------------------------------------------------------------------------------------------- Windows
+  release-windows:
+    name: "cd: release-windows"
+    needs: plan
+    if: needs.plan.outputs.windows == 'true'
+    runs-on: windows-latest
+    timeout-minutes: 40
+    environment: release
+    permissions:
+      contents: write
+      id-token: write
+      attestations: write
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/build-windows
+        with:
+          identity-name: ${{ vars.MSIX_IDENTITY_NAME }}
+          publisher: ${{ vars.MSIX_PUBLISHER }}
+          publisher-display: ${{ vars.MSIX_PUBLISHER_DISPLAY }}
+      # Authenticode (what Windows itself checks) needs a paid code-signing certificate. When the two secrets exist the installer is signed and the signature is
+      # verified; when they do not, the installer stays unsigned (Windows shows "Windows protected your PC" the first time) and the Sigstore signature below is the proof.
+      - name: Authenticode signature (only when a certificate is set up)
+        shell: pwsh
+        env:
+          PFX: ${{ secrets.WINDOWS_PFX_BASE64 }}
+          PFX_PASSWORD: ${{ secrets.WINDOWS_PFX_PASSWORD }}
+        run: |
+          if (-not $env:PFX) { Write-Host "::notice::No certificate is set up, so the installer is not Authenticode-signed."; exit 0 }
+          $pfx = Join-Path $env:RUNNER_TEMP "signing.pfx"
+          [IO.File]::WriteAllBytes($pfx, [Convert]::FromBase64String($env:PFX))
+          try {
+            $signtool = Get-ChildItem "${env:ProgramFiles(x86)}\Windows Kits\10\bin\*\x64\signtool.exe" | Sort-Object FullName | Select-Object -Last 1
+            & $signtool.FullName sign /f $pfx /p $env:PFX_PASSWORD /fd SHA256 /tr http://timestamp.digicert.com /td SHA256 dist\Emvryx-Setup.exe
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+            & $signtool.FullName verify /pa dist\Emvryx-Setup.exe
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          } finally { Remove-Item $pfx -Force -ErrorAction SilentlyContinue }
+      - name: Checksums and version.json
+        shell: bash
+        env:
+          REPO: ${{ github.repository }}
+          RUN_ID: ${{ github.run_id }}
+        run: |
+          cd dist
+          sha256sum Emvryx-Setup.exe > Emvryx-Setup.exe.sha256
+          python - <<'PY'
+          import datetime, hashlib, json, os
+          exe = hashlib.sha256(open("Emvryx-Setup.exe", "rb").read()).hexdigest()
+          json.dump({"sha": os.environ["GITHUB_SHA"], "built": datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+                     "installer_sha256": exe, "run": f"https://github.com/{os.environ['REPO']}/actions/runs/{os.environ['RUN_ID']}"}, open("version.json", "w"))
+          PY
+          cat version.json
+      - uses: sigstore/cosign-installer@7e8b541eb2e61bf99390e1afd4be13a184e9ebc5 # v3.10.1
+      - name: "Sign with Sigstore (keyless, with this workflow's own identity)"
+        shell: bash
+        run: |
+          cosign sign-blob --yes --bundle dist/Emvryx-Setup.exe.sigstore.json dist/Emvryx-Setup.exe
+          cosign sign-blob --yes --bundle dist/version.json.sigstore.json dist/version.json
+      - uses: actions/attest-build-provenance@e8998f949152b193b063cb0ec769d69d929409be # v2.4.0
+        with:
+          subject-path: dist/Emvryx-Setup.exe
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: emvryx-msix
+          path: dist/Emvryx.msix
+      - name: Replace the windows-latest download
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          files=(dist/Emvryx-Setup.exe dist/Emvryx-Setup.exe.sha256 dist/Emvryx-Setup.exe.sigstore.json dist/version.json dist/version.json.sigstore.json)
+          notes="The newest Windows app, built from ${GITHUB_SHA::7} by this repository's release workflow. Windows may say it protected your PC the first time: More info, Run anyway. Check the download: cosign verify-blob --bundle Emvryx-Setup.exe.sigstore.json --certificate-identity ${SIGN_IDENTITY} --certificate-oidc-issuer ${SIGN_ISSUER} Emvryx-Setup.exe"
+          if gh release view windows-latest --repo "$REPO" > /dev/null 2>&1; then
+            gh release upload windows-latest "${files[@]}" --clobber --repo "$REPO"
+            gh release edit windows-latest --notes "$notes" --prerelease --repo "$REPO"
+            gh api -X PATCH "repos/$REPO/git/refs/tags/windows-latest" -f sha="$GITHUB_SHA" -F force=true > /dev/null
+          else
+            gh release create windows-latest "${files[@]}" --target "$GITHUB_SHA" --prerelease --title "Emvryx for Windows (newest)" --notes "$notes" --repo "$REPO"
+          fi
+      - name: Check the public download
+        shell: bash
+        env:
+          REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          mkdir -p check && cd check
+          for f in Emvryx-Setup.exe Emvryx-Setup.exe.sha256 Emvryx-Setup.exe.sigstore.json; do curl -fsSL -o "$f" "https://github.com/$REPO/releases/download/windows-latest/$f"; done
+          sha256sum -c Emvryx-Setup.exe.sha256
+          cosign verify-blob --bundle Emvryx-Setup.exe.sigstore.json --certificate-identity "$SIGN_IDENTITY" --certificate-oidc-issuer "$SIGN_ISSUER" Emvryx-Setup.exe

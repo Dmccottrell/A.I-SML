@@ -99,7 +99,7 @@ jobs:
       # command line tool and logs in with the token in GH_TOKEN. ${GITHUB_SHA::7} is the first 7 characters of the commit id. It is marked a pre-release
       # so GitHub does not show it as the project's "Latest" release.
       - name: Replace the windows-latest release
-        if: github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
+        if: github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && vars.SUPREME_CD != 'true'     # supreme-cd-release.yml takes over when SUPREME_CD is true
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}

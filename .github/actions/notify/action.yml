@@ -1,0 +1,65 @@
+# Sends one alert at the priority given, and always writes it in the run's summary. The priorities (the matrix is in docs/DEVSECOPS.md):
+#   p1  critical (a leaked secret, the production site down): ntfy at its highest priority, which rings the phone even in silent mode
+#   p2  standard (a failed build of main, a new Sentry error): a Slack message
+#   p3  low (a failed preview branch): only the run summary, and Better Stack's log intake when it is set up
+# The webhook addresses and tokens come in through `env` from repository secrets and are never printed. The text of the alert can come from outside (a branch
+# name, a pull request title), so it is only ever passed as data (jq --arg, curl -d), never put into a command.
+name: notify
+description: Send an alert at a priority (p1, p2 or p3)
+inputs:
+  priority:
+    description: "p1, p2 or p3"
+    required: true
+  title:
+    description: "One line: what happened"
+    required: true
+  message:
+    description: "A few words more"
+    required: false
+    default: ""
+  url:
+    description: "Where to look (a run or a page)"
+    required: false
+    default: ""
+runs:
+  using: composite
+  steps:
+    - shell: bash
+      env:
+        PRIORITY: ${{ inputs.priority }}
+        TITLE: ${{ inputs.title }}
+        MESSAGE: ${{ inputs.message }}
+        LINK: ${{ inputs.url }}
+      run: |
+        set -u
+        clean() { printf '%s' "$1" | tr -d '\r' | tr '\n' ' ' | cut -c1-300; }
+        title="$(clean "$TITLE")"; message="$(clean "$MESSAGE")"; link="$(clean "$LINK")"
+        {
+          echo "### Alert ${PRIORITY^^}: ${title}"
+          if [ -n "$message" ]; then echo "$message"; fi
+          if [ -n "$link" ]; then echo "$link"; fi
+        } >> "$GITHUB_STEP_SUMMARY"
+        sent=none
+        case "$PRIORITY" in
+          p1)
+            if [ -n "${NTFY_TOPIC_P1:-}" ]; then
+              extra=()
+              if [ -n "${NTFY_TOKEN:-}" ]; then extra+=(-H "Authorization: Bearer ${NTFY_TOKEN}"); fi
+              if [ -n "$link" ]; then extra+=(-H "Click: ${link}"); fi
+              if curl -fsS --max-time 20 "${extra[@]}" -H "Priority: 5" -H "Tags: rotating_light" -H "Title: ${title}" \
+                   -d "${message:-$title}" "https://ntfy.sh/${NTFY_TOPIC_P1}" > /dev/null; then sent=ntfy; fi
+            fi ;;
+          p2)
+            if [ -n "${SLACK_WEBHOOK_P2:-}" ]; then
+              body="$(jq -n --arg t "*${title}*" --arg m "$message" --arg l "$link" '{text: ([$t, $m, $l] | map(select(length > 0)) | join("\n"))}')"
+              if curl -fsS --max-time 20 -H "Content-Type: application/json" -d "$body" "$SLACK_WEBHOOK_P2" > /dev/null; then sent=slack; fi
+            fi ;;
+          p3)
+            if [ -n "${BETTERSTACK_SOURCE_TOKEN:-}" ] && [ -n "${BETTERSTACK_INGEST_HOST:-}" ]; then
+              body="$(jq -n --arg t "$title" --arg m "$message" --arg l "$link" --arg d "$(date -u +%Y-%m-%dT%H:%M:%SZ)" '{dt: $d, level: "warn", message: $t, detail: $m, url: $l, source: "github-actions"}')"
+              if curl -fsS --max-time 20 -H "Authorization: Bearer ${BETTERSTACK_SOURCE_TOKEN}" -H "Content-Type: application/json" -d "$body" "https://${BETTERSTACK_INGEST_HOST}" > /dev/null; then sent=betterstack; fi
+            fi ;;
+          *) echo "::error::priority must be p1, p2 or p3"; exit 1 ;;
+        esac
+        echo "alert ${PRIORITY}: sent through ${sent}"
+        if [ "$sent" = none ]; then echo "::notice::No channel is set up for ${PRIORITY} yet (see docs/DEVSECOPS.md, section 4); the alert is in this run's summary only."; fi

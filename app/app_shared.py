@@ -186,4 +186,4 @@ def error_payload(e):
 
 # Names of the settings (API keys, mail server details) that live in keys.env on the PC. Only the names are listed here, never the values.
 KEY_NAMES = ("TAVILY_API_KEY", "BRAVE_API_KEY", "GEMINI_API_KEY", "RAWG_API_KEY", "TMDB_API_KEY", "USDA_API_KEY", "FRED_API_KEY", "WOLFRAM_APPID",
-             "EMVRYX_SMTP_HOST", "EMVRYX_SMTP_PORT", "EMVRYX_SMTP_USER", "EMVRYX_SMTP_PASS", "EMVRYX_MAIL_FROM", "GOOGLE_CLIENT_ID", "GOOGLE_CLIENT_SECRET")
+             "EMVRYX_SMTP_HOST", "EMVRYX_SMTP_PORT", "EMVRYX_SMTP_USER", "EMVRYX_SMTP_PASS", "EMVRYX_MAIL_FROM", "GOOGLE_CLIENT_ID", "GOOGLE_CLIENT_SECRET", "EMVRYX_SENTRY_DSN")
