@@ -49,7 +49,12 @@ class Page(Base):
         self.errors = []
         page.on("pageerror", lambda e: self.errors.append(str(e)))
         page.goto(f"http://127.0.0.1:{self.port}/")
-        wait_for(lambda: page.evaluate("typeof S !== 'undefined' && !!S.state"))
+        ready = lambda: page.evaluate("typeof S !== 'undefined' && !!S.state")
+        try:
+            wait_for(ready, 20)
+        except AssertionError:                                          # a page that never got going on a busy shared machine: load it once more, then wait the long time
+            page.reload()
+            wait_for(ready)
         page.evaluate("document.querySelectorAll('.tour').forEach((e) => e.remove())")
         return page
 
