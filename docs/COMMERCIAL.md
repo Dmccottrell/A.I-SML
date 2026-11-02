@@ -1,6 +1,6 @@
 # The Emvryx commercial
 
-Two cuts of one idea: **"Small models. Real help."** A 30 second script for a voiced ad, and a 15 second animated version that is already built.
+Two cuts of one idea: **"Small models. Real help."** A 15 second silent animation, and a 30 second animation **with a voice, captions and music**, both built. The 30 second script below is the one the voiced version follows.
 
 ## The 15 second animated version (built)
 - The page: `site/commercial.html` (1080 x 1920, the shape of Reels, Shorts and TikTok). Open it in a browser: it plays by itself, has a Replay button and a scrubber. `?t=8.9` shows one moment, `?clean` hides the buttons. It is not linked from the site and is marked noindex until the owner decides to publish it.
@@ -16,6 +16,14 @@ Two cuts of one idea: **"Small models. Real help."** A 30 second script for a vo
 | 9.7 to 12.5 | four cards pop in | Made for you. Private chat. On your phone. Pick your model. Research and code. |
 | 12.3 to 15.0 | the mark, the name, the button | Emvryx. Small models. Real help. emvryx.app |
 
+## The 30 second version with the voice (built)
+- The page: `site/commercial30.html` (unlisted, noindex). The list of spoken lines at the top of its script (`VOICE`) is the single source: the captions, the voice and the timing all come from it. "Sound" in the page's bar reads the lines with the browser's own voice (only a preview).
+- The video: `python tools/render_commercial.py --cut 30` makes `site/emvryx-ad-30s.mp4` (900 frames at 30 a second, about 10 minutes). The voice is made on this computer by **Piper** (free, open source, nothing leaves the computer except the one-time voice download) and placed at each line's time; the soft original pad sits underneath and dips while the voice speaks.
+- Credit (the voice's licence asks for it when the ad is published): **Voice: Alba, CSTR, University of Edinburgh, CC BY 4.0**. Alba is a British English voice. The other free voices are not used on purpose: Ryan is non-commercial only, and Lessac's licence is unclear.
+- The voice is a computer voice: clear and even, not an actor. For a more human read, record the same lines yourself (the table below) and put your recording over the video in a free editor.
+- If the voice says a word wrongly, change its spelling in the `VOICE` list (the brand name is spelt "Em-vrix" for the voice, "Emvryx" in the captions) and render again.
+- Scenes: the mark draws itself in the dark; Meet Emvryx on a phone; a question and a plain answer; VryxCode builds and checks; a padlock closes and the phone answers with no internet; the four models; the sign-off.
+
 ## The 30 second script (for a voiced ad)
 Tone: calm, warm, a little proud. Not shouting. Music: soft and rising, one gentle beat on each scene change. Voice: one person, natural, close to the microphone.
 
@@ -25,7 +33,7 @@ Tone: calm, warm, a little proud. Not shouting. Music: soft and rising, one gent
 | 4 to 8 | The mark finishes, the dot pops. A phone appears. | "Emvryx just wants to help." | Meet Emvryx |
 | 8 to 13 | A real person's hands, a kitchen table, a phone. Over their shoulder: a question typed, an answer arriving word by word. | "Ask it anything. It answers in plain words." | Ask anything. |
 | 13 to 18 | Laptop, late evening. VryxCode writes a file, checks the page, runs the tests. A tick appears. | "Tell it what to build. It builds it, and checks its own work." | Build anything. |
-| 18 to 23 | A phone on a train, aeroplane mode on. The chat still answers. A padlock closes on "Private chat". | "Chat in private, and never saved. Even on your phone, even with no internet." | Private chat. On your phone. |
+| 18 to 23 | A phone on a train, aeroplane mode on. The chat still answers. A padlock closes on the words Private chat. | "Chat in private, and never saved. Even on your phone, even with no internet." | Private chat. On your phone. |
 | 23 to 27 | Four model names slide in one by one: Flare, Equinox, Solstice, Apogee. | "Pick the model that fits the moment." | Pick your model. |
 | 27 to 30 | The mark, the name, the button. | "Emvryx. Small models. Real help." | Emvryx / emvryx.app |
 

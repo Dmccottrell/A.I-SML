@@ -9,6 +9,7 @@ from tests.test_browser_check import find_browser
 
 ROOT = os.path.join(os.path.dirname(os.path.abspath(__file__)), os.pardir)
 PAGE = os.path.join(ROOT, "site", "commercial.html")
+PAGE30 = os.path.join(ROOT, "site", "commercial30.html")
 BASE_FAMILY = re.compile(r"\b(qwen|llama|mistral|gemma|phi-?\d|deepseek)\b", re.I)
 
 
@@ -19,11 +20,31 @@ def read(path):
 
 class Words(unittest.TestCase):
     def test_the_base_model_family_is_never_named(self):
-        for path in (PAGE, os.path.join(ROOT, "docs", "COMMERCIAL.md"), os.path.join(ROOT, "tools", "render_commercial.py")):
+        for path in (PAGE, PAGE30, os.path.join(ROOT, "docs", "COMMERCIAL.md"), os.path.join(ROOT, "tools", "render_commercial.py")):
             self.assertIsNone(BASE_FAMILY.search(read(path)), path)
 
     def test_it_is_not_listed_for_search_engines_until_the_owner_decides(self):
-        self.assertIn('name="robots" content="noindex"', read(PAGE))
+        for page in (PAGE, PAGE30):
+            self.assertIn('name="robots" content="noindex"', read(page))
+
+    def test_the_voice_is_credited_and_its_licence_is_one_that_allows_an_advert(self):
+        doc, tool = read(os.path.join(ROOT, "docs", "COMMERCIAL.md")), read(os.path.join(ROOT, "tools", "render_commercial.py"))
+        self.assertIn("Voice: Alba, CSTR, University of Edinburgh, CC BY 4.0", doc)       # the credit that the licence asks for
+        self.assertIn("alba", tool.lower())
+        self.assertNotIn("ryan", tool.lower())                                              # the Ryan voice is non-commercial only
+
+    def test_the_spoken_lines_of_the_30_second_ad_are_the_script(self):
+        import json
+        page = read(PAGE30)
+        caps = re.findall(r"cap: '([^']+)'", page)
+        doc = read(os.path.join(ROOT, "docs", "COMMERCIAL.md"))
+        script = doc.split("## The 30 second script")[1].split("**The 15 second voiced cut**")[0]
+        spoken = " ".join(re.findall(r'"([^"]+)"', script))
+        squash = lambda t: re.sub(r"[^a-z]", "", t.lower())
+        self.assertEqual(squash(" ".join(caps)), squash(spoken))                           # captions, voice and the written script say the same words
+        starts = [float(x) for x in re.findall(r"\{t: ([\d.]+),", page)]
+        self.assertEqual(starts, sorted(starts))
+        self.assertLess(starts[-1], 30)
 
     def test_the_script_fits_its_time(self):
         doc = read(os.path.join(ROOT, "docs", "COMMERCIAL.md"))
@@ -82,6 +103,29 @@ class Page(unittest.TestCase):
             page.evaluate("window.__seek(8.9)")
             shots.append(page.screenshot())
         self.assertEqual(shots[0], shots[1])                                    # what lets the video be made frame by frame
+
+    def test_the_30_second_ad_shows_each_scene_and_its_caption_at_the_right_time(self):
+        from playwright.sync_api import sync_playwright
+        p = sync_playwright().start()
+        self.addCleanup(p.stop)
+        b = p.chromium.launch(executable_path=find_browser())
+        self.addCleanup(b.close)
+        page = b.new_page(viewport={"width": 1080, "height": 1920})
+        errors = []
+        page.on("pageerror", lambda e: errors.append(str(e)))
+        page.goto("file://" + os.path.abspath(PAGE30).replace("\\", "/") + "?clean")
+        page.wait_for_function("typeof window.__seek === 'function'")
+        self.assertEqual(page.evaluate("window.__duration"), 30)
+        op = lambda t, sel: float(page.evaluate("([t, s]) => { window.__seek(t); return getComputedStyle(document.querySelector(s)).opacity; }", [t, sel]))
+        for t, scene in ((1.5, "#s1"), (5.2, "#s2"), (9.0, "#s3"), (13.5, "#s4"), (19.0, "#s5"), (23.5, "#s6"), (28.5, "#s7")):
+            self.assertGreater(op(t, scene), .9, scene)
+        self.assertEqual(op(1.5, "#s3"), 0)
+        cap = lambda t: page.evaluate("([t]) => { window.__seek(t); return document.getElementById('cap').innerText; }", [t])
+        self.assertEqual(cap(1.5), "Some AI wants to know everything about you.")
+        self.assertEqual(cap(5.0), "Emvryx just wants to help.")
+        self.assertEqual(cap(28.0), "Emvryx. Small models. Real help.")
+        self.assertEqual(cap(0.1), "")                                                    # the dark opening starts in silence
+        self.assertEqual(errors, [])
 
     def test_a_person_who_asked_for_less_motion_gets_the_last_frame_still(self):
         from playwright.sync_api import sync_playwright
