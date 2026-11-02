@@ -124,18 +124,20 @@ function applyTheme() {
   document.querySelector('meta[name=theme-color]').content = p.bg;
   const on = (id) => !!(S.state && S.state.features && S.state.features[id]);
   if (!S.state) return;                                  // before sign-in nothing is known: keep what this device remembered
-  applyLooks(on('modern_look'), on('vryxcode_update'));
+  applyLooks(on('modern_look'), on('vryxcode_update'), on('design_2027'));
   document.body.classList.toggle('mbar', on('model_bar'));
-  try { localStorage.setItem('emvryx_looks', JSON.stringify({ml: on('modern_look'), vxn: on('vryxcode_update'), vi: on('violet_theme')})); } catch (e) { /* the sign-in screen then shows the plain look first */ }
+  try { localStorage.setItem('emvryx_looks', JSON.stringify({ml: on('modern_look'), vxn: on('vryxcode_update'), vi: on('violet_theme'), d27: on('design_2027')})); } catch (e) { /* the sign-in screen then shows the plain look first */ }
 }
 // two looks behind feature flags: their stylesheets are only loaded (and their classes only set) while the flag is on for this person, so off means exactly the earlier look.
 // The last answer is remembered on this device so the sign-in screen (shown before anyone is known) already wears the look.
-function applyLooks(ml, vxn) {
+function applyLooks(ml, vxn, d27) {
   const sheet = (id, href, want) => { const e = document.getElementById(id); if (want && !e) document.head.append(el('link', {id, rel: 'stylesheet', href})); else if (!want && e) e.remove(); };
   document.body.classList.toggle('ml', !!ml); sheet('cssModern', '/modern.css', ml);
   document.body.classList.toggle('vxn', !!vxn); sheet('cssVryx', '/vryx.css', vxn);
+  document.body.classList.toggle('d27', !!d27); sheet('cssD27', '/design2027.css', d27);     // design_2027: the 2027 look (owner only until reviewed)
+  if (window.d27Apply) d27Apply();
 }
-try { const k = JSON.parse(localStorage.getItem('emvryx_looks') || '{}'); if (k.ml || k.vxn) applyLooks(k.ml, k.vxn); } catch (e) { /* no memory of it: the plain look */ }
+try { const k = JSON.parse(localStorage.getItem('emvryx_looks') || '{}'); if (k.ml || k.vxn || k.d27) applyLooks(k.ml, k.vxn, k.d27); } catch (e) { /* no memory of it: the plain look */ }
 function wash() {
   const w = el('div', {class: 'wash'}); document.body.append(w); setTimeout(() => w.remove(), 1100);
   document.querySelectorAll('.composer .card').forEach((c) => { c.classList.remove('mbar-swap'); void c.offsetWidth; c.classList.add('mbar-swap'); setTimeout(() => c.classList.remove('mbar-swap'), 1300); });   // the box lights up in the new model's colour

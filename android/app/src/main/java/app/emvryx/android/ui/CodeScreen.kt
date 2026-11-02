@@ -60,6 +60,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEventType
@@ -174,18 +176,25 @@ fun CodeScreen(app: AppViewModel, vm: CodeViewModel) {
         }
         // Inside a session: the feed fills the space and the message box sits under it. Otherwise: the list, plus a floating "New session" button in the bottom-right corner.
         if (vm.inSession) {
-            Box(Modifier.weight(1f).fillMaxWidth()) { Feed(vm) }
-            CodeComposer(vm)
+            if (Emvryx.d27) Box(Modifier.weight(1f).fillMaxWidth()) {          // design_2027: the message bar floats over the feed as glass; the feed scrolls up clear of it
+                Feed(vm)
+                Box(Modifier.align(Alignment.BottomCenter)) { CodeComposer(vm) }
+            } else {
+                Box(Modifier.weight(1f).fillMaxWidth()) { Feed(vm) }
+                CodeComposer(vm)
+            }
         } else {
             Box(Modifier.weight(1f).fillMaxWidth()) {
                 SessionList(vm)
                 Row(
                     Modifier.align(Alignment.BottomEnd).navigationBarsPadding().padding(18.dp).heightIn(min = 52.dp).clip(CircleShape)
-                        .background(Violet).clickable { vm.newSession() }.padding(horizontal = 22.dp),
+                        .then(if (Emvryx.d27) Modifier.background(Color(0xCC000000)).border(1.dp, d27Edge(), CircleShape)         // design_2027: a hollow ghost button
+                              else Modifier.background(Violet))
+                        .clickable { vm.newSession() }.padding(horizontal = 22.dp),
                     verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
-                    Text("+", color = Color.White, fontSize = 22.sp)
-                    Text("New session", color = Color.White, fontWeight = FontWeight.SemiBold, fontSize = 16.sp)
+                    Text("+", color = if (Emvryx.d27) D27Amethyst else Color.White, fontSize = 22.sp)
+                    Text("New session", color = if (Emvryx.d27) D27Amethyst else Color.White, fontWeight = FontWeight.SemiBold, fontSize = 16.sp)
                 }
             }
         }
@@ -321,7 +330,10 @@ private fun Organizer(vm: CodeViewModel) {
                 item(key = s.id) {
                     // "Ready for review": finished, changed something, and not opened since it last changed.
                     val ready = s.state !in busy && s.state == "done" && (s.added > 0 || s.removed > 0 || s.files > 0) && vm.reviewed[s.id] != s.updated
-                    Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp)).clickable { vm.openSession(s) }.padding(start = 8.dp, end = 8.dp, top = 9.dp, bottom = 9.dp),
+                    val d27 = Emvryx.d27                           // design_2027: tighter rows with a razor-thin line between them, numbers in a monospace face
+                    val mono = if (d27) androidx.compose.ui.text.font.FontFamily.Monospace else null
+                    Row(Modifier.fillMaxWidth().then(if (d27) Modifier.drawBehind { drawLine(D27Hair, Offset(0f, size.height), Offset(size.width, size.height), 1.dp.toPx()) } else Modifier.clip(RoundedCornerShape(10.dp)))
+                        .clickable { vm.openSession(s) }.padding(start = 8.dp, end = 8.dp, top = if (d27) 6.dp else 9.dp, bottom = if (d27) 6.dp else 9.dp),
                         verticalAlignment = Alignment.CenterVertically) {
                         Box(Modifier.width(22.dp), contentAlignment = Alignment.Center) {
                             when {
@@ -338,14 +350,14 @@ private fun Organizer(vm: CodeViewModel) {
                         // Lines added (green) and removed (red), like a code review.
                         if (s.added > 0 || s.removed > 0) {
                             Spacer(Modifier.width(8.dp))
-                            Text("+${s.added}", color = Green, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
-                            Text(" −${s.removed}", color = Emvryx.danger, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+                            Text("+${s.added}", color = Green, fontSize = 12.sp, fontWeight = FontWeight.SemiBold, fontFamily = mono)
+                            Text(" −${s.removed}", color = Emvryx.danger, fontSize = 12.sp, fontWeight = FontWeight.SemiBold, fontFamily = mono)
                         }
                         Spacer(Modifier.width(8.dp))
-                        Text(s.age, color = Emvryx.muted, fontSize = 12.sp)
+                        Text(s.age, color = Emvryx.muted, fontSize = 12.sp, fontFamily = mono)
                         // vryxcode_archive: the ⋯ opens Archive / Delete (not for a session that is still working)
                         if (vm.archiveOn && !s.live) MoreDots { vm.menuFor = s }
-                        Text(num.toString(), color = Emvryx.muted, fontSize = 11.sp, modifier = Modifier.padding(start = 8.dp).widthIn(min = 16.dp),
+                        Text(num.toString(), color = Emvryx.muted, fontSize = 11.sp, modifier = Modifier.padding(start = 8.dp).widthIn(min = 16.dp), fontFamily = mono,
                             textAlign = androidx.compose.ui.text.style.TextAlign.End)
                     }
                 }
@@ -379,12 +391,12 @@ private fun androidx.compose.foundation.lazy.LazyListScope.homeHero(vm: CodeView
                     BasicTextField(vm.draft, { vm.draft = it }, Modifier.fillMaxWidth(), textStyle = androidx.compose.ui.text.TextStyle(color = Emvryx.text, fontSize = 16.sp),
                         cursorBrush = SolidColor(Violet))
                 }
-                Box(Modifier.heightIn(min = 46.dp).clip(RoundedCornerShape(18.dp)).background(Violet).clickable(enabled = vm.draft.isNotBlank()) {
+                Box(Modifier.heightIn(min = 46.dp).clip(RoundedCornerShape(18.dp)).then(if (Emvryx.d27) Modifier.border(1.dp, d27Edge(), RoundedCornerShape(18.dp)) else Modifier.background(Violet)).clickable(enabled = vm.draft.isNotBlank()) {
                     val words = vm.draft
                     vm.draft = ""
                     vm.newSession()
                     vm.send(words)
-                }.padding(horizontal = 20.dp), contentAlignment = Alignment.Center) { Text("Build it", color = Color.White, fontWeight = FontWeight.SemiBold, fontSize = 16.sp) }
+                }.padding(horizontal = 20.dp), contentAlignment = Alignment.Center) { Text("Build it", color = if (Emvryx.d27) D27Amethyst else Color.White, fontWeight = FontWeight.SemiBold, fontSize = 16.sp) }
             }
             // Effort: how hard VryxCode thinks (only when it picks the model itself).
             if (vm.oneModel) {
@@ -423,7 +435,8 @@ private fun androidx.compose.foundation.lazy.LazyListScope.homeHero(vm: CodeView
                         pair.forEach { t ->
                             val on = vm.template == t.id
                             val card = RoundedCornerShape(18.dp)
-                            Column(Modifier.weight(1f).heightIn(min = 120.dp).clip(card).background(Emvryx.surface).border(1.dp, if (on) Violet else Emvryx.line, card)
+                            Column(Modifier.weight(1f).heightIn(min = 120.dp).clip(card).background(if (Emvryx.d27) D27Carbon else Emvryx.surface)
+                                .then(if (Emvryx.d27 && !on) Modifier.border(1.dp, d27Edge(), card) else Modifier.border(1.dp, if (on) Violet else Emvryx.line, card))
                                 .clickable { vm.template = if (on) null else t.id }.padding(14.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                                 Text(t.icon, fontSize = 26.sp)
                                 Text(t.name, fontWeight = FontWeight.SemiBold, fontSize = 17.sp)
@@ -592,7 +605,9 @@ private fun Feed(vm: CodeViewModel) {
     }
     // The agent's to-do list, when the taskbox part is on.
     val plan = if ("vryxcode_taskbox" in vm.parity) planSteps(vm.events, vm.working) else emptyList()
-    LazyColumn(Modifier.fillMaxSize(), state = list, contentPadding = PaddingValues(14.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+    LazyColumn(Modifier.fillMaxSize(), state = list, contentPadding = if (Emvryx.d27) PaddingValues(start = 14.dp, end = 14.dp, top = 14.dp, bottom = 200.dp) else PaddingValues(14.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        // design_2027: while a session spins up and nothing has come back yet, shimmering lines like a code block instead of an empty page
+        if (Emvryx.d27 && vm.events.isEmpty() && vm.working) item(key = "skeleton") { D27Skeleton() }
         if (plan.isNotEmpty()) item { PlanBox(plan) }
         // Review view / Claude Code style lines: events are turned into richer items (quiet lines, file chips, a "Changed N files" summary).
         if (vm.review || "vryxcode_lines" in vm.parity) {
@@ -631,31 +646,37 @@ private fun EventRow(e: JsonObject, all: List<JsonObject>, vm: CodeViewModel) {
     // Choose the look by the event's kind.
     when (e.str("kind")) {
         // What the person asked (shown unless it was sent automatically), with a Restore button on their messages.
-        "start", "user" -> if (!e.bool("auto")) Row(Modifier.fillMaxWidth().clip(shape).background(Emvryx.surface2).padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
+        "start", "user" -> if (!e.bool("auto")) Row(Modifier.fillMaxWidth().then(if (Emvryx.d27) Modifier.d27Bubble(shape) else Modifier.clip(shape).background(Emvryx.surface2)).padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
             Text((if (e.bool("plan")) "[Plan] " else "") + e.str("task").ifEmpty { e.str("text") } + (if (e.bool("steer")) "  (while it worked)" else ""),
-                fontSize = 15.sp, modifier = Modifier.weight(1f))
+                fontSize = 15.sp, color = d27Ink(Emvryx.text), modifier = Modifier.weight(1f))
             if ("vryxcode_restore" in vm.parity && e.int("turn") > 0) RestorePill(vm, e.int("turn"))
         }
         // A tool the agent used (such as writing a file): its name, how long it took, and a preview of what it did.
-        "step" -> Column(Modifier.fillMaxWidth().clip(shape).background(Emvryx.surface).border(1.dp, Emvryx.line, shape).padding(12.dp),
+        "step" -> {
+          // design_2027: a step is one quiet line (no box); a change's code opens only when the line is tapped
+          var open by remember { mutableStateOf(!Emvryx.d27) }
+          val inkTool = d27Ink(Emvryx.text)
+          val preview = e.str("preview")
+          Column(Modifier.fillMaxWidth().then(if (Emvryx.d27) Modifier.clip(RoundedCornerShape(8.dp)).clickable(enabled = preview.isNotBlank()) { open = !open }.padding(vertical = 3.dp, horizontal = 2.dp)
+                  else Modifier.clip(shape).background(Emvryx.surface).border(1.dp, Emvryx.line, shape).padding(12.dp)),
             verticalArrangement = Arrangement.spacedBy(6.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Text("● " + e.str("tool"), color = Green, fontWeight = FontWeight.SemiBold, fontSize = 14.sp)
+                Text((if (Emvryx.d27) "" else "● ") + e.str("tool"), color = if (Emvryx.d27) inkTool else Green, fontWeight = if (Emvryx.d27) FontWeight.Medium else FontWeight.SemiBold, fontSize = 14.sp)
                 // how long the step took and the tokens it wrote, as on the website (ide.js: "3s · 1,234 tokens")
                 val took = listOfNotNull(e.num("secs").takeIf { e.containsKey("secs") }?.let { "${Math.round(it)}s" },
                     e.int("words").takeIf { it > 0 }?.let { "%,d tokens".format(it) }).joinToString(" · ")
                 if (took.isNotEmpty()) Text("   $took", color = Emvryx.muted, fontSize = 13.sp)
             }
             // A grey code-style preview, cut at 1,500 characters, that scrolls sideways.
-            val preview = e.str("preview")
-            if (preview.isNotBlank()) Text(preview.take(1500), style = Mono, color = Emvryx.muted,
+            if (open && preview.isNotBlank()) Text(preview.take(1500), style = Mono, color = Emvryx.muted,
                 modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp)).background(Emvryx.bg).horizontalScroll(rememberScrollState()).padding(10.dp))
+          }
         }
         // The tool's output, cut to 600 characters and 8 lines.
         "result" -> Text("→ " + e.str("text").take(600), style = Mono, color = Emvryx.muted, maxLines = 8, overflow = TextOverflow.Ellipsis)
         // Small grey notices: a retry, a note, being queued, earlier steps summarised, the model changing, files rewound.
         "retry" -> Text("↻ " + e.str("why"), color = Emvryx.muted, fontSize = 13.sp)
-        "note", "language" -> Text(e.str("text"), color = Emvryx.muted, fontSize = 14.sp)
+        "note", "language" -> Text(e.str("text"), color = d27Ink(Emvryx.muted), fontSize = 14.sp)
         "queued" -> Text("Queued: it starts when the session before it finishes.", color = Emvryx.muted, fontSize = 14.sp)
         "compacted" -> Text("Summarized earlier steps to make room.", color = Emvryx.muted, fontSize = 13.sp)
         "model" -> Text("Now using ${e.str("model")}.", color = Emvryx.muted, fontSize = 13.sp)
@@ -668,8 +689,8 @@ private fun EventRow(e: JsonObject, all: List<JsonObject>, vm: CodeViewModel) {
         // The option the person picked.
         "answer" -> if (e.str("choice").isNotEmpty()) Text("You chose: " + e.str("choice"), color = Violet, fontSize = 14.sp)
         // The end of a message: a summary card (violet when finished). The summary text is markdown, drawn block by block: text, code, or table.
-        "end" -> Column(Modifier.fillMaxWidth().clip(shape).background(if (e.bool("finished")) VioletSoft else Emvryx.surface)
-            .border(1.dp, if (e.bool("finished")) Violet else Emvryx.line, shape).padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        "end" -> Column(Modifier.fillMaxWidth().then(if (Emvryx.d27) Modifier.d27Card(shape).then(if (e.bool("finished")) Modifier.border(1.dp, D27Amethyst.copy(alpha = 0.35f), shape) else Modifier)
+            else Modifier.clip(shape).background(if (e.bool("finished")) VioletSoft else Emvryx.surface).border(1.dp, if (e.bool("finished")) Violet else Emvryx.line, shape)).padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Markdown.blocks(e.str("summary").ifEmpty { if (e.bool("finished")) "Done." else "Stopped." }).forEach { b ->
                 when (b) {
                     is Block.Prose -> Text(Markdown.inline(b.text), fontSize = 15.sp)
@@ -715,7 +736,7 @@ private fun GroupLine(g: ReviewItem.Group) {
     var open by remember { mutableStateOf(false) }
     val bad = g.lines.any { it.bad }
     Column(Modifier.padding(horizontal = 4.dp).clickable { open = !open }) {
-        Text((if (bad) "✗ " else "") + groupTitle(g) + if (open) "  ⌄" else "  ›", color = if (bad) Emvryx.danger else Emvryx.muted, fontSize = 13.sp)
+        Text((if (bad) "✗ " else "") + groupTitle(g) + if (open) "  ⌄" else "  ›", color = if (bad) Emvryx.danger else d27Ink(Emvryx.muted), fontSize = 13.sp)
         if (open) g.lines.forEach { QuietLine(it) }
     }
 }
@@ -779,7 +800,7 @@ private fun EndExtras(e: JsonObject, vm: CodeViewModel) {
 @Composable
 private fun QuietLine(r: ReviewItem.Quiet) {
     Column(Modifier.padding(horizontal = 4.dp)) {
-        Text((if (r.bad) "✗ " else "") + r.text, color = if (r.bad) Emvryx.danger else Emvryx.muted, fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        Text((if (r.bad) "✗ " else "") + r.text, color = if (r.bad) Emvryx.danger else d27Ink(Emvryx.muted), fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
         if (r.why.isNotBlank()) Text(r.why, color = Emvryx.muted, fontSize = 12.sp, style = Mono, maxLines = 2)
     }
 }
@@ -790,12 +811,13 @@ private fun FileChip(r: ReviewItem.File) {
     var open by remember { mutableStateOf(false) }
     val shape = RoundedCornerShape(12.dp)
     // A card with a red outline if the change failed; tapping opens or closes the diff (only when there are lines to show).
-    Column(Modifier.fillMaxWidth().clip(shape).background(Emvryx.surface).border(1.dp, if (r.bad) Emvryx.danger.copy(alpha = 0.6f) else Emvryx.line, shape)
+    Column(Modifier.fillMaxWidth().then(if (Emvryx.d27) Modifier.clip(RoundedCornerShape(8.dp)).then(if (r.bad) Modifier.border(1.dp, Emvryx.danger.copy(alpha = 0.6f), RoundedCornerShape(8.dp)) else Modifier)     // design_2027: a quiet row, no box
+            else Modifier.clip(shape).background(Emvryx.surface).border(1.dp, if (r.bad) Emvryx.danger.copy(alpha = 0.6f) else Emvryx.line, shape))
         .clickable(enabled = r.diff.isNotEmpty()) { open = !open }.padding(horizontal = 12.dp, vertical = 10.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             PwaIcon("doc", Emvryx.muted, 16.dp)
             Spacer(Modifier.width(8.dp))
-            Text(r.path, style = Mono, fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+            Text(r.path, style = Mono, color = d27Ink(Emvryx.text), fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
             Text("+${r.add}", color = Green, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
             Text(" −${r.del}", color = Emvryx.danger, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
         }
@@ -813,7 +835,7 @@ private fun FileChip(r: ReviewItem.File) {
 @Composable
 private fun DoneLine(r: ReviewItem.Done) {
     val shape = RoundedCornerShape(14.dp)
-    Column(Modifier.fillMaxWidth().clip(shape).background(Emvryx.surface).border(1.dp, Emvryx.line, shape).padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+    Column(Modifier.fillMaxWidth().then(if (Emvryx.d27) Modifier else Modifier.clip(shape).background(Emvryx.surface).border(1.dp, Emvryx.line, shape)).padding(if (Emvryx.d27) 2.dp else 12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text("Changed ${r.files.size} " + if (r.files.size == 1) "file" else "files", fontWeight = FontWeight.SemiBold, fontSize = 14.sp)
             Spacer(Modifier.width(8.dp))
@@ -836,14 +858,20 @@ private fun DoneLine(r: ReviewItem.Done) {
 @Composable
 private fun AskCard(vm: CodeViewModel, q: JsonObject) {
     val shape = RoundedCornerShape(16.dp)
-    Column(Modifier.fillMaxWidth().clip(shape).background(Emvryx.surface).border(1.dp, Violet, shape).padding(14.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+    Column(Modifier.fillMaxWidth().then(if (Emvryx.d27) Modifier.d27Card(shape) else Modifier.clip(shape).background(Emvryx.surface).border(1.dp, Violet, shape)).padding(14.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
         Text("Allow this?", fontWeight = FontWeight.Bold, fontSize = 17.sp)
         Text(q.str("preview").take(2500), style = Mono, color = Emvryx.muted,
             modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp)).background(Emvryx.bg).horizontalScroll(rememberScrollState()).padding(10.dp))
         FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            PwaButton("Yes", { vm.answer(true) })
-            Chip("Yes, and don't ask again for this", { vm.answer(true, always = true) })
-            Chip("No", { vm.answer(false) })
+            if (Emvryx.d27) {                                                          // design_2027: hollow ghost answers, the first one with a soft ring
+                D27GhostAnswer("Yes", { vm.answer(true) }, main = true)
+                D27GhostAnswer("Yes, and don't ask again for this", { vm.answer(true, always = true) })
+                D27GhostAnswer("No", { vm.answer(false) })
+            } else {
+                PwaButton("Yes", { vm.answer(true) })
+                Chip("Yes, and don't ask again for this", { vm.answer(true, always = true) })
+                Chip("No", { vm.answer(false) })
+            }
         }
     }
 }
@@ -854,7 +882,7 @@ private fun ChoiceCard(vm: CodeViewModel, q: JsonObject) {
     // The typed answer; `remember(q.str("id"))` starts it empty again for each new question.
     var own by remember(q.str("id")) { mutableStateOf("") }
     val shape = RoundedCornerShape(16.dp)
-    Column(Modifier.fillMaxWidth().clip(shape).background(Emvryx.surface).border(1.dp, Violet, shape).padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+    Column(Modifier.fillMaxWidth().then(if (Emvryx.d27) Modifier.d27Card(shape) else Modifier.clip(shape).background(Emvryx.surface).border(1.dp, Violet, shape)).padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Text(q.str("question"), fontWeight = FontWeight.Bold, fontSize = 17.sp)
         q.strings("options").forEach { o ->
             Text(o, fontSize = 15.sp, modifier = Modifier.fillMaxWidth().clip(CircleShape).border(1.dp, Emvryx.line, CircleShape).clickable { vm.choose(o) }
@@ -899,7 +927,9 @@ private fun CodeComposer(vm: CodeViewModel) {
     val shape = RoundedCornerShape(22.dp)
     Column(Modifier.fillMaxWidth().navigationBarsPadding()) {
     Column(
-        Modifier.fillMaxWidth().padding(start = 12.dp, end = 12.dp, top = 12.dp, bottom = 8.dp).clip(shape).background(Emvryx.surface).border(1.dp, Violet.copy(alpha = 0.6f), shape)
+        (if (Emvryx.d27) Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, top = 12.dp, bottom = 8.dp).clip(RoundedCornerShape(26.dp)).background(D27Bar)      // design_2027: frosted carbon glass with a lit top edge
+            .border(1.dp, d27Edge(), RoundedCornerShape(26.dp))
+         else Modifier.fillMaxWidth().padding(start = 12.dp, end = 12.dp, top = 12.dp, bottom = 8.dp).clip(shape).background(Emvryx.surface).border(1.dp, Violet.copy(alpha = 0.6f), shape))
             .padding(12.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
@@ -982,6 +1012,11 @@ private fun CodeComposer(vm: CodeViewModel) {
                 }
             }
             }
+            // design_2027: the same glowing ring as in chat: Stop while it works, Send (also during a run if this agent can take messages) otherwise
+            if (Emvryx.d27) {
+                if (vm.working) SendButton(true, true) { vm.stop() }
+                if (!vm.working || vm.full) SendButton(false, text.isNotBlank() || vm.pictures.isNotEmpty() || vm.docs.isNotEmpty()) { vm.send(text); fill("") }
+            } else {
             // While it works: a red Stop square.
             if (vm.working) Box(Modifier.size(42.dp).clip(RoundedCornerShape(12.dp)).background(Emvryx.danger).clickable { vm.stop() }, contentAlignment = Alignment.Center) {
                 Box(Modifier.size(12.dp).background(Color.White))
@@ -994,6 +1029,7 @@ private fun CodeComposer(vm: CodeViewModel) {
                 },
                 contentAlignment = Alignment.Center,
             ) { Text("↑", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 20.sp) }
+            }
         }
     }
     // the usage line under the box (index.html #codeUsage): plan, how much is left and about how many coding steps that is

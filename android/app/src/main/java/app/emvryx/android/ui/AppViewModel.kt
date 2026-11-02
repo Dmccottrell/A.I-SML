@@ -145,6 +145,9 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     val bubbles = mutableStateListOf<Bubble>()
     var streaming by mutableStateOf(false)
         private set
+    /** design_2027: the speed line under the newest reply ("~64 tok/s · Flare 3 · first word 120 ms"), measured on this phone; null until a reply ends */
+    var telemetry by mutableStateOf<String?>(null)
+        private set
     var working by mutableStateOf<String?>(null)          // "Loading Solstice...", "Thinking..."
         private set
     var notice by mutableStateOf<String?>(null)           // a refusal or "off" message shown above the box
@@ -457,6 +460,8 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         if (Emvryx.violet != v) Emvryx.violet = v
         if (Emvryx.modern != m) Emvryx.modern = m
         Emvryx.modelBar = s.on("model_bar")
+        val d = s.on("design_2027")                                   // design_2027: the 2027 look (owner only until reviewed)
+        if (Emvryx.d27 != d) Emvryx.d27 = d
         if (session.looks != (v to m)) session.looks = v to m
     }
 
@@ -1001,6 +1006,8 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         streaming = true
         working = null                                         // the thinking words show while nothing is written yet
         sentAt = android.os.SystemClock.elapsedRealtime()
+        telemetry = null
+        var firstAt = 0L                                       // design_2027: when the first word arrived
         val replyKey = nextKey--
         bubbles.add(Bubble(replyKey, mine = false, text = "", streaming = true, model = model))
         var finished = false
@@ -1026,6 +1033,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
                         is ReplyEvent.Piece -> {
                             working = null
                             got = true
+                            if (firstAt == 0L) firstAt = android.os.SystemClock.elapsedRealtime()
                             update(replyKey) { it.copy(text = it.text + ev.text) }
                         }
                         is ReplyEvent.Done -> {
@@ -1037,6 +1045,10 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
                             ev.usage?.let { usage = it }
                             ev.context?.let { ctx = it }
                             update(replyKey) { it.copy(streaming = false, cut = ev.cut, timing = ev.timing) }
+                            if (Emvryx.d27 && firstAt > 0L) {                                  // design_2027: how fast this reply was written
+                                val now = android.os.SystemClock.elapsedRealtime()
+                                telemetry = D27Telemetry.line(bubbles.firstOrNull { it.key == replyKey }?.text.orEmpty().length, firstAt - sentAt, now - sentAt, modelById(model)?.fullName.orEmpty())
+                            }
                         }
                         is ReplyEvent.Research -> working = app.emvryx.android.local.Speech.step(ev.step, ev.done, ev.of)
                         is ReplyEvent.Failed -> failure = Failure(ev.message, ev.action, ev.code)

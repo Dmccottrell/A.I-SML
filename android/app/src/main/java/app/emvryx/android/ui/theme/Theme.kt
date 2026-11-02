@@ -37,15 +37,18 @@ object Emvryx {
     var violet by mutableStateOf(false)
     var modern by mutableStateOf(false)
 
+    /** design_2027 (owner only until reviewed): the 2027 look. Dark mode becomes pure OLED black with matte carbon cards and hairline borders. */
+    var d27 by mutableStateOf(false)
+
     /** model_bar (Admin > Previews): the message box wears the chosen model's own colour, and lights up in it when the model is picked */
     var modelBar by mutableStateOf(false)
 
     // Page background, the side drawer, cards, a slightly lighter card, hairlines, main text, quiet text, and error red.
-    val bg get() = if (light) Color(0xFFF7F8FC) else Color(0xFF07080D)
-    val side get() = if (light) Color(0xFFEEF0F7) else Color(0xFF0A0B11)
-    val surface get() = if (light) Color(0xFFFFFFFF) else Color(0xFF0F1119)
-    val surface2 get() = if (light) Color(0xFFEEF0F7) else Color(0xFF161926)
-    val line get() = if (light) Color(0xFFD8DCEA) else Color(0xFF232739)
+    val bg get() = if (light) Color(0xFFF7F8FC) else if (d27) Color.Black else Color(0xFF07080D)
+    val side get() = if (light) Color(0xFFEEF0F7) else if (d27) Color.Black else Color(0xFF0A0B11)
+    val surface get() = if (light) Color(0xFFFFFFFF) else if (d27) Color(0xFF0C0C10) else Color(0xFF0F1119)
+    val surface2 get() = if (light) Color(0xFFEEF0F7) else if (d27) Color(0xFF14141B) else Color(0xFF161926)
+    val line get() = if (light) Color(0xFFD8DCEA) else if (d27) Color(0x14FFFFFF) else Color(0xFF232739)
     val text get() = if (light) Color(0xFF0D0F1A) else Color(0xFFEEF0F6)
     val muted get() = if (light) Color(0xFF4A526B) else Color(0xFF9AA3BC)
     val danger get() = if (light) Color(0xFFD93A3A) else Color(0xFFF87171)
