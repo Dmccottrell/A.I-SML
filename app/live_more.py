@@ -13,6 +13,8 @@ live_more.py - The second batch of live facts (see live_data.py for the idea and
     Each provider has the signature (question, now, net, online) and returns a list of notes; see live_data.gather for how they are used.
     This file imports live_data only inside functions (live_data imports this file when it loads).
 """
+# Tools used below: math (sin, cos, radians ...), random (dice), re (regular expressions = text patterns), time, urllib.parse (safe web addresses),
+# ElementTree (reads XML), os (environment variables), and date/datetime/timedelta/timezone (calendar and clock maths).
 import math
 import random
 import re
@@ -24,31 +26,40 @@ from datetime import date, datetime, timedelta, timezone
 
 
 def _L():
+    """Give back the live_data module. It is imported inside this function (not at the top) because live_data imports THIS file when it loads;
+    importing it at the top would make the two files wait for each other (a "circular import")."""
     import live_data
     return live_data
 
 
 def _note(title, text, url=""):
+    """Build one note {title, text, url, kind "live"} by using live_data's _note, so both files make notes the same way."""
     return _L()._note(title, text, url)
 
 
 def _q(q):
+    """Tidy the question: curly apostrophes to straight ones, squeeze spaces, and drop a trailing ? ! . so patterns can match the end of the text."""
     return " ".join((q or "").replace("’", "'").split()).rstrip("?!. ")
 
 
 def _num(s):
+    """Turn text like "1,250.50" into the number 1250.5 (commas removed)."""
     return float(str(s).replace(",", ""))
 
 
 def _money(x):
+    """Format a number as dollars with commas and 2 decimals, e.g. $1,234.50."""
     return f"${x:,.2f}"
 
 
+# FINANCE: loan payments, compound interest, BMI and percent maths. All are plain formulas, so the numbers are exact.
 # =========================================================================================== finance (offline)
+# _AMT is a regex for a money amount with an optional k / thousand / million suffix. In regexes: \d = digit, [\d,]* = digits or commas, (?:...) = a group, ? = optional.
 _AMT = r"\$?\s*(\d[\d,]*(?:\.\d+)?)\s*(k|thousand|million|m)?\b"
 
 
 def _amount(m):
+    """From a regex match of _AMT, the amount as a number: "5k" -> 5000, "2 million" -> 2,000,000."""
     v = _num(m.group(1))
     unit = (m.group(2) or "").lower()
     return v * (1000 if unit in ("k", "thousand") else 1_000_000 if unit in ("m", "million") else 1)
@@ -56,6 +67,8 @@ def _amount(m):
 
 def _principal(q):
     """The money amount in a loan or investment question: a $ amount, a number with k/million, or the first big number (never the rate or the years)."""
+    # Prefer an amount with a $ sign, then a number with k/thousand/million; as a last resort (loop below) take the first number of 1000 or more
+    # that is not followed by %, years, months or feet (so a rate or term is never mistaken for the amount).
     m = re.search(r"\$\s*(\d[\d,]*(?:\.\d+)?)\s*(k|thousand|million|m)?\b", q) or re.search(r"\b(\d[\d,]*(?:\.\d+)?)\s*(k|thousand|million)\b", q)
     if m:
         return _amount(m)
@@ -66,11 +79,13 @@ def _principal(q):
 
 
 def _rate(q):
+    """The interest rate in the question (the number before % / percent) or None."""
     m = re.search(r"(\d+(?:\.\d+)?)\s*(?:%|percent|per cent)", q)
     return float(m.group(1)) if m else None
 
 
 def _years(q):
+    """The length of time in the question, in years: "30 years" -> 30, "18 months" -> 1.5. None if not found."""
     m = re.search(r"(\d+(?:\.\d+)?)\s*[- ]?\s*(year|yr|month|mo)s?\b", q)
     if not m:
         return None
@@ -78,11 +93,14 @@ def _years(q):
 
 
 def finance(q, now, net, online):
+    """Provider: loan/mortgage payment, compound interest (with optional monthly additions), BMI, percent change and "what percent is X of Y". Offline. Returns a list of notes, empty if the question is not financial or lacks a needed number."""
     q = _q(q).lower()
     # loan / mortgage payment
     if re.search(r"\b(mortgage|loan|monthly payment|car payment|amortiz\w*|financ\w+)\b", q) and re.search(r"\bpayment|\bmonthly\b|how much (?:would|will|is)", q):
         rate, yrs = _rate(q), _years(q)
         p = _principal(q)
+        # Loan formula: monthly payment = P * r / (1 - (1 + r)^-n), where P = amount, r = monthly rate (yearly % / 100 / 12), n = number of months.
+        # With a 0% rate it is just P / n. Total paid = payment * n; the rest is interest.
         if p and rate is not None and yrs:
             n = int(round(yrs * 12))
             r = rate / 100 / 12
@@ -95,12 +113,14 @@ def finance(q, now, net, online):
         rate, yrs = _rate(q), _years(q)
         p = _principal(q)
         if p and rate is not None and yrs:
+            # How often interest is added per year: monthly 12, daily 365, quarterly 4, otherwise yearly 1. "adding $X a month" switches to monthly contributions.
             per = 12 if re.search(r"compound\w*\s+(?:monthly|every month)", q) else 365 if re.search(r"compound\w*\s+daily", q) else 4 if re.search(r"compound\w*\s+quarterly", q) else 1
             contrib = 0.0
             cm = re.search(r"(?:add|contribut\w*|deposit\w*|plus)\s*(?:of\s*)?\$?\s*(\d[\d,]*(?:\.\d+)?)\s*(?:a|per|each|every)\s*month", q)
             if cm:
                 contrib, per = _num(cm.group(1)), 12
             bal = p
+            # Step through each period: grow the balance by the period's rate, then add the contribution (if any).
             for _ in range(int(round(yrs * per))):
                 bal = bal * (1 + rate / 100 / per) + contrib
             paid_in = p + contrib * 12 * yrs
@@ -108,6 +128,7 @@ def finance(q, now, net, online):
                                                               + (f", adding {_money(contrib)} a month" if contrib else "") + f", grows to {_money(bal)} (you put in {_money(paid_in)}). Returns are not guaranteed.")]
     # BMI
     if re.search(r"\bbmi\b|body mass index", q):
+        # BMI = weight in kg divided by height in metres squared. Weight may be kg or pounds; height may be cm, m, inches or feet+inches. Pounds -> kg with 0.45359237; inches -> m with 0.0254.
         w = re.search(r"(\d+(?:\.\d+)?)\s*(kg|kilos?|kilograms?|lbs?|pounds?)", q)
         h = re.search(r"(\d+(?:\.\d+)?)\s*(cm|centimet\w+|m\b|meters?|in\b|inch\w*)", q)
         ft = re.search(r"(\d)\s*(?:ft|feet|foot|')\s*(\d{1,2})?", q)
@@ -118,17 +139,20 @@ def finance(q, now, net, online):
             else:
                 v, u = _num(h.group(1)), h.group(2)
                 m_ = v / 100 if u.startswith("cm") or u.startswith("centi") else v if u.startswith("m") else v * 0.0254
+            # Sanity check: ignore absurd heights / weights (probably a misread question). The bands are the standard adult BMI categories (18.5 / 25 / 30).
             if 0.5 < m_ < 2.8 and 10 < kg < 500:
                 b = kg / m_ ** 2
                 cat = "underweight" if b < 18.5 else "healthy range" if b < 25 else "overweight" if b < 30 else "obese"
                 return [_note("BMI (exact formula)", f"BMI = {b:.1f} ({cat} on the standard adult scale). BMI is a rough screening number, not a diagnosis.")]
     # percent change / percent of
+    # Percent change from a to b = (b - a) / |a| * 100. Cannot divide by zero, hence the a != 0 check.
     m = re.search(r"(?:percent(?:age)?|%)\s*(?:change|increase|decrease|difference)\s*(?:from|between)\s*\$?(-?\d[\d,]*(?:\.\d+)?)\s*(?:to|and)\s*\$?(-?\d[\d,]*(?:\.\d+)?)", q)
     if m:
         a, b = _num(m.group(1)), _num(m.group(2))
         if a != 0:
             ch = (b - a) / abs(a) * 100
             return [_note("Percent change (exact)", f"From {a:,g} to {b:,g} is a {'rise' if ch >= 0 else 'drop'} of {abs(ch):.2f}%.")]
+    # "What percent is A of B" or "A is what percent of B": answer = A / B * 100.
     m = re.search(r"what percent(?:age)? is\s*\$?(\d[\d,]*(?:\.\d+)?)\s*of\s*\$?(\d[\d,]*(?:\.\d+)?)|(\d[\d,]*(?:\.\d+)?)\s*is what percent(?:age)? of\s*(\d[\d,]*(?:\.\d+)?)", q)
     if m:
         a, b = (_num(m.group(1)), _num(m.group(2))) if m.group(1) else (_num(m.group(3)), _num(m.group(4)))
@@ -137,7 +161,9 @@ def finance(q, now, net, online):
     return []
 
 
+# TIME-ZONE CONVERSION: "3pm EST in PST". Uses Python's built-in zoneinfo database, so daylight saving is right for today.
 # =========================================================================================== time-zone conversion (offline)
+# ZONES: every word a person might type (EST, "new york", "tokyo") -> the official IANA time zone name zoneinfo understands.
 ZONES = {"est": "America/New_York", "edt": "America/New_York", "et": "America/New_York", "eastern": "America/New_York", "new york": "America/New_York",
          "cst": "America/Chicago", "cdt": "America/Chicago", "ct": "America/Chicago", "central": "America/Chicago", "chicago": "America/Chicago",
          "mst": "America/Denver", "mdt": "America/Denver", "mt": "America/Denver", "mountain": "America/Denver", "denver": "America/Denver",
@@ -149,14 +175,17 @@ ZONES = {"est": "America/New_York", "edt": "America/New_York", "et": "America/Ne
          "sydney": "Australia/Sydney", "aest": "Australia/Sydney", "melbourne": "Australia/Melbourne", "auckland": "Pacific/Auckland", "toronto": "America/Toronto",
          "vancouver": "America/Vancouver", "mexico city": "America/Mexico_City", "sao paulo": "America/Sao_Paulo", "cairo": "Africa/Cairo", "lagos": "Africa/Lagos",
          "johannesburg": "Africa/Johannesburg", "honolulu": "Pacific/Honolulu", "hst": "Pacific/Honolulu", "hawaii": "Pacific/Honolulu", "alaska": "America/Anchorage"}
+# ZONE_RE: regex "a|b|c" of all zone words, longest first. TZ_Q matches "3:30 pm est in pst" with named parts h (hour), m (minute), ap (am/pm), a (from zone), b (to zone).
 ZONE_RE = "|".join(re.escape(z) for z in sorted(ZONES, key=len, reverse=True))
 TZ_Q = re.compile(rf"(?P<h>\d{{1,2}})(?::(?P<m>\d{{2}}))?\s*(?P<ap>am|pm|a\.m\.|p\.m\.)?\s*(?P<a>{ZONE_RE})(?:\s+time)?\s+(?:to|in|into|->)\s+(?:the\s+)?(?P<b>{ZONE_RE})(?:\s+time)?\b", re.I)
 
 
 def tzconvert(q, now, net, online):
+    """Provider: convert a clock time between two zones, using today's date so daylight saving is applied. Offline."""
     m = TZ_Q.search(_q(q))
     if not m:
         return []
+    # Read hour, minute and am/pm. Convert to 24-hour time: 3pm -> 15, 12am -> 0. Reject impossible times.
     h, mi, ap = int(m.group("h")), int(m.group("m") or 0), (m.group("ap") or "").lower().replace(".", "")
     if ap == "pm" and h < 12:
         h += 12
@@ -165,6 +194,7 @@ def tzconvert(q, now, net, online):
     if h > 23 or mi > 59:
         return []
     try:
+        # zoneinfo = Python's built-in time zone database. Build the time in the source zone, then .astimezone() gives the same instant in the target zone.
         from zoneinfo import ZoneInfo
         za, zb = ZoneInfo(ZONES[m.group("a").lower()]), ZoneInfo(ZONES[m.group("b").lower()])
         today = datetime.fromtimestamp(now or time.time()).date()
@@ -173,22 +203,27 @@ def tzconvert(q, now, net, online):
     except Exception as e:
         print(f"(time zone conversion failed: {e})")
         return []
+    # If the converted time falls on another calendar day, say so ("the next day"). `f` formats a time like "3:00 PM".
     day = "" if dst.date() == src.date() else (" the next day" if dst.date() > src.date() else " the previous day")
     f = lambda d: f"{d:%I:%M %p}".lstrip("0")
     return [_note("Time zone conversion (exact, daylight saving included for today)",
                   f"{f(src)} {m.group('a').upper() if len(m.group('a')) <= 4 else m.group('a').title()} ({src.tzname()}) is {f(dst)}{day} in {m.group('b').upper() if len(m.group('b')) <= 4 else m.group('b').title()} ({dst.tzname()}).")]
 
 
+# MOON PHASE: worked out from the known length of the lunar cycle, no internet. Accurate to about a day.
 # =========================================================================================== moon phase (offline)
+# SYNODIC = average days from one new moon to the next. NEW_MOON_EPOCH = a known new moon (6 Jan 2000, 18:14 UTC) to count from.
 SYNODIC = 29.530588853
 NEW_MOON_EPOCH = datetime(2000, 1, 6, 18, 14, tzinfo=timezone.utc)
 
 
 def _moon_age(t):
+    """Days since the last new moon at time t: days since the known new moon, wrapped around the cycle length with % (the remainder)."""
     return ((t - NEW_MOON_EPOCH).total_seconds() / 86400) % SYNODIC
 
 
 def _phase_name(age):
+    """Name of the phase for an age in days. `frac` is how far through the cycle we are (0 to 1); the first row whose upper edge is above it wins."""
     frac = age / SYNODIC
     names = [(0.03, "new moon"), (0.22, "waxing crescent"), (0.28, "first quarter"), (0.47, "waxing gibbous"), (0.53, "full moon"), (0.72, "waning gibbous"),
              (0.78, "last quarter"), (0.97, "waning crescent"), (1.01, "new moon")]
@@ -196,11 +231,14 @@ def _phase_name(age):
 
 
 def moon(q, now, net, online):
+    """Provider: today's moon phase, how much of it is lit, and the dates of the next full and new moon. Offline."""
     if not re.search(r"\b(moon phase|phase of the moon|full moon|new moon|moon tonight|is the moon|how full is the moon|what.s the moon)\b", _q(q), re.I):
         return []
     t = datetime.fromtimestamp(now or time.time(), timezone.utc)
     age = _moon_age(t)
+    # Share of the moon lit: 0% at new moon, 100% at full, following a cosine curve through the cycle.
     illum = (1 - math.cos(2 * math.pi * age / SYNODIC)) / 2 * 100
+    # Days until the next full moon (half a cycle after new) and the next new moon; % keeps the answer positive.
     to_full = (SYNODIC / 2 - age) % SYNODIC
     to_new = (SYNODIC - age) % SYNODIC
     full, new = t + timedelta(days=to_full), t + timedelta(days=to_new)
@@ -208,11 +246,14 @@ def moon(q, now, net, online):
                   f"Today the moon is a {_phase_name(age)}, about {illum:.0f}% lit. The next full moon is around {full:%A, %B} {full.day}, {full.year}; the next new moon around {new:%A, %B} {new.day}, {new.year}.")]
 
 
+# DICE, COINS, BASES, ROMAN NUMERALS: small offline helpers.
 # =========================================================================================== dice, coins, bases, Roman numerals (offline)
+# SystemRandom takes randomness from the operating system (not predictable), which suits dice and coin flips.
 _rng = random.SystemRandom()
 
 
 def dice(q, now, net, online):
+    """Provider: "roll 2d6", "roll a die", "flip a coin", "random number between 1 and 100". Limits: up to 20 dice with 2-1000 sides. Results are random on purpose."""
     q = _q(q).lower()
     m = re.search(r"\broll\s+(?:a\s+)?(?:(\d+)\s*d\s*(\d+)|(\d+)\s+(?:six[- ]sided\s+)?dice|(?:a\s+)?(?:d(\d+)|die|dice))\b", q)
     if m:
@@ -222,6 +263,7 @@ def dice(q, now, net, online):
             n, s = int(m.group(3)), 6
         else:
             n, s = 1, int(m.group(4) or 6)
+        # n = how many dice, s = sides on each. "2d6" means two six-sided dice.
         if 1 <= n <= 20 and 2 <= s <= 1000:
             rolls = [_rng.randint(1, s) for _ in range(n)]
             return [_note("Dice roll (random)", f"Rolled {n}d{s}: {', '.join(map(str, rolls))}" + (f" (total {sum(rolls)})" if n > 1 else "") + ".")]
@@ -229,15 +271,18 @@ def dice(q, now, net, online):
         return [_note("Coin flip (random)", f"The coin landed on {_rng.choice(['heads', 'tails'])}.")]
     m = re.search(r"\b(?:random|pick)\s+(?:a\s+)?(?:number|integer)?\s*(?:between|from)\s+(-?\d+)\s+(?:and|to)\s+(-?\d+)", q)
     if m:
+        # sorted puts the smaller number first, so "between 10 and 1" still works.
         a, b = sorted((int(m.group(1)), int(m.group(2))))
         return [_note("Random number", f"The random number between {a} and {b} is {_rng.randint(a, b)}.")]
     return []
 
 
+# ROMAN: value/letters pairs from largest to smallest, including the subtractive ones (CM = 900, IV = 4).
 ROMAN = [(1000, "M"), (900, "CM"), (500, "D"), (400, "CD"), (100, "C"), (90, "XC"), (50, "L"), (40, "XL"), (10, "X"), (9, "IX"), (5, "V"), (4, "IV"), (1, "I")]
 
 
 def _to_roman(n):
+    """Number -> Roman numerals: repeatedly take the biggest value that still fits."""
     out = ""
     for v, s in ROMAN:
         while n >= v:
@@ -247,6 +292,7 @@ def _to_roman(n):
 
 
 def _from_roman(s):
+    """Roman numerals -> number: add each letter's value, but subtract it when a bigger letter follows (the I in IV)."""
     vals = {"I": 1, "V": 5, "X": 10, "L": 50, "C": 100, "D": 500, "M": 1000}
     total = 0
     for i, ch in enumerate(s):
@@ -256,11 +302,13 @@ def _from_roman(s):
 
 
 def bases(q, now, net, online):
+    """Provider: convert a number to binary/hex/octal, binary or hex to decimal, and Roman numerals both ways (1-3999). Offline."""
     q = _q(q).lower()
     m = re.search(r"\b(?:what is |convert |write )?(\d+)\s+(?:in|to|as)\s+(binary|hex|hexadecimal|octal)\b|\b(binary|hex|hexadecimal|octal) (?:of|for)\s+(\d+)\b", q)
     if m:
         n = int(m.group(1) or m.group(4))
         kind = m.group(2) or m.group(3)
+        # bin/hex/oct give text like "0b101"; [2:] cuts the "0b" / "0x" / "0o" prefix. The size limit keeps answers short.
         if n < 10 ** 12:
             s = bin(n)[2:] if kind == "binary" else hex(n)[2:].upper() if kind.startswith("hex") else oct(n)[2:]
             return [_note("Number base conversion (exact)", f"{n} in {kind} is {s}.")]
@@ -277,17 +325,21 @@ def bases(q, now, net, online):
         if 0 < n < 4000:
             return [_note("Roman numerals (exact)", f"{n} in Roman numerals is {_to_roman(n)}.")]
     m = re.search(r"\b(?:what is|what's|convert)\s+([ivxlcdm]{2,12})\s+(?:in|to|as)\s+(?:number|numbers|decimal|digits|arabic)", q)
+    # Only accept well-formed Roman numerals: the pattern allows up to MMM, then the hundreds, tens and ones forms.
     if m and re.fullmatch(r"m{0,3}(cm|cd|d?c{0,3})(xc|xl|l?x{0,3})(ix|iv|v?i{0,3})", m.group(1)):
         return [_note("Roman numerals (exact)", f"{m.group(1).upper()} is {_from_roman(m.group(1).upper())}.")]
     return []
 
 
+# PEOPLE: ages, birthdays and heights from Wikidata, the free fact database behind Wikipedia.
 # =========================================================================================== people (Wikidata)
+# PERSON_Q: "how old is X", "when was X born", "when did X die", "how tall is X" ... each form captures the name in a different named group (a..h).
 PERSON_Q = re.compile(r"^(?:how old (?:is|was)\s+(?P<a>.+?)|when (?:was|is)\s+(?P<b>.+?)\s+born|when did\s+(?P<c>.+?)\s+die|how tall (?:is|was)\s+(?P<d>.+?)|"
                       r"when (?:is|was)\s+(?P<e>.+?)'s birthday|what(?:'s| is)\s+(?P<f>.+?)'s age|what(?:'s| is| was)\s+(?P<g>.+?)'s height|how old is\s+(?P<h>.+?)\s+now)$", re.I)
 
 
 def _wd_time(claim):
+    """Read a Wikidata date claim. Returns (date or None, year). Dates less precise than a day (only a year or month known) give (None, year)."""
     try:
         v = claim["mainsnak"]["datavalue"]["value"]
         s, prec = v["time"].lstrip("+"), v.get("precision", 11)
@@ -300,19 +352,23 @@ def _wd_time(claim):
 
 
 def _age(born, end):
+    """Whole years between two dates; the tuple comparison subtracts 1 if the birthday has not happened yet in the end year."""
     return end.year - born.year - ((end.month, end.day) < (born.month, born.day))
 
 
 def person(q, now, net, online):
+    """Provider: age / birth date / death date / height of a famous person, from Wikidata. It searches by name and keeps the first hit that is a human (class Q5). Needs the internet."""
     if not online:
         return []
     m = PERSON_Q.match(_q(q))
     if not m:
         return []
+    # Whichever named group matched holds the name. Skip words that are obviously not a person ("it", "my dog", "the sun", "mount ...", "tower ..." and so on).
     name = next(g for g in m.groups() if g)
     if name.lower() in ("it", "this", "that", "he", "she", "the earth", "the sun", "the universe", "the moon", "my dog", "my cat", "my mom", "my dad") or len(name) < 3 or name.lower().startswith(("my ", "mount ", "mt ", "mt. ", "the ", "lake ", "river ", "tower ", "bridge ", "statue ", "building ", "a ", "an ")):
         return []
     try:
+        # Search Wikidata for the name, then fetch each hit's full record until one is an instance (P31) of human (Q5).
         hits = net.json("https://www.wikidata.org/w/api.php?" + urllib.parse.urlencode(
             {"action": "wbsearchentities", "search": name, "language": "en", "format": "json", "limit": 3, "type": "item"})).get("search") or []
         ent = None
@@ -330,6 +386,7 @@ def person(q, now, net, online):
     h, data, claims = ent
     label = (data.get("labels", {}).get("en") or {}).get("value") or h.get("label") or name
     desc = (data.get("descriptions", {}).get("en") or {}).get("value") or ""
+    # Wikidata property numbers: P569 = date of birth, P570 = date of death, P2048 = height.
     born = _wd_time(claims["P569"][0])[0] if claims.get("P569") else None
     died = _wd_time(claims["P570"][0])[0] if claims.get("P570") else None
     today = datetime.fromtimestamp(now or time.time()).date()
@@ -343,6 +400,7 @@ def person(q, now, net, online):
         try:
             amt = float(claims["P2048"][0]["mainsnak"]["datavalue"]["value"]["amount"])
             unit = claims["P2048"][0]["mainsnak"]["datavalue"]["value"].get("unit", "")
+            # Q174728 is Wikidata's code for the unit "centimetre"; the height is stored in cm or metres, so convert to metres first, then show feet and inches too.
             m_ = amt / 100 if unit.endswith("Q174728") else amt
             parts.append(f"height {m_:.2f} m ({int(m_ / 0.3048)} ft {round(m_ / 0.0254 % 12)} in)")
         except (KeyError, ValueError, TypeError):
@@ -352,7 +410,9 @@ def person(q, now, net, online):
     return [_note(f"{label} - Wikidata", f"{label}" + (f" ({desc})" if desc else "") + ": " + "; ".join(parts) + ".", f"https://www.wikidata.org/wiki/{h['id']}")]
 
 
+# PACKAGES: the latest version of a software package (PyPI for Python, npm for JavaScript, GitHub releases for "owner/repo").
 # =========================================================================================== packages
+# NPM_HINT / PY_HINT: words that suggest JavaScript or Python, used to decide which registry to ask first. PKG_Q: "latest version of X" (group n, n2 or n3 = the package name).
 NPM_HINT = re.compile(r"\b(npm|node|nodejs|javascript|js|react|vue|angular|svelte|typescript|express|next\.?js|webpack|vite|jquery|tailwind)\b", re.I)
 PY_HINT = re.compile(r"\b(pip|pypi|python|django|flask|numpy|pandas|requests|fastapi|pytest|torch|pytorch|tensorflow|scipy|matplotlib|transformers)\b", re.I)
 PKG_Q = re.compile(r"\b(?:latest|newest|current)\s+(?:stable\s+)?(?:version|release)\s+of\s+(?:the\s+)?(?:python\s+|npm\s+|node\s+)?(?:package\s+|library\s+)?(?P<n>[@a-z0-9][\w@./\-]{0,60})|"
@@ -360,12 +420,14 @@ PKG_Q = re.compile(r"\b(?:latest|newest|current)\s+(?:stable\s+)?(?:version|rele
 
 
 def packages(q, now, net, online):
+    """Provider: the newest version number of a package. A name like "owner/repo" is looked up as a GitHub release; otherwise PyPI and npm are tried (the likelier one first) and the first answer wins."""
     if not online:
         return []
     m = PKG_Q.search(_q(q))
     if not m:
         return []
     name = (m.group("n") or m.group("n2") or m.group("n3")).strip().lower().rstrip(".,")
+    # Skip names that are products or words, not packages.
     if name in ("python", "node", "nodejs", "java", "it", "the", "windows", "ios", "android", "chrome", "firefox", "linux", "macos"):
         return []
     notes = []
@@ -376,6 +438,7 @@ def packages(q, now, net, online):
         except Exception as e:
             print(f"(GitHub release lookup failed: {e})")
             return []
+    # Decide which registry to try first from hint words in the question.
     order = ["npm", "pypi"] if NPM_HINT.search(q) and not PY_HINT.search(q) else ["pypi", "npm"]
     for src in order:
         try:
@@ -395,12 +458,15 @@ def packages(q, now, net, online):
     return notes
 
 
+# TV, GAMES, MUSIC: TVmaze (episode dates), Steam (game prices) and Apple iTunes Search (songs and albums). All free, no key.
 # =========================================================================================== TV, games, music
+# TV_Q: "next episode of X", "when does X come back" ... (group t, t2 or t3 = the show name).
 TV_Q = re.compile(r"\b(?:next|new|latest|upcoming)\s+(?:episode|season)\s+of\s+(?P<t>.+)$|\bwhen (?:does|is|will)\s+(?P<t2>.+?)\s+(?:come back|return|premiere|season \d+|next episode|new season|air)\b|"
                   r"\bwhen (?:does|is|will) the next episode of\s+(?P<t3>.+?)\s*(?:air|come out)?$", re.I)
 
 
 def tv(q, now, net, online):
+    """Provider: a show's status plus the date of its next and last episodes, from TVmaze. Needs the internet."""
     if not online:
         return []
     m = TV_Q.search(_q(q))
@@ -410,6 +476,7 @@ def tv(q, now, net, online):
     if len(title) < 2:
         return []
     try:
+        # The "embed" parameters ask TVmaze to include the next and previous episode in the same reply (one request instead of three).
         s = net.json("https://api.tvmaze.com/singlesearch/shows?" + urllib.parse.urlencode({"q": title}) + "&embed[]=nextepisode&embed[]=previousepisode")
     except Exception as e:
         print(f"(TV lookup failed: {e})")
@@ -428,10 +495,12 @@ def tv(q, now, net, online):
     return [_note(f"{s.get('name')} schedule - tvmaze.com", "; ".join(bits) + ".", s.get("url") or "https://www.tvmaze.com/")]
 
 
+# STEAM_Q: the message must mention Steam.
 STEAM_Q = re.compile(r"\bsteam\b", re.I)
 
 
 def steam(q, now, net, online):
+    """Provider: price (with any discount) and release date of a game on Steam. Strips filler words so only the game title is searched."""
     if not online:
         return []
     q = _q(q)
@@ -452,16 +521,19 @@ def steam(q, now, net, online):
         return []
     rd = det.get("release_date") or {}
     po = det.get("price_overview") or {}
+    # Build the price text: free-to-play, or the current price with the old price and discount if on sale, or "no price listed".
     price = "free to play" if det.get("is_free") else (po.get("final_formatted") + (f" (was {po['initial_formatted']}, {po['discount_percent']}% off)" if po.get("discount_percent") else "")) if po else "no price listed"
     return [_note(f"{det.get('name')} on Steam", f"{det.get('name')}: {price}; " + ("not released yet, " if rd.get("coming_soon") else "released ") + f"{rd.get('date', 'date unknown')}.",
                   f"https://store.steampowered.com/app/{it['id']}/")]
 
 
+# MUSIC_Q: "who sings X", "albums by X", "latest album by X" ... (group t = what comes after).
 MUSIC_Q = re.compile(r"\b(?:who sings|who sang|who performs|song by|songs by|albums? by|discography of|latest (?:album|song|single) (?:by|from)|new (?:album|song) (?:by|from)|"
                      r"when (?:did|was|is) .+? (?:album|song|single) (?:come out|released|release))\b(?P<t>.*)$", re.I)
 
 
 def music(q, now, net, online):
+    """Provider: songs or albums matching the search, with artist and release date, from Apple's iTunes Search. Albums if the question says album/discography, else songs."""
     if not online:
         return []
     q = _q(q)
@@ -488,12 +560,15 @@ def music(q, now, net, online):
     return [_note(f"Music matching '{term}' - Apple iTunes Search", "; ".join(lines) + ".", "https://music.apple.com/")]
 
 
+# NUTRITION: calories and nutrients. Uses USDA FoodData Central if USDA_API_KEY is set, otherwise Open Food Facts (no key).
 # =========================================================================================== nutrition
+# FOOD_Q: "calories in an apple", "how much protein is in rice" (group f or f2 = the food).
 FOOD_Q = re.compile(r"\b(?:calories|calorie|protein|carbs|carbohydrates|fat|sugar|nutrition(?: facts)?|nutritional (?:value|info\w*))\s+(?:in|of|for)\s+(?:an?\s+|one\s+|1\s+|a (?:cup|slice|bowl|serving) of\s+)?(?P<f>[a-z][a-z ,'&\-]{1,40})|"
                     r"\bhow (?:many|much)\s+(?:calories|protein|carbs|sugar|fat)\s+(?:are |is )?(?:in|does)\s+(?:an?\s+|one\s+|1\s+)?(?P<f2>[a-z][a-z ,'&\-]{1,40})", re.I)
 
 
 def nutrition(q, now, net, online):
+    """Provider: nutrition per 100 g for a food. USDA data when a key is available (energy, protein, fat, carbs), else the first Open Food Facts product with calorie data."""
     if not online:
         return []
     m = FOOD_Q.search(_q(q))
@@ -508,6 +583,7 @@ def nutrition(q, now, net, online):
             foods = net.json("https://api.nal.usda.gov/fdc/v1/foods/search?" + urllib.parse.urlencode({"query": food, "pageSize": 3, "dataType": "Foundation,SR Legacy", "api_key": key})).get("foods") or []
             f = foods[0]
             nut = {n["nutrientName"]: (n["value"], n.get("unitName", "")) for n in f.get("foodNutrients", [])}
+            # Small helper: return the first nutrient that exists, formatted like "52 kcal", or None.
             def g(*names):
                 for nm in names:
                     if nm in nut:
@@ -529,18 +605,22 @@ def nutrition(q, now, net, online):
                   "https://world.openfoodfacts.org/")]
 
 
+# PLACES: sunrise/sunset, distance, past weather, elevation, surf and US weather alerts. All start by turning a place name into coordinates (live_data._geocode).
 # =========================================================================================== places: sun, distance, past weather, elevation, surf, alerts
 def _place_after(q, words):
+    """Regex search for one of `words` followed by a place name; returns the match object (or None)."""
     m = re.search(rf"\b(?:{words})\s+(?:in|at|for|near|of)?\s*([A-Za-z][A-Za-z'.\- ,]*)", q, re.I)
     return m
 
 
 def _clean_place(p):
+    """Trim a place name: remove trailing time words ("today", "this weekend") and a leading "the"/"my"."""
     p = re.sub(r"\b(today|tonight|tomorrow|now|right now|please|this (?:week|weekend|morning|evening)|yesterday)\b.*$", "", p or "", flags=re.I).strip(" ,.-")
     return re.sub(r"^(the|my)\s+", "", p, flags=re.I)
 
 
 def sun(q, now, net, online, default_place=""):
+    """Provider: sunrise, sunset and daylight length for today and tomorrow in a place (default_place when none is named). Needs the internet."""
     if not online:
         return []
     q = _q(q)
@@ -562,6 +642,7 @@ def sun(q, now, net, online, default_place=""):
     where = ", ".join(x for x in (hit.get("name"), hit.get("admin1"), hit.get("country")) if x)
     lines = []
     for i, label in enumerate(("Today", "Tomorrow")):
+        # Times look like "2025-03-05T06:41": characters 11-15 are the "HH:MM" part. Daylight is given in seconds, so /3600 gives hours.
         rise, sset = d["sunrise"][i][11:16], d["sunset"][i][11:16]
         hrs = d["daylight_duration"][i] / 3600
         lines.append(f"{label} ({d['time'][i]}): sunrise {rise}, sunset {sset} (local time), {int(hrs)} h {round(hrs % 1 * 60)} min of daylight")
@@ -569,21 +650,25 @@ def sun(q, now, net, online, default_place=""):
 
 
 def _haversine(a, b):
+    """Straight-line (great-circle) distance in km between two points given as dicts with latitude and longitude. The haversine formula; 6371.0088 is the Earth's average radius in km."""
     la1, lo1, la2, lo2 = map(math.radians, (a["latitude"], a["longitude"], b["latitude"], b["longitude"]))
     h = math.sin((la2 - la1) / 2) ** 2 + math.cos(la1) * math.cos(la2) * math.sin((lo2 - lo1) / 2) ** 2
     return 2 * 6371.0088 * math.asin(math.sqrt(h))
 
 
+# DIST_Q: "how far is A from B", "distance between A and B", "how long to drive from A to B" ... (group pairs a/b, a2/b2 ...).
 DIST_Q = re.compile(r"\bhow far is\s+(?P<a>.+?)\s+(?:from|to)\s+(?P<b>.+)$|\bdistance\s+(?:between|from)\s+(?P<a2>.+?)\s+(?:and|to)\s+(?P<b2>.+)$|"
                     r"\bhow long (?:does it take )?to (?:drive|fly|travel)\s+from\s+(?P<a3>.+?)\s+to\s+(?P<b3>.+)$|\b(?:drive|driving) (?:time|distance) (?:from|between)\s+(?P<a4>.+?)\s+(?:to|and)\s+(?P<b4>.+)$", re.I)
 
 
 def distance(q, now, net, online):
+    """Provider: straight-line distance between two places and, if the question is about driving, the road distance and time (OSRM routing service). Skips space objects (sun, moon, Mars...)."""
     if not online:
         return []
     m = DIST_Q.search(_q(q))
     if not m:
         return []
+    # Whichever of the four alternative forms matched filled one pair of groups; pick the non-empty ones.
     g = m.groupdict()
     a = next(g[k] for k in ("a", "a2", "a3", "a4") if g.get(k))
     b = next(g[k] for k in ("b", "b2", "b3", "b4") if g.get(k))
@@ -598,6 +683,7 @@ def distance(q, now, net, online):
         print(f"(distance lookup failed: {e})")
         return []
     km = _haversine(ha, hb)
+    # 1 km = 0.621371 miles. Driving info is a bonus: if the routing service fails, we still give the straight-line answer.
     text = f"{ha['name']} to {hb['name']}: {km:,.0f} km ({km * 0.621371:,.0f} miles) in a straight line"
     if re.search(r"\b(drive|driving|car|road|how long|travel|trip|route)\b", q.lower()):
         try:
@@ -610,6 +696,7 @@ def distance(q, now, net, online):
 
 
 def past_weather(q, now, net, online, default_place=""):
+    """Provider: the weather on a past day ("weather in Paris yesterday", "on March 5") from Open-Meteo's archive. Needs the internet; future dates are ignored."""
     if not online:
         return []
     q = _q(q)
@@ -624,6 +711,7 @@ def past_weather(q, now, net, online, default_place=""):
         found = L._explicit_dates(q, today)
         if found:
             day = found[0]
+    # Only past days work here (the archive has no future).
     if not day or day >= today:
         return []
     m = re.search(r"\b(?:in|at|for|near)\s+([A-Za-z][A-Za-z'.\- ,]*?)(?:\s+(?:on|in|last|yesterday)\b|$)", q)
@@ -637,6 +725,7 @@ def past_weather(q, now, net, online, default_place=""):
         d = net.json("https://archive-api.open-meteo.com/v1/archive?" + urllib.parse.urlencode(
             {"latitude": hit["latitude"], "longitude": hit["longitude"], "start_date": day.isoformat(), "end_date": day.isoformat(),
              "daily": "temperature_2m_max,temperature_2m_min,precipitation_sum,weather_code", "timezone": "auto"}))["daily"]
+        # Daily high, low, rain total and a weather code (WMO code; web_search.WMO turns it into words like "light rain").
         hi, lo, pr, wc = d["temperature_2m_max"][0], d["temperature_2m_min"][0], d["precipitation_sum"][0], d["weather_code"][0]
     except Exception as e:
         print(f"(past weather lookup failed: {e})")
@@ -648,6 +737,7 @@ def past_weather(q, now, net, online, default_place=""):
 
 
 def elevation(q, now, net, online):
+    """Provider: how high above sea level a place is (the geocoder returns an elevation in metres; 1 m = 3.28084 ft)."""
     if not online:
         return []
     m = re.search(r"\b(?:elevation|altitude)\s+(?:of|in|at)\s+(?P<p>[A-Za-z][A-Za-z'.\- ,]+)$|\bhow high (?:above sea level )?is\s+(?P<p2>[A-Za-z][A-Za-z'.\- ,]+)$|\bhow (?:high|many (?:feet|meters|metres)) above sea level is\s+(?P<p3>.+)$", _q(q), re.I)
@@ -667,6 +757,7 @@ def elevation(q, now, net, online):
 
 
 def surf(q, now, net, online):
+    """Provider: current wave height, period and direction near a coastal place, from Open-Meteo's marine model."""
     if not online:
         return []
     m = re.search(r"\b(?:surf|wave|waves|swell|ocean conditions|surf report)\b.*?\b(?:in|at|for|near)\s+(?P<p>[A-Za-z][A-Za-z'.\- ,]+)$", _q(q), re.I)
@@ -687,6 +778,7 @@ def surf(q, now, net, online):
 
 
 def alerts(q, now, net, online, default_place=""):
+    """Provider: active US weather alerts for a place from weather.gov (US places only; other countries return nothing)."""
     if not online:
         return []
     q = _q(q)
@@ -711,7 +803,9 @@ def alerts(q, now, net, online, default_place=""):
     return [_note(f"Weather alerts for {where} - weather.gov", " | ".join(lines), "https://www.weather.gov/")]
 
 
+# ECONOMY: country statistics from the World Bank, and US economy numbers from FRED (needs a free key).
 # =========================================================================================== economy (World Bank, FRED)
+# WB: topic word -> (World Bank indicator code, readable label). WB_Q matches "inflation in Japan" (group k = topic, c = country).
 WB = {"gdp per capita": ("NY.GDP.PCAP.CD", "GDP per person (US$)"), "gdp": ("NY.GDP.MKTP.CD", "GDP (US$)"), "inflation": ("FP.CPI.TOTL.ZG", "inflation (% a year)"),
       "unemployment": ("SL.UEM.TOTL.ZS", "unemployment (% of workforce)"), "life expectancy": ("SP.DYN.LE00.IN", "life expectancy (years)"),
       "literacy": ("SE.ADT.LITR.ZS", "adult literacy (%)"), "poverty": ("SI.POV.DDAY", "poverty rate at $2.15 a day (%)"), "co2": ("EN.GHG.CO2.PC.CE.AR5", "CO2 per person (tonnes)")}
@@ -719,6 +813,7 @@ WB_Q = re.compile(r"\b(?P<k>gdp per capita|gdp|inflation(?: rate)?|unemployment(
 
 
 def worldbank(q, now, net, online):
+    """Provider: the latest value of a statistic (GDP, inflation, unemployment ...) for a country, using COUNTRY_CODES from live_data to get the 2-letter code."""
     if not online:
         return []
     m = WB_Q.search(_q(q))
@@ -731,17 +826,20 @@ def worldbank(q, now, net, online):
         return []
     ind, label = WB[key]
     try:
+        # mrnev=1 asks for the most recent non-empty value; the reply is [info, rows], so [1] is the data rows.
         rows = net.json(f"https://api.worldbank.org/v2/country/{code}/indicator/{ind}?format=json&per_page=5&mrnev=1")[1]
         row = next(r for r in rows if r.get("value") is not None)
     except Exception as e:
         print(f"(World Bank lookup failed: {e})")
         return []
     v = row["value"]
+    # Big GDP numbers are shown in trillions / billions of dollars; other statistics as plain numbers.
     shown = f"${v / 1e12:,.2f} trillion" if ind == "NY.GDP.MKTP.CD" and v >= 1e12 else f"${v / 1e9:,.1f} billion" if ind == "NY.GDP.MKTP.CD" else f"{v:,.2f}"
     return [_note(f"{row['country']['value']}: {label} - World Bank", f"{row['country']['value']} {label}: {shown} ({row['date']}, the latest year the World Bank has). Official statistics lag by a year or more.",
                   "https://data.worldbank.org/")]
 
 
+# FRED: phrase -> (FRED series id, label). FRED is the Federal Reserve Bank of St. Louis economic database.
 FRED = {"unemployment": ("UNRATE", "US unemployment rate (%)"), "fed funds": ("FEDFUNDS", "federal funds rate (%)"), "interest rate": ("FEDFUNDS", "federal funds rate (%)"),
         "mortgage rate": ("MORTGAGE30US", "average 30-year mortgage rate (%)"), "30 year mortgage": ("MORTGAGE30US", "average 30-year mortgage rate (%)"),
         "10 year treasury": ("DGS10", "10-year Treasury yield (%)"), "treasury yield": ("DGS10", "10-year Treasury yield (%)"), "inflation": ("CPIAUCSL", "consumer price index (1982-84=100)"),
@@ -749,12 +847,14 @@ FRED = {"unemployment": ("UNRATE", "US unemployment rate (%)"), "fed funds": ("F
 
 
 def fred(q, now, net, online):
+    """Provider: the newest US economic figure (unemployment, mortgage rate, gas price ...) from FRED. Needs FRED_API_KEY and a question that is clearly about the US."""
     key = os.environ.get("FRED_API_KEY")
     if not online or not key:
         return []
     low = _q(q).lower()
     if not re.search(r"\b(us|u\.s\.|american|america|united states|fed|mortgage|treasury|gas price)\b", low):
         return []
+    # Pick the longest matching phrase first ("30 year mortgage" before "mortgage").
     k = next((k for k in sorted(FRED, key=len, reverse=True) if k in low), None)
     if not k:
         return []
@@ -762,6 +862,7 @@ def fred(q, now, net, online):
     try:
         obs = net.json("https://api.stlouisfed.org/fred/series/observations?" + urllib.parse.urlencode(
             {"series_id": sid, "api_key": key, "file_type": "json", "sort_order": "desc", "limit": 5}))["observations"]
+        # Newest first; skip placeholder values ("." or empty) that FRED uses when a figure is not yet published.
         o = next(x for x in obs if x["value"] not in (".", ""))
     except Exception as e:
         print(f"(FRED lookup failed: {e})")
@@ -769,11 +870,14 @@ def fred(q, now, net, online):
     return [_note(f"{label} - FRED (St. Louis Fed)", f"{label}: {o['value']} (as of {o['date']}).", f"https://fred.stlouisfed.org/series/{sid}")]
 
 
+# RESEARCH, CODING, TRIVIA, FILINGS: arXiv and PubMed paper lists, Stack Overflow questions, trivia, and SEC company filings. All free, no key.
 # =========================================================================================== research, coding, trivia, filings
+# ARXIV_Q: "latest papers on X" (group t or t2 = topic).
 ARXIV_Q = re.compile(r"\b(?:latest|recent|new|newest)\s+(?:research\s+)?papers?\s+(?:on|about)\s+(?P<t>.+)$|\barxiv\b.*?\b(?:on|about)\s+(?P<t2>.+)$", re.I)
 
 
 def arxiv(q, now, net, online):
+    """Provider: the 5 newest arXiv preprints on a topic (titles and dates). Notes that preprints are not peer reviewed."""
     if not online:
         return []
     m = ARXIV_Q.search(_q(q))
@@ -783,6 +887,7 @@ def arxiv(q, now, net, online):
     try:
         root = ET.fromstring(net.text("http://export.arxiv.org/api/query?" + urllib.parse.urlencode(
             {"search_query": "all:" + topic, "max_results": 5, "sortBy": "submittedDate", "sortOrder": "descending"})))
+        # The arXiv reply is Atom XML, whose tags live in a "namespace"; the dict lets us write "a:entry" for tags in that namespace.
         ns = {"a": "http://www.w3.org/2005/Atom"}
         entries = root.findall("a:entry", ns)[:5]
         lines = [f"{' '.join((e.findtext('a:title', '', ns) or '').split())} ({(e.findtext('a:published', '', ns) or '')[:10]})" for e in entries]
@@ -794,10 +899,12 @@ def arxiv(q, now, net, online):
     return [_note(f"Recent arXiv papers on {topic} - arxiv.org", "; ".join(lines) + ". Preprints are not peer reviewed.", "https://arxiv.org/")]
 
 
+# PUBMED_Q: "pubmed ...", "clinical trials on X", "studies on X" (group t = topic).
 PUBMED_Q = re.compile(r"\b(?:pubmed|clinical (?:trials?|studies)|medical (?:studies|research|papers)|studies (?:on|about)|research (?:on|about))\b\s*(?:on|about|for)?\s*(?P<t>.+)$", re.I)
 
 
 def pubmed(q, now, net, online):
+    """Provider: titles of recent-to-relevant medical papers from PubMed. Two requests: first search for paper ids, then fetch a summary for those ids. Titles only; it says it is not medical advice."""
     if not online:
         return []
     m = PUBMED_Q.search(_q(q))
@@ -819,11 +926,13 @@ def pubmed(q, now, net, online):
     return [_note(f"PubMed results for {topic} - pubmed.ncbi.nlm.nih.gov", "; ".join(lines) + ". Titles only: this is not medical advice.", "https://pubmed.ncbi.nlm.nih.gov/")]
 
 
+# ERR_RE: names of common programming errors (TypeError, Traceback ...). A message containing one triggers a Stack Overflow search.
 ERR_RE = re.compile(r"\b(TypeError|ValueError|KeyError|AttributeError|ImportError|ModuleNotFoundError|IndexError|NameError|SyntaxError|NullPointerException|Traceback|segmentation fault|"
                     r"cannot find module|undefined is not a function)\b", re.I)
 
 
 def stackexchange(q, now, net, online):
+    """Provider: up to 3 Stack Overflow questions that have an accepted answer and match the question (titles and links only)."""
     if not online:
         return []
     q = _q(q)
@@ -844,11 +953,13 @@ def stackexchange(q, now, net, online):
 
 
 def W_clean(text):
+    """Clean text from a web reply (HTML bits, odd spaces) using web_search.clean_text. web_search is imported here so this file loads even before it is needed."""
     import web_search as W
     return W.clean_text(text)
 
 
 def trivia(q, now, net, online):
+    """Provider: 1-10 multiple-choice trivia questions from Open Trivia DB. The answer options are sorted so the correct one is not always in the same place, and the note tells the model to keep answers hidden until asked."""
     if not online or not re.search(r"\btrivia\b", q or "", re.I):
         return []
     n = 5
@@ -862,15 +973,18 @@ def trivia(q, now, net, online):
         return []
     if not rows:
         return []
+    # The service sends text percent-encoded ("%20" for a space); unquote decodes it. enumerate(rows, 1) numbers the questions from 1.
     un = urllib.parse.unquote
     lines = [f"Q{i}: {un(r['question'])} Options: {', '.join(sorted([un(r['correct_answer'])] + [un(x) for x in r['incorrect_answers']]))}. Answer: {un(r['correct_answer'])}" for i, r in enumerate(rows, 1)]
     return [_note("Trivia questions - opentdb.com", " ".join(lines) + " (Give the questions one at a time and keep the answers hidden until the person answers.)", "https://opentdb.com/")]
 
 
+# FILING_Q: mentions of SEC filings (10-K yearly report, 10-Q quarterly report, 8-K event report).
 FILING_Q = re.compile(r"\b(?:sec filings?|10-?k|10-?q|8-?k|annual report|quarterly report)\b", re.I)
 
 
 def filings(q, now, net, online):
+    """Provider: the 5 most recent 10-K / 10-Q / 8-K filings of a US public company from the SEC's EDGAR site, with links. Finds the company by name (live_data.COMPANIES) or a ticker like "for AAPL"."""
     if not online or not FILING_Q.search(q or ""):
         return []
     L = _L()
@@ -882,10 +996,12 @@ def filings(q, now, net, online):
     if not tick:
         return []
     try:
+        # The SEC publishes a text list of "ticker number" lines. The number (CIK) identifies the company; it is zero-padded to 10 digits in the next web address ({cik:010d}).
         txt = net.text("https://www.sec.gov/include/ticker.txt")
         cik = next(int(line.split()[1]) for line in txt.splitlines() if line.split() and line.split()[0] == tick.lower().replace("-", "-"))
         sub = net.json(f"https://data.sec.gov/submissions/CIK{cik:010d}.json")
         rec = sub["filings"]["recent"]
+        # The "recent" filings are parallel lists (form type, date, id, document name). Keep only the three form types we care about, first five.
         rows = [(rec["form"][i], rec["filingDate"][i], rec["accessionNumber"][i].replace("-", ""), rec["primaryDocument"][i]) for i in range(len(rec["form"])) if
                 rec["form"][i] in ("10-K", "10-Q", "8-K")][:5]
     except Exception as e:
@@ -897,13 +1013,16 @@ def filings(q, now, net, online):
     return [_note(f"Recent SEC filings for {sub.get('name', tick)} - sec.gov", "; ".join(lines) + ".", "https://www.sec.gov/")]
 
 
+# WOLFRAM|ALPHA: a computing service for hard maths and science facts. Used only when WOLFRAM_APPID is set.
 # =========================================================================================== Wolfram|Alpha (optional key)
+# WOLFRAM_Q: words that suggest a hard maths / science question (integral, molar mass, escape velocity ...).
 WOLFRAM_Q = re.compile(r"\b(integral|integrate|derivative|differentiate|limit of|factor|solve for|solve the equation|simplify|prime factors?|gcd|lcm|determinant|eigenvalue|logarithm|"
                        r"boiling point|melting point|molar mass|atomic (?:mass|number|weight)|speed of|mass of|diameter of|distance to the (?:moon|sun)|how many .{1,30} in a|density of|"
                        r"orbital period|escape velocity|half[- ]life|ph of|chemical formula)\b", re.I)
 
 
 def wolfram(q, now, net, online):
+    """Provider: a short answer to a maths / science question from Wolfram|Alpha, when a key is configured. "Did not understand" replies are dropped."""
     key = os.environ.get("WOLFRAM_APPID")
     if not online or not key or not WOLFRAM_Q.search(q or ""):
         return []
@@ -918,10 +1037,13 @@ def wolfram(q, now, net, online):
     return [_note("Answer - Wolfram|Alpha", text, "https://www.wolframalpha.com/")]
 
 
+# REGISTRY: the list live_data.py merges into its own provider list.
 # =========================================================================================== registry
+# Mark these three as wanting the person's default place; live_data.gather checks this flag when it calls a provider.
 for _fn in (sun, past_weather, alerts):
     _fn.needs_place = True
 
+# MORE: the same four-part rows as live_data.PROVIDERS: id, function, runs without the internet, label shown on the page.
 # (name, function, works offline, label). live_data.PROVIDERS gets these after its own.
 MORE = [
     ("finance", finance, True, "Finance calculator"),

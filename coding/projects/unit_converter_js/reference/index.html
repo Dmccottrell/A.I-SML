@@ -1,13 +1,17 @@
 <!doctype html>
+<!-- The unit converter page (reference solution for the "unit_converter_js" exercise). convert.js does the maths, page.js runs the page. -->
 <html lang="en">
 <head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Unit converter</title><link rel="stylesheet" href="style.css"></head>
 <body>
   <h1>Unit converter</h1>
+  <!-- Controls: kind of unit, the number, and the From and To units (page.js fills the two unit lists). -->
   <label>Kind <select id="kind"><option>length</option><option>mass</option><option>temperature</option></select></label>
   <label>Value <input id="value" type="number" value="1"></label>
   <label>From <select id="from"></select></label>
   <label>To <select id="to"></select></label>
+  <!-- The answer appears here. -->
   <p id="result"></p>
+  <!-- convert.js must load before page.js because page.js uses its functions. -->
   <script src="convert.js"></script>
   <script src="page.js"></script>
 </body>

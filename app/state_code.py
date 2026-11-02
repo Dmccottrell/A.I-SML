@@ -1,5 +1,11 @@
 """
 state_code.py - AppState's VryxCode part: which models may code, the cloud machine, GitHub and browser tools, and the model a coding session runs on.
+
+WHERE IT FITS
+    AppState (the server's big shared object) is built from mixin classes, one per state_*.py file. A mixin's methods are mixed into AppState,
+    so `self` here is the whole AppState (self.code, self.security, self.cfg, self.catalog ... come from other parts).
+    VryxCode is the coding agent: it writes files in a per-person project folder by calling "tools" (small functions the model may ask to run).
+    Several methods below build such tools and hand them to the agent.
 """
 import os, sys; sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), os.pardir)); import emvryx_paths  # noqa: E402,F401  (the code folders become importable)
 import json
@@ -21,25 +27,35 @@ class StateCode:
 
     # ---- the cloud machine for VryxCode (SSH)
     def cloud_paths(self):
+        """Where the SSH key and the known-hosts file for the cloud machine are kept. Returns (key path, known_hosts path)."""
+        # Use the data folder if there is one, otherwise a hidden .emvryx folder next to the program.
         d = self.data_dir or os.path.join(HERE, ".emvryx")
         return os.path.join(d, "cloud_key"), os.path.join(d, "cloud_known_hosts")
 
     def apply_cloud(self):
+        """Read the cloud-machine settings (environment variables win over security.json) and give them to the coding part (self.code.cloud).
+
+        With no host set, self.code.cloud becomes None, meaning "no cloud machine". SSH is the secure remote-login tool used to reach it.
+        """
         key, known = self.cloud_paths()
+        # Each setting: environment variable first, then security.json, then a default (port 22 is SSH's standard port).
         host = str(os.environ.get("EMVRYX_CLOUD_HOST") or self.security.get("cloud_host") or "").strip()
         self.code.cloud = ({"host": host, "port": int(os.environ.get("EMVRYX_CLOUD_PORT") or self.security.get("cloud_port") or 22),
                             "user": str(os.environ.get("EMVRYX_CLOUD_USER") or self.security.get("cloud_user") or "root"), "key": os.environ.get("EMVRYX_CLOUD_KEY") or key,
                             "known_hosts": known, "for_others": bool(self.security.get("cloud_for_others"))} if host else None)
 
     def cloud_status(self):
+        """What the settings screen shows about the cloud machine: host, port, user, whether the key and the ssh tools exist, and if it is ready."""
         key, known = self.cloud_paths()
         pub = ""
+        # The public half of the key (safe to show; the person pastes it on the cloud machine). Missing file = nothing to show yet.
         try:
             with open(key + ".pub", encoding="utf-8") as f:
                 pub = f.read().strip()
         except OSError:
             pass
         c = self.code.cloud or {}
+        # shutil.which finds a program on the PATH (returns None when it is not installed). "why_not" explains a not-ready state.
         return {"host": c.get("host", ""), "port": c.get("port", 22), "user": c.get("user", "root"), "for_others": bool(c.get("for_others")), "key_made": os.path.exists(key),
                 "public_key": pub, "ssh_found": bool(shutil.which("ssh")), "keygen_found": bool(shutil.which("ssh-keygen")), "ready": self.code.cloud_ready(True)[0],
                 "why_not": "" if self.code.cloud_ready(True)[0] else self.code.cloud_ready(True)[1], "from_env": bool(os.environ.get("EMVRYX_CLOUD_HOST"))}
@@ -47,9 +63,11 @@ class StateCode:
     def code_models(self, who):
         """The models VryxCode can use for this person: flagged "vryxcode", and ready to run here."""
         cat = self.catalog(who)
+        # First the Emvryx models that carry the "vryxcode" flag (cards = newest of each name, other = older versions).
         out = [{"id": m["id"], "name": m["name"], "version": m["version"], "state": m["state"], "badge": m["badge"],
                 "label": f"{m['name']} {m['version']:g}", "outside": False, "note": vryxcode.ELIGIBLE_NOTE.get(m["id"], ""), "build": bool(m.get("vryxcode_build"))}
                for m in cat["cards"] + cat["other"] if m.get("vryxcode")]
+        # Then "outside" coding models listed in the manifest; the note is a fixed text that names the model and its licence.
         for c in self.manifest.get("coders", []):
             state, badge = self._coder_state(c, who)
             out.append({"id": c["id"], "name": c["label"], "version": "", "state": state, "badge": badge, "label": c["label"] + " (outside model)",
@@ -57,11 +75,13 @@ class StateCode:
         return out
 
     def coder(self, coder_id):
+        """The manifest entry of the outside coding model with this id, or None."""
         return next((c for c in self.manifest.get("coders", []) if c["id"] == coder_id), None)
 
     def _coder_state(self, c, who):
         """ready | locked | too_big | missing for an outside coding model (same plan rule as the Emvryx model it costs like)."""
         plan = self.cfg["tiers"][who["tier"]]["models"]
+        # Same checks as for chat models, in order: plan, enough memory (RAM), then whether something can actually run it.
         if not who["owner"] and plan != "all" and c.get("plan_like", "solstice") not in plan:
             return "locked", "Not in your plan"
         if self.ram_gb < c.get("min_ram_gb", 0):
@@ -72,17 +92,21 @@ class StateCode:
 
     # ---- GitHub (a connected app)
     def github_client_id(self):
+        """The GitHub app's public client id used for the connect flow (environment variable first, then security.json), or "" if not set."""
         return str(os.environ.get("EMVRYX_GITHUB_CLIENT_ID") or self.security.get("github_client_id") or "")
 
     def github_api(self, user):
+        """A GitHub web-API client for this person, using the token they connected. Raises GitHubError (with a hint) if not connected."""
         d = self.github.get(user)
         if not d.get("token"):
             raise github_link.GitHubError("GitHub isn't connected.", "Open Menu > Connected apps > GitHub and connect it.")
         return github_link.Api(d["token"], self.github_http)
 
     def git_for(self, user, project):
+        """A git helper working inside this person's project folder, signing in with their token and committing as them."""
         d = self.github.get(user)
         workspace = self.code.project_path(user, project)
+        # Commits are credited to the person's GitHub login, with GitHub's private "noreply" address so no real email is exposed.
         identity = None
         if d.get("login"):
             identity = (d["login"], f"{d.get('id', 0)}+{d['login']}@users.noreply.github.com")
@@ -90,8 +114,10 @@ class StateCode:
 
     def github_tool(self, user, project):
         """The `github` tool the model may call (status, pull, push). It runs here on the server with the person's token; the model never sees it."""
+        # The tool itself, defined inside so it remembers which person and project it is for (a "closure").
         def github(action="status"):
             g = self.git_for(user, project)
+            # Do the asked action; every success for pull/push is logged. GitHub errors become ToolError, which the model can read and react to.
             try:
                 if action == "status":
                     return json.dumps(g.status())
@@ -100,11 +126,13 @@ class StateCode:
                     self.github.log(user, f"pulled {project}")
                     return out
                 if action == "push":
+                    # allow_protected=False: the model may not push to protected branches.
                     out = g.push(allow_protected=False)
                     self.github.log(user, f"pushed {project}")
                     return out
             except github_link.GitHubError as e:
                 raise harness.ToolError(e.message + (" " + e.action if e.action else ""))
+            # Reached only for an unknown action word.
             raise harness.ToolError("action must be status, pull or push")
         return github
 
@@ -113,13 +141,16 @@ class StateCode:
         topic = str(self.security.get("alert_ntfy_topic") or "")
         if not topic:
             return
+        # What to say for each kind of event; an unknown kind is shown as it is.
         said = {"done": "finished. Open it to see what it built.", "asking": "is waiting for your OK.", "stopped": "stopped.", "failed": "ran into a problem.", "limited": "paused: your usage ran out."}
         text = f'"{session.project}" {said.get(kind, kind)}'
+        # Send from a background thread so a slow network never holds up the coding session.
         import notify
         threading.Thread(target=notify.send, args=(topic, text, "VryxCode"), daemon=True).start()
 
     def code_push(self, session, kind):
         """pwa_push: the same short line to the browsers the person turned notifications on in (web_push.py). Not while it is still working."""
+        # Only these kinds are worth a push; the last argument "/#code" is the page opened when the person taps the notification.
         said = {"done": "finished. Open it to see what it built.", "asking": "is waiting for your OK.", "stopped": "stopped.", "failed": "ran into a problem.",
                 "limited": "paused: your usage ran out."}
         if kind in said:
@@ -128,14 +159,18 @@ class StateCode:
     # ---- CI: /fixci and "Watch CI" (app/code_ci.py)
     def ci_failures(self, user, project):
         """(owner, repo, branch, sha, failed) for the project's GitHub branch; raises CodeError when it is not linked to GitHub."""
+        # CI = continuous integration: the automatic checks GitHub runs after a push. Imported here so the module loads only when needed.
         import code_ci
         g = self.git_for(user, project)
+        # Which GitHub repository and branch is this project linked to?
         try:
             remote, branch = g.remote(), g.branch()
         except github_link.GitHubError as e:
             raise code_sessions.CodeError(e.message, e.action)
+        # Not linked to GitHub (no remote, a local-only remote, or no branch): tell the person what to do first.
         if not remote or remote[0] == "local" or not branch:
             raise code_sessions.CodeError("This project is not linked to a GitHub repository.", "Link it first (Project > GitHub), push it, then try again.")
+        # Ask GitHub for the newest commit (sha = its id) on that branch and the checks that failed on it.
         try:
             sha, failed = code_ci.failures(self.github_api(user), remote[0], remote[1], branch)
         except github_link.GitHubError as e:
@@ -144,18 +179,22 @@ class StateCode:
 
     def ci_watcher(self):
         """The CI watcher (created once; it resumes the watches saved in ci_watch.json)."""
+        # Create it on first use only (getattr with a default avoids an error before _ci exists).
         if getattr(self, "_ci", None) is None:
             import code_ci
             import routes_code
 
+            # What the watcher calls to check a project: gives (sha, failed), the last two values of ci_failures.
             def look(who, project):
                 return self.ci_failures(who["user"], project)[3:]
 
+            # What the watcher calls to tell someone: a phone alert, sent only to the owner and only if alerts are set up.
             def notify(who, text):
                 topic = str(self.security.get("alert_ntfy_topic") or "")
                 if topic and who.get("owner"):
                     import notify as ntfy
                     threading.Thread(target=ntfy.send, args=(topic, text, "VryxCode"), daemon=True).start()
+            # The watcher keeps its list in ci_watch.json. The lambda is the "fix it" action: it starts a coding session to fix the failure.
             self._ci = code_ci.Watcher(os.path.join(self.data_dir, "ci_watch.json") if self.data_dir else None, look,
                                        lambda who, project, model, sha, failed: routes_code.start_fix(self, who, project, model), notify)
         return self._ci
@@ -163,13 +202,16 @@ class StateCode:
     def app_tools(self, user, project, secrets=None):
         """start_app / stop_app / app_logs (flag vryxcode_servers): the model starts the server it built, sealed in a container with no network,
         and the person uses it in the Preview (coding/code_servers.py). Never on this computer: without Docker it is refused."""
+        # Three small tools are defined below and returned together as a dict: tool name -> function.
         def start_app(command="", port=5000):
+            # The app may only run inside the Docker sandbox. Check the sandbox is ready (either the configured Docker mode, or the image exists).
             ok, why = self.code.sandbox_ready() if self.code.sandbox.get("mode") == "docker" else code_sandbox.available(self.code.sandbox.get("image", code_sandbox.DEFAULT_IMAGE))
             if not ok:
                 raise harness.ToolError("apps run only in the isolated sandbox (Docker), and it is not ready on the Emvryx computer: " + why
                                         + ". Build the page in HTML and JavaScript instead, so it shows in the Preview.")
             folder = self.code.project_path(user, project)
             try:
+                # prefix = the start of the docker command line (it ends with the image name).
                 prefix = self.code.prefix_for(folder, force=True)
                 if secrets:                                     # vryxcode_secrets: the app gets them too (docker run -e, before the image name)
                     prefix = prefix[:-1] + [x for k, v in secrets.items() for x in ("-e", f"{k}={v}")] + prefix[-1:]
@@ -177,24 +219,30 @@ class StateCode:
             except code_servers.AppError as e:
                 raise harness.ToolError(str(e))
 
+        # Stops the running app, if there is one, and says what happened.
         def stop_app():
             return "The app was stopped." if self.app_servers.stop(user, project) else "No app was running."
 
+        # The app's recent output, so the model can see why it failed.
         def app_logs():
             return self.app_servers.logs(user, project)
         return {"start_app": start_app, "stop_app": stop_app, "app_logs": app_logs}
 
     def browser_tool(self, user, project):
         """The `check_page` tool the model may call: a hidden browser opens a page of the project, clicks around and audits it (coding/browser_check.py)."""
+        # The tool itself. width/height are the browser window size in pixels (the defaults 390x844 are a typical phone).
         def check_page(path="", width=390, height=844):
             folder = self.code.project_path(user, project)
+            # The model may pass odd values: force them to whole numbers inside safe limits (width 240-1600, height 320-2400).
             try:
                 width, height = max(240, min(1600, int(width))), max(320, min(2400, int(height)))
             except (TypeError, ValueError):
                 raise harness.ToolError("width and height must be numbers (for example 390 and 844 for a phone)")
+            # Which page to open: the path the model gave (checked to stay inside the project folder), or else the project's main page.
             entry = browser_check.safe_page_path(folder, path) if path else code_preview.entry_page(folder)
             if not entry:
                 raise harness.ToolError("there is no web page (.html file) at that path in this project to check" if path else "this project has no web page (.html file) to check yet")
+            # Run the hidden browser and turn its findings into text the model can read.
             return browser_check.format_report(browser_check.check_page(folder, entry, width, height), entry, width, height)
         return check_page
 
@@ -203,26 +251,34 @@ class StateCode:
         explicitly accepting the folder sandbox for them): a person must never get to run programs on the host with only the folder sandbox between us."""
         if who["owner"] or who["admin"]:
             return True, ""
+        # Everyone else: first the plan must include VryxCode...
         if not self.cfg["tiers"][who["tier"]].get("vryxcode", False):
             return False, "VryxCode isn't included in your plan."
+        # ...and the safe container sandbox must be on, unless the owner explicitly allowed the weaker folder-only sandbox.
         if self.code.sandbox.get("mode") != "docker" and not self.security["code_unsandboxed_for_others"]:
             return False, "VryxCode is only open to the owner until the container sandbox is turned on."
         return True, ""
 
     def code_backend(self, model, cancel=None):
         """generate(messages) for a coding session on this model (the llama-server that runs it)."""
+        # A test or special setup can supply its own generator function; use it if present.
         if self.code_generate:
             return self.code_generate(model)
+        # Gaming mode: the PC is lent to a game, so no model is started.
         if self.cfg.get("gaming"):
             raise code_sessions.CodeError("Emvryx is resting while the PC is being used for something else.", "Try again in a little while.")
+        # ctx = the context window: how many tokens (word pieces) the model can read at once. 32768 is "32K".
         # 32K for coding, unless the model has its own VryxCode window (models.json "code_context": Apogee 3 has 128K, so a whole project fits)
         ctx = int(model.get("code_context") or min(int(model.get("context_tested") or 8192), 32768))
+        # Find the llama-server (the program that runs the model) for this model: start it through the runner, or use the one attached.
         if self.runner:
             url = self.runner.ensure(model["id"], ctx, cancel=cancel)
         elif self.llama_url:
             url = self.llama_url
         else:
             raise code_sessions.CodeError("No model is attached to this server.", "Start it with --gguf or --llama (see docs/VRYXCODE.md).")
+        # Models with the effort picker use their own recommended coding settings. Deep effort lets the model "think" (reason in text first),
+        # so it gets a bigger reply limit (max_tokens, capped at 16384); the others get up to 8192.
         if model.get("effort") and model.get("think") == "empty":          # a Qwen3.5 model with the effort picker: Qwen's own coding settings
             if vryxcode.EFFORTS.get(model["effort"], {}).get("think"):      # Deep: it reasons before each step, with room for the reasoning and the file
                 s = vryxcode.QWEN35_CODE_THINK
@@ -230,4 +286,5 @@ class StateCode:
                                           sampling={k: v for k, v in s.items() if k != "temperature"})
             s = vryxcode.QWEN35_CODE
             return vryxcode.LlamaChat(url, temperature=s["temperature"], max_tokens=max(1024, min(8192, ctx // 3)), sampling={k: v for k, v in s.items() if k != "temperature"})   # 8,192: a whole page in one step
+        # Every other model: plain settings; the reply limit is a third of the window, between 1024 and 4096 tokens.
         return vryxcode.LlamaChat(url, max_tokens=max(1024, min(4096, ctx // 3)))     # room for a whole file in one reply (1,024 cut a page of 100 lines off in the middle)

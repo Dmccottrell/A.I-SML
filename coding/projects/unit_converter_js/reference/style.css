@@ -1,2 +1,5 @@
+/* Look of the unit converter page. */
+/* A narrow centred column (max 420px) with side space for phones. */
 body { font-family: system-ui, sans-serif; max-width: 420px; margin: 24px auto; padding: 0 16px; }
+/* Each label with its input sits on its own line with a little space around it. */
 label { display: block; margin: 8px 0; }

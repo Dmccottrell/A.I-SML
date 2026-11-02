@@ -6,14 +6,19 @@ Two sources of a change, both read-only:
   * a GitHub pull request: its diff, fetched with the person's connected token (GET only; nothing is posted back).
 The page sends the prompt in Plan-first mode, where VryxCode may only look (writing, editing, running and git are refused), so a review can never change anything.
 """
+# difflib compares two texts and writes the differences; io.BytesIO is a file kept in memory; re = regular
+# expressions (text patterns); zipfile reads .zip archives (the Rewind snapshots are zips).
 import difflib
 import io
 import re
 import zipfile
 
+# Folders left out of a review, and the biggest file (bytes) that is read as text.
 SKIP_DIRS = {".git", "__pycache__", "node_modules", ".emvryx"}
 MAX_FILE_BYTES = 200_000
 DEFAULT_LIMIT = 20_000                      # characters of diff sent to the model (its memory is small); the rest is listed by name
+# Finds a pull request reference: optional "https://github.com/", then owner/repo, then "/pull/" or "#", then the
+# number. Groups: 1 = owner, 2 = repo, 3 = number. (?:...) groups without capturing; "?" makes a part optional.
 PR_RX = re.compile(r"(?:https?://github\.com/)?([A-Za-z0-9_.-]+)/([A-Za-z0-9_.-]+)(?:/pull/|#)(\d+)")
 
 
@@ -24,6 +29,7 @@ def parse_pr_ref(text):
 
 
 def _text_of(data):
+    """Bytes -> text, or None if it looks binary (a zero byte early on), is too big, or is not UTF-8."""
     if b"\0" in data[:4000] or len(data) > MAX_FILE_BYTES:
         return None
     try:
@@ -35,8 +41,10 @@ def _text_of(data):
 def snapshot_files(zip_bytes):
     """{path: text} for the text files in a Rewind snapshot."""
     out = {}
+    # Open the zip from memory and go through every entry in it.
     with zipfile.ZipFile(io.BytesIO(zip_bytes)) as z:
         for info in z.infolist():
+            # Skip folders, and anything inside a skipped folder.
             if info.is_dir() or any(part in SKIP_DIRS for part in info.filename.split("/")):
                 continue
             text = _text_of(z.read(info))
@@ -47,15 +55,20 @@ def snapshot_files(zip_bytes):
 
 def diff_files(before, after, limit=DEFAULT_LIMIT):
     """(unified diff text, [changed paths], how many characters were left out). `before` and `after` are {path: text}."""
+    # Every path in either snapshot ("|" joins the two sets). A file missing on one side is None below.
     paths = sorted(set(before) | set(after))
+    # parts = diff pieces kept; changed = names of changed files; used = characters kept; cut = characters left out.
     parts, changed, used, cut = [], [], 0, 0
     for p in paths:
         a, b = before.get(p), after.get(p)
         if a == b:
             continue
         changed.append(p)
+        # unified_diff makes the familiar "+/-" diff. splitlines(True) keeps line endings. A new file is shown as
+        # coming from /dev/null and a deleted one as going to it. n=3 gives 3 lines of context around each change.
         d = "".join(difflib.unified_diff((a or "").splitlines(True), (b or "").splitlines(True),
                                          fromfile="/dev/null" if a is None else "a/" + p, tofile="/dev/null" if b is None else "b/" + p, n=3))
+        # Over the size limit: leave this file's diff out (it is still listed in `changed`) and count what was cut.
         if used + len(d) > limit:
             cut += len(d)
             continue
@@ -64,6 +77,8 @@ def diff_files(before, after, limit=DEFAULT_LIMIT):
     return "".join(parts), changed, cut
 
 
+# The standing instructions for an open review (a "prompt" is the text sent to the model). Kept as one fixed string
+# so strict() below can find it and swap it for RULES_STRICT.
 RULES = """You are reviewing a code change. Read it carefully and look for real problems. You may only read: do not change any file and do not run anything.
 
 List the problems WORST FIRST. For each one write:
@@ -76,16 +91,23 @@ Rules: only report what you can point to in the change; do not invent problems t
 
 
 def review_prompt(diff, changed, cut=0, source="these changes"):
+    """The full review request: the rules, the changed file names and the diff. diff = unified diff text, changed =
+    list of paths, cut = characters left out for length, source = how to call the change ("this pull request"...)."""
+    # At most 30 names are listed; the rest are counted.
     names = ", ".join(changed[:30]) + (f" and {len(changed) - 30} more" if len(changed) > 30 else "")
+    # Tell the model if part of the diff is missing, so it does not pretend to have reviewed those files.
     note = f"\n\n(The diff was too long: {cut:,} characters of it were left out. Say which files you could not see.)" if cut else ""
+    # Nothing changed: no point sending the rules.
     if not diff.strip():
         return f"Review {source}. There are no changes to look at yet: say so in one sentence."
+    # The diff goes in a ```diff code block so the model sees it as code.
     return f"{RULES}\n\nReview {source}. Files changed: {names}.{note}\n\n```diff\n{diff}\n```"
 
 
 # vryxcode_guardrails: a review that can end. A reviewer asked to "review this" thinks its job is to find fault, so it is given the request as a checklist,
 # three severities, and told that approving is the best answer when the change does what was asked. Only CRITICAL and MAJOR count; NITPICKs are listed
 # and never worked on by themselves. Every CRITICAL or MAJOR must say which test would fail because of it (the fix starts by writing that test).
+# The strict rules (a checklist, three severities, and a JSON answer at the end that verdict() below reads).
 RULES_STRICT = """You are reviewing a code change against the request it was made for. You may only read: do not change any file and do not run anything.
 
 Judge it against this checklist only:
@@ -111,6 +133,7 @@ or, when something CRITICAL or MAJOR is wrong:
 ```
 NITPICK items may be listed in "defects" too; with only NITPICKs the status is still APPROVED."""
 
+# The message sent back to fix the blocking problems; {items} is filled in by fix_request(). Test first, then fix.
 FIX_GATE = """Fix only these problems from the review, one at a time. For each one, first write a small test that shows the problem and run it:
 if the test passes on the first run, the problem is not real, so drop it and say so; if it fails, fix the code until it passes, with the other tests
 still passing. Do not change or delete the existing tests. Leave NITPICK items alone. Problems:
@@ -120,21 +143,29 @@ still passing. Do not change or delete the existing tests. Leave NITPICK items a
 def strict(prompt, task=""):
     """The review request with the checklist rules instead of the open ones, and the request the change was made for (the reviewer sees only the
     request, the change and its files: never the conversation that produced it)."""
+    # Swap the open rules for the strict ones; if the open rules are not in the prompt, put the strict ones in front.
     body = prompt.replace(RULES, RULES_STRICT) if RULES in prompt else RULES_STRICT + "\n\n" + prompt
+    # Add the original request (max 2000 characters) so the reviewer can judge the change against it.
     return body + (f"\n\nThe request this change was made for:\n{str(task)[:2000]}" if task else "")
 
 
 def verdict(text):
     """The JSON block at the end of a strict review -> {"status", "defects", "blocking"} (blocking = CRITICAL and MAJOR only), or None."""
+    # Imported here because only this function needs it.
     import json
+    # Find every ```json ... ``` block that holds a {...} object. re.S lets "." match new lines. "(.*?)" is lazy,
+    # i.e. as short as possible, so separate blocks are not merged.
     blocks = re.findall(r"```(?:json)?\s*(\{.*?\})\s*```", str(text or ""), re.S)
+    # Try the LAST block first: the instructions say the answer comes at the end.
     for b in reversed(blocks):
         try:
             v = json.loads(b)
         except ValueError:
+            # Not valid JSON: try the one before it.
             continue
         if not isinstance(v, dict) or "status" not in v:
             continue
+        # Keep only well-formed defect entries, then pick out the ones that must be fixed.
         defects = [d for d in v.get("defects") or [] if isinstance(d, dict)]
         blocking = [d for d in defects if str(d.get("severity", "")).upper() in ("CRITICAL", "MAJOR")]
         status = "CHANGES_NEEDED" if blocking else "APPROVED"            # the router decides from the severities, not from the word the reviewer chose
@@ -144,6 +175,7 @@ def verdict(text):
 
 def fix_request(blocking):
     """The message that sends the CRITICAL and MAJOR problems back to be fixed, test first (FIX_GATE)."""
+    # One bullet per problem: "- MAJOR in file line N: what is wrong (test: what would fail)".
     items = "\n".join(f"- {str(d.get('severity', '')).upper()} in {d.get('file', '?')}"
                        + (f" line {d.get('line')}" if d.get("line") else "") + f": {d.get('problem', '')}"
                        + (f" (test: {d.get('test')})" if d.get("test") else "") for d in blocking)

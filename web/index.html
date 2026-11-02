@@ -540,6 +540,8 @@ body.mbar.mbar .wash { background: radial-gradient(circle, var(--core) 0%, var(-
 .code .scard .foot { display: flex; gap: 8px; align-items: center; color: var(--muted); font-size: 13px; } .code .scard .foot .grow { flex: 1; }
 .code .scard .badge { border: 1px solid var(--line); border-radius: 999px; padding: 1px 9px; font-size: 12px; } .code .scard .badge.ask { border-color: #f5a524; color: #f5a524; } .code .scard .badge.bad { border-color: var(--danger); color: var(--danger); }
 .code .scard .del { background: transparent; border: 0; color: var(--muted); width: 32px; height: 32px; border-radius: 8px; font-size: 18px; }
+.code .more { background: transparent; border: 0; color: var(--muted); width: 32px; height: 32px; border-radius: 8px; font-size: 20px; line-height: 1; cursor: pointer; flex: none; }   /* vryxcode_archive: the menu on a session */
+.code .more:hover, .code .more:focus-visible { background: var(--surface2); color: var(--text); }
 .spin { width: 22px; height: 22px; border-radius: 999px; border: 3px solid var(--line); border-top-color: var(--accent); animation: spin .9s linear infinite; } @keyframes spin { to { transform: rotate(360deg); } }
 .code .fab { position: absolute; right: 18px; bottom: calc(22px + env(safe-area-inset-bottom)); background: var(--text); color: var(--bg); border: 0; border-radius: 999px; min-height: 52px; padding: 0 22px; font-weight: 600; font-size: 17px; display: flex; align-items: center; gap: 8px; box-shadow: 0 8px 28px rgba(0,0,0,.35); z-index: 6; }
 .code .empty-list { color: var(--muted); text-align: center; padding: 40px 12px; line-height: 1.5; }

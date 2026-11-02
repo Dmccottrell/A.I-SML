@@ -695,7 +695,9 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     /** The app's own screen for one of the website's panels when android_native is on, else the website's panel */
-    fun panel(kind: String, web: Screen.Web): Screen = if (flag("android_native")) Screen.Native(kind) else web
+    fun panel(kind: String, web: Screen.Web): Screen =
+        if (kind == "settings" && flag("android_full_settings")) web              // android_full_settings: Settings opens the full list, as on the website
+        else if (flag("android_native")) Screen.Native(kind) else web
 
     /** Back from VryxCode or a website page to the chat */
     fun backToChat() {
