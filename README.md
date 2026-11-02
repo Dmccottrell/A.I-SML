@@ -32,7 +32,7 @@ you and your testers, or public). Where it runs is a choice per chat, not a prop
 | | |
 |---|---|
 | Code (tracked files, comments and blank lines included) | **654 files, about 114,000 lines**: Python 452 files / 83,400 lines (server, VryxCode, training, tools, tests), Kotlin 90 / 15,900 (the Android app), HTML 29 / 5,800, JavaScript 29 / 5,400 (the website's code), CSS 6, XML 23, C++ 2 (the Windows app), YAML 13 (CI/CD), shell, PowerShell and installer scripts |
-| Automatic tests | **2,092 tests in 192 files** (`python scripts/run_tests.py`), plus the Android unit tests; 228 test files (192 Python, 36 Android) and about 31,000 lines are tests |
+| Automatic tests | **2,105 tests in 193 files** (`python scripts/run_tests.py`), plus the Android unit tests; 229 test files (193 Python, 36 Android) and about 31,000 lines are tests |
 | Feature switches | 80 in `app/flags.py` (77 features, 3 fixes), each with an audience: off, owner, admins or everyone |
 | Docs | 48 guides in `docs/` (index [below](#docs-index)) |
 | CI/CD | 4 workflows run on pull requests today (`tests`, `android`, `windows-app`, `sandbox`), and the new gate, delivery, alert and uptime workflows (`supreme-*`, `alert-router`, `monitor-uptime`) with 4 shared actions in `.github/actions/` |
@@ -97,7 +97,7 @@ The code lives in folders by job. Run everything from the project folder, for ex
 | `evaluation/` | The exams, test sheets, public benchmarks and the side-by-side comparison |
 | `tools/` | Export and convert (Hugging Face layout, GGUF), generate text, build the website, back up server data; and the project's own checks: `lint.py`, `lint_polyglot.py`, `guard_repo.py`, `comments_only.py`, `restore_drill.py`, `load_test.py` |
 | `scripts/` | The shell scripts for cloud runs (`chain_open.sh`, `wrap_open.sh`, `bench_all.sh`, `cloud_setup.sh`), the test runner (`run_tests.py`) and `scripts/security/` (GitHub hardening, pinning the update key) |
-| `tests/` | The automatic tests (2,092). Fast way: `python scripts/run_tests.py` (runs the files side by side, about 5 minutes, lists the slowest; `--kind plain` or `--kind browser` and `--shard 1/2` for part of it); reference: `python -m unittest discover -s tests -t .`. `python tools/lint.py` and `python tools/lint_polyglot.py` are the linters. GitHub runs all of it on every pull request (see CI/CD below) |
+| `tests/` | The automatic tests (2,105). Fast way: `python scripts/run_tests.py` (runs the files side by side, about 5 minutes, lists the slowest; `--kind plain` or `--kind browser` and `--shard 1/2` for part of it); reference: `python -m unittest discover -s tests -t .`. `python tools/lint.py` and `python tools/lint_polyglot.py` are the linters. GitHub runs all of it on every pull request (see CI/CD below) |
 | `docs/` | The guides: [Family guide](docs/FAMILY_GUIDE.md), versions, roadmap, benchmarks, how each feature works; a full [index](#docs-index) is below |
 | `site/`, `design/` | The website (built pages and design sources) and the brand; `site/ignore-build.sh` tells Vercel when not to build |
 | `android/` | The **Android app**: Kotlin and Jetpack Compose (`app/src/main/java/app/emvryx/android/`: `ui/` screens, `data/` the server client, `local/` the phone model and offline sync, `assist/` the phone assistant and background work), the C++ model engine, unit tests (`src/test/`) and screenshot tests (`src/androidTest/`) |

@@ -227,3 +227,46 @@ body.d27 .code .itl .ifile.on { background: rgba(167, 139, 250, .08); box-shadow
 body.d27 .code .iout .ol, body.d27 .code .iout .oi .badge2 { font-variant-numeric: tabular-nums; }
 body.d27 .code .iout .oi .badge2 { background: transparent; border: 1px solid var(--d-hair); }
 body.d27 .code .iai input { background: #000; border-color: var(--d-hair); border-radius: 10px; }
+
+/* ---------- 8  light mode ----------
+   The cards above are matte carbon, made for dark mode: with the light theme the text on them was dark on near-black. In light mode they become soft white
+   cards with a fine grey edge, the violet is deeper so it can be read on white, and the glass bar is frosted white. (Dark mode is untouched.) */
+html[data-mode="light"] body.d27 {
+  --d-carbon: #FFFFFF; --d-hair: rgba(25, 25, 60, .10); --d-top: rgba(255, 255, 255, .95);
+  --d-amethyst: #6D28D9; --d-glow: rgba(124, 58, 237, .28);
+  --d-soft: #6B6B78; --d-paper: #F1F0F9; --d-well: #F4F4F9; --d-shadow: rgba(40, 30, 90, .22);
+}
+html[data-mode="light"] body.d27::before { opacity: .55; }
+html[data-mode="light"] body.d27 .composer .card, html[data-mode="light"] body.d27.ml:not(.vx) .composer .card { background: rgba(255, 255, 255, .72) !important; box-shadow: 0 18px 50px -22px var(--d-shadow), inset 0 1px 0 rgba(255, 255, 255, .9); }
+@media (hover: none), (pointer: coarse) { html[data-mode="light"] body.d27 .composer .card, html[data-mode="light"] body.d27.ml:not(.vx) .composer .card { background: rgba(255, 255, 255, .72) !important; } }
+html[data-mode="light"] body.d27 .composer .card:focus-within { box-shadow: 0 0 0 3px rgba(124, 58, 237, .14), 0 18px 50px -22px var(--d-shadow); }
+html[data-mode="light"] body.d27 .composer .pill, html[data-mode="light"] body.d27 .composer .pill.plain { background: rgba(124, 58, 237, .07); border-color: rgba(124, 58, 237, .28); box-shadow: none; }
+html[data-mode="light"] body.d27 .composer .send::before { background: #fff; }
+html[data-mode="light"] body.d27 .composer .send { text-shadow: none; }
+html[data-mode="light"] body.d27 .vx-prow:hover, html[data-mode="light"] body.d27 .code .itl .ifile:hover { background: rgba(25, 25, 60, .04); }
+html[data-mode="light"] body.d27 #vxTpls button, html[data-mode="light"] body.d27 .ml-ideas button, html[data-mode="light"] body.d27 .opt, html[data-mode="light"] body.d27 .dialog {
+  border-top-color: #fff !important; box-shadow: inset 0 1px 0 #fff, 0 10px 30px -20px var(--d-shadow); }
+html[data-mode="light"] body.d27 #vxTpls button::after, html[data-mode="light"] body.d27 .ml-ideas button::after { opacity: .02; }
+html[data-mode="light"] body.d27 .side #usage.d27-pill, html[data-mode="light"] body.d27 .d27-tel { background: rgba(255, 255, 255, .8); }
+html[data-mode="light"] body.d27 .side .d27-pill .bar { background: rgba(25, 25, 60, .10); }
+html[data-mode="light"] body.d27 .md-code, html[data-mode="light"] body.d27 .code pre, html[data-mode="light"] body.d27 .code .cc-code,
+html[data-mode="light"] body.d27 .md-code pre, html[data-mode="light"] body.d27 .md-code code, html[data-mode="light"] body.d27 .code .cc-ask pre,
+html[data-mode="light"] body.d27 .d27-skel, html[data-mode="light"] body.d27 .code.ide .ide-ed .ed, html[data-mode="light"] body.d27 .code .itab.on, html[data-mode="light"] body.d27 .code .iai input { background: var(--d-well); }
+html[data-mode="light"] body.d27 .d27-skel i { background: linear-gradient(90deg, rgba(25, 25, 60, .05) 25%, rgba(25, 25, 60, .12) 50%, rgba(25, 25, 60, .05) 75%); background-size: 200% 100%; }
+html[data-mode="light"] body.d27 .code .tk-c { color: #6B7280; } html[data-mode="light"] body.d27 .code .tk-s { color: #0a7d2c; } html[data-mode="light"] body.d27 .code .tk-n { color: #0a5bb5; }
+html[data-mode="light"] body.d27 .code .tk-k { color: #c2243a; } html[data-mode="light"] body.d27 .code .tk-p { color: #7a3fc1; } html[data-mode="light"] body.d27 .code .tk-t { color: #b5530a; }
+html[data-mode="light"] body.d27 .msg.user .bubble, html[data-mode="light"] body.d27.ml .msg.user .bubble, html[data-mode="light"] body.d27 .code .cc-user, html[data-mode="light"] body.d27.vxl .code .cc-user {
+  background: var(--d-paper) !important; color: var(--text) !important; border: 1px solid var(--d-hair) !important; border-top-color: #fff !important;
+  box-shadow: inset 0 1px 0 #fff, 0 10px 24px -14px var(--d-shadow) !important; }
+html[data-mode="light"] body.d27 .nudge { background: rgba(255, 255, 255, .78); box-shadow: 0 18px 44px -20px var(--d-shadow), inset 0 1px 0 #fff; }
+html[data-mode="light"] body.d27 .nudge button:not(.x) { border-color: rgba(124, 58, 237, .35) !important; text-shadow: none; }
+html[data-mode="light"] body.d27 .nudge button.x, html[data-mode="light"] body.d27 .msg .acts .chip { color: var(--d-soft); }
+html[data-mode="light"] body.d27 .msg .acts .chip:hover, html[data-mode="light"] body.d27 .msg .acts .chip:active, html[data-mode="light"] body.d27 .msg .acts .chip:focus-visible,
+html[data-mode="light"] body.d27 .msg .cp-ver .icon:active, html[data-mode="light"] body.d27 .msg .cp-chips .chip:active { color: var(--text); }
+html[data-mode="light"] body.d27 .code .cc-ask { background: #fff; }
+html[data-mode="light"] body.d27 .code.ide .ide-tree, html[data-mode="light"] body.d27 .code.ide .ide-ed, html[data-mode="light"] body.d27 .code.ide .col, html[data-mode="light"] body.d27 .code.ide .pv,
+html[data-mode="light"] body.d27 .code .itabs, html[data-mode="light"] body.d27 .code .iai, html[data-mode="light"] body.d27 .code .iout, html[data-mode="light"] body.d27 .code .iout .oh { background: #FAFAFD; }
+@keyframes d27inkL { from { color: #6D28D9; text-shadow: 0 0 10px rgba(124, 58, 237, .25); } to { text-shadow: 0 0 0 transparent; } }
+html[data-mode="light"] body.d27 .code .feedin > .cc-say, html[data-mode="light"] body.d27 .code .feedin > .cc-quiet, html[data-mode="light"] body.d27 .code .feedin > .note, html[data-mode="light"] body.d27 .code .cc-tool .cc-verb,
+html[data-mode="light"] body.d27 .code .cc-tool .cc-arg, html[data-mode="light"] body.d27 .code .cc-file .nm, html[data-mode="light"] body.d27 .code .cc-user > span:not(.ember),
+html[data-mode="light"] body.d27 .code .cc-ask .q, html[data-mode="light"] body.d27 .code .vx-grp .h, html[data-mode="light"] body.d27 .code .cc-quiet .arg { animation-name: d27inkL; }

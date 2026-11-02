@@ -188,7 +188,7 @@ fun CodeScreen(app: AppViewModel, vm: CodeViewModel) {
                 SessionList(vm)
                 Row(
                     Modifier.align(Alignment.BottomEnd).navigationBarsPadding().padding(18.dp).heightIn(min = 52.dp).clip(CircleShape)
-                        .then(if (Emvryx.d27) Modifier.background(Color(0xCC000000)).border(1.dp, d27Edge(), CircleShape)         // design_2027: a hollow ghost button
+                        .then(if (Emvryx.d27) Modifier.background(if (Emvryx.light) Color(0xCCFFFFFF) else Color(0xCC000000)).border(1.dp, d27Edge(), CircleShape)         // design_2027: a hollow ghost button
                               else Modifier.background(Violet))
                         .clickable { vm.newSession() }.padding(horizontal = 22.dp),
                     verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -791,11 +791,19 @@ private fun EndExtras(e: JsonObject, vm: CodeViewModel) {
     if ("vryxcode_autocontinue" in on) when (val st = endState(e)) {
         EndState.Finished -> Text("✓ Done: the task is finished", color = Green, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
         EndState.Waiting -> {
-            Text("● Not finished yet: it is waiting for your answer", color = Violet, fontSize = 14.sp)
+            val answered = justAnswered(e, vm.events)          // it only explained what the person asked: an answer, not a task waiting for them
+            if (!answered) Text("● Not finished yet: it is waiting for your answer", color = Violet, fontSize = 14.sp)
             // say what you could answer: one tap sends it (the first one is also greyed in the message box)
-            Text("You could answer:", color = Emvryx.muted, fontSize = 13.sp)
+            val replies = if (answered) followUps(lastAsked(vm.events, e), e.str("summary")) else waitingReplies(e.str("summary"))
+            if (replies.isNotEmpty()) Text(if (answered) "You could ask:" else "You could answer:", color = Emvryx.muted, fontSize = 13.sp)
             FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                waitingReplies(e.str("summary")).forEach { r -> SmallPill(r) { vm.send(r) } }
+                replies.forEach { r ->
+                    SmallPill(r) {
+                        // "Show me what you changed." needs no model: the changes are opened on screen (the website does the same)
+                        if (r.startsWith("Show me what you changed")) vm.onWeb?.invoke("VryxCode", editorJs(vm).removeSuffix(" })") + "; setTimeout(() => showDrawer(true, 'changes'), 1500); })")
+                        else vm.send(r)
+                    }
+                }
             }
         }
         is EndState.OutOfSteps -> {

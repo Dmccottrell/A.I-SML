@@ -377,11 +377,31 @@ async function vxDownloads(box) {
 }
 // What to answer when VryxCode stops with "Not finished yet: it is waiting for your answer": a few replies one tap sends, the first also greyed in the message box.
 // A question gets "Yes, go ahead."; anything else is a push to really save the work, run it and explain what was wrong.
-function vxWaitingReplies(text) {
+function vxAsksYou(text) {
   const tail = String(text || '').trim().slice(-400);
-  const asks = /\?\s*$/.test(tail) || /\b(would you like|do you want|shall i|should i|let me know|which (one|option|file))\b/i.test(tail);
-  return asks ? ['Yes, go ahead.', 'Explain your options first.', 'No, I want something different.']
-              : ['Please save the fix to the project files, run the tests, and tell me what was wrong.', 'Explain in plain words what was wrong.', 'Show me what you changed.'];
+  return /\?\s*$/.test(tail) || /\b(would you like|do you want|shall i|should i|let me know|which (one|option|file))\b/i.test(tail);
+}
+function vxWaitingReplies(text) {
+  return vxAsksYou(text) ? ['Yes, go ahead.', 'Explain your options first.', 'No, I want something different.']
+                         : ['Please save the fix to the project files, run the tests, and tell me what was wrong.', 'Explain in plain words what was wrong.', 'Show me what you changed.'];
+}
+// After a plain answer (the person asked a question: why, what, explain, show me, ...?, and it explained): it is not "waiting", so no banner; a few follow-ups that were not just asked. "Show me what you changed" opens the changes itself.
+function vxLastAsked() {
+  for (let i = C.events.length - 1; i >= 0; i--) { const e = C.events[i]; if (e.kind === 'user' || e.kind === 'start') return String(e.text || e.task || '').trim().toLowerCase(); }
+  return '';
+}
+function vxIsQuestion(text) {
+  const t = String(text || '').trim().toLowerCase();
+  return /\?\s*$/.test(t) || /^(why|what|how|when|where|who|which|explain|show me|tell me|describe|can you explain|could you explain|is it|does it|did it|are you)\b/.test(t);
+}
+function vxFollowUps(text) {
+  const last = vxLastAsked(), said = String(text || '').toLowerCase();
+  const all = ['Show me what you changed.', 'Run the tests and tell me the result.', 'Explain it again in simpler words.', 'What should I do next?'];
+  return all.filter((t) => t.toLowerCase() !== last && !(t.startsWith('Explain') && /plain words|simpler/.test(last)) && !(t.startsWith('Show') && /changed/.test(last) && said.includes('changed'))).slice(0, 3);
+}
+function vxSendReply(t) {
+  if (/^show me what you changed/i.test(t)) { showDrawer(true, 'changes'); return; }          // no need to ask the model: the changes are on screen
+  $('codeTask').value = t; $('codeGo').click();
 }
 function cEvent(e) {
   if (e.kind === 'user' || e.kind === 'start') offerReply('');          // a new message: the last suggestion no longer fits
@@ -483,12 +503,13 @@ function cEvent(e) {
     if (e.finished || e.said) {                       // the model talking to the person: what it did, what to run, what it suggests
       if (e.finished) setTimeout(() => { if (!$('codePv').hidden) reloadPreview(); else if (!$('codePreviewBtn').disabled) $('codePreviewBtn').classList.add('pulse'); }, 700);     // the page changed: refresh it, or point at Preview
       feed.append(renderMessage(e.summary || 'Done.', e.finished));
-      if (featureOn('vryxcode_autocontinue') && !e.plan) feed.append(el('div', {class: 'vx-state ' + (e.finished ? 'ok' : 'wait')},     // plainly: finished, or waiting for you
+      const justAnswered = !e.finished && !e.plan && vxIsQuestion(vxLastAsked()) && !vxAsksYou(e.summary);           // a question that was answered is an answer, not a task waiting for you
+      if (featureOn('vryxcode_autocontinue') && !e.plan && !justAnswered) feed.append(el('div', {class: 'vx-state ' + (e.finished ? 'ok' : 'wait')},     // plainly: finished, or waiting for you
         e.finished ? '\u2713 Done: the task is finished' : '\u25CF Not finished yet: it is waiting for your answer'));
       if (!e.finished && !e.plan && featureOn('vryxcode_autocontinue')) {           // waiting for you: say what you could answer (one tap sends it), and recommend one in the box
-        const rs = vxWaitingReplies(e.summary); offerReply(rs[0]);
-        feed.append(el('div', {class: 'cc-next vx-replies'}, el('span', {class: 'lead'}, 'You could answer:'),
-          ...rs.map((t) => el('button', {class: 'chip', onclick: () => { $('codeTask').value = t; $('codeGo').click(); }}, t))));
+        const rs = justAnswered ? vxFollowUps(e.summary) : vxWaitingReplies(e.summary); if (rs.length) offerReply(rs[0]);
+        feed.append(el('div', {class: 'cc-next vx-replies'}, el('span', {class: 'lead'}, justAnswered ? 'You could ask:' : 'You could answer:'),
+          ...rs.map((t) => el('button', {class: 'chip', onclick: () => vxSendReply(t)}, t))));
       }
       const changed = Object.entries(C.turnFiles || {});
       if (vxReview() && e.finished && changed.length) {          // the Done line: every file this message changed, each one opens the change

@@ -131,8 +131,44 @@ fun groupTitle(g: ReviewItem.Group): String {
  * in the message box. A question gets "Yes, go ahead."; anything else is a push to really save the work, run it and explain what was wrong. (The same words as the website's.)
  */
 fun waitingReplies(text: String): List<String> {
-    val tail = text.trim().takeLast(400)
-    val asks = tail.endsWith("?") || Regex("\\b(would you like|do you want|shall i|should i|let me know|which (one|option|file))\\b", RegexOption.IGNORE_CASE).containsMatchIn(tail)
-    return if (asks) listOf("Yes, go ahead.", "Explain your options first.", "No, I want something different.")
+    return if (asksYou(text)) listOf("Yes, go ahead.", "Explain your options first.", "No, I want something different.")
     else listOf("Please save the fix to the project files, run the tests, and tell me what was wrong.", "Explain in plain words what was wrong.", "Show me what you changed.")
+}
+
+/** True when the reply ends by asking the person something (a question mark, "would you like", "should I", ...). The website's vxAsksYou. */
+fun asksYou(text: String): Boolean {
+    val tail = text.trim().takeLast(400)
+    return tail.endsWith("?") || Regex("\\b(would you like|do you want|shall i|should i|let me know|which (one|option|file))\\b", RegexOption.IGNORE_CASE).containsMatchIn(tail)
+}
+
+/** True when what the person typed is a question (why, what, explain, show me, ...?), so a plain explanation is the whole answer. The website's vxIsQuestion. */
+fun isQuestion(text: String): Boolean {
+    val t = text.trim().lowercase()
+    return t.endsWith("?") || Regex("^(why|what|how|when|where|who|which|explain|show me|tell me|describe|can you explain|could you explain|is it|does it|did it|are you)\\b").containsMatchIn(t)
+}
+
+/** What the person last typed before the end event [e] (a "user" or "start" message), lower case. */
+fun lastAsked(events: List<JsonObject>, e: JsonObject): String {
+    val at = events.indexOfFirst { it === e }.let { if (it < 0) events.size else it }
+    for (i in at - 1 downTo 0) {
+        val x = events[i]
+        if (x.str("kind") == "user" || x.str("kind") == "start") return (x.str("text").ifBlank { x.str("task") }).trim().lowercase()
+    }
+    return ""
+}
+
+/**
+ * True when the turn ended with a plain answer to a question: not finished, not a plan, the person asked a question and the reply does not ask one back. That is an
+ * answer, not a task "waiting for your answer", so no banner. (The website's justAnswered.)
+ */
+fun justAnswered(e: JsonObject, events: List<JsonObject>): Boolean =
+    endState(e) == EndState.Waiting && isQuestion(lastAsked(events, e)) && !asksYou(e.str("summary"))
+
+/** A few things the person could ask next after a plain answer, leaving out what they just asked. "Show me what you changed." opens the changes by itself (see CodeScreen). */
+fun followUps(last: String, text: String): List<String> {
+    val said = text.lowercase()
+    val all = listOf("Show me what you changed.", "Run the tests and tell me the result.", "Explain it again in simpler words.", "What should I do next?")
+    return all.filter { t ->
+        t.lowercase() != last && !(t.startsWith("Explain") && Regex("plain words|simpler").containsMatchIn(last)) && !(t.startsWith("Show") && "changed" in last && "changed" in said)
+    }.take(3)
 }
