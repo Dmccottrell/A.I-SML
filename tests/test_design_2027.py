@@ -1,4 +1,4 @@
-"""The 2027 look (flag design_2027, owner only until it has been reviewed): off, the page is exactly as before; on, it gets the floating glass message bar,
+"""The 2027 look (flag design_2027, admins and the owner first): off, the page is exactly as before; on, it gets the floating glass message bar,
 a ring-style send button, the sidebar in two blocks, the usage as a pill at the top, words that fade in as they arrive, and the stylesheet is served."""
 import os, sys; sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), os.pardir)); import emvryx_paths  # noqa: E402,F401
 import unittest
@@ -12,8 +12,8 @@ from tests.test_code_sessions import open_to_everyone, wait_for
 
 
 class Flag(unittest.TestCase):
-    def test_it_starts_with_the_owner_only(self):
-        self.assertEqual(flags.BY_ID["design_2027"]["default"], "owner")
+    def test_it_starts_with_the_admins_and_the_owner(self):
+        self.assertEqual(flags.BY_ID["design_2027"]["default"], "admins")
         self.assertEqual(flags.BY_ID["design_2027"]["kind"], "feature")
 
 

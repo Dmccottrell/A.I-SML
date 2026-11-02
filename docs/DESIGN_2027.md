@@ -1,4 +1,4 @@
-# Design 2027 (switch `design_2027`, owner only until reviewed)
+# Design 2027 (switch `design_2027`, admins and the owner first)
 
 One new look for the website, the installed app (PWA) and the Android app. It is a single switch in Admin > Previews, **Owner** to start with,
 so nobody else sees it. Off, everything looks exactly as before. **This is not merged to main until the owner has reviewed it.**
