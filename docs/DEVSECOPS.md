@@ -30,7 +30,7 @@ alerts           ──> P1 phone (ntfy), P2 Slack, P3 run summary / Better Stac
 
 `supreme-ci-gate.yml` runs on every pull request to `main`. Order, as the file enforces it (`tests/test_workflows.py` fails if it changes):
 
-1. **security-scan**: TruffleHog (open source) reads every commit of the pull request and asks each service whether a key it found still works. `--results=verified --fail`:
+1. **security-scan**: TruffleHog (open source) reads every commit of the pull request and asks each service whether a key it found still works. `--results=verified` (the action adds `--fail` itself):
    only a live key stops the run, so test fixtures cause no noise. The checkout has full history (`fetch-depth: 0`).
 2. **guard** (runs only after security-scan passed): `tools/guard_repo.py`, the repository's own rules (tests are the judge, no skipping, a fix has its proof, no secrets).
 3. **tests**, two shards side by side, only after both of the above:

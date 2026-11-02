@@ -133,8 +133,9 @@ class Gate(unittest.TestCase):
 
     def test_security_scan_is_trufflehog_and_fails_on_a_verified_secret(self):
         step = next(s for s in self.jobs["security-scan"]["steps"] if "trufflehog" in s.get("uses", ""))
-        self.assertIn("--fail", step["with"]["extra_args"])
         self.assertIn("--results=verified", step["with"]["extra_args"])
+        for added_by_the_action in ("--fail", "--no-update"):                                   # the action adds these itself and TruffleHog refuses a repeated flag (seen on GitHub)
+            self.assertNotIn(added_by_the_action, step["with"]["extra_args"])
         checkout = next(s for s in self.jobs["security-scan"]["steps"] if "checkout" in s.get("uses", ""))
         self.assertEqual(checkout["with"]["fetch-depth"], 0)                                    # every commit of the pull request is read
 
