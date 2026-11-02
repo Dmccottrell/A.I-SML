@@ -245,6 +245,45 @@ to `checkpoints/staging/`; when a `.gguf` works well on your phone, copy it to
 `checkpoints/production/`. To work from another stage later, change `STAGE` in `training/stage.py`. `data/`, `checkpoints/` and `export/` are
 git-ignored because they're large.
 
+## CI/CD, security and monitoring
+
+How a change gets from a pull request to people's hands, and how the project defends and watches itself. The full design, every exact command and what was and was not
+verified is in **[docs/DEVSECOPS.md](docs/DEVSECOPS.md)**; this is the map. Nothing here costs money unless it says **paid**.
+
+**1. The gate (every pull request to `main`)** &mdash; `.github/workflows/supreme-ci-gate.yml`
+- `security-scan` (TruffleHog, live secrets only) &rarr; `guard` (the repository's own rules) &rarr; the tests in two parallel shards: shard 1 runs the linters plus half of the tests,
+  shard 2 runs the other half plus every browser suite. `gate: result` is the one check to require.
+- The Android, Windows app and sandbox builds run only when their folders change. `windows-tests`, `screens`, `windows-app`, `sandbox` and `workers-cloudflare` only report; they never block a merge.
+- Every action is pinned to a full commit, the gate holds no secrets, and `tests/test_workflows.py` fails if any of these rules is broken.
+
+**2. Signed commits and secrets**
+- `main` takes changes only through a pull request, with signed commits, squash merges and no force-push. `python scripts/security/github_hardening.py plan` shows the exact GitHub calls; `apply` sends them.
+- The Android signing key lives in a protected GitHub environment called `release` that only `main` can read. The chat server's own keys stay in `.emvryx/keys.env` on the PC, never in GitHub or Vercel.
+
+**3. Delivery** &mdash; `.github/workflows/supreme-cd-release.yml` (off until the repository variable `SUPREME_CD` is `true`)
+- After a merge it builds `android-latest` and `windows-latest`, refuses an app signed by the wrong key, adds checksums, `version.json` and a free Sigstore signature, and checks the public download.
+- **The website:** `site/ignore-build.sh` makes Vercel build only when something in `site/` changed.
+- **The PC server updates by hand** (Admin &gt; PC &gt; Software update). Before installing, `app/update_verify.py` checks the pinned repository address, that the certificate check is on, and that the newest commit is signed by a key you pinned.
+  Set it up once with `python scripts/security/pin_update_keys.py`.
+
+**4. Monitoring and alerts**
+- Error reports (Sentry) are off unless you set `EMVRYX_SENTRY_DSN` in `keys.env`; the message, variables, request data and keys are removed on the PC before anything is sent.
+- **P1** (a live secret leaked, production down) rings the phone through ntfy; **P2** (a failed build of `main`, a new error) goes to Slack; **P3** (a failed preview branch) goes to the run summary and Better Stack.
+  `monitor-uptime.yml` checks `chat.emvryx.app` and `emvryx.app` every five minutes.
+- Not set up because they cost money (**paid**): Vercel Log Drains, Datadog, a Windows code-signing certificate.
+
+**Tools you can run yourself**
+
+| Command | What it does |
+|---|---|
+| `python scripts/run_tests.py --kind plain --shard 1/2` | the same half of the tests the gate runs (`--kind browser` for the browser suites, `--list` to only list them) |
+| `python tools/lint.py` and `python tools/lint_polyglot.py` | the linters: Python, then JavaScript, JSON, YAML, XML, CSS, shell and HTML |
+| `python tools/guard_repo.py` | the repository's own rules, as CI runs them |
+| `python tools/restore_drill.py --out backups` | proves the newest backup really restores, without touching live data |
+| `python tools/load_test.py --url https://chat.emvryx.app --users 3 --rounds 2` | how many people the PC can serve (use a test account's key in `EMVRYX_KEY`) |
+
+**Before inviting real testers:** [docs/TESTING.md](docs/TESTING.md) is the checklist, and [docs/MICROSOFT_STORE.md](docs/MICROSOFT_STORE.md) is the free route to a Windows app without the "unknown publisher" warning.
+
 ## Troubleshooting
 
 - **`torch.cuda.is_available()` is False**: you installed the CPU-only PyTorch. Uninstall torch and reinstall with the CUDA command.
