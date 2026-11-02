@@ -88,6 +88,20 @@ class Page(Base):
         self.assertEqual(out["second"], [" world"])
         self.assertEqual(out["text"], "Hello world")
 
+    def test_the_send_ring_beats_fills_with_memory_and_the_reply_gets_a_speed_line(self):
+        page = self.open("owner")
+        wait_for(lambda: page.evaluate("document.body.classList.contains('d27')"))
+        page.evaluate("d27Tick()")                                                                       # a batch of words arrived
+        self.assertTrue(page.evaluate("document.getElementById('send').classList.contains('beat')"))     # the ring beat
+        page.evaluate("const c = document.getElementById('ctxBtn'); c.hidden = false; c.style.setProperty('--p', '40')")
+        wait_for(lambda: page.evaluate("document.getElementById('send').style.getPropertyValue('--p')") == "40")   # the memory fill is on the send ring
+        page.click("#input")
+        page.keyboard.type("Hello")
+        page.click("#send")
+        wait_for(lambda: page.evaluate("document.querySelectorAll('.d27-tel').length") == 1)             # tokens a second, the model, the first word
+        self.assertIn("tok/s", page.inner_text(".d27-tel"))
+        self.assertEqual(self.errors, [])
+
 
 if __name__ == "__main__":
     unittest.main()

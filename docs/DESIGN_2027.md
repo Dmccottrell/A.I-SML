@@ -10,7 +10,7 @@ Website files: `web/design2027.css` (the look), `web/js/design2027.js` (the few 
 |---|---|---|
 | Floating frosted-glass input bar, 16 px off the bottom, blur 40, carbon at 70% | Yes: it floats over the chat and text blurs as it passes under | Detached 16 dp from the bottom, frosted carbon, lit top edge. **No real blur behind it** (Android cannot blur what is behind a view this way), and it does not float over the chat |
 | Model and effort as tiny glowing tags (12 px) | Yes | Yes |
-| Send button: no solid fill, glowing amethyst ring that pulses while the model writes (and the memory ring glows too) | Yes | Yes |
+| Send button: no solid fill, a neon amethyst ring as the focal point. On the website it is one ring that also shows how full the chat's memory is, and it beats once per batch of words as they arrive | Yes | A glowing ring that pulses while the model writes (a steady pulse, not tied to each batch; the memory ring is still separate) |
 | Dense VryxCode list, hairline borders | Yes | Yes (organizer rows) |
 | Monospace for metrics, dates, usage, token numbers | Yes (Geist Mono, JetBrains Mono, then the system's) | Yes (the system's monospace; the two named fonts are not bundled) |
 | Ghost buttons (New session, Build it, New chat) | Yes | Yes |

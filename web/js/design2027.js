@@ -5,8 +5,13 @@
   const dark = () => document.documentElement.dataset.mode === 'dark';
 
   // 1. "the model is working": the ambient glow turns warm and the send ring pulses. Chat: S.busy (set while a reply streams); VryxCode: its Stop button is showing.
-  const busy = () => !!(window.S && S.busy) || !!($('codeStop') && !$('codeStop').hidden && !$('code').hidden);
-  setInterval(() => { document.body.classList.toggle('d27-busy', on() && busy()); }, 400);
+  const busy = () => (typeof S !== 'undefined' && !!S.busy) || !!($('codeStop') && !$('codeStop').hidden && !$('code').hidden);
+  setInterval(() => {
+    document.body.classList.toggle('d27-busy', on() && busy());
+    // the send ring shows how full the chat's memory is: the number the (hidden) memory ring holds, copied onto it
+    const c = $('ctxBtn'), s = $('send');
+    if (on() && c && s) s.style.setProperty('--p', c.hidden ? '100' : (c.style.getPropertyValue('--p') || '100'));
+  }, 400);
 
   // 2. the token fade: after each redraw of a streaming reply, the characters that are new since the last redraw are wrapped in <span class="tok">, which fades in over 50 ms.
   //    Text that was already there is left alone, so only the newest words ramp in.
@@ -32,9 +37,14 @@
   // 3. the inference telemetry under a finished reply: tokens a second, the model, the time to the first word. It is measured here, while the reply streams
   //    (tokens are estimated from the length: about four letters each), so it needs nothing from the server.
   let t0 = null, tFirst = 0, lastTel = null;
+  let lastBeat = 0, lastTick = 0;
   window.d27Tick = function () {
-    if (!on() || !window.S) return;
-    if (S.sentAt !== t0) { t0 = S.sentAt; tFirst = performance.now(); }       // the first piece of this reply
+    if (!on() || typeof S === 'undefined') return;
+    const now = performance.now();
+    if (!tFirst || now - lastTick > 20000) { t0 = S.sentAt || now; tFirst = now; }   // the first piece of this reply (a long silence means an older reply never finished)
+    lastTick = now;
+    const send = $('send');                                                       // the send ring beats once per batch of words (at most every 90 ms)
+    if (send && now - lastBeat > 90) { lastBeat = now; send.classList.remove('beat'); void send.offsetWidth; send.classList.add('beat'); }
   };
   window.d27Done = function (got) {
     if (!on() || !tFirst || !got) { tFirst = 0; return; }
@@ -42,12 +52,23 @@
     lastTel = {rate: Math.round(Math.max(1, got.length / 4) / secs), first: Math.round(Math.max(0, tFirst - (t0 || tFirst))), model: typeof mname === 'function' ? mname(curModel()) : ''};
     tFirst = 0;
   };
-  window.d27Show = function () {                                                // called after the thread is redrawn
-    if (!on() || !lastTel) return;
-    const t = lastTel; lastTel = null;
+  let shown = null;                                                              // the newest reply's speed line, kept so a redraw of the chat does not lose it
+  const draw = () => {
+    if (!on() || !shown || typeof S === 'undefined' || S.chatId !== shown.chat || $('thread').querySelector('.d27-tel')) return;
+    const last = S.messages && S.messages[S.messages.length - 1];
+    if (!last || last.role !== 'assistant') return;                               // only under the newest reply
+    const t = shown;
     $('thread').append(el('div', {class: 'd27-tel', title: 'Measured on this device while the reply streamed. Tokens are estimated from the length of the text.'},
       el('span', {}, '~' + t.rate + ' tok/s'), t.model ? el('b', {}, t.model) : '', el('span', {}, 'first word ' + t.first + ' ms')));
   };
+  window.d27Show = function () {                                                // called after the thread is redrawn at the end of a reply
+    if (!on() || !lastTel) return;
+    shown = Object.assign({chat: S.chatId}, lastTel); lastTel = null; draw();
+  };
+  if (typeof renderThread === 'function') {                                      // every later redraw puts the line back under the newest reply
+    const rt = renderThread;
+    window.renderThread = renderThread = function () { const r = rt.apply(this, arguments); draw(); return r; };
+  }
 
   // 4. the sidebar in two bento blocks: chat tools in one, developer tools in the other
   const DEV = ['VryxCode', 'Skills', 'Scheduled tasks'];
