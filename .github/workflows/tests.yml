@@ -41,9 +41,9 @@ jobs:
     # Steps run one after another; if one fails, the later ones are skipped.
     steps:
       # Download this repository's code onto the machine.
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       # Install Python 3.11. "cache: pip" keeps downloaded packages between runs; the cache is refreshed whenever requirements.txt changes.
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v7
         with:
           python-version: "3.11"
           cache: pip
@@ -57,7 +57,7 @@ jobs:
           pip install -r requirements.txt peft playwright pyflakes pyyaml
       # Keep the downloaded test browser between runs; the key changes when requirements.txt does, which forces a fresh download.
       - name: Cache the browser
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: ~/.cache/ms-playwright
           key: playwright-${{ runner.os }}-${{ hashFiles('requirements.txt') }}-v1
@@ -98,11 +98,11 @@ jobs:
     # A short limit: this job is quick.
     timeout-minutes: 5
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           # Download the full git history, not just the latest commit, so the change can be compared with main.
           fetch-depth: 0
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v7
         with:
           python-version: "3.11"
       # PR_TITLE is passed through "env" (not pasted into the command) so a strange pull request title cannot be run as a command.
@@ -128,8 +128,8 @@ jobs:
     # A failure here is shown but does not fail the pull request (see the note above: this job is report-only for now).
     continue-on-error: true
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
         with:
           python-version: "3.11"
           cache: pip
