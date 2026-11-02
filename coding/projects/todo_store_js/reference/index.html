@@ -1,13 +1,18 @@
 <!doctype html>
+<!-- The to-do page (reference solution for the "todo_store_js" exercise). store.js keeps the data, app.js draws the page. -->
 <html lang="en">
 <head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>To-do</title><link rel="stylesheet" href="style.css"></head>
 <body>
   <h1>To-do</h1>
+  <!-- Form to add a task. -->
   <form id="add-form"><input id="text" aria-label="New task" placeholder="Something to do"><button>Add</button></form>
+  <!-- Filter buttons; app.js reads the data-filter name on each. -->
   <div><button data-filter="all">All</button><button data-filter="active">Active</button><button data-filter="done">Done</button></div>
+  <!-- The task list and the "x active, y done" line are filled in by app.js. -->
   <ul id="list"></ul>
   <p id="counts"></p>
   <button id="clear">Clear done</button>
+  <!-- store.js must load before app.js because app.js uses createStore(). -->
   <script src="store.js"></script>
   <script src="app.js"></script>
 </body>

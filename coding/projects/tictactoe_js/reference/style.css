@@ -1,3 +1,7 @@
+/* Look of the tic-tac-toe page. */
+/* Page text: the device's normal font, centred. */
 body { font-family: system-ui, sans-serif; text-align: center; }
+/* The board is a grid of 3 equal columns of 72px with 6px gaps, centred on the page. */
 #board { display: grid; grid-template-columns: repeat(3, 72px); gap: 6px; justify-content: center; margin: 16px auto; }
+/* Each square is a big button with a large X or O. */
 #board button { width: 72px; height: 72px; font-size: 32px; }

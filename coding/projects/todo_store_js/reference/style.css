@@ -1,2 +1,5 @@
+/* Look of the to-do page. */
+/* A narrow centred column (max 480px) with some space at the sides for phones. */
 body { font-family: system-ui, sans-serif; max-width: 480px; margin: 24px auto; padding: 0 16px; }
+/* Each task row lays its checkbox, text and buttons side by side, vertically centred. */
 li { display: flex; gap: 8px; align-items: center; padding: 4px 0; }

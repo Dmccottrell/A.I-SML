@@ -1,7 +1,15 @@
 """
 routes_post.py - The web routes for changing things (POST): sign-in, the account, chats, VryxCode and apps, personal data and the admin changes. Each part returns UNHANDLED when the address is not one of its own.
+
+Where it fits: app_server.py builds its request handler from several "mixin" classes (small classes that each add a group of methods).
+For a POST request it tries `post_public` (no sign-in), then the signed-in parts (`post_account`, `post_chats`, `post_apps`, `post_data`,
+`post_admin`) until one answers. Many of these just pass the work on to the bigger route files (routes_account.py, routes_chat.py, routes_code.py,
+routes_admin.py). `path` is the web address, `body` the JSON the page sent (already parsed to a dict), `who` the signed-in person's info dict.
+`self._send(status, data)` writes the answer. Several features are behind "feature flags" (per-person on/off switches: `self.state.flags.on(name, who)`).
 """
 import os, sys; sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), os.pardir)); import emvryx_paths  # noqa: E402,F401  (the code folders become importable)
+# Standard library: re (regular expressions = text patterns), threading (background work), time.
+# Project modules: one per kind of data these routes change (chats, documents, exports, feedback, updates, GitHub, schedules, the phone model...).
 import re
 import threading
 import time
@@ -21,6 +29,8 @@ import model_code_test
 import github_link
 import scheduled
 import phone_model
+# APP_PREFIX: the name prefix that marks an account as an app (not a person). MAX_TEXT: the longest chat message allowed.
+# UNHANDLED: a marker value meaning 'not my address, try the next part'.
 from app_shared import APP_PREFIX, MAX_TEXT
 from app_shared import UNHANDLED
 
@@ -30,26 +40,34 @@ class RoutesPost:
 
     def post_public(self, path, body):
         """The sign-in and sign-up answers that need no session, and the /api/v1 interface."""
+        # Sign in with an access key (a long secret starting with emvx_).
         if path == "/api/login":
+            # Too many wrong tries from this address: a 429 answer was already sent.
             if self._locked():
                 return
             key = str(body.get("key", "")).strip()
+            # Look the key up; gives the person's info dict or None.
             who = self.state.who(key)
+            # App keys are for the /api/v1 interface only, never for signing in.
             if who and who.get("app"):
                 return self._send(403, {"code": "app_key", "message": "This key is for an app, not a person.", "action": "Use POST /api/v1/ask."})
             if not who:
                 self._fail("bad key")
+                # People often type a password in this box; tell them so, instead of a vague 'wrong key'.
                 if not key.startswith("emvx_"):                          # a password typed in the access-key box (the Android app opens on that box)
                     return self._send(401, {"code": "bad_key", "message": "That looks like a password, not an access key (keys start with emvx_).",
                                             "action": "Tap \"Sign in with a password\" below and enter your name or email and password there."})
                 return self._send(401, {"code": "bad_key", "message": "That key isn't right.", "action": "Check it and try again."})
             if who["banned"]:
                 return self._send(403, {"code": "banned", "message": "This account has been turned off.", "action": "Ask the owner if you think that is a mistake."})
+            # Starts the session (or asks for the two-step code first).
             return self._finish_login(who["user"], "key")
+        # The other sign-in routes live in routes_account.py; these lines just hand over to them.
         if path == "/api/login/password":
             return self.api_password_login(body)
         if path == "/api/login/mfa":
             return self.api_mfa_login(body)
+        # path.rsplit("/", 1)[1] is the last part of the address: "begin" or "finish".
         if path in ("/api/login/passkey/begin", "/api/login/passkey/finish"):
             return self.api_passkey_login(path.rsplit("/", 1)[1], body)
         if path == "/api/signup":
@@ -58,37 +76,46 @@ class RoutesPost:
             return self.api_email_start(body)
         if path == "/api/login/email/verify":
             return self.api_email_verify(body)
+        # For other programs: ask a question with an app key (routes_chat.py).
         if path == "/api/v1/ask":
             return self.api_v1_ask(body)
         return UNHANDLED
 
     def post_account(self, who, path, body):
         """The account and devices: the account screen, deleting the account, signing out, ending sessions."""
+        # Account changes (password, email, passkeys, two-step) are in routes_account.py.
         if path.startswith("/api/account/"):
             return self.api_account(who, path, body)
+        # Delete the person's own account for good.
         if path == "/api/delete-account":
+            # Ask for the password (and two-step code) again before such a big change.
             if who.get("has_password") or who.get("mfa"):
                 err = self._reauth(who, body)
                 if err:
                     return self._send(400, {"code": "reauth", "message": err, "action": "Nothing was deleted."})
+            # The person must also type their own name, to stop an accidental click.
             if str(body.get("confirm", "")) != who["user"]:
                 return self._send(400, {"code": "confirm", "message": "Type your name to confirm.", "action": "Nothing was deleted."})
             try:
                 data_tools.delete_account(self.state, who["user"])
             except ValueError as e:
                 return self._send(400, {"code": "bad_request", "message": str(e)})
+            # Tell the browser to forget the sign-in cookie.
             self._expire_cookie("emvryx_session")
             return self._send(200, {"ok": True})
+        # Sign out this device.
         if path == "/api/logout":
             if who.get("session"):
                 self.state.auth.revoke(who["session"], who["user"])
                 self.state.auth.event("logout", who["user"], self._ip(), "")
             self._expire_cookie("emvryx_session")
             return self._send(200, {"ok": True})
+        # Sign out one other device, chosen by its session id.
         if path == "/api/sessions/revoke":
             ok = self.state.auth.revoke(str(body.get("id", "")), who["user"])
             self.state.auth.event("session_revoked", who["user"], self._ip(), "one device")
             return self._send(200, {"ok": ok})
+        # Sign out every device except this one.
         if path == "/api/sessions/revoke-others":
             n = self.state.auth.revoke_user(who["user"], who.get("session"))
             self.state.auth.event("session_revoked", who["user"], self._ip(), f"{n} other devices")
@@ -97,28 +124,36 @@ class RoutesPost:
 
     def post_chats(self, who, path, body):
         """Chats and what goes in them: new chats, documents, the teacher tools, sending, stopping."""
+        # Start a new chat (optionally private, with a skill, documents, or inside a project).
         if path == "/api/chats":
+            # A skill is a ready-made helper with its own instructions; an unknown name is refused.
             skill = str(body.get("skill") or "")
             if skill and not app_skills.get(skill):
                 return self._send(400, {"code": "bad_skill", "message": "That skill isn't available."})
             store = self.state.store(who["user"])
             cid = store.new_chat(private=bool(body.get("private")), skill=skill)
             lib = self.state.docs_for(who["user"])
+            # Keep only ids of documents that really exist in this person's own library (so nobody can attach someone else's).
             docs = [i for i in (body.get("docs") or []) if isinstance(i, int) and lib.info(i)]
+            # A project is a folder of chats with shared instructions and files. Private chats (negative id) cannot be in one.
             proj = store.project(str(body.get("project") or "")) if (body.get("project") and self.state.flags.on("chat_projects", who) and cid >= 0) else None
             if proj:                                                                # chat_projects: a new chat in a project starts with its files
                 store.set_folder(cid, proj["name"])
+                # Add the project's documents too, without repeats, and keep at most 10.
                 docs = (docs + [i for i in proj["docs"] if i not in docs and lib.info(i)])[:10]
             store.set_docs(cid, docs)
             return self._send(200, {"id": cid})
+        # Chats written on the phone while the PC was off are added to the server's chats.
         if path == "/api/phone-sync" and self.state.flags.on("android_offline_model", who):   # android_offline_model: chats written on the phone
             try:
                 cid = phone_model.sync_chat(self.state.store(who["user"]), self.state.phone_synced, who["user"], body)
             except ValueError as e:
                 return self._send(400, {"code": "bad_sync", "message": str(e)})
             return self._send(200, {"chat": cid})
+        # Scheduled tasks are handled further down in post_schedules.
         if path.startswith("/api/schedules") and self.state.flags.on("chat_schedule", who):    # chat_schedule: scheduled tasks
             return self.post_schedules(who, path, body)
+        # Browser push notifications: subscribe, unsubscribe, or send a test.
         if path.startswith("/api/push/") and self.state.flags.on("pwa_push", who):    # pwa_push: this browser on or off, and a test
             push = self.state.push
             try:
@@ -134,11 +169,13 @@ class RoutesPost:
             except ValueError as e:
                 return self._send(400, {"code": "bad_request", "message": str(e)})
             return self._send(200, {"devices": push.subscribed(who["user"])})
+        # Store an HTML page from an answer and give back a short address for the side panel to show.
         if path == "/api/panel" and self.state.flags.on("chat_panel", who):         # a web page from an answer, for the side panel's sealed frame
             try:
                 return self._send(200, {"url": "/panel/" + self.state.panels.make(who["user"], body.get("html"))})
             except ValueError as e:
                 return self._send(400, {"code": "bad_request", "message": str(e)})
+        # Create, rename or delete a project.
         if path == "/api/projects" and self.state.flags.on("chat_projects", who):    # make, change or remove a project (a folder with instructions and files)
             store, lib = self.state.store(who["user"]), self.state.docs_for(who["user"])
             try:
@@ -148,6 +185,7 @@ class RoutesPost:
                     old = str(body.get("old") or "")
                     name = store.save_project(body.get("name"), body.get("instructions", ""), [i for i in (body.get("docs") or []) if isinstance(i, int) and lib.info(i)])
                     if old and old != name:                                          # renamed: its chats move with it
+                        # A rename is done as 'save under the new name, delete the old'; the chats in it are re-filed first.
                         moving = [c["id"] for c in store.list_chats(everything=True) if c.get("folder") == old]
                         store.delete_project(old)
                         for cid in moving:
@@ -155,18 +193,25 @@ class RoutesPost:
             except ValueError as e:
                 return self._send(400, {"code": "bad_request", "message": str(e)})
             return self._send(200, {"projects": store.projects()})
+        # Upload a document or picture. The page sends the file as base64 text (a way to write bytes as plain letters).
         if path == "/api/documents":
+            # Imported here, only when needed.
             import base64
             try:
+                # Turn the base64 text back into the file's bytes.
                 data = base64.b64decode(str(body.get("data", "")), validate=False)
                 name = str(body.get("name", ""))
+                # 'Eyes': can some model look at pictures? If so a picture with no words in it is acceptable.
                 eyes = bool(self.state.vision and self.state.vision.available())
+                # Tidy the picture first (rotate it upright, convert the format, resize).
                 if self.state.flags.on("photo_fixes", who):          # right way up, a format the models open, a sensible size; and a photo with no words is fine when a model can see
                     name, data = documents.clean_picture(name, data)
                     eyes = eyes or self.state.any_eyes()
                 return self._send(200, self.state.docs_for(who["user"]).add(name, data, allow_picture=eyes))
             except (ValueError, TypeError) as e:
+                # Show our own readable ValueError messages, but not the technical base64 'Incorrect padding' text.
                 return self._send(400, {"code": "bad_document", "message": str(e) if isinstance(e, ValueError) and not str(e).startswith("Incorrect padding") else "That file couldn't be read."})
+        # Regex: /api/chats/<id>/docs, where the id may be negative (private chats). Group 1 is the id.
         m = re.fullmatch(r"/api/chats/(-?\d+)/docs", path)
         if m:
             cid = int(m.group(1))
@@ -174,23 +219,29 @@ class RoutesPost:
             if not store.exists(cid):
                 return self._send(404, {"code": "not_found", "message": "That chat is gone."})
             lib = self.state.docs_for(who["user"])
+            # Only the person's own documents.
             ids = [i for i in (body.get("ids") or []) if isinstance(i, int) and lib.info(i)]
             store.set_docs(cid, ids)
             return self._send(200, {"docs": [lib.info(i) for i in store.docs(cid)]})
+        # Teacher tools: a calculator-style tool run by the server.
         if path == "/api/teacher/calc":
             try:
                 return self._send(200, teacher_mode.calculate(str(body.get("tool", "")), body.get("values") or {}))
             except ValueError as e:
                 return self._send(400, {"code": "bad_numbers", "message": str(e)})
+        # Fill in a teacher tool's template to make the question that is sent to the model.
         if path == "/api/teacher/prompt":
             try:
                 return self._send(200, {"prompt": teacher_mode.fill(str(body.get("tool", "")), body.get("values") or {}),
                                         "skill": "teacher" if teacher_mode.BY_ID[str(body["tool"])]["side"] == "teacher" else "study"})
             except (ValueError, KeyError):
                 return self._send(400, {"code": "bad_tool", "message": "That tool doesn't exist."})
+        # Turn text into a PDF, Word or Markdown file to download.
         if path == "/api/export-doc":
             text = str(body.get("text", ""))
+            # File extension with exactly one leading dot.
             ext = "." + str(body.get("format", "pdf")).lower().lstrip(".")
+            # Empty, or over 200,000 characters (the underscore is just a digit separator for reading).
             if not text.strip() or len(text) > 200_000:
                 return self._send(400, {"code": "empty", "message": "There is nothing to save."})
             if ext not in export_doc.MIME:
@@ -199,13 +250,17 @@ class RoutesPost:
                 data, mime, title = export_doc.to_bytes(text, ext)
             except RuntimeError as e:
                 return self._send(501, {"code": "needs_package", "message": str(e)})
+            # Make a safe file name: delete every character that is not a letter, digit, space, underscore or dash; cut to 60.
             name = re.sub(r"[^A-Za-z0-9 _-]", "", str(body.get("title") or title)).strip()[:60] or "document"
             return self._send(200, data, mime, {"Content-Disposition": f'attachment; filename="{name}{ext}"'})
+        # Send a message; the work is in routes_chat.py (api_send).
         m = re.fullmatch(r"/api/chats/(-?\d+)/send", path)
         if m:
             return self.api_send(who, int(m.group(1)), body)
+        # Stop a reply that is being written.
         m = re.fullmatch(r"/api/chats/(-?\d+)/stop", path)
         if m:
+            # `stops` maps (person, chat) to a threading.Event, a flag that the writing thread checks. Setting it asks the thread to stop.
             ev = self.state.stops.get((who["user"], int(m.group(1))))
             if ev:
                 ev.set()
@@ -213,11 +268,14 @@ class RoutesPost:
         return UNHANDLED
 
     def post_schedules(self, who, path, body):
+        """POST /api/schedules...: add a scheduled task, delete it, switch it on or off, or run it now. `sch` is this server's schedule store."""
         sch = self.state.schedules
         try:
             if path == "/api/schedules":
                 return self._send(200, {"task": sch.add(who["user"], body), "tasks": sch.list(who["user"])})
+            # Regex: a task id is 12 hex characters; group 2 is what to do.
             m = re.fullmatch(r"/api/schedules/([0-9a-f]{12})/(delete|on|run)", path)
+            # Unknown address, or a task that is not this person's.
             if not m or not sch.get(who["user"], m.group(1)):
                 return self._send(404, {"code": "not_found", "message": "That scheduled task is gone."})
             if m.group(2) == "delete":
@@ -226,6 +284,7 @@ class RoutesPost:
                 sch.set_on(who["user"], m.group(1), bool(body.get("on")))
             else:                                                                  # Run now: answered in the background, into the task's chat
                 task = sch.get(who["user"], m.group(1))
+                # `dict(task)` passes a copy; daemon=True means the thread will not keep the server alive when it shuts down.
                 threading.Thread(target=scheduled.run_task, args=(self.state, who["user"], dict(task)), daemon=True).start()
             return self._send(200, {"tasks": sch.list(who["user"])})
         except ValueError as e:
@@ -233,40 +292,51 @@ class RoutesPost:
 
     def post_apps(self, who, path, body):
         """VryxCode, settings, warming a model and the connected apps (GitHub and the others)."""
+        # All VryxCode changes are in routes_code.py.
         if path.startswith("/api/code/"):
             return self.api_code_post(who, path, body)
+        # Save the person's settings.
         if path == "/api/settings":
             return self._send(200, self.state.put_settings(who["user"], body))
+        # Start loading a model in the background so the first answer is faster.
         if path == "/api/models/warm":
             return self._send(200, {"ok": self.state.warm(who, str(body.get("model", "")))})
+        # GitHub 'device flow' sign-in: the person gets a short code, types it on github.com, and meanwhile our page keeps asking (polling) whether they finished. No password or token is typed here.
         if path == "/api/apps/github/device/start":
             try:
                 flow = github_link.DeviceFlow(self.state.github_client_id(), self.state.github_http)
                 d = flow.start()
             except github_link.GitHubError as e:
                 return self._send(400, {"code": "github", "message": e.message, "action": e.action})
+            # Remember this waiting sign-in: when it runs out, how many seconds GitHub wants between asks, and when we last asked.
             self.state.github_device[who["user"]] = {"device_code": d["device_code"], "expires": time.time() + d["expires_in"], "interval": d["interval"], "last": 0}
             self.state.auth.event("github_device_start", who["user"], self._ip(), "")
             return self._send(200, {"user_code": d["user_code"], "verification_uri": d["verification_uri"], "interval": d["interval"], "expires_in": d["expires_in"]})
+        # The page asks: has the person finished on GitHub yet?
         if path == "/api/apps/github/device/poll":
             pend = self.state.github_device.get(who["user"])
             if not pend or pend["expires"] < time.time():
                 self.state.github_device.pop(who["user"], None)
                 return self._send(400, {"code": "github", "message": "That sign-in has run out.", "action": "Start it again."})
+            # Seconds still to wait before GitHub allows another ask.
             wait = pend["last"] + pend["interval"] - time.time()
             if wait > 0:                                       # never ask GitHub faster than it said
                 return self._send(200, {"status": "pending", "wait": int(wait) + 1})
             pend["last"] = time.time()
             try:
+                # status is one of pending, slow_down, done, expired, denied; token is set when done.
                 status, token = github_link.DeviceFlow(self.state.github_client_id(), self.state.github_http).poll(pend["device_code"])
                 if status == "done":
+                    # Ask GitHub who this token belongs to.
                     login, uid = github_link.Api(token, self.state.github_http).me()
             except github_link.GitHubError as e:
                 return self._send(400, {"code": "github", "message": e.message, "action": e.action})
+            # GitHub asks for a longer gap between asks: add 5 seconds.
             if status == "slow_down":
                 pend["interval"] += 5
             if status == "done":
                 self.state.github_device.pop(who["user"], None)
+                # Save the token (stored encrypted when possible; it is never sent back to the page).
                 self.state.github.connect(who["user"], token, login, uid)
                 self.state.github.log(who["user"], f"connected as {login} (GitHub sign-in)")
                 self.state.auth.event("github_connected", who["user"], self._ip(), "device flow")
@@ -275,6 +345,7 @@ class RoutesPost:
                 self.state.github_device.pop(who["user"], None)
                 return self._send(200, {"status": status})
             return self._send(200, {"status": "pending", "wait": pend["interval"]})
+        # Connect GitHub by pasting a token.
         if path == "/api/apps/github/connect":
             try:
                 token = github_link.validate_token(body.get("token"))
@@ -285,14 +356,17 @@ class RoutesPost:
             self.state.github.log(who["user"], f"connected as {login}")
             self.state.auth.event("github_connected", who["user"], self._ip(), "pasted token")
             return self._send(200, self.state.github.public(who["user"]))
+        # Disconnect GitHub and delete the saved token.
         if path == "/api/apps/github/disconnect":
             self.state.github.disconnect(who["user"])
             self.state.github.log(who["user"], "disconnected (token deleted)")
             self.state.auth.event("github_disconnected", who["user"], self._ip(), "")
             return self._send(200, self.state.github.public(who["user"]))
+        # Other connected apps: connect, disconnect, or try one (routes_account.py, api_app_link).
         m = re.fullmatch(r"/api/apps/([a-z]+)/(connect|disconnect|ask)", path)
         if m and m.group(1) in app_links.BY_ID:
             return self.api_app_link(who, m.group(1), m.group(2), body)
+        # Apps that are listed but not built yet get a friendly 'coming soon' answer.
         m = re.fullmatch(r"/api/apps/([a-z]+)/connect", path)
         if m:
             try:
@@ -305,13 +379,16 @@ class RoutesPost:
 
     def post_data(self, who, path, body):
         """The person's own data: delete everything, shares, chat actions, memory and saved notes."""
+        # Delete all of this person's chats, saved notes and documents (the account itself stays).
         if path == "/api/delete-everything":
             self.state.store(who["user"]).delete_everything()
             self.state.saved_for(who["user"]).clear()
             self.state.docs_for(who["user"]).clear()
             return self._send(200, {"ok": True})
+        # Cancel a shared link.
         if path == "/api/shares/revoke":
             return self._send(200, {"ok": self.state.shares.revoke(who["user"], body.get("id", ""))})
+        # Make a read-only link to a copy of a chat.
         m = re.fullmatch(r"/api/chats/(-?\d+)/share", path)
         if m:
             cid, store = int(m.group(1)), self.state.store(who["user"])
@@ -321,17 +398,22 @@ class RoutesPost:
                 return self._send(400, {"code": "private", "message": "Private chats can't be shared: nothing about them is saved."})
             if not store.exists(cid):
                 return self._send(404, {"code": "not_found", "message": "That chat is gone."})
+            # Look-up table so each answer can show the model's name.
             models_by_id = {x["id"]: x for x in self.state.catalog(who)["cards"] + self.state.catalog(who)["other"]}
+            # A plain copy of the words only (skipping compacted and summary entries and empty ones).
             msgs = [{"role": x["role"], "content": x["content"], "model": (models_by_id.get(x["model_id"]) or {}).get("name", "")} for x in store.messages(cid)
                     if x["status"] not in ("compacted", "summary") and x["content"]]
             try:
+                # Create the link; it expires after this many days (7 by default).
                 token = self.state.shares.create(who["user"], cid, store.title(cid), msgs, int(body.get("days") or 7))
             except ValueError as e:
                 return self._send(400, {"code": "bad_request", "message": str(e)})
             self.state.auth.event("share_made", who["user"], self._ip(), "")
             return self._send(200, {"url": "/s/" + token, "shares": self.state.shares.list(who["user"])})
+        # Hide every chat from the list but keep it remembered.
         if path == "/api/chats/archive-all":                  # Settings > Data controls: clear the list but keep everything remembered
             return self._send(200, {"archived": self.state.store(who["user"]).archive_all()})
+        # Shrink an old chat's memory to make room.
         m = re.fullmatch(r"/api/chats/(-?\d+)/compact", path)
         if m:                                                   # the "Compact now" button by the memory meter (feature flag context_meter)
             cid, store = int(m.group(1)), self.state.store(who["user"])
@@ -339,12 +421,14 @@ class RoutesPost:
                 return self._send(404, {"code": "not_found", "message": "Not found."})
             if not store.exists(cid):
                 return self._send(404, {"code": "not_found", "message": "That chat is gone."})
+            # A reply is being written right now (409 = conflict).
             if (who["user"], cid) in self.state.stops:
                 return self._send(409, {"code": "busy", "message": "Wait for the reply to finish, then compact."})
             try:
                 return self._send(200, chat_turn.compact_now(self.state, who, cid, str(body.get("model", ""))))
             except KeyError:
                 return self._send(400, {"code": "bad_model", "message": "That model isn't available."})
+        # Small chat actions: group 2 says which one.
         m = re.fullmatch(r"/api/chats/(-?\d+)/(pin|folder|branch|archive)", path)
         if m:
             cid, what, store = int(m.group(1)), m.group(2), self.state.store(who["user"])
@@ -359,10 +443,12 @@ class RoutesPost:
             if what == "folder":
                 store.set_folder(cid, body.get("folder", ""))
                 return self._send(200, store.meta(cid))
+            # branch: copy the chat up to a chosen message into a new chat.
             new = store.branch(cid, int(body.get("message_id", -1)))
             if new is None:
                 return self._send(400, {"code": "bad_request", "message": "That message isn't in this chat."})
             return self._send(200, {"id": new, "title": store.title(new)})
+        # Edit one of your messages, or send feedback about an answer.
         m = re.fullmatch(r"/api/chats/(-?\d+)/messages/(\d+)/(edit|feedback)", path)
         if m:
             cid, mid, what, store = int(m.group(1)), int(m.group(2)), m.group(3), self.state.store(who["user"])
@@ -381,16 +467,21 @@ class RoutesPost:
             if cid < 0:
                 return self._send(400, {"code": "private", "message": "Private chats can't be reported: nothing about them is saved."})
             msgs = store.messages(cid)
+            # Position of the answer being reported in the chat.
             i = next((n for n, x in enumerate(msgs) if x["id"] == mid and x["role"] == "assistant"), None)
             if i is None:
                 return self._send(400, {"code": "bad_request", "message": "That answer isn't here."})
+            # The question this answer replied to: search backwards from the answer.
             question = next((x["content"] for x in reversed(msgs[:i]) if x["role"] == "user" and x["status"] != "summary"), "")
             kind = str(body.get("kind", "other"))
+            # What the answer looked up (its sources), remembered in memory for a while.
             used = self.state.lookups.get((who["user"], cid, mid)) or {}
             self.state.feedback.add(who["user"], msgs[i]["model_id"], kind, body.get("note"), question, msgs[i]["content"], [n.get("title") for n in used.get("notes", [])])
+            # Mark the answer as reported; unknown kinds are stored as 'other'.
             store.set_flag(cid, mid, "fb", kind if kind in feedback.KINDS else "other")
             self.state.auth.event("feedback", who["user"], self._ip(), kind)
             return self._send(200, {"ok": True})
+        # Switch which version of an edited question is shown.
         m = re.fullmatch(r"/api/chats/(-?\d+)/messages/(\d+)/version", path)
         if m and self.state.flags.on("chat_versions", who):               # ‹ 1/2 ›: show another version of an edited question and its answers
             cid, mid, store = int(m.group(1)), int(m.group(2)), self.state.store(who["user"])
@@ -405,6 +496,7 @@ class RoutesPost:
             if not store.show_version(cid, mid, index):
                 return self._send(400, {"code": "bad_request", "message": "That version isn't kept."})
             return self._send(200, {"ok": True, "versions": {str(k): v for k, v in store.versions(cid).items()}})
+        # A 'like' saves the notes that helped this answer, so similar questions can reuse them.
         m = re.fullmatch(r"/api/chats/(-?\d+)/messages/(\d+)/like", path)
         if m:
             cid, mid = int(m.group(1)), int(m.group(2))
@@ -415,6 +507,7 @@ class RoutesPost:
                 return self._send(200, {"saved": 0})
             n = self.state.saved_for(who["user"]).save(used["question"], used["notes"], self.state.clock(), used["recent"])
             return self._send(200, {"saved": n, "notes": len(used["notes"])})
+        # Memory: facts about the person that the model may use. Add, delete one or clear all.
         if path == "/api/memory/add":
             if not self.state.memory_for(who["user"]).add(str(body.get("text", ""))):
                 return self._send(400, {"code": "not_saved", "message": "That was not saved.",
@@ -426,6 +519,7 @@ class RoutesPost:
         if path == "/api/memory/clear":
             self.state.memory_for(who["user"]).clear()
             return self._send(200, {"ok": True})
+        # Saved notes (from likes): delete one or clear all.
         if path == "/api/saved-notes/delete":
             self.state.saved_for(who["user"]).delete(int(body.get("id", 0)))
             return self._send(200, {"ok": True})
@@ -436,9 +530,11 @@ class RoutesPost:
 
     def post_admin(self, who, path, body):
         """The owner and admin changes (/api/admin/...)."""
+        # Everything under /api/admin/ needs admin rights.
         if path.startswith("/api/admin/"):
             if not who["admin"]:
                 return self._send(403, {"code": "owner_only", "message": "Only the owner or an admin can change this."})
+            # Change who sees a feature, or publish/schedule it as a release. The branches below handle: publish everything, publish one now, cancel a schedule, schedule one, or just change its audience.
             if path == "/api/admin/flags":                                   # any admin may widen or narrow who sees a new feature
                 try:
                     if body.get("publish") == "all":                                      # everything in preview, as one release
@@ -450,6 +546,7 @@ class RoutesPost:
                     elif body.get("id") and body.get("cancel_schedule"):
                         self.state.flags.cancel_schedule(str(body["id"]))
                         self.state.auth.event("flag_changed", who["user"], self._ip(), f"{body['id']}: schedule cancelled")
+                    # schedule_at is a time in seconds since 1970 (a Unix timestamp).
                     elif body.get("id") and "schedule_at" in body:                       # publish at a chosen time (seconds since 1970)
                         self.state.flags.schedule(str(body["id"]), body.get("schedule_at"), str(body.get("audience") or "everyone"), by=who["user"],
                                                  kind=body.get("kind") and str(body["kind"]), notes=str(body.get("notes") or ""))
@@ -461,6 +558,7 @@ class RoutesPost:
                     return self._send(400, {"code": "bad_request", "message": str(e)})
                 return self._send(200, {"flags": self.state.flags.listing(), "version": self.state.flags.version(), "next": self.state.flags.next_versions(),
                                         "releases": self.state.flags.releases(), "fixes": [f["text"] for f in self.state.flags.pending_fixes(None)]})
+            # Manage the keys of other programs: create, rotate key, delete or update.
             if path == "/api/admin/apps":                                     # make, change, switch off, rotate the key of, or remove an app
                 st, act = self.state, str(body.get("action", ""))
                 try:
@@ -468,6 +566,7 @@ class RoutesPost:
                         key = st.add_app(body.get("slug"), body.get("display"), body.get("plan", "free"), body.get("instructions", ""), body.get("rpm", 20),
                                          body.get("model", "flare"), body.get("effort", "balanced"), body.get("lookup", "none"))
                         return self._send(200, {"key": key, "apps": st.apps(), "url": self._public_base() + "/api/v1/ask"})
+                    # An app is stored like an account whose name starts with the app prefix.
                     name = APP_PREFIX + str(body.get("slug", ""))
                     if not st.app_record(name):
                         return self._send(404, {"code": "not_found", "message": "No such app."})
@@ -480,6 +579,7 @@ class RoutesPost:
                             return self._send(400, {"code": "confirm", "message": "Type the app's name to confirm."})
                         data_tools.delete_account(st, name, by=who["user"])
                     elif act == "update":
+                        # Pass on only the fields the page actually sent (** turns the dict into keyword arguments).
                         st.update_app(name, **{k: body[k] for k in ("display", "instructions", "rpm", "model", "effort", "enabled", "lookup", "plan") if k in body})
                         st.auth.event("app_changed", name, self._ip(), "by " + who["user"])
                     else:
@@ -487,15 +587,18 @@ class RoutesPost:
                 except (ValueError, TypeError) as e:
                     return self._send(400, {"code": "bad_request", "message": str(e)})
                 return self._send(200, {"apps": st.apps()})
+            # Update Emvryx itself. `expected` is the change the owner was shown, so a different one is not applied by surprise.
             if path == "/api/admin/update":                                   # pull the newest main and restart: only the PC owner, and only the change they were shown
                 if not who["owner"]:
                     return self._send(403, {"code": "owner_only", "message": "Only the PC owner can update Emvryx.", "action": "Nothing was changed."})
                 try:
                     res = self.state.updater.apply(str(body.get("expected", "")), force=bool(body.get("force")))
                 except updater.UpdateError as e:
+                    # 409 (conflict) when busy or the code changed since the check; 400 for other problems.
                     return self._send(409 if e.code in ("busy", "changed") else 400, {"code": e.code, "message": e.message, "action": e.action or "Nothing was changed."})
                 self.state.auth.event("update_applied", who["user"], self._ip(), f"{res['from']} -> {res['to']} ({res['changes']} changes, restarting={res['restarting']})")
                 return self._send(200, res)
+            # PC controls: Gaming mode, minutes before an idle model is unloaded, and unload now.
             if path == "/api/admin/pc":                                       # Gaming mode, idle unload, unload now
                 st = self.state
                 if "gaming" in body:
@@ -505,24 +608,30 @@ class RoutesPost:
                         minutes = int(body["idle_unload_minutes"])
                     except (TypeError, ValueError):
                         return self._send(400, {"code": "bad_request", "message": "Choose a number of minutes (0 turns idle unload off)."})
+                    # 0 to 720 minutes (12 hours); 0 turns the feature off.
                     if not 0 <= minutes <= 720:
                         return self._send(400, {"code": "bad_request", "message": "Choose between 0 and 720 minutes (0 turns idle unload off)."})
                     st.save_security(idle_unload_minutes=minutes)
                     st.auth.event("idle_unload_changed", who["user"], self._ip(), str(minutes))
+                # Refuse to unload while a reply is being written.
                 if body.get("unload"):
                     if st.busy():
                         return self._send(409, {"code": "busy", "message": "A reply is being written right now.", "action": "Try again in a moment."})
                     st.unload_model(f"unloaded by {who['user']}")
                 return self._send(200, st.pc_status())
+            # Run the coding test: each ready model works on the owner's recorded sessions. Only inside the Docker sandbox.
             if path == "/api/admin/code-test":                                 # model_code_test: the owner's own models on the owner's recorded sessions, sealed
                 st = self.state
                 if not (who["owner"] and st.flags.on("model_code_test", who)):
                     return self._send(403, {"code": "owner_only", "message": "Only the PC owner can run the coding test."})
+                # Is Docker with the sandbox image ready?
                 ok, why = code_sandbox.available(st.code.sandbox.get("image", code_sandbox.DEFAULT_IMAGE))
                 if not ok:
                     return self._send(400, {"code": "bad_request", "message": "The coding test runs only in the isolated sandbox (Docker): " + why,
                                             "action": "Start Docker Desktop and build the image: docker build -t emvryx/code-sandbox:1 docker/code-sandbox"})
+                # Turn recorded coding sessions into test tasks.
                 cases = model_code_test.build_cases(code_log.SessionLog(st.code.base(who["user"])))
+                # Only our own models that are ready.
                 models = [{"id": m["id"], "label": m["label"]} for m in st.code_models(who) if not m["outside"] and m["state"] == "ready"]
                 try:
                     st.code_test.start(cases, models, lambda mid: st.code_backend(st.pick_model(who, mid)), lambda folder: st.code.prefix_for(folder, force=True), by=who["user"])
@@ -530,7 +639,9 @@ class RoutesPost:
                     return self._send(400, {"code": "bad_request", "message": str(e)})
                 st.auth.event("model_checks", who["user"], self._ip(), f"coding test started: {len(cases)} tasks, {len(models)} models")
                 return self._send(200, dict(st.code_test.status(), recorded=len(cases)))
+            # Publish a preview model, schedule it, run its safety checks, or record an update.
             if path == "/api/admin/models":                                   # publish a model that is in preview, schedule it, or record an update that keeps its version
+                # Short names: the publisher, the models.json contents, the model id and who did it.
                 mp, man, mid, by = self.state.models_pub, self.state.manifest, str(body.get("id", "")), who["user"]
                 try:
                     if body.get("push_product"):                                   # VryxCode: every waiting feature goes out as its next version
@@ -542,6 +653,7 @@ class RoutesPost:
                     elif body.get("publish") == "now":
                         if self.state.runner and not self.state.runner.available(mid):
                             return self._send(400, {"code": "bad_request", "message": "That model's file is not on this computer yet, so it cannot be published."})
+                        # Skipping the safety checks is allowed but is written in the log.
                         skip = bool(body.get("skip_checks"))
                         label = mp.publish(man, mid, by=by, notes=str(body.get("notes") or ""), skip_checks=skip)
                         self.state.auth.event("model_published", by, self._ip(), label + (" WITHOUT the safety checks" if skip else ""))
@@ -558,28 +670,35 @@ class RoutesPost:
                 except ValueError as e:
                     return self._send(400, {"code": "bad_request", "message": str(e)})
                 return self._send(200, self.state.models_admin())
+            # Admin password reset: the old password is wiped, all sessions end, and a one-time link lets the person choose a new one.
             if path == "/api/admin/reset-password":                          # a password reset: the old password stops working and a one-time link lets them choose a new one
                 target = str(body.get("user", ""))
                 rec = self.state.user_record(target)
                 if not rec:
                     return self._send(404, {"code": "not_found", "message": "No one is called that."})
+                # Not for the owner or yourself (use Settings for that).
                 if rec.get("owner") or target == who["user"]:
                     return self._send(400, {"code": "bad_request", "message": "Change your own password in Settings > Security.", "action": "Nothing was changed."})
+                # Only the first owner (the 'granter') may touch admin or no-limits accounts.
                 if (rec.get("admin") or rec.get("unlimited")) and not who["granter"]:
                     return self._send(403, {"code": "owner_only", "message": "Only the PC owner and the owner's email account can reset an admin or no-limits account.", "action": "Nothing was changed."})
                 st = self.state
+                # Empty password = password sign-in no longer works for them.
                 st._set_fields(target, pw="")
                 st.auth.revoke_user(target)
                 pair = st.auth.new_pair(target, st.security["pair_minutes"], made_by=who["user"])
+                # The one-time pairing link.
                 link = self._public_base() + "/pair/" + pair
                 emailed = False
                 if st.mailer and rec.get("email"):
                     text = (f"An Emvryx admin reset your password. Open this link to sign in and choose a new one (it works once, for {st.security['pair_minutes']} minutes):\n\n{link}\n\n"
                             "If you did not expect this, ignore it: the link does nothing until it is opened.")
+                    # Email it in the background so a slow mail server does not hold up the answer.
                     threading.Thread(target=lambda: st.mailer.send(rec["email"], "Your Emvryx password was reset", text), daemon=True).start()
                     emailed = True
                 st.auth.event("password_reset_by_admin", target, self._ip(), "by " + who["user"] + (", emailed" if emailed else ""))
                 return self._send(200, {"ok": True, "link": link, "emailed": emailed, "minutes": st.security["pair_minutes"]})
+            # Delete a person's account and everything they owned. The checks come first: person exists, not the first owner, not yourself, privileged accounts only by the granter, the admin's own password again, and the name typed to confirm.
             if path == "/api/admin/delete-user":                             # an admin removes an account and everything it owned
                 target = str(body.get("user", ""))
                 rec = self.state.user_record(target)
@@ -602,6 +721,7 @@ class RoutesPost:
                 except ValueError as e:
                     return self._send(400, {"code": "bad_request", "message": str(e), "action": "Nothing was deleted."})
                 return self._send(200, {"ok": True})
+            # Give out a plan, admin rights or no-limits. Only the granter may.
             if path == "/api/admin/access":                                  # who gets a plan, no limits or admin rights: only the first owner decides
                 if not who["granter"]:
                     return self._send(403, {"code": "owner_only", "message": "Only the PC owner and the owner's own email account can give out plans, admin rights or no-limits."})
@@ -610,5 +730,6 @@ class RoutesPost:
                 except ValueError as e:
                     return self._send(400, {"code": "bad_request", "message": str(e)})
                 return self._send(200, out)
+            # Every other /api/admin/ address is in routes_admin.py.
             return self.api_admin(path, body)
         return UNHANDLED

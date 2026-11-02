@@ -1,11 +1,15 @@
 <!doctype html>
+<!-- The tic-tac-toe page (reference solution for the "tictactoe_js" exercise). game.js holds the rules, ui.js draws the board. -->
 <html lang="en">
 <head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Tic-tac-toe</title><link rel="stylesheet" href="style.css"></head>
 <body>
   <h1>Tic-tac-toe</h1>
+  <!-- Status line: whose turn it is, or who won (filled in by ui.js). -->
   <p id="status"></p>
+  <!-- The board: ui.js puts nine square buttons in here. -->
   <div id="board"></div>
   <button id="new">New game</button>
+  <!-- game.js must load before ui.js because ui.js uses its functions. -->
   <script src="game.js"></script>
   <script src="ui.js"></script>
 </body>
