@@ -44,7 +44,7 @@ def shell_files():
     # All script files in web/js, so a new script is picked up without changing this list.
     js = sorted(n for n in os.listdir(os.path.join(WEB_DIR, "js")) if n.endswith(".js"))
     # The addresses the installed app saves so it can open without the network.
-    return ["/", "/editor.js", "/vryx.css", "/modern.css"] + ["/js/" + n for n in js] + ["/icon.svg", "/icon-192.png", "/manifest.webmanifest"]
+    return ["/", "/editor.js", "/vryx.css", "/modern.css", "/design2027.css"] + ["/js/" + n for n in js] + ["/icon.svg", "/icon-192.png", "/manifest.webmanifest"]
 
 
 def shell_version():
@@ -155,6 +155,8 @@ class RoutesGet:
             return self._file("editor.js", "text/javascript; charset=utf-8")
         if path == "/modern.css":
             return self._file("modern.css", "text/css; charset=utf-8")
+        if path == "/design2027.css":                 # the 2027 look (feature flag design_2027): only loaded while the flag is on
+            return self._file("design2027.css", "text/css; charset=utf-8")
         if path == "/vryx.css":                       # VryxCode's own look (violet, glass panels), loaded after the page's styles
             return self._file("vryx.css", "text/css; charset=utf-8")
         if path == "/icon.svg":
