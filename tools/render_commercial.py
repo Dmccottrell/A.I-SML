@@ -146,11 +146,11 @@ def main():
                 vmix = "".join(f"[v{i}]" for i in range(n)) + f"amix=inputs={n}:normalize=0,volume=1.6,asplit[vo][vkey]"
                 # the pad sits under the voice: it dips while the voice speaks (sidechain), then both are mixed and kept from clipping
                 graph = f"{mix}[pad];{delays};{vmix};[pad][vkey]sidechaincompress=threshold=0.015:ratio=10:attack=15:release=500[low];[low][vo]amix=inputs=2:normalize=0,apad=whole_dur={SECONDS},alimiter=limit=0.95[a]"
-                cmd += inputs + vin + ["-filter_complex", graph, "-map", "0:v", "-map", "[a]", "-c:a", "aac", "-b:a", "192k"]
+                cmd += inputs + vin + ["-filter_complex", graph, "-map", "0:v", "-map", "[a]", "-c:a", "aac", "-profile:a", "aac_low", "-ar", "44100", "-ac", "2", "-b:a", "192k", "-disposition:a:0", "default"]
             elif args.music:
                 inputs, mix = music_filter()
-                cmd += inputs + ["-filter_complex", mix + "[a]", "-map", "0:v", "-map", "[a]", "-c:a", "aac", "-b:a", "160k"]
-            cmd += ["-c:v", "libx264", "-preset", "slow", "-crf", "18", "-pix_fmt", "yuv420p", "-movflags", "+faststart", "-t", str(SECONDS), target]
+                cmd += inputs + ["-filter_complex", mix + "[a]", "-map", "0:v", "-map", "[a]", "-c:a", "aac", "-profile:a", "aac_low", "-ar", "44100", "-ac", "2", "-b:a", "160k", "-disposition:a:0", "default"]
+            cmd += ["-c:v", "libx264", "-preset", "slow", "-crf", "18", "-pix_fmt", "yuv420p", "-tag:v", "avc1", "-brand", "mp42", "-movflags", "+faststart", "-t", str(SECONDS), target]
             subprocess.run(cmd, check=True)
             done = True
         finally:
