@@ -71,6 +71,8 @@ class Page(Base):
 
     def test_it_says_what_it_is_running_and_keeps_the_e_mark(self):
         page = self.working_page()
+        page.evaluate("C.sid = null; clearTimeout(C.timer)")        # stop asking the server: its own "thinking" answer would otherwise replace the details injected below
+        page.wait_for_timeout(700)                                  # a look that was already on its way has arrived (and is ignored)
         page.evaluate("renderLive({secs: 4, tool: 'run', target: 'python test_valid_code.py', tokens: 0, phase: 'tool'}, 'working'); paintLive()")
         page.wait_for_timeout(450)                                  # the words fade out and in (a quarter of a second)
         text = page.evaluate("document.querySelector('#codeLive .what').textContent")
