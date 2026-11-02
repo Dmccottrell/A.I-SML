@@ -20,7 +20,7 @@ class Page(Base):
         self.state.code_generate = lambda model: vryxcode.ScriptedChat([words])
         s, j = self.owner.call("POST", "/api/code/start", {"project": "tips", "task": task, "model": "solstice-2"})
         self.assertEqual(s, 200, j)
-        wait_for(lambda: self.state.code.sessions[j["id"]].state in ("done", "stopped"))
+        wait_for(lambda: self.state.code.sessions[j["id"]].state in ("done", "stopped"), 90)          # a slow shared machine (the Windows runner) needs more than the usual wait
         p = sync_playwright().start()
         self.addCleanup(p.stop)
         b = p.chromium.launch(executable_path=find_browser())

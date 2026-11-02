@@ -29,7 +29,12 @@ class Record(Base):
                                                                         vryxcode.harness_call("finish", summary="done")])
         st, j = client.call("POST", "/api/code/start", {"project": "p", "task": "make it", "model": "equinox-2", "auto_edits": True})
         self.assertEqual(st, 200, j)
-        wait_for(lambda: client.call("GET", f"/api/code/sessions/{j['id']}")[1]["state"] not in ("starting", "working", "queued"), 30)
+        # The session ends by itself; a busy shared CI machine (four test files at once) can take much longer than a quiet one, so wait for the real condition for
+        # a long time, and if it still does not come say what state the session was in (a stuck session and a slow machine look different).
+        try:
+            wait_for(lambda: client.call("GET", f"/api/code/sessions/{j['id']}")[1]["state"] not in ("starting", "working", "queued"), 120)
+        except AssertionError:
+            self.fail("the session did not end: " + json.dumps(client.call("GET", f"/api/code/sessions/{j['id']}")[1])[:600])
         wait_for(lambda: True, 1)
         return j["id"]
 
