@@ -27,7 +27,8 @@ class Languages(unittest.TestCase):
     @unittest.skipUnless(shutil.which("java") and shutil.which("javac"), "needs Java")
     def test_java_compiles_and_runs_under_the_memory_limit(self):
         with box_with("Main.java", 'public class Main { public static void main(String[] a) { System.out.println("hi"); } }\n') as box:
-            self.assertTrue(box.run("javac Main.java").startswith("exit code 0"))
+            compiled = box.run("javac Main.java")
+            self.assertTrue(compiled.startswith("exit code 0"), compiled)           # said in full if it ever fails: a slow shared machine and a real problem look different
             r = box.run("java Main")
             self.assertTrue(r.startswith("exit code 0"), r)
             self.assertIn("hi", r)
