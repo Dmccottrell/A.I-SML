@@ -1,6 +1,6 @@
 # Native apps (Android first, then iPhone): what is needed
 
-> **Status (Nov 2026):** the Android app is built (Kotlin + Compose) and published by GitHub as the `android-latest` download; see [ANDROID_EXTRAS.md](ANDROID_EXTRAS.md). The iPhone app is not started. The rest of this page is the original plan.
+> **Status (Nov 2026):** the Android app is built (Kotlin + Compose) and published by GitHub as the `android-latest` download; see [ANDROID_EXTRAS.md](ANDROID_EXTRAS.md). The iPhone app, version 1 (the website inside a real app), is in [`ios/`](../ios/README.md); see [IOS.md](IOS.md). The rest of this page is the original plan.
 
 Decision (Oct 2026): both apps are built natively, like the big AI apps: **Kotlin + Jetpack Compose** on Android, **Swift + SwiftUI** on iPhone. Capacitor was the cheaper road (see [ANDROID.md](ANDROID.md)); this is the polished one. Nothing here has to be built today.
 
@@ -39,7 +39,7 @@ Report, edit and ask again, branch, pin, delete, search inside chats, the memory
 questions, messages while it works, screenshots, /commands) as native screens; Settings, Admin and the rest (skills, teacher mode, connected apps,
 files, the VryxCode editor and preview) open as the website's own pages inside the app, signed in with the same session. It is compiled and tested
 on GitHub for every change (`.github/workflows/android.yml`), with the `.apk` as a download. Still to do: push notifications, fingerprint lock,
-passkey and email-code sign-in, the on-phone model, and `NATIVE_API.md`. The iPhone app has not been started.
+passkey and email-code sign-in, the on-phone model, and `NATIVE_API.md`. **iPhone, in [`ios/`](../ios/README.md):** version 1, the website in a SwiftUI app with Android's off screen and the website's icon.
 
 ## Order of work
 1. (cloud) `NATIVE_API.md` and the server pieces above, with tests.
