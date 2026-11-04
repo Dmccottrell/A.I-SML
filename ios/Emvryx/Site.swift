@@ -3,8 +3,23 @@ import UIKit
 
 /// The rules for which website the app shows and what it may do there. Plain logic, so EmvryxTests can check it.
 enum Site {
-    static let host = "chat.emvryx.app"
-    static let home = URL(string: "https://\(host)")!
+    static let production = URL(string: "https://chat.emvryx.app")!
+    /// The Emvryx website the app shows. A debug build can be pointed at a test server with EMVRYX_SERVER (EmvryxUITests use a local
+    /// one, e.g. http://127.0.0.1:8765); builds for the App Store and TestFlight always use chat.emvryx.app.
+    static let home: URL = {
+        #if DEBUG
+        if let s = ProcessInfo.processInfo.environment["EMVRYX_SERVER"], let url = URL(string: s), url.host != nil { return url }
+        #endif
+        return production
+    }()
+    static var host: String { home.host ?? "" }
+    /// The first page to open: the start page, or in a debug build EMVRYX_START (a test sign-in link on the test server).
+    static let start: URL = {
+        #if DEBUG
+        if let s = ProcessInfo.processInfo.environment["EMVRYX_START"], let url = URL(string: s), isOurs(url) { return url }
+        #endif
+        return home
+    }()
     /// Added to the end of Safari's user agent so the website knows it runs in the iPhone app.
     static let userAgentTag = "EmvryxiOS/1.0"
     /// What WebKit puts at the end of an iPhone user agent by default, kept so the website still sees a phone.
@@ -13,7 +28,7 @@ enum Site {
 
     /// Whether this address is the Emvryx website itself.
     static func isOurs(_ url: URL?) -> Bool {
-        url?.scheme?.lowercased() == "https" && url?.host?.lowercased() == host
+        url?.scheme?.lowercased() == home.scheme && url?.host?.lowercased() == host && url?.port == home.port
     }
 
     /// Whether a navigation should leave the app. [userTapped]: the person tapped a link; [newWindow]: the page asked for a new window.
@@ -29,7 +44,7 @@ enum Site {
 
     /// The microphone (voice button) and camera are only for the Emvryx website, never for another site shown inside the app.
     static func mayUseMicAndCamera(scheme: String, host: String) -> Bool {
-        scheme.lowercased() == "https" && host.lowercased() == Site.host
+        scheme.lowercased() == home.scheme && host.lowercased() == Site.host
     }
 
     /// Whether a failed page load means there is no connection (show the "No connection" page) rather than something to ignore,

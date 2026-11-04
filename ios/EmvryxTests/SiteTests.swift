@@ -68,6 +68,36 @@ final class WebControllerTests: XCTestCase {
         XCTAssertFalse(web.offline)
     }
 
+    /// The voice button uses the browser's speech recognition: in the app's web view it must start and hear the microphone.
+    @MainActor
+    func testSpeechRecognitionListensInTheAppWebView() async throws {
+        let web = WebController()
+        web.webView.stopLoading()
+        // On screen (iOS pauses web views that are not in a window), with a page of the Emvryx site's own address and no network.
+        let window = UIWindow(frame: UIScreen.main.bounds)
+        window.windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene
+        window.addSubview(web.webView)
+        web.webView.frame = window.bounds
+        window.isHidden = false
+        defer { window.isHidden = true }
+        web.webView.loadHTMLString("<p>voice</p>", baseURL: Site.home)
+        for _ in 0..<50 where web.webView.isLoading || web.webView.url == nil { try await Task.sleep(nanoseconds: 100_000_000) }
+        let heard = try await web.webView.callAsyncJavaScript("""
+            const R = window.SpeechRecognition || window.webkitSpeechRecognition;
+            if (!R) return 'missing';
+            return await new Promise((done) => {
+              const rec = new R(); const seen = [];
+              rec.onstart = () => seen.push('start');
+              rec.onaudiostart = () => { seen.push('audio'); rec.stop(); };
+              rec.onerror = (e) => seen.push('error:' + e.error);
+              rec.onend = () => done(seen.join(' '));
+              rec.start();
+              setTimeout(() => done(seen.join(' ') + ' timeout'), 10000);
+            });
+            """, contentWorld: .page) as? String ?? ""
+        XCTAssertTrue(heard.hasPrefix("start audio"), heard)
+    }
+
     @MainActor
     func testAStoppedLoadDoesNotShowTheOfflinePage() {
         let web = WebController()

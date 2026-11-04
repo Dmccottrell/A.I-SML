@@ -50,11 +50,22 @@ targets:
     settings:
       base:
         GENERATE_INFOPLIST_FILE: true
+  EmvryxUITests:
+    type: bundle.ui-testing
+    platform: iOS
+    sources: [EmvryxUITests]
+    dependencies:
+      - target: Emvryx
+    settings:
+      base:
+        GENERATE_INFOPLIST_FILE: true
+        TEST_TARGET_NAME: Emvryx
 schemes:
   Emvryx:
     build:
       targets:
         Emvryx: all
         EmvryxTests: [test]
+        EmvryxUITests: [test]
     test:
-      targets: [EmvryxTests]
+      targets: [EmvryxTests, EmvryxUITests]

@@ -53,7 +53,7 @@ final class WebController: NSObject, ObservableObject {
         }
         network.start(queue: .main)
 
-        webView.load(URLRequest(url: Site.home))
+        webView.load(URLRequest(url: Site.start))
     }
 
     deinit { network.cancel() }
@@ -123,6 +123,40 @@ extension WebController: WKUIDelegate {
             }
         }
         return nil
+    }
+
+    // The site's alert(), confirm() and prompt() (Skipped files, "Delete this chat?") as iPhone alerts. WKWebView shows nothing unless the
+    // app does it; Android's web view shows its own dialogs. Each completion handler runs exactly once.
+
+    func webView(_ webView: WKWebView, runJavaScriptAlertPanelWithMessage message: String, initiatedByFrame frame: WKFrameInfo,
+                 completionHandler: @escaping () -> Void) {
+        let alert = UIAlertController(title: nil, message: message, preferredStyle: .alert)
+        alert.addAction(UIAlertAction(title: "OK", style: .default) { _ in completionHandler() })
+        present(alert, over: webView, otherwise: completionHandler)
+    }
+
+    func webView(_ webView: WKWebView, runJavaScriptConfirmPanelWithMessage message: String, initiatedByFrame frame: WKFrameInfo,
+                 completionHandler: @escaping (Bool) -> Void) {
+        let alert = UIAlertController(title: nil, message: message, preferredStyle: .alert)
+        alert.addAction(UIAlertAction(title: "Cancel", style: .cancel) { _ in completionHandler(false) })
+        alert.addAction(UIAlertAction(title: "OK", style: .default) { _ in completionHandler(true) })
+        present(alert, over: webView) { completionHandler(false) }
+    }
+
+    func webView(_ webView: WKWebView, runJavaScriptTextInputPanelWithPrompt prompt: String, defaultText: String?, initiatedByFrame frame: WKFrameInfo,
+                 completionHandler: @escaping (String?) -> Void) {
+        let alert = UIAlertController(title: nil, message: prompt, preferredStyle: .alert)
+        alert.addTextField { $0.text = defaultText }
+        alert.addAction(UIAlertAction(title: "Cancel", style: .cancel) { _ in completionHandler(nil) })
+        alert.addAction(UIAlertAction(title: "OK", style: .default) { [weak alert] _ in completionHandler(alert?.textFields?.first?.text ?? "") })
+        present(alert, over: webView) { completionHandler(nil) }
+    }
+
+    /// Show [alert] over whatever is on top; with nothing on screen to show it over, answer straight away with [otherwise].
+    private func present(_ alert: UIAlertController, over webView: WKWebView, otherwise: () -> Void) {
+        guard var top = webView.window?.rootViewController else { return otherwise() }
+        while let next = top.presentedViewController { top = next }
+        top.present(alert, animated: true)
     }
 
     /// The website asks for the microphone or camera: yes for Emvryx (iOS still asks the person the first time), no for anyone else.
