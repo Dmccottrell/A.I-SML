@@ -62,7 +62,7 @@ struct RootView: View {
                 case .settings:
                     SettingsPanel(vm: vm).environment(\.palette, vm.palette)
                 case .code:
-                    WebPage(path: "/#code", title: "VryxCode", run: nil, done: vm.backToChat)
+                    CodeView_(vm: vm)
                 }
             }
         }

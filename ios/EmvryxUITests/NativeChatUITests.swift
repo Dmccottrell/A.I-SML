@@ -16,7 +16,7 @@ final class NativeChatUITests: ServerUITestCase {
         box.typeText("Hello from the iPhone")
         app.buttons["Send"].tap()
         // My words in a bubble, then the reply written in; Copy shows once it is finished.
-        XCTAssertTrue(app.staticTexts["Hello from the iPhone"].waitForExistence(timeout: 10))
+        XCTAssertTrue(bubble("Hello from").waitForExistence(timeout: 10), "my message did not show")
         XCTAssertTrue(app.buttons["Copy"].waitForExistence(timeout: 60), "the reply did not finish")
         XCTAssertTrue(app.buttons["Send"].exists, "the Stop button should be Send again")
         shot("native reply")
@@ -37,10 +37,10 @@ final class NativeChatUITests: ServerUITestCase {
         let settings = app.buttons["Settings"]
         XCTAssertTrue(settings.waitForExistence(timeout: 5))
         settings.tap()
-        // The website's Settings, inside the app and signed in, with a way back to the chat.
+        // The app's own Settings (not a web page), with a way back to the chat; "More settings" is the website's.
         XCTAssertTrue(app.buttons["Back to chat"].waitForExistence(timeout: 10))
-        XCTAssertTrue(app.webViews.firstMatch.waitForExistence(timeout: 10))
-        sleep(3)
+        XCTAssertTrue(app.switches["Show word counts"].waitForExistence(timeout: 10))
+        XCTAssertFalse(app.webViews.firstMatch.exists)
         shot("native settings page")
         app.buttons["Back to chat"].tap()
         XCTAssertTrue(box.waitForExistence(timeout: 10))

@@ -45,6 +45,12 @@ enum TestServer {
         for chat in ((try? JSONSerialization.jsonObject(with: archived)) as? [String: Any])?["chats"] as? [[String: Any]] ?? [] {
             if let chatId = chat["id"] as? Int { try call("DELETE", "/api/chats/\(chatId)", session: session) }
         }
+        for archived in ["", "?archived=1"] {
+            let (_, sessions) = try call("GET", "/api/code/sessions" + archived, session: session)
+            for row in ((try? JSONSerialization.jsonObject(with: sessions)) as? [String: Any])?["sessions"] as? [[String: Any]] ?? [] {
+                if let sid = row["id"] as? String { try call("POST", "/api/code/sessions/\(sid)/delete", [:], session: session) }
+            }
+        }
         try call("POST", "/api/memory/clear", [:], session: session)
         let (_, docs) = try call("GET", "/api/documents", session: session)
         for doc in ((try? JSONSerialization.jsonObject(with: docs)) as? [String: Any])?["documents"] as? [[String: Any]] ?? [] {

@@ -23,12 +23,14 @@ final class ApiClient {
     let session: SessionStore
     private let http: URLSession
 
-    init(base: URL = Site.home, session: SessionStore? = nil) {
+    /// [protocolClasses]: only for tests, to answer the calls with a script instead of a server.
+    init(base: URL = Site.home, session: SessionStore? = nil, protocolClasses: [AnyClass] = []) {
         self.base = base
         self.session = session ?? SessionStore(server: base)
         let config = URLSessionConfiguration.default
         config.httpShouldSetCookies = false                       // the one cookie is added by hand, from the Keychain
         config.httpCookieAcceptPolicy = .never
+        if !protocolClasses.isEmpty { config.protocolClasses = protocolClasses }
         config.timeoutIntervalForRequest = 30
         config.timeoutIntervalForResource = 60 * 60                // a long reply can stream for a while
         config.httpAdditionalHeaders = ["User-Agent": "Emvryx-iOS/1.0 " + Site.userAgentTag]
@@ -182,15 +184,23 @@ final class ApiClient {
     private func post<T: Decodable>(_ path: String, _ body: [String: Any]) async throws -> T { try await call(makeRequest(path, body: body)) }
     private func post<T: Decodable>(_ path: String, _ body: [String: Any], as: T.Type) async throws -> T { try await call(makeRequest(path, body: body)) }
 
+    // For the parts of the app outside this file (VryxCode): a call whose answer is decoded, or read as loose JSON.
+    func getJSON<T: Decodable>(_ path: String) async throws -> T { try await call(makeRequest(path)) }
+    func postJSON<T: Decodable>(_ path: String, _ body: [String: Any]) async throws -> T { try await call(makeRequest(path, body: body)) }
+    func rawJSON(_ method: String, _ path: String, _ body: [String: Any]? = nil) async throws -> [String: Any] {
+        let data = try await bytes(makeRequest(path, body: method == "POST" ? (body ?? [:]) : nil))
+        return (try? JSONSerialization.jsonObject(with: data)) as? [String: Any] ?? [:]
+    }
+
     /// The raw bytes of an answer (a picture, a saved document).
-    private func bytes(_ request: URLRequest) async throws -> Data {
+    func bytes(_ request: URLRequest) async throws -> Data {
         let data: Data, response: URLResponse
         do { (data, response) = try await http.data(for: request) } catch { throw ApiError.offline }
         try await check(response) { data }
         return data
     }
 
-    private func makeRequest(_ path: String, body: [String: Any]? = nil, method: String? = nil) -> URLRequest {
+    func makeRequest(_ path: String, body: [String: Any]? = nil, method: String? = nil) -> URLRequest {
         var r = URLRequest(url: URL(string: path, relativeTo: base)!)
         if let method { r.httpMethod = method }
         if let body {
@@ -202,7 +212,7 @@ final class ApiClient {
         return r
     }
 
-    private func call<T: Decodable>(_ request: URLRequest) async throws -> T {
+    func call<T: Decodable>(_ request: URLRequest) async throws -> T {
         let data: Data, response: URLResponse
         do { (data, response) = try await http.data(for: request) } catch { throw ApiError.offline }
         try await check(response) { data }
