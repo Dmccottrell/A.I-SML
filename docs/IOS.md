@@ -34,7 +34,7 @@ You have a Mac, so the iPhone app can be built. This page is everything to do on
 1. On the iPhone: Settings > Privacy & Security > Developer Mode > turn on, and restart when it asks.
 2. Plug the iPhone into the Mac. Tap Trust on the phone if it asks.
 3. In Xcode: Xcode menu > Settings > Accounts > the + button > add your Apple ID.
-4. Open the project (Claude Code will tell you the file: `ios/Emvryx.xcodeproj`). Click the project name at the top left, then Signing & Capabilities, and under Team choose your name (Personal Team).
+4. Make and open the project: in Terminal, `cd ios`, then `xcodegen generate`, then `open Emvryx.xcodeproj`. Click the project name at the top left, then Signing & Capabilities, and under Team choose your name (Personal Team).
 5. At the top, pick your iPhone instead of a simulator and press the Play button.
 6. The first time, the iPhone says "Untrusted developer": Settings > General > VPN & Device Management > your Apple ID > Trust.
 7. **A free Apple ID app stops working after 7 days.** Press Play again to refresh it. This limit goes away with the paid account.

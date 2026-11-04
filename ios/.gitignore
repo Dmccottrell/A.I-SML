@@ -1,0 +1,7 @@
+# Made by `xcodegen generate` from project.yml
+Emvryx.xcodeproj/
+Emvryx/Info.plist
+# Xcode's build output and personal settings
+build/
+DerivedData/
+xcuserdata/
