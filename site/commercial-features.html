@@ -1,0 +1,227 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title>Emvryx feature advert</title>
+<link rel="icon" href="/icon.svg" type="image/svg+xml">
+<style>
+/* The Emvryx feature advert with a voice, 1080 x 1920, made of pictures of the real app (9:16, for phones, Reels, Shorts and TikTok). Everything on screen is worked out from ONE number, the time in seconds, by render(t) below:
+   so the page plays by itself, a scrubber can jump anywhere, and tools/render_commercial.py can ask for exactly frame 0, 1, 2 ... and make the same video every time.
+   The colours are the app's own (web/design2027.css and the website). */
+:root { --bg:#07080D; --surface:#0F1119; --carbon:#16161D; --line:rgba(255,255,255,.10); --text:#EEF0F6; --muted:#9AA3BC; --violet:#8B5CF6; --amethyst:#B79CFF; --amber:#F5A524; --teal:#2DD4BF; }
+* { box-sizing: border-box; }
+html, body { margin: 0; height: 100%; background: #000; color: var(--text); font-family: 'Sora', 'DM Sans', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif; overflow: hidden; }
+#frame { position: fixed; inset: 0; display: grid; place-items: center; }
+#stage { width: 1080px; height: 1920px; position: relative; overflow: hidden; background: var(--bg); transform-origin: center; flex: none; }
+.abs { position: absolute; }
+.glow { position: absolute; border-radius: 50%; filter: blur(110px); pointer-events: none; }
+.scene { position: absolute; inset: 0; opacity: 0; }
+.logo { position: absolute; left: 50%; top: 50%; width: 300px; height: 300px; margin: -150px 0 0 -150px; }
+.big { font-weight: 700; letter-spacing: -.03em; line-height: 1.05; }
+.card { position: absolute; left: 90px; right: 90px; border-radius: 44px; background: linear-gradient(180deg, #14141B, #0C0C10); border: 1px solid var(--line); box-shadow: inset 0 2px 0 rgba(255,255,255,.07), 0 40px 90px -30px #000; padding: 54px; }
+.bubble { background: var(--carbon); border: 1px solid var(--line); border-radius: 36px; padding: 34px 40px; font-size: 46px; line-height: 1.35; box-shadow: inset 0 2px 0 rgba(255,255,255,.07); }
+.you { margin-left: 120px; }
+.ai { font-size: 50px; line-height: 1.45; color: var(--text); padding: 6px 6px; }
+.tag { display: inline-flex; align-items: center; gap: 14px; padding: 12px 26px; border-radius: 999px; font-size: 32px; letter-spacing: .02em; color: var(--amethyst); background: rgba(167,139,250,.10); border: 1px solid rgba(167,139,250,.35); }
+.dots i { display: inline-block; width: 12px; height: 12px; border-radius: 50%; background: var(--amethyst); margin-right: 8px; }
+.row { display: flex; align-items: center; gap: 28px; padding: 30px 6px; border-bottom: 1px solid var(--line); font-size: 46px; color: var(--muted); opacity: 0; }
+.row b { color: var(--text); font-weight: 500; }
+.row .mono { font-family: 'Geist Mono', ui-monospace, Menlo, Consolas, monospace; font-size: 42px; }
+.row .add { margin-left: auto; color: var(--teal); font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 40px; }
+.tick { width: 54px; height: 54px; flex: none; }
+.pill { position: absolute; left: 90px; right: 90px; height: 190px; border-radius: 48px; display: flex; align-items: center; gap: 36px; padding: 0 56px; font-size: 54px; font-weight: 600; letter-spacing: -.01em;
+  background: linear-gradient(180deg, #14141B, #0C0C10); border: 1px solid var(--line); box-shadow: inset 0 2px 0 rgba(255,255,255,.07), 0 30px 70px -30px #000; opacity: 0; }
+.pill small { display: block; font-size: 34px; font-weight: 400; color: var(--muted); margin-top: 6px; letter-spacing: 0; }
+.pill svg { width: 84px; height: 84px; flex: none; }
+.cta { display: inline-block; padding: 34px 84px; border-radius: 999px; font-size: 60px; font-weight: 600; color: #fff; background: var(--violet); box-shadow: 0 0 80px rgba(139,92,246,.55); }
+/* the page around the stage (hidden for the video render with ?clean) */
+#bar { position: fixed; left: 0; right: 0; bottom: 0; display: flex; gap: 12px; align-items: center; padding: 12px 16px; background: rgba(0,0,0,.65); z-index: 5; font: 15px system-ui, sans-serif; }
+#bar button { min-height: 44px; min-width: 88px; border-radius: 999px; border: 1px solid #444; background: #1b1b24; color: #fff; font: inherit; cursor: pointer; }
+#bar input { flex: 1; min-height: 44px; }
+body.clean #bar { display: none; }
+.cap { position: absolute; left: 70px; right: 70px; top: 1500px; text-align: center; font-size: 58px; font-weight: 600; line-height: 1.25; letter-spacing: -.01em; text-shadow: 0 4px 30px #000, 0 0 8px #000; opacity: 0; }
+.phone { position: absolute; left: 50%; width: 560px; height: 940px; margin-left: -280px; border-radius: 80px; background: linear-gradient(180deg, #14141B, #0A0A0F); border: 2px solid rgba(255,255,255,.14); box-shadow: inset 0 2px 0 rgba(255,255,255,.08), 0 60px 120px -30px #000; }
+.phone .notch { position: absolute; left: 50%; top: 26px; width: 150px; height: 34px; margin-left: -75px; border-radius: 20px; background: #000; }
+.chip2 { display: inline-flex; align-items: center; gap: 16px; padding: 16px 30px; border-radius: 999px; font-size: 40px; font-weight: 600; background: rgba(255,255,255,.07); border: 1px solid var(--line); }
+.mod { position: absolute; left: 150px; right: 150px; height: 170px; border-radius: 50px; display: flex; align-items: center; gap: 40px; padding: 0 64px; font-size: 76px; font-weight: 700; letter-spacing: -.02em; background: linear-gradient(180deg, #14141B, #0C0C10); border: 1px solid var(--line); box-shadow: inset 0 2px 0 rgba(255,255,255,.07), 0 30px 70px -30px #000; opacity: 0; }
+.mod i { width: 46px; height: 46px; border-radius: 50%; flex: none; }
+.title { position: absolute; left: 70px; right: 70px; top: 120px; font-size: 100px; font-weight: 700; letter-spacing: -.03em; line-height: 1.02; }
+.sub { position: absolute; left: 70px; right: 70px; top: 250px; font-size: 44px; color: var(--muted); }
+.dev { position: absolute; width: 520px; height: 1120px; border-radius: 76px; background: #000; border: 3px solid rgba(255,255,255,.16); box-shadow: 0 0 0 10px #0b0b10, 0 70px 140px -30px #000, 0 0 120px rgba(139,92,246,.30); overflow: hidden; }
+.dev img { position: absolute; left: 0; top: 0; width: 100%; height: 100%; object-fit: cover; object-position: top; opacity: 0; will-change: transform, opacity; }
+.badge { position: absolute; padding: 18px 34px; border-radius: 999px; font-size: 42px; font-weight: 600; background: rgba(15,17,25,.92); border: 1px solid rgba(167,139,250,.5); color: #E4DAFF; box-shadow: 0 20px 60px -10px rgba(0,0,0,.8), 0 0 40px rgba(139,92,246,.35); opacity: 0; white-space: nowrap; }
+.plat { position: absolute; left: 110px; right: 110px; height: 190px; border-radius: 52px; display: flex; align-items: center; gap: 44px; padding: 0 70px; font-size: 62px; font-weight: 700; letter-spacing: -.02em; background: linear-gradient(180deg, #14141B, #0C0C10); border: 1px solid var(--line); box-shadow: inset 0 2px 0 rgba(255,255,255,.07), 0 30px 70px -30px #000; opacity: 0; }
+.plat small { display: block; font-size: 34px; font-weight: 400; color: var(--muted); letter-spacing: 0; margin-top: 4px; }
+.plat svg { width: 84px; height: 84px; flex: none; }
+</style>
+</head>
+<body>
+<div id="frame"><div id="stage" aria-label="A 48 second advert showing the features of Emvryx" role="img">
+  <div class="glow" id="g1" style="width:1100px;height:1100px;left:-250px;top:150px;background:rgba(139,92,246,.55)"></div>
+  <div class="glow" id="g2" style="width:900px;height:900px;left:380px;top:900px;background:rgba(34,211,238,.20)"></div>
+
+  <div class="scene" id="s0">
+    <svg class="logo" id="logo" viewBox="0 0 64 64" fill="none" style="top:700px">
+      <path id="lE" d="M15 15 H42 M15 49 H42 M15 15 V49" stroke="#EEF0F6" stroke-width="8" stroke-linecap="round" stroke-linejoin="round" pathLength="100" stroke-dasharray="100" stroke-dashoffset="100"/>
+      <path id="lBar" d="M15 32 H34" stroke="#8B5CF6" stroke-width="8" stroke-linecap="round" pathLength="100" stroke-dasharray="100" stroke-dashoffset="100"/>
+      <circle id="lDot" cx="49" cy="32" r="6.5" fill="#8B5CF6"/>
+    </svg>
+    <div class="abs big" id="meet" style="left:0;right:0;top:1010px;text-align:center;font-size:130px">Meet Emvryx</div>
+    <div class="abs" id="meet2" style="left:60px;right:60px;top:1190px;text-align:center;font-size:56px;color:var(--muted)">One app that chats, researches and builds.</div>
+  </div>
+
+  <!-- the feature scenes: a title, a line under it, a phone showing the real screen, and a badge -->
+  <div class="scene" id="sf">
+    <div class="title" id="ft"></div><div class="sub" id="fs"></div>
+    <div class="dev" id="dev" style="left:280px;top:350px"><img id="im-chat-answer" src="ad-screens/chat-answer.png" alt=""><img id="im-model-picker" src="ad-screens/model-picker.png" alt=""><img id="im-research" src="ad-screens/research.png" alt=""><img id="im-private" src="ad-screens/private.png" alt=""><img id="im-vryx-home" src="ad-screens/vryx-home.png" alt=""><img id="im-vryx-session" src="ad-screens/vryx-session.png" alt=""><img id="im-vryx-preview" src="ad-screens/vryx-preview.png" alt=""></div>
+    <div class="badge" id="badge" style="left:120px;top:1340px"></div>
+  </div>
+
+  <!-- dark and light side by side -->
+  <div class="scene" id="sl">
+    <div class="title">Dark or light.</div><div class="sub">Your look, your choice.</div>
+    <div class="dev" id="devD" style="left:40px;top:430px;width:470px;height:980px;border-radius:64px"><img id="imd" src="ad-screens/chat-answer.png" alt="" style="opacity:1"></div>
+    <div class="dev" id="devL" style="left:570px;top:430px;width:470px;height:980px;border-radius:64px"><img id="iml" src="ad-screens/light.png" alt="" style="opacity:1"></div>
+  </div>
+
+  <!-- everywhere -->
+  <div class="scene" id="se">
+    <div class="title">Everywhere.</div>
+    <div class="plat" id="e1" style="top:400px"><svg viewBox="0 0 48 48" fill="none" stroke="#B79CFF" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"><rect x="14" y="4" width="20" height="40" rx="5"/><path d="M21 38h6"/></svg><div>Android app<small>Built in, with voice and widgets.</small></div></div>
+    <div class="plat" id="e2" style="top:640px"><svg viewBox="0 0 48 48" fill="none" stroke="#B79CFF" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="9" width="38" height="25" rx="4"/><path d="M16 41h16M24 34v7"/></svg><div>Windows app<small>On your desktop.</small></div></div>
+    <div class="plat" id="e3" style="top:880px"><svg viewBox="0 0 48 48" fill="none" stroke="#B79CFF" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="24" cy="24" r="18"/><path d="M6 24h36M24 6c-8 9-8 27 0 36M24 6c8 9 8 27 0 36"/></svg><div>Any browser<small>Install it from the web.</small></div></div>
+    <div class="plat" id="e4" style="top:1120px"><svg viewBox="0 0 48 48" fill="none" stroke="#B79CFF" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 20c10-12 26-12 36 0M12 27c8-8 16-8 24 0M18 34c4-4 8-4 12 0"/><circle cx="24" cy="40" r="1.8"/><path d="M8 8l32 32"/></svg><div>Offline on your phone<small>A small model that runs on the phone.</small></div></div>
+  </div>
+
+  <div class="scene" id="so">
+    <svg class="logo" id="logo2" viewBox="0 0 64 64" fill="none" style="top:540px;width:340px;height:340px;margin:-170px 0 0 -170px">
+      <path d="M15 15 H42 M15 49 H42 M15 15 V49" stroke="#EEF0F6" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"/>
+      <path d="M15 32 H34" stroke="#8B5CF6" stroke-width="8" stroke-linecap="round"/><circle cx="49" cy="32" r="6.5" fill="#8B5CF6"/>
+    </svg>
+    <div class="abs big" id="o1" style="left:0;right:0;top:760px;text-align:center;font-size:150px">Emvryx</div>
+    <div class="abs" id="o2" style="left:0;right:0;top:960px;text-align:center;font-size:62px;color:var(--muted)">Small models. Real help.</div>
+    <div class="abs" id="o3" style="left:0;right:0;top:1160px;text-align:center"><span class="cta">emvryx.app</span></div>
+  </div>
+
+  <div class="cap" id="cap"></div>
+</div></div>
+
+<div id="bar"><button id="play">Replay</button><input id="scrub" type="range" min="0" max="48" step="0.01" value="0" aria-label="Time in the advert"><span id="clock">0.0 / 48 s</span><button id="snd">Sound</button></div>
+
+<script>
+'use strict';
+const DURATION = 48;
+const $ = (id) => document.getElementById(id);
+const clamp = (x) => Math.min(1, Math.max(0, x));
+const seg = (t, a, b) => clamp((t - a) / (b - a));
+const out3 = (x) => 1 - Math.pow(1 - x, 3);
+const back = (x) => 1 + 2.2 * Math.pow(x - 1, 3) + 1.2 * Math.pow(x - 1, 2);
+const vis = (t, a, b, fi = .45, fo = .45) => Math.min(seg(t, a, a + fi), 1 - seg(t, b - fo, b));
+const set = (el, s) => { for (const k in s) el.style[k] = s[k]; };
+
+// The voice: one list for the voice, the captions and the timing (tools/render_commercial.py --cut features reads it). "Em-vrix" is how the name is spelt for the voice.
+const VOICE = [
+  {t: 0.4,  say: 'Meet Em-vrix. One app that chats, researches, and builds.', cap: 'Meet Emvryx. One app that chats, researches, and builds.'},
+  {t: 4.8,  say: 'Ask it anything. Get clear answers, with tables and code.', cap: 'Ask it anything. Get clear answers, with tables and code.'},
+  {t: 9.8,  say: 'Pick your model, and how hard it thinks.', cap: 'Pick your model, and how hard it thinks.'},
+  {t: 14.4, say: 'Ask for research. You get a report with numbered sources.', cap: 'Ask for research. You get a report with numbered sources.'},
+  {t: 19.8, say: 'Keep a chat private. It is never saved.', cap: 'Keep a chat private. It is never saved.'},
+  {t: 24.8, say: 'Tell VryxCode what to build. It writes the code, checks it in a browser, and shows you a live preview.', cap: 'Tell VryxCode what to build. It writes the code, checks it in a browser, and shows you a live preview.'},
+  {t: 33.4, say: 'Dark or light, it is yours.', cap: 'Dark or light, it is yours.'},
+  {t: 37.8, say: 'On Android, on Windows, on the web, and offline on your phone.', cap: 'On Android, on Windows, on the web, and offline on your phone.'},
+  {t: 43.2, say: 'Em-vrix. Small models. Real help.', cap: 'Emvryx. Small models. Real help.'},
+];
+const VOICE_LENGTH = [4.4, 4.1, 2.3, 3.5, 3.0, 7.1, 2.4, 4.25, 3.4];
+
+// the feature scenes: when each starts and ends, its words, its pictures (each shown from..to, sliding), and a badge
+const FEATURES = [
+  {a: 4.4,  b: 9.5,  title: 'Ask anything.',       sub: 'Plain answers, tables and code.',   pics: [['chat-answer', 4.4, 9.5]], badge: 'Tables, code, lists', bt: 7.0},
+  {a: 9.4,  b: 14.2, title: 'Pick your model.',    sub: 'And how hard it thinks.',           pics: [['model-picker', 9.4, 14.2]], badge: 'Flare \u00b7 Equinox \u00b7 Solstice \u00b7 Apogee', bt: 11.4},
+  {a: 14.0, b: 19.6, title: 'Research.',           sub: 'A report you can check.',           pics: [['research', 14.0, 19.6]], badge: 'Numbered sources [1] [2]', bt: 16.4},
+  {a: 19.4, b: 24.6, title: 'Private chat.',       sub: 'Never saved.',                      pics: [['private', 19.4, 24.6]], badge: 'Gone when you leave', bt: 21.6},
+  {a: 24.4, b: 33.6, title: 'Build anything.',     sub: 'VryxCode writes, checks and shows.', pics: [['vryx-home', 24.4, 27.6], ['vryx-session', 27.4, 30.6], ['vryx-preview', 30.4, 33.6]], badge: 'Live preview', bt: 30.8},
+];
+
+function render(t) {
+  t = Math.min(DURATION, Math.max(0, t));
+  $('g1').style.transform = `translate(${Math.sin(t * .45) * 90}px, ${Math.cos(t * .35) * 70}px) scale(${1 + Math.sin(t * .6) * .06})`;
+  $('g2').style.transform = `translate(${Math.cos(t * .5) * 110}px, ${Math.sin(t * .4) * 80}px)`;
+
+  // opening: the mark draws itself
+  set($('s0'), {opacity: vis(t, 0, 4.7, .01, .5)});
+  $('lE').style.strokeDashoffset = 100 * (1 - out3(seg(t, .2, 1.4)));
+  $('lBar').style.strokeDashoffset = 100 * (1 - out3(seg(t, 1.2, 1.9)));
+  $('lDot').style.transform = `scale(${back(seg(t, 1.8, 2.4))})`; $('lDot').style.transformOrigin = '49px 32px';
+  const mt = out3(seg(t, 2.2, 2.8)); set($('meet'), {opacity: mt, transform: `translateY(${(1 - mt) * 40}px)`});
+  const mt2 = out3(seg(t, 2.9, 3.5)); set($('meet2'), {opacity: mt2, transform: `translateY(${(1 - mt2) * 30}px)`});
+
+  // the feature scenes share one phone: the pictures cross-fade inside it
+  let sceneOn = 0, cur = null;
+  FEATURES.forEach((f) => { const o = vis(t, f.a, f.b); if (o > sceneOn) { sceneOn = o; cur = f; } });
+  set($('sf'), {opacity: sceneOn});
+  ['chat-answer', 'model-picker', 'research', 'private', 'vryx-home', 'vryx-session', 'vryx-preview'].forEach((n) => { $('im-' + n).style.opacity = 0; });
+  if (cur) {
+    $('ft').textContent = cur.title; $('fs').textContent = cur.sub;
+    cur.pics.forEach(([name, a, b]) => {
+      const im = $('im-' + name), o = vis(t, a, b, .5, .5);
+      set(im, {opacity: o, transform: `scale(${1 + .05 * seg(t, a, b)}) translateY(${(1 - out3(seg(t, a, a + .6))) * 40}px)`});
+    });
+    const rise = out3(seg(t, cur.a, cur.a + .8));
+    $('dev').style.transform = `translateY(${(1 - rise) * 120}px) rotate(${(1 - rise) * 2}deg)`;
+    $('badge').textContent = cur.badge;
+    const bp = back(seg(t, cur.bt, cur.bt + .5));
+    set($('badge'), {opacity: clamp(seg(t, cur.bt, cur.bt + .25)) * vis(t, cur.a, cur.b, .01, .5), transform: `translateY(${(1 - bp) * 40}px) scale(${.9 + .1 * bp})`});
+    const bw = $('badge').offsetWidth; $('badge').style.left = Math.round((1080 - bw) / 2) + 'px';
+  }
+
+  // dark and light side by side
+  set($('sl'), {opacity: vis(t, 33.2, 37.9)});
+  const d1 = back(seg(t, 33.5, 34.2)), d2 = back(seg(t, 34.0, 34.7));
+  set($('devD'), {transform: `translateY(${(1 - d1) * 120}px) rotate(${-2 * (1 - d1)}deg)`}); set($('devL'), {transform: `translateY(${(1 - d2) * 120}px) rotate(${2 * (1 - d2)}deg)`});
+
+  // everywhere
+  set($('se'), {opacity: vis(t, 37.6, 43.4)});
+  [['e1', 38.0], ['e2', 38.6], ['e3', 39.2], ['e4', 39.8]].forEach(([id, a]) => { const p = back(seg(t, a, a + .5)); set($(id), {opacity: clamp(seg(t, a, a + .25)), transform: `translateX(${(1 - p) * 140}px)`}); });
+
+  // sign-off
+  set($('so'), {opacity: vis(t, 43.0, 48.01, .5, 0)});
+  $('logo2').style.transform = `scale(${back(seg(t, 43.2, 43.9))})`;
+  [['o1', 43.7], ['o2', 44.2], ['o3', 45.0]].forEach(([id, a]) => { const p = out3(seg(t, a, a + .5)); set($(id), {opacity: p, transform: `translateY(${(1 - p) * 40}px)`}); });
+  $('o3').firstElementChild.style.boxShadow = `0 0 ${60 + Math.sin(t * 6) * 22}px rgba(139,92,246,.55)`;
+
+  // captions
+  let cap = '', co = 0;
+  VOICE.forEach((v, i) => { const e = v.t + VOICE_LENGTH[i]; if (t >= v.t - .05 && t < e + .25) { cap = v.cap; co = Math.min(seg(t, v.t - .05, v.t + .2), 1 - seg(t, e, e + .25)); } });
+  $('cap').textContent = cap; $('cap').style.opacity = co;
+  $('clock').textContent = t.toFixed(1) + ' / ' + DURATION + ' s'; $('scrub').value = t;
+}
+
+function fit() { const s = Math.min(innerWidth / 1080, (innerHeight - (document.body.classList.contains('clean') ? 0 : 70)) / 1920); $('stage').style.transform = `scale(${s})`; }
+addEventListener('resize', fit);
+if (/[?&]clean/.test(location.search)) document.body.classList.add('clean');
+fit();
+
+let sound = false;
+$('snd').onclick = () => { sound = !sound; $('snd').textContent = sound ? 'Sound on' : 'Sound'; if (!sound) speechSynthesis.cancel(); };
+let spoken = -1;
+function speakFor(t) { if (!sound || !('speechSynthesis' in window)) return; VOICE.forEach((v, i) => { if (i > spoken && t >= v.t) { spoken = i; const u = new SpeechSynthesisUtterance(v.say.replace(/Em-vrix/g, 'Emvryx')); speechSynthesis.speak(u); } }); }
+let t0 = 0, raf = 0;
+function tick(now) { const t = (now - t0) / 1000; render(t); speakFor(t); if (t < DURATION) raf = requestAnimationFrame(tick); else $('play').textContent = 'Replay'; }
+function play(from = 0) { cancelAnimationFrame(raf); if (window.speechSynthesis) speechSynthesis.cancel(); spoken = -1; $('play').textContent = 'Replay'; t0 = performance.now() - from * 1000; raf = requestAnimationFrame(tick); }
+$('play').onclick = () => play(0);
+$('scrub').oninput = (e) => { cancelAnimationFrame(raf); render(+e.target.value); };
+window.__seek = (t) => { cancelAnimationFrame(raf); render(t); return t; };
+window.__duration = DURATION;
+window.__voice = VOICE;
+window.__ready = () => Promise.all([...document.images].map((i) => i.complete ? 1 : new Promise((r) => { i.onload = i.onerror = r; })));
+
+const q0 = /[?&]t=([\d.]+)/.exec(location.search);
+if (q0) render(+q0[1]);
+else if (matchMedia('(prefers-reduced-motion: reduce)').matches) render(DURATION);
+else if (!/[?&]clean/.test(location.search)) play(0);
+else render(0);
+</script>
+</body>
+</html>

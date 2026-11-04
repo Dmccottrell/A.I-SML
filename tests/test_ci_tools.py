@@ -36,6 +36,30 @@ class Split(unittest.TestCase):
         self.assertFalse(R.is_browser("test_vercel_ignore"))
 
 
+class Runner(unittest.TestCase):
+    def test_a_test_process_that_dies_without_a_word_is_reported_with_its_exit_code(self):
+        """A test file once failed in a full run with no output at all, which left nothing to read. The runner now says what happened."""
+        from unittest import mock
+
+        class Dead:
+            returncode, stdout, stderr = -9, "", ""
+        with mock.patch.object(R.subprocess, "run", return_value=Dead()):
+            name, code, secs, ran, out = R.run_one("test_flags")
+        self.assertEqual(code, -9)
+        self.assertIn("exit code -9", out)
+        self.assertIn("test_flags", out)
+
+    def test_a_normal_failure_keeps_its_own_output(self):
+        from unittest import mock
+
+        class Failed:
+            returncode, stdout, stderr = 1, "", "FAIL: x\nRan 1 test\nFAILED (failures=1)"
+        with mock.patch.object(R.subprocess, "run", return_value=Failed()):
+            out = R.run_one("test_flags")[4]
+        self.assertIn("FAIL: x", out)
+        self.assertNotIn("exit code", out)
+
+
 class Lint(unittest.TestCase):
     def test_the_project_itself_is_clean(self):
         problems, counts = L.run()

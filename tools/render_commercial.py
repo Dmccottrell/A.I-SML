@@ -17,6 +17,8 @@ WHAT THIS FILE DOES
 Usage:
     python tools/render_commercial.py                      (silent video: site/emvryx-ad-15s.mp4)
     python tools/render_commercial.py --cut 30             (the 30 second ad with the voice and the pad: site/emvryx-ad-30s.mp4)
+    python tools/render_commercial.py --cut 48             (the 48 second feature advert made of pictures of the real app, with the voice: site/emvryx-ad-48s.mp4;
+                                                            the pictures come from tools/capture_app_screens.py)
     python tools/render_commercial.py --music              (with the soft pad)
     python tools/render_commercial.py --stills             (six pictures to look at, in the output folder)
     python tools/render_commercial.py --out some/folder
@@ -29,12 +31,12 @@ import subprocess
 import tempfile
 
 ROOT = os.path.join(os.path.dirname(os.path.abspath(__file__)), os.pardir)
-PAGES = {15: "commercial.html", 30: "commercial30.html"}
+PAGES = {15: "commercial.html", 30: "commercial30.html", 48: "commercial-features.html"}
 FPS = 30
 SECONDS = 15
 VOICE_URL = "https://huggingface.co/rhasspy/piper-voices/resolve/main/en/en_GB/alba/medium/en_GB-alba-medium"     # Alba, CC BY 4.0
 VOICE_CACHE = os.path.join(os.path.expanduser("~"), ".cache", "emvryx-voice")
-STILLS = {15: (1.9, 4.0, 5.9, 8.9, 11.6, 14.4), 30: (2.5, 5.0, 9.4, 14.6, 19.6, 23.4, 28.5)}            # the moments worth looking at: the mark, a question, the answer, the finished build, the four reasons, the sign-off
+STILLS = {15: (1.9, 4.0, 5.9, 8.9, 11.6, 14.4), 30: (2.5, 5.0, 9.4, 14.6, 19.6, 23.4, 28.5), 48: (3.0, 7.0, 11.6, 16.5, 22.0, 28.0, 31.5, 35.5, 39.5, 46.0)}            # the moments worth looking at: the mark, a question, the answer, the finished build, the four reasons, the sign-off
 
 
 def browser_path():
@@ -99,7 +101,7 @@ def main():
     ap = argparse.ArgumentParser(description="Render the 15 second advert to an MP4")
     ap.add_argument("--out", default=os.path.join(ROOT, "site"), help="the folder for the result")
     ap.add_argument("--music", action="store_true", help="add a soft original pad made by ffmpeg (the 30 second cut always has it)")
-    ap.add_argument("--cut", type=int, choices=sorted(PAGES), default=15, help="15 (silent animation) or 30 (with the voice)")
+    ap.add_argument("--cut", type=int, choices=sorted(PAGES), default=15, help="15 (silent animation), 30 (with the voice) or 48 (the feature advert made of pictures of the real app, with the voice)")
     ap.add_argument("--stills", action="store_true", help="only take six pictures to look at")
     args = ap.parse_args()
     global SECONDS
@@ -112,6 +114,7 @@ def main():
         page = browser.new_page(viewport={"width": 1080, "height": 1920}, device_scale_factor=1)
         page.goto("file://" + os.path.abspath(PAGE).replace("\\", "/") + "?clean")
         page.wait_for_function("typeof window.__seek === 'function'")
+        page.evaluate("window.__ready ? window.__ready() : 1")                          # the pictures of the real app are loaded before any frame is taken
         lines = page.evaluate("window.__voice || []")
         if args.stills:
             for t in STILLS[args.cut]:
