@@ -266,3 +266,67 @@ extension KeyedDecodingContainer where K == AnyKey {
         return fallback
     }
 }
+
+
+// MARK: - Memory, files, skills and settings (android/.../data/Native.kt)
+
+/// GET /api/memory: what Emvryx remembers about you, and whether memory is on.
+struct MemoryList: Decodable, Equatable {
+    var facts: [Fact] = [], on = true
+    struct Fact: Decodable, Equatable, Identifiable {
+        var id: Int64 = 0, text = "", created = 0.0, slot = ""
+        init(from d: Decoder) throws {
+            let c = try d.container(keyedBy: AnyKey.self)
+            id = c.int("id") ?? 0; text = c.string("text") ?? ""; created = c.double("created") ?? 0; slot = c.string("slot") ?? ""
+        }
+    }
+    init(from d: Decoder) throws {
+        let c = try d.container(keyedBy: AnyKey.self)
+        facts = c.value("facts") ?? []; on = c.bool("on", true)
+    }
+}
+
+/// GET /api/documents: your files, and the size limit in megabytes.
+struct DocList: Decodable, Equatable {
+    var documents: [DocRow] = [], maxMb = 0
+    struct DocRow: Decodable, Equatable, Identifiable {
+        var id: Int64 = 0, name = "", kind = "", chars: Int64 = 0, created = 0.0
+        var isPicture: Bool { DocInfo.pictureKinds.contains(kind.lowercased()) }
+        /// "40 words", "3,400 words" ("" for nothing): the characters the server read, at a rough 6 per word.
+        var size: String {
+            if chars <= 0 { return "" }
+            if chars < 6_000 { return "\(max(1, chars / 6)) words" }
+            return NumberFormatter.localizedString(from: NSNumber(value: chars / 6), number: .decimal) + " words"
+        }
+        init(from d: Decoder) throws {
+            let c = try d.container(keyedBy: AnyKey.self)
+            id = c.int("id") ?? 0; name = c.string("name") ?? ""; kind = c.string("kind") ?? ""; chars = c.int("chars") ?? 0; created = c.double("created") ?? 0
+        }
+    }
+    init(from d: Decoder) throws {
+        let c = try d.container(keyedBy: AnyKey.self)
+        documents = c.value("documents") ?? []; maxMb = Int(c.int("max_mb") ?? 0)
+    }
+}
+
+/// One skill: a saved set of instructions a chat can start from.
+struct Skill: Decodable, Equatable, Identifiable {
+    var id = "", name = "", forWho = "", icon = "", does = "", tryThis = ""
+    init(from d: Decoder) throws {
+        let c = try d.container(keyedBy: AnyKey.self)
+        id = c.string("id") ?? ""; name = c.string("name") ?? ""; forWho = c.string("for") ?? ""; icon = c.string("icon") ?? ""
+        does = c.string("does") ?? ""; tryThis = c.string("try") ?? ""
+    }
+}
+
+/// GET /api/settings: the everyday settings the app's own Settings screen shows (app/state_settings.py get_settings).
+struct SettingsData: Decodable, Equatable {
+    var windowMode = "everyday", showTokens = false, webSearch = "auto", memory = true, thinkingPause = "short"
+    var liveData = true, connectedApps = true, customInstructions = ""
+    init(from d: Decoder) throws {
+        let c = try d.container(keyedBy: AnyKey.self)
+        windowMode = c.string("window_mode") ?? "everyday"; showTokens = c.bool("show_tokens"); webSearch = c.string("web_search") ?? "auto"
+        memory = c.bool("memory", true); thinkingPause = c.string("thinking_pause") ?? "short"; liveData = c.bool("live_data", true)
+        connectedApps = c.bool("connected_apps", true); customInstructions = c.string("custom_instructions") ?? ""
+    }
+}

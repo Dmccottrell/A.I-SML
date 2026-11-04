@@ -56,8 +56,11 @@ final class ApiClient {
         try await get("/api/state" + (model.map { "?model=" + ($0.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? $0) } ?? ""))
     }
     func chat(_ id: Int64) async throws -> Chat { try await get("/api/chats/\(id)") }
-    func newChat(isPrivate: Bool = false) async throws -> Int64 {
-        let made: NewChat = try await post("/api/chats", isPrivate ? ["private": true] : [:])
+    func newChat(isPrivate: Bool = false, skill: String = "") async throws -> Int64 {
+        var body: [String: Any] = [:]
+        if isPrivate { body["private"] = true }
+        if !skill.isEmpty { body["skill"] = skill }
+        let made: NewChat = try await post("/api/chats", body)
         return made.id
     }
     func stop(_ id: Int64) async { _ = try? await post("/api/chats/\(id)/stop", [:]) as Empty }
@@ -95,6 +98,18 @@ final class ApiClient {
     func exportDoc(text: String, format: String, title: String) async throws -> Data {
         try await bytes(makeRequest("/api/export-doc", body: ["text": text, "format": format, "title": title]))
     }
+
+    // Memory, files, skills and settings
+    func memory() async throws -> MemoryList { try await get("/api/memory") }
+    func memoryAdd(_ text: String) async throws -> MemoryList { try await post("/api/memory/add", ["text": text]) }
+    func memoryDelete(_ id: Int64) async throws { let _: Empty = try await post("/api/memory/delete", ["id": id]) }
+    func memoryClear() async throws { let _: Empty = try await post("/api/memory/clear", [:]) }
+    func documents() async throws -> DocList { try await get("/api/documents") }
+    func deleteDocument(_ id: Int64) async throws { let _: Empty = try await call(makeRequest("/api/documents/\(id)", method: "DELETE")) }
+    func skills() async throws -> [Skill] { try await get("/api/skills", as: SkillList.self).skills }
+    func settings() async throws -> SettingsData { try await get("/api/settings") }
+    /// Changes only what [body] names; the server checks each value and sends back all the settings.
+    func saveSettings(_ body: [String: Any]) async throws -> SettingsData { try await post("/api/settings", body) }
 
     // Pictures and files
     /// A picture or file for the chat: uploaded once (the bytes as Base64, as the website does), then attached with [setChatDocs].
@@ -153,6 +168,8 @@ final class ApiClient {
         init(from d: Decoder) throws { chats = (try d.container(keyedBy: AnyKey.self)).value("chats") ?? [] } }
     private struct SearchReply: Decodable { var results: [SearchHit] = []
         init(from d: Decoder) throws { results = (try d.container(keyedBy: AnyKey.self)).value("results") ?? [] } }
+    private struct SkillList: Decodable { var skills: [Skill] = []
+        init(from d: Decoder) throws { skills = (try d.container(keyedBy: AnyKey.self)).value("skills") ?? [] } }
     private struct DocsReply: Decodable { var docs: [DocInfo] = []
         init(from d: Decoder) throws { docs = (try d.container(keyedBy: AnyKey.self)).value("docs") ?? [] } }
     private struct LikeReply: Decodable { var saved = 0

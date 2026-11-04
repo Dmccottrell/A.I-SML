@@ -24,6 +24,14 @@ enum TestServer {
         return (status, out)
     }
 
+    /// A signed-in call to the test server that returns its answer as JSON (to check what the app saved).
+    static func json(_ method: String = "GET", _ path: String, _ body: [String: Any]? = nil) throws -> [String: Any] {
+        let session = URLSession(configuration: .ephemeral)
+        try call("POST", "/api/login", ["key": key], session: session)
+        let (_, data) = try call(method, path, body, session: session)
+        return (try? JSONSerialization.jsonObject(with: data)) as? [String: Any] ?? [:]
+    }
+
     /// Starts every test from the same place: [flag] set for the tester ("admins", "everyone" or "off"), no chats and nothing remembered.
     static func reset(flag id: String, _ audience: String) throws {
         let session = URLSession(configuration: .ephemeral)
@@ -38,6 +46,10 @@ enum TestServer {
             if let chatId = chat["id"] as? Int { try call("DELETE", "/api/chats/\(chatId)", session: session) }
         }
         try call("POST", "/api/memory/clear", [:], session: session)
+        let (_, docs) = try call("GET", "/api/documents", session: session)
+        for doc in ((try? JSONSerialization.jsonObject(with: docs)) as? [String: Any])?["documents"] as? [[String: Any]] ?? [] {
+            if let docId = doc["id"] as? Int { try call("DELETE", "/api/documents/\(docId)", session: session) }
+        }
     }
 }
 

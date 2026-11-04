@@ -31,13 +31,13 @@ struct RootView: View {
                 case let .page(path, title, run):
                     WebPage(path: path, title: title, run: run, done: vm.backToChat)
                 case .memory:
-                    WebPage(path: "/", title: "Memory", run: "openMemory()", done: vm.backToChat)
+                    MemoryPanel(vm: vm).environment(\.palette, vm.palette)
                 case .files:
-                    WebPage(path: "/", title: "Documents", run: "openDocs()", done: vm.backToChat)
+                    FilesPanel(vm: vm).environment(\.palette, vm.palette)
                 case .skills:
-                    WebPage(path: "/", title: "Skills", run: "openSkills()", done: vm.backToChat)
+                    SkillsPanel(vm: vm).environment(\.palette, vm.palette)
                 case .settings:
-                    WebPage(path: "/#settings", title: "Settings", run: nil, done: vm.backToChat)
+                    SettingsPanel(vm: vm).environment(\.palette, vm.palette)
                 case .code:
                     WebPage(path: "/#code", title: "VryxCode", run: nil, done: vm.backToChat)
                 }

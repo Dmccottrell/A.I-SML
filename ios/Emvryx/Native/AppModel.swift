@@ -234,10 +234,14 @@ final class AppModel: ObservableObject {
 
     // MARK: The chat
 
-    func newChat(isPrivate: Bool = false) {
+    /// The skill the chat that is about to start uses (Skills > Start), shaping every answer.
+    private var skill = ""
+
+    func newChat(isPrivate: Bool = false, skill: String = "", skillName: String = "") {
         guard !streaming else { return }
         chatId = nil
-        title = isPrivate ? "Private chat" : "New chat"
+        self.skill = skill
+        title = isPrivate ? "Private chat" : (skillName.isEmpty ? "New chat" : skillName)
         self.isPrivate = isPrivate
         bubbles = []
         attached = []
@@ -331,7 +335,7 @@ final class AppModel: ObservableObject {
             }
             do {
                 let id: Int64
-                if let c = chatId { id = c } else { id = try await api.newChat(isPrivate: isPrivate); chatId = id }
+                if let c = chatId { id = c } else { id = try await api.newChat(isPrivate: isPrivate, skill: skill); chatId = id; skill = "" }
                 for try await ev in api.send(chatId: id, text: words, model: model, effort: effort, regenerate: regenerate, regenMode: mode,
                                              cont: cont, research: research) {
                     switch ev {
