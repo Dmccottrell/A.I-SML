@@ -13,6 +13,10 @@ final class AppLock: ObservableObject {
     @Published private(set) var problem: String?
 
     init() {
+        #if DEBUG
+        // UI tests start without the lock (EMVRYX_APP_LOCK=reset); debug builds started by hand keep what was chosen.
+        if ProcessInfo.processInfo.environment["EMVRYX_APP_LOCK"] == "reset" { UserDefaults.standard.removeObject(forKey: key) }
+        #endif
         let on = UserDefaults.standard.bool(forKey: key)
         enabled = on
         locked = on
@@ -21,6 +25,7 @@ final class AppLock: ObservableObject {
     func toggle() {
         enabled.toggle()
         UserDefaults.standard.set(enabled, forKey: key)
+        UserDefaults.standard.synchronize()                        // written now, in case the app is closed straight away
         locked = false
         problem = nil
     }

@@ -12,10 +12,33 @@ struct EmvryxApp: App {
 struct RootView: View {
     @StateObject private var vm = AppModel()
     @ObservedObject private var lock = AppLock.shared
+    @ObservedObject private var bridge = IncomingBridge.shared
     @Environment(\.scenePhase) private var phase
+
+    private var locked: Bool { lock.locked && vm.screen != .signIn && vm.screen != .starting }
 
     var body: some View {
         ZStack {
+            // While locked the app is not drawn at all (hiding it from VoiceOver was not enough: other accessibility tools still saw it).
+            // Its state lives in the model, so it comes back as it was.
+            if !locked {
+                screens
+            } else {
+                LockScreen(lock: lock).transition(.opacity)
+            }
+        }
+        .preferredColorScheme(.dark)
+        .onAppear { if vm.screen == .starting { vm.start() } }
+        .onOpenURL { vm.receive($0) }
+        .onReceive(bridge.$pending) { if let words = $0 { bridge.pending = nil; vm.receive(words) } }
+        .onChange(of: phase) { p in
+            if p == .background { lock.lockNow() }
+            if p == .active && lock.locked { Task { await lock.unlock() } }
+        }
+    }
+
+    @ViewBuilder private var screens: some View {
+        Group {
             Group {
                 switch vm.screen {
                 case .starting:
@@ -42,13 +65,6 @@ struct RootView: View {
                     WebPage(path: "/#code", title: "VryxCode", run: nil, done: vm.backToChat)
                 }
             }
-            if lock.locked && vm.screen != .signIn && vm.screen != .starting { LockScreen(lock: lock).transition(.opacity) }
-        }
-        .preferredColorScheme(.dark)
-        .onAppear { if vm.screen == .starting { vm.start() } }
-        .onChange(of: phase) { p in
-            if p == .background { lock.lockNow() }
-            if p == .active && lock.locked { Task { await lock.unlock() } }
         }
     }
 }

@@ -82,6 +82,9 @@ final class AppModel: ObservableObject {
     @Published private(set) var emailSentTo: String?
     @Published private(set) var emailOffered = false
 
+    /// Words that came from outside (Share to Emvryx, the Siri Shortcut), waiting for the chat to be on screen.
+    private var incoming: Incoming?
+
     private var nextKey = 0
     private var replyTask: Task<Void, Never>?
     private var searchTask: Task<Void, Never>?
@@ -200,6 +203,7 @@ final class AppModel: ObservableObject {
         try await loadState()
         await api.session.shareWithWebPages()
         screen = flag("ios_native") ? .chat : .website
+        applyIncoming()
     }
 
     func signOut() {
@@ -223,12 +227,30 @@ final class AppModel: ObservableObject {
         if let s = try? await api.state(model: model) { state = s; chats = s.chats; usage = s.usage }
     }
 
+    // MARK: From outside the app
+
+    /// Words from Share to Emvryx or the Siri Shortcut: they open a new chat (in the message box, or sent at once) as soon as the chat is showing.
+    func receive(_ words: Incoming) {
+        incoming = words
+        applyIncoming()
+    }
+
+    func receive(_ url: URL) { if let i = Incoming(url: url) { receive(i) } }
+
+    private func applyIncoming() {
+        guard screen == .chat, !streaming, let i = incoming else { return }
+        incoming = nil
+        newChat()
+        if i.send { send(i.text) } else { draft = i.text }
+    }
+
     // MARK: Pages
 
     /// A website page inside the app (Settings, Admin, VryxCode, Memory ...), signed in.
     func open(_ path: String, _ title: String, run: String? = nil) { screen = .page(path: path, title: title, run: run) }
     func backToChat() {
         screen = .chat
+        applyIncoming()
         Task { await refreshChats() }                // a page may have changed the model list, chats or usage
     }
 

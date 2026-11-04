@@ -65,6 +65,7 @@ class ServerUITestCase: XCTestCase {
         try TestServer.reset(flag: "ios_native", native ? "admins" : "off")
         app = XCUIApplication()
         app.launchEnvironment["EMVRYX_SERVER"] = TestServer.url
+        app.launchEnvironment["EMVRYX_APP_LOCK"] = "reset"
         app.launch()
         let useKey = app.buttons["Use an access key"]
         if useKey.waitForExistence(timeout: 10) {
