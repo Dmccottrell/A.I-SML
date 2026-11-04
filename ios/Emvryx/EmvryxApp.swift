@@ -4,11 +4,71 @@ import WebKit
 @main
 struct EmvryxApp: App {
     var body: some Scene {
-        WindowGroup { ContentView() }
+        WindowGroup { RootView() }
     }
 }
 
-/// The whole app: the website full screen, the dark colour behind it (status bar and home bar areas too), and the
+/// The whole app: the native screens (sign-in, chat) when the server's ios_native switch is on for you, otherwise the website.
+struct RootView: View {
+    @StateObject private var vm = AppModel()
+
+    var body: some View {
+        Group {
+            switch vm.screen {
+            case .starting:
+                ZStack { Emvryx.bg.ignoresSafeArea(); Logo().frame(width: 64, height: 64) }
+            case let .off(resting):
+                OffScreen(phoneOnline: true, resting: resting, retry: vm.start)
+            case .signIn:
+                SignInView(vm: vm)
+            case .chat:
+                ChatView(vm: vm)
+            case .website:
+                ContentView()
+            case let .page(path, title, run):
+                WebPage(path: path, title: title, run: run, done: vm.backToChat)
+            }
+        }
+        .preferredColorScheme(.dark)
+        .onAppear { if vm.screen == .starting { vm.start() } }
+    }
+}
+
+/// One website page inside the native app (Settings, Admin, VryxCode ...), signed in, with a bar to go back to the chat.
+struct WebPage: View {
+    @StateObject private var web: WebController
+    let title: String
+    let done: () -> Void
+
+    init(path: String, title: String, run: String?, done: @escaping () -> Void) {
+        _web = StateObject(wrappedValue: WebController(start: URL(string: path, relativeTo: Site.home)!.absoluteURL, run: run))
+        self.title = title
+        self.done = done
+    }
+
+    var body: some View {
+        VStack(spacing: 0) {
+            HStack {
+                Button(action: done) {
+                    Label("Chat", systemImage: "chevron.left").font(Emvryx.body(16, semibold: true)).foregroundStyle(Emvryx.text)
+                }
+                .accessibilityLabel("Back to chat")
+                Spacer()
+            }
+            .overlay(Text(title).font(Emvryx.body(17, semibold: true)).foregroundStyle(Emvryx.text))
+            .padding(.horizontal, 16).frame(height: 52)
+            Rectangle().fill(Emvryx.line).frame(height: 1)
+            ZStack {
+                Color(uiColor: Site.background)
+                WebView(webView: web.webView).ignoresSafeArea(.keyboard)
+                if web.offline { OffScreen(phoneOnline: web.phoneOnline, retry: web.retry) }
+            }
+        }
+        .background(Emvryx.bg.ignoresSafeArea())
+    }
+}
+
+/// The whole website full screen (version 1), the dark colour behind it (status bar and home bar areas too), and the
 /// "No connection" page on top when the site cannot be reached.
 struct ContentView: View {
     @StateObject private var web = WebController()

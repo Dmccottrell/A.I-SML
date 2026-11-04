@@ -13,8 +13,12 @@ final class WebController: NSObject, ObservableObject {
     /// The address that failed to load, so Retry goes back to it rather than to the start page.
     private var failedURL: URL?
     private let network = NWPathMonitor()
+    /// The site's own function to open a panel once the page has loaded (openMemory(), openDocs() ...), as Android's in-app pages do.
+    private var run: String?
 
-    override init() {
+    /// [start]: the page to open (the site, or Settings, Admin, VryxCode inside the native app); [run]: JavaScript to run once it loads.
+    init(start: URL = Site.start, run: String? = nil) {
+        self.run = run
         let config = WKWebViewConfiguration()
         config.applicationNameForUserAgent = Site.applicationName
         config.allowsInlineMediaPlayback = true
@@ -53,7 +57,7 @@ final class WebController: NSObject, ObservableObject {
         }
         network.start(queue: .main)
 
-        webView.load(URLRequest(url: Site.start))
+        webView.load(URLRequest(url: start))
     }
 
     deinit { network.cancel() }
@@ -93,6 +97,10 @@ extension WebController: WKNavigationDelegate {
 
     func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
         webView.scrollView.refreshControl?.endRefreshing()
+        if let js = run {
+            run = nil
+            webView.evaluateJavaScript(js)
+        }
         failedURL = nil
         offline = false
     }
