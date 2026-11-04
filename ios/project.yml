@@ -40,6 +40,7 @@ targets:
         NSMicrophoneUsageDescription: Emvryx uses the microphone when you press the voice button.
         NSSpeechRecognitionUsageDescription: Emvryx turns what you say into text when you press the voice button.
         NSCameraUsageDescription: Emvryx uses the camera when you take a photo to send in a chat.
+        NSFaceIDUsageDescription: Emvryx uses Face ID to unlock the app when you have switched the app lock on.
         NSPhotoLibraryUsageDescription: Emvryx opens your photos when you choose one to send in a chat.
   EmvryxTests:
     type: bundle.unit-test

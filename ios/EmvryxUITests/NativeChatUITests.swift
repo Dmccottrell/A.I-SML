@@ -8,9 +8,6 @@ final class NativeChatUITests: ServerUITestCase {
         XCTAssertTrue(box.exists, "the native chat did not open signed in")
     }
 
-    /// The message box (a growing box is a text view, a one-line one a text field: match it by name).
-    private var box: XCUIElement { app.descendants(matching: .any).matching(NSPredicate(format: "label == %@ AND (elementType == %d OR elementType == %d)", "Message", XCUIElement.ElementType.textView.rawValue, XCUIElement.ElementType.textField.rawValue)).firstMatch }
-
     func testSendAMessageAndTheReplyIsWrittenIn() {
         app.buttons["New chat"].tap()
         XCTAssertTrue(app.staticTexts["How can I help?"].waitForExistence(timeout: 5))

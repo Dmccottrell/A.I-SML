@@ -11,26 +11,45 @@ struct EmvryxApp: App {
 /// The whole app: the native screens (sign-in, chat) when the server's ios_native switch is on for you, otherwise the website.
 struct RootView: View {
     @StateObject private var vm = AppModel()
+    @ObservedObject private var lock = AppLock.shared
+    @Environment(\.scenePhase) private var phase
 
     var body: some View {
-        Group {
-            switch vm.screen {
-            case .starting:
-                ZStack { Emvryx.bg.ignoresSafeArea(); Logo().frame(width: 64, height: 64) }
-            case let .off(resting):
-                OffScreen(phoneOnline: true, resting: resting, retry: vm.start)
-            case .signIn:
-                SignInView(vm: vm)
-            case .chat:
-                ChatView(vm: vm)
-            case .website:
-                ContentView()
-            case let .page(path, title, run):
-                WebPage(path: path, title: title, run: run, done: vm.backToChat)
+        ZStack {
+            Group {
+                switch vm.screen {
+                case .starting:
+                    ZStack { Emvryx.bg.ignoresSafeArea(); Logo().frame(width: 64, height: 64) }
+                case let .off(resting):
+                    OffScreen(phoneOnline: true, resting: resting, retry: vm.start)
+                case .signIn:
+                    SignInView(vm: vm)
+                case .chat:
+                    ChatView(vm: vm)
+                case .website:
+                    ContentView()
+                case let .page(path, title, run):
+                    WebPage(path: path, title: title, run: run, done: vm.backToChat)
+                case .memory:
+                    WebPage(path: "/", title: "Memory", run: "openMemory()", done: vm.backToChat)
+                case .files:
+                    WebPage(path: "/", title: "Documents", run: "openDocs()", done: vm.backToChat)
+                case .skills:
+                    WebPage(path: "/", title: "Skills", run: "openSkills()", done: vm.backToChat)
+                case .settings:
+                    WebPage(path: "/#settings", title: "Settings", run: nil, done: vm.backToChat)
+                case .code:
+                    WebPage(path: "/#code", title: "VryxCode", run: nil, done: vm.backToChat)
+                }
             }
+            if lock.locked && vm.screen != .signIn && vm.screen != .starting { LockScreen(lock: lock).transition(.opacity) }
         }
         .preferredColorScheme(.dark)
         .onAppear { if vm.screen == .starting { vm.start() } }
+        .onChange(of: phase) { p in
+            if p == .background { lock.lockNow() }
+            if p == .active && lock.locked { Task { await lock.unlock() } }
+        }
     }
 }
 

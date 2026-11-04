@@ -32,7 +32,7 @@ final class SseParserTests: XCTestCase {
             .loading(model: "solstice-2"),
             .piece("Hello"),
             .piece(" there"),
-            .done(title: "Greetings", messageId: 7, cut: false, usage: Usage()),
+            .done(title: "Greetings", messageId: 7, cut: false, usage: Usage(), context: nil),
         ])
     }
 

@@ -7,22 +7,37 @@ enum TestServer {
     static var url: String { ProcessInfo.processInfo.environment["EMVRYX_TEST_SERVER"] ?? "" }
     static var key: String { ProcessInfo.processInfo.environment["EMVRYX_TEST_KEY"] ?? "" }
 
-    /// Sets who sees a feature (Admin > Previews) on the test server, signed in as the tester: "admins", "everyone" or "off".
-    static func setFlag(_ id: String, _ audience: String) throws {
-        let session = URLSession(configuration: .ephemeral)
-        func post(_ path: String, _ body: [String: Any]) throws -> Int {
-            var r = URLRequest(url: URL(string: url + path)!)
-            r.httpMethod = "POST"
+    /// One call to the test server as the tester (signed in with the key): the status code and the answer.
+    @discardableResult
+    static func call(_ method: String, _ path: String, _ body: [String: Any]? = nil, session: URLSession) throws -> (Int, Data) {
+        var r = URLRequest(url: URL(string: url + path)!)
+        r.httpMethod = method
+        if let body {
             r.setValue("application/json", forHTTPHeaderField: "Content-Type")
             r.httpBody = try JSONSerialization.data(withJSONObject: body)
-            let done = DispatchSemaphore(value: 0)
-            var status = 0
-            session.dataTask(with: r) { _, response, _ in status = (response as? HTTPURLResponse)?.statusCode ?? 0; done.signal() }.resume()
-            done.wait()
-            return status
         }
-        XCTAssertEqual(try post("/api/login", ["key": key]), 200, "the test key did not sign in")
-        XCTAssertEqual(try post("/api/admin/flags", ["id": id, "audience": audience]), 200, "could not set \(id)")
+        let done = DispatchSemaphore(value: 0)
+        var status = 0
+        var out = Data()
+        session.dataTask(with: r) { data, response, _ in status = (response as? HTTPURLResponse)?.statusCode ?? 0; out = data ?? Data(); done.signal() }.resume()
+        done.wait()
+        return (status, out)
+    }
+
+    /// Starts every test from the same place: [flag] set for the tester ("admins", "everyone" or "off"), no chats and nothing remembered.
+    static func reset(flag id: String, _ audience: String) throws {
+        let session = URLSession(configuration: .ephemeral)
+        XCTAssertEqual(try call("POST", "/api/login", ["key": key], session: session).0, 200, "the test key did not sign in")
+        XCTAssertEqual(try call("POST", "/api/admin/flags", ["id": id, "audience": audience], session: session).0, 200, "could not set \(id)")
+        let (_, state) = try call("GET", "/api/state", session: session)
+        for chat in ((try? JSONSerialization.jsonObject(with: state)) as? [String: Any])?["chats"] as? [[String: Any]] ?? [] {
+            if let chatId = chat["id"] as? Int { try call("DELETE", "/api/chats/\(chatId)", session: session) }
+        }
+        let (_, archived) = try call("GET", "/api/chats/archived", session: session)
+        for chat in ((try? JSONSerialization.jsonObject(with: archived)) as? [String: Any])?["chats"] as? [[String: Any]] ?? [] {
+            if let chatId = chat["id"] as? Int { try call("DELETE", "/api/chats/\(chatId)", session: session) }
+        }
+        try call("POST", "/api/memory/clear", [:], session: session)
     }
 }
 
@@ -35,7 +50,7 @@ class ServerUITestCase: XCTestCase {
     func launch(native: Bool) throws {
         try XCTSkipIf(TestServer.url.isEmpty || TestServer.key.isEmpty, "needs a test server (EMVRYX_TEST_SERVER and EMVRYX_TEST_KEY)")
         continueAfterFailure = false
-        try TestServer.setFlag("ios_native", native ? "admins" : "off")
+        try TestServer.reset(flag: "ios_native", native ? "admins" : "off")
         app = XCUIApplication()
         app.launchEnvironment["EMVRYX_SERVER"] = TestServer.url
         app.launch()
@@ -49,6 +64,45 @@ class ServerUITestCase: XCTestCase {
             field.typeText(TestServer.key)
             app.buttons["Sign in"].tap()
         }
+    }
+
+    /// The message box of the native chat (a growing box is a text view, a one-line one a text field: match it by name).
+    var box: XCUIElement {
+        app.descendants(matching: .any).matching(NSPredicate(format: "label == %@ AND (elementType == %d OR elementType == %d)", "Message",
+            XCUIElement.ElementType.textView.rawValue, XCUIElement.ElementType.textField.rawValue)).firstMatch
+    }
+
+    /// Types [text] in the native chat, sends it and waits until the reply is finished (Stop is Send again).
+    func ask(_ text: String) {
+        XCTAssertTrue(box.waitForExistence(timeout: 10))
+        box.tap()
+        box.typeText(text)
+        let send = app.buttons["Send"]
+        XCTAssertTrue(NSPredicate(format: "isEnabled == true").evaluate(with: send) || send.waitForExistence(timeout: 5))
+        send.tap()
+        // The keyboard may autocorrect a word, so match the start of what was typed.
+        let mine = bubble(text)
+        if !mine.waitForExistence(timeout: 10) { shot("my message did not show") }
+        XCTAssertTrue(mine.exists, "my message did not show")
+        waitForReply()
+    }
+
+    /// My message's bubble, matched by the first words (the keyboard may autocorrect the end).
+    func bubble(_ text: String) -> XCUIElement {
+        app.staticTexts.matching(NSPredicate(format: "label BEGINSWITH %@", String(text.prefix(10)))).firstMatch
+    }
+
+    func waitForReply(timeout: TimeInterval = 60) {
+        if !app.buttons["Copy"].firstMatch.waitForExistence(timeout: timeout) { shot("reply did not finish") }
+        XCTAssertTrue(app.buttons["Copy"].firstMatch.exists, "the reply did not finish")
+        let idle = XCTNSPredicateExpectation(predicate: NSPredicate(format: "exists == false"), object: app.buttons["Stop"])
+        XCTWaiter().wait(for: [idle], timeout: timeout)
+    }
+
+    /// Taps an element at its centre by coordinates (SwiftUI menu buttons sometimes report "scroll to visible" failures on a plain tap).
+    func tapCentre(_ e: XCUIElement) {
+        XCTAssertTrue(e.waitForExistence(timeout: 10), "missing: \(e)")
+        e.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
     }
 
     /// A screenshot kept in the test results, and also saved as a PNG in EMVRYX_SHOTS when that folder is given.

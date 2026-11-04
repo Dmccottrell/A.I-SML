@@ -81,9 +81,12 @@ struct ChatSummary: Decodable, Equatable, Identifiable {
     }
 }
 
-/// The usage line under the message box (app usage_snapshot; web/js/chat.js renderUsage).
+/// The usage line under the message box (app usage_snapshot; web/js/chat.js renderUsage), and the numbers behind it for the Usage sheet.
 struct Usage: Decodable, Equatable {
     var exempt = false, canSend = 0, tankPct = 100.0, weekPctLeft = 100.0
+    var tankMessagesLeft = 0, tankFullAt = 0.0, tankRefillHours = 0.0, weekMessagesLeft = 0, weekResetsAt = 0.0
+    var models: [ModelLeft] = []
+    struct ModelLeft: Equatable { var model = "", messagesLeft = 0 }
     init() {}
     init(from d: Decoder) throws {
         let c = try d.container(keyedBy: AnyKey.self)
@@ -91,6 +94,11 @@ struct Usage: Decodable, Equatable {
         let tank = try? c.nestedContainer(keyedBy: AnyKey.self, forKey: AnyKey("tank"))
         let week = try? c.nestedContainer(keyedBy: AnyKey.self, forKey: AnyKey("week"))
         tankPct = tank?.double("pct") ?? 100; weekPctLeft = week?.double("pct_left") ?? 100
+        tankMessagesLeft = Int(tank?.int("messages_left") ?? 0); tankFullAt = tank?.double("full_at") ?? 0
+        tankRefillHours = tank?.double("refill_hours") ?? 0
+        weekMessagesLeft = Int(week?.int("messages_left") ?? 0); weekResetsAt = week?.double("resets_at") ?? 0
+        let rows: [[String: AnyCodable]] = c.value("models") ?? []
+        models = rows.map { ModelLeft(model: $0["model"]?.string ?? "", messagesLeft: Int($0["messages_left"]?.number ?? 0)) }
     }
     var fraction: Double { exempt ? 1 : min(tankPct, weekPctLeft) / 100 }
     var label: String {
@@ -106,11 +114,21 @@ struct Usage: Decodable, Equatable {
     }
 }
 
+/// A JSON value that is a string or a number, for the few lists whose rows mix both.
+struct AnyCodable: Decodable, Equatable {
+    var string: String?, number: Double?
+    init(from d: Decoder) throws {
+        let c = try d.singleValueContainer()
+        string = try? c.decode(String.self)
+        number = (try? c.decode(Double.self)) ?? nil
+    }
+}
+
 /// GET /api/state: who you are, your plan, the models, your chats, usage and the feature flags as they apply to you.
 struct AppState: Decodable, Equatable {
     var user = "", plan = "", demo = false, owner = false, admin = false
     var models = Catalog(), model = "", efforts: [Effort] = [], chats: [ChatSummary] = []
-    var usage: Usage?, features: [String: Bool] = [:], thinkingWords: [String] = []
+    var usage: Usage?, features: [String: Bool] = [:], thinkingWords: [String] = [], regenOptions: [RegenOption] = []
     var planName: String { plan.prefix(1).uppercased() + plan.dropFirst() + " plan" }
     func on(_ flag: String) -> Bool { features[flag] == true }
     init() {}
@@ -119,30 +137,98 @@ struct AppState: Decodable, Equatable {
         user = c.string("user") ?? ""; plan = c.string("plan") ?? ""; demo = c.bool("demo"); owner = c.bool("owner"); admin = c.bool("admin")
         models = c.value("models") ?? Catalog(); model = c.string("model") ?? ""; efforts = c.value("efforts") ?? []
         chats = c.value("chats") ?? []; usage = c.value("usage"); features = c.value("features") ?? [:]
-        thinkingWords = c.value("thinking_words") ?? []
+        thinkingWords = c.value("thinking_words") ?? []; regenOptions = c.value("regen_options") ?? []
+    }
+}
+
+/// "Regenerate" with a choice of how the new answer should differ (app/regen_modes.py).
+struct RegenOption: Decodable, Equatable, Identifiable {
+    var id = "", label = "", blurb = ""
+    init(id: String, label: String, blurb: String = "") { self.id = id; self.label = label; self.blurb = blurb }
+    init(from d: Decoder) throws {
+        let c = try d.container(keyedBy: AnyKey.self)
+        id = c.string("id") ?? ""; label = c.string("label") ?? ""; blurb = c.string("blurb") ?? ""
+    }
+}
+
+/// How full the model's memory (context window) is: the ring by the message box (feature flag context_meter).
+struct Ctx: Decodable, Equatable {
+    var used: Int64 = 0, window: Int64 = 1, pct = 0.0, compactAt: Int64 = 0
+    init() {}
+    init(from d: Decoder) throws {
+        let c = try d.container(keyedBy: AnyKey.self)
+        used = c.int("used") ?? 0; window = c.int("window") ?? 1; pct = c.double("pct") ?? 0; compactAt = c.int("compact_at") ?? 0
+    }
+}
+
+/// A picture or file attached to a chat (app/documents.py).
+struct DocInfo: Decodable, Equatable, Identifiable, Hashable {
+    var id: Int64 = 0, name = "", kind = ""
+    static let pictureKinds: Set<String> = ["png", "jpg", "jpeg", "webp", "bmp", "gif", "heic"]
+    var isPicture: Bool { Self.pictureKinds.contains(kind.lowercased()) }
+    init(from d: Decoder) throws {
+        let c = try d.container(keyedBy: AnyKey.self)
+        id = c.int("id") ?? 0; name = c.string("name") ?? ""; kind = c.string("kind") ?? ""
+    }
+}
+
+/// One hit of the search inside chats (GET /api/chats/search).
+struct SearchHit: Decodable, Equatable, Identifiable {
+    var id: Int64 = 0, title = "", snippet = ""
+    init(from d: Decoder) throws {
+        let c = try d.container(keyedBy: AnyKey.self)
+        id = c.int("id") ?? 0; title = c.string("title") ?? ""; snippet = c.string("snippet") ?? ""
+    }
+}
+
+/// A read-only link to a copy of a chat (POST /api/chats/{id}/share, GET /api/shares); [expires] is a Unix time in seconds.
+struct ShareRow: Decodable, Equatable, Identifiable {
+    var id = "", title = "", expires = 0.0
+    init(from d: Decoder) throws {
+        let c = try d.container(keyedBy: AnyKey.self)
+        id = c.string("id") ?? ""; title = c.string("title") ?? ""; expires = c.double("expires") ?? 0
+    }
+}
+struct Shares: Decodable, Equatable {
+    var shares: [ShareRow] = [], on = false
+    init() {}
+    init(from d: Decoder) throws {
+        let c = try d.container(keyedBy: AnyKey.self)
+        shares = c.value("shares") ?? []; on = c.bool("on")
+    }
+}
+struct ShareMade: Decodable { var url = "", shares: [ShareRow] = []
+    init(from d: Decoder) throws {
+        let c = try d.container(keyedBy: AnyKey.self)
+        url = c.string("url") ?? ""; shares = c.value("shares") ?? []
     }
 }
 
 /// One message in a chat: who wrote it ([role] user or assistant), its words, and whether the reply was cut off.
 struct Message: Decodable, Equatable {
-    var id: Int64 = 0, role = "", content = "", modelId = "", status = "done", cut = false
+    var id: Int64 = 0, role = "", content = "", modelId = "", status = "done", cut = false, fb = ""
+    var docs: [DocInfo] = []
     init(from d: Decoder) throws {
         let c = try d.container(keyedBy: AnyKey.self)
         id = c.int("id") ?? 0; role = c.string("role") ?? ""; content = c.string("content") ?? ""
         modelId = c.string("model_id") ?? ""; status = c.string("status") ?? "done"; cut = c.bool("cut")
+        fb = c.string("fb") ?? ""; docs = c.value("docs") ?? []
     }
 }
 
 /// GET /api/chats/{id}: its messages, and whether a reply is still being written.
 struct Chat: Decodable, Equatable {
-    var id: Int64 = 0, title = "New chat", messages: [Message] = [], generating = false, isPrivate = false
+    var id: Int64 = 0, title = "New chat", messages: [Message] = [], generating = false, isPrivate = false, pinned = false
+    var ctx: Ctx?, docs: [DocInfo] = []
     init(from d: Decoder) throws {
         let c = try d.container(keyedBy: AnyKey.self)
         id = c.int("id") ?? 0; title = c.string("title") ?? "New chat"; messages = c.value("messages") ?? []
-        generating = c.bool("generating"); isPrivate = c.bool("private")
+        generating = c.bool("generating"); isPrivate = c.bool("private"); pinned = c.bool("pinned")
+        ctx = c.value("ctx"); docs = c.value("docs") ?? []
     }
 }
 
+/// POST /api/chats/{id}/compact: the new memory reading.
 /// POST /api/chats: the new chat's id.
 struct NewChat: Decodable { var id: Int64 = 0
     init(from d: Decoder) throws { id = (try d.container(keyedBy: AnyKey.self)).int("id") ?? 0 }

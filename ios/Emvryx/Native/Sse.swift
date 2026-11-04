@@ -13,7 +13,7 @@ enum ReplyEvent: Equatable {
     /// What it remembered about you, and how many things it forgot.
     case memory(saved: [String], forgot: Int)
     /// Finished: the chat's title, the message id, and whether it was cut at a length limit.
-    case done(title: String?, messageId: Int64?, cut: Bool, usage: Usage?)
+    case done(title: String?, messageId: Int64?, cut: Bool, usage: Usage?, context: Ctx?)
     /// Deep Research: one search or page read, [done] of [of].
     case research(step: String, done: Int, of: Int)
     /// The server reported an error inside the stream.
@@ -59,7 +59,9 @@ struct SseParser {
         case "done":
             let usage = (body["usage"] as? [String: Any]).flatMap { try? JSONSerialization.data(withJSONObject: $0) }
                 .flatMap { try? JSONDecoder().decode(Usage.self, from: $0) }
-            return .done(title: body["title"] as? String, messageId: (body["message_id"] as? NSNumber)?.int64Value, cut: b("cut"), usage: usage)
+            let context = (body["context"] as? [String: Any]).flatMap { try? JSONSerialization.data(withJSONObject: $0) }
+                .flatMap { try? JSONDecoder().decode(Ctx.self, from: $0) }
+            return .done(title: body["title"] as? String, messageId: (body["message_id"] as? NSNumber)?.int64Value, cut: b("cut"), usage: usage, context: context)
         case "research": return .research(step: s("step") ?? "", done: i("done"), of: i("of"))
         case "error":
             return .failed(code: s("code") ?? "error", message: s("message") ?? "Something went wrong.", action: s("action") ?? "")

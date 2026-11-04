@@ -62,9 +62,61 @@ final class ApiClient {
     }
     func stop(_ id: Int64) async { _ = try? await post("/api/chats/\(id)/stop", [:]) as Empty }
 
+    // Chats: pin, archive, delete, search, edit, branch, feedback (the same calls as android/.../data/ApiClient.kt)
+    func pin(_ id: Int64, _ pinned: Bool) async throws { let _: Empty = try await post("/api/chats/\(id)/pin", ["pinned": pinned]) }
+    func archive(_ id: Int64, _ on: Bool) async throws { let _: Empty = try await post("/api/chats/\(id)/archive", ["archived": on]) }
+    func archived() async throws -> [ChatSummary] { try await get("/api/chats/archived", as: ChatList.self).chats }
+    func deleteChat(_ id: Int64) async throws { let _: Empty = try await call(makeRequest("/api/chats/\(id)", method: "DELETE")) }
+    func search(_ q: String) async throws -> [SearchHit] {
+        try await get("/api/chats/search?q=" + (q.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? q), as: SearchReply.self).results
+    }
+    func editMessage(_ chatId: Int64, _ messageId: Int64, _ text: String) async throws {
+        let _: Empty = try await post("/api/chats/\(chatId)/messages/\(messageId)/edit", ["text": text])
+    }
+    func branch(_ chatId: Int64, _ messageId: Int64) async throws -> Int64 {
+        try await post("/api/chats/\(chatId)/branch", ["message_id": messageId], as: NewChat.self).id
+    }
+    /// "Right answer": the server keeps the notes it used. Returns how many were saved.
+    func like(_ chatId: Int64, _ messageId: Int64) async throws -> Int {
+        try await post("/api/chats/\(chatId)/messages/\(messageId)/like", [:], as: LikeReply.self).saved
+    }
+    func report(_ chatId: Int64, _ messageId: Int64, kind: String, note: String) async throws {
+        let _: Empty = try await post("/api/chats/\(chatId)/messages/\(messageId)/feedback", ["kind": kind, "note": note])
+    }
+    func compact(_ chatId: Int64, model: String) async throws -> Ctx? {
+        try await post("/api/chats/\(chatId)/compact", ["model": model], as: CompactReply.self).context
+    }
+
+    // Sharing and saving
+    func shares() async throws -> Shares { try await get("/api/shares") }
+    func share(_ chatId: Int64, days: Int) async throws -> ShareMade { try await post("/api/chats/\(chatId)/share", ["days": days]) }
+    func revokeShare(_ id: String) async throws { let _: Empty = try await post("/api/shares/revoke", ["id": id]) }
+    /// The text as a PDF, Word or Markdown file made on the server: its bytes.
+    func exportDoc(text: String, format: String, title: String) async throws -> Data {
+        try await bytes(makeRequest("/api/export-doc", body: ["text": text, "format": format, "title": title]))
+    }
+
+    // Pictures and files
+    /// A picture or file for the chat: uploaded once (the bytes as Base64, as the website does), then attached with [setChatDocs].
+    func upload(name: String, data: Data) async throws -> DocInfo {
+        try await post("/api/documents", ["name": name, "data": data.base64EncodedString()])
+    }
+    /// Attaches exactly these uploaded files to the chat and returns the resulting list.
+    func setChatDocs(_ chatId: Int64, _ ids: [Int64]) async throws -> [DocInfo] {
+        try await post("/api/chats/\(chatId)/docs", ["ids": ids], as: DocsReply.self).docs
+    }
+    /// The bytes of a picture that went with a message, for the thread; nil when it cannot be loaded (a broken picture just does not show).
+    func picture(_ id: Int64) async -> Data? { try? await bytes(makeRequest("/api/documents/\(id)/image")) }
+
     /// Sends a message and reads the reply as it is written (server-sent events).
-    func send(chatId: Int64, text: String, model: String, effort: String) -> AsyncThrowingStream<ReplyEvent, Error> {
-        let request = makeRequest("/api/chats/\(chatId)/send", body: ["text": text, "model": model, "effort": effort])
+    func send(chatId: Int64, text: String, model: String, effort: String, regenerate: Bool = false, regenMode: String? = nil,
+              cont: Bool = false, research: Bool = false) -> AsyncThrowingStream<ReplyEvent, Error> {
+        var body: [String: Any] = ["text": text, "model": model, "effort": effort]
+        if regenerate { body["regenerate"] = true }               // write the last reply again
+        if let m = regenMode { body["regen_mode"] = m }
+        if cont { body["continue"] = true }
+        if research { body["research"] = true }                   // chat_research: search the web several ways and write a report
+        let request = makeRequest("/api/chats/\(chatId)/send", body: body)
         return AsyncThrowingStream { continuation in
             let task = Task {
                 do {
@@ -97,12 +149,33 @@ final class ApiClient {
     // MARK: Plumbing
 
     private struct Empty: Decodable {}
+    private struct ChatList: Decodable { var chats: [ChatSummary] = []
+        init(from d: Decoder) throws { chats = (try d.container(keyedBy: AnyKey.self)).value("chats") ?? [] } }
+    private struct SearchReply: Decodable { var results: [SearchHit] = []
+        init(from d: Decoder) throws { results = (try d.container(keyedBy: AnyKey.self)).value("results") ?? [] } }
+    private struct DocsReply: Decodable { var docs: [DocInfo] = []
+        init(from d: Decoder) throws { docs = (try d.container(keyedBy: AnyKey.self)).value("docs") ?? [] } }
+    private struct LikeReply: Decodable { var saved = 0
+        init(from d: Decoder) throws { saved = Int((try d.container(keyedBy: AnyKey.self)).int("saved") ?? 0) } }
+    private struct CompactReply: Decodable { var context: Ctx?
+        init(from d: Decoder) throws { context = (try d.container(keyedBy: AnyKey.self)).value("context") } }
 
     private func get<T: Decodable>(_ path: String) async throws -> T { try await call(makeRequest(path)) }
+    private func get<T: Decodable>(_ path: String, as: T.Type) async throws -> T { try await call(makeRequest(path)) }
     private func post<T: Decodable>(_ path: String, _ body: [String: Any]) async throws -> T { try await call(makeRequest(path, body: body)) }
+    private func post<T: Decodable>(_ path: String, _ body: [String: Any], as: T.Type) async throws -> T { try await call(makeRequest(path, body: body)) }
 
-    private func makeRequest(_ path: String, body: [String: Any]? = nil) -> URLRequest {
+    /// The raw bytes of an answer (a picture, a saved document).
+    private func bytes(_ request: URLRequest) async throws -> Data {
+        let data: Data, response: URLResponse
+        do { (data, response) = try await http.data(for: request) } catch { throw ApiError.offline }
+        try await check(response) { data }
+        return data
+    }
+
+    private func makeRequest(_ path: String, body: [String: Any]? = nil, method: String? = nil) -> URLRequest {
         var r = URLRequest(url: URL(string: path, relativeTo: base)!)
+        if let method { r.httpMethod = method }
         if let body {
             r.httpMethod = "POST"
             r.setValue("application/json", forHTTPHeaderField: "Content-Type")
