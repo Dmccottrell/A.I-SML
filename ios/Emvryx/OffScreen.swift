@@ -10,6 +10,8 @@ struct OffScreen: View {
     /// The PC is busy in Gaming mode (GET /api/status "resting").
     var resting = false
     let retry: () -> Void
+    /// "Chat on this phone": the model on the phone answers while the PC is off (only when it is on the phone).
+    var onLocal: (() -> Void)?
 
     var body: some View {
         ZStack {
@@ -29,6 +31,7 @@ struct OffScreen: View {
                     .foregroundStyle(Emvryx.muted)
                     .multilineTextAlignment(.center)
                 PwaButton(text: "Try again", action: retry).padding(.top, 6)
+                if let onLocal { PwaButton(text: "Chat on this phone", ghost: true, action: onLocal) }
                 Text(Site.host)
                     .font(Emvryx.body(14))
                     .foregroundStyle(Emvryx.muted)

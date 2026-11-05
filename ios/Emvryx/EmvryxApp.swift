@@ -44,7 +44,9 @@ struct RootView: View {
                 case .starting:
                     ZStack { Emvryx.bg.ignoresSafeArea(); Logo().frame(width: 64, height: 64) }
                 case let .off(resting):
-                    OffScreen(phoneOnline: true, resting: resting, retry: vm.start)
+                    OffScreen(phoneOnline: true, resting: resting, retry: vm.start, onLocal: vm.phone.allowed && vm.phone.ready ? { vm.screen = .local } : nil)
+                case .local:
+                    LocalChatView(vm: vm, phone: vm.phone).environment(\.palette, vm.palette)
                 case .signIn:
                     SignInView(vm: vm)
                 case .chat:

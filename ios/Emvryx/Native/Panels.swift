@@ -272,6 +272,10 @@ struct SettingsPanel: View {
                             Chip(text: "What it remembers") { vm.screen = .memory }
                         }
                         Card { Toggle("Use my connected apps in chats", "When a question is clearly about one (“what is on my calendar”), the few matching items are read. Read-only.", s.connectedApps) { save("connected_apps", $0) } }
+                        if vm.phone.allowed {
+                            Section(text: "This phone")
+                            Card { PhoneCard(phone: vm.phone, vm: vm) }
+                        }
                         Section(text: "More")
                         Card {
                             Text("Connected apps, data controls, notifications and everything else are in the full Settings.").font(Emvryx.body(13)).foregroundStyle(Emvryx.muted)

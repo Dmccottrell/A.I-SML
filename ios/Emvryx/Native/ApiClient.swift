@@ -101,6 +101,22 @@ final class ApiClient {
         try await bytes(makeRequest("/api/export-doc", body: ["text": text, "format": format, "title": title]))
     }
 
+    // The model on the phone (android_offline_model)
+    func phoneKit(_ model: String?) async throws -> PhoneKit {
+        try await get("/api/phone-model" + (model.map { "?model=" + ($0.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? $0) } ?? ""))
+    }
+    /// Messages written on the phone while the PC was off, added to the PC's chat (or a new one): the chat's id.
+    func phoneSync(_ body: [String: Any]) async throws -> Int64 { try await post("/api/phone-sync", body, as: PhoneSynced.self).chat }
+
+    /// The model file from byte [from] on, written to [file] as it arrives (a download that stopped carries on); [progress] gets the bytes so far.
+    /// Chunks are written as they come: reading a 2 GB file a byte at a time with AsyncBytes would take minutes.
+    func download(path: String, to file: URL, from: Int64, progress: @escaping (Int64) -> Void) async throws {
+        var r = URLRequest(url: URL(string: path, relativeTo: base)!)
+        if let c = session.cookie { r.setValue("\(c.name)=\(c.value)", forHTTPHeaderField: "Cookie") }
+        if from > 0 { r.setValue("bytes=\(from)-", forHTTPHeaderField: "Range") }
+        try await ChunkedDownload(request: r, file: file, from: from, protocolClasses: http.configuration.protocolClasses ?? [], progress: progress).run()
+    }
+
     // Memory, files, skills and settings
     func memory() async throws -> MemoryList { try await get("/api/memory") }
     func memoryAdd(_ text: String) async throws -> MemoryList { try await post("/api/memory/add", ["text": text]) }
@@ -166,6 +182,8 @@ final class ApiClient {
     // MARK: Plumbing
 
     private struct Empty: Decodable {}
+    private struct PhoneSynced: Decodable { var chat: Int64 = 0
+        init(from d: Decoder) throws { chat = (try d.container(keyedBy: AnyKey.self)).int("chat") ?? 0 } }
     private struct ChatList: Decodable { var chats: [ChatSummary] = []
         init(from d: Decoder) throws { chats = (try d.container(keyedBy: AnyKey.self)).value("chats") ?? [] } }
     private struct SearchReply: Decodable { var results: [SearchHit] = []
@@ -232,5 +250,75 @@ final class ApiClient {
         }
         if [502, 503, 504, 530].contains(r.statusCode) { throw ApiError.offline }
         throw ApiError.server(http: r.statusCode, code: "http_\(r.statusCode)", message: "Something went wrong (\(r.statusCode)).", action: "")
+    }
+}
+
+
+/// One download written to a file in chunks, from a byte offset: 206 carries on, 200 means the whole file was sent again (start over).
+final class ChunkedDownload: NSObject, URLSessionDataDelegate {
+    private let request: URLRequest
+    private let file: URL
+    private var written: Int64
+    private let progress: (Int64) -> Void
+    private let protocolClasses: [AnyClass]
+    private var handle: FileHandle?
+    private var continuation: CheckedContinuation<Void, Error>?
+    private var failure: Error?
+    private var lastReported: Int64 = 0
+    private var session: URLSession?
+
+    init(request: URLRequest, file: URL, from: Int64, protocolClasses: [AnyClass], progress: @escaping (Int64) -> Void) {
+        self.request = request; self.file = file; written = from; self.progress = progress; self.protocolClasses = protocolClasses
+    }
+
+    func run() async throws {
+        let config = URLSessionConfiguration.default
+        config.httpShouldSetCookies = false
+        config.timeoutIntervalForRequest = 60
+        config.timeoutIntervalForResource = 6 * 60 * 60
+        config.requestCachePolicy = .reloadIgnoringLocalCacheData
+        if !protocolClasses.isEmpty { config.protocolClasses = protocolClasses }
+        let s = URLSession(configuration: config, delegate: self, delegateQueue: nil)
+        session = s
+        let task = s.dataTask(with: request)
+        try await withTaskCancellationHandler {
+            try await withCheckedThrowingContinuation { (c: CheckedContinuation<Void, Error>) in
+                continuation = c
+                task.resume()
+            }
+        } onCancel: { task.cancel(); s.invalidateAndCancel() }
+        try Task.checkCancellation()
+    }
+
+    func urlSession(_ s: URLSession, dataTask: URLSessionDataTask, didReceive response: URLResponse, completionHandler: @escaping (URLSession.ResponseDisposition) -> Void) {
+        guard let r = response as? HTTPURLResponse else { failure = ApiError.offline; completionHandler(.cancel); return }
+        switch r.statusCode {
+        case 206: break
+        case 200: written = 0                                           // the PC sent it all again: start over
+        case 502, 503, 504, 530: failure = ApiError.offline; completionHandler(.cancel); return
+        default: failure = ApiError.server(http: r.statusCode, code: "http_\(r.statusCode)", message: "The download was refused (\(r.statusCode)).", action: ""); completionHandler(.cancel); return
+        }
+        do {
+            handle = try FileHandle(forWritingTo: file)
+            if written == 0 { try handle?.truncate(atOffset: 0) } else { try handle?.seek(toOffset: UInt64(written)) }
+        } catch { failure = error; completionHandler(.cancel); return }
+        completionHandler(.allow)
+    }
+
+    func urlSession(_ s: URLSession, dataTask: URLSessionDataTask, didReceive data: Data) {
+        do { try handle?.write(contentsOf: data) } catch { failure = error; dataTask.cancel(); return }
+        written += Int64(data.count)
+        if written - lastReported > 4 * 1024 * 1024 { lastReported = written; progress(written) }
+    }
+
+    func urlSession(_ s: URLSession, task: URLSessionTask, didCompleteWithError error: Error?) {
+        try? handle?.close()
+        progress(written)
+        s.finishTasksAndInvalidate()
+        if let failure { continuation?.resume(throwing: failure) }
+        else if let e = error as? URLError, e.code == .cancelled { continuation?.resume(throwing: CancellationError()) }
+        else if error != nil { continuation?.resume(throwing: ApiError.offline) }
+        else { continuation?.resume() }
+        continuation = nil
     }
 }

@@ -10,6 +10,11 @@ struct Sidebar: View {
     @State private var account = false
     @State private var deleting: ChatSummary?
     @ObservedObject private var lock = AppLock.shared
+    @ObservedObject private var phone: PhoneModel
+
+    init(vm: AppModel, done: @escaping () -> Void, onSheet: @escaping (ChatSheet) -> Void) {
+        self.vm = vm; self.done = done; self.onSheet = onSheet; phone = vm.phone
+    }
 
     var body: some View {
         let p = vm.palette
@@ -64,6 +69,7 @@ struct Sidebar: View {
             }
             Rectangle().fill(Emvryx.line).frame(height: 1)
             SideLink(icon: "lock", text: "Private chat", note: "Never saved") { vm.newChat(isPrivate: true); done() }
+            if phone.allowed && phone.ready { SideLink(icon: "iphone", text: "On this phone", note: "Works with the PC off") { vm.screen = .local; done() } }
             SideLink(icon: "chevron.left.forwardslash.chevron.right", text: "VryxCode") { vm.screen = .code; done() }
             SideLink(icon: "sparkles", text: "Skills") { vm.screen = .skills; done() }
             SideLink(icon: "doc", text: "Documents") { vm.screen = .files; done() }

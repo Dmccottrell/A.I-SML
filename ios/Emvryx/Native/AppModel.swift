@@ -15,6 +15,8 @@ enum Screen: Equatable {
     case page(path: String, title: String, run: String?)
     /// A screen of the app's own: memory, files, skills, settings, VryxCode.
     case memory, files, skills, settings, code
+    /// "On this phone": the chats written here with the model on the phone (the PC is off, or you opened them).
+    case local
 }
 
 enum SignInWay { case password, key, email }
@@ -43,6 +45,8 @@ struct Failure: Equatable { var message: String; var action = "" }
 @MainActor
 final class AppModel: ObservableObject {
     let api: ApiClient
+    /// The model on the phone (android_offline_model): its download, its chats and what is sent back when the PC returns.
+    let phone: PhoneModel
 
     @Published var screen: Screen = .starting
     @Published private(set) var state: AppState?
@@ -89,7 +93,7 @@ final class AppModel: ObservableObject {
     private var replyTask: Task<Void, Never>?
     private var searchTask: Task<Void, Never>?
 
-    init(api: ApiClient = ApiClient()) { self.api = api }
+    init(api: ApiClient = ApiClient(), phone: PhoneModel? = nil) { self.api = api; self.phone = phone ?? PhoneModel(api: api) }
 
     var models: [ModelCard] { state?.models.all ?? [] }
     var currentModel: ModelCard? { models.first { $0.id == model } }
@@ -130,7 +134,8 @@ final class AppModel: ObservableObject {
                 api.session.forget()
                 screen = .signIn
             } catch {
-                screen = .off(resting: false)
+                // With the model on the phone, the phone's chats open instead of "Emvryx is off".
+                screen = phone.allowed && phone.ready ? .local : .off(resting: false)
             }
         }
     }
@@ -221,6 +226,16 @@ final class AppModel: ObservableObject {
         chats = s.chats
         usage = s.usage
         if model.isEmpty || !models.contains(where: { $0.id == model && $0.ready }) { model = s.model }
+        // The PC answered: remember whether the phone model is allowed, keep its instructions and memory fresh, send what was written on the
+        // phone while the PC was off, and keep copies of the recent chats to read with the PC off.
+        phone.rememberAllowed(s.on("android_offline_model"))
+        if phone.allowed {
+            Task {
+                await phone.refresh()
+                if await phone.syncUp() > 0 { await refreshChats() }
+                await phone.keepRecent(s.chats)
+            }
+        }
     }
 
     func refreshChats() async {
@@ -387,6 +402,8 @@ final class AppModel: ObservableObject {
             } catch is CancellationError {
                 await refreshChats()
                 await readBack()
+            } catch ApiError.offline where !got && phone.ready && flag("android_auto_offline") && !isPrivate && !words.isBlank && !regenerate && !cont {
+                carryOnOnPhone(words)
             } catch {
                 handle(error)
             }
@@ -400,6 +417,13 @@ final class AppModel: ObservableObject {
             for (i, m) in c.messages.enumerated() { bubbles[i].serverId = m.id; bubbles[i].fb = m.fb }
         }
         if let cx = c.ctx { ctx = cx }
+    }
+
+    /// The PC dropped before a word came back: the chat carries on with the model on the phone, which answers the same question.
+    private func carryOnOnPhone(_ question: String) {
+        let earlier = bubbles.dropLast(2).filter { !$0.text.isBlank }.map { LocalTurn(mine: $0.mine, text: $0.text) }
+        phone.carryOn(serverId: chatId, title: title, turns: Array(earlier), question: question)
+        screen = .local
     }
 
     /// Stops the reply: the server stops writing and what was written so far is kept.

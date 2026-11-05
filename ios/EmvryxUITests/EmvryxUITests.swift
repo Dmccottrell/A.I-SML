@@ -72,6 +72,7 @@ class ServerUITestCase: XCTestCase {
         app = XCUIApplication()
         app.launchEnvironment["EMVRYX_SERVER"] = TestServer.url
         app.launchEnvironment["EMVRYX_APP_LOCK"] = "reset"
+        app.launchEnvironment["EMVRYX_FAKE_ENGINE"] = "1"          // the phone model's stand-in engine: no real model is needed to test the screens
         app.launch()
         let useKey = app.buttons["Use an access key"]
         if useKey.waitForExistence(timeout: 10) {
