@@ -27,13 +27,15 @@ struct RootView: View {
                 LockScreen(lock: lock).transition(.opacity)
             }
         }
-        .preferredColorScheme(.dark)
-        .onAppear { if vm.screen == .starting { vm.start() } }
+        .preferredColorScheme(vm.light ? .light : .dark)
+        .onAppear { LocalAlerts.shared.setUp(); if vm.screen == .starting { vm.start() } }
         .onOpenURL { vm.receive($0) }
+        .onReceive(bridge.$openChat) { if let id = $0 { bridge.openChat = nil; vm.screen = .chat; vm.openChat(id) } }
         .onReceive(bridge.$pending) { if let words = $0 { bridge.pending = nil; vm.receive(words) } }
         .onChange(of: phase) { p in
             if p == .background { lock.lockNow() }
             if p == .active && lock.locked { Task { await lock.unlock() } }
+            if p == .active { vm.cameBack() }
         }
     }
 
@@ -117,7 +119,6 @@ struct ContentView: View {
             WebView(webView: web.webView).ignoresSafeArea(.keyboard)
             if web.offline { OffScreen(phoneOnline: web.phoneOnline, retry: web.retry) }
         }
-        .preferredColorScheme(.dark)
     }
 }
 

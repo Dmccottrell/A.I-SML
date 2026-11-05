@@ -41,7 +41,6 @@ struct CodeView_: View {
             }
         }
         .background(Emvryx.bg.ignoresSafeArea())
-        .preferredColorScheme(.dark)
         .environment(\.palette, vm.palette)
         .task { await code.load() }
         .onDisappear { code.stopPolling() }

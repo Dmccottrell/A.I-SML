@@ -3,16 +3,43 @@ import SwiftUI
 // The Android app's colours, fonts and logo (android/.../ui/theme/Theme.kt and ui/Logo.kt), dark look. Sizes are in points, which
 // match Android's dp and sp one for one.
 
-/// The fixed page colours and the fonts.
+/// A colour with a dark and a light version: it changes by itself when the app's look changes (the moon button). [lightAlpha] / [darkAlpha]
+/// are the opacity of each.
+extension Color {
+    static func pair(dark: Int, light: Int, darkAlpha: Double = 1, lightAlpha: Double = 1) -> Color {
+        Color(uiColor: .pair(dark: dark, light: light, darkAlpha: darkAlpha, lightAlpha: lightAlpha))
+    }
+    init(hex: Int, opacity: Double = 1) {
+        self.init(.sRGB, red: Double((hex >> 16) & 255) / 255, green: Double((hex >> 8) & 255) / 255, blue: Double(hex & 255) / 255, opacity: opacity)
+    }
+}
+
+extension UIColor {
+    /// A UIKit colour that is [dark] in the dark look and [light] in the light look.
+    static func pair(dark: Int, light: Int, darkAlpha: Double = 1, lightAlpha: Double = 1) -> UIColor {
+        UIColor { trait in trait.userInterfaceStyle == .light ? UIColor(hex: light, alpha: lightAlpha) : UIColor(hex: dark, alpha: darkAlpha) }
+    }
+    convenience init(hex: Int, alpha: Double = 1) {
+        self.init(red: CGFloat((hex >> 16) & 255) / 255, green: CGFloat((hex >> 8) & 255) / 255, blue: CGFloat(hex & 255) / 255, alpha: alpha)
+    }
+}
+
+/// The fixed page colours (dark, and light as Android's Theme.kt has it) and the fonts.
 enum Emvryx {
-    static let bg = Color(hex: 0x07080D)
-    static let side = Color(hex: 0x0A0B11)
-    static let surface = Color(hex: 0x0F1119)
-    static let surface2 = Color(hex: 0x161926)
-    static let line = Color(hex: 0x232739)
-    static let text = Color(hex: 0xEEF0F6)
-    static let muted = Color(hex: 0x9AA3BC)
-    static let danger = Color(hex: 0xF87171)
+    /// The page colours as (dark, light) values: Theme.kt Emvryx.bg, side, surface ... (the tests check them against Android's).
+    static let values: [String: (dark: Int, light: Int)] = [
+        "bg": (0x07080D, 0xF7F8FC), "side": (0x0A0B11, 0xEEF0F7), "surface": (0x0F1119, 0xFFFFFF), "surface2": (0x161926, 0xEEF0F7),
+        "line": (0x232739, 0xD8DCEA), "text": (0xEEF0F6, 0x0D0F1A), "muted": (0x9AA3BC, 0x4A526B), "danger": (0xF87171, 0xD93A3A),
+    ]
+    private static func pair(_ name: String) -> Color { Color.pair(dark: values[name]!.dark, light: values[name]!.light) }
+    static let bg = pair("bg")
+    static let side = pair("side")
+    static let surface = pair("surface")
+    static let surface2 = pair("surface2")
+    static let line = pair("line")
+    static let text = pair("text")
+    static let muted = pair("muted")
+    static let danger = pair("danger")
     // The Emvryx amber (Palette.brand), for the screens that have no model yet.
     static let accent = Palette.brand.accent
     static let onAccent = Palette.brand.onAccent
@@ -25,29 +52,40 @@ enum Emvryx {
     }
 }
 
-extension Color {
-    init(hex: Int, opacity: Double = 1) {
-        self.init(.sRGB, red: Double((hex >> 16) & 255) / 255, green: Double((hex >> 8) & 255) / 255, blue: Double(hex & 255) / 255, opacity: opacity)
-    }
-}
-
-/// A model's colours: buttons ([accent], with [onAccent] text on them), accent text, the logo's [sun] and [core], and the soft [glow].
+/// A model's colours: buttons ([accent], with [onAccent] text on them), accent text, the logo's [sun] and [core], and the soft [glow]. Each has a
+/// dark and a light version.
 struct Palette: Equatable {
     var accent: Color, onAccent: Color, accentText: Color, sun: Color, core: Color, glow: Color
+    /// The same colours as plain values, for the tests (and for anything that needs the numbers).
+    let dark: Mode, light: Mode
 
-    private init(_ a: Int, _ on: Int, _ t: Int, _ sun: Int, _ core: Int, _ glow: Int, _ glowAlpha: Int) {
-        accent = Color(hex: a); onAccent = Color(hex: on); accentText = Color(hex: t); self.sun = Color(hex: sun); self.core = Color(hex: core)
-        self.glow = Color(hex: glow, opacity: Double(glowAlpha) / 255)
+    /// One mode's six colours: accent, onAccent, accentText, sun, core, then the glow's colour and opacity (0 to 255).
+    struct Mode: Equatable {
+        var accent: Int, onAccent: Int, accentText: Int, sun: Int, core: Int, glow: Int, glowAlpha: Int
     }
 
-    // Theme.kt Palettes (dark): accent, onAccent, accentText, sun, core, glow.
-    static let brand = Palette(0xF5A524, 0x1A1204, 0xF5A524, 0xF5A524, 0xFFD27A, 0xF5A524, 0x24)
-    static let ember = Palette(0xC8431F, 0xFFFFFF, 0xF0734F, 0xC8431F, 0xFFB05A, 0xC8431F, 0x33)
-    static let flare = Palette(0xFF4B1F, 0x1A0500, 0xFF6B3D, 0xFF4B1F, 0xFFF3E6, 0xFF4B1F, 0x33)
-    static let equinox = Palette(0xEEF0F6, 0x07080D, 0xEEF0F6, 0xEEF0F6, 0x07080D, 0xEEF0F6, 0x14)
-    static let solstice = Palette(0xF2A60C, 0x1F1400, 0xFFBE3B, 0xF2A60C, 0xFFE7A0, 0xF2A60C, 0x2E)
-    static let apogee = Palette(0xA8D1F5, 0x06121F, 0xB5D8F8, 0xA8D1F5, 0xF4F9FF, 0xA8D1F5, 0x26)
-    static let violet = Palette(0x8B5CF6, 0xFFFFFF, 0xA78BFA, 0x8B5CF6, 0xC4B5FD, 0x8B5CF6, 0x24)
+    init(dark d: Mode, light l: Mode) {
+        dark = d; light = l
+        accent = .pair(dark: d.accent, light: l.accent); onAccent = .pair(dark: d.onAccent, light: l.onAccent)
+        accentText = .pair(dark: d.accentText, light: l.accentText); sun = .pair(dark: d.sun, light: l.sun); core = .pair(dark: d.core, light: l.core)
+        glow = .pair(dark: d.glow, light: l.glow, darkAlpha: Double(d.glowAlpha) / 255, lightAlpha: Double(l.glowAlpha) / 255)
+    }
+
+    // Theme.kt Palettes: the dark ones, then the light ones (brandL, emberL ...).
+    static let brand = Palette(dark: Mode(accent: 0xF5A524, onAccent: 0x1A1204, accentText: 0xF5A524, sun: 0xF5A524, core: 0xFFD27A, glow: 0xF5A524, glowAlpha: 0x24),
+                               light: Mode(accent: 0xF5A524, onAccent: 0x1A1204, accentText: 0x8F5600, sun: 0xE08A00, core: 0xFFD27A, glow: 0xF5A524, glowAlpha: 0x1F))
+    static let ember = Palette(dark: Mode(accent: 0xC8431F, onAccent: 0xFFFFFF, accentText: 0xF0734F, sun: 0xC8431F, core: 0xFFB05A, glow: 0xC8431F, glowAlpha: 0x33),
+                               light: Mode(accent: 0xB7391E, onAccent: 0xFFFFFF, accentText: 0x8F2A14, sun: 0xA8321A, core: 0xFF9A3C, glow: 0xB7391E, glowAlpha: 0x24))
+    static let flare = Palette(dark: Mode(accent: 0xFF4B1F, onAccent: 0x1A0500, accentText: 0xFF6B3D, sun: 0xFF4B1F, core: 0xFFF3E6, glow: 0xFF4B1F, glowAlpha: 0x33),
+                               light: Mode(accent: 0xFF4B1F, onAccent: 0x1A0500, accentText: 0xB83208, sun: 0xE5340A, core: 0xFFF3E6, glow: 0xFF4B1F, glowAlpha: 0x1F))
+    static let equinox = Palette(dark: Mode(accent: 0xEEF0F6, onAccent: 0x07080D, accentText: 0xEEF0F6, sun: 0xEEF0F6, core: 0x07080D, glow: 0xEEF0F6, glowAlpha: 0x14),
+                                 light: Mode(accent: 0x0D0F1A, onAccent: 0xFFFFFF, accentText: 0x0D0F1A, sun: 0x0D0F1A, core: 0xFFFFFF, glow: 0x0D0F1A, glowAlpha: 0x12))
+    static let solstice = Palette(dark: Mode(accent: 0xF2A60C, onAccent: 0x1F1400, accentText: 0xFFBE3B, sun: 0xF2A60C, core: 0xFFE7A0, glow: 0xF2A60C, glowAlpha: 0x2E),
+                                  light: Mode(accent: 0xF2A60C, onAccent: 0x1F1400, accentText: 0x8A5A00, sun: 0xD18A00, core: 0xFFE7A0, glow: 0xF2A60C, glowAlpha: 0x21))
+    static let apogee = Palette(dark: Mode(accent: 0xA8D1F5, onAccent: 0x06121F, accentText: 0xB5D8F8, sun: 0xA8D1F5, core: 0xF4F9FF, glow: 0xA8D1F5, glowAlpha: 0x26),
+                                light: Mode(accent: 0xA8D1F5, onAccent: 0x06121F, accentText: 0x2A5F96, sun: 0x4F8FC9, core: 0xF4F9FF, glow: 0x78AADC, glowAlpha: 0x26))
+    static let violet = Palette(dark: Mode(accent: 0x8B5CF6, onAccent: 0xFFFFFF, accentText: 0xA78BFA, sun: 0x8B5CF6, core: 0xC4B5FD, glow: 0x8B5CF6, glowAlpha: 0x24),
+                                light: Mode(accent: 0x7C3AED, onAccent: 0xFFFFFF, accentText: 0x6D28D9, sun: 0x7C3AED, core: 0x8B5CF6, glow: 0x7C3AED, glowAlpha: 0x1F))
 
     /// A model's palette by its name; no name is Emvryx's amber and an unknown name gets Flare's, as on the website. With the violet
     /// look (violet_theme) the buttons and glow are violet and a model keeps only its own logo colours (core.js applyTheme).
@@ -65,6 +103,8 @@ struct Palette: Equatable {
         if name?.isEmpty ?? true { return .violet }
         var p = own
         p.accent = Palette.violet.accent; p.onAccent = Palette.violet.onAccent; p.accentText = Palette.violet.accentText; p.glow = Palette.violet.glow
+        p = Palette(dark: Palette.Mode(accent: Palette.violet.dark.accent, onAccent: Palette.violet.dark.onAccent, accentText: Palette.violet.dark.accentText, sun: own.dark.sun, core: own.dark.core, glow: Palette.violet.dark.glow, glowAlpha: Palette.violet.dark.glowAlpha),
+                    light: Palette.Mode(accent: Palette.violet.light.accent, onAccent: Palette.violet.light.onAccent, accentText: Palette.violet.light.accentText, sun: own.light.sun, core: own.light.core, glow: Palette.violet.light.glow, glowAlpha: Palette.violet.light.glowAlpha))
         return p
     }
 }

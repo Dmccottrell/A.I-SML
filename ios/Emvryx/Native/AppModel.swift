@@ -67,6 +67,8 @@ final class AppModel: ObservableObject {
     @Published var effort = "balanced"
     @Published var draft = ""
     @Published var research = false
+    /// The light look instead of the dark one (the moon button; Android's toggleLight). Kept on the phone.
+    @Published var light = UserDefaults.standard.bool(forKey: "emvryx_light") { didSet { UserDefaults.standard.set(light, forKey: "emvryx_light") } }
 
     // Pictures and files waiting to go with the next message.
     @Published private(set) var attached: [DocInfo] = []
@@ -88,6 +90,11 @@ final class AppModel: ObservableObject {
 
     /// Words that came from outside (Share to Emvryx, the Siri Shortcut), waiting for the chat to be on screen.
     private var incoming: Incoming?
+
+    /// Whether the app is in front (the answer is on screen); tests say it is not. Alerts go to [alerts].
+    var isActive: () -> Bool = { UIApplication.shared.applicationState == .active }
+    var alerts: AlertSink = LocalAlerts.shared
+    private var followTask: Task<Void, Never>?
 
     private var nextKey = 0
     private var replyTask: Task<Void, Never>?
@@ -213,6 +220,7 @@ final class AppModel: ObservableObject {
 
     func signOut() {
         replyTask?.cancel()
+        followTask?.cancel()
         Task {
             await api.signOut()
             state = nil; chats = []; bubbles = []; chatId = nil; title = "New chat"; attached = []; ctx = nil
@@ -362,13 +370,20 @@ final class AppModel: ObservableObject {
         let key = nextKey
         bubbles.append(Bubble(id: key, mine: false, text: "", streaming: true, model: model))
         var got = false
+        var finished = false
+        var lost = false
+        let background = BackgroundTime()
+        background.begin()
+        if flag("phone_alerts") && !isPrivate { Task { await alerts.prepare() } }
         replyTask = Task {
             defer {
                 update(key) { $0.streaming = false }
                 bubbles.removeAll { $0.id == key && $0.text.isEmpty }
                 streaming = false
                 working = nil
+                background.end()
                 if failure != nil && !got && !regenerate && !words.isBlank { draft = words }      // refused before a word: back in the box
+                if lost, chatId != nil { follow() }                                                // cut off: the reply carries on at the PC, read it back
             }
             do {
                 let id: Int64
@@ -389,24 +404,67 @@ final class AppModel: ObservableObject {
                         got = true
                         update(key) { $0.text += t }
                     case let .done(newTitle, _, cut, newUsage, context):
+                        finished = true
                         if let t = newTitle { title = t }
                         if let u = newUsage { usage = u }
                         if let c = context { ctx = c }
                         update(key) { $0.cut = cut }
+                        if !isActive() && flag("phone_alerts") && !isPrivate {                      // answered while the app was away
+                            alerts.chatAnswered(id: id, title: title, text: bubbles.first { $0.id == key }?.text ?? "")
+                        }
                     case let .failed(_, message, action): failure = Failure(message: message, action: action)
                     case .other: break
                     }
                 }
-                await refreshChats()
-                await readBack()
+                if !finished && failure == nil && got { lost = true }                           // the line ended without "done": iOS cut it, the reply goes on
+                if !lost { await refreshChats(); await readBack() }
             } catch is CancellationError {
                 await refreshChats()
                 await readBack()
             } catch ApiError.offline where !got && phone.ready && flag("android_auto_offline") && !isPrivate && !words.isBlank && !regenerate && !cont {
                 carryOnOnPhone(words)
+            } catch ApiError.lost {
+                lost = true                                                                     // the connection dropped mid-reply (the app was in the background)
             } catch {
                 handle(error)
             }
+        }
+    }
+
+    /// The app is in front again: a chat that was streaming when it went away is read again, in case its reply was cut off.
+    func cameBack() {
+        guard screen == .chat, streaming == false, let last = bubbles.last, !last.mine, last.text.isEmpty == false || last.streaming else { return }
+        if last.streaming { follow() }
+    }
+
+    /// A reply that was cut off while it was being written (the app went to the background): the PC carries on writing it, so read the chat
+    /// again until it is finished, showing what is written so far.
+    func follow() {
+        guard let id = chatId, id >= 0 else { return }
+        followTask?.cancel()
+        streaming = true
+        followTask = Task {
+            defer { streaming = false; working = nil }
+            var misses = 0
+            while !Task.isCancelled {
+                guard let c = try? await api.chat(id), chatId == id else {
+                    misses += 1
+                    if misses > 40 { break }                                                    // about two minutes without an answer: give up quietly
+                    try? await Task.sleep(nanoseconds: 3_000_000_000)
+                    continue
+                }
+                misses = 0
+                show(c)
+                if c.generating, !bubbles.isEmpty { bubbles[bubbles.count - 1].streaming = true }
+                if !c.generating {
+                    if !isActive() && flag("phone_alerts") && !isPrivate, let last = c.messages.last(where: { $0.role == "assistant" }) {
+                        alerts.chatAnswered(id: id, title: c.title, text: last.content)
+                    }
+                    break
+                }
+                try? await Task.sleep(nanoseconds: 1_000_000_000)
+            }
+            await refreshChats()
         }
     }
 

@@ -45,4 +45,30 @@ final class NativeChatUITests: ServerUITestCase {
         app.buttons["Back to chat"].tap()
         XCTAssertTrue(box.waitForExistence(timeout: 10))
     }
+
+    /// The moon button switches the app to its light look, and it stays on the next start.
+    func testTheLightLook() {
+        app.buttons["New chat"].tap()
+        ask("Tell me about zebras")
+        app.buttons["Switch dark or light"].tap()
+        sleep(1)
+        shot("light chat")
+        app.buttons["Choose model"].tap()
+        XCTAssertTrue(app.staticTexts["SELECT MODEL"].waitForExistence(timeout: 5))
+        shot("light model menu")
+        app.buttons["Choose model"].tap()
+        let closed = XCTNSPredicateExpectation(predicate: NSPredicate(format: "exists == false"), object: app.staticTexts["SELECT MODEL"])
+        wait(for: [closed], timeout: 5)
+        app.buttons["Chats"].tap()
+        XCTAssertTrue(app.buttons["Account"].waitForExistence(timeout: 5))
+        shot("light chat list")
+        // It stays light after a restart.
+        app.terminate()
+        app.launchEnvironment["EMVRYX_APP_LOCK"] = "reset"
+        app.launch()
+        XCTAssertTrue(box.waitForExistence(timeout: 30))
+        shot("light after restart")
+        XCTAssertTrue(app.buttons["Switch dark or light"].exists)
+        app.buttons["Switch dark or light"].tap()          // back to dark for the other tests
+    }
 }

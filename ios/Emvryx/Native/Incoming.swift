@@ -24,6 +24,8 @@ struct Incoming: Equatable {
 final class IncomingBridge: ObservableObject {
     static let shared = IncomingBridge()
     @Published var pending: Incoming?
+    /// A notification was tapped: this chat opens.
+    @Published var openChat: Int64?
 }
 
 /// "Hey Siri, ask Emvryx": Siri asks for the question, opens Emvryx and sends it in a new chat.

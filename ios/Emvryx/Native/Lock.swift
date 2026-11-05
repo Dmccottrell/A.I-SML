@@ -67,6 +67,5 @@ struct LockScreen: View {
             }
             .frame(maxWidth: 420).padding(28)
         }
-        .preferredColorScheme(.dark)
     }
 }

@@ -34,10 +34,22 @@ steering it while it works, Stop, Ask / Auto / Plan, the effort or model picker,
 - **Siri Shortcut "Ask Emvryx"** (App Intents): asks for the question, opens the app and sends it in a new chat.
 
 ### What is not done, and what is not proven
-- **Not built**: the model running on the phone (it needs a third-party library and a download of about 2 GB, so it waits for a yes);
-  notifications (Apple's paid account); Google sign-in (Google refuses it inside web views) and passkeys (the paid account);
-  light mode and the "modern" / Design 2027 looks (the app is the classic dark look, with the violet look); from Android's VryxCode: restore,
-  the plan box, review lines, Preview, servers, GitHub, Publish, fix CI, slash commands, rules, memory, pictures and documents to the agent.
+- **Not built**: notifications from the server (Apple's paid account); Google sign-in (Google refuses it inside web views) and passkeys (the paid
+  account); the "modern" / Design 2027 looks; from Android's VryxCode: restore, the plan box, review lines, Preview, servers, GitHub, Publish,
+  fix CI, slash commands, rules, memory, pictures and documents to the agent.
+- **Free extras added after stage 5**:
+  - **On this phone** (`Native/Phone/`): download the small model once (resumable, checked with SHA-256, about 2 GB), then chats keep going with the
+    PC off, with the same prompt as the PC; the chats merge back with the PC (`/api/phone-sync`). The engine is llama.cpp (MIT licence), pinned to one
+    version in `scripts/get-llama.sh`.
+  - **Alerts and carrying on**: a reply that was cut off because the app went to the background is read back from the server when you return, and a
+    local notification says when a long reply is done (local only: no Apple paid account needed).
+  - **Light mode**: the moon / sun button in the chat bar; the colours are Android's light palettes and the website's `emvryx_theme` is kept in step.
+- **Setting up the phone model on your Mac** (once): `brew install xcodegen cmake`, then `ios/scripts/get-llama.sh` (builds llama.cpp, about 10
+  minutes), then `ios/scripts/generate.sh` (makes the Xcode project with the engine in it). Without these the app still builds and the phone model
+  says it is not in this build. GitHub's free Mac builds the same thing in the `engine` job of `.github/workflows/ios.yml`.
+- **Real answers from the phone model are not proven yet**: the download, the checks, the prompt, the PC-off switch and the sync were tested against a
+  real server, but the engine itself has not been run on a model here. To try it: `TEST_RUNNER_EMVRYX_TEST_GGUF=/path/to/model.gguf` and run
+  `LlamaEngineTests`.
 - **Seen working in the simulator**: sign-in, sending and streaming, every chat action above, photo upload, Memory / Documents / Skills / Settings,
   VryxCode's home, sessions and feed against the demo server, the lock with Face ID, and a link from outside.
 - **Only unit-tested, never seen with a real agent**: VryxCode's steps, permission questions, choices, steering and Stop (the demo server has no

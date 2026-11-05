@@ -71,7 +71,6 @@ struct SignInView: View {
             }
             .scrollDismissesKeyboard(.interactively)
         }
-        .preferredColorScheme(.dark)
         .onAppear { vm.checkSignInOptions() }
     }
 

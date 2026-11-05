@@ -72,6 +72,7 @@ class ServerUITestCase: XCTestCase {
         app = XCUIApplication()
         app.launchEnvironment["EMVRYX_SERVER"] = TestServer.url
         app.launchEnvironment["EMVRYX_APP_LOCK"] = "reset"
+        app.launchEnvironment["EMVRYX_PHONE_RESET"] = "1"          // nothing left on the phone from an earlier run
         app.launchEnvironment["EMVRYX_FAKE_ENGINE"] = "1"          // the phone model's stand-in engine: no real model is needed to test the screens
         app.launch()
         let useKey = app.buttons["Use an access key"]
@@ -214,6 +215,7 @@ final class EmvryxUITests: ServerUITestCase {
 final class OffScreenUITests: XCTestCase {
     func testServerNotAnsweringShowsTheOffScreenAndTryAgainWorks() {
         let app = XCUIApplication()
+        app.launchEnvironment["EMVRYX_PHONE_RESET"] = "1"                   // no model on the phone, so the app shows the off screen
         app.launchEnvironment["EMVRYX_SERVER"] = "http://127.0.0.1:8799"   // nothing listens there (port 9 would be refused by WebKit itself)
         app.launch()
         XCTAssertTrue(app.staticTexts["Emvryx is off right now"].waitForExistence(timeout: 30))

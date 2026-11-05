@@ -24,7 +24,6 @@ struct PanelScreen<Content: View>: View {
             content()
         }
         .background(Emvryx.bg.ignoresSafeArea())
-        .preferredColorScheme(.dark)
     }
 }
 

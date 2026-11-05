@@ -49,6 +49,11 @@ final class PhoneModel: ObservableObject {
         self.engine = engine ?? PhoneModel.defaultEngine()
         let base = directory ?? FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0].appendingPathComponent("phone-model", isDirectory: true)
         dir = base
+        // Tests start with nothing on the phone (EMVRYX_PHONE_RESET=1), so a model downloaded by an earlier test run cannot change what they see.
+        if ProcessInfo.processInfo.environment["EMVRYX_PHONE_RESET"] == "1" {
+            try? FileManager.default.removeItem(at: dir)
+            defaults.removeObject(forKey: "emvryx_phone_allowed"); defaults.removeObject(forKey: "emvryx_phone_wanted")
+        }
         try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
         var values = URLResourceValues(); values.isExcludedFromBackup = true          // 2 GB must not go into the iCloud backup
         var d = dir; try? d.setResourceValues(values)

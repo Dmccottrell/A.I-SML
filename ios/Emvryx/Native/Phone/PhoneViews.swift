@@ -86,7 +86,6 @@ struct LocalChatView: View {
             }
         }
         .background(Emvryx.bg.ignoresSafeArea())
-        .preferredColorScheme(.dark)
         .task(id: phone.ask) { await askIfWaiting() }
         .onAppear { if let d = phone.draft { text = d; phone.draft = nil } }
     }

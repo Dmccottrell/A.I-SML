@@ -39,10 +39,7 @@ targets:
         UIAppFonts: [sora.ttf, dm_sans.ttf]
         UILaunchScreen:
           UIColorName: LaunchBackground
-        UIStatusBarStyle: UIStatusBarStyleLightContent
-        UIViewControllerBasedStatusBarAppearance: false
         UISupportedInterfaceOrientations: [UIInterfaceOrientationPortrait, UIInterfaceOrientationLandscapeLeft, UIInterfaceOrientationLandscapeRight]
-        UIUserInterfaceStyle: Dark
         ITSAppUsesNonExemptEncryption: false
         NSMicrophoneUsageDescription: Emvryx uses the microphone when you press the voice button.
         NSSpeechRecognitionUsageDescription: Emvryx turns what you say into text when you press the voice button.

@@ -3,6 +3,9 @@ import Foundation
 /// What can go wrong talking to the server: it cannot be reached (the PC is off, no internet), or it answered with an error to show.
 enum ApiError: Error, Equatable {
     case offline
+    /// The connection broke after the PC had accepted the message, while the answer was being written (the app was in the background, or the
+    /// signal went): the PC carries on writing it, so the app reads it back instead of showing an error.
+    case lost
     case server(http: Int, code: String, message: String, action: String)
 
     /// The session is gone (signed out on another device, or it ran out): back to the sign-in screen.
@@ -11,6 +14,7 @@ enum ApiError: Error, Equatable {
     var text: String {
         switch self {
         case .offline: return "Emvryx can't be reached right now. Check your connection and try again."
+        case .lost: return "The connection dropped while the answer was being written."
         case let .server(_, _, message, action): return action.isEmpty ? message : message + " " + action
         }
     }
@@ -157,15 +161,19 @@ final class ApiClient {
                     try await check(response) { var d = Data(); for try await b in bytes { d.append(b) }; return d }
                     var parser = SseParser()
                     var line = Data()
-                    // Lines by hand: a blank line ends an event, and AsyncBytes.lines would skip it.
-                    for try await b in bytes {
-                        if b == UInt8(ascii: "\n") {
-                            let text = String(decoding: line, as: UTF8.self).trimmingCharacters(in: CharacterSet(charactersIn: "\r"))
-                            if let ev = parser.feed(text) { continuation.yield(ev) }
-                            line.removeAll(keepingCapacity: true)
-                        } else {
-                            line.append(b)
+                    do {
+                        // Lines by hand: a blank line ends an event, and AsyncBytes.lines would skip it.
+                        for try await b in bytes {
+                            if b == UInt8(ascii: "\n") {
+                                let text = String(decoding: line, as: UTF8.self).trimmingCharacters(in: CharacterSet(charactersIn: "\r"))
+                                if let ev = parser.feed(text) { continuation.yield(ev) }
+                                line.removeAll(keepingCapacity: true)
+                            } else {
+                                line.append(b)
+                            }
                         }
+                    } catch let e as URLError where e.code != .cancelled {
+                        throw ApiError.lost                                         // the PC had the message: it goes on writing the answer
                     }
                     if let ev = parser.feed("") { continuation.yield(ev) }
                     continuation.finish()

@@ -22,6 +22,10 @@ final class WebController: NSObject, ObservableObject {
         let config = WKWebViewConfiguration()
         config.applicationNameForUserAgent = Site.applicationName
         config.allowsInlineMediaPlayback = true
+        // The website keeps its own dark or light look in the browser's storage: start it in the one chosen in the app (the moon button).
+        let look = UserDefaults.standard.bool(forKey: "emvryx_light") ? "light" : "dark"
+        config.userContentController.addUserScript(WKUserScript(source: "try{localStorage.setItem('emvryx_theme','\(look)')}catch(e){}",
+                                                                injectionTime: .atDocumentStart, forMainFrameOnly: true))
         config.mediaTypesRequiringUserActionForPlayback = []
         webView = WKWebView(frame: .zero, configuration: config)
         super.init()

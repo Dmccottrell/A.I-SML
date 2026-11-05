@@ -42,7 +42,6 @@ struct ChatView: View {
                     .transition(.move(edge: .leading))
             }
         }
-        .preferredColorScheme(.dark)
         .environment(\.palette, p)
         .sheet(item: $sheet) { s in sheetView(s).environment(\.palette, p).presentationDetents(detents(s)) }
     }
@@ -81,6 +80,7 @@ private struct TopBar: View {
                 IconButton(system: "line.3.horizontal", label: "Chats", action: onMenu)
                 Text(vm.title).font(Emvryx.body(17, semibold: true)).foregroundStyle(Emvryx.text).lineLimit(1)
                     .frame(maxWidth: .infinity, alignment: .leading).padding(.horizontal, 8)
+                IconButton(system: vm.light ? "sun.max" : "moon", label: "Switch dark or light") { vm.light.toggle() }
                 if vm.chatId != nil && !vm.bubbles.isEmpty {
                     Menu {
                         if !vm.isPrivate { Button("Share a link…") { onSheet(.share) } }

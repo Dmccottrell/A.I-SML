@@ -156,7 +156,6 @@ struct SheetCard<Content: View>: View {
             }
         }
         .background(Emvryx.surface.ignoresSafeArea())
-        .preferredColorScheme(.dark)
     }
 }
 
