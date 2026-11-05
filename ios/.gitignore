@@ -5,3 +5,9 @@ Emvryx/Info.plist
 build/
 DerivedData/
 xcuserdata/
+
+# The phone model engine, built by scripts/get-llama.sh, and the files scripts/generate.sh makes for a moment
+Vendor/
+llama.yml
+project-with-llama.yml
+build-device/

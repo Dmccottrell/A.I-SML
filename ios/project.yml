@@ -17,7 +17,10 @@ targets:
   Emvryx:
     type: application
     platform: iOS
-    sources: [Emvryx]
+    sources: [Emvryx, Shared]
+    dependencies:
+      - target: EmvryxShare
+        embed: true
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: app.emvryx.ios
@@ -28,19 +31,42 @@ targets:
       path: Emvryx/Info.plist
       properties:
         CFBundleDisplayName: Emvryx
+        # emvryx://ask?text=... (used by the share extension): the words go in the message box of a new chat.
+        CFBundleURLTypes:
+          - CFBundleURLName: app.emvryx.ios
+            CFBundleURLSchemes: [emvryx]
         # The Android app's fonts (android/app/src/main/res/font): Sora for headings, DM Sans for text.
         UIAppFonts: [sora.ttf, dm_sans.ttf]
         UILaunchScreen:
           UIColorName: LaunchBackground
-        UIStatusBarStyle: UIStatusBarStyleLightContent
-        UIViewControllerBasedStatusBarAppearance: false
         UISupportedInterfaceOrientations: [UIInterfaceOrientationPortrait, UIInterfaceOrientationLandscapeLeft, UIInterfaceOrientationLandscapeRight]
-        UIUserInterfaceStyle: Dark
         ITSAppUsesNonExemptEncryption: false
         NSMicrophoneUsageDescription: Emvryx uses the microphone when you press the voice button.
         NSSpeechRecognitionUsageDescription: Emvryx turns what you say into text when you press the voice button.
         NSCameraUsageDescription: Emvryx uses the camera when you take a photo to send in a chat.
+        NSFaceIDUsageDescription: Emvryx uses Face ID to unlock the app when you have switched the app lock on.
         NSPhotoLibraryUsageDescription: Emvryx opens your photos when you choose one to send in a chat.
+  EmvryxShare:
+    type: app-extension
+    platform: iOS
+    sources: [EmvryxShare, Shared]
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: app.emvryx.ios.share
+        TARGETED_DEVICE_FAMILY: "1"
+        CODE_SIGN_STYLE: Automatic
+        SKIP_INSTALL: true
+    info:
+      path: EmvryxShare/Info.plist
+      properties:
+        CFBundleDisplayName: Emvryx
+        NSExtension:
+          NSExtensionPointIdentifier: com.apple.share-services
+          NSExtensionPrincipalClass: $(PRODUCT_MODULE_NAME).ShareViewController
+          NSExtensionAttributes:
+            NSExtensionActivationRule:
+              NSExtensionActivationSupportsText: true
+              NSExtensionActivationSupportsWebURLWithMaxCount: 1
   EmvryxTests:
     type: bundle.unit-test
     platform: iOS
