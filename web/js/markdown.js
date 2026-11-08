@@ -1,13 +1,16 @@
 /* Answers with real formatting (flag chat_fixes): code blocks with a Copy button, tables, lists, headings, quotes, links, bold, italic and inline code.
    Everything is built as page elements from the text (never as HTML), so nothing a model writes can run on the page. A half-written answer (still
    streaming) renders too: an open code block shows as a code block, a table shows once its dash line has arrived. */
+// Patterns that recognise the parts of a text: the dash line under a table header, a bullet line, a numbered line, and inline pieces (`code`, **bold**, __bold__, ~~strike~~, *italic*, _italic_, [links](address) and bare addresses).
 const MD_TABLE_RULE = /^\s*\|?\s*:?-{2,}:?\s*(\|\s*:?-{2,}:?\s*)*\|?\s*$/;
 const MD_BULLET = /^(\s*)[-*+•]\s+(.*)$/;
 const MD_NUMBER = /^(\s*)(\d{1,3})[.)]\s+(.*)$/;
 const MD_INLINE = /(`+)([^`]+?)\1|\*\*([^*\n]+?)\*\*|__([^_\n]+?)__|~~([^~\n]+?)~~|(?<![\w*])\*(?!\s)([^*\n]+?)(?<!\s)\*(?!\w)|(?<![\w_])_(?!\s)([^_\n]+?)(?<!\s)_(?![\w_])|\[([^\]\n]+)\]\((https?:\/\/[^\s)]+)\)|(https?:\/\/[^\s<>()]+[^\s<>().,;:!?'"])/g;
 
+// mdInline: turn one line of text into page elements, finding each inline piece in turn; bold and italic can hold other pieces, so it calls itself for their text.
 function mdInline(text) {          // one line of text -> elements
   text = text.split(/(`+[^`\n]*?`+)/).map((part, k) => (k % 2 ? part : mdMath(part))).join('');      // never inside `code`
+  // A fresh copy of the pattern for each call, because the pattern remembers its position and a nested call would disturb it.
   const f = document.createDocumentFragment(), re = new RegExp(MD_INLINE.source, 'g'); let at = 0, m;   // its own copy: bold inside a line is read by a nested call
   while ((m = re.exec(text))) {
     if (m.index > at) f.append(text.slice(at, m.index));
@@ -15,6 +18,7 @@ function mdInline(text) {          // one line of text -> elements
     else if (m[3] != null || m[4] != null) f.append(el('b', {}, mdInline(m[3] != null ? m[3] : m[4])));
     else if (m[5] != null) f.append(el('s', {}, mdInline(m[5])));
     else if (m[6] != null || m[7] != null) f.append(el('i', {}, mdInline(m[6] != null ? m[6] : m[7])));
+    // Links open in a new tab and carry no referrer, so a link in an answer cannot reach back into the app.
     else if (m[8] != null) f.append(el('a', {href: m[9], target: '_blank', rel: 'noopener noreferrer nofollow'}, m[8]));
     else if (m[10] != null) f.append(el('a', {href: m[10], target: '_blank', rel: 'noopener noreferrer nofollow'}, m[10]));
     at = re.lastIndex;
@@ -22,21 +26,26 @@ function mdInline(text) {          // one line of text -> elements
   if (at < text.length) f.append(text.slice(at));
   return f;
 }
+// MD_MATH: pairs of [pattern, replacement] that turn common LaTeX maths (fractions, roots, times, greater-or-equal, squared ...) into plain readable symbols.
 const MD_MATH = [[/\\boxed\{([^{}]*)\}/g, '**$1**'], [/\\d?frac\{([^{}]+)\}\{([^{}]+)\}/g, (m, a, b) => (/^\w+$/.test(a) ? a : '(' + a + ')') + '/' + (/^\w+$/.test(b) ? b : '(' + b + ')')],
   [/\\sqrt\{([^{}]+)\}/g, '\u221a($1)'], [/\\(?:text|mathrm|mathbf|operatorname)\{([^{}]*)\}/g, '$1'], [/\\times/g, '\u00d7'], [/\\cdot/g, '\u00b7'], [/\\div/g, '\u00f7'],
   [/\\pm/g, '\u00b1'], [/\\leq?(?![a-z])/g, '\u2264'], [/\\geq?(?![a-z])/g, '\u2265'], [/\\neq?(?![a-z])/g, '\u2260'], [/\\approx/g, '\u2248'], [/\\pi(?![a-z])/g, '\u03c0'],
   [/\\infty/g, '\u221e'], [/\\degree|\^\{?\\circ\}?/g, '\u00b0'], [/\^\{?2\}?(?![\d{])/g, '\u00b2'], [/\^\{?3\}?(?![\d{])/g, '\u00b3'], [/\\%/g, '%'], [/\\[,;:!]|\\q?quad/g, ' '],
   [/\\left|\\right/g, ''], [/\\[()\[\]]|\$\$/g, '']];
+// mdMath: apply those replacements to a line, but only if it looks like it contains LaTeX at all.
 function mdMath(line) {          // the LaTeX a model writes for maths, as plain readable text (3/4, x\u00b2, \u221a(2), the boxed answer in bold)
   if (!/\\[a-zA-Z()[\]%,;:!]|\$\$|\^/.test(line)) return line;
   for (const [re, to] of MD_MATH) line = line.replace(re, to);
   return line;
 }
+// mdCells: split a table row at the | marks and trim each cell.
 function mdCells(line) { return line.trim().replace(/^\|/, '').replace(/\|$/, '').split('|').map((c) => c.trim()); }
+// mdCode: a code block with the language name and a Copy button.
 function mdCode(code, lang) {
   const btn = el('button', {class: 'md-copy', type: 'button', onclick: () => { navigator.clipboard && navigator.clipboard.writeText(code); btn.textContent = 'Copied'; setTimeout(() => { btn.textContent = 'Copy'; }, 1500); }}, 'Copy');
   return el('div', {class: 'md-code'}, el('div', {class: 'md-cbar'}, el('span', {}, lang || 'code'), btn), el('pre', {}, el('code', {}, code)));
 }
+// mdList: turn a flat list of bullet lines (with their indent) into nested lists, using a stack of the open levels.
 function mdList(lines) {           // [{indent, ordered, start, text}] -> nested lists
   const root = {kids: []}, stack = [{indent: -1, node: root}];
   for (const it of lines) {
@@ -50,12 +59,14 @@ function mdList(lines) {           // [{indent, ordered, start, text}] -> nested
   const build = (list) => el(list.ordered ? 'ol' : 'ul', list.ordered && list.start !== 1 ? {start: String(list.start)} : {}, ...list.items.map((i) => el('li', {}, mdInline(i.text), ...i.kids.map(build))));
   return root.kids.map(build);
 }
+// mdRender: the main function: turns text into page elements line by line (code fences, headings, rules, tables, quotes, lists, paragraphs). It never builds HTML text, so nothing a model writes can run on the page.
 function mdRender(text) {
   const box = el('div', {class: 'md'}), lines = String(text || '').replace(/\r/g, '').replace(/^\s+/, '').split('\n');
   let i = 0, para = [];
   const flush = () => { if (para.length) { box.append(el('p', {}, ...para.flatMap((l, k) => k ? [el('br'), mdInline(l)] : [mdInline(l)]))); para = []; } };
   while (i < lines.length) {
     const line = lines[i];
+    // A line starting with ``` or ~~~ opens a code block that runs until the matching closing line (or the end, while the answer is still streaming).
     const fence = /^\s*(```+|~~~+)\s*([\w+#.-]*)/.exec(line);
     if (fence) {
       flush(); const close = fence[1]; const body = []; i++;
@@ -63,9 +74,12 @@ function mdRender(text) {
       i++; box.append(mdCode(body.join('\n'), fence[2])); continue;
     }
     if (!line.trim()) { flush(); i++; continue; }
+    // A heading: 1 to 6 # signs.
     const h = /^\s{0,3}(#{1,6})\s+(.+?)\s*#*\s*$/.exec(line);
     if (h) { flush(); box.append(el('div', {class: 'md-h md-h' + Math.min(h[1].length, 4)}, mdInline(h[2]))); i++; continue; }
+    // A line of three or more -, * or _ is a horizontal rule.
     if (/^\s{0,3}([-*_])(\s*\1){2,}\s*$/.test(line)) { flush(); box.append(el('hr')); i++; continue; }
+    // A table: a line with | followed by the dash line.
     if (line.includes('|') && i + 1 < lines.length && MD_TABLE_RULE.test(lines[i + 1]) && lines[i + 1].includes('-')) {
       flush(); const head = mdCells(line); i += 2; const rows = [];
       while (i < lines.length && lines[i].includes('|') && lines[i].trim()) rows.push(mdCells(lines[i++]));
@@ -73,10 +87,12 @@ function mdRender(text) {
         el('tbody', {}, ...rows.map((r) => el('tr', {}, ...head.map((_, k) => el('td', {}, mdInline(r[k] || '')))))))));
       continue;
     }
+    // A quote: lines starting with >; the quote's inside is rendered the same way.
     if (/^\s*>/.test(line)) {
       flush(); const q = []; while (i < lines.length && /^\s*>/.test(lines[i])) q.push(lines[i++].replace(/^\s*>\s?/, ''));
       box.append(el('blockquote', {}, mdRender(q.join('\n')))); continue;
     }
+    // A list: bullets or numbers; an indented line continues the previous item.
     if (MD_BULLET.test(line) || MD_NUMBER.test(line)) {
       flush(); const items = [];
       while (i < lines.length) {
@@ -89,6 +105,7 @@ function mdRender(text) {
       }
       box.append(...mdList(items)); continue;
     }
+    // Anything else is part of a paragraph.
     para.push(line); i++;
   }
   flush();
