@@ -37,10 +37,12 @@ def filler(tokens):
 NOUNS = ["harbour", "orchard", "workshop", "library", "greenhouse", "station", "market", "observatory", "bakery", "ferry", "garage", "museum"]
 THINGS = ["boxes", "letters", "tickets", "bottles", "tools", "maps", "lamps", "chairs", "books", "keys", "coins", "plants"]
 CODE_WORDS = ["ORCHID", "FALCON", "MARBLE", "TUNDRA", "COBALT", "JUNIPER", "SAFFRON", "BEACON"]
+# The needle test hides a code at 10%, 50% and 90% of the way through a long text and asks the model to find it.
 NEEDLE_DEPTHS = (0.1, 0.5, 0.9)
 NEEDLE_QUESTION = "\n\nQuestion: What is the secret access code for the blue cabinet? Reply with just the code."
 
 
+# needle_code: a code word and number made from a seed, so each hidden code differs but can be repeated.
 def needle_code(seed):
     return f"{CODE_WORDS[seed % len(CODE_WORDS)]}-{4000 + (seed * 7919) % 5000}"
 
@@ -93,6 +95,7 @@ def parse_vram(smi_output):
     return None
 
 
+# fit_word: put the graphics-card memory used into a word: comfortable, tight or too full.
 def fit_word(peak_gb):
     if peak_gb is None:
         return "unknown"
@@ -186,6 +189,7 @@ def smi_used_gb():
     return parse_vram(out)
 
 
+# post: send a JSON request to the local llama-server and give back the status and the JSON answer.
 def post(path, body, timeout=600):
     conn = http.client.HTTPConnection("127.0.0.1", PORT, timeout=timeout)
     try:
@@ -197,10 +201,12 @@ def post(path, body, timeout=600):
         conn.close()
 
 
+# server_log_path: where each candidate's server messages are written.
 def server_log_path(cand, ctx):
     return os.path.join("logs", "bakeoff", f"{cand['name']}-{ctx}-server.log")
 
 
+# gpu_layers: from the server's start-up messages, how many layers of the model are on the graphics card.
 def gpu_layers(log_text):
     """From llama-server's start-up log: (layers on the card, total layers), or None when the log does not say (older/newer wording)."""
     import re
@@ -208,6 +214,7 @@ def gpu_layers(log_text):
     return (int(m.group(1)), int(m.group(2))) if m else None
 
 
+# start_server: start llama-server for a candidate model at a window size and wait (up to 4 minutes) until it says it is healthy.
 def start_server(llama_bin, cand, ctx):
     cmd = [llama_bin, "-m", cand["file"], "--port", str(PORT), "-c", str(ctx), "-ngl", str(cand.get("ngl", 99)), "-fa", "on"] + list(cand.get("args", []))
     os.makedirs(os.path.join("logs", "bakeoff"), exist_ok=True)
@@ -232,6 +239,7 @@ def start_server(llama_bin, cand, ctx):
     raise RuntimeError("llama-server did not become ready in 4 minutes")
 
 
+# stop_server: stop the server politely, then forcefully if it does not stop in 20 seconds.
 def stop_server(proc):
     proc.terminate()
     try:
@@ -243,6 +251,7 @@ def stop_server(proc):
         log.close()
 
 
+# chat_body: the request for a chat answer; models that think first can have thinking turned off.
 def chat_body(cand, prompt, max_tokens=700):
     body = {"messages": [{"role": "user", "content": prompt}], "max_tokens": max_tokens, "temperature": 0.2}
     if cand.get("think") is False:
@@ -250,6 +259,7 @@ def chat_body(cand, prompt, max_tokens=700):
     return body
 
 
+# needle_test: hide the code in the long text at three depths and count how many times the model finds it.
 def needle_test(cand, ctx, timeout=1800):
     """Hide a code in about 70% of `ctx` tokens of text at 10%, 50% and 90% depth and ask for it: {"found", "total", "prefill_s"} (or {"error"})."""
     found, prefill = 0, 0.0
@@ -270,6 +280,7 @@ def needle_test(cand, ctx, timeout=1800):
     return {"found": found, "total": len(NEEDLE_DEPTHS), "prefill_s": prefill or None}
 
 
+# run_candidate: test one model: for each window size start it, measure memory and speed (and the needle test if asked); at the smallest size also run the question sheet and score it. A model that will not start at the smallest size is out.
 def run_candidate(llama_bin, cand, tests, contexts=CONTEXTS, needle=False):
     from quality_check import run, totals
     out = {"name": cand["name"], "slot": cand["slot"], "baseline": bool(cand.get("baseline")), "contexts": [], "speed": None}
@@ -280,6 +291,7 @@ def run_candidate(llama_bin, cand, tests, contexts=CONTEXTS, needle=False):
         try:
             proc = start_server(llama_bin, cand, ctx)
         except (RuntimeError, OSError) as e:
+            # If it will not even start at the smallest size the model is out; at a bigger size it just means it does not fit.
             if ctx == contexts[0]:                                       # it does not even start at the smallest size: the candidate is out
                 out.update(error=str(e), passed=0, total=len(tests))
                 return out
@@ -298,6 +310,7 @@ def run_candidate(llama_bin, cand, tests, contexts=CONTEXTS, needle=False):
             n = entry.get("needle") or {}
             print(f"    {ctx // 1024}K: {entry['vram_gb']} GB on the card" + (f", hidden code found {n['found']}/{n['total']}" if n.get("total") else ("" if not needle else ", long-document test failed")), flush=True)
             if ctx == contexts[0]:
+                # ask: send one question from the sheet and give back the answer text with any thinking part removed.
                 def ask(prompt):
                     st, d = post("/v1/chat/completions", chat_body(cand, prompt))
                     if st != 200:
@@ -321,10 +334,12 @@ def run_candidate(llama_bin, cand, tests, contexts=CONTEXTS, needle=False):
     return out
 
 
+# parse_contexts: turn "8192,32768" into numbers.
 def parse_contexts(text):
     return tuple(int(x) for x in text.split(",") if x.strip())
 
 
+# main: read the options, test each candidate (saving one result file each), then write one report from all result files.
 def main(argv=None):
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--llama-bin", help="path to llama-server(.exe)")

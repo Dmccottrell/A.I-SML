@@ -20,15 +20,19 @@ import shutil
 
 from site_fx import FX_CSS, FX_JS  # noqa: E402
 
+# HERE is the project folder.
 HERE = emvryx_paths.ROOT                      # the project folder (design/, site/ and web/ live there)
+# PAGES: which design page (in design/canvas) becomes which public web page (in site/).
 PAGES = {"Main": "index.html", "SiteModels": "models.html", "SitePlans": "plans.html", "SiteUsage": "usage.html",
          "SiteAbout": "about.html"}
 YEAR = "2026"
 
+# The brand colours and fonts come from one file, design/brand-tokens.json, so the website and the app agree.
 with open(os.path.join(HERE, "design", "brand-tokens.json"), encoding="utf-8") as f:
     TOKENS = json.load(f)
 
 
+# css_vars: the colour variables (like --bg and --accent) for dark or light mode, written as CSS text.
 def css_vars(mode):
     t = dict(TOKENS["base"][mode])
     t.update({k: v for k, v in TOKENS["models"]["brand"][mode].items()})
@@ -36,11 +40,13 @@ def css_vars(mode):
     return ";".join(f"--{k}:{v}" for k, v in t.items())
 
 
+# THEME_CSS: the basic page styles plus the dark and light colour sets, and the round theme toggle button.
 THEME_CSS = (":root{" + css_vars("dark") + "}\n:root[data-theme=light]{" + css_vars("light") + "}\n"
              "html,body{margin:0;background:var(--bg)}\n"
              ".theme-toggle{position:fixed;right:16px;bottom:16px;z-index:50;width:44px;height:44px;border-radius:999px;"
              "border:1px solid var(--line);background:var(--surface);color:var(--text);cursor:pointer;font-size:18px}\n"
              ".theme-toggle:focus-visible{outline:2px solid var(--accent);outline-offset:2px}\n")
+# THEME_JS: the theme toggle button and its small script, which remembers the choice on the visitor's device.
 THEME_JS = """<button class="theme-toggle" id="themeToggle" aria-label="Switch between dark and light">&#9680;</button>
 <script>
 (function () {
@@ -104,6 +110,7 @@ NAV_JS = """<script>
 </script>"""
 
 
+# nav_html: the menu bar shared by every page; the current page is highlighted.
 def nav_html(active=""):
     """The one menu every page shares: logo, main links, a More menu, and the Open Emvryx button; on phones a single row with a menu button."""
     def a(href, label):
@@ -114,14 +121,17 @@ def nav_html(active=""):
             f'<a class="cta" href="open.html">Open Emvryx</a>'
             f'<button class="burger" type="button" aria-expanded="false" aria-controls="navLinks" aria-label="Menu">\u2630</button></div>')
 
+# The public address, the default description and the meta tags that make a link look right when shared (title, description, picture).
 SITE = "https://emvryx.app"
 DESCRIPTION = "Emvryx is a family of four AI models that think on your own device or its own computer, show where an answer came from, and say so when they don't know."
 HEAD_META = ('<meta name="description" content="{desc}">\n<meta name="theme-color" content="#07080D">\n<meta property="og:type" content="website">\n'
              '<meta property="og:site_name" content="Emvryx">\n<meta property="og:title" content="{title}">\n<meta property="og:description" content="{desc}">\n'
              '<meta property="og:image" content="{site}/og.png">\n<meta name="twitter:card" content="summary_large_image">\n<meta name="twitter:image" content="{site}/og.png">\n')
+# The file whose numbers the Plans page shows.
 LIMITS_PATH = os.path.join(HERE, "limits.json")
 
 
+# plan_values: the numbers on the Plans page, worked out from limits.json so the page can never disagree with the app.
 def plan_values():
     """{"free.week": "300", ...}: the numbers on the Plans page, worked out from limits.json so the page can never disagree with the app."""
     with open(LIMITS_PATH, encoding="utf-8") as f:
@@ -135,15 +145,18 @@ def plan_values():
     return out
 
 
+# convert: turn one design page (an exported "dc.html" file) into a finished web page: take its title, head and body, fix the links between pages, fill in the year and the plan numbers, and swap in the shared menu.
 def convert(source, active=""):
     title = re.search(r"<title>(.*?)</title>", source, re.S).group(1)
     helmet = re.search(r"<helmet>(.*?)</helmet>", source, re.S).group(1)
     body = re.search(r"</helmet>(.*?)</x-dc>", source, re.S).group(1)
     body = body.replace("{{themeStyle}};", "").replace("{{themeStyle}}", "")
     body = re.sub(r"min-height:\s*\d+px;?", "min-height: 100vh;", body)
+    # Links between design files become links between the finished pages.
     for src, dst in PAGES.items():
         body = body.replace(f"{src}.dc.html", dst)
     body = body.replace("[YEAR]", YEAR)
+    # Each [[placeholder]] is replaced by a number from limits.json; the build stops if any is left over.
     for key, value in plan_values().items():
         body = body.replace(f"[[{key}]]", value)
     assert "[[" not in body, "a page has a placeholder that limits.json does not fill"
@@ -214,11 +227,13 @@ PAGE_CSS = (".doc{max-width:860px;margin:0 auto;padding:40px 24px 80px}.doc h1{f
             "@media(max-width:700px){.tw{border:0;overflow:visible}table,thead,tbody,tr,td{display:block;min-width:0;width:100%}thead{display:none}tr{box-sizing:border-box;background:var(--surface);border:1px solid var(--line);border-radius:16px;padding:6px 14px;margin:0 0 14px}"
             "td{border-top:1px solid var(--line);padding:10px 0;white-space:normal!important}td:first-child{border-top:0;font-family:'Sora',sans-serif;font-size:20px;font-weight:600}td[data-label]:not(:first-child)::before{content:attr(data-label);display:block;color:var(--muted);font-size:12px;letter-spacing:.06em;text-transform:uppercase;margin-bottom:2px}}"
             "a{color:var(--text);text-decoration:none}a:hover{color:var(--accenttext)}.center{display:grid;place-items:center;min-height:60vh;text-align:center;padding:40px 24px}")
+# LOGO: the Emvryx mark as an inline picture.
 LOGO = ('<svg width="38" height="38" viewBox="0 0 64 64" fill="none" aria-label="Emvryx"><circle cx="46" cy="32" r="12" style="fill: var(--sun)" fill-opacity="0.16"/>'
         '<path d="M17 16 H41 M17 48 H41 M17 16 V48" style="stroke: var(--text)" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/><path d="M17 32 H37" style="stroke: var(--sun)" stroke-width="6" stroke-linecap="round"/>'
         '<circle cx="46" cy="32" r="5.5" style="stroke: var(--sun)" stroke-width="3"></circle><circle cx="46" cy="32" r="1.8" style="fill: var(--sun)"/></svg>')
 
 
+# extra_page: wrap a body of HTML into a full page (head, shared menu, footer, theme button); used for What's new, the scorecard and the Open page.
 def extra_page(title, body, active="", description=DESCRIPTION, extra_head="", extra_js=""):
     def link(href, label):
         return f'<a href="{href}"' + (' style="color: var(--accenttext); border-bottom: 2px solid var(--accent); padding-bottom: 2px"' if href == active else "") + f">{label}</a>"
@@ -232,6 +247,7 @@ def extra_page(title, body, active="", description=DESCRIPTION, extra_head="", e
             f'<div style="background-image:radial-gradient(1200px 600px at 50% -5%, var(--glow), transparent 70%)">{nav}{body}{foot}</div>\n{THEME_JS}\n{STATUS_JS}\n{NAV_JS}\n{FX_JS}\n{extra_js}\n</body>\n</html>\n')
 
 
+# The Open page: it checks whether the chat computer is on and either opens the app or says it is off and keeps checking.
 OPEN_BODY = """<div class="center"><div style="max-width:520px;display:flex;flex-direction:column;gap:16px;align-items:center">
 <h1 id="openTitle" style="font-family:'Sora',sans-serif;font-weight:600;font-size:40px;margin:0">Opening Emvryx&hellip;</h1>
 <p id="openText" style="color:var(--muted);font-size:18px;margin:0">Checking that it is on.</p>
@@ -258,6 +274,7 @@ OPEN_JS = """<script>
 </script>"""
 
 
+# extra_pages: build What's new and the scorecard from the docs folder, and the Open page.
 def extra_pages():
     """{file name: html} for What's new, the scorecard and the Open page."""
     out = {}
@@ -268,6 +285,7 @@ def extra_pages():
     return out
 
 
+# build: write every page into site/, plus the icon, the share picture and the hosting settings (vercel.json); returns the list of files written.
 def build(out=None):
     out = out or os.path.join(HERE, "site")
     os.makedirs(out, exist_ok=True)
@@ -295,5 +313,6 @@ def build(out=None):
     return written
 
 
+# Running this file directly rebuilds the website.
 if __name__ == "__main__":
     print("wrote site/:", ", ".join(build()))
