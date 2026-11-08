@@ -306,6 +306,7 @@ private fun AttachMenu(onPicture: () -> Unit, onFile: () -> Unit, onCamera: (() 
 // ---------------------------------------------------------------- top
 
 // The top bar of the chat screen. [onMenu] opens the chat list, [onSaveAs] starts Save as for the whole chat.
+// TopBar: the bar across the top: menu button, chat title, the light/dark moon button and a "more" menu (new chat, private chat, save as ...).
 @Composable
 private fun TopBar(vm: AppViewModel, onMenu: () -> Unit, onSaveAs: () -> Unit) {
     // more = the ... drop-down is open; confirm = the delete-chat confirmation is open.
@@ -408,6 +409,7 @@ private fun OfflineBanner(vm: AppViewModel, model: app.emvryx.android.local.Phon
 }
 
 // A grey strip shown when the server has no real model attached. buildAnnotatedString lets one line of text have two styles (bold accent first part, normal rest).
+// DemoBanner: a note shown when no model is attached, so people know the replies are stand-ins.
 @Composable
 private fun DemoBanner() {
     val p = LocalPalette.current
@@ -498,6 +500,7 @@ private fun Thread(vm: AppViewModel, onRegen: () -> Unit, onEdit: (Bubble) -> Un
 }
 
 // The greeting screen shown when the chat has no messages: logo, headline, hint text, optional notices and idea buttons.
+// Empty: what an empty chat looks like.
 @Composable
 private fun Empty(vm: AppViewModel) {
     Column(
@@ -646,6 +649,7 @@ private fun AiMessage(vm: AppViewModel, b: Bubble, isLast: Boolean, onRegen: () 
     }
 }
 
+// Thinking: the moving word shown while a reply has not started; its brightness pulses.
 @Composable
 private fun Thinking(word: String) {
     val t = rememberInfiniteTransition(label = "thinking")
@@ -655,18 +659,22 @@ private fun Thinking(word: String) {
 
 // ---------------------------------------------------------------- the message box
 
+// Composer: the message box area. It holds the typed text, the + button, the send/stop button, the model and effort pills and the memory ring.
 @Composable
 private fun Composer(vm: AppViewModel, open: Menu?, onMenu: (Menu) -> Unit) {
     val p = LocalPalette.current
+    // The typed text survives a screen turn (rememberSaveable).
     var text by rememberSaveable { mutableStateOf("") }
     LaunchedEffect(vm.draft) { if (vm.draft.isNotEmpty()) text = vm.draft }          // shared from another app
     val modern = Emvryx.modern
     val shape = RoundedCornerShape(if (modern) 28.dp else 20.dp)
     val typing = remember { MutableInteractionSource() }
+    // focused is true while the keyboard is in this box; the border changes colour then.
     val focused by typing.collectIsFocusedAsState()
     // model_bar: the box's edge and glow in the chosen model's own colour (index.html body.mbar .composer .card), easing to the next model's,
     // and a pulse of it when a model is picked (the mbarSwap animation); the rest of the app keeps its colours
     val bar by animateColorAsState(if (Emvryx.modelBar) Palettes.own(vm.currentModel?.name, Emvryx.light).accent else p.accent, tween(600), label = "bar")
+    // pulse is a small animation that makes the border glow once when the model is changed.
     val pulse = remember { Animatable(0f) }
     var seenWash by remember { mutableStateOf(vm.washes) }
     LaunchedEffect(vm.washes) {
@@ -726,6 +734,7 @@ private fun Composer(vm: AppViewModel, open: Menu?, onMenu: (Menu) -> Unit) {
                         overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
                 }
             }
+            // The memory ring: how full the chat's memory is, tapping it shows details.
             val c = vm.shownCtx
             if (c != null && vm.flag("context_meter")) MemoryRing(c) { onMenu(Menu.Memory) }
             SendButton(stop = vm.streaming, enabled = vm.streaming || ((text.isNotBlank() || vm.attached.isNotEmpty()) && !vm.uploading)) {
@@ -831,6 +840,7 @@ private fun UsageLine(vm: AppViewModel, onClick: () -> Unit) {
 
 // ---------------------------------------------------------------- the menus above the box (.menu, .opt)
 
+// PopMenu: the rounded panel that holds a menu above the message box.
 @Composable
 private fun PopMenu(modifier: Modifier, content: @Composable () -> Unit) {
     val p = LocalPalette.current
@@ -845,12 +855,14 @@ private fun PopMenu(modifier: Modifier, content: @Composable () -> Unit) {
     ) { content() }
 }
 
+// MenuHead: the small heading at the top of a menu.
 @Composable
 private fun MenuHead(text: String) {
     Text(text, color = Emvryx.muted, fontSize = 12.sp, fontWeight = FontWeight.SemiBold, letterSpacing = 1.2.sp,
         modifier = Modifier.padding(horizontal = 6.dp, vertical = 4.dp))
 }
 
+// Opt: one choice in a menu; the selected one is highlighted and a disabled one is greyed out.
 @Composable
 private fun Opt(selected: Boolean, enabled: Boolean = true, onClick: () -> Unit, content: @Composable RowScope.() -> Unit) {
     val p = LocalPalette.current
@@ -866,6 +878,7 @@ private fun Opt(selected: Boolean, enabled: Boolean = true, onClick: () -> Unit,
     ) { content() }
 }
 
+// ModelMenu: choose a model (not-ready ones are greyed) and, if tours are on, replay a model's welcome tour.
 @Composable
 private fun ModelMenu(vm: AppViewModel, close: () -> Unit) {
     MenuHead("SELECT MODEL")
@@ -892,6 +905,7 @@ private fun ModelMenu(vm: AppViewModel, close: () -> Unit) {
     }
 }
 
+// EffortMenu: choose how much thinking the model does; levels the current model does not offer are greyed.
 @Composable
 private fun EffortMenu(vm: AppViewModel, close: () -> Unit) {
     MenuHead("HOW MUCH SHOULD IT THINK?")
@@ -914,9 +928,11 @@ private fun EffortMenu(vm: AppViewModel, close: () -> Unit) {
 
 // ---------------------------------------------------------------- the chat list (.side)
 
+// Sidebar: the chat list that slides in from the left, with search, groups and archive/folder actions.
 @Composable
 private fun Sidebar(vm: AppViewModel, onDone: () -> Unit, onFolder: (ChatSummary) -> Unit) {
     val p = LocalPalette.current
+    // The search words survive a screen turn.
     var query by rememberSaveable { mutableStateOf("") }
     LaunchedEffect(query) { vm.search(query) }                   // the words inside chats too, from the server (core.js search)
     ModalDrawerSheet(
@@ -956,7 +972,9 @@ private fun Sidebar(vm: AppViewModel, onDone: () -> Unit, onFolder: (ChatSummary
                         textStyle = MaterialTheme.typography.bodyMedium.copy(color = Emvryx.text, fontSize = 15.sp), cursorBrush = SolidColor(p.accent))
                 }
             }
+            // Chats whose title matches the search words (case ignored).
             val shown = remember(vm.chats, query) { vm.chats.filter { query.isBlank() || it.title.contains(query.trim(), ignoreCase = true) } }
+            // Chats grouped into Pinned, folders, Today and Earlier.
             val grouped = remember(shown) { groups(shown) }
             LazyColumn(Modifier.weight(1f).padding(horizontal = 14.dp)) {
                 grouped.forEach { (label, rows) ->
