@@ -1,6 +1,7 @@
 /* The page's foundation: iPhone sizing, palettes, state, theme and loading the app. */
 // iPhone installed app: the page can be given a height shorter than the screen (an empty band under the message box). The device's own screen size is
 // reliable there, so the app is sized to it (never smaller than what the browser reports), and again after a turn of the phone.
+// fitScreen: on an iPhone home-screen app the page can come out shorter than the screen; this sets a CSS height (--appH) from the real screen size, and removes it everywhere else.
 function fitScreen() {
   try {
     const de = document.documentElement;
@@ -12,8 +13,10 @@ function fitScreen() {
     if (full > window.innerHeight && full < window.innerHeight + 300) de.style.setProperty('--appH', full + 'px'); else de.style.removeProperty('--appH');
   } catch (e) {}
 }
+// Run it at start, when the window changes size, after turning the phone, and when the page is shown again.
 fitScreen(); addEventListener('resize', fitScreen); addEventListener('orientationchange', () => setTimeout(fitScreen, 300)); addEventListener('pageshow', fitScreen);
 'use strict';
+// The colours of each model for dark and light mode (accent colour, text colour on it, glow, and the sun/core colours of its logo).
 // ---------------------------------------------------------------- palettes (design/brand-tokens.json)
 const MODEL = {
   Emvryx:   {dark: {accent:'#F5A524', onaccent:'#1A1204', accenttext:'#F5A524', sun:'#F5A524', core:'#FFD27A', glow:'rgba(245,165,36,.14)'}, light: {accent:'#F5A524', onaccent:'#1A1204', accenttext:'#8F5600', sun:'#E08A00', core:'#FFD27A', glow:'rgba(245,165,36,.12)'}},   // the brand amber, as on the website: shown before a model is known (login)
@@ -25,15 +28,21 @@ const MODEL = {
 };
 // The violet look (a feature flag, "violet_theme": Admin > Previews). Only Emvryx's own colour changes; each model keeps its own.
 const VIOLET = {dark: {accent:'#8B5CF6', onaccent:'#FFFFFF', accenttext:'#A78BFA', sun:'#8B5CF6', core:'#C4B5FD', glow:'rgba(139,92,246,.14)'}, light: {accent:'#7C3AED', onaccent:'#FFFFFF', accenttext:'#6D28D9', sun:'#7C3AED', core:'#8B5CF6', glow:'rgba(124,58,237,.12)'}};
+// lookMemory: the last look settings remembered on this device (read before sign-in, when nothing else is known).
 const lookMemory = () => { try { return JSON.parse(localStorage.getItem('emvryx_looks') || '{}'); } catch (e) { return {}; } };
 // Before sign-in nothing is known about the person: the sign-in screen uses what this device remembered from last time.
+// violetOn: is the violet look switched on?
 const violetOn = () => S.state ? !!(S.state.features && S.state.features.violet_theme) : !!lookMemory().vi;
+// BASE: the page colours that do not depend on the model (background, side panel, cards, lines, text) for dark and light.
 const BASE = {
   dark:  {bg:'#07080D', side:'#0A0B11', surface:'#0F1119', surface2:'#161926', line:'#232739', text:'#EEF0F6', muted:'#9AA3BC'},
   light: {bg:'#F7F8FC', side:'#EEF0F7', surface:'#FFFFFF', surface2:'#EEF0F7', line:'#D8DCEA', text:'#0D0F1A', muted:'#4A526B'}
 };
+// The marker text that starts a summary of earlier messages in a long chat.
 const SUMMARY_MARK = '[Earlier in this chat, shortened to save room]';
+// $ finds an element by its id.
 const $ = (id) => document.getElementById(id);
+// el(tag, attributes, ...children): builds a page element. "class" sets the class, names starting with "on" become event listeners, other values become attributes; children can be text or elements.
 const el = (tag, attrs, ...kids) => {
   const e = document.createElement(tag);
   for (const k in (attrs || {})) {
@@ -43,12 +52,14 @@ const el = (tag, attrs, ...kids) => {
   for (const c of kids.flat()) if (c != null) e.append(c.nodeType ? c : document.createTextNode(c));
   return e;
 };
+// The Emvryx logo is drawn in code as a small SVG picture (an E with a glowing ring); each model gets its own ring.
 // The mark is an E whose middle arm runs into a glowing ring. Each model keeps the E and its own colours, and the ring
 // grows with the model: Ember a coal, Flare a ring, Equinox ticks, Solstice rays, Apogee halos. `kind` 'brand' is Emvryx's
 // own amber (login, sidebar); otherwise it is a model name, and the colours follow the page's model theme.
 const LOGO_KINDS = ['ember', 'flare', 'equinox', 'solstice', 'apogee'];
 const logoRays = (r1, r2, n, color) => Array.from({length: n}, (_, i) => { const a = i * 2 * Math.PI / n;
   return `<path d="M${(46 + r1 * Math.cos(a)).toFixed(1)} ${(32 + r1 * Math.sin(a)).toFixed(1)} L${(46 + r2 * Math.cos(a)).toFixed(1)} ${(32 + r2 * Math.sin(a)).toFixed(1)}" stroke="${color}" stroke-width="2" stroke-linecap="round"/>`; }).join('');
+// logo(size, animate, kind): returns the logo picture in a size, optionally with a pulsing ring, for the brand or for a model.
 const logo = (size, animate, kind) => {
   const k = kind === 'brand' ? 'brand' : (LOGO_KINDS.includes((kind || '').toLowerCase()) ? kind.toLowerCase() : (LOGO_KINDS.includes(((curModel() || {}).name || '').toLowerCase()) ? curModel().name.toLowerCase() : 'flare'));
   const s = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
@@ -65,6 +76,7 @@ const logo = (size, animate, kind) => {
     <path d="M17 32 H${k === 'ember' ? 36 : 37}" stroke="${sun}" stroke-width="6" stroke-linecap="round"/>${ring}`;
   return s;
 };
+// logoDots: the three-dots "working" version of the logo.
 // The working mark (VryxCode's "working" line, flag vryxcode_lines): the E, its middle arm in Emvryx's colour, and its dot become three dots that
 // light up in turn, like a typing indicator made of the logo
 const logoDots = (size) => {
@@ -79,39 +91,50 @@ const logoDots = (size) => {
     <path d="M10 32 H28" stroke="${sun}" stroke-width="6" stroke-linecap="round"/>${dot(42, 0)}${dot(56, 0.2)}${dot(70, 0.4)}`;
   return s;
 };
+// fmt: a whole number with thousands separators (12,345); nice: rounds big numbers to the nearest ten first.
 const fmt = (n) => Math.round(n).toLocaleString('en-US');
 const nice = (n) => fmt(n >= 100 ? Math.round(n / 10) * 10 : Math.round(n));
 
+// S is the one box for the app's state: the server's answer (state), the open chat and its messages, the chosen model and effort, whether a reply is running, the theme and so on.
 // ---------------------------------------------------------------- state
 const S = {state: null, chatId: null, skill: '', skills: [], docs: [], messages: [], title: 'New chat', private: false, model: null, effort: 'balanced', busy: false, abort: null,
            theme: localStorage.getItem('emvryx_theme') || 'dark', shown: null, stick: true, thinkTimer: null};
 try { S.model = localStorage.getItem('emvryx_model'); S.effort = localStorage.getItem('emvryx_effort') || 'balanced'; } catch (e) {}
 if (!['auto', 'quick', 'balanced', 'deep'].includes(S.effort)) S.effort = 'balanced';
 
+// remember: keep the open chat's number on this device so the home-screen app reopens where you were (private chats are never remembered).
 function remember() {   // the open chat, so the home-screen app reopens where you were (a private chat is never saved, so it is not remembered)
   if (!S.restored) return;   // while the page is still starting up nothing may erase what was remembered
   try { if (S.chatId != null && S.chatId >= 0 && !S.private) localStorage.setItem('emvryx_chat', String(S.chatId)); else if (S.private) localStorage.removeItem('emvryx_chat'); } catch (e) {}   // an empty new chat keeps the last real one
 }
+// restoreChat: once per page load, reopen the remembered chat if it still exists.
 async function restoreChat() {   // once per page load, after the chat list is known
   if (S.restored) return; S.restored = true;
   let id = null; try { id = parseInt(localStorage.getItem('emvryx_chat'), 10); } catch (e) {}
   if (S.chatId == null && id >= 0 && S.state.chats.some((c) => c.id === id)) await openChat(id);
 }
+// api: call the server with the login cookie; a 401 answer (not signed in) shows the sign-in screen.
 async function api(path, opts) {
   const r = await fetch(path, Object.assign({credentials: 'same-origin', headers: {'Content-Type': 'application/json'}}, opts));
   if (r.status === 401) { showLogin(); throw new Error('login'); }
   return r;
 }
+// post: api() with the POST method and a JSON body.
 const post = (path, body) => api(path, {method: 'POST', body: JSON.stringify(body || {})});
 
+// Theme and model helpers.
 // ---------------------------------------------------------------- theme
+// mname: a model's name with its version (Flare 2.5).
 function mname(m) { return m ? m.name + (m.version ? ' ' + m.version : '') : 'Emvryx'; }   // the name with its version: Flare 2.5
+// allModels / curModel: all the models the server lists, and the one chosen now.
 function allModels() { return S.state ? S.state.models.cards.concat(S.state.models.other || []) : []; }
 function curModel() { return allModels().find((m) => m.id === S.model) || null; }
+// applySize: set the text size (0.7 to 1.4) from the saved choice.
 function applySize() {   // text size: 0.85 small .. 1.3 extra large, remembered on this device
   let z = 1; try { z = parseFloat(localStorage.getItem('emvryx_size')) || 1; } catch (e) {}
   document.documentElement.style.setProperty('--z', String(Math.min(1.4, Math.max(0.7, z))));
 }
+// applyTheme: work out dark or light (Automatic follows the device), mix the base colours with the chosen model's colours (and the violet look), and set them as CSS variables.
 function applyTheme() {
   applySize();
   const mode = S.theme === 'auto' ? (matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark') : S.theme;
@@ -131,6 +154,7 @@ function applyTheme() {
 }
 // two looks behind feature flags: their stylesheets are only loaded (and their classes only set) while the flag is on for this person, so off means exactly the earlier look.
 // The last answer is remembered on this device so the sign-in screen (shown before anyone is known) already wears the look.
+// applyLooks: load or remove the extra style sheets of the optional looks (modern, VryxCode, 2027) depending on their feature switches.
 function applyLooks(ml, vxn, d27) {
   const sheet = (id, href, want) => { const e = document.getElementById(id); if (want && !e) document.head.append(el('link', {id, rel: 'stylesheet', href})); else if (!want && e) e.remove(); };
   document.body.classList.toggle('ml', !!ml); sheet('cssModern', '/modern.css', ml);
@@ -139,11 +163,13 @@ function applyLooks(ml, vxn, d27) {
   if (window.d27Apply) d27Apply();
 }
 try { const k = JSON.parse(localStorage.getItem('emvryx_looks') || '{}'); if (k.ml || k.vxn || k.d27) applyLooks(k.ml, k.vxn, k.d27); } catch (e) { /* no memory of it: the plain look */ }
+// wash: a short colour wash animation shown when the model changes.
 function wash() {
   const w = el('div', {class: 'wash'}); document.body.append(w); setTimeout(() => w.remove(), 1100);
   document.querySelectorAll('.composer .card').forEach((c) => { c.classList.remove('mbar-swap'); void c.offsetWidth; c.classList.add('mbar-swap'); setTimeout(() => c.classList.remove('mbar-swap'), 1300); });   // the box lights up in the new model's colour
 }
 
+// load: the start of the app: fetch the state from the server, pick a ready model, show the app, draw everything, reopen the last chat and show the tour or What's new if due.
 // ---------------------------------------------------------------- load
 async function load() {
   const q = new URLSearchParams({effort: S.effort}); if (S.model) q.set('model', S.model);
@@ -156,6 +182,7 @@ async function load() {
   await restoreChat();
   maybeTour(); checkWhatsNew(); restoreView(); setTimeout(checkModelTour, 2500);
 }
+// renderAll: redraw the whole screen from the state: name, avatar, plan, banners (demo or resting), chat list, composer, usage and thread.
 function renderAll() {
   const st = S.state;
   $('brand').replaceChildren(logo(32, false, 'brand'), 'Emvryx', el('button', {class: 'icon', type: 'button', style: 'margin-left:auto;width:40px;height:40px;color:var(--muted)', 'aria-label': 'Sign out', title: 'Sign out', onclick: signOut}, icon('signout')));
@@ -167,6 +194,7 @@ function renderAll() {
   else $('banner').hidden = true;
   renderChats(); renderLinks(); renderComposer(); renderUsage(st.usage, true); renderThread(); warmModel(); maybeNudge();
 }
+// renderChats: draw the chat list: search results, or groups (Pinned, folders or projects, Today, Earlier, and skill chats).
 function renderChats() {
   const box = $('chatList'); box.replaceChildren();
   if (S.q) {   // searching: matching chats, with the words around the match
@@ -191,12 +219,14 @@ function renderChats() {
   for (const id of seen) group(names[id] || (((S.skills.find((k) => k.id === id) || {}).name) || id).toUpperCase(), all.filter((c) => c.skill === id && !c.pinned && !c.folder));
   if (!all.length) box.append(el('div', {class: 'label'}, 'NO CHATS YET'));
 }
+// Typing in the chat search box waits for a pause, then asks the server for chats that match.
 let searchTimer = null;
 $('chatSearch').addEventListener('input', (e) => {
   S.q = e.target.value.trim(); S.hits = null; renderChats(); clearTimeout(searchTimer);
   if (!S.q) return;
   searchTimer = setTimeout(async () => { const q = S.q; try { const r = await api('/api/chats/search?q=' + encodeURIComponent(q)); const j = await r.json(); if (S.q === q) { S.hits = j.results; renderChats(); } } catch (x) {} }, 250);
 });
+// chatMenu: the small menu beside a chat: pin, move to a folder, archive or delete.
 function chatMenu(c, btn) {   // a small menu next to the chat: pin, folder, delete
   document.querySelectorAll('.chatmenu').forEach((m) => m.remove());
   const item = (label, fn) => el('button', {class: 'link', style: 'min-height:40px', onclick: async () => { menu.remove(); await fn(); }}, label);
