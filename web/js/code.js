@@ -1,16 +1,23 @@
 /* VryxCode: sessions, the work feed, the live line and the composer. */
 // ---------------------------------------------------------------- VryxCode
+// C is the one box that remembers everything about VryxCode right now: the info from the server, the open session (sid), the project, the model, which screen is showing (view), the list filter and so on.
 const C = {info: null, sid: null, seen: 0, timer: null, project: null, file: null, model: null, auto: false, last: null, files: [], view: 'home', filter: 'all', env: 'local', saved: false, checkpoints: [], sessions: [], pvAuto: false, mode: 'ask', prevMode: 'ask', todo: [], events: [], todoOpen: true};
+// Read the last chosen "where to run" from the phone/browser's own small storage; the try/catch is there because private windows can block that storage.
 try { C.env = localStorage.getItem('emvryx_code_env') || 'local'; } catch (e) {}
 C.effort = 'balanced'; try { C.effort = localStorage.getItem('emvryx_code_effort') || 'balanced'; } catch (e) {}
+// Small helper functions (arrow functions) that answer one question each, so the rest of the file stays short and easy to read.
 const oneModel = () => !!(C.info && C.info.effort);          // feature flag vryxcode_effort: no model picker, VryxCode picks the model and you pick the effort
 const effortName = () => { const l = oneModel() && C.info.effort.levels.find((x) => x.id === C.effort); return l ? l.name : 'Balanced'; };
 const cOn = () => !$('code').hidden;
 const cModel = () => (C.info ? C.info.models.find((m) => m.id === C.model) : null);
+// openCode: called when you open the Code part of the app. It asks the server what VryxCode can do, picks a model and project, then draws the home list.
 async function openCode() {
   $('code').hidden = false; document.body.classList.remove('menu-open'); document.body.classList.add('vx'); startDots($('vxDots'), $('code'));
+  // "asked" is a counter so that if you open it twice quickly, only the newest answer is allowed to draw the screen.
   const asked = C.opening = (C.opening || 0) + 1, view = C.view, sid = C.sid;
+  // api(...) is the app's helper for calling the server; here it asks for the VryxCode info (models, projects, environments, usage).
   const r = await api('/api/code'); C.info = await r.json(); showUsage(C.info.usage);
+  // Models that are ready to use; the first one is the fallback if none is chosen yet.
   const usable = C.info.models.filter((m) => m.state === 'ready');
   if (!cModel() || cModel().state !== 'ready') C.model = (usable.find((m) => m.id === S.model) || usable[0] || C.info.models[0] || {}).id;
   if (oneModel()) C.model = C.info.effort.auto || C.model;
@@ -20,37 +27,49 @@ async function openCode() {
   renderCodeBar(); if (!moved && asked === C.opening) showHome(); vxRenderTemplates(); vxNotifyInit(); maybeVryxTour();
 }
 // ---- the Sessions list: where VryxCode opens, like a to-do list of everything it has worked on
+// The three places VryxCode can run code, with the names people see.
 const ENV_NAME = {local: 'This computer', sandbox: 'Isolated sandbox', cloud: 'Cloud machine'};
+// The filter choices on the Sessions list: [internal id, label shown].
 const FILTERS = [['all', 'All'], ['running', 'Running'], ['queued', 'Queued'], ['needs', 'Needs you'], ['done', 'Finished']];
 const vxArchiveOn = () => !!(S.state && S.state.features && S.state.features.vryxcode_archive);
 const vxFilters = () => FILTERS.concat(vxArchiveOn() ? [['archived', 'Archived']] : []);      // vryxcode_archive adds an Archived filter at the end
 // vryxcode_archive: the small menu on every session that is not running: Archive (or Restore, in the Archived list) and Delete for good
+// vxSessionMenu: the small pop-up for one session with Archive/Restore and Delete.
 function vxSessionMenu(m) {
   const archived = !!m.archived || C.filter === 'archived';
+  // done: sends the chosen action to the server, shows the server's message if it failed, then redraws the list.
   const done = async (path, body) => { const r = await post(path, body); if (r && r.ok === false) { const j = await r.json().catch(() => ({})); alert(j.message || 'That did not work.'); } renderHome(); };
   const dlg = dialog([el('h2', {}, (m.title || 'Session').slice(0, 60)),
     el('button', {class: 'opt', onclick: () => { dlg.remove(); done('/api/code/sessions/' + m.id + '/archive', {archived: !archived}); }}, el('span', {class: 'grow'}, el('b', {}, archived ? 'Restore to the list' : 'Archive'), el('small', {}, archived ? 'Put it back in the normal list.' : 'Tuck it away. Its files and history are kept; find it under Archived.'))),
     el('button', {class: 'opt', onclick: () => { dlg.remove(); if (!confirm('Delete this session for good? Your project files are kept.')) return; done('/api/code/sessions/' + m.id + '/delete', {}); }}, el('span', {class: 'grow'}, el('b', {style: 'color:var(--danger)'}, 'Delete'), el('small', {}, 'Removes the session and its history for good. Your project files are kept.')))], 'Cancel');
 }
+// The "..." button on a session row; stopPropagation stops the click from also opening the session underneath.
 const vxMoreButton = (m) => el('button', {type: 'button', class: 'more', title: 'Archive or delete', 'aria-label': 'Archive or delete this session', onclick: (ev) => { ev.stopPropagation(); vxSessionMenu(m); }}, '\u22ef');
+// showHome: switch the screen to the Sessions list (the home of VryxCode) and draw it.
 async function showHome() {
   clearTimeout(C.timer); C.view = 'home'; $('code').classList.remove('ide'); $('code').classList.add('home'); closeCodeMenus(); $('codePv').hidden = true; showDrawer(false);
   $('vxSide').hidden = true; $('codeTitle').textContent = 'Code'; $('codeBack').setAttribute('aria-label', 'Back to chats'); await renderHome();
 }
+// Small helpers for the little icon and name that show where a session runs.
 function envLine(e) { return e ? [icon(ENV_ICON(e.id)), el('span', {}, e.name)] : []; }
 function ENV_ICON(id) { return id === 'sandbox' ? 'box' : id === 'cloud' ? 'cloud' : 'laptop'; }
+// homeDraw counts list loads so an old slow answer never replaces a newer one.
 let homeDraw = 0;
+// renderHome: ask the server for the sessions and draw them (grouped by project, by review state, or as a plain list, depending on the switched-on features).
 async function renderHome() {
   const mine = ++homeDraw;                         // two loads at once (opening, then a filter): only the newest is drawn, an older slow answer never replaces it
   const arch = vxArchiveOn();       // vryxcode_archive: the Archived list is fetched too, for the Archived filter
+  // Three requests sent at the same time (Promise.all) to save waiting: sessions, general info, and the archived sessions when that feature is on.
   const [r, ri, ra] = await Promise.all([api('/api/code/sessions'), api('/api/code'), arch ? api('/api/code/sessions?archived=1') : null]);
   const sessions = (await r.json()).sessions || [], info = await ri.json(), archived = ra ? ((await ra.json().catch(() => ({}))).sessions || []) : [];
   if (mine !== homeDraw) return;
   C.sessions = sessions; C.info = info; C.archived = archived;
   $('code').classList.toggle('vxsl', !!(S.state && S.state.features && S.state.features.vryxcode_side_list));     // vryxcode_side_list: sessions on the left
+  // The row of environment chips (where code can run); a green dot means it is available.
   $('codeEnvs').replaceChildren(el('span', {class: 'lbl'}, 'Environments'), ...C.info.environments.map((e) => el('button', {class: 'chip', onclick: () => envInfo()}, el('span', {class: 'dot' + (e.available ? ' on' : '')}), e.name)));
   if (!vxFilters().some((f) => f[0] === C.filter)) C.filter = 'all';                 // the Archived filter is gone when the switch is off
   $('codeFilter').textContent = (vxFilters().find((f) => f[0] === C.filter) || FILTERS[0])[1] + ' \u25be';
+  // pick: decides whether one session passes the current filter. live = still running.
   const live = ['starting', 'working'], pick = (x) => C.filter === 'all' || (C.filter === 'running' && live.includes(x.state)) || (C.filter === 'queued' && x.state === 'queued') || (C.filter === 'needs' && x.state === 'asking') || (C.filter === 'done' && !live.includes(x.state) && !['asking', 'queued'].includes(x.state));
   const rows = C.filter === 'archived' ? (C.archived || []) : C.sessions.filter(pick);       // vryxcode_archive: the Archived filter shows the tucked-away ones
   vxWhere();
@@ -64,7 +83,9 @@ async function renderHome() {
   }
   $('codeList').replaceChildren(...(rows.length ? rows.map(sessionCard) : [el('div', {class: 'empty-list'}, C.sessions.length ? 'Nothing here with this filter.' : 'No sessions yet. Tap New session to start one. Everything VryxCode does is listed here, so you can come back to it, see what it changed, or rewind it.')]));
 }
+// modelName: turns a model id into the name shown to people.
 const modelName = (id) => { const x = ((C.info && C.info.models) || []).find((y) => y.id === id); return x ? (x.outside ? x.name : x.label) : (id || 'model'); };
+// sessionCard: builds one row of the Sessions list (icon, title, badges, how many steps and files, delete button).
 function sessionCard(m) {
   const live = ['starting', 'working'].includes(m.state), ask = m.state === 'asking', queued = m.state === 'queued', bad = ['failed', 'interrupted'].includes(m.state);
   const ic = live ? el('span', {class: 'spin', 'aria-label': 'Working'}) : queued ? el('b', {style: 'font-size:15px;color:var(--muted)'}, '\u22ef') : ask ? el('b', {style: 'color:#f5a524;font-size:20px'}, '!') : bad ? el('b', {style: 'color:var(--danger);font-size:18px'}, '\u2717') : m.state === 'stopped' ? el('b', {style: 'font-size:14px'}, '\u25a0') : icon('code');
@@ -72,21 +93,26 @@ function sessionCard(m) {
   const badge = queued ? el('span', {class: 'badge'}, 'Queued' + (m.position ? ' \u00b7 #' + m.position : '')) : ask ? el('span', {class: 'badge ask'}, 'Needs you') : bad ? el('span', {class: 'badge bad'}, m.state === 'interrupted' ? 'Interrupted' : 'Failed') : m.state === 'stopped' ? el('span', {class: 'badge'}, 'Stopped') : '';
   const stats = [m.steps ? m.steps + (m.steps === 1 ? ' step' : ' steps') : '', m.files ? m.files + (m.files === 1 ? ' file' : ' files') + ' changed' : ''].filter(Boolean).join(' \u00b7 ');
   const lines = vxReviewOn() && (m.added || m.removed) ? el('span', {class: 'vx-lines'}, el('span', {class: 'a'}, '+' + (m.added || 0)), ' ', el('span', {class: 'd'}, '\u2212' + (m.removed || 0))) : '';
+  // el(tag, attributes, ...children) is the app's helper that builds a page element; this returns the whole card.
   return el('div', {class: 'scard', role: 'button', tabindex: '0', onclick: () => openSession(m), onkeydown: (ev) => { if (ev.key === 'Enter') openSession(m); }},
     el('div', {class: 'top'}, el('span', {class: 'sicon'}, ic), el('div', {class: 'mid'}, el('div', {class: 't'}, m.title), el('div', {class: 'sub'}, icon(ENV_ICON(env.id)), el('span', {}, m.project + ' \u00b7 ' + modelName(m.model) + ' \u00b7 ' + env.name))), el('span', {class: 'age'}, m.age)),
     m.snippet ? el('div', {class: 'snip'}, m.snippet) : '',
     el('div', {class: 'foot'}, badge, lines, el('span', {}, stats), el('span', {class: 'grow'}), live || ask ? '' : vxArchiveOn() ? vxMoreButton(m) : el('button', {class: 'del', 'aria-label': 'Delete this session', onclick: async (ev) => { ev.stopPropagation(); if (!confirm('Delete this session from the list? Your files are kept.')) return; await post('/api/code/sessions/' + m.id + '/delete', {}); renderHome(); }}, '\u00d7')));
 }
+// envInfo: a pop-up that explains each place VryxCode can run code.
 function envInfo() {
   dialog([el('h2', {}, 'Environments'), el('div', {style: 'color:var(--muted)'}, 'Where VryxCode runs the code it writes. Pick one when you start a session.'),
     ...C.info.environments.map((e) => el('div', {class: 'opt', style: 'cursor:default'}, el('span', {class: 'sicon', style: 'width:36px;height:36px;border-radius:10px;background:var(--surface2);display:grid;place-items:center'}, icon(ENV_ICON(e.id))),
       el('span', {class: 'grow'}, el('b', {}, e.name + (e.available ? '' : ' \u00b7 not available')), el('small', {}, e.note))))], 'Close');
 }
+// resetWork: clears the to-do list, the events and the output panel when you switch to another session.
 function resetWork() { C.todo = []; C.events = []; C.ctx = null; if ($('codeCtx')) $('codeCtx').hidden = true; renderTodo(); if (typeof OUT !== 'undefined') { OUT.items = []; OUT.pending = null; if (OUT.open) outRender(); } }
+// newSession: show an empty session screen ready for a first message; nothing is created on the server until you send something.
 function newSession() {
   C.view = 'session'; $('code').classList.remove('home'); $('codeTitle').textContent = 'VryxCode'; C.sid = null; C.saved = false; C.checkpoints = []; C.seen = 0; C.last = null; C.pvAuto = false; C.pvPage = '';
   offerReply(''); $('codeIn').replaceChildren(); $('codeGo').hidden = false; $('codeStop').hidden = true; resetWork(); renderCodeBar(); emptyFeed(); refreshFiles(); loadCmds(); C.pics = []; C.docs = []; renderPics(); $('codeTask').focus(); vxSide();
 }
+// vxOrganizer: builds the project list, each project with its sessions under it (newest first).
 function vxOrganizer(rows) {   // vryxcode_projects: every project with its sessions under it (newest first), like Claude's list; + starts a new one in that project
   const by = {}; let n = 0;
   for (const m of rows) (by[m.project] = by[m.project] || []).push(m);
@@ -105,15 +131,19 @@ function vxOrganizer(rows) {   // vryxcode_projects: every project with its sess
         el('span', {class: 'age'}, m.age || ''), vxArchiveOn() && !busy(m) && m.state !== 'asking' ? vxMoreButton(m) : '', el('span', {class: 'num'}, String(n)));
     }) : [el('div', {class: 'vx-pempty'}, 'No sessions yet')])));
 }
+// Is the "review" feature switched on for this person?
 const vxReviewOn = () => !!(S.state && S.state.features && S.state.features.vryxcode_review);
+// vxSeen / vxMarkSeen: remember on this device which finished sessions you already opened, so only new ones show "Ready for review".
 function vxSeen() { try { return JSON.parse(localStorage.getItem('emvryx_vx_seen') || '{}') || {}; } catch (e) { return {}; } }
 function vxMarkSeen(m) { try { const s = vxSeen(); s[m.id] = m.updated; localStorage.setItem('emvryx_vx_seen', JSON.stringify(s)); } catch (e) { /* private window: it just stays in Ready for review */ } }
+// openSession: open an existing session, set the screen up for it and start polling the server for its news.
 function openSession(m) {
   vxMarkSeen(m);
   C.view = 'session'; $('code').classList.remove('home'); $('codeTitle').textContent = 'VryxCode'; C.sid = m.id; C.project = m.project; C.saved = false; C.checkpoints = m.checkpoints || []; C.pvAuto = false; C.pvPage = '';
   if (C.info.models.some((x) => x.id === m.model && x.state === 'ready')) C.model = m.model;
   C.seen = 0; C.last = null; $('codeIn').replaceChildren(); resetWork(); C.chatKey = C.project + '|' + C.model; renderCodeBar(); refreshFiles(); loadCmds(); C.pics = []; C.docs = []; renderPics(); poll(); vxSide();
 }
+// Wire the buttons at the top of the Code screen to what they should do.
 $('codeNew').onclick = newSession;
 $('codeFilter').onclick = (e) => {
   e.stopPropagation(); const m = $('codeFilterMenu'); if (!m.hidden) { m.hidden = true; return; } closeCodeMenus();
@@ -126,6 +156,7 @@ $('codeEnv').onclick = (e) => {
     icon(ENV_ICON(x.id)), el('span', {class: 'grow'}, el('b', {}, x.name), el('small', {}, x.note)))));
   m.hidden = false;
 };
+// renderCodeBar: redraw the bar of buttons (project, model or effort, where to run, mode, files, preview) from the current state.
 function renderCodeBar() {
   $('codeProj').textContent = C.project + ' ▾';
   const m = cModel();
@@ -143,6 +174,7 @@ function renderCodeBar() {
   $('codePreviewBtn').replaceChildren(icon('eye'), el('span', {class: 'lab'}, 'Preview'));
   ideApply();
 }
+// emptyFeed: the welcome screen of a new session, or a note that VryxCode is not open to this person yet.
 function emptyFeed() {
   if (C.info && C.info.allowed === false) { $('codeIn').replaceChildren(el('div', {class: 'empty'}, el('h1', {}, 'VryxCode is not open to you yet'), el('p', {}, C.info.why_not || 'Ask the owner for access.'))); $('codeGo').disabled = true; return; }
   $('codeGo').disabled = false;
@@ -152,8 +184,10 @@ function emptyFeed() {
     el('div', {class: 'row'}, tip('Write a function with a unit test'), tip('Fix the failing test in this project'), tip('Explain what this project does')),
     el('p', {style: 'font-size:13px'}, C.files.includes('VRYX.md') ? 'Using the notes in VRYX.md. Type / for commands and @ to point at a file.' : 'Type / for commands and @ to point at a file. /init creates VRYX.md, notes VryxCode reads every time.')));
 }
+// closeCodeMenus: hide every pop-up menu in the Code screen at once.
 function closeCodeMenus() { $('vxModelMenu').hidden = true; $('codeProjMenu').hidden = true; $('codeModelMenu').hidden = true; $('codeEnvMenu').hidden = true; $('codeFilterMenu').hidden = true; $('codeModeMenu').hidden = true; $('codeSuggest').hidden = true; }
 $('codeProjNew').onclick = (e) => { e.stopPropagation(); newProject(); };
+// The project button: opens a menu to switch, create, import, download or delete a project.
 $('codeProj').onclick = (e) => {
   e.stopPropagation(); const m = $('codeProjMenu'); if (!m.hidden) { m.hidden = true; return; } closeCodeMenus();
   const item = (label, fn, cls) => el('button', {class: 'opt' + (cls ? ' ' + cls : ''), onclick: () => { closeCodeMenus(); fn(); }}, el('span', {class: 'grow'}, label));
@@ -164,6 +198,7 @@ $('codeProj').onclick = (e) => {
     item('Delete project', deleteProject));
   m.hidden = false;
 };
+// newProject: asks for a name, checks it (letters, numbers, dashes, underscores, up to 40, not already used) and starts a session in it.
 function newProject() {
   closeCodeMenus();
   const name = el('input', {type: 'text', placeholder: 'my-new-app', maxlength: '40', autocomplete: 'off', autocapitalize: 'none', spellcheck: 'false', 'aria-label': 'Project name', style: 'width:100%;box-sizing:border-box'});
@@ -182,12 +217,14 @@ function newProject() {
     'Cancel', el('button', {class: 'btn primary', type: 'button', onclick: make}, 'Create project'));
   setTimeout(() => name.focus(), 50);
 }
+// deleteProject: asks you to confirm, then asks the server to delete the project and moves to another one.
 async function deleteProject() {
   if (!confirm('Delete the project "' + C.project + '" and all its files? This cannot be undone.')) return;
   const r = await post('/api/code/projects/delete', {project: C.project}); const j = await r.json().catch(() => ({message: 'The server did not answer properly.', action: 'Try again in a moment.'}));
   if (!r.ok) { note('bad', 'COULD NOT DELETE', j.message + ' ' + (j.action || '')); return; }
   C.info.projects = C.info.projects.filter((p) => p !== C.project); C.project = C.info.projects[0] || 'my-project'; renderCodeBar(); refreshFiles();
 }
+// modelMenu: the menu under the model button; it shows effort levels if VryxCode picks the model itself, otherwise the list of models.
 function modelMenu(e, m) {
   e.stopPropagation(); if (!m.hidden) { m.hidden = true; return; } closeCodeMenus();
   if (oneModel()) {
@@ -201,18 +238,24 @@ function modelMenu(e, m) {
 }
 $('codeModelBtn').onclick = (e) => modelMenu(e, $('codeModelMenu'));
 $('vxModel').onclick = (e) => modelMenu(e, $('vxModelMenu'));
+// Clicking anywhere outside a menu closes the menus.
 document.addEventListener('click', (e) => { if (cOn() && !e.target.closest('.menu')) closeCodeMenus(); });
+// The three working modes: ask before editing, edit without asking, or plan only.
 const MODES = {ask: {short: 'Ask', name: 'Ask before editing', note: 'It asks you before it changes a file or runs something.'},
   auto: {short: 'Auto', name: 'Edit without asking', note: 'It writes and edits files by itself. It still asks before anything riskier.'},
   plan: {short: 'Plan', name: 'Plan first', note: 'It only looks around and writes a plan. Nothing is changed until you tap Build it.'}};
+// setMode: change the mode; when switching into Plan we remember the old mode so Build it can go back.
 function setMode(m) { if (m === 'plan' && C.mode !== 'plan') C.prevMode = C.mode; C.mode = m; renderCodeBar(); }
+// The mode button opens its menu.
 $('codeAuto').onclick = (e) => {
   e.stopPropagation(); const m = $('codeModeMenu'); if (!m.hidden) { m.hidden = true; return; } closeCodeMenus();
   m.replaceChildren(el('div', {class: 'head'}, 'HOW SHOULD IT WORK?'), ...Object.entries(MODES).map(([id, x]) => el('button', {class: 'opt' + (id === C.mode ? ' sel' : ''), onclick: () => { closeCodeMenus(); setMode(id); }},
     el('span', {class: 'grow'}, el('b', {}, x.name), el('small', {}, x.note)))));
   m.hidden = false;
 };
+// The back arrow: from a session go to the list, from the list leave Code and go back to the chats.
 $('codeBack').onclick = () => { if (C.view === 'session') { showHome(); return; } $('code').hidden = true; document.body.classList.remove('vx'); clearTimeout(C.timer); closeCodeMenus(); };
+// showDrawer: show or hide the side drawer and pick its tab (Files, Changes or Rewind).
 function showDrawer(on, tab) {
   $('codeDrawer').hidden = !on; if (!on) return; tab = tab || C.tab || 'files'; C.tab = tab;
   document.querySelectorAll('#codeDrawer .dtabs button').forEach((b) => b.classList.toggle('on', b.dataset.tab === tab));
@@ -220,13 +263,16 @@ function showDrawer(on, tab) {
   if (tab === 'changes') renderChanges(); if (tab === 'rewind') renderRewind();
 }
 document.querySelectorAll('#codeDrawer .dtabs button').forEach((b) => { b.onclick = () => showDrawer(true, b.dataset.tab); });
+// changesFromEvents: the older way to list changes, built from the diff lines of each file the agent wrote or edited.
 // what this session changed, from the steps it took (the diff lines each edit showed)
 function changesFromEvents() {
   const files = new Map();
   for (const e of C.events) {
     if (e.kind !== 'step' || (e.tool !== 'write_file' && e.tool !== 'edit_file')) continue;
+    // Each step's preview starts with "write <file>" or "edit <file>"; the regular expression pulls the file name out.
     const lines = String(e.preview || '').split('\n'), m = /^(?:write|edit) (\S+)/.exec(lines[0] || ''); if (!m) continue;
     const f = files.get(m[1]) || {path: m[1], add: 0, del: 0, lines: []};
+    // Lines starting with + count as added, lines starting with - as removed.
     for (const l of lines.slice(1)) { if (/^\s*\+ /.test(l)) f.add++; else if (/^\s*- /.test(l)) f.del++; f.lines.push(l); }
     f.lines.push('');
     files.set(m[1], f);
@@ -235,10 +281,12 @@ function changesFromEvents() {
 }
 // what this session changed: the real difference against the project as it was before the session (kept or undone file by file), or, without that, the steps' own diff lines
 C.kept = C.kept || new Set();
+// renderChanges: draw the Changes tab; it prefers the server's real difference and falls back to the steps' own lines.
 async function renderChanges() {
   const pane = $('tabChanges');
   let list = null;
   if (C.sid) {
+    // Files you already chose to keep are hidden from the list.
     try { const r = await api('/api/code/sessions/' + C.sid + '/changes'); if (r.ok) list = ((await r.json()).changes || []).filter((f) => !C.kept.has(C.sid + '|' + f.path)); } catch (e) { list = null; }
   }
   if (list) { renderRealChanges(pane, list); return; }
@@ -249,6 +297,7 @@ async function renderChanges() {
       el('pre', {}, ...f.lines.filter((l) => l !== '').map((l) => el('span', {class: /^\s*\+ /.test(l) ? 'add' : /^\s*- /.test(l) ? 'del' : ''}, l))),
       el('div', {class: 'acts'}, el('button', {class: 'chip', onclick: () => { showDrawer(true, 'files'); viewFile(f.path); }}, 'Open the file')))));
 }
+// renderRealChanges: one expandable row per changed file with Keep, Undo this file and Open buttons.
 function renderRealChanges(pane, list) {
   if (!list.length) { pane.replaceChildren(el('div', {class: 'hint'}, 'Nothing to review: every change in this session has been kept, or nothing was changed.')); return; }
   const running = ['working', 'asking', 'starting'].includes(C.state);
@@ -260,6 +309,7 @@ function renderRealChanges(pane, list) {
       el('pre', {}, ...f.diff.split('\n').filter((l) => !/^(---|\+\+\+)/.test(l)).map((l) => el('span', {class: l.startsWith('+') ? 'add' : l.startsWith('-') ? 'del' : ''}, l))),
       el('div', {class: 'acts'},
         el('button', {class: 'chip', onclick: () => { C.kept.add(C.sid + '|' + f.path); renderChanges(); }}, 'Keep'),
+        // Undo is disabled while VryxCode is still working, because it would fight with the changes it is making.
         el('button', {class: 'chip bad', disabled: running, title: running ? 'Wait for VryxCode to finish, or press Stop' : '', onclick: async () => {
           const r = await post('/api/code/sessions/' + C.sid + '/reject', {path: f.path}); const j = await r.json().catch(() => ({}));
           if (!r.ok) { note('bad', 'Could not undo', (j.message || '') + ' ' + (j.action || '')); return; }
@@ -267,6 +317,7 @@ function renderRealChanges(pane, list) {
         }}, 'Undo this file'),
         f.status === 'removed' ? '' : el('button', {class: 'chip', onclick: () => { showDrawer(true, 'files'); viewFile(f.path); }}, 'Open')))));
 }
+// renderRewind: list the saved checkpoints; pressing one puts the project's files back as they were before that message.
 function renderRewind() {
   const cps = [...(C.checkpoints || [])].reverse(), pane = $('tabRewind');
   if (!C.sid || !cps.length) { pane.replaceChildren(el('div', {class: 'hint'}, 'Before each of your messages VryxCode saves the project, so you can put the files back as they were. Nothing is saved yet for this session.')); return; }
@@ -279,6 +330,7 @@ function renderRewind() {
     }}, icon('undo'), el('span', {class: 'grow'}, el('b', {}, 'Before message ' + c.turn), el('small', {}, c.label || '')))));
 }
 // the to-do list the model keeps (its todo tool): a card above the feed that fills in as items are ticked off
+// renderTodo: draw the model's to-do list, either as a Claude-Code-style task box or as a collapsible card with a progress bar.
 function renderTodo() {
   const box = $('codeTodo'), items = C.todo || [];
   if (!items.length) { box.hidden = true; box.replaceChildren(); return; }
@@ -299,6 +351,7 @@ function renderTodo() {
 }
 // "/" commands and "@" file mentions in the message box
 // a code review: the model gets the change (this session's, or a pull request's) in Plan-first mode, so it can only read; you see one short line
+// startReview: start a read-only code review of this session's changes or of a pull request.
 async function startReview(review) {
   if (!C.sid) { note('fin', 'Open a session first', 'Start or open a VryxCode session, then use /review.'); return; }
   setMode('plan');
@@ -307,6 +360,7 @@ async function startReview(review) {
   if (!r.ok) { const j = await r.json().catch(() => ({})); note('fin', 'Could not start the review', (j.message || 'Try again.') + (j.action ? ' ' + j.action : '')); return; }
   poll();
 }
+// SLASH is the table of "/" commands: [name, what it says, what it does, optional feature switch that must be on].
 const SLASH = [['plan', 'Plan first: look and plan, change nothing', () => setMode('plan')], ['ask', 'Ask before editing', () => setMode('ask')], ['auto', 'Edit without asking', () => setMode('auto')],
   ['init', 'Create VRYX.md, notes VryxCode reads every session', async () => { const r = await post('/api/code/init', {project: C.project}); const j = await r.json().catch(() => ({})); note('fin', j.created ? 'Created VRYX.md' : 'VRYX.md is already there', 'Open it from Files and fill it in: what the project is, how to test it, your style rules.'); refreshFiles(); }],
   ['review', 'Review what this session changed: problems, worst first (read-only)', () => startReview({session: true})],
@@ -327,10 +381,13 @@ const SLASH = [['plan', 'Plan first: look and plan, change nothing', () => setMo
   ['publish', 'Publish this web project to a free public link (GitHub Pages)', () => publishSite(), 'vryxcode_publish'],
   ['tour', 'Take the VryxCode tour again', () => openVryxTour(true)],
   ['help', 'List these commands', () => note('fin', 'Commands', slashOn().map((x) => '/' + x[0] + ' \u2014 ' + x[1]).concat((C.cmds || []).map((x) => '/' + x.name + ' \u2014 ' + (x.about || 'this project\u2019s own command'))).join('\n') + '\n@filename \u2014 point at a file in your message')]];
+// slashOn: only the commands whose feature switch is on.
 const slashOn = () => SLASH.filter((x) => !x[3] || featureOn(x[3]));     // a command that belongs to a switched-off feature is not listed
 // vryxcode_secrets: names only; a value can be replaced or removed, never read back
+// showSecrets: a pop-up to add, replace or remove secrets (like API keys) for this project; values are never shown again once saved.
 async function showSecrets() {
   const q = '?project=' + encodeURIComponent(C.project); const r = await api('/api/code/secrets' + q); const j = await r.json().catch(() => ({names: []}));
+  // change: send an add/remove to the server, then reload the pop-up.
   let m; const change = async (body) => { const x = await post('/api/code/secrets', Object.assign({project: C.project}, body)); const k = await x.json().catch(() => ({})); if (!x.ok) { note('bad', 'Could not save', k.message || ''); return; } m.remove(); showSecrets(); };
   const name = el('input', {type: 'text', placeholder: 'NAME, like WEATHER_API_KEY', 'aria-label': 'Secret name', autocapitalize: 'characters', style: 'flex:1;min-width:140px'});
   const value = el('input', {type: 'password', placeholder: 'Value', 'aria-label': 'Secret value', autocomplete: 'off', style: 'flex:1;min-width:140px'});
@@ -341,9 +398,11 @@ async function showSecrets() {
     el('div', {class: 'row', style: 'flex-wrap:wrap;gap:8px'}, name, value, el('button', {class: 'chip', onclick: () => { name.value = name.value.trim().toUpperCase(); change({name: name.value, value: value.value}); }}, 'Save'))], 'Close');
 }
 // vryxcode_github: Save to GitHub. The person sees and can change the commit title and the description before anything is sent.
+// saveToGithub: shows an editable title and description, then asks the server to commit everything on a new branch and open a pull request.
 async function saveToGithub() {
   if (!C.project) return toast('Open a project first.');
   if (C.state === 'working') return toast('Wait for VryxCode to finish, or press Stop.');
+  // Ask the server about the GitHub link first: connected? repository made yet? current branch?
   let g; try { g = await (await api('/api/code/git?project=' + encodeURIComponent(C.project))).json(); } catch (e) { return toast('That did not load. Try again.'); }
   if (!g.connected) { note('bad', 'GitHub is not connected', 'Open Menu > Connected apps > GitHub and connect it, then try again.'); return; }
   if (!g.linked) {
@@ -351,6 +410,7 @@ async function saveToGithub() {
     const r = await post('/api/code/git', {project: C.project, action: 'create_repo', name: C.project, private: true}); const j = await r.json().catch(() => ({}));
     if (!r.ok) { note('bad', 'Could not make the repository', (j.message || '') + ' ' + (j.action || '')); return; }
   }
+  // Gather what was asked and what VryxCode did, to fill in the description for the pull request.
   const evs = C.events || [], start = evs.find((e) => e.kind === 'start'), ends = evs.filter((e) => e.kind === 'end' && e.finished), asks = evs.filter((e) => e.kind === 'user' && !e.auto);
   const files = Object.keys(C.turnFiles || {});
   const title = el('input', {type: 'text', maxlength: 120, value: ((asks.length ? asks[asks.length - 1].text : start ? start.task : '') || 'Changes from VryxCode').split('\n')[0].slice(0, 100), 'aria-label': 'Title', style: 'width:100%'});
@@ -369,10 +429,12 @@ async function saveToGithub() {
     }}, 'Save and open a pull request'));
 }
 // vryxcode_publish: the person sees exactly which files would be public, then says yes
+// publishSite: show exactly which files would become public, then publish them to GitHub Pages only if you say yes.
 async function publishSite() {
   if (!C.project) return toast('Open a project first.');
   const r = await api('/api/code/publish?project=' + encodeURIComponent(C.project)); const j = await r.json().catch(() => ({}));
   if (!r.ok) { note('bad', 'Cannot publish this project', (j.message || '') + ' ' + (j.action || '')); return; }
+  // go: send the confirmed publish (or unpublish) request and show the result.
   const go = async (body, btn) => {
     btn.disabled = true; btn.textContent = 'Working\u2026';
     const x = await post('/api/code/publish', Object.assign({project: C.project, confirm: true}, body)); const k = await x.json().catch(() => ({}));
@@ -394,6 +456,7 @@ async function publishSite() {
 // ---- pictures sent with the next message (the full agent sees them), memory, saved permission rules, the project's own /commands
 C.pics = [];
 C.docs = [];                                   // vryxcode_review: documents attached to the next message ({id, name}), read by the model before it starts
+// renderPics: show small thumbnails of the pictures and documents attached to the next message, each with a remove button.
 function renderPics() {
   let row = $('codePics');
   if (!row) { row = el('div', {id: 'codePics', class: 'row', style: 'gap:6px;flex-wrap:wrap;margin:4px 0'}); $('codeTask').before(row); }
@@ -402,11 +465,13 @@ function renderPics() {
     ...(C.docs || []).map((d, i) => el('span', {class: 'chip'}, '\u{1F4C4} ' + d.name, el('button', {class: 'del', 'aria-label': 'Remove ' + d.name, onclick: () => { C.docs.splice(i, 1); renderPics(); }}, '\u00d7'))));
   row.hidden = !C.pics.length && !(C.docs || []).length;
 }
+// pickDocs: choose documents from the device, send them to the server (max 8, up to 10 MB each) to be kept in Documents and read first.
 function pickDocs() {   // a PDF, Word file or text file from this device, kept in your Documents and read by VryxCode with your next message
   const f = el('input', {type: 'file', accept: '.pdf,.docx,.txt,.md,.markdown,.csv,.json,.html,.htm,.yaml,.yml', multiple: true});
   f.onchange = async () => {
     for (const file of Array.from(f.files || []).slice(0, 8)) {
       if (file.size > 10e6) { note('bad', 'Too big', file.name + ' is over 10 MB.'); continue; }
+      // Read the file as base64 text (a data URL, then the part after the comma) so it can be sent as JSON.
       const data = await new Promise((res) => { const rd = new FileReader(); rd.onload = () => res(String(rd.result).split(',')[1] || ''); rd.readAsDataURL(file); });
       const r = await post('/api/documents', {name: file.name, data}); const j = await r.json().catch(() => ({}));
       if (r.ok) { C.docs.push({id: j.id, name: j.name}); renderPics(); } else note('bad', 'Not attached', file.name + ': ' + (j.message || 'it could not be read.'));
@@ -414,13 +479,17 @@ function pickDocs() {   // a PDF, Word file or text file from this device, kept 
   };
   f.click();
 }
+// addPicture: accept a picture (png, jpeg, webp or gif, up to 3 pictures and 5 MB each) and keep it as text to send with the message.
 function addPicture(file) {
   if (!file || !/^image\/(png|jpe?g|webp|gif)$/.test(file.type) || C.pics.length >= 3) return;
   if (file.size > 5 * 1024 * 1024) { note('bad', 'Picture too big', 'Pictures can be up to 5 MB.'); return; }
   const rd = new FileReader(); rd.onload = () => { C.pics.push(String(rd.result)); renderPics(); }; rd.readAsDataURL(file);
 }
+// pickPictures: open the device's file chooser for pictures.
 function pickPictures() { const f = el('input', {type: 'file', accept: 'image/png,image/jpeg,image/webp,image/gif', multiple: true}); f.onchange = () => Array.from(f.files || []).forEach(addPicture); f.click(); }
+// Pasting an image into the message box attaches it.
 $('codeTask').addEventListener('paste', (e) => { const files = Array.from((e.clipboardData && e.clipboardData.files) || []).filter((f) => f.type.startsWith('image/')); if (files.length) { e.preventDefault(); files.forEach(addPicture); } });
+// showMemory: list the notes VryxCode remembers about you, each with a Forget button, and a Forget all button.
 async function showMemory() {
   const r = await api('/api/code/memory'); const j = await r.json().catch(() => ({notes: []}));
   let m; const forget = async (i) => { await post('/api/code/memory', {forget: i}); m.remove(); showMemory(); };
@@ -428,6 +497,7 @@ async function showMemory() {
     ...(j.notes.length ? j.notes.map((n, i) => el('div', {class: 'opt', style: 'cursor:default'}, el('span', {class: 'grow'}, n), el('button', {class: 'chip', onclick: () => forget(i)}, 'Forget'))) : [el('div', {}, 'Nothing yet.')])],
     'Close', j.notes.length ? el('button', {class: 'btn', type: 'button', onclick: () => { if (confirm('Forget everything VryxCode remembers about you?')) forget(null); }}, 'Forget all') : null);
 }
+// showRules: list the saved permission rules (Always allow / Never allow) and let you add or remove one.
 async function showRules() {
   const q = '?project=' + encodeURIComponent(C.project); const r = await api('/api/code/rules' + q); const j = await r.json().catch(() => ({allow: [], deny: []}));
   let m; const change = async (body) => { const x = await post('/api/code/rules', Object.assign({project: C.project}, body)); const k = await x.json().catch(() => ({})); if (!x.ok) { note('bad', 'Could not save', k.message || ''); return; } m.remove(); showRules(); };
@@ -437,6 +507,7 @@ async function showRules() {
     ...list('allow', 'Always allow'), ...list('deny', 'Never allow'),
     el('div', {class: 'row'}, rule, el('button', {class: 'chip', onclick: () => change({add: {kind: 'allow', rule: rule.value}})}, 'Always'), el('button', {class: 'chip bad', onclick: () => change({add: {kind: 'deny', rule: rule.value}})}, 'Never'))], 'Close');
 }
+// fixCi: ask the server to read the failing GitHub checks and start a session to fix them.
 async function fixCi() {
   const r = await post('/api/code/fixci', {project: C.project, model: C.model, effort: C.effort, env: C.env, notify: vxNotifyOn()}); const j = await r.json().catch(() => ({}));
   if (!r.ok) { note('bad', 'Could not check CI', (j.message || '') + ' ' + (j.action || '')); return; }
@@ -444,6 +515,7 @@ async function fixCi() {
   if (C.view === 'home') newSession();
   C.sid = j.id; C.saved = false; C.checkpoints = []; C.seen = 0; C.stopping = false; $('codeIn').replaceChildren(); poll();
 }
+// watchCi: switch "watch CI" on or off for this project.
 async function watchCi() {
   const on = !((C.info && C.info.ci_watch) || []).includes(C.project);
   const r = await post('/api/code/ci-watch', {project: C.project, on, model: C.model}); const j = await r.json().catch(() => ({}));
@@ -451,14 +523,19 @@ async function watchCi() {
   if (C.info) C.info.ci_watch = on ? (C.info.ci_watch || []).concat([C.project]) : (C.info.ci_watch || []).filter((p) => p !== C.project);
   note('fin', on ? 'Watching CI' : 'Stopped watching CI', on ? 'Every few minutes VryxCode looks at GitHub. When a new commit fails, your phone is told and it starts fixing it. Pushing the fix still asks you.' : C.project + ' is no longer watched.');
 }
+// loadCmds: fetch this project's own "/" commands.
 async function loadCmds() { try { const r = await api('/api/code/commands?project=' + encodeURIComponent(C.project)); C.cmds = (await r.json()).commands || []; } catch (e) { C.cmds = []; } }
+// SUG holds the current suggestion list for the "/" and "@" helper under the message box.
 let SUG = {items: [], at: -1};
+// suggest: while typing, show matching "/" commands, or "@" file names after an @ sign.
 function suggest() {
   const t = $('codeTask'), box = $('codeSuggest'), pos = t.selectionStart, before = t.value.slice(0, pos);
   let items = [];
+  // A line that is only "/" and some letters means a command is being typed.
   const sl = /^\/(\w*)$/.exec(before);
   if (sl) items = slashOn().filter((x) => x[0].startsWith(sl[1].toLowerCase())).map((x) => ({label: '/' + x[0], sub: x[1], run: () => { t.value = ''; closeCodeMenus(); x[2](); }}))
     .concat((C.cmds || []).filter((x) => x.name.startsWith(sl[1].toLowerCase()) && !SLASH.some((y) => y[0] === x.name)).map((x) => ({label: '/' + x.name, sub: x.about || 'this project\u2019s own command', run: () => { t.value = '/' + x.name + ' '; closeCodeMenus(); t.focus(); }})));
+  // Otherwise look for an "@" followed by letters: a file mention.
   else { const at = /(?:^|\s)@([\w./-]*)$/.exec(before);
     if (at) { const q = at[1].toLowerCase(); items = C.files.filter((f) => f.toLowerCase().includes(q)).slice(0, 8).map((f) => ({label: '@' + f, sub: '', run: () => { const start = before.length - at[1].length - 1; t.value = t.value.slice(0, start) + '@' + f + ' ' + t.value.slice(pos); closeCodeMenus(); t.focus(); }})); } }
   SUG = {items, at: items.length ? 0 : -1};
@@ -468,25 +545,31 @@ function suggest() {
 }
 // The suggested reply (flag vryxcode_suggest): after a finished turn the empty message box shows what to say next, greyed out, as Claude does.
 // Tab, or a swipe right across the box on a phone, fills it in; typing anything else ignores it, and sending clears it.
+// offerReply: show the suggested next message as grey hint text in the empty box.
 function offerReply(text) {
   C.offer = (S.state && S.state.features && S.state.features.vryxcode_suggest && text) ? String(text).slice(0, 200) : '';
   const t = $('codeTask'); t.placeholder = C.offer || 'Ask, answer, or tell VryxCode what to build or fix'; t.classList.toggle('offer', !!C.offer);
 }
+// takeOffer: put the suggested text in the box (Tab, or a swipe right on a phone).
 function takeOffer() {
   const t = $('codeTask'); if (!C.offer || t.value) return false;
   t.value = C.offer; offerReply(''); t.focus(); t.setSelectionRange(t.value.length, t.value.length); suggest(); return true;
 }
 $('codeTask').addEventListener('keydown', (e) => { if (e.key === 'Tab' && !e.shiftKey && $('codeSuggest').hidden && takeOffer()) e.preventDefault(); });
+// Swipe detection: remember where a finger touched down, and on release a move of 60+ pixels to the right (and mostly flat) counts as a swipe.
 (() => {
   let x0 = null, y0 = 0;
   $('codeTask').addEventListener('touchstart', (e) => { const p = e.touches[0]; x0 = e.touches.length === 1 ? p.clientX : null; y0 = p.clientY; }, {passive: true});
   $('codeTask').addEventListener('touchend', (e) => { const p = e.changedTouches[0]; if (x0 != null && p.clientX - x0 > 60 && Math.abs(p.clientY - y0) < 40) takeOffer(); x0 = null; }, {passive: true});
 })();
 $('codeTask').addEventListener('input', suggest);
+// With the suggestion list open, Tab or Enter picks the highlighted item; Escape closes the list.
 $('codeTask').addEventListener('keydown', (e) => { if (!$('codeSuggest').hidden && SUG.items.length && (e.key === 'Tab' || (e.key === 'Enter' && !e.shiftKey && !e.ctrlKey && !e.metaKey))) { e.preventDefault(); SUG.items[SUG.at].run(); } else if (e.key === 'Escape') $('codeSuggest').hidden = true; });
 $('codeFilesBtn').onclick = () => showDrawer($('codeDrawer').hidden);
 $('codeDrawerX').onclick = () => showDrawer(false);
+// pfView counts file-drawer draws so only the newest request may fill the drawer.
 let pfView = 0;          // the Files drawer shows one thing at a time (the list, search hits or the map): only the newest request may draw it
+// refreshFiles: reload the project's file list, update buttons that depend on it, and redraw the list.
 async function refreshFiles() {
   if (!C.project) return;
   const view = ++pfView;
@@ -497,16 +580,19 @@ async function refreshFiles() {
   $('codeFiles').replaceChildren(...(j.files.length ? j.files.map((f) => el('button', {class: f === C.file ? 'on' : '', onclick: () => viewFile(f)}, f)) : [el('div', {style: 'color:var(--muted);padding:6px 8px;font-size:14px'}, 'No files yet.')]));
 }
 
+// The idea chips on the home screen: each is [name, text that fills the start box].
 // ---- the home screen's start box and idea chips (a session starts the moment you press Build it)
 const VX_IDEAS = [['Bill splitter', 'A bill splitter: bill, tip percentage and number of people, and it shows what each person pays.'],
   ['To-do list', 'A to-do list that saves in the browser, with tick, delete and filter, and looks good on a phone.'],
   ['Focus timer', 'A focus timer with 25 and 5 minute rounds, a progress ring and a sound at the end.'],
   ['Snake', 'The game Snake in one HTML file with arrow keys and swipe controls, a score and a high score.'],
   ['Habit tracker', 'A 7-day habit grid I can tick off, with a streak counter, saved in the browser.']];
+// vxRenderChips: draw the idea chips.
 function vxRenderChips() {
   $('vxChips').replaceChildren(...VX_IDEAS.map(([name, text]) => el('button', {type: 'button', onclick: () => { $('vxQuick').value = text; $('vxQuick').focus(); }}, el('b', {}, '+'), name)));
 }
 // starters: a small working project the model fills in (coding/templates.py). Tap one, say what you want, press Build it.
+// vxRenderTemplates: fetch the starter projects and draw them as buttons; tapping one selects it, tapping again unselects.
 async function vxRenderTemplates() {
   let list = [];
   try { list = ((await (await api('/api/code/templates')).json()).templates) || []; } catch (e) { /* the chips alone are fine */ }
@@ -517,9 +603,11 @@ async function vxRenderTemplates() {
     $('vxTpls').querySelectorAll('button').forEach((b) => b.classList.toggle('on', b.dataset.id === C.template)); $('vxQuick').focus();
   }, 'data-id': t.id}, el('span', {}, t.icon), el('b', {}, t.name), el('small', {}, t.desc))));
 }
+// vxFreeName: a project name that is not already used (adds -2, -3 and so on).
 const vxFreeName = (base) => { const have = new Set((C.info && C.info.projects) || []); let n = base, i = 2; while (have.has(n)) n = base + '-' + i++; return n; };
 const vxProjectsOn = () => !!(S.state && S.state.features && S.state.features.vryxcode_projects);
 // vryxcode_projects on a wide screen: the organizer stays beside an open session, like Claude's sidebar (New session, then every project and its sessions)
+// vxSide: on wide screens keep the project list beside an open session.
 async function vxSide(reload) {
   const side = $('vxSide'); if (!side) return;
   const on = vxProjectsOn() && C.view === 'session' && matchMedia('(min-width: 1100px)').matches && !$('code').classList.contains('ide');
@@ -528,13 +616,16 @@ async function vxSide(reload) {
   side.replaceChildren(el('button', {type: 'button', class: 'vx-snew', onclick: () => newSession()}, el('b', {}, '+'), 'New session'), ...vxOrganizer(C.sessions));
   side.querySelectorAll('.vx-prow').forEach((r) => r.classList.toggle('on', !!C.sid && r.dataset.id === C.sid));
 }
+// Redraw the side list when the window size changes, and refresh it every 15 seconds.
 addEventListener('resize', () => { if (!$('code').hidden) vxSide(); });
 setInterval(() => { if (!$('code').hidden && !$('vxSide').hidden) vxSide(true); }, 15000);
+// vxIdeaName: turns an idea into a short folder name (drops polite words, keeps up to 4 words, joins them with dashes).
 function vxIdeaName(text) {   // "A bill splitter with tip and people" -> "bill-splitter": a short folder name made from the idea
   const t = String(text || '').toLowerCase().replace(/^(please\s+)?((can|could) you\s+)?((make|build|create|write|code|give)( me)?\s+)?((a|an|the|my|me)\s+)?/, '');
   const words = t.split(/\s(?:with|that|which|where|for|using|in|so|to)\s|[,.;:!?()]/)[0].replace(/[^a-z0-9\s-]/g, ' ').trim().split(/\s+/).filter(Boolean).slice(0, 4);
   return (words.join('-').slice(0, 32).replace(/-+$/, '')) || 'new-project';
 }
+// vxWhere: the line under the start box that says which project the idea will be built in.
 function vxWhere() {          // under the box: where the idea will be built
   const row = $('vxWhere'); if (!row) return;
   row.hidden = !vxProjectsOn(); if (row.hidden) return;
@@ -542,6 +633,7 @@ function vxWhere() {          // under the box: where the idea will be built
   row.replaceChildren(here ? el('span', {}, 'Builds in ', el('b', {}, C.project), ' \u00b7 ') : el('span', {}, 'Builds in a new project' + (text ? ': ' : ''), text ? el('b', {}, vxFreeName(vxIdeaName(text))) : '', ' \u00b7 '),
     el('button', {type: 'button', class: 'link', onclick: () => { C.buildHere = !here; vxWhere(); }}, here ? 'use a new project instead' : 'use ' + (C.project || 'the current project') + ' instead'));
 }
+// The Build it button on the home screen: starts a session and sends the idea as its first message.
 $('vxQuickGo').onclick = () => {
   const text = $('vxQuick').value.trim();
   if (!text && !C.template) { $('vxQuick').focus(); return; }
@@ -552,9 +644,11 @@ $('vxQuickGo').onclick = () => {
   C.buildHere = false; $('codeTask').value = text; $('vxQuick').value = ''; $('codeGo').click();
 };
 $('vxQuick').addEventListener('input', () => vxWhere());
+// Enter (without Shift) in the start box presses Build it.
 $('vxQuick').addEventListener('keydown', (e) => { if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) { e.preventDefault(); $('vxQuickGo').click(); } });
 vxRenderChips();
 // the phone notification (owner only; it needs the ntfy topic from Admin > Security): remembered on this device
+// The phone-notification choice is remembered on this device.
 const vxNotifyOn = () => { try { return localStorage.getItem('vx_notify') === '1'; } catch (e) { return false; } };
 function vxNotifyInit() {
   const row = $('vxNotifyRow'); row.hidden = !(S.state && S.state.owner); $('vxNotify').checked = vxNotifyOn();
@@ -563,6 +657,7 @@ $('vxNotify').onchange = () => { try { localStorage.setItem('vx_notify', $('vxNo
 
 // ---- search the project, and its map (coding/code_map.py): what is where, made from the files alone; "Explain this project" asks the model to put it in words
 let pfSearchTimer = null;
+// Searching the project: wait 250 ms after the last key, ask the server, and draw the hits only if you have not typed more or asked for something else.
 $('codeSearch').addEventListener('input', () => {
   clearTimeout(pfSearchTimer); const q = $('codeSearch').value.trim();
   if (q.length < 2) { refreshFiles(); return; }
@@ -574,6 +669,7 @@ $('codeSearch').addEventListener('input', () => {
       : [el('div', {style: 'color:var(--muted);padding:6px 8px;font-size:13px'}, 'Nothing matches "' + q + '".')]));
   }, 250);
 });
+// The Map button: shows what is where in the project, with a button asking the model to explain it in words.
 $('codeMapBtn').onclick = async () => {
   clearTimeout(pfSearchTimer); const view = ++pfView;
   const r = await api('/api/code/map?project=' + encodeURIComponent(C.project)); const m = await r.json().catch(() => null);
@@ -590,12 +686,14 @@ $('codeMapBtn').onclick = async () => {
 };
 
 // ---- parallel tries and a second opinion
+// forkProject: make a separate copy of the project to try an idea safely.
 async function forkProject() {
   if (!C.project) return;
   const r = await post('/api/code/projects/fork', {project: C.project}); const j = await r.json().catch(() => ({}));
   if (!r.ok) { note('bad', 'Could not make a copy', (j.message || '') + ' ' + (j.action || '')); return; }
   C.project = j.project; newSession(); note('fin', 'Working in a copy', 'This is "' + j.project + '", a separate copy. Try your idea here; the original is not touched. When you like it, type /usecopy.');
 }
+// adoptCopy: put a copy's files back into the original project; the original is kept first as "-before".
 async function adoptCopy() {
   const m = /^(.*)-try(-\d+)?$/.exec(C.project || ''); if (!m) { note('fin', 'This is not a copy', 'Make one first with /copy, try your idea there, then come back to /usecopy.'); return; }
   if (!confirm('Use the files of "' + C.project + '" in "' + m[1] + '"? "' + m[1] + '" is kept first as "' + m[1] + '-before".')) return;
@@ -603,6 +701,7 @@ async function adoptCopy() {
   if (!r.ok) { note('bad', 'Could not use the copy', (j.message || '') + ' ' + (j.action || '')); return; }
   C.project = j.project; newSession(); note('fin', 'Done', '"' + j.project + '" now has the copy\u2019s files. Your old version is saved as "' + j.backup + '".');
 }
+// secondOpinion: another model reads the session's changes and lists problems; it starts a new read-only session.
 async function secondOpinion(model) {
   const r = await post('/api/code/sessions/' + C.sid + '/second-opinion', {model: model.id, notify: vxNotifyOn()}); const j = await r.json().catch(() => ({}));
   if (!r.ok) { note('bad', 'Could not ask', (j.message || '') + ' ' + (j.action || '')); return; }
