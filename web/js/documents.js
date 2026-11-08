@@ -1,9 +1,14 @@
 /* Documents, saving answers, Teacher mode, Skills, connected apps, saved notes and memory. */
 // ---------------------------------------------------------------- documents (files you add so a chat can answer about them)
+// sizeText: show a document's size in plain words (letters, K letters, M letters).
 function sizeText(chars) { return chars < 1000 ? chars + ' letters' : chars < 1e6 ? Math.round(chars / 1000) + 'K letters' : (chars / 1e6).toFixed(1) + 'M letters'; }
+// The kinds of file the picker offers: documents, text and code files.
 const DOC_ACCEPT = '.pdf,.docx,.txt,.md,.csv,.tsv,.json,.html,.htm,.log,.py,.js,.ts,.java,.c,.cpp,.cs,.go,.rs,.sql,.yaml,.yml,.xml,.css,.sh,.tex';
+// Folders that are never uploaded when you add a whole folder (git history, installed packages, caches, editor settings).
 const SKIP_DIRS = /(^|\/)(\.git|node_modules|__pycache__|\.venv|venv|dist|build|\.idea|\.vscode)\//;
+// fileToB64: read a file and turn it into base64 text so it can be sent to the server as JSON; it is done in chunks of 32,768 bytes so big files do not break the browser.
 async function fileToB64(f) { const buf = new Uint8Array(await f.arrayBuffer()); let bin = ''; for (let i = 0; i < buf.length; i += 0x8000) bin += String.fromCharCode.apply(null, buf.subarray(i, i + 0x8000)); return btoa(bin); }
+// pickFile: open the device's file chooser for one file (max 10 MB) and hand its name and data to the function given.
 function pickFile(onDone) {
   const inp = el('input', {type: 'file', accept: DOC_ACCEPT + ',image/*', style: 'display:none'});
   inp.onchange = async () => {
@@ -13,12 +18,14 @@ function pickFile(onDone) {
   };
   document.body.append(inp); inp.click(); setTimeout(() => inp.remove(), 60000);
 }
+// pickMany: choose several files, photos or a whole folder; each one is added to your documents and attached to the chat.
 function pickMany({accept, folder}) {   // files, photos or a whole folder: each one is added to your documents and attached to this chat
   const inp = el('input', {type: 'file', multiple: true, style: 'display:none'});
   if (accept) inp.accept = accept; if (folder) inp.setAttribute('webkitdirectory', '');
   inp.onchange = () => { const list = [...inp.files]; inp.remove(); if (list.length) addFiles(list); };
   document.body.append(inp); inp.click(); setTimeout(() => inp.remove(), 60000);
 }
+// imageFilesFrom: pick the pictures out of a paste or a drop and give each a proper name and ending (like screenshot-123.png).
 function imageFilesFrom(data) {   // screenshots and photos from a paste or a drop, given a name and the right ending so they can be read
   const out = [];
   for (const f of [...((data && data.files) || [])]) {
@@ -28,14 +35,17 @@ function imageFilesFrom(data) {   // screenshots and photos from a paste or a dr
   }
   return out;
 }
+// Pasting a picture anywhere in the app attaches it to the chat.
 document.addEventListener('paste', (e) => {   // Ctrl+V or paste after taking a screenshot, like other chat apps
   if (!S.state || $('app').hidden) return; const files = imageFilesFrom(e.clipboardData); if (!files.length) return;
   e.preventDefault(); addFiles(files);
 });
+// Dragging files over the app and dropping them attaches them too (dragover is cancelled so the browser lets us handle the drop).
 ['dragover', 'drop'].forEach((ev) => document.addEventListener(ev, (e) => {
   if (!S.state || $('app').hidden || !e.dataTransfer || ![...(e.dataTransfer.types || [])].includes('Files')) return;
   e.preventDefault(); if (ev === 'drop' && e.dataTransfer.files.length) addFiles([...e.dataTransfer.files]);
 }));
+// shrinkImage: make big photos smaller before uploading (long side at most 2000 pixels, saved as JPEG); small pictures and GIFs are left alone.
 async function shrinkImage(f) {   // a phone photo is several MB: send a smaller copy (long side 2000 px), which uploads and reads much faster
   const conv = !!(S.state && S.state.features && S.state.features.photo_fixes) && (/\.(webp|heic|heif|bmp|gif|avif)$/i.test(f.name || '') || /^image\/(webp|heic|heif|bmp|avif)$/.test(f.type || ''));   // photo_fixes: formats the models cannot open become JPEG
   if (!conv && (!f.type || !f.type.startsWith('image/') || f.type === 'image/gif' || f.size < 400e3)) return f;
@@ -49,6 +59,7 @@ async function shrinkImage(f) {   // a phone photo is several MB: send a smaller
     return blob && (conv || blob.size < f.size) ? new File([blob], f.name.replace(/\.[a-z0-9]+$/i, '') + '.jpg', {type: 'image/jpeg'}) : f;
   } catch (e) { return f; }
 }
+// addFiles: upload each file to your documents (up to 40, none over 10 MB, no hidden or junk folders), show progress, then attach the new ones to this chat and report what was skipped.
 async function addFiles(list) {
   const box = $('attached'); const note = el('span', {class: 'chip', role: 'status'}, ''); box.hidden = false; box.append(note);
   const added = []; const skipped = [];
@@ -69,6 +80,7 @@ async function addFiles(list) {
   if (skipped.length) alert((added.length ? 'Added ' + added.length + '. ' : 'Nothing was added. ') + 'Skipped ' + skipped.length + ':\n' + skipped.slice(0, 8).join('\n') + (skipped.length > 8 ? '\n...' : ''));
   input.focus();
 }
+// uploadDoc: choose one file and upload it, writing progress into the status line; gives back the new document or nothing if it failed.
 async function uploadDoc(status) {
   return new Promise((resolve) => pickFile(async (name, data) => {
     status.textContent = 'Reading ' + name + '...';
@@ -77,6 +89,7 @@ async function uploadDoc(status) {
     resolve(r.ok ? j : null);
   }));
 }
+// openDocs: the Documents window: your files with Ask (start a chat about it) and delete buttons, and an Add a document button.
 async function openDocs() {
   closeModals(); document.body.classList.remove('menu-open');
   const j = await (await api('/api/documents')).json();
@@ -90,6 +103,7 @@ async function openDocs() {
     el('button', {class: 'chip', 'aria-label': 'Delete ' + d.name, onclick: async () => { if (confirm('Delete "' + d.name + '"?')) { await api('/api/documents/' + d.id, {method: 'DELETE'}); S.docs = S.docs.filter((x) => x.id !== d.id); openDocs(); } }}, '\u00d7')));
   dialog(kids, 'Close');
 }
+// openAttach: the window for picking which documents this chat should read; "chosen" remembers the ticked ones.
 async function openAttach() {
   closeModals();
   const j = await (await api('/api/documents')).json();
@@ -106,14 +120,18 @@ async function openAttach() {
     el('button', {class: 'btn ghost', onclick: async () => { const d = await uploadDoc(status); if (d) { docs = [d, ...docs]; chosen.add(d.id); draw(docs); } }}, 'Add a new document'), done], 'Cancel');
 }
 
+// Saving an answer as a file: PDF, Word or Google Docs.
 // ---------------------------------------------------------------- saving documents (PDF, Word, Google Docs)
+// closeModals: remove every open pop-up window.
 function closeModals() { document.querySelectorAll('.modal').forEach((m) => m.remove()); }
+// downloadDoc: ask the server to make the file, then download it through a temporary link (the file name comes from the server's reply when it gives one).
 async function downloadDoc(text, format, title) {
   const r = await post('/api/export-doc', {text, format, title});
   if (!r.ok) { const j = await r.json().catch(() => ({})); alert(j.message || 'Could not save that.'); return false; }
   const blob = await r.blob(), a = el('a', {href: URL.createObjectURL(blob), download: ((r.headers.get('Content-Disposition') || '').match(/filename="([^"]+)"/) || [])[1] || 'document.' + format});
   document.body.append(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 4000); return true;
 }
+// saveAs: the Save as window with PDF, Word, Google Docs (a Word file plus a link to docs.google.com) and Copy text buttons.
 function saveAs(text, title) {
   const note = el('div', {style: 'color:var(--muted);font-size:14px'}, 'Worksheets keep the answer key and teacher notes on their own pages, so you can print page 1 for the class.');
   const done = (msg) => note.replaceChildren(msg);
@@ -124,8 +142,11 @@ function saveAs(text, title) {
     el('button', {class: 'btn ghost', onclick: () => { navigator.clipboard && navigator.clipboard.writeText(text); done('Copied.'); }}, 'Copy text'))], 'Close');
 }
 
+// Teacher mode: tools for making classroom materials and calculating, for teachers and for students.
 // ---------------------------------------------------------------- teacher mode
+// loadTeacher: fetch the list of teacher tools once and keep it.
 async function loadTeacher() { if (!S.tools) S.tools = (await (await api('/api/teacher/tools')).json()).tools; return S.tools; }
+// openTeacher: the Teacher tools window with two tabs (For teachers / For students) and the tools under MAKE and CALCULATE.
 async function openTeacher(side) {
   const tools = await loadTeacher(); side = side || S.teacherSide || 'teacher'; S.teacherSide = side; closeModals(); document.body.classList.remove('menu-open');
   const tab = (id, label) => el('button', {class: 'chip' + (side === id ? ' on' : ''), onclick: () => openTeacher(id)}, label);
@@ -138,8 +159,10 @@ async function openTeacher(side) {
   }
   dialog(kids, 'Close');
 }
+// openTool: build a small form for one tool from its field list (choice, text area, number or text), with a Make it / Calculate button.
 function openTool(t) {
   closeModals();
+  // Each field becomes the right kind of input; "inputs" remembers them by key so their values can be read later.
   const inputs = {}, fields = t.fields.map((f) => {
     let c;
     if (f.type === 'choice') { c = el('select', {}); for (const o of f.options) c.append(el('option', {value: o, selected: o === f.default ? 'selected' : null}, o)); }
@@ -157,10 +180,12 @@ function openTool(t) {
   dialog([el('h2', {}, t.name), el('div', {style: 'color:var(--muted)'}, t.blurb), ...fields, err, go,
     el('button', {class: 'btn ghost', onclick: () => openTeacher(t.side)}, 'Back')], 'Close');
 }
+// runMake: ask the server for the prompt that makes the material, then start a chat with the right skill and send it.
 async function runMake(t, values) {
   const r = await post('/api/teacher/prompt', {tool: t.id, values}); const j = await r.json(); if (!r.ok) return alert(j.message || 'Something went wrong.');
   closeModals(); if (!isTeacherChat() || S.skill !== j.skill || S.busy) await newChat(false, j.skill); input.value = j.prompt; send();
 }
+// runCalc: send the numbers to the exact calculator and show the report, with buttons to get suggestions, save it, or change the numbers.
 async function runCalc(t, values, err) {
   const r = await post('/api/teacher/calc', {tool: t.id, values}); const j = await r.json();
   if (!r.ok) { err.textContent = j.message || 'Check the numbers and try again.'; return; }
@@ -172,7 +197,9 @@ async function runCalc(t, values, err) {
   dialog([...kids, row], 'Close');
 }
 
+// Skills: specialist modes the chat can work in.
 // ---------------------------------------------------------------- skills
+// openSkills: list the skills; picking one starts a new chat in that skill.
 async function openSkills() {
   const kids = [el('h2', {}, 'Skills'), el('div', {style: 'color:var(--muted)'}, 'Pick one to start a chat where Emvryx works as that specialist. It works with every model.')];
   for (const k of S.skills) kids.push(el('button', {class: 'opt', onclick: () => { document.querySelectorAll('.modal').forEach((m) => m.remove()); newChat(false, k.id); }},
@@ -180,7 +207,9 @@ async function openSkills() {
   dialog(kids, 'Close');
 }
 
+// Connected apps: link your other apps so you can ask about them in chat (read-only).
 // ---------------------------------------------------------------- connected apps
+// openApps: the Connected apps window, grouped by category, each with Connect or Manage (or Coming soon), plus the rules of how connections work.
 async function openApps() {
   const r = await api('/api/apps'); const c = await r.json(); const conn = c.connections || {}; APPS_ENCRYPTED = c.encrypted !== false;
   const kids = [el('h2', {}, 'Connected apps'), el('div', {style: 'color:var(--muted)'}, 'Connect the apps you use and just ask: \u201cwhat is on my calendar tomorrow?\u201d, \u201csearch my Notion for the trip plan\u201d. Everything is read-only, and a private chat never uses them.')];
@@ -200,12 +229,14 @@ async function openApps() {
   dialog(kids, 'Close');
 }
 
+// openAppConnect: connect one app with a pasted token, link or app password; or, if already connected, try it, see what was read, or disconnect and delete the secret.
 // Any app that connects with a pasted token, link or app password
 async function openAppConnect(a, x) {
   const close = () => document.querySelectorAll('.modal').forEach((m) => m.remove());
   const kids = [el('h2', {}, a.name), el('div', {style: 'color:var(--muted)'}, a.does)];
   const out = el('div', {role: 'alert', style: 'color:var(--muted);font-size:14px;word-break:break-word'});
   const fail = (j) => { out.style.color = 'var(--danger)'; out.textContent = (j.message || 'Something went wrong.') + ' ' + (j.action || ''); };
+  // Already connected: a box to try a search, the log of what was read, and the Disconnect button.
   if (x && x.connected) {
     const q = el('input', {type: 'text', placeholder: 'Try it: type what to look for, or leave empty for the latest', 'aria-label': 'Try it'}), res = el('div', {style: 'display:flex;flex-direction:column;gap:8px'});
     const go = async () => { out.textContent = ''; res.replaceChildren(el('div', {style: 'color:var(--muted)'}, 'Looking...')); const rr = await post('/api/apps/' + a.id + '/ask', {query: q.value}); const j = await rr.json();
@@ -215,6 +246,7 @@ async function openAppConnect(a, x) {
     kids.push(el('div', {}, 'Connected as ', el('b', {}, x.label || a.name), '. Ask about it in a chat, or try it here.'), q, el('button', {class: 'btn', type: 'button', onclick: go}, 'Try it'), res, out,
       el('b', {}, 'What was read'), ...((x.log || []).length ? x.log.map((l) => el('div', {style: 'color:var(--muted);font-size:14px'}, new Date(l.at * 1000).toLocaleString([], {month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit'}) + '  ' + l.what)) : [el('div', {style: 'color:var(--muted);font-size:14px'}, 'Nothing yet.')]),
       el('button', {class: 'btn danger', type: 'button', onclick: async () => { if (!confirm('Disconnect ' + a.name + '? The saved secret is deleted now.')) return; await post('/api/apps/' + a.id + '/disconnect'); close(); openApps(); }}, 'Disconnect and delete the secret'));
+  // Not connected yet: how to get the token, one input per field (secret fields show as dots), and a Connect button that checks it once.
   } else {
     const inputs = {};
     kids.push(el('div', {style: 'color:var(--muted);font-size:14px'}, el('b', {style: 'color:var(--text)'}, 'How to get it: '), a.steps));
@@ -229,8 +261,10 @@ async function openAppConnect(a, x) {
   }
   const m = dialog(kids, 'Back'); m.querySelector('.dialog').lastElementChild.onclick = () => { m.remove(); openApps(); };
 }
+// Whether the server can store secrets encrypted; the window warns when it cannot.
 let APPS_ENCRYPTED = true; const c_encrypted = () => APPS_ENCRYPTED;
 
+// openGithubConnect: connect GitHub either by signing in with a short code (device flow, no token to handle) or by pasting a token you made.
 // GitHub: connect with a token you make and can delete any time
 async function openGithubConnect(after) {
   const r = await api('/api/apps'); const g = (await r.json()).connections.github;
@@ -243,6 +277,7 @@ async function openGithubConnect(after) {
     kids.push(...(g.log.length ? g.log.map((l) => el('div', {style: 'color:var(--muted);font-size:14px'}, new Date(l.at * 1000).toLocaleString([], {month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit'}) + '  ' + l.what)) : [el('div', {style: 'color:var(--muted);font-size:14px'}, 'Nothing yet.')]));
     kids.push(el('button', {class: 'btn danger', onclick: async () => { if (!confirm('Disconnect GitHub? The saved token is deleted now.')) return; await post('/api/apps/github/disconnect'); close(); if (after) after(); }}, 'Disconnect and delete the token'));
   } else {
+    // Sign in with GitHub: ask for a code, show it with the github.com address, then check every few seconds until you say yes, say no or the code runs out.
     if (g.device) {
       const status = el('div', {style: 'color:var(--muted);font-size:14px'});
       kids.push(el('div', {style: 'color:var(--muted)'}, 'The easy way: sign in with GitHub. You get a short code, type it on github.com, and say yes. You never handle a token.'),
@@ -252,6 +287,7 @@ async function openGithubConnect(after) {
           if (!r.ok) { e.target.disabled = false; status.style.color = 'var(--danger)'; status.textContent = d.message + ' ' + (d.action || ''); return; }
           status.replaceChildren('Open ', el('a', {href: d.verification_uri, target: '_blank', rel: 'noopener', style: 'color:var(--accenttext)'}, d.verification_uri.replace('https://', '')), ' and enter ', el('b', {style: 'font-size:20px;letter-spacing:.1em;color:var(--text)'}, d.user_code), '. Waiting for you to say yes...');
           const stop = Date.now() + d.expires_in * 1000;
+          // tick: one check of whether you approved on GitHub; it schedules the next check itself.
           const tick = async () => {
             if (!document.body.contains(status)) return;
             if (Date.now() > stop) { status.textContent = 'That code ran out. Try again.'; e.target.disabled = false; return; }
@@ -263,6 +299,7 @@ async function openGithubConnect(after) {
           setTimeout(tick, d.interval * 1000);
         }}, 'Sign in with GitHub'), status, el('div', {style: 'color:var(--muted);font-size:14px'}, 'Or paste a token instead:'));
     }
+    // The paste-a-token way, with advice to give the token as little power as possible.
     const tok = el('input', {type: 'password', placeholder: 'Paste your GitHub token', autocomplete: 'off', 'aria-label': 'GitHub token'});
     kids.push(el('div', {style: 'color:var(--muted)'}, 'Make a token on GitHub (Settings > Developer settings > Personal access tokens) and paste it here. Give it the least it needs: a fine-grained token limited to the repositories you choose, with Contents read and write, is enough to pull and push. Creating new repositories needs a classic token with the repo permission (GitHub’s rule).'),
       el('div', {style: 'color:var(--muted);font-size:14px'}, 'The token is kept on this server encrypted' + (g.encrypted ? '' : ' (NOT encrypted: ask the owner to install the cryptography package)') + ', never shown again, never given to the model, and deleted the moment you disconnect.'),
@@ -275,6 +312,7 @@ async function openGithubConnect(after) {
   dialog(kids, 'Close');
 }
 
+// openRepoPicker: list your GitHub repositories (with search) and copy the one you pick into a new VryxCode project.
 // Pick one of your own GitHub repositories and copy it into a new project (VryxCode > project menu > Import from GitHub)
 async function openRepoPicker() {
   const r = await api('/api/code/git?project=' + encodeURIComponent(C.project)); const g = await r.json();
@@ -284,6 +322,7 @@ async function openRepoPicker() {
   const out = el('div', {style: 'color:var(--muted);font-size:14px;word-break:break-word'}), note = el('div', {});
   const close = () => document.querySelectorAll('.modal').forEach((m) => m.remove());
   const typed = el('input', {type: 'text', placeholder: 'owner/name, for one that is not listed', 'aria-label': 'Repository to import by name', style: 'width:100%', autocapitalize: 'none', spellcheck: 'false'});
+  // importByName: ask the server to copy a repository into a new project and switch to it.
   const importByName = async (name, btn) => {
     if (btn) btn.disabled = true; out.style.color = 'var(--muted)'; out.textContent = 'Copying ' + name + '... this can take a minute for a big repository.';
     const rr = await post('/api/code/git', {project: C.project, action: 'import', repo: name}); const j = await rr.json().catch(() => ({}));
@@ -292,6 +331,7 @@ async function openRepoPicker() {
     C.project = j.project; C.file = null; close(); renderCodeBar(); refreshFiles(); toast(j.message);
   };
   let repos = [];
+  // draw: show the repositories that match the search words.
   const draw = () => {
     const q = find.value.trim().toLowerCase(), shown = repos.filter((x) => !q || (x.full_name + ' ' + x.description).toLowerCase().includes(q));
     list.replaceChildren(...(shown.length ? shown.map((x) => el('div', {class: 'srow stack', style: 'border:1px solid var(--line);border-radius:12px;padding:10px 12px;display:flex;flex-direction:column;gap:6px'},
@@ -302,6 +342,7 @@ async function openRepoPicker() {
   };
   find.oninput = draw;
   dialog([el('h2', {}, 'Import from GitHub'), el('div', {style: 'color:var(--muted);font-size:14px'}, 'Connected as @' + g.login + '. Pick a repository: it is copied into a new VryxCode project of its own, and stays linked to GitHub so you can pull and push.'), find, note, list, el('b', {style: 'margin-top:6px'}, 'Or type its name'), typed, el('button', {class: 'btn ghost', type: 'button', onclick: (e) => importByName(typed.value.trim(), e.currentTarget)}, 'Import it'), out], 'Close');
+  // Load the repository list; the hint says whether private repositories can be seen and what to do if not.
   try {
     const rr = await api('/api/code/github/repos'); const j = await rr.json();
     if (!rr.ok) throw new Error((j.message || 'Could not load your repositories.') + ' ' + (j.action || ''));
@@ -316,12 +357,14 @@ async function openRepoPicker() {
   } catch (e) { list.replaceChildren(el('div', {style: 'color:var(--danger)'}, e.message)); }
 }
 
+// openProjectGithub: the GitHub window for one project: connect, create or link a repository, or (once linked) Pull and Push.
 // GitHub for one VryxCode project: create / link / clone, pull, push
 async function openProjectGithub() {
   const r = await api('/api/code/git?project=' + encodeURIComponent(C.project)); const g = await r.json();
   const close = () => document.querySelectorAll('.modal').forEach((m) => m.remove());
   const kids = [el('h2', {}, 'GitHub · ' + C.project)];
   const out = el('div', {style: 'color:var(--muted);font-size:14px;word-break:break-word;white-space:pre-wrap'});
+  // act: send one GitHub action for this project and show its message.
   const act = async (body, then) => {
     out.style.color = 'var(--muted)'; out.textContent = 'Working...';
     const rr = await post('/api/code/git', Object.assign({project: C.project}, body)); const j = await rr.json();
@@ -342,6 +385,7 @@ async function openProjectGithub() {
         el('button', {class: 'btn ghost', onclick: () => act({action: 'link', repo: repo.value}, () => { close(); openProjectGithub(); })}, 'Link this project to it'),
         el('button', {class: 'btn ghost', onclick: () => { if (confirm('Copy that repository into this project? (The project must be empty.)')) act({action: 'clone', repo: repo.value}, () => { close(); openProjectGithub(); }); }}, 'Clone it into this project')));
   } else {
+    // Pushing straight to main or master asks a second time.
     const prot = ['main', 'master'].includes(g.branch);
     kids.push(el('div', {}, 'Linked to ', el('b', {}, g.owner + '/' + g.name), '. Branch ', el('b', {}, g.branch || '(none)'), '.'),
       el('div', {style: 'color:var(--muted);font-size:14px'}, (g.ahead ? g.ahead + ' commit' + (g.ahead > 1 ? 's' : '') + ' not pushed yet. ' : 'Nothing waiting to push. ') + (g.changed_files ? g.changed_files + ' changed file' + (g.changed_files > 1 ? 's' : '') + ' not committed yet (VryxCode commits when you ask it to).' : '')),
@@ -357,7 +401,9 @@ async function openProjectGithub() {
   kids.push(out); dialog(kids, 'Close');
 }
 
+// Saved notes: the web notes kept when you gave an answer a thumbs up.
 // ---------------------------------------------------------------- saved notes
+// openSaved: list the saved notes with Delete buttons, or delete them all.
 async function openSaved() {
   const r = await api('/api/saved-notes'); const j = await r.json();
   const kids = [el('h2', {}, 'Saved notes')];
@@ -372,7 +418,9 @@ async function openSaved() {
   dialog(kids, 'Close');
 }
 
+// Memory: short facts about you that every model is given.
 // ---------------------------------------------------------------- memory (facts about you, shared by every model)
+// openMemory: list, add and delete the facts, or forget everything.
 async function openMemory() {
   const r = await api('/api/memory'); const j = await r.json();
   const list = el('div', {style: 'display:flex;flex-direction:column;gap:8px'});
