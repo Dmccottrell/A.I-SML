@@ -31,6 +31,7 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 
+// Screen: every full screen the app can show. The app shows exactly one at a time; changing the value switches the screen.
 sealed interface Screen {
     data object Starting : Screen
     data class Off(val resting: Boolean, val server: String) : Screen
@@ -46,6 +47,7 @@ sealed interface Screen {
     data object Local : Screen
 }
 
+// How the person signs in: password, access key or emailed code.
 enum class SignInWay { Password, Key, Email }
 
 /** One bubble on the chat screen. [streaming] is the reply still being written; [model] is the id of the model that wrote it.
@@ -57,17 +59,21 @@ data class Bubble(val key: Long, val mine: Boolean, val text: String, val stream
 /** A reply that did not come: the message, what to do, and for an empty tank a word about what is not counted (web/js/send.js errorCard) */
 data class Failure(val message: String, val action: String = "", val code: String = "", val later: String = "")
 
+// AppViewModel: the app's brain. It holds everything the screens show (the chat, the models, sign-in, the PC's state) and the actions the buttons call. Screens read its values and redraw by themselves when they change (Compose "state").
 class AppViewModel(app: Application) : AndroidViewModel(app) {
+    // Helpers from the app object: the saved login, the server connection, the phone's own model and the cached Admin data.
     private val session = (app as EmvryxApp).session
     private val api = (app as EmvryxApp).api
     private val phone = (app as EmvryxApp).phone
     private val adminCache = (app as EmvryxApp).admin
 
     /** The PC answered the last time it was asked (the phone's model is downloaded only then) */
+    // online: did the PC answer the last time it was asked? "private set" means only this class can change it; screens can only read it.
     var online by mutableStateOf(false)
         private set
 
     /** Back from one of the app's own screens: to the chat, or with the PC off to the phone's chats */
+    // backFromPanel: leave one of the app's panels: to the chat, or to the phone's chats if the PC is off.
     fun backFromPanel() {
         if (online) backToChat() else screen = Screen.Local
     }
@@ -79,6 +85,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     val phoneReady get() = phone.allowed && phone.status == app.emvryx.android.local.PhoneModel.Status.Ready
 
     /** The PC is off: has it come back? (quietly, every half minute from the phone's chats) Back: the app goes back to the PC's chats. */
+    // checkPc: while offline, quietly ask if the PC is back; if so, start again from the top.
     fun checkPc() {
         if (phone.writing) return                                          // never in the middle of an answer on the phone
         viewModelScope.launch {
@@ -88,6 +95,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     /** The PC dropped while a message was being sent: the same chat carries on here, answered by the phone */
+    // carryOnOnPhone: the PC dropped while a message was being sent, so the same chat continues on the phone's model.
     private fun carryOnOnPhone(words: String): Boolean {
         if (!phoneReady || isPrivate || words.isBlank()) return false
         val turns = bubbles.filter { !it.streaming && it.text.isNotBlank() }.map { app.emvryx.android.local.LocalTurn(it.mine, it.text) }
@@ -110,10 +118,13 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         if (online && state != null) backToChat() else start()
     }
 
+    // screen: the screen being shown now.
     var screen by mutableStateOf<Screen>(Screen.Starting)
         private set
 
+    // Sign-in state: the server address, a busy flag, an error message and a ticket for the second (two-step) check.
     // ---- sign-in
+    // The emulator reaches the PC at a special address (10.0.2.2); on a real phone that address is wrong, so it is forgotten.
     var server by mutableStateOf(run {
         // 10.0.2.2 is the PC as seen from the emulator only: on a real phone it goes nowhere and looks like "Emvryx is off"
         if (!onEmulator() && session.serverUrl?.contains(EMULATOR_HOST) == true) session.serverUrl = null
@@ -126,6 +137,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     var twoStepTicket by mutableStateOf<String?>(null)
         private set
 
+    // Chat state: the server's state, the chat list, the chosen model and effort, the open chat and its messages (bubbles), and flags for streaming, notices and errors.
     // ---- chat
     var state by mutableStateOf<AppState?>(null)
         private set
@@ -182,12 +194,14 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     var emailSentTo by mutableStateOf<String?>(null)      // a code was sent: now type it
         private set
 
+    // replyJob is the running reply, so it can be cancelled; nextKey gives temporary messages unique negative numbers.
     private var replyJob: Job? = null
     private var nextKey = -1L
 
     var usage by mutableStateOf<Usage?>(null)
         private set
 
+    // Pictures and files waiting for the next message, the memory ring, search results and things shared from other apps.
     // ---- pictures and files waiting to go with the next message, the memory ring, search, and things shared from other apps
     val attached = mutableStateListOf<DocInfo>()
     var uploading by mutableStateOf(false)
@@ -201,10 +215,12 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     private var pendingShare: Pair<String?, List<Pair<String, ByteArray>>>? = null     // shared from another app before it was ready
     private var chatDocIds: List<Long> = emptyList()     // all of this chat's pictures and files (sent ones too: the model keeps seeing them)
 
+    // flag: is a feature switch on? isAdmin: is this person an admin or the owner?
     fun flag(name: String) = state?.on(name) == true
     val isAdmin get() = state?.admin == true || state?.owner == true
 
     /** Every model this person has (not ready ones are shown greyed, as on the website) */
+    // The models this person has, and helpers to find one or check which effort levels it allows.
     val models: List<ModelCard> get() = state?.models?.all.orEmpty()
     val currentModel: ModelCard? get() = models.firstOrNull { it.id == model }
 
@@ -213,13 +229,16 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     /** Auto is always there; otherwise a model may list the levels it offers */
     fun effortAllowed(id: String) = id == "auto" || currentModel?.efforts?.contains(id) ?: true
 
+    // App updates: a notice that a newer build exists, checked once each time the app opens.
     // ---- app_updates: "A new version of Emvryx is ready" (local/AppUpdate.kt), checked once each time the app opens
     var updateReady by mutableStateOf<app.emvryx.android.local.AppUpdate.Latest?>(null)
     private var updateChecked = false
 
+    // Automatic offline: when the phone has room and a good connection, offer once to download the offline model.
     /** android_auto_offline: the model to offer ("Get Emvryx ready for offline?"), asked once; null when there is nothing to ask */
     var offlineOffer by mutableStateOf<app.emvryx.android.local.PhoneChoice?>(null)
 
+    // answerOffline: the person's yes or no to that offer is remembered.
     fun answerOffline(yes: Boolean) {
         val c = offlineOffer ?: return
         offlineOffer = null
@@ -236,6 +255,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     /** The phone has the room and a good connection: the PC-off model (and Google's offline speech) come by themselves, after one question */
+    // autoOffline: decides whether to ask, start the download by itself, or do nothing, based on the switches, the connection, what is already downloaded and the earlier answer.
     private suspend fun autoOffline() {
         val app = getApplication<EmvryxApp>()
         val phone = app.phone
@@ -249,6 +269,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     }
     private val updatePrefs get() = getApplication<EmvryxApp>().getSharedPreferences("emvryx_update", android.content.Context.MODE_PRIVATE)
 
+    // checkForUpdate: ask which build is newest and show the notice if this one is older and "Later" was not pressed for it.
     private fun checkForUpdate() {
         updateChecked = true
         viewModelScope.launch {
@@ -258,11 +279,13 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     /** Later: not asked again about this build (the next one is offered) */
+    // updateLater: remember not to ask again about this build.
     fun updateLater() {
         updateReady?.let { updatePrefs.edit().putString("later", it.sha).apply() }
         updateReady = null
     }
 
+    // Model welcome tours: which tour is showing and which ones were already seen.
     // ---- model welcome tours (declared before init: loading the state reads them)
     var tour by mutableStateOf<ModelCard?>(null)
         private set
@@ -272,18 +295,21 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         private set
     private var vryxSeen = 0
 
+    // init runs when the brain is created: restore the light/dark and look settings, then start.
     init {
         Emvryx.light = session.light
         session.looks.let { (v, m) -> Emvryx.violet = v; Emvryx.modern = m }
         start()
     }
 
+    // toggleLight: switch light and dark mode and remember it.
     // ---- light or dark (the website's moon button)
     fun toggleLight() {
         Emvryx.light = !Emvryx.light
         session.light = Emvryx.light
     }
 
+    // The fingerprint lock: turn it on or off, lock now, and unlock.
     // ---- the fingerprint lock
     fun setLock(on: Boolean) {
         lockOn = on
@@ -298,6 +324,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         locked = false
     }
 
+    // start: find out where the app stands: no server yet means sign-in; the PC resting or off means the matching screen (or the phone's chats if the offline model is ready); not signed in means sign-in; otherwise load the state and show the chat.
     /** Is the server there, and is this phone signed in? */
     fun start() {
         val url = session.serverUrl
@@ -332,16 +359,19 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
+    // changeServer: go back to the sign-in screen to type another address.
     fun changeServer() {
         screen = Screen.SignIn
     }
 
+    // checkSignInOptions: ask the server which ways of signing in it offers.
     /** Which ways of signing in the server offers (email codes need the owner's mail set up) */
     fun checkSignInOptions() {
         if (session.serverUrl == null) return
         viewModelScope.launch { runCatching { api.authOptions() }.onSuccess { emailOffered = it.email } }
     }
 
+    // sendEmailCode: ask the server to email a 6-digit code (it answers the same whether or not the email exists).
     /** "Email me a code": the server sends a 6-digit code if that email belongs to an account (it answers the same either way) */
     fun sendEmailCode(email: String) {
         val url = normalise(server) ?: return
@@ -365,6 +395,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
+    // signInWithEmailCode: sign in with the code from the email; a two-step account then asks for its second code.
     fun signInWithEmailCode(code: String) {
         val e = emailSentTo ?: return
         signInBusy = true
@@ -382,11 +413,13 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
+    // cancelEmailCode: go back from the code step.
     fun cancelEmailCode() {
         emailSentTo = null
         signInError = null
     }
 
+    // signIn: sign in with a password or access key; the address is tidied first and errors are shown in plain words.
     fun signIn(way: SignInWay, id: String, secret: String) {
         val url = normalise(server) ?: run {
             signInError = "That address doesn't look right. It starts with https://"
@@ -412,6 +445,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
+    // submitTwoStep: send the 6-digit (or recovery) code for the second check.
     fun submitTwoStep(code: String) {
         val ticket = twoStepTicket ?: return
         signInBusy = true
@@ -429,11 +463,13 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
+    // cancelTwoStep: leave the second check.
     fun cancelTwoStep() {
         twoStepTicket = null
         signInError = null
     }
 
+    // afterSignIn: load everything, start a new chat and show it.
     private suspend fun afterSignIn() {
         loadState()
         newChat()
@@ -441,6 +477,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         applyShare()
     }
 
+    // signOut: stop any reply, sign out on the server and clear everything on the screen.
     fun signOut() {
         viewModelScope.launch {
             replyJob?.cancel()
@@ -453,6 +490,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
+    // applyLooks: copy the server's look switches (violet, modern, model bar, 2027 design) into the app's theme and remember them.
     /** The website's looks follow the server's switches; remembered for the next sign-in screen */
     private fun applyLooks(s: AppState) {
         val v = s.on("violet_theme")
@@ -465,6 +503,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         if (session.looks != (v to m)) session.looks = v to m
     }
 
+    // loadState: fetch the server's state and set everything from it, including the phone-model settings, background sync and the model tours; changes made in Admin while offline are sent now.
     private suspend fun loadState() {
         val s = api.state(model.ifEmpty { null })
         applyLooks(s)
@@ -496,6 +535,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
+    // Welcome tours for models and VryxCode: shown once each; they can be replayed.
     // ---- model welcome tours (feature flag model_tours): "WELCOME to Flare 3", what only that model brings, then VryxCode for its models
     fun maybeTour(card: ModelCard) {
         if (flag("model_tours") && card.tour.isNotEmpty() && card.id !in toursSeen && tour == null) tour = card
@@ -531,6 +571,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     /** The chat list and the usage line (the usage figure depends on the model and effort picked) */
+    // refreshChats: reload the chat list and usage; only what changed is set, so unchanged lists do not redraw the screen.
     fun refreshChats() {
         viewModelScope.launch {
             runCatching { api.state(model) }.onSuccess {
@@ -543,6 +584,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
+    // pickModel: choose a model (only if it is ready), play the colour wash, and fix the effort level if the model does not offer it.
     fun pickModel(id: String) {
         val m = modelById(id) ?: return
         if (!m.ready) return
@@ -553,11 +595,13 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         maybeTour(m)
     }
 
+    // pickEffort: choose how much thinking.
     fun pickEffort(id: String) {
         effort = id
     }
 
     /** A new chat; [private] makes it one that is never saved; [skill] (an id from GET /api/skills) shapes every answer in it */
+    // newChat: start an empty chat (private if asked, or with a skill); not while a reply is streaming.
     fun newChat(private: Boolean = false, skill: String = "", skillName: String = "") {
         if (streaming) return
         chatId = null
@@ -572,6 +616,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         failure = null
     }
 
+    // shownCtx: the memory ring's reading: the server's number after a reply, or an estimate from the words so far.
     /** The memory ring's reading: the last reply's, else an estimate from the words so far (web/js/chat.js lastCtx) */
     val shownCtx: Ctx?
         get() {
@@ -582,6 +627,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
             return Ctx(used, w, minOf(100.0, Math.round(1000.0 * used / w) / 10.0), minOf(0.75 * maxOf(64L, w - 1024), 96000.0).toLong())
         }
 
+    // The chat's menu actions and the answer's: Right, archive, move to a folder, share a link and save as a file.
     // ---- the chat's menu and the answer's: Right, archive, folder, share a link, save as
     fun like(b: Bubble) {
         val id = chatId ?: return
@@ -668,6 +714,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
+    // "Your day": read from the connected apps only when asked.
     // ---- "Your day" from the connected apps (nothing is read until it is asked for)
     fun readMyDay() {
         briefingBusy = true
@@ -695,21 +742,25 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         regenerate()
     }
 
+    // open: show another screen.
     fun open(screen: Screen) {
         this.screen = screen
     }
 
+    // panel: choose the app's own screen or the website's page for a panel, depending on the switches.
     /** The app's own screen for one of the website's panels when android_native is on, else the website's panel */
     fun panel(kind: String, web: Screen.Web): Screen =
         if (kind == "settings" && flag("android_full_settings")) web              // android_full_settings: Settings opens the full list, as on the website
         else if (flag("android_native")) Screen.Native(kind) else web
 
+    // backToChat: return to the chat and reload the list.
     /** Back from VryxCode or a website page to the chat */
     fun backToChat() {
         screen = Screen.Chat
         refreshChats()
     }
 
+    // Pictures and files: attach uploads the file to the server and ties it to this chat (a chat is made first if needed); unattach removes it.
     // ---- pictures and files
     /** Uploads a picture or file and attaches it to this chat (a new chat is made first if needed); it goes with the next message. */
     fun attach(name: String, bytes: ByteArray) {
@@ -742,12 +793,14 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
 
     suspend fun pictureBytes(id: Long): ByteArray? = api.picture(id)
 
+    // incoming: text or pictures shared to Emvryx from another app; kept until the app is signed in and ready.
     /** Something shared to Emvryx from another app: its text goes in the box, pictures are attached. Kept until the app is signed in and ready. */
     fun incoming(text: String?, files: List<Pair<String, ByteArray>>) {
         pendingShare = text to files
         if (screen == Screen.Chat || screen == Screen.Code || screen is Screen.Web) applyShare()
     }
 
+    // A notification tap opens a VryxCode session or a chat; kept until the app is ready.
     /** A notification tapped (flag phone_alerts): VryxCode opens that session (CodeScreen reads [openSession]), or the chat opens. Kept until ready. */
     var openSession by mutableStateOf<String?>(null)
     private var pendingAlert: Pair<String?, Long?>? = null
@@ -770,6 +823,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
+    // The ways in from outside the app: selected text, the assistant button, the icon shortcuts and shared items.
     // ---- the ways in from outside the app (local/NativeExtras.kt Launch): selected text, the assistant button, the icon's shortcuts, the widget
     private var pendingLaunch: app.emvryx.android.local.Launch? = null
     /** Talk in the phone's own chats (android_offline_talk), opened from outside the app with the PC off */
@@ -806,6 +860,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         files.forEach { (name, bytes) -> attach(name, bytes) }
     }
 
+    // Chat list: pin, delete and search.
     // ---- chat list: pin, delete, search
     fun pin(c: ChatSummary) {
         viewModelScope.launch { runCatching { api.pin(c.id, !c.pinned) }; refreshChats() }
@@ -832,6 +887,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
+    // One answer: report it, start a new chat from it, edit and ask again, or continue a cut-off reply.
     // ---- one answer: report it, start a new chat from it, ask again after an edit
     fun report(b: Bubble, kind: String, note: String) {
         val id = chatId ?: return
@@ -881,6 +937,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         reply("Continue", regenerate = false, cont = true)
     }
 
+    // The memory ring: compact folds older messages to save room.
     // ---- the memory ring (feature flag context_meter)
     fun compact() {
         val id = chatId ?: return
@@ -899,6 +956,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
+    // openChat: load a chat from the server and show it; if it is still being written, watch it.
     fun openChat(id: Long) {
         if (streaming) return
         notice = null
@@ -916,6 +974,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
+    // follow: the reply is still being written on the server; ask every 1.2 seconds for up to 15 minutes and show it as it grows.
     /** The reply is still being written on the server (the app was closed or switched away from): watch it until it is done (send.js followReply) */
     fun follow() {
         val id = chatId ?: return
@@ -955,6 +1014,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
+    // showChat: put a loaded chat on screen (keeping a copy on the phone for offline use if that is on).
     private fun showChat(c: app.emvryx.android.data.Chat) {
         val kept = bubbles.filter { !it.mine && it.id > 0 }.associateBy { it.id }
         chatId = c.id
