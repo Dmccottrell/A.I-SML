@@ -36,6 +36,7 @@ final class SessionStore {
     /// Signs out on the phone: deletes the cookie, here and in the website pages.
     func forget() {
         SecItemDelete(query() as CFDictionary)
+        Self.memoryLock.lock(); Self.memory[account] = nil; Self.memoryLock.unlock()
         Task { @MainActor in                                       // WebKit's stores are used on the main thread only
             let store = WKWebsiteDataStore.default().httpCookieStore
             store.getAllCookies { all in all.filter { $0.name == Self.cookieName }.forEach { store.delete($0) } }
@@ -55,7 +56,17 @@ final class SessionStore {
         [kSecClass as String: kSecClassGenericPassword, kSecAttrService as String: "app.emvryx.ios", kSecAttrAccount as String: account]
     }
 
+    /// Where the cookie waits when the Keychain refuses it (a simulator without Keychain access, as on GitHub's Macs): only until the app closes.
+    private static var memory: [String: Data] = [:]
+    private static let memoryLock = NSLock()
+
     private func read() -> Data? {
+        if let d = readKeychain() { return d }
+        Self.memoryLock.lock(); defer { Self.memoryLock.unlock() }
+        return Self.memory[account]
+    }
+
+    private func readKeychain() -> Data? {
         var q = query()
         q[kSecReturnData as String] = true
         q[kSecMatchLimit as String] = kSecMatchLimitOne
@@ -68,6 +79,8 @@ final class SessionStore {
         var q = query()
         q[kSecValueData as String] = data
         q[kSecAttrAccessible as String] = kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly     // never copied to another phone or a backup
-        SecItemAdd(q as CFDictionary, nil)
+        let kept = SecItemAdd(q as CFDictionary, nil) == errSecSuccess
+        Self.memoryLock.lock(); defer { Self.memoryLock.unlock() }
+        Self.memory[account] = kept ? nil : data
     }
 }

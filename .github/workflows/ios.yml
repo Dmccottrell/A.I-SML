@@ -29,8 +29,9 @@ concurrency:
 jobs:
   # Compile the app and run its tests in the iPhone simulator.
   build:
-    # A GitHub Mac with Apple silicon. macOS 14 comes with Xcode 15.4 and the iPhone 15 simulator, the same as the owner's Mac.
-    runs-on: macos-14
+    # A GitHub Mac with Apple silicon. macOS 15 comes with Xcode 16.4 and the iPhone 16 simulator (macOS 14 is no longer offered by GitHub; the owner's Mac has Xcode 15.4,
+    # and the project builds with both: see "projectFormat" in ios/project.yml).
+    runs-on: macos-15
     # Stop the job if it takes longer than 45 minutes, so a hung step cannot run for hours.
     timeout-minutes: 45
     # Settings that apply to every "run:" step of this job.
@@ -41,9 +42,9 @@ jobs:
     steps:
       # Download this repository's code onto the machine.
       - uses: actions/checkout@v4
-      # Use Xcode 15.4 (the project file is written for it: see "projectFormat" in ios/project.yml).
-      - name: Use Xcode 15.4
-        run: sudo xcode-select -s /Applications/Xcode_15.4.app
+      # Use Xcode 16.4 (the project file is written in the Xcode 15.3 format, which it reads: see "projectFormat" in ios/project.yml).
+      - name: Use Xcode 16.4
+        run: sudo xcode-select -s /Applications/Xcode_16.4.app
       # XcodeGen makes Emvryx.xcodeproj from project.yml; the project file itself is not kept in git.
       - name: Install XcodeGen
         run: brew install xcodegen
@@ -55,7 +56,7 @@ jobs:
         run: |
           xcodebuild test \
             -project Emvryx.xcodeproj -scheme Emvryx \
-            -destination 'platform=iOS Simulator,name=iPhone 15' \
+            -destination 'platform=iOS Simulator,name=iPhone 16' \
             -derivedDataPath build -resultBundlePath "$RUNNER_TEMP/ios-tests.xcresult" \
             CODE_SIGN_IDENTITY=-
       # Keep the test results (screenshots and logs) for a week, even when a test failed (always()).
@@ -70,15 +71,15 @@ jobs:
   # The phone model's engine, llama.cpp: build it for the iPhone simulator and the iPhone (about 10 minutes the first time, then kept), put it in the
   # app, and compile and test everything with it. The real-inference tests need a model file and skip here (ios/README.md: how to run them on your Mac).
   engine:
-    runs-on: macos-14
+    runs-on: macos-15
     timeout-minutes: 60
     defaults:
       run:
         working-directory: ios
     steps:
       - uses: actions/checkout@v4
-      - name: Use Xcode 15.4
-        run: sudo xcode-select -s /Applications/Xcode_15.4.app
+      - name: Use Xcode 16.4
+        run: sudo xcode-select -s /Applications/Xcode_16.4.app
       - name: Install XcodeGen and cmake
         run: brew install xcodegen cmake
       # The built library is kept between runs; the key changes when the script (which names the llama.cpp version) changes.
@@ -97,7 +98,7 @@ jobs:
         run: |
           xcodebuild test \
             -project Emvryx.xcodeproj -scheme Emvryx \
-            -destination 'platform=iOS Simulator,name=iPhone 15' \
+            -destination 'platform=iOS Simulator,name=iPhone 16' \
             -derivedDataPath build CODE_SIGN_IDENTITY=-
       # The same app for a real iPhone must compile and link too (no signing here: that needs your Apple ID, on your Mac).
       - name: Build for an iPhone
