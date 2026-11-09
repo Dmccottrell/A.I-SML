@@ -35,9 +35,14 @@ steering it while it works, Stop, Ask / Auto / Plan, the effort or model picker,
 
 ### What is not done, and what is not proven
 - **Not built**: notifications from the server (Apple's paid account); Google sign-in (Google refuses it inside web views) and passkeys (the paid
-  account); the "modern" / Design 2027 looks; from Android's VryxCode: restore, the plan box, review lines, Preview, servers, GitHub, Publish,
-  fix CI, slash commands, rules, memory, pictures and documents to the agent.
+  account); the "modern" / Design 2027 looks; from Android's VryxCode, the parts that open the website's pages: Preview, servers, Save to GitHub,
+  Publish and fix CI (they are still on the website).
 - **Free extras added after stage 5**:
+  - **VryxCode like the website** (flag `ios_vryxcode`, admins first; `Native/CodeParity.swift`, `CodeExtras.swift`): the task list box, the Claude Code-style
+    feed (quiet lines that fold, file chips that open to the change, "Changed N files"), Restore on each message, how a message ended (waiting, out of
+    steps, the review verdict, one-tap replies), a suggested next message, the sessions list in Working / Ready for review / Done, /plan /ask /auto /new
+    /memory /permissions and the project's own /commands, and pictures (3) and documents (8) sent to the agent. Each part also follows its own VryxCode
+    switch (the same ones as Android).
   - **On this phone** (`Native/Phone/`): download the small model once (resumable, checked with SHA-256, about 2 GB), then chats keep going with the
     PC off, with the same prompt as the PC; the chats merge back with the PC (`/api/phone-sync`). The engine is llama.cpp (MIT licence), pinned to one
     version in `scripts/get-llama.sh`.

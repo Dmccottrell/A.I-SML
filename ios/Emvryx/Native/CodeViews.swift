@@ -1,4 +1,6 @@
+import PhotosUI
 import SwiftUI
+import UniformTypeIdentifiers
 
 // The VryxCode screens (android/.../ui/CodeScreen.kt): the home with the sessions and the starters, and a session's live feed.
 
@@ -42,8 +44,10 @@ struct CodeView_: View {
         }
         .background(Emvryx.bg.ignoresSafeArea())
         .environment(\.palette, vm.palette)
-        .task { await code.load() }
+        .task { code.setParity(vm.flag); await code.load(); await code.loadCommands() }
         .onDisappear { code.stopPolling() }
+        .sheet(isPresented: Binding(get: { code.memory != nil }, set: { if !$0 { code.memory = nil } })) { CodeMemorySheet(code: code).environment(\.palette, vm.palette) }
+        .sheet(isPresented: Binding(get: { code.rules != nil }, set: { if !$0 { code.rules = nil } })) { RulesSheet(code: code).environment(\.palette, vm.palette) }
     }
 }
 
@@ -90,7 +94,15 @@ private struct CodeHome: View {
                         }
                     }
                     .padding(.top, 8)
-                    ForEach(showArchived ? code.archived : code.sessions) { s in row(s) }
+                    if code.parity.contains("vryxcode_review") && !showArchived {
+                        ForEach(sessionGroups(code.sessions, seen: code.reviewed), id: \.title) { g in
+                            Text(g.title).font(Emvryx.body(11, semibold: true)).kerning(1.1).foregroundStyle(Emvryx.muted.opacity(0.8)).padding(.top, 6)
+                                .accessibilityIdentifier("group " + g.title)
+                            ForEach(g.sessions) { s in row(s) }
+                        }
+                    } else {
+                        ForEach(showArchived ? code.archived : code.sessions) { s in row(s) }
+                    }
                 }
                 .padding(.horizontal, 16).padding(.bottom, 16)
             }
@@ -153,7 +165,16 @@ private struct SessionFeed: View {
             ScrollViewReader { proxy in
                 ScrollView {
                     LazyVStack(alignment: .leading, spacing: 10) {
-                        ForEach(code.events) { e in EventRow(e: e, all: code.events) }
+                        if code.parity.contains("vryxcode_taskbox") {
+                            let steps = planSteps(code.events, working: code.working)
+                            if !steps.isEmpty { PlanBox(steps: steps) }
+                        }
+                        if code.parity.contains("vryxcode_lines") || code.parity.contains("vryxcode_review") {
+                            let items = reviewItems(code.events)
+                            ForEach(code.parity.contains("vryxcode_lines") ? foldQuiet(items) : items) { item in ReviewRow(item: item, code: code) }
+                        } else {
+                            ForEach(code.events) { e in EventRow(e: e, all: code.events, code: code) }
+                        }
                         if let q = code.pending {
                             if q.str("tool") == "ask_user" || q.kind == "choose" || q.raw["options"] != nil { ChoiceCard(code: code, q: q) } else { AskCard(code: code, q: q) }
                         } else if code.working {
@@ -168,20 +189,39 @@ private struct SessionFeed: View {
                 .onChange(of: code.events.count) { _ in proxy.scrollTo("end", anchor: .bottom) }
                 .onChange(of: code.pending?.str("id")) { _ in proxy.scrollTo("end", anchor: .bottom) }
             }
+            if !code.offer.isEmpty && !code.working && text.isEmpty {
+                Chip(text: code.offer) { code.send(code.offer) }.padding(.horizontal, 16).padding(.top, 6).accessibilityIdentifier("suggestion")
+            }
             CodeComposer(vm: vm, code: code, text: $text, placeholder: code.working ? "Tell it something while it works…" : "Message VryxCode…")
+        }
+    }
+}
+
+/// One item of the review feed: a quiet line, a folded group, a file chip, the "Changed N files" summary, or an ordinary event.
+private struct ReviewRow: View {
+    let item: ReviewItem
+    @ObservedObject var code: CodeStore
+    var body: some View {
+        switch item {
+        case let .quiet(q): QuietRow(line: q)
+        case let .group(g): GroupRow(lines: g)
+        case let .file(path, add, del, diff, bad, why): FileChip(path: path, add: add, del: del, diff: diff, bad: bad, why: why)
+        case let .done(files): DoneRow(files: files)
+        case let .event(e): EventRow(e: e, all: code.events, code: code)
         }
     }
 }
 
 /// For tests: one event drawn as in a session's feed.
 enum CodeEventPreview {
-    static func row(_ e: CodeEvent, _ all: [CodeEvent]) -> some View { EventRow(e: e, all: all) }
+    static func row(_ e: CodeEvent, _ all: [CodeEvent]) -> some View { EventRow(e: e, all: all, code: nil) }
 }
 
 /// One event of a session drawn as a row; each kind looks different and unknown kinds draw nothing.
 private struct EventRow: View {
     let e: CodeEvent
     let all: [CodeEvent]
+    var code: CodeStore?
     @State private var open = false
     @Environment(\.palette) private var p
     private let violet = Color(hex: 0x8B5CF6)
@@ -196,6 +236,9 @@ private struct EventRow: View {
                         .font(Emvryx.body(16)).foregroundStyle(Emvryx.text).padding(.horizontal, 16).padding(.vertical, 12)
                         .background(Emvryx.surface2, in: Corners(topLeading: 18, topTrailing: 18, bottomTrailing: 4, bottomLeading: 18))
                         .frame(maxWidth: (UIScreen.main.bounds.width - 32) * 0.85, alignment: .trailing)
+                }
+                if let code, code.parity.contains("vryxcode_restore"), e.int("turn") > 0 {
+                    HStack { Spacer(); RestorePill(code: code, turn: e.int("turn")) }
                 }
             }
         case "step":
@@ -243,6 +286,7 @@ private struct EventRow: View {
                     }
                 }
                 ForEach(e.strings("next"), id: \.self) { Text("→ " + $0).font(Emvryx.body(14)).foregroundStyle(Emvryx.muted) }
+                if let code { EndNotes(code: code, e: e, all: all) }
             }
             .padding(14).frame(maxWidth: .infinity, alignment: .leading)
             .background(finished ? violet.opacity(0.14) : Emvryx.surface, in: RoundedRectangle(cornerRadius: 14))
@@ -339,15 +383,32 @@ private struct CodeComposer: View {
     @ObservedObject var code: CodeStore
     @Binding var text: String
     let placeholder: String
+    @State private var photos = false
+    @State private var files = false
+    @State private var camera = false
+    @State private var photoItems: [PhotosPickerItem] = []
 
     var body: some View {
         let p = vm.palette
         VStack(spacing: 6) {
+            SlashList(matches: code.slashMatches(text)) { text = $0 + " " }
             VStack(alignment: .leading, spacing: 10) {
+                AttachStrip(code: code)
                 TextField("", text: $text, prompt: Text(placeholder).foregroundColor(Emvryx.muted), axis: .vertical)
                     .font(Emvryx.body(16)).foregroundStyle(Emvryx.text).tint(p.accent).lineLimit(1...6)
                     .accessibilityLabel("Message VryxCode")
                 HStack(spacing: 6) {
+                    if code.extras {
+                        Menu {
+                            Button { photos = true } label: { Label("Photos or screenshots", systemImage: "photo") }
+                            if UIImagePickerController.isSourceTypeAvailable(.camera) { Button { camera = true } label: { Label("Take a photo", systemImage: "camera") } }
+                            Button { files = true } label: { Label("A document (PDF, Word, text)", systemImage: "doc") }
+                        } label: {
+                            Image(systemName: "plus").font(.system(size: 15, weight: .semibold)).foregroundStyle(Emvryx.muted)
+                                .frame(width: 32, height: 32).overlay(Circle().stroke(Emvryx.line, lineWidth: 1))
+                        }
+                        .accessibilityLabel("Attach to VryxCode")
+                    }
                     pick("Mode", code.mode == "auto" ? "Auto" : code.mode == "plan" ? "Plan" : "Ask") {
                         Button("Ask before editing") { code.mode = "ask" }
                         Button("Edit without asking") { code.mode = "auto" }
@@ -379,8 +440,8 @@ private struct CodeComposer: View {
                         .background(code.working && !(code.full && !text.isBlank) ? Emvryx.surface2 : p.accent, in: RoundedRectangle(cornerRadius: 12))
                     }
                     .buttonStyle(.plain)
-                    .disabled(!code.working && text.isBlank)
-                    .opacity(!code.working && text.isBlank ? 0.45 : 1)
+                    .disabled(!code.working && text.isBlank && code.pictures.isEmpty)
+                    .opacity(!code.working && text.isBlank && code.pictures.isEmpty ? 0.45 : 1)
                     .accessibilityLabel(code.working && !(code.full && !text.isBlank) ? "Stop" : "Send")
                 }
             }
@@ -388,7 +449,35 @@ private struct CodeComposer: View {
             .background(Emvryx.surface, in: RoundedRectangle(cornerRadius: 20))
             .overlay(RoundedRectangle(cornerRadius: 20).stroke(Emvryx.line, lineWidth: 1))
             .padding(.horizontal, 16).padding(.top, 8)
+            .photosPicker(isPresented: $photos, selection: $photoItems, maxSelectionCount: 3, matching: .images)
+            .onChange(of: photoItems) { items in loadPhotos(items) }
+            .fileImporter(isPresented: $files, allowedContentTypes: [.item], allowsMultipleSelection: true) { result in
+                if case let .success(urls) = result { for f in urls.compactMap(Picked.file) { add(f) } }
+            }
+            .fullScreenCover(isPresented: $camera) {
+                CameraPicker { image in
+                    camera = false
+                    if let d = image?.jpegData(compressionQuality: 1), let f = Picked.picture(d, name: "photo.jpg") { add(f) }
+                }
+                .ignoresSafeArea()
+            }
             if let u = code.usageLabel { Text(u).font(Emvryx.body(13)).foregroundStyle(Emvryx.muted).padding(.bottom, 8) }
+        }
+    }
+
+    /// A picked file goes with the next message: pictures as pictures, anything else as a document.
+    private func add(_ f: (name: String, data: Data)) {
+        if ["jpg", "jpeg", "png", "webp", "gif"].contains((f.name as NSString).pathExtension.lowercased()) { code.addPicture(name: f.name, data: f.data) }
+        else { code.addDoc(name: f.name, data: f.data) }
+    }
+
+    private func loadPhotos(_ items: [PhotosPickerItem]) {
+        guard !items.isEmpty else { return }
+        Task {
+            for (i, item) in items.enumerated() {
+                if let data = try? await item.loadTransferable(type: Data.self), let f = Picked.picture(data, name: "photo-\(i + 1)") { code.addPicture(name: f.name, data: f.data) }
+            }
+            photoItems = []
         }
     }
 

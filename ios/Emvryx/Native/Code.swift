@@ -66,14 +66,40 @@ struct CodeInfo: Decodable, Equatable {
 /// One row in the list of sessions.
 struct CodeSessionRow: Decodable, Equatable, Identifiable {
     var id = "", title = "", project = "", model = "", state = "", age = "", snippet = "", env = "local"
-    var steps = 0, files = 0, added = 0, removed = 0, archived = false
+    var steps = 0, files = 0, added = 0, removed = 0, archived = false, updated = 0.0
     var live: Bool { ["starting", "working", "asking", "queued"].contains(state) }
     init(from d: Decoder) throws {
         let c = try d.container(keyedBy: AnyKey.self)
         id = c.string("id") ?? ""; title = c.string("title") ?? ""; project = c.string("project") ?? ""; model = c.string("model") ?? ""
         state = c.string("state") ?? ""; age = c.string("age") ?? ""; snippet = c.string("snippet") ?? ""; env = c.string("env") ?? "local"
         steps = Int(c.int("steps") ?? 0); files = Int(c.int("files") ?? 0); added = Int(c.int("added") ?? 0); removed = Int(c.int("removed") ?? 0)
-        archived = c.bool("archived")
+        archived = c.bool("archived"); updated = c.double("updated") ?? 0
+    }
+}
+
+/// A project's rules for the agent: patterns it may do without asking ([allow]) and ones it must never do ([deny]).
+struct CodeRules: Decodable, Equatable {
+    var allow: [String] = [], deny: [String] = []
+    init() {}
+    init(from d: Decoder) throws {
+        let c = try d.container(keyedBy: AnyKey.self)
+        allow = c.value("allow") ?? []; deny = c.value("deny") ?? []
+    }
+}
+
+/// What VryxCode has remembered across sessions.
+struct CodeMemory: Decodable, Equatable {
+    var notes: [String] = []
+    init(from d: Decoder) throws { notes = try d.container(keyedBy: AnyKey.self).value("notes") ?? [] }
+}
+
+/// One saved command of a project (shown as a suggestion when the person types a slash).
+struct CodeCommand: Decodable, Equatable, Identifiable {
+    var name = "", about = ""
+    var id: String { name }
+    init(from d: Decoder) throws {
+        let c = try d.container(keyedBy: AnyKey.self)
+        name = c.string("name") ?? ""; about = c.string("about") ?? ""
     }
 }
 
@@ -147,4 +173,21 @@ extension ApiClient {
     func codeStop(_ id: String) async throws { _ = try await rawJSON("POST", "/api/code/sessions/\(id)/stop", [:]) }
     func codeArchive(_ id: String, _ on: Bool) async throws { _ = try await rawJSON("POST", "/api/code/sessions/\(id)/archive", ["archived": on]) }
     func codeDeleteSession(_ id: String) async throws { _ = try await rawJSON("POST", "/api/code/sessions/\(id)/delete", [:]) }
+
+    func codeMemory() async throws -> CodeMemory { try await getJSON("/api/code/memory") }
+    /// Forgets one remembered note by its place in the list (nil forgets everything).
+    func codeForget(_ index: Int?) async throws -> CodeMemory { try await postJSON("/api/code/memory", ["forget": index as Any? ?? NSNull()]) }
+    func codeRules(_ project: String) async throws -> CodeRules { try await getJSON("/api/code/rules?project=" + Self.encoded(project)) }
+    func codeRule(_ project: String, add: (kind: String, rule: String)? = nil, remove: String? = nil) async throws -> CodeRules {
+        var body: [String: Any] = ["project": project]
+        if let add { body["add"] = ["kind": add.kind, "rule": add.rule] } else { body["remove"] = remove ?? "" }
+        return try await postJSON("/api/code/rules", body)
+    }
+    func codeCommands(_ project: String) async throws -> [CodeCommand] {
+        let r: [String: [CodeCommand]] = try await getJSON("/api/code/commands?project=" + Self.encoded(project))
+        return r["commands"] ?? []
+    }
+    /// Restore: the project's files go back to just before the message with this turn number.
+    func codeRewind(_ id: String, turn: Int) async throws { _ = try await rawJSON("POST", "/api/code/sessions/\(id)/rewind", ["turn": turn]) }
+    private static func encoded(_ s: String) -> String { s.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? s }
 }

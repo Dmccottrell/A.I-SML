@@ -8,9 +8,11 @@ final class ScriptedServer: URLProtocol {
     static var sent: [(path: String, body: [String: Any])] = []
     static var views: [[String: Any]] = []              // the answers to the session polls, in order (the last repeats)
     static var served = 0
+    static var answers: [String: [String: Any]] = [:]    // the answer to any other call, by the end of its path
+    static var gets: [String] = []                        // the addresses (with their query) the app asked for
     static let lock = NSLock()
 
-    static func reset(views: [[String: Any]]) { lock.lock(); sent = []; Self.views = views; served = 0; lock.unlock() }
+    static func reset(views: [[String: Any]], answers: [String: [String: Any]] = [:]) { lock.lock(); sent = []; gets = []; Self.views = views; Self.answers = answers; served = 0; lock.unlock() }
     static func posts(to suffix: String) -> [[String: Any]] { lock.lock(); defer { lock.unlock() }; return sent.filter { $0.path.hasSuffix(suffix) }.map(\.body) }
 
     override class func canInit(with request: URLRequest) -> Bool { true }
@@ -25,8 +27,9 @@ final class ScriptedServer: URLProtocol {
         } else if let data = request.httpBody { body = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any] ?? [:] }
         Self.lock.lock()
         var answer: [String: Any] = [:]
-        if request.httpMethod == "POST" { Self.sent.append((path, body)) }
-        if path.hasSuffix("/api/code/start") { answer = ["id": "s1", "queued": false] }
+        if request.httpMethod == "POST" { Self.sent.append((path, body)) } else { Self.gets.append(request.url?.absoluteString ?? "") }
+        if let other = Self.answers.first(where: { path.hasSuffix($0.key) }) { answer = other.value }
+        else if path.hasSuffix("/api/code/start") { answer = ["id": "s1", "queued": false] }
         else if path.hasPrefix("/api/code/sessions/s1") && request.httpMethod == "GET" {
             answer = Self.views[min(Self.served, Self.views.count - 1)]
             Self.served += 1
