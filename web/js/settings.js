@@ -115,6 +115,7 @@ function sxSections(id) {
     data: [{title: 'Your data', rows: [
       {title: 'Documents', desc: 'Files and pictures you added to chats.', ctl: sxBtn('Open documents', () => { closeSettings(); openDocs(); })},
       {title: 'Download my data', desc: 'Everything saved about you in one zip: chats, notes, memory, projects.', ctl: el('a', {class: 'sbtn', href: '/api/export', download: ''}, 'Download'), keys: 'export backup'},
+      ...(featureOn('chat_import') ? [{title: 'Import chats', desc: 'Bring chats in from a file: your own Download my data zip, a ChatGPT or Claude export (the zip or its conversations.json), or one chat saved as text. They land in an \u201cImported\u201d folder. Nothing imported is used for training.', ctl: sxBtn('Import chats', importChats), keys: 'import upload chatgpt claude bring move transfer restore'}] : []),
       {title: 'Private chats', desc: 'Chats started as Private are never saved, never searched on the web and never use memory.'}]},
       {title: 'Archive', rows: [
       {title: 'Archived chats', desc: 'Chats you archived: out of the list, but kept, searchable and still remembered. Open, bring back or delete them here.', ctl: sxBtn('See archived', openArchived), keys: 'archive archived hidden old chats'},
@@ -159,6 +160,22 @@ function sxSections(id) {
   return A[id] || [];
 }
 // sendFeedback: a small form (bug, confusing, idea or other) that sends your words and the screen you are on to the owner, never your chats.
+function importChats() {   // chat_import: pick a file, send it, say how many chats came in
+  const inp = el('input', {type: 'file', accept: '.zip,.json,.md,.txt,.markdown', style: 'display:none'});
+  inp.onchange = async () => {
+    const f = inp.files[0]; inp.remove(); if (!f) return;
+    if (f.size > 20e6) return toast('That file is too big. The limit is 20 MB.');
+    toast('Reading ' + f.name + '\u2026');
+    const r = await post('/api/chats/import', {name: f.name, data: await fileToB64(f)}); const j = await r.json().catch(() => ({}));
+    if (!r.ok) return alert((j.message || 'That file could not be imported.') + (j.action ? ' ' + j.action : ''));
+    toast(j.imported + (j.imported === 1 ? ' chat was' : ' chats were') + ' imported. Find ' + (j.imported === 1 ? 'it' : 'them') + ' under IMPORTED in your chat list.');
+    refreshChatList();
+  };
+  document.body.append(inp); inp.click();
+}
+async function refreshChatList() {   // the chat list again from the server, without redrawing the open screen
+  try { const st = await (await api('/api/state?' + new URLSearchParams({effort: S.effort, model: S.model}))).json(); S.state.chats = st.chats; renderChats(); } catch (e) { /* it shows on the next load */ }
+}
 function sendFeedback() {   // send_feedback: tell the owner about a bug, an idea or something confusing (works from any screen; Android's Settings opens it too)
   const KINDS = [['bug', 'A bug'], ['confusing', 'Something confusing'], ['idea', 'An idea'], ['other', 'Something else']];
   let kind = 'bug';

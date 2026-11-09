@@ -369,7 +369,7 @@ class Handler(RoutesGet, RoutesPost, RoutesCode, RoutesAccount, RoutesAdmin, Rou
     # _json: read the request body as JSON, refusing bodies over the size limit for that address (uploads may be bigger).
     def _json(self):
         n = int(self.headers.get("Content-Length") or 0)
-        limit = {"/api/code/import": MAX_UPLOAD, "/api/documents": MAX_DOC_BODY}.get(self.path.split("?")[0], MAX_BODY)
+        limit = {"/api/code/import": MAX_UPLOAD, "/api/documents": MAX_DOC_BODY, "/api/chats/import": MAX_UPLOAD}.get(self.path.split("?")[0], MAX_BODY)
         if n > limit:
             raise ValueError("too big")
         raw = self.rfile.read(n) if n else b""

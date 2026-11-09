@@ -10,9 +10,11 @@ routes_admin.py). `path` is the web address, `body` the JSON the page sent (alre
 import os, sys; sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), os.pardir)); import emvryx_paths  # noqa: E402,F401  (the code folders become importable)
 # Standard library: re (regular expressions = text patterns), threading (background work), time.
 # Project modules: one per kind of data these routes change (chats, documents, exports, feedback, updates, GitHub, schedules, the phone model...).
+import base64
 import re
 import threading
 import time
+import chat_import
 import chat_turn
 import data_tools
 import app_skills
@@ -492,6 +494,22 @@ class RoutesPost:
             self.state.feedback.add_app(who["user"], str(body.get("kind", "other")), note, where)
             self.state.auth.event("feedback", who["user"], self._ip(), "app")
             return self._send(200, {"ok": True})
+        # chat_import: chats from a picked file (Emvryx's own zip, a ChatGPT or Claude export, or one chat as text). At most 5 imports an hour per person.
+        if path == "/api/chats/import" and self.state.flags.on("chat_import", who):
+            if self.state.rl.blocked("import:" + who["user"], 5, 3600):
+                return self._send(429, {"code": "slow_down", "message": "That is a lot of imports for one hour.", "action": "Try again a little later."})
+            try:
+                data = base64.b64decode(str(body.get("data", "")), validate=True)
+            except ValueError:                                                 # not base64 at all
+                return self._send(400, {"code": "bad_import", "message": "That file could not be read."})
+            try:
+                chats = chat_import.parse(str(body.get("name", ""))[:200], data)
+            except ValueError as e:                                            # chat_import says why in plain words
+                return self._send(400, {"code": "bad_import", "message": str(e)})
+            self.state.rl.hit("import:" + who["user"])
+            n = chat_import.add_to(self.state.store(who["user"]), chats)
+            self.state.auth.event("chats_imported", who["user"], self._ip(), str(n))
+            return self._send(200, {"imported": n})
         # Switch which version of an edited question is shown.
         m = re.fullmatch(r"/api/chats/(-?\d+)/messages/(\d+)/version", path)
         if m and self.state.flags.on("chat_versions", who):               # ‹ 1/2 ›: show another version of an edited question and its answers
