@@ -21,45 +21,57 @@ import threading
 import time
 import traceback
 
+# TOOL is the text format the code model uses to ask for a tool; call() builds one such request.
 TOOL = "<|tool_call|>{}<|end_tool_call|>"
+# GEN_LOCK makes sure only one thread at a time swaps in its pretend model.
 GEN_LOCK = threading.Lock()
+# The states in which a session counts as finished.
 FINAL = ("done", "failed", "stopped", "interrupted", "limited")      # limited: the person's usage ran out (a proper ending)
+# Stop messages that are normal for a model having a bad day (so they are not reported as problems).
 EXPECTED_STOPS = re.compile(r"kept answering in words|could not be read|going round in circles|did not get better|fixes that did not make|"
                             r"Removed from the queue|Stopped\.|ran out|steps|could not finish: the model", re.I)
 
 
+# call: build the text of one tool request, like "write a file" or "run a command", as a model would write it.
 def call(name, **args):
     return TOOL.format(json.dumps({"name": name, "args": args}))
 
 
+# Chaos is the pretend model. Each time it is asked for a reply it picks a random move from the list below, good or bad.
 class Chaos:
     """A stand-in model: each reply is picked at random from what small models really do, good and bad."""
 
+    # rng is the random number generator (a fixed seed makes a run repeatable); length is how many replies before it finishes.
     def __init__(self, rng, length):
         self.rng, self.left = rng, length
         self.files = ["main.py"]
 
+    # When the allowed number of replies has run out it ends the session: a proper finish, or just words.
     def __call__(self, messages):
         r = self.rng
         self.left -= 1
         if self.left <= 0:
             return r.choice([call("finish", summary="Done. " + r.choice(["It works.", "Open Preview to see it.", ""])),
                              "All done! The app is ready.", "Now I'll add the scoring.", "Which colour do you want?"])
+        # Otherwise pick a kind of move using the weights in MOVES.
         kind = r.choices(list(MOVES), weights=[w for w, _ in MOVES.values()])[0]
         return MOVES[kind][1](self, r)
 
 
+# _py: a random little Python file, some broken on purpose.
 def _py(r):
     return r.choice(["print('hi')\n", "def add(a, b):\n    return a + b\n", "import json\nprint(json.dumps({'ok': 1}))\n",
                      "x = 'émoji 🎲 ünïcode'\nprint(x)\n", "def broken(:\n    pass\n", "raise SystemExit(3)\n"])
 
 
+# _path: a random file name, including awkward ones: spaces, accents, very long, nested, and paths that try to escape the project.
 def _path(c, r):
     return r.choice(c.files + ["app.py", "src/game.py", "web/index.html", "web/style.css", "web/app.js", "notes/a b c.txt", "données/é.py",
                                "x" * 120 + ".py", "../outside.py", "/etc/evil.py", "C:\\Windows\\evil.py", ".git/config", "src\\win.py",
                                "tests/test_main.py", "", ".", "nested/" * 12 + "deep.py"])
 
 
+# m_write: the model writes a file (sometimes adding to it).
 def m_write(c, r):
     p = _path(c, r)
     c.files.append(p)
@@ -67,30 +79,36 @@ def m_write(c, r):
     return call("write_file", path=p, content=content, **({"append": True} if r.random() < 0.15 else {}))
 
 
+# m_huge: the model writes a very big file.
 def m_huge(c, r):
     return call("write_file", path="big.py", content="".join(f"x{i} = {i}\n" for i in range(r.choice([2000, 6000]))))
 
 
+# m_edit: the model edits a file, sometimes with text that does not exist.
 def m_edit(c, r):
     return call("edit_file", path=r.choice(c.files), old=r.choice(["print('hi')", "nothing like this", "a + b", ""]), new=r.choice(["print('bye')", "a - b", ""]))
 
 
+# m_run: the model runs a command: harmless, failing, slow, or dangerous ones that must be refused.
 def m_run(c, r):
     return call("run", command=r.choice(["python -m unittest", "python main.py", "python -c \"print(1/0)\"", "ls", "pip install flask",
                                          "npm install express", "python -m pytest -q", "rm -rf /", "curl http://example.com", "python app.py",
                                          "git status", "echo hi && echo there", "python -c \"import time; time.sleep(1)\""]))
 
 
+# m_read: the model reads a file or lists a folder.
 def m_read(c, r):
     return call(r.choice(["read_file", "list_files"]), path=_path(c, r))
 
 
+# m_test: the model writes a test, which may pass or fail.
 def m_test(c, r):
     c.files.append("test_main.py")
     return call("write_file", path="test_main.py", content="import unittest\n\nclass T(unittest.TestCase):\n    def test_a(self):\n        self.assertEqual(1, "
                 + r.choice(["1", "2"]) + ")\n")
 
 
+# m_broken: tool requests that are cut off, not valid JSON, missing parts or for tools that do not exist.
 def m_broken(c, r):
     return r.choice(['<|tool_call|>{"name": "write_file", "args": {oops}<|end_tool_call|>',
                      '<|tool_call|>{"name": "write_file", "args": {"path": "cut.py", "content": "line1\\nline2',
@@ -100,30 +118,36 @@ def m_broken(c, r):
                      "<tool_call>\n<function=write_file>\n<parameter=path>\nx.py\n</parameter>\n<parameter=content>\nprint(1)\n</parameter>\n</function>\n</tool_call>"])
 
 
+# m_fenced: a tool request wrapped in a ```json block instead of the normal format.
 def m_fenced(c, r):
     return "Now I'll write it.\n\n```json\n" + json.dumps({"name": "write_file", "args": {"path": "fenced.py", "content": "print(2)\n"}}, indent=2) + "\n```\n"
 
 
+# m_words: the model just talks (or says nothing) instead of using a tool.
 def m_words(c, r):
     return r.choice(["Now I'll add the quests.", "Let me think about this.", "Here is the plan:\n1. map\n2. npcs", "```python\nprint('pasted')\n```",
                      "", "   ", "?" * 3, "<think>hmm</think>", "I cannot do that."])
 
 
+# m_circle: the model rewrites the same file back and forth, going in circles.
 def m_circle(c, r):
     return call("write_file", path="circle.py", content=r.choice(["a = 1\n", "a = 2\n"]))
 
 
+# m_tools: other tools: to-do list, page check, start and stop an app, rollback, remember a note, ask the user a question.
 def m_tools(c, r):
     return r.choice([call("todo", items=[{"text": "map", "done": False}]), call("check_page", path="web/index.html"), call("start_app", command="python app.py", port=5000),
                      call("app_logs"), call("stop_app"), call("rollback"), call("remember", note="likes dark mode"), call("ask_user", question="Which one?", options=["A", "B"])])
 
 
+# m_seeded_edit: edit one of the files the project started with.
 def m_seeded_edit(c, r):
     """An edit to one of the files the project started with (complex mode), sometimes one that matches, sometimes stale text."""
     p = r.choice(SEEDED or ["main.py"])
     return call("edit_file", path=p, old=r.choice(["def handler", "return value", "import os", "TODO", "x = 1"]), new=r.choice(["def handler2", "return None", "import sys", ""]))
 
 
+# m_heavy: commands that make a lot of output, take long or use a lot of memory.
 def m_heavy(c, r):
     return call("run", command=r.choice(["python -c \"print('\\n'.join(str(i) for i in range(200000)))\"", "python -m unittest discover -s tests",
                                          "python -c \"import time; time.sleep(25)\"", "python -c \"x = ' ' * (300 * 1024 * 1024)\"",
@@ -131,11 +155,13 @@ def m_heavy(c, r):
                                          "grep -rn handler .", "find . -name '*.py' | head"]))
 
 
+# m_search: search tools (grep, glob, read from a line).
 def m_search(c, r):
     return r.choice([call("grep", pattern=r.choice(["handler", "import", "["]), path="."), call("glob", pattern=r.choice(["**/*.py", "*.md", "src/**"])),
                      call("read_file", path=r.choice(SEEDED or ["main.py"]), start=r.randint(1, 50))])
 
 
+# m_multi: work across languages in one project: SQL, Python, the web page and a Node server.
 def m_multi(c, r):
     """Work across languages in one project: SQL schema and queries, Python using the database, the web page and its script and style, a Node server."""
     return r.choice([
@@ -158,6 +184,7 @@ def m_multi(c, r):
     ])
 
 
+# One tiny project per language: [file name, good code, broken code, code that crashes, commands to run].
 # --languages: one project per language; the model writes good, broken, crashing and never-ending code, then builds, runs and tests it
 LANGS = {
     "c": ("main.c", '#include <stdio.h>\nint main(void) { printf("hi\\n"); return 0; }\n', "int main( { return 0 }\n",
@@ -183,10 +210,13 @@ LANGS = {
             ["sqlite3 app.db < q.sql", "sqlite3 app.db \"SELECT 1\"", "sqlite3 app.db \".read q.sql\""]),
     "python": ("main.py", "print('hi')\n", "def x(:\n", "raise SystemExit(3)\n", ["python main.py", "python -m py_compile main.py", "python -m unittest"]),
 }
+# LOOPS: code that never ends, per language, to test that VryxCode stops it.
 LOOPS = {"c": "int main(void) { for (;;) {} }\n", "python": "while True:\n    pass\n", "javascript": "for (;;) {}\n", "go": "package main\nfunc main() { for {} }\n"}
+# LANG holds the language being tested in the --languages mode.
 LANG = {"name": "python"}
 
 
+# m_lang: in languages mode, run a command or write good, broken, crashing or never-ending code.
 def m_lang(c, r):
     name = LANG["name"]
     path, good, bad, crash, cmds = LANGS[name]
@@ -197,8 +227,10 @@ def m_lang(c, r):
     return call("write_file", path=path, content=content)
 
 
+# SEEDED lists the Python files of the started project, filled in when a project is made.
 SEEDED = []
 
+# MOVES: each kind of move with its weight (how often it is picked) and its function; COMPLEX_WEIGHTS replaces the weights in complex mode.
 MOVES = {"write": (24, m_write), "edit": (10, m_edit), "run": (14, m_run), "read": (8, m_read), "test": (6, m_test), "broken": (9, m_broken),
          "fenced": (4, m_fenced), "words": (7, m_words), "circle": (5, m_circle), "huge": (1, m_huge), "tools": (6, m_tools),
          "seeded": (0, m_seeded_edit), "heavy": (0, m_heavy), "search": (0, m_search), "multi": (0, m_multi),
@@ -206,6 +238,7 @@ MOVES = {"write": (24, m_write), "edit": (10, m_edit), "run": (14, m_run), "read
 COMPLEX_WEIGHTS = {"seeded": 12, "heavy": 3, "search": 8, "multi": 22}
 
 
+# seed_project: make a project that looks like one VryxCode has worked on for weeks (many files, tests where some fail, a database, a big file); big and many push past the size and file-count limits.
 def seed_project(folder, rng, big=False, many=False):
     """A project like one VryxCode works on for weeks: packages, tests (some failing), notes, data, a web front, a large asset; or one that is
     over the size or file-count limit (big / many) to see what VryxCode does at the edge."""
@@ -242,6 +275,7 @@ def seed_project(folder, rng, big=False, many=False):
     return [k for k in files if k.endswith(".py")]
 
 
+# work: one worker process. It starts its own test server and runs its share of the sessions, collecting problems and counts.
 def work(job):
     """One worker: its own Emvryx server (the test one), `runs` sessions. Returns (problems, counts)."""
     seed, first, runs, mode = job
@@ -253,13 +287,16 @@ def work(job):
     from tests.test_app_server import Base
     from tests.test_code_sessions import open_to_everyone
 
+    # crashes collects any unexpected server error that is logged during the runs.
     crashes = []
     real_log = app_server.log_crash
     app_server.log_crash = lambda method, path: (crashes.append(f"{method} {path}\n{traceback.format_exc()[-1500:]}"), real_log(method, path))
     out = {"problems": [], "counts": {}}
 
+    # Run is a test case that borrows the app's normal test setup (a real server on a free port).
     class Run(Base):
         def runTest(self):
+            # Open VryxCode to everyone and turn every feature on, so the whole thing is exercised; the tours are turned off because they get in the way.
             open_to_everyone(self.state)
             self.read = {}
             self.lang_mode = mode == "languages"
@@ -279,9 +316,11 @@ def work(job):
                 self.state.flags.data["audiences"][f["id"]] = "admins"
             for off in ("welcome_tour", "model_tours", "vryxcode_tour"):
                 self.state.flags.data["audiences"][off] = "off"
+            # Remember what folders exist so any file written outside the projects folder can be spotted afterwards.
             root = os.path.realpath(self.state.code.project_path("owner", "p0"))
             parent = os.path.dirname(root)
             before = set(os.listdir(os.path.dirname(parent)))
+            # Languages mode: one project per language.
             if mode == "languages":
                 MOVES.update({k: (0, v[1]) for k, v in MOVES.items()})
                 MOVES["lang"], MOVES["words"], MOVES["broken"] = (20, m_lang), (1, m_words), (1, m_broken)
@@ -292,11 +331,13 @@ def work(job):
                     self.state.code_generate = lambda model, rng=rng: Chaos(rng, rng.randint(6, 20))
                     self.one(n, rng, self.owner, "owner", project="lang-" + LANG["name"])
                 return
+            # Normal mode: one person, many short sessions.
             if not complex_mode:
                 for n in range(first, first + runs):
                     rng = random.Random(seed * 1000003 + n)
                     self.state.code_generate = lambda model, rng=rng: Chaos(rng, rng.randint(1, 18))
                     self.one(n, rng, self.owner, "owner")
+            # Complex mode: three people at once, each running long sessions on big projects.
             else:                                                     # three people at once, each with long sessions on big projects
                 from tests.test_app_server import Client
                 people = [(self.owner, "owner")] + [(Client(self.port, self.state.add_user(nm, "pro")), nm) for nm in ("ann", "ben")]
@@ -326,10 +367,12 @@ def work(job):
                     t.start()
                 for t in threads:
                     t.join()
+            # Anything new outside the projects folder means a model managed to write outside its project, which is a problem.
             leaked = set(os.listdir(os.path.dirname(parent))) - before - {"ann", "ben"}     # the other two people's own project folders
             if leaked:
                 out["problems"].append(f"files appeared outside the projects folder: {sorted(leaked)[:5]}")
 
+        # call: send a request to the server; for ones that start the model, swap in this person's pretend model first.
         def call(self, client, chaos, method, path, body=None):
             """A request; one that starts the model (a start, a message, a second opinion) gets this person's chaos model, under a lock so three
             people at once never get each other's."""
@@ -339,6 +382,7 @@ def work(job):
                 self.state.code_generate = lambda model: chaos
                 return client.call(method, path, body)
 
+        # one: one whole run: start a session, watch it end, then do a few things a person might do next (another message, a review, a rewind, a second opinion, a delete).
         def one(self, n, rng, client=None, user="owner", project=None, chaos=None):
             self.tl.c = client or self.owner
             self.tl.chaos = chaos
@@ -382,6 +426,7 @@ def work(job):
                 if st == 200 and act != "rewind" and not self.follow(n, rng, sid, stop_at=rng.random() < 0.1):
                     return
 
+        # follow: watch a session until it ends: answer its questions, sometimes press Stop part way, and note any problem (an error answer or a session that never ends).
         def follow(self, n, rng, sid, stop_at=False):
             """Watch a session to its end (answering its questions, sometimes pressing Stop part way); checks what it showed. False when it went wrong."""
             seen = self.read.get(sid, 0)                         # only what this turn adds: the earlier turn's end must not count as this one's

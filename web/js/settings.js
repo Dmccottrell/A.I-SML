@@ -1,5 +1,6 @@
 /* The Settings screen. */
 // ---------------------------------------------------------------- settings
+// removeAccountDialog: an admin deletes another person's account; they confirm with their own password or code and type the person's name.
 function removeAccountDialog(u, done) {   // an admin deletes someone else's account: confirm it is you, then type their name
   const [rk, rb] = reauthFields(), err = sxErr(), typed = sxInput('text', u.user);
   const m = dialog([el('h2', {}, 'Delete ' + u.user + '?'),
@@ -7,6 +8,7 @@ function removeAccountDialog(u, done) {   // an admin deletes someone else's acc
     ...rk, el('p', {style: 'margin:0'}, 'Type ', el('b', {}, u.user), ' to confirm:'), typed, err,
     el('button', {class: 'btn danger', type: 'button', onclick: async () => { const j = await sxPost('/api/admin/delete-user', Object.assign({user: u.user, confirm: typed.value.trim()}, rb()), err); if (!j) return; m.remove(); toast(u.user + ' was deleted.'); done(); }}, 'Delete everything')], 'Keep the account');
 }
+// accessDialog: the first owner sets someone's plan (Free, Pro, Mega), whether they have no usage limits, and whether they are an admin.
 function accessDialog(u, done) {   // the first owner chooses a plan, no limits, and admin rights for one person
   let plan = u.tier, unlimited = !!u.unlimited, admin = !!u.admin;
   const note = el('div', {style: 'color:var(--muted);font-size:14px'}, 'No limits means no usage cap at all, like the owner. A plan sets the normal cap. Admin rights open the Owner pages in Settings (people, invite codes, backups, reports).');
@@ -21,6 +23,7 @@ function accessDialog(u, done) {   // the first owner chooses a plan, no limits,
       e.target.closest('.dialog').parentNode.remove(); toast('Saved for ' + u.user + '.'); done();
     }}, 'Save'))], 'Cancel');
 }
+// openSources: a window showing which live data sources work right now (green dot) and which need a key, with a Test button for admins.
 async function openSources() {
   const j = await (await api('/api/live/sources')).json();
   const row = (x) => el('div', {style: 'display:flex;gap:8px;align-items:baseline;padding:2px 0'}, el('span', {style: 'color:' + (x.active ? '#3fb950' : 'var(--muted)')}, x.active ? '●' : '○'), el('span', {}, x.name), x.needs_key && !x.active ? el('small', {style: 'color:var(--muted)'}, 'needs ' + x.keys.join(' or ')) : x.note ? el('small', {style: 'color:var(--muted)'}, x.note) : '');
@@ -46,25 +49,36 @@ async function openSources() {
     ...grp('Online services that use a key', j.sources.filter((x) => x.keys.length))], 'Close');
 }
 
+// SX remembers the Settings screen: the page open now, the account details, the search words and the app state it was drawn from.
 const SX = {page: 'general', acct: null, q: '', st: null};
+// sxWhen: a time in seconds turned into a short readable date and time.
 const sxWhen = (t) => new Date(t * 1000).toLocaleString([], {month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit'});
+// clip: squeeze white space and cut a text to n letters, ending with an ellipsis.
 const clip = (s, n) => { s = String(s || '').replace(/\s+/g, ' ').trim(); return s.length > n ? s.slice(0, n - 1) + '\u2026' : s; };
+// Small builders for the controls used all over Settings: a button, a little pill label, a row of choices (seg) and an on/off switch.
 const sxBtn = (label, fn, cls) => el('button', {class: 'sbtn' + (cls ? ' ' + cls : ''), type: 'button', onclick: fn}, label);
 const sxPill = (text, kind) => el('span', {class: 'pill' + (kind ? ' ' + kind : '')}, text);
 function sxSeg(opts, cur, fn) { return el('div', {class: 'seg'}, ...opts.map(([v, t]) => el('button', {class: cur === v ? 'on' : '', type: 'button', onclick: (e) => { fn(v); [...e.target.parentNode.children].forEach((b) => b.classList.remove('on')); e.target.classList.add('on'); }}, t))); }
 function sxSwitch(on, fn, label) { const b = el('button', {class: 'switch', type: 'button', role: 'switch', 'aria-checked': String(!!on), 'aria-label': label, onclick: () => { const v = b.getAttribute('aria-checked') !== 'true'; b.setAttribute('aria-checked', String(v)); fn(v); }}); return b; }
+// sxSet: save a setting on the server, then reload the app state so the screen shows it.
 const sxSet = async (patch) => { await post('/api/settings', patch); await load().catch(() => {}); };
+// sxLocal: read a value kept on this device only; a blocked browser storage just gives the default.
 const sxLocal = (k, d) => { try { return localStorage.getItem(k) || d; } catch (e) { return d; } };
+// sxAcct: load the account details (password set? two-step on? email? passkeys?); if the login ended, close Settings.
 async function sxAcct() { try { SX.acct = await (await api('/api/account')).json(); } catch (e) { if (e.message === 'login') closeSettings(); } return SX.acct; }
 
 // A page is a list of sections; a section is {title, rows}; a row is {title, desc, ctl | node, keys, danger}. Search looks through every row.
 const APK_URL = 'https://github.com/Dmccottrell/A.I-SML/releases/download/android-latest/emvryx.apk';     // made by .github/workflows/android.yml (release job)
 const WIN_URL = 'https://github.com/Dmccottrell/A.I-SML/releases/download/windows-latest/Emvryx-Setup.exe';   // made by .github/workflows/windows-app.yml
+// sxSections: the whole content of Settings. For a page id (general, chat, memory ...) it gives sections, each with rows that have a title, a short description and a control.
 function sxSections(id) {
+  // s = your settings, w = the chat window info, a = your account, owner = are you the admin.
   const st = S.state, s = st.settings, w = st.window, a = SX.acct || {mfa: {}}, owner = st.admin;
   const A = {
+    // Notifications row (only if the feature is on).
     general: [...(featureOn('pwa_push') ? [{title: 'Notifications', rows: [   // pwa_push (pwa.js): this device is told when an answer or VryxCode is ready
       {title: 'Notifications on this device', desc: 'When an answer or a VryxCode session is ready while Emvryx is closed. Only a short line is sent, never the chat.', ctl: pwaPushRow(), keys: 'notifications push alerts phone'}]}] : []),
+      // Links to download the Windows and Android apps (only if the feature is on); the Android one also has a QR code.
       ...(featureOn('apk_link') ? [{title: 'Emvryx apps', rows: [      // apk_link: fixed links, always the newest apps (the android-latest and windows-latest releases)
       {title: 'Get the Windows app', desc: 'Emvryx in its own window, with a Start menu icon, like Claude\u2019s desktop app. Always the newest version. Windows may say \u201cWindows protected your PC\u201d the first time: tap More info, then Run anyway.',
         ctl: el('a', {class: 'sbtn', href: WIN_URL, rel: 'noopener'}, 'Download for Windows'), keys: 'windows desktop exe pc computer download install app'},
@@ -72,18 +86,24 @@ function sxSections(id) {
         ctl: el('div', {style: 'display:flex;gap:8px;flex-wrap:wrap'}, el('a', {class: 'sbtn', href: APK_URL, rel: 'noopener'}, 'Download for Android'),
           sxBtn('Show code', () => dialog([el('h2', {}, 'Scan with your phone'), el('div', {style: 'display:grid;place-items:center;margin:8px 0'}, qrSvg(APK_URL, 5)), el('small', {style: 'color:var(--muted);word-break:break-all'}, APK_URL)], 'Close'))),
         keys: 'android apk phone download install app'}]}] : []),
+      // What's new and the Welcome tour.
       {title: 'Welcome tour and what\u2019s new', rows: [{title: 'What\u2019s new', desc: 'Every release so far, newest first: new features and new model versions.', ctl: sxBtn('See releases', () => { closeSettings(); openWhatsNew(true); }), keys: 'whats new releases updates changes history version'}, ...(featureOn('welcome_tour') ? [{title: 'Welcome tour', desc: 'The short animated introduction to Emvryx: the models, answers with sources, making it yours and VryxCode.', ctl: sxBtn('Start the tour', () => { closeSettings(); openTour(true); }), keys: 'welcome tour introduction walk through intro'}] : [])]},
+      // Appearance: theme and text size, both remembered on this device.
       {title: 'Appearance', rows: [
       {title: 'Theme', desc: 'Automatic follows your phone or computer.', ctl: sxSeg([['auto', 'Automatic'], ['dark', 'Dark'], ['light', 'Light']], S.theme, (v) => { S.theme = v; try { localStorage.setItem('emvryx_theme', v); } catch (e) {} applyTheme(); }), keys: 'dark light mode colour color'},
       {title: 'Text and button size', ctl: sxSeg([['0.85', 'Small'], ['1', 'Normal'], ['1.15', 'Large'], ['1.3', 'Extra large']], String(parseFloat(sxLocal('emvryx_size', '1')) || 1), (v) => { try { localStorage.setItem('emvryx_size', v); } catch (e) {} applySize(); }), keys: 'font zoom bigger'}]},
+      // Answers: the short pause before words appear.
       {title: 'Answers', rows: [
       {title: 'Pause before the answer', desc: 'A short beat before words appear, so replies feel less abrupt.', ctl: sxSeg([['off', 'None'], ['short', 'Short'], ['natural', 'Natural']], s.thinking_pause || 'short', (v) => sxSet({thinking_pause: v})), keys: 'delay typing speed'}]}],
+    // Chat page: where answers come from (Wikipedia, the web, or just the model), live facts and the list of sources.
     chat: [{title: 'Looking things up', rows: [
       {title: 'Where answers come from', desc: 'Questions are first looked up in Wikipedia on the server. Auto also searches the web, when it is online, for recent things (news, scores, prices) or when Wikipedia does not have the answer; your question is sent to a search service then, and each answer says so. Private chats never search the web.', ctl: sxSeg([['auto', 'Auto'], ['off', 'Wikipedia only'], ['always', 'Always search the web'], ['none', 'Model only']], s.web_search || 'auto', (v) => sxSet({web_search: v})), keys: 'web search wikipedia tavily internet', stack: true},
       {title: 'Live facts', desc: 'Sums, dates, prices, rates, scores and news come from code and free public services, not from the model’s memory. Only the needed words (a place, a currency, a team) are sent, never the chat. Off in private chats and in “Model only”.', ctl: sxSwitch(s.live_data !== false, (v) => sxSet({live_data: v}), 'Live facts'), keys: 'weather stocks sports currency'},
       {title: 'Which sources are on', desc: 'See what works right now and which keys are missing.', ctl: sxBtn('See sources', openSources), keys: 'api keys tavily brave rawg tmdb'}]},
+      // How long a chat can be (the token window).
       {title: 'Chat length', rows: [
       {title: 'How long a chat can be', desc: 'Right now: ' + fmt(w.window) + ' tokens, ' + w.reason + '. Long chats use more memory and are slower to read.', ctl: sxSeg([['everyday', 'Everyday (about 8K)'], ['long', 'Long (if allowed)']], s.window_mode, (v) => sxSet({window_mode: v})), keys: 'context window tokens', stack: true}]}],
+    // Memory page: custom instructions and the memory switch.
     memory: [{title: 'Custom instructions', rows: [
       {title: 'How you like answers', desc: 'For example: \u201cKeep answers short. I am a nurse.\u201d It goes with every question where it fits (up to 400 letters). The small models follow short, simple instructions best.', node: 'custom', keys: 'style tone personalization system prompt'}]},
       {title: 'Memory', rows: [
@@ -91,6 +111,7 @@ function sxSections(id) {
       {title: 'What it remembers', desc: 'See, add or delete any fact.', ctl: sxBtn('Open memory', () => { closeSettings(); openMemory(); })}]},
       {title: 'Saved notes', rows: [
       {title: 'Saved notes', desc: 'Notes you gave a thumbs up are kept so the same question works offline. You can delete any of them.', ctl: sxBtn('Open saved notes', openSaved), keys: 'thumbs up offline'}]}],
+    // Data page: documents, download your data, archive and delete chats, privacy and terms.
     data: [{title: 'Your data', rows: [
       {title: 'Documents', desc: 'Files and pictures you added to chats.', ctl: sxBtn('Open documents', () => { closeSettings(); openDocs(); })},
       {title: 'Download my data', desc: 'Everything saved about you in one zip: chats, notes, memory, projects.', ctl: el('a', {class: 'sbtn', href: '/api/export', download: ''}, 'Download'), keys: 'export backup'},
@@ -106,10 +127,12 @@ function sxSections(id) {
       {title: 'Delete all my chats', desc: 'Removes every chat. This cannot be undone.', danger: true, ctl: sxBtn('Delete chats', async () => { if (confirm('Delete every chat? This cannot be undone.')) { await post('/api/delete-everything'); S.chatId = null; S.messages = []; remember(); await load(); } }, 'bad')}]},
       {title: 'Legal', rows: [
       {title: 'Privacy and terms', ctl: el('div', {style: 'display:flex;gap:8px'}, el('a', {class: 'sbtn', href: '/privacy', target: '_blank', rel: 'noopener'}, 'Privacy'), el('a', {class: 'sbtn', href: '/terms', target: '_blank', rel: 'noopener'}, 'Terms'))}]}],
+    // Connected apps page.
     apps: [{title: 'Connected apps', rows: [
       {title: 'Use my connected apps in chats', desc: 'When a question is clearly about one (\u201cwhat is on my calendar\u201d), the few matching items are read and given to the model as notes. Read-only. Private chats never use them.', ctl: sxSwitch(s.connected_apps !== false, (v) => sxSet({connected_apps: v}), 'Use my connected apps in chats'), keys: 'calendar notion slack email'},
       {title: 'All apps', desc: 'Calendar, email, Notion, Slack, Todoist, Linear, Trello, Jira, Dropbox, GitLab, Vercel and more: each one needs only a token, link or app password you paste.', ctl: sxBtn('See all apps', () => { closeSettings(); openApps(); }), keys: 'google gmail outlook todoist trello jira'},
       {title: 'GitHub', desc: 'Lets VryxCode create repositories and pull and push. Your token is stored encrypted and the model never sees it. Pulling, pushing and creating always ask first.', ctl: sxBtn('Manage', () => { closeSettings(); openApps(); }), keys: 'git repository vryxcode'}]}],
+    // Security page: password, two-step sign-in, passkeys, recovery codes, signed-in devices and recent activity.
     security: [{title: 'Signing in', rows: [
       {title: 'Password', desc: a.has_password ? 'Set. Changing it signs your other devices out.' : 'Not set. Add one to sign in with your name and password.', ctl: el('div', {style: 'display:flex;gap:8px;align-items:center'}, sxPill(a.has_password ? 'Set' : 'Not set', a.has_password ? 'ok' : 'warn'), sxBtn(a.has_password ? 'Change' : 'Set a password', () => passwordDialog(), a.has_password ? '' : 'primary')), keys: 'change reset'},
       {title: 'Two-step sign-in', desc: a.mfa.on ? 'On. Signing in also needs a 6-digit code from your authenticator app.' : 'Off. Adds a 6-digit code from an authenticator app (Google Authenticator, Microsoft Authenticator, Authy, 1Password) every time you sign in.', ctl: el('div', {style: 'display:flex;gap:8px;align-items:center'}, sxPill(a.mfa.on ? 'On' : 'Off', a.mfa.on ? 'ok' : 'warn'), a.mfa.on ? sxBtn('Turn off', () => mfaOffDialog(), 'bad') : sxBtn('Set up', () => mfaSetupDialog(), 'primary')), keys: 'mfa 2fa authenticator totp'},
@@ -117,6 +140,7 @@ function sxSections(id) {
       ...(a.mfa.on ? [{title: 'Recovery codes', desc: a.mfa.recovery_left + ' of 8 left. Each works once if you lose your phone.', ctl: sxBtn('Make new codes', () => recoveryDialog()), keys: 'backup codes lost phone'}] : [])]},
       {title: 'Where you are signed in', rows: [{node: 'devices'}]},
       {title: 'Recent security activity', rows: [{node: 'activity'}]}],
+    // Account page: name, email, plan, sign out and delete account (the owner's account cannot be deleted).
     account: [{title: 'You', rows: [
       {title: 'Name', desc: 'This is how you sign in.', ctl: el('b', {}, a.user || st.user)},
       {title: 'Email', desc: a.email ? (a.email_verified ? 'Verified. You can sign in with an email code.' : 'Not verified yet' + (a.mail ? '. Verify it to sign in with an email code.' : ' (this server cannot send email, so it stays unverified).')) : 'None. Add one so you can recover your account.',
@@ -126,6 +150,7 @@ function sxSections(id) {
       {title: 'Sign out', desc: 'On this device.', ctl: sxBtn('Sign out', async () => { await post('/api/logout'); location.reload(); })}]},
       ...(owner ? [{title: 'Owner account', rows: [{title: 'This is the admin account', desc: 'It has no usage limits and the Owner pages in this menu. Keep it safe: use a password and two-step sign-in. It cannot be deleted or turned off from the app.'}]}] : [{title: 'Delete account', rows: [
       {title: 'Delete my account', desc: 'Removes your chats, notes, memory, projects, GitHub link and devices. This cannot be undone.', danger: true, ctl: sxBtn('Delete account', () => deleteDialog(), 'bad')}]}])],
+    // About page: the models, the server and Send feedback.
     about: [{title: 'Emvryx', rows: [
       {title: 'One family of four models', desc: 'Flare, Equinox, Solstice and Apogee are the Emvryx models; VryxCode builds projects with them.'},
       {title: 'Your server', desc: st.demo ? 'Demo mode: no model is attached.' : 'Connected.', ctl: st.contact ? el('a', {class: 'sbtn', href: 'mailto:' + st.contact}, 'Report a problem') : null},
@@ -133,6 +158,7 @@ function sxSections(id) {
   };
   return A[id] || [];
 }
+// sendFeedback: a small form (bug, confusing, idea or other) that sends your words and the screen you are on to the owner, never your chats.
 function sendFeedback() {   // send_feedback: tell the owner about a bug, an idea or something confusing (works from any screen; Android's Settings opens it too)
   const KINDS = [['bug', 'A bug'], ['confusing', 'Something confusing'], ['idea', 'An idea'], ['other', 'Something else']];
   let kind = 'bug';
@@ -146,15 +172,21 @@ function sendFeedback() {   // send_feedback: tell the owner about a bug, an ide
       const r = await post('/api/feedback', {kind, note: note.value, where: where()}); const j = await r.json().catch(() => ({}));
       if (!r.ok) { out.style.color = 'var(--danger)'; out.textContent = j.message || 'That did not work.'; return; } d.remove(); toast('Thanks. The owner will see it.'); }}, 'Send')], 'Cancel');
 }
+// SX_NAV: the pages in the Settings menu: [id, name, icon].
 const SX_NAV = [['general', 'General', 'gear'], ['chat', 'Chat and lookups', 'spark'], ['memory', 'Memory', 'brain'], ['data', 'Data controls', 'folder'], ['apps', 'Connected apps', 'code'], ['security', 'Security', 'lock'], ['account', 'Account', 'eye'], ['about', 'About', 'doc']];
+// SX_OWNER: the owner's pages, which now live on the Admin screen.
 const SX_OWNER = [['a-overview', 'Overview', 'chart'], ['a-flags', 'Previews (Admin screen)', 'spark'], ['a-people', 'People (Admin screen)', 'eye'], ['a-signups', 'Sign-ups and invites', 'pencil'], ['a-feedback', 'Answer reports', 'pencil'], ['a-backups', 'Backups', 'folder'], ['a-cloud', 'Cloud machine', 'cloud'], ['a-log', 'Security log', 'lock']];
+// SX_LEAD: the one-line introduction shown at the top of each page.
 const SX_LEAD = {general: 'How Emvryx looks and feels on this device.', chat: 'How it finds facts and how much of a chat it keeps in mind.', memory: 'What it knows about you, shared by every model.', data: 'Your files, your downloads and what gets deleted.', apps: 'Other services Emvryx can work with.', security: 'Protect your account: password, two-step sign-in and your devices.', account: 'Who you are and your plan.', about: 'About this Emvryx.',
   'a-overview': 'How safe this server is to share, and how it is doing.', 'a-flags': 'Try new things yourself first, then widen who sees them. Changes apply at once.', 'a-people': 'Everyone with an account.', 'a-signups': 'Who may create an account, and invite codes.', 'a-feedback': 'What people said went wrong with an answer, newest first.', 'a-backups': 'Copies of everything this server keeps, so a broken disk is not the end.', 'a-cloud': 'A computer elsewhere (like a rented GPU box) where VryxCode can run your code.', 'a-log': 'Sign-ins, failures and changes, newest first.'};
 
 
+// Keep the open Settings or Admin screen in the address, so a refresh brings you back to it.
 // Keep the open Settings or Admin screen in the address (#settings/security, #admin/people), so an accidental refresh brings the person back to it instead of the chat.
+// viewHash: put (or remove) the screen name in the address without adding a history step.
 function viewHash(h) { try { if (h) history.replaceState(null, '', '#' + h); else if (location.hash) history.replaceState(null, '', location.pathname + location.search); } catch (e) {} }
 function sxHash() { viewHash(SX.root && SX.root.isConnected ? 'settings' + (SX.root.classList.contains('on-page') && SX.page ? '/' + SX.page : '') : ''); }
+// restoreView: on start, open the Settings or Admin page named in the address, if there is one and you are allowed.
 function restoreView() {
   if (S.viewChecked) return; S.viewChecked = true;
   const m = /^#(settings|admin)(?:\/([\w-]+))?$/.exec(location.hash || ''); if (!m) return;
@@ -162,20 +194,25 @@ function restoreView() {
   if (SX_OWNER.some((x) => x[0] === m[2])) { if (S.state && S.state.admin) openAdmin(ADM_TAB_OF[m[2]]); else viewHash(''); return; }   // an old link to an owner page
   const ok = SX_NAV.some((x) => x[0] === m[2]); openSettings(ok ? m[2] : undefined);
 }
+// closeSettings: remove the Settings screen.
 function closeSettings() { document.querySelectorAll('.sx').forEach((n) => n.remove()); SX.root = null; sxHash(); }
+// openSettings: open the Settings screen on a page (default General) after loading the account.
 async function openSettings(page) {
   closeSettings(); SX.page = page || SX.page || 'general'; SX.q = ''; SX.st = S.state;
   await sxAcct();
   const root = el('div', {class: 'sx', role: 'dialog', 'aria-modal': 'true', 'aria-label': 'Settings'});
   $('dialogs').append(root); SX.root = root; sxRender(!!page);
 }
+// chevron: the small ">" arrow drawn as an SVG picture.
 function chevron() { const c = document.createElementNS('http://www.w3.org/2000/svg', 'svg'); c.setAttribute('class', 'chev'); c.setAttribute('width', '18'); c.setAttribute('height', '18'); c.setAttribute('viewBox', '0 0 24 24'); c.setAttribute('fill', 'none'); c.setAttribute('aria-hidden', 'true');
   const p = document.createElementNS('http://www.w3.org/2000/svg', 'path'); p.setAttribute('d', 'M9 6l6 6-6 6'); p.setAttribute('stroke', 'currentColor'); p.setAttribute('stroke-width', '2'); p.setAttribute('stroke-linecap', 'round'); c.append(p); return c; }
+// sxNavItem: one line of the Settings menu; a dot warns the owner when their account has no password or two-step sign-in.
 function sxNavItem(id, name, ico) {
   const a = SX.acct || {mfa: {}}, flag = id === 'security' && (!a.has_password || !a.mfa.on) && S.state.admin;
   return el('button', {class: 'sx-item' + (SX.page === id && !SX.q ? ' on' : ''), type: 'button', onclick: () => { SX.page = id; SX.q = ''; sxRender(true); }}, icon(ico), el('span', {}, name), flag ? el('span', {class: 'dot', title: 'Needs attention'}) : null,
     chevron());
 }
+// sxRender: draw the Settings screen: the menu with its search box on the left and the page on the right (on a phone, one at a time); it keeps the scroll position.
 function sxRender(onPage) {
   const root = SX.root; if (!root || !root.isConnected) return;
   const keepScroll = root.querySelector('.sx-body') ? root.querySelector('.sx-body').scrollTop : 0, owner = S.state.admin;
@@ -190,12 +227,15 @@ function sxRender(onPage) {
   sxBody(); body.scrollTop = keepScroll; sxHash();
   if (SX.q) { search.focus(); search.setSelectionRange(search.value.length, search.value.length); }
 }
+// sxRowNode: draw one row; rows with a "node" are filled in later by sxFill (devices, passkeys, custom instructions, activity).
 function sxRowNode(r) {
   if (r.node) { const box = el('div', {class: 'srow stack', 'data-node': r.node}, el('div', {style: 'color:var(--muted)'}, 'Loading...')); setTimeout(() => sxFill(r.node, box), 0); return box; }
   const auto = r.ctl && r.ctl.classList && (r.ctl.classList.contains('switch') || r.ctl.classList.contains('sbtn'));
   return el('div', {class: 'srow' + (r.stack ? ' stack' : '') + (r.danger ? ' danger' : '') + (auto || r.inline ? ' inline' : '')}, el('div', {class: 'stxt'}, el('b', {}, r.title), r.desc ? el('small', {}, r.desc) : null), r.ctl ? el('div', {class: 'sctl'}, r.ctl) : null);
 }
+// sxCard: a card holding the rows of one section.
 function sxCard(rows) { return el('div', {class: 'sx-card'}, ...rows.map(sxRowNode)); }
+// sxBody: draw the page on the right, or the search results when something is typed in the search box.
 function sxBody() {
   const body = $('sxBody'); if (!body) return;
   const all = [...SX_NAV, ...SX_OWNER];
@@ -217,11 +257,14 @@ function sxBody() {
   for (const sec of sxSections(id)) kids.push(el('div', {class: 'sx-sec'}, sec.title), sxCard(sec.rows));
   body.replaceChildren(...kids);
 }
+// sxReload: reload the account details and redraw.
 async function sxReload() { await sxAcct(); sxRender(); }
+// Plain-words names for the security log events.
 const EVENT_NAMES = {login_ok: 'Signed in', login_fail: 'Wrong sign-in try', logout: 'Signed out', lockout: 'Address locked out', signup: 'New account', password_set: 'Password changed', mfa_on: 'Two-step turned on', mfa_off: 'Two-step turned off',
   mfa_recovery_used: 'Recovery code used', mfa_recovery_new: 'New recovery codes', mfa_reset_by_owner: 'Two-step reset by owner', password_reset_by_admin: 'Password reset by admin', gaming_mode: 'Gaming mode', model_unloaded: 'Model unloaded', idle_unload_changed: 'Idle unload changed', model_published: 'Model published', model_checks: 'Safety checks', app_added: 'App added', app_changed: 'App changed', app_key_rotated: 'App key replaced', reauth_fail: 'Wrong password or code', email_changed: 'Email changed', session_revoked: 'Device signed out', key_rotated: 'Key replaced',
   pair_created: 'Sign-in link made', pair_used: 'Sign-in link used', user_added: 'Person added', ban: 'Account turned off', unban: 'Account turned on', signups_changed: 'Sign-up rule changed', invite_made: 'Invite made', bad_origin: 'Cross-site request refused', email_code: 'Email code sent'};
 
+// sxFill: fill in the rows that need extra loading: signed-in devices, passkeys, custom instructions and recent activity.
 async function sxFill(kind, box) {
   try {
     if (kind === 'devices') {
@@ -246,9 +289,12 @@ async function sxFill(kind, box) {
   } catch (e) { if (e.message !== 'login') box.textContent = 'Could not load this.'; }
 }
 
+// Dialogs for the account.
 // ---- dialogs for the account
+// sxErr: an empty red message line; sxInput: a text box with phone-friendly settings.
 const sxErr = () => el('div', {role: 'alert', style: 'color:var(--danger);font-size:14px'});
 function sxInput(type, ph, attrs) { return el('input', Object.assign({type, placeholder: ph, autocapitalize: 'none', autocorrect: 'off', spellcheck: 'false'}, attrs || {})); }
+// reauthFields: asks for your password and/or two-step code again before a sensitive change; gives the fields and a function that reads their values.
 // "Enter your password / code" fields for sensitive changes: returns [nodes, () => body]
 function reauthFields() {
   const a = SX.acct, kids = [], got = {};
@@ -256,7 +302,9 @@ function reauthFields() {
   if (a.mfa.on) { const c = sxInput('text', '6-digit code or recovery code', {inputmode: 'text', autocomplete: 'one-time-code', 'aria-label': 'Two-step code'}); kids.push(authField('Two-step code', c, 'From your authenticator app, or a recovery code.')); got.code = () => c.value; }
   return [kids, () => Object.fromEntries(Object.entries(got).map(([k, f]) => [k, f()]))];
 }
+// sxPost: send to the server and, if it fails, write the server's message into the error line and give nothing back.
 async function sxPost(url, body, err) { const r = await post(url, body); const j = await r.json().catch(() => ({})); if (!r.ok) { err.textContent = j.message || 'Something went wrong.'; return null; } return j; }
+// passwordDialog: set or change the password; changing it signs the other devices out.
 function passwordDialog() {
   const a = SX.acct, [rk, rb] = reauthFields(), err = sxErr(), pw = pwBox({autocomplete: 'new-password', placeholder: 'New password', 'aria-label': 'New password'}, true), again = pwBox({autocomplete: 'new-password', placeholder: 'Type it again', 'aria-label': 'New password again'});
   const cur = a.has_password ? rk.slice(0, 1) : [], rest = a.has_password ? rk.slice(1) : rk;
@@ -267,17 +315,20 @@ function passwordDialog() {
   }}, a.has_password ? 'Change password' : 'Save password');
   const m = dialog([el('h2', {}, a.has_password ? 'Change password' : 'Set a password'), ...cur, authField('New password', pw.node), authField('New password again', again.node), ...rest, err, go], 'Cancel');
 }
+// emailDialog: add or change the email address.
 function emailDialog() {
   const a = SX.acct, [rk, rb] = reauthFields(), err = sxErr(), email = sxInput('text', 'you@example.com', {inputmode: 'email', autocomplete: 'email', value: a.email || ''});
   const go = el('button', {class: 'btn', type: 'button', onclick: async () => { err.textContent = ''; const b = rb(); const j = await sxPost('/api/account/email', Object.assign({email: email.value}, b), err); if (!j) return; m.remove(); sxReload(); }}, 'Save email');
   const m = dialog([el('h2', {}, a.email ? 'Change email' : 'Add an email'), authField('Email', email, 'Changing it means you verify it again.'), ...rk, err, go], 'Cancel');
 }
+// verifyEmailDialog: send a 6-digit code to the email and check what you type.
 function verifyEmailDialog() {
   const err = sxErr(), code = sxInput('text', '6-digit code', {inputmode: 'numeric', autocomplete: 'one-time-code', maxlength: '6', class: 'codein'});
   const info = el('div', {class: 'authnote'}, 'Sending a code to ' + SX.acct.email + '...');
   const m = dialog([el('h2', {}, 'Verify your email'), info, authField('Code from the email', code), err, el('button', {class: 'btn', type: 'button', onclick: async () => { err.textContent = ''; const j = await sxPost('/api/account/email/verify', {code: code.value}, err); if (!j) return; m.remove(); sxReload(); }}, 'Verify')], 'Cancel');
   sxPost('/api/account/email/send', {}, err).then((j) => { info.textContent = j ? 'We sent a 6-digit code to ' + SX.acct.email + '. It works for 10 minutes.' : 'Could not send a code.'; });
 }
+// addPasskeyDialog: register a passkey (fingerprint, face or screen lock) using the browser's built-in credentials system.
 function addPasskeyDialog() {
   const [rk, rb] = reauthFields(), err = sxErr(), name = sxInput('text', 'Name it, e.g. My phone', {'aria-label': 'Passkey name'});
   const go = async (e) => {
@@ -292,11 +343,13 @@ function addPasskeyDialog() {
   };
   const m = dialog([el('h2', {}, 'Add a passkey'), el('p', {style: 'margin:0;color:var(--muted)'}, 'Your device will ask for your fingerprint, face or screen lock.'), authField('Name', name), ...rk, err, el('button', {class: 'btn', type: 'button', onclick: go}, 'Continue')], 'Cancel');
 }
+// removePasskeyDialog: remove a passkey after you confirm it is you.
 function removePasskeyDialog(p) {
   const [rk, rb] = reauthFields(), err = sxErr();
   const m = dialog([el('h2', {}, 'Remove \u201c' + p.name + '\u201d?'), el('p', {style: 'margin:0;color:var(--muted)'}, 'It stops working here at once. Delete it from your phone or password manager too.'), ...rk, err,
     el('button', {class: 'btn danger', type: 'button', onclick: async () => { const j = await sxPost('/api/account/passkey/delete', Object.assign({id: p.id}, rb()), err); if (j) { m.remove(); sxReload(); } }}, 'Remove')], 'Keep it');
 }
+// recoveryCodesView: shows the recovery codes once, with Copy and Download; the Done button works only after you tick that you saved them.
 function recoveryCodesView(codes, onDone) {
   const text = 'Emvryx recovery codes (each works once)\n\n' + codes.join('\n') + '\n';
   const done = el('button', {class: 'btn', type: 'button', disabled: 'disabled', onclick: onDone}, 'Done');
@@ -306,6 +359,7 @@ function recoveryCodesView(codes, onDone) {
       el('a', {class: 'sbtn', href: 'data:text/plain;charset=utf-8,' + encodeURIComponent(text), download: 'emvryx-recovery-codes.txt'}, 'Download')),
     el('label', {style: 'display:flex;gap:10px;align-items:center'}, saved, 'I saved these somewhere safe'), done];
 }
+// mfaSetupDialog: set up two-step sign-in in two steps: add Emvryx to an authenticator app (QR code, button or typed key), then type the 6-digit code it shows.
 async function mfaSetupDialog() {
   const a = SX.acct, [rk, rb] = reauthFields(), err = sxErr(), box = el('div', {style: 'display:flex;flex-direction:column;gap:14px'});
   const m = dialog([el('h2', {}, 'Set up two-step sign-in'), box], 'Cancel');
@@ -328,22 +382,26 @@ async function mfaSetupDialog() {
   if (rk.length) box.replaceChildren(el('p', {style: 'margin:0;color:var(--muted)'}, 'First, confirm it is you.'), ...rk, err, el('button', {class: 'btn', type: 'button', onclick: start}, 'Continue'));
   else start();
 }
+// mfaOffDialog: turn two-step sign-in off after confirming it is you.
 function mfaOffDialog() {
   const [rk, rb] = reauthFields(), err = sxErr();
   const m = dialog([el('h2', {}, 'Turn off two-step sign-in?'), el('p', {style: 'margin:0;color:var(--muted)'}, 'Your account will only need your password again. Confirm it is you:'), ...rk, err,
     el('button', {class: 'btn danger', type: 'button', onclick: async () => { const j = await sxPost('/api/account/mfa/disable', rb(), err); if (!j) return; m.remove(); sxReload(); }}, 'Turn off')], 'Keep it on');
 }
+// recoveryDialog: replace the recovery codes with new ones.
 function recoveryDialog() {
   const [rk, rb] = reauthFields(), err = sxErr(), box = el('div', {style: 'display:flex;flex-direction:column;gap:14px'});
   const m = dialog([el('h2', {}, 'New recovery codes'), box], 'Close');
   box.replaceChildren(el('p', {style: 'margin:0;color:var(--muted)'}, 'This replaces your old codes, which stop working.'), ...rk, err,
     el('button', {class: 'btn', type: 'button', onclick: async () => { const j = await sxPost('/api/account/mfa/recovery', rb(), err); if (!j) return; box.replaceChildren(...recoveryCodesView(j.recovery, () => { m.remove(); sxReload(); })); m.querySelector('.dialog').lastElementChild.hidden = true; }}, 'Make new codes'));
 }
+// deleteDialog: delete your own account; you type your name to confirm.
 function deleteDialog() {
   const a = SX.acct, [rk, rb] = reauthFields(), err = sxErr(), typed = sxInput('text', a.user);
   const m = dialog([el('h2', {}, 'Delete your account?'), el('p', {style: 'margin:0;color:var(--muted)'}, 'This removes your chats, notes, memory, projects, GitHub link and devices, and cannot be undone. Type your name (' + a.user + ') to confirm.'), authField('Your name', typed), ...rk, err,
     el('button', {class: 'btn danger', type: 'button', onclick: async () => { const j = await sxPost('/api/delete-account', Object.assign({confirm: typed.value.trim()}, rb()), err); if (j) location.reload(); }}, 'Delete everything')], 'Keep my account');
 }
+// maybeNudge: for the owner, a bar that asks to set a password or two-step sign-in (shown again after 14 days if you pressed Not now).
 async function maybeNudge() {   // the owner's account is the one that matters most: ask once per visit until it has a password and two-step sign-in
   document.querySelectorAll('#nudge').forEach((n) => n.remove());
   if (!S.state || !S.state.admin) return;
@@ -354,6 +412,7 @@ async function maybeNudge() {   // the owner's account is the one that matters m
     sxBtn('Do it now', () => { bar.remove(); openSettings('security'); }, 'primary'), el('button', {class: 'x', type: 'button', 'aria-label': 'Not now', onclick: () => { bar.remove(); try { localStorage.setItem('emvryx_nudge', String(Date.now())); } catch (e) {} }}, 'Not now'));
   $('banner').after(bar);
 }
+// toast: a small message that appears at the bottom for 3.5 seconds.
 function toast(text) { const t = el('div', {class: 'sx-toast', role: 'status', style: 'pointer-events:none;position:fixed;left:50%;bottom:24px;transform:translateX(-50%);background:var(--surface2);border:1px solid var(--line);border-radius:999px;padding:10px 18px;z-index:80;box-shadow:0 8px 24px rgba(0,0,0,.4)'}, text); document.body.append(t); setTimeout(() => t.remove(), 3500); }
 
 // ---- the owner's pages

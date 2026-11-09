@@ -1,23 +1,33 @@
 /* QR codes for the two-step sign-in setup. */
+// A small QR code maker written from scratch (no outside library), used to show the two-step sign-in code and the app download code. It makes byte-mode codes with error level L, versions 1 to 9.
 // ---------------------------------------------------------------- QR codes (for the two-step setup): byte mode, error level L, versions 1 to 9
+// QR_BLOCKS: for each version [total codewords, check codewords per block, number of blocks, data codewords per block].
 const QR_BLOCKS = [null, [26, 7, 1, 19], [44, 10, 1, 34], [70, 15, 1, 55], [100, 20, 1, 80], [134, 26, 1, 108], [172, 18, 2, 68], [196, 20, 2, 78], [242, 24, 2, 97], [292, 30, 2, 116]];   // version: [all codewords, check codewords per block, blocks, data codewords per block]
+// QR_ALIGN: where the small alignment squares go for each version.
 const QR_ALIGN = [null, [], [6, 18], [6, 22], [6, 26], [6, 30], [6, 34], [6, 22, 38], [6, 24, 42], [6, 26, 46]];
+// QR_EXP / QR_LOG: tables for the special arithmetic (Galois field) the error-correction maths needs.
 const QR_EXP = new Array(512), QR_LOG = new Array(256);
 (() => { let x = 1; for (let i = 0; i < 255; i++) { QR_EXP[i] = x; QR_LOG[x] = i; x <<= 1; if (x & 256) x ^= 0x11D; } for (let i = 255; i < 512; i++) QR_EXP[i] = QR_EXP[i - 255]; })();
+// qrMul: multiply two numbers in that arithmetic using the tables.
 const qrMul = (a, b) => (a && b ? QR_EXP[QR_LOG[a] + QR_LOG[b]] : 0);
+// qrChecks: Reed-Solomon error correction: from the data bytes, work out the extra check bytes that let a scanner fix damage.
 function qrChecks(data, n) {   // Reed-Solomon: the n check codewords for the data codewords
   let g = [1]; for (let i = 0; i < n; i++) { const next = new Array(g.length + 1).fill(0); for (let j = 0; j < g.length; j++) { next[j] ^= g[j]; next[j + 1] ^= qrMul(g[j], QR_EXP[i]); } g = next; }
   const r = new Array(n).fill(0);
   for (const d of data) { const f = d ^ r[0]; r.shift(); r.push(0); for (let i = 0; i < n; i++) r[i] ^= qrMul(g[i + 1], f); }
   return r;
 }
+// qrBch: the extra bits that protect the format and version information.
 function qrBch(value, poly, bits) { let v = value << bits; const top = (n) => 31 - Math.clz32(n); while (top(v) >= top(poly)) v ^= poly << (top(v) - top(poly)); return (value << bits) | v; }
+// qrMatrix: build the square of dark and light cells for a text. Steps: pick the smallest version that fits, write the data bits with padding, add the check bytes, draw the fixed patterns, place the data, try the 8 masks and keep the best one.
 function qrMatrix(text) {
   const bytes = Array.from(new TextEncoder().encode(text));
   let ver = 1; while (ver < 9 && bytes.length > QR_BLOCKS[ver][2] * QR_BLOCKS[ver][3] - 2) ver++;
   const [total, ecn, nb, dpb] = QR_BLOCKS[ver], dataCw = nb * dpb;
   if (bytes.length > dataCw - 2) return null;
+  // put: add a number to the bit list, using n bits.
   const bits = []; const put = (v, n) => { for (let i = n - 1; i >= 0; i--) bits.push((v >> i) & 1); };
+  // Header: mode 4 (bytes), the length, then the text's bytes.
   put(4, 4); put(bytes.length, 8); bytes.forEach((b) => put(b, 8));
   for (let i = 0; i < 4 && bits.length < dataCw * 8; i++) bits.push(0);
   while (bits.length % 8) bits.push(0);
@@ -28,20 +38,27 @@ function qrMatrix(text) {
   for (let i = 0; i < dpb; i++) for (const b of blocks) out.push(b[i]);
   for (let i = 0; i < ecn; i++) for (const c of checks) out.push(c[i]);
   const stream = []; out.forEach((c) => put2(stream, c)); function put2(a, v) { for (let i = 7; i >= 0; i--) a.push((v >> i) & 1); }
+  // M holds the cell values; F marks the cells that are already taken by fixed patterns.
   const size = 17 + 4 * ver, M = Array.from({length: size}, () => new Array(size).fill(0)), F = Array.from({length: size}, () => new Array(size).fill(false));
   const set = (r, c, v) => { if (r >= 0 && c >= 0 && r < size && c < size) { M[r][c] = v ? 1 : 0; F[r][c] = true; } };
+  // finder: one of the three big corner squares.
   const finder = (r, c) => { for (let i = -1; i <= 7; i++) for (let j = -1; j <= 7; j++) set(r + i, c + j, i >= 0 && i <= 6 && j >= 0 && j <= 6 && (i === 0 || i === 6 || j === 0 || j === 6 || (i >= 2 && i <= 4 && j >= 2 && j <= 4))); };
   finder(0, 0); finder(0, size - 7); finder(size - 7, 0);
+  // The two dotted timing lines.
   for (let i = 8; i < size - 8; i++) { set(6, i, i % 2 === 0); set(i, 6, i % 2 === 0); }
+  // The small alignment squares (not on top of a corner square).
   const al = QR_ALIGN[ver];
   for (const r of al) for (const c of al) { if ((r === 6 && c === 6) || (r === 6 && c === al[al.length - 1]) || (c === 6 && r === al[al.length - 1])) continue; for (let i = -2; i <= 2; i++) for (let j = -2; j <= 2; j++) set(r + i, c + j, Math.max(Math.abs(i), Math.abs(j)) !== 1); }
   set(size - 8, 8, true);
   for (let i = 0; i < 9; i++) { if (!F[8][i]) set(8, i, 0); if (!F[i][8]) set(i, 8, 0); }
   for (let i = 0; i < 8; i++) { if (!F[8][size - 1 - i]) set(8, size - 1 - i, 0); if (!F[size - 1 - i][8]) set(size - 1 - i, 8, 0); }
   if (ver >= 7) { const v = qrBch(ver, 0x1F25, 12); for (let i = 0; i < 18; i++) { const bit = (v >> i) & 1, a = Math.floor(i / 3), b = (i % 3) + size - 11; set(a, b, bit); set(b, a, bit); } }
+  // Data cells are filled two columns at a time from the bottom right, going up and then down.
   const free = F.map((row) => row.slice()), data = [];   // where data goes: two columns at a time, from the bottom right, going up then down
   for (let c = size - 1, up = true; c > 0; c -= 2, up = !up) { if (c === 6) c--; for (let k = 0; k < size; k++) { const r = up ? size - 1 - k : k; for (const cc of [c, c - 1]) if (!free[r][cc]) data.push([r, cc]); } }
+  // The 8 mask patterns that flip cells to avoid large plain areas.
   const masks = [(r, c) => (r + c) % 2 === 0, (r) => r % 2 === 0, (r, c) => c % 3 === 0, (r, c) => (r + c) % 3 === 0, (r, c) => (Math.floor(r / 2) + Math.floor(c / 3)) % 2 === 0, (r, c) => ((r * c) % 2) + ((r * c) % 3) === 0, (r, c) => (((r * c) % 2) + ((r * c) % 3)) % 2 === 0, (r, c) => (((r + c) % 2) + ((r * c) % 3)) % 2 === 0];
+  // build: apply one mask and write the format bits.
   const build = (m) => {
     const G = M.map((row) => row.slice());
     data.forEach(([r, c], i) => { G[r][c] = (stream[i] || 0) ^ (masks[m](r, c) ? 1 : 0); });
@@ -51,6 +68,7 @@ function qrMatrix(text) {
     for (let i = 0; i < 8; i++) G[8][size - 1 - i] = fb(i); for (let i = 8; i < 15; i++) G[size - 15 + i][8] = fb(i);
     G[size - 8][8] = 1; return G;
   };
+  // penalty: score a finished pattern (runs, blocks, finder-like shapes, balance); lower is easier to scan.
   const penalty = (G) => {
     let p = 0;
     for (let pass = 0; pass < 2; pass++) for (let a = 0; a < size; a++) { let run = 1; for (let b = 1; b < size; b++) { const cur = pass ? G[b][a] : G[a][b], prev = pass ? G[b - 1][a] : G[a][b - 1]; if (cur === prev) { run++; if (run === 5) p += 3; else if (run > 5) p++; } else run = 1; } }
@@ -60,9 +78,11 @@ function qrMatrix(text) {
     let dark = 0; G.forEach((row) => row.forEach((v) => { dark += v; })); p += Math.floor(Math.abs((dark * 100) / (size * size) - 50) / 5) * 10;
     return p;
   };
+  // Try every mask and keep the one with the lowest penalty.
   let best = null, bestP = Infinity; for (let m = 0; m < 8; m++) { const G = build(m), p = penalty(G); if (p < bestP) { bestP = p; best = G; } }
   return best;
 }
+// qrSvg: draw the matrix as an SVG picture, black on white with a white border (scanners need it).
 function qrSvg(text, px) {   // an <svg> element, black on white with a 4-module quiet zone (scanners need the white)
   const G = qrMatrix(text); if (!G) return null;
   const n = G.length, q = 4, ns = 'http://www.w3.org/2000/svg', svg = document.createElementNS(ns, 'svg');

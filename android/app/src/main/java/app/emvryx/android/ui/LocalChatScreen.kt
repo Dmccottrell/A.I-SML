@@ -82,12 +82,16 @@ import kotlinx.coroutines.withContext
  */
 @Composable
 fun LocalChatScreen(vm: AppViewModel, onBack: () -> Unit) {
+    // The Back button or gesture leaves this screen.
     BackHandler(onBack = onBack)
+    // phone is the on-phone model object kept by the app.
     val phone = (LocalContext.current.applicationContext as EmvryxApp).phone
+    // showModel controls a pop-up with the model card (download, remove) once the model is ready.
     var showModel by remember { mutableStateOf(false) }
     if (showModel) androidx.compose.material3.AlertDialog(onDismissRequest = { showModel = false }, containerColor = Emvryx.surface,
         text = { Column(Modifier.verticalScroll(rememberScrollState())) { PhoneModelCard(phone, vm.online) } },
         confirmButton = { TextButton(onClick = { showModel = false }) { Text("Close") } })
+    // The screen: a top bar (Back, title, Model and Admin buttons), an offline bar when the PC is off, then either the chats or the download card.
     Column(Modifier.fillMaxSize().background(Emvryx.bg)) {
         Column(Modifier.statusBarsPadding()) {
             Row(Modifier.fillMaxWidth().height(56.dp).padding(horizontal = 8.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -96,14 +100,17 @@ fun LocalChatScreen(vm: AppViewModel, onBack: () -> Unit) {
                     Text("On this phone", fontWeight = FontWeight.SemiBold, fontSize = 17.sp)
                     phone.kit?.let { Text(it.fullName + " · works without the PC", color = Emvryx.muted, fontSize = 12.sp) }
                 }
+                // With the full settings list on, the model's own card lives here as a pop-up.
                 // android_full_settings: the phone model's own card (download, switch, remove) lives here, since Settings now opens the full list
                 if (vm.flag("android_full_settings") && phone.status == PhoneModel.Status.Ready) TextButton(onClick = { showModel = true }) { Text("Model") }
                 if (vm.adminKept) TextButton(onClick = { vm.open(Screen.Native("admin")) }) { Text("Admin") }
             }
             HorizontalDivider(color = Emvryx.line)
         }
+        // If the PC is off, say so and keep looking for it.
         if (!vm.online) OfflineBar(vm)
         Box(Modifier.weight(1f).fillMaxWidth().navigationBarsPadding().imePadding()) {
+            // Once the model is on the phone, show two tabs: normal chats and VryxCode code drafts; before that, show the download card.
             if (phone.status == PhoneModel.Status.Ready) {
                 var tab by remember { mutableStateOf(0) }
                 Column(Modifier.fillMaxSize()) {
@@ -118,6 +125,7 @@ fun LocalChatScreen(vm: AppViewModel, onBack: () -> Unit) {
     }
 }
 
+// TabChip: a small rounded button used as a tab; it is filled with the accent colour when selected.
 @Composable
 private fun TabChip(label: String, on: Boolean, onClick: () -> Unit) {
     val p = LocalPalette.current
@@ -127,16 +135,19 @@ private fun TabChip(label: String, on: Boolean, onClick: () -> Unit) {
     }
 }
 
+// DraftsPane: with the PC off the phone's model writes the files for a request; the draft goes to the PC when it is back, and Run in VryxCode runs and tests it there.
 /** VryxCode drafts: with the PC off, the phone's model writes the files for a request; they go to the PC when it is back and run there */
 @Composable
 private fun DraftsPane(vm: AppViewModel, phone: PhoneModel) {
     val scope = rememberCoroutineScope()
     val p = LocalPalette.current
+    // The text boxes remember what was typed: project name, request, live text while writing, a note and which draft is opened.
     var project by remember { mutableStateOf(phone.drafts.lastOrNull()?.project ?: "") }
     var request by remember { mutableStateOf("") }
     var live by remember { mutableStateOf("") }
     var note by remember { mutableStateOf<String?>(null) }
     var open by remember { mutableStateOf<Long?>(null) }
+    // A scrolling list: explanation, two fields, the Write button (or Stop while writing), then every saved draft with Show files, Run in VryxCode and Delete.
     LazyColumn(Modifier.fillMaxSize().padding(horizontal = 14.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
         item {
             Text("The phone's model writes the files; a phone cannot run them. When the PC is back the draft goes to it, and Run in VryxCode " +
@@ -158,6 +169,7 @@ private fun DraftsPane(vm: AppViewModel, phone: PhoneModel) {
             }, Modifier.fillMaxWidth())
             note?.let { Text(it, color = Emvryx.muted, fontSize = 13.sp, modifier = Modifier.padding(top = 6.dp)) }
         }
+        // Newest drafts first; the key lets the list keep each row's state when the order changes.
         items(phone.drafts.sortedByDescending { it.made }, key = { it.id }) { d ->
             Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(Emvryx.surface).padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 Text(d.request, fontWeight = FontWeight.SemiBold, fontSize = 14.sp, maxLines = 2, overflow = TextOverflow.Ellipsis)
@@ -184,6 +196,7 @@ private fun DraftsPane(vm: AppViewModel, phone: PhoneModel) {
     }
 }
 
+// OfflineBar: shown while the PC is off; it checks for the PC every 30 seconds and goes back to normal chat by itself.
 /** The PC is off: everything here is answered on the phone; it looks for the PC every half minute and goes back by itself */
 @Composable
 private fun OfflineBar(vm: AppViewModel) {
@@ -200,8 +213,10 @@ private fun OfflineBar(vm: AppViewModel) {
     }
 }
 
+// How often to look for the PC while offline, in milliseconds.
 const val OFFLINE_CHECK_MS = 30_000L
 
+// ModelChoice: pick Flare (fast) or Equinox (smarter, needs more memory); a choice the phone cannot hold is greyed out.
 /** Flare (fast) or Equinox (smarter, needs a phone with more memory): only what this phone can run can be picked */
 @Composable
 private fun ModelChoice(phone: PhoneModel) {
@@ -226,12 +241,14 @@ private fun ModelChoice(phone: PhoneModel) {
     }
 }
 
+// PhoneModelCard: the download card for the phone model, which changes with the status: None (Download), Downloading (progress and Stop), Checking, Ready (switch or remove) and Failed (message and Try again).
 /** Download, progress, remove: the model on this phone (also in Settings) */
 @Composable
 fun PhoneModelCard(phone: PhoneModel, online: Boolean) {
     val p = LocalPalette.current
     val ctx = LocalContext.current
     val auto = remember { NativeFlags.on(ctx, "android_auto_offline") }
+    // Stop and Remove are remembered so that automatic offline mode does not start the download again against the person's choice.
     // Stop and Remove are remembered: android_auto_offline never starts the download again against that
     val stop = { AutoOffline.setAnswer(ctx, false); phone.cancel() }
     val removeIt = { AutoOffline.setAnswer(ctx, false); phone.remove() }
@@ -272,6 +289,7 @@ fun PhoneModelCard(phone: PhoneModel, online: Boolean) {
     }
 }
 
+// PhoneVisionCard: the same kind of card for the picture model.
 /** android_phone_vision: download, progress, remove: the picture model on this phone (also in Settings) */
 @Composable
 fun PhoneVisionCard(vision: PhoneVision, online: Boolean) {
@@ -304,6 +322,7 @@ fun PhoneVisionCard(vision: PhoneVision, online: Boolean) {
     }
 }
 
+// pictureBytes: make a picture small enough for the picture model by decoding it at a reduced size (about 1000 pixels a side) and saving it as JPEG.
 /** A picture, made small enough for the picture model (it reads about 1000 pixels a side at most) */
 private fun pictureBytes(context: android.content.Context, uri: android.net.Uri): ByteArray? = runCatching {
     val bounds = android.graphics.BitmapFactory.Options().apply { inJustDecodeBounds = true }
@@ -316,10 +335,12 @@ private fun pictureBytes(context: android.content.Context, uri: android.net.Uri)
     java.io.ByteArrayOutputStream().also { bmp.compress(android.graphics.Bitmap.CompressFormat.JPEG, 90, it); bmp.recycle() }.toByteArray()
 }.getOrNull()
 
+// LocalChats: the chat screen for the phone's model: chat picker, message list, picture attachments and the message box with its send button.
 @Composable
 private fun LocalChats(vm: AppViewModel, phone: PhoneModel) {
     val scope = rememberCoroutineScope()
     val vision = (LocalContext.current.applicationContext as EmvryxApp).vision
+    // Local state for the screen: the picture waiting to be looked at, the chat being shown, the answer so far, errors, the typed text, a picture's words and whether a picture is being read.
     var seeing by remember { mutableStateOf<android.net.Uri?>(null) }   // a picture to look at with the picture model when the message goes
     var looked by remember { mutableStateOf("") }
     var chatId by remember { mutableLongStateOf(phone.openChat ?: phone.chats.maxByOrNull { it.updated }?.id ?: phone.newChat().id) }
@@ -330,16 +351,19 @@ private fun LocalChats(vm: AppViewModel, phone: PhoneModel) {
     var picture by remember { mutableStateOf<String?>(null) }        // the words read from a picture, waiting to go with the next message
     var reading by remember { mutableStateOf(false) }
     val chat = phone.chats.firstOrNull { it.id == chatId } ?: phone.chats.lastOrNull() ?: phone.newChat().also { chatId = it.id }
+    // Keep the list scrolled to the newest message.
     val list = rememberLazyListState()
     val turns = chat.turns
     LaunchedEffect(turns.size, live.length / 80) { if (turns.isNotEmpty()) list.scrollToItem(turns.size - 1) }
     LaunchedEffect(phone.draft) { phone.draft?.let { text = it; phone.draft = null } }        // selected in another app (android_text_menu)
     val ctx = LocalContext.current
     val canTalk = remember { NativeFlags.on(ctx, "android_offline_talk") && Voice.canListen(ctx) }
+    // Talk mode (voice conversation with the phone's model) replaces the chat while it is on.
     if (vm.localTalking) {                                          // Talk with the PC off (android_offline_talk), or opened from Talk with it off
         if (canTalk) { PhoneTalk(phone, chatId) { vm.localTalking = false }; return }
         vm.localTalking = false
     }
+    // If the PC dropped while a message was being sent, the question is answered here on the phone.
     LaunchedEffect(phone.ask) {                                      // the PC dropped while this was being sent: it is answered here
         val q = phone.ask ?: return@LaunchedEffect
         phone.openChat?.let { chatId = it }
@@ -350,6 +374,7 @@ private fun LocalChats(vm: AppViewModel, phone: PhoneModel) {
         error = phone.answer(chatId, q) { live = it }
     }
 
+    // Top row: the chat title opens a menu to pick or delete a chat; Talk and New chat buttons.
     Column(Modifier.fillMaxSize()) {
         Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
             Box(Modifier.weight(1f)) {
@@ -367,6 +392,7 @@ private fun LocalChats(vm: AppViewModel, phone: PhoneModel) {
             if (canTalk) TextButton(onClick = { if (!phone.writing) vm.localTalking = true }) { Text("🗣 Talk") }
             TextButton(onClick = { if (!phone.writing) chatId = phone.newChat().id }) { Text("New chat") }
         }
+        // The messages. Each is a bubble; the last one shows the answer as it is being written.
         LazyColumn(Modifier.weight(1f).fillMaxWidth().padding(horizontal = 14.dp), state = list, verticalArrangement = Arrangement.spacedBy(10.dp)) {
             if (turns.isEmpty()) item {
                 Text("Ask anything. This model is small and has no internet, so for facts that change (news, prices) wait for the PC.",
@@ -379,6 +405,7 @@ private fun LocalChats(vm: AppViewModel, phone: PhoneModel) {
             error?.let { item { Text(it, color = Emvryx.muted, fontSize = 14.sp) } }
         }
         val p = LocalPalette.current
+        // A picture: with the picture model it is looked at on the phone; without it the words in the picture are read (OCR) and go with the next message.
         // a picture: its words are read here on the phone and go with the next message (the phone's model reads the words, it cannot see)
         val context = LocalContext.current
         val picked: (android.net.Uri) -> Unit = picked@{ uri ->
@@ -391,6 +418,7 @@ private fun LocalChats(vm: AppViewModel, phone: PhoneModel) {
                 else { picture = got; error = null }
             }
         }
+        // The picker, camera and document scanner all end up calling the same function.
         val pick = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri -> uri?.let(picked) }
         val cameraOn = remember { NativeFlags.on(context, "android_camera_scan") }      // android_camera_scan: a photo, or a scanned page, read the same way
         val camera = rememberCamera(picked)
@@ -409,6 +437,7 @@ private fun LocalChats(vm: AppViewModel, phone: PhoneModel) {
         }
         if (reading) Text(if (seeing != null) "Looking at the picture on the phone… " + looked.takeLast(160) else "Reading the picture…",
             color = Emvryx.muted, fontSize = 13.sp, modifier = Modifier.padding(start = 16.dp, top = 6.dp, end = 16.dp))
+        // The message row: + for pictures, camera and scan buttons (if the feature is on), the text box, and the round send button.
         Row(Modifier.fillMaxWidth().padding(12.dp).clip(RoundedCornerShape(20.dp)).background(Emvryx.surface).border(1.dp, Emvryx.line, RoundedCornerShape(20.dp))
             .padding(start = 6.dp, end = 8.dp, top = 8.dp, bottom = 8.dp), verticalAlignment = Alignment.CenterVertically) {
             Box(Modifier.size(36.dp).clip(CircleShape).clickable(enabled = !phone.writing && !reading) {
@@ -427,6 +456,7 @@ private fun LocalChats(vm: AppViewModel, phone: PhoneModel) {
                 BasicTextField(text, { text = it }, Modifier.fillMaxWidth(), textStyle = MaterialTheme.typography.bodyLarge.copy(color = Emvryx.text),
                     cursorBrush = SolidColor(p.accent))
             }
+            // The send button does different things: stop writing, stop looking at a picture, send a picture with the question, or send the text (with any words read from a picture).
             Box(Modifier.size(40.dp).clip(CircleShape).background(if (phone.writing || reading || text.isNotBlank() || picture != null || seeing != null) p.accent else Emvryx.surface2)
                 .clickable {
                     if (phone.writing) { phone.stop(); return@clickable }
@@ -469,6 +499,7 @@ private fun LocalChats(vm: AppViewModel, phone: PhoneModel) {
     }
 }
 
+// LocalBubble: one message bubble; the model's text is drawn with formatting (paragraphs, code and tables) and can be selected and copied.
 @Composable
 private fun LocalBubble(mine: Boolean, text: String, streaming: Boolean) {
     Row(Modifier.fillMaxWidth(), horizontalArrangement = if (mine) Arrangement.End else Arrangement.Start) {
@@ -497,6 +528,7 @@ private fun LocalBubble(mine: Boolean, text: String, streaming: Boolean) {
     Spacer(Modifier.height(2.dp))
 }
 
+// PhoneTalk: voice conversation using only the phone: listen, answer with the phone's model, speak the answer, listen again.
 /**
  * android_offline_talk: Talk in the phone's own chats. You speak, the model on the phone answers out loud, then it listens again; the phone's own
  * speech typing (offline where the phone has it) and voice, no PC. Everything said stays in this chat.
@@ -508,20 +540,24 @@ private fun PhoneTalk(phone: PhoneModel, chatId: Long, onEnd: () -> Unit) {
     val voice = remember { Voice(context, offline = true) }
     var state by remember { mutableStateOf("Listening…") }
     var heard by remember { mutableStateOf("") }
+    // phase is the stage the conversation is in: listen, think, speak, paused or stopped.
     var phase by remember { mutableStateOf("listen") }               // listen, think, speak, stopped
     var allowed by remember { mutableStateOf(androidx.core.content.ContextCompat.checkSelfPermission(context, android.Manifest.permission.RECORD_AUDIO) ==
         android.content.pm.PackageManager.PERMISSION_GRANTED) }
+    // listen is declared first so the permission result can call it, and filled in below.
     var listen: () -> Unit = {}
     val ask = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { ok ->
         allowed = ok
         if (ok) listen() else { state = "Emvryx needs the microphone to talk. Allow it in the phone's Settings > Apps > Emvryx."; phase = "stopped" }
     }
+    // end: stop listening and speaking, stop any answer being written, and leave Talk.
     fun end() {
         phase = "stopped"
         voice.quiet()
         if (phone.writing) phone.stop()
         onEnd()
     }
+    // listen: start the microphone; when words arrive, ask the model, speak its answer, then listen again until the person stops.
     listen = listen@{
         if (phase == "stopped" || !allowed) return@listen
         phase = "listen"; state = "Listening…"; heard = ""
@@ -540,11 +576,14 @@ private fun PhoneTalk(phone: PhoneModel, chatId: Long, onEnd: () -> Unit) {
             }
         })
     }
+    // Ask for the microphone permission if it is not given yet, otherwise start listening.
     LaunchedEffect(Unit) { if (allowed) listen() else ask.launch(android.Manifest.permission.RECORD_AUDIO) }
+    // When the screen goes away, stop everything.
     androidx.compose.runtime.DisposableEffect(Unit) { onDispose { phase = "stopped"; voice.close() } }
     BackHandler { end() }
 
     val p = LocalPalette.current
+    // The big circle shows the stage; tapping it interrupts speaking or retries after a pause.
     Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
         Column(Modifier.padding(28.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(16.dp)) {
             val ring = when (phase) { "listen" -> p.accent; "speak" -> p.accent.copy(alpha = 0.6f); else -> Emvryx.line }

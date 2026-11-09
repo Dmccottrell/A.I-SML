@@ -30,6 +30,7 @@ data class VisionKit(val available: Boolean = false, val message: String = "", v
                      val preparing: Boolean = false, val prompt: String = "", @SerialName("max_reply_tokens") val maxReplyTokens: Int = 600,
                      @SerialName("min_ram_gb") val minRamGb: Double = 6.0)
 
+// Vision: small helpers for the picture model: the names of its two files (the model itself and its picture reader, "mmproj") and how a question and what the picture shows are put into text.
 object Vision {
     val PARTS = listOf("model", "mmproj")
 
@@ -50,16 +51,23 @@ object Vision {
  * picture shows and frees it again, so it never sits in memory next to the chat model.
  */
 class PhoneVision(private val context: Context, private val api: ApiClient, private val phone: PhoneModel) {
+    // Settings for reading the PC's JSON answers: unknown fields are ignored and missing ones get defaults.
     private val json = Json { ignoreUnknownKeys = true; explicitNulls = false; coerceInputValues = true }
+    // A background worker for downloads, so the screen stays responsive; SupervisorJob means one failed job does not cancel the others.
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+    // The folder on the phone where the picture model's files are kept.
     private val dir = File(context.filesDir, "phone-vision").apply { mkdirs() }
+    // kit.json remembers which version of the files was downloaded.
     private val kitFile = File(dir, "kit.json")
+    // Each part is saved as <name>.gguf; while downloading it is <name>.gguf.part so a half file is never mistaken for a finished one.
     private fun file(part: String) = File(dir, "$part.gguf")
     private fun partial(part: String) = File(dir, "$part.gguf.part")
 
+    // A tiny settings store on the phone for this feature's on/off answer.
     private val prefs = context.getSharedPreferences("emvryx_phone_vision", Context.MODE_PRIVATE)
 
     /** The android_phone_vision switch as it was the last time the PC answered */
+    // allowed: the PC's "picture model on the phone" switch as it was the last time the PC answered (kept so it works with the PC off).
     var allowed by mutableStateOf(prefs.getBoolean("allowed", false))
         private set
 
@@ -69,17 +77,22 @@ class PhoneVision(private val context: Context, private val api: ApiClient, priv
     }
 
     /** Ready to look at pictures */
+    // usable: true only when the switch is on and the files are downloaded.
     val usable get() = allowed && status == PhoneModel.Status.Ready
 
+    // kit: the PC's description of the files (sizes, checksums), read from disk at start. Compose watches it, so the screen updates when it changes.
     var kit by mutableStateOf(runCatching { json.decodeFromString<VisionKit>(kitFile.readText()) }.getOrNull())
         private set
+    // status: None, Checking, Downloading (with progress), Ready or Failed (with a plain message), shown on the settings screen.
     var status by mutableStateOf<PhoneModel.Status>(if (ready()) PhoneModel.Status.Ready else PhoneModel.Status.None)
         private set
     private var job: Job? = null
+    // stopping is set by stop() and read by the model while it writes, so the person can interrupt it.
     @Volatile private var stopping = false
 
     private fun ready() = kit != null && Vision.PARTS.all { file(it).exists() }
 
+    // download: get both files from the PC. It checks the phone can run the model (64-bit, enough memory and free space), skips files that are already complete, and shows a plain message if anything fails.
     fun download() {
         if (job?.isActive == true) return
         app.emvryx.android.DownloadService.start(context)
@@ -87,6 +100,7 @@ class PhoneVision(private val context: Context, private val api: ApiClient, priv
             try {
                 var k = api.phoneVision()
                 if (!k.available) { status = PhoneModel.Status.Failed(k.message.ifEmpty { "The PC has no picture model." }); return@launch }
+                // The PC works out checksums the first time it is asked, so wait and ask again.
                 while (k.preparing && isActive) {                            // the PC works out the checksums the first time
                     status = PhoneModel.Status.Checking
                     delay(3000)
@@ -120,12 +134,14 @@ class PhoneVision(private val context: Context, private val api: ApiClient, priv
         }
     }
 
+    // fetch: download one file, carrying on from where a stopped download ended, report progress every 4 MB, and check the SHA-256 checksum before keeping it (a damaged file is deleted).
     private suspend fun fetch(name: String, part: VisionPart, before: Long, total: Long) = withContext(Dispatchers.IO) {
         val tmp = partial(name)
         if (tmp.length() > part.size) tmp.delete()
         var done = if (tmp.exists()) tmp.length() else 0L
         status = PhoneModel.Status.Downloading(before + done, total)
         if (done < part.size) api.downloadFrom(part.file, done).use { r ->
+            // If the PC ignored the "carry on from here" request and sent the whole file (code 200), start the partial file again from zero.
             if (r.code == 200 && done > 0) { tmp.delete(); done = 0 }
             else if (!r.isSuccessful) throw IllegalStateException("The download was refused (${r.code}).")
             val body = r.body ?: throw IllegalStateException("The PC sent nothing.")
@@ -144,6 +160,7 @@ class PhoneVision(private val context: Context, private val api: ApiClient, priv
         }
         if (!isActive) return@withContext
         if (tmp.length() != part.size) throw IllegalStateException("The download stopped early. Try again: it carries on where it was.")
+        // Checking the checksum proves the file arrived whole and unchanged.
         status = PhoneModel.Status.Checking
         if (sha256(tmp) != part.sha256) {
             tmp.delete()
@@ -153,11 +170,13 @@ class PhoneVision(private val context: Context, private val api: ApiClient, priv
         tmp.renameTo(file(name))
     }
 
+    // cancel: stop the download; the partial file is kept so it can carry on later.
     fun cancel() {
         job?.cancel()
         status = if (ready()) PhoneModel.Status.Ready else PhoneModel.Status.None
     }
 
+    // remove: delete the downloaded files and forget the kit.
     fun remove() {
         cancel()
         Vision.PARTS.forEach { file(it).delete(); partial(it).delete() }
@@ -166,6 +185,7 @@ class PhoneVision(private val context: Context, private val api: ApiClient, priv
         status = PhoneModel.Status.None
     }
 
+    // stop: ask a running picture description to stop.
     fun stop() {
         stopping = true
     }
@@ -174,6 +194,7 @@ class PhoneVision(private val context: Context, private val api: ApiClient, priv
     var error = ""
         private set
 
+    // look: describe a picture. It frees the chat model first (one model in memory at a time), runs the picture model with the question, streams the text as it is written, removes any <think> notes and gives back the description, or nothing with a plain message in error.
     suspend fun look(image: ByteArray, question: String, onText: (String) -> Unit): String? = withContext(Dispatchers.Default) {
         val k = kit ?: run { error = "The picture model is not on this phone."; return@withContext null }
         if (!phone.canRun()) { error = "This phone cannot run the picture model."; return@withContext null }

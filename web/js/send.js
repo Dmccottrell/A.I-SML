@@ -1,6 +1,8 @@
 /* Sending a message and streaming the answer. */
 // ---------------------------------------------------------------- sending
+// clockText: seconds as "12s" or "1m 05s" for the thinking clock (nothing under one second).
 const clockText = (s) => (s < 1 ? '' : s < 60 ? s + 's' : Math.floor(s / 60) + 'm ' + String(s % 60).padStart(2, '0') + 's');
+// thinkingNode: the "thinking" line shown while waiting: the logo, a word that changes every few seconds, moving dots and a seconds clock. _stop() on it ends its timers.
 function thinkingNode(since) {    // since: when the message was sent (performance.now()), so the clock carries on instead of starting again
   const words = S.state.thinking_words, word = el('span', {class: 'word'}, words[0]), secs = el('span', {class: 'secs', 'aria-hidden': 'true'}); let i = 0;
   const node = el('div', {class: 'thinking', 'aria-label': 'Thinking'}, logo(34, true), word, el('span', {class: 'dots'}, ...'...'.split('').map((d) => el('span', {}, d))), secs);
@@ -10,27 +12,37 @@ function thinkingNode(since) {    // since: when the message was sent (performan
   node._stop = () => { clearInterval(S.thinkTimer); clearInterval(S.secTimer); S.thinkTimer = S.secTimer = null; };
   return node;
 }
+// send: the main function. It sends your message to the server and draws the answer word by word as it streams back. regen true means "write the last answer again".
 async function send(regen, mode) {
   if (S.busy) return;
+  // Documents that were not attached to an earlier message in this chat.
   const sentNow = sentIds(), pendingDocs = S.docs.filter((d) => !sentNow.has(d.id));
   let text = regen === true ? '' : input.value.trim();     // a picture or file alone is sent as it is (no made-up question); the model reacts to it
   if (regen !== true && !text && !pendingDocs.length) return;
+  // A brand-new chat is created on the server the first time you send.
   if (!S.chatId) { const r = await post('/api/chats', {private: S.private, skill: S.skill, docs: S.docs.map((d) => d.id), ...(S.newProject ? {project: S.newProject} : {})}); if (!r.ok) return; S.chatId = (await r.json()).id; S.newProject = null; remember(); }
+  // busy stops a second send while one is running; stick keeps the view scrolled to the newest text.
   S.busy = true; S.stick = true; S.contNow = S.cont === true; S.cont = false; renderComposer(); closeMenus();
   if (regen === true) { const last = S.messages[S.messages.length - 1]; if (last && last.role === 'assistant') S.messages.pop(); }
+  // Your message is shown at once as "pending" before the server has confirmed it.
   else { S.pending = {id: 'u' + Date.now(), role: 'user', content: text, docs: pendingDocs.map((d) => ({id: d.id, name: d.name, kind: d.kind}))}; S.messages.push(S.pending); input.value = ''; renderAttached(); }
   renderThread(); const before = S.lastUsage;
   S.sentAt = performance.now();
   const think = thinkingNode(S.sentAt); $('thread').append(think); scrollDown(true);
+  // State for this one answer: the text so far (got), the bubble being filled, any error card, what was looked up, and whether the connection was lost or the answer finished.
   let aiBubble = null, aiWrap = null, got = '', errCard = null, looked = null, lost = false, finished = false;
+  // AbortController lets the Stop button (or switching away) cancel the request.
   S.abort = new AbortController();
   try {
+    // The request: a POST whose reply is a stream of events ("server-sent events") that keeps arriving while the model writes.
     const r = await fetch('/api/chats/' + S.chatId + '/send', {method: 'POST', credentials: 'same-origin', signal: S.abort.signal, headers: {'Content-Type': 'application/json'},
       body: JSON.stringify({text, model: S.model, effort: S.effort, regenerate: regen === true, regen_mode: mode || null, continue: S.contNow === true,
         ...(typeof asTakeResearch === 'function' && regen !== true && asTakeResearch() ? {research: true} : {})})});
     if (r.status === 401) { showLogin(); throw new Error('login'); }
     if (!r.ok) { const j = await r.json().catch(() => ({})); throw Object.assign(new Error(j.message || 'Something went wrong.'), {info: j, status: r.status, retry: r.headers.get('Retry-After')}); }
+    // Read the stream in chunks; events are separated by a blank line.
     const reader = r.body.getReader(), dec = new TextDecoder(); let buf = '';
+    // handle: what to do with each kind of event: research steps, thinking, notes (what was looked up), memory saved, compacting, loading, piece (a piece of the answer text), done and error.
     const handle = (ev, data) => {
       if (typeof plusEvent === 'function') plusEvent(ev, data, think);          // chatplus.js: the task box (chat_taskbox)
       if (ev === 'research') { if (typeof asResearchStep === 'function') asResearchStep(data, think); }        // assist.js: Deep Research's searches
@@ -38,6 +50,7 @@ async function send(regen, mode) {
         S.autoNote = data.auto ? data : null; renderComposer();
       } else if (ev === 'notes') {
         looked = data;
+        // The model said it did not know, so the web was searched and it answers again: clear the bubble and start over.
         if (data.retry && aiWrap) {                      // the model said it didn't know, so the web was searched: it answers again
           got = ''; aiBubble.replaceChildren(el('span', {class: 'cursor'}, '▍'));
           const old = aiWrap.querySelector('.note'); if (old) old.remove();
@@ -46,10 +59,12 @@ async function send(regen, mode) {
       } else if (ev === 'memory') {
         const bits = [...(data.saved || []).map((t) => t.replace(/^The user\W?s? ?/i, '').replace(/\.$/, '')), ...(data.forgot ? ['forgot ' + data.forgot + (data.forgot === 1 ? ' thing' : ' things')] : [])];
         if (bits.length) $('thread').append(el('div', {class: 'note', style: 'align-self:flex-start', title: 'Open Memory in the menu to see or change what is kept'}, '\ud83d\udcd6 Memory updated' + (bits.length ? ': ' + bits.join('; ') : '')));
+      // The chat is close to the model's memory limit, so older messages are summarized first.
       } else if (ev === 'compacting') {             // the chat is near the model's memory limit: the older messages are being summarized first
         S.compacting = true; renderCtx(null, true);
         if (S.state.features && S.state.features.context_meter) $('thread').insertBefore(el('div', {class: 'note', id: 'compactNote'}, 'Summarizing earlier messages to make room\u2026'), think);
       } else if (ev === 'loading') {   // the model is still starting: the normal thinking words carry on (no extra message)
+      // piece: the first piece replaces the thinking line with the answer bubble; later pieces add text and redraw, at most once per screen refresh.
       } else if (ev === 'piece') {
         if (!aiWrap && typeof asResearchEnd === 'function') asResearchEnd();
         if (!aiWrap) { think._stop(); think.remove(); const m = curModel(); aiBubble = el('div', {class: 'bubble'}); const note = S.autoNote ? el('span', {title: S.autoNote.reason}, ' \u00b7 Auto chose ' + S.autoNote.effort[0].toUpperCase() + S.autoNote.effort.slice(1)) : null;
@@ -60,6 +75,7 @@ async function send(regen, mode) {
         else if (!S.paintDue) { S.paintDue = true; requestAnimationFrame(() => { S.paintDue = false; if (aiBubble) { const md = richText(got), cur = el('span', {class: 'cursor'}, '▍'); let at = md.lastElementChild;
           while (at && /^(UL|OL|LI)$/.test(at.tagName) && at.lastElementChild) at = at.lastElementChild;      // the cursor sits at the end of the text being written
           (at && /^(P|LI)$/.test(at.tagName) ? at : md).append(cur); aiBubble.replaceChildren(md); if (window.d27Fade) d27Fade(aiBubble); scrollDown(); } }); }   // redrawn once a frame, not once a word: a long answer stays smooth
+      // done: the answer is complete; update the title, the usage meter, the memory meter and the speed line.
       } else if (ev === 'done') {
         finished = true; if (window.d27Done) d27Done(got); S.title = data.title || S.title; S.state.usage = data.usage; renderUsage(data.usage); popTokens(before, data.usage);
         const cn = $('compactNote'); if (cn) cn.remove();
@@ -68,27 +84,34 @@ async function send(regen, mode) {
         if (data.timing && aiWrap) S.timing = data.timing;                  // the owner's speed line (shown under the reply once the chat is redrawn)
       } else if (ev === 'error') { throw Object.assign(new Error(data.message), {info: data, status: data.http}); }
     };
+    // Loop that reads the stream until it ends and calls handle for every complete event.
     for (;;) {
       const {value, done} = await reader.read(); if (done) break; buf += dec.decode(value, {stream: true});
       let i; while ((i = buf.indexOf('\n\n')) >= 0) { const block = buf.slice(0, i); buf = buf.slice(i + 2); let ev = 'message', data = '';
         for (const line of block.split('\n')) { if (line.startsWith('event:')) ev = line.slice(6).trim(); else if (line.startsWith('data:')) data += line.slice(5).trim(); }
         if (data) handle(ev, JSON.parse(data)); }
     }
+    // If the stream ended without a "done" event, the phone probably cut the connection; the answer is still being written on the server.
     if (!finished) lost = true;   // the connection ended without the "done" message: the app was probably switched away from
+  // Errors: a Stop is fine; a network error means "lost" (follow the reply); anything else becomes an error card.
   } catch (e) {
     if (e.name === 'AbortError') { if (S.resume) lost = true; }
     else if (e.message !== 'login') { if (e instanceof TypeError || /network|fetch|load failed|terminated|connection/i.test(e.message || '')) lost = true; else errCard = errorCard(e); }
+  // Always clean up at the end: stop the thinking line and allow sending again.
   } finally {
     think._stop && think._stop(); think.remove(); S.busy = false; S.compacting = false; S.abort = null; S.resume = false;
     if (typeof plusEvent === 'function') plusEvent('end', null, null);
   }
+  // If the connection was lost, switch to followReply, which watches the server until the answer is ready.
   if (lost) return followReply();   // the reply keeps being written on the server: show it when it is ready
   S.pending = null; S.sentAt = null;
+    // Reload the finished chat from the server so what is shown is exactly what was saved.
     try { const r = await api('/api/chats/' + S.chatId); if (r.ok) { const c = await r.json(); S.messages = c.messages; S.title = c.title; S.plus = {versions: c.versions || {}, project: c.project || null}; } } catch (e) {}
   renderThread(); if (errCard) { $('thread').append(errCard); scrollDown(true); if (!got && regen !== true) input.value = text; }
   if (S.timing && !errCard) { $('thread').append(timingLine(S.timing)); scrollDown(); } S.timing = null; if (window.d27Show) d27Show();
   renderComposer(); try { const q = new URLSearchParams({effort: S.effort, model: S.model}); const r = await api('/api/state?' + q); const st = await r.json(); S.state.chats = st.chats; S.state.usage = st.usage; renderChats(); renderUsage(st.usage); } catch (e) {}
 }
+// timingLine: for the owner and admins only: where the time went (looking up, loading the model, first word).
 // Where the reply's time went, for the owner and admins only: "9.8s in all · looking it up 1.2s · loading the model 0s · first word at 6.1s"
 function timingLine(t) {
   const sec = (x) => (x < 10 ? x.toFixed(1) : Math.round(x)) + 's';
@@ -100,7 +123,9 @@ function timingLine(t) {
   if (t.tries > 1) bits.push('answered twice (searched after "I don\u2019t know")');
   return el('div', {class: 'note', style: 'align-self:flex-start;opacity:.75', title: 'Only you and your admins see this'}, '\u23f1 ' + bits.join(' \u00b7 '));
 }
+// sleep: wait for some milliseconds (used with await).
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+// followReply: the answer is still being written on the server (the app was closed or switched away); ask again every 1.2 seconds, for up to about 15 minutes, and redraw as it grows.
 async function followReply() {   // the reply is still being written on the server (the app was closed or switched away from): watch it until it is done
   if (S.following || S.chatId == null) return;
   const id = S.chatId; S.following = true; S.busy = true; S.stick = true; renderComposer();
@@ -121,6 +146,7 @@ async function followReply() {   // the reply is still being written on the serv
   renderThread(); renderComposer();
   try { const q = new URLSearchParams({effort: S.effort, model: S.model}); const r = await api('/api/state?' + q); const st = await r.json(); S.state.chats = st.chats; S.state.usage = st.usage; renderChats(); renderUsage(st.usage); } catch (e) {}
 }
+// When the page comes back to the front: if the connection was cut, carry on by watching the server; otherwise refresh the chat if it changed.
 let hiddenAt = 0;
 document.addEventListener('visibilitychange', async () => {
   if (document.hidden) { hiddenAt = Date.now(); return; }
@@ -132,6 +158,7 @@ document.addEventListener('visibilitychange', async () => {
     if (c.generating) return followReply();
     if (JSON.stringify(c.messages) !== JSON.stringify(S.messages)) { S.messages = c.messages; S.title = c.title; renderThread(true); } } catch (e) {}
 });
+// lookupLine: the small grey note above an answer saying what was looked up (notes, web, live data, your apps, pictures) or what could not be read.
 // "Read 2 notes from Wikipedia" / "Searched the web: 1 source": what the model was given before it answered
 function lookupLine(info) {
   if (!info || !info.asked) return null;
@@ -149,6 +176,7 @@ function lookupLine(info) {
   if (info.web) parts.push(((info.wiki || info.saved) ? 'and searched' : 'Searched') + ' the web: ' + info.web + (info.web === 1 ? ' source' : ' sources'));
   return el('div', {class: 'note', style: 'align-self:flex-start', title: info.sources.map((x) => x.title + (x.url ? ' (' + x.url + ')' : '')).join('\n')}, parts.join(' ') + noKey);
 }
+// errorCard: the red box for an error, with the action to take; for a used-up allowance it says when it resets.
 function errorCard(e) {
   const i = e.info || {}, card = el('div', {class: 'err', role: 'alert'}, el('b', {}, e.message || 'Something went wrong.'));
   if (i.action) card.append(el('div', {}, i.action));
@@ -159,6 +187,7 @@ function errorCard(e) {
   }
   return card;
 }
+// stop: ask the server to stop the answer; if the page is still waiting after 6 seconds, stop waiting too.
 // Stop: ask the server to stop, and if the page is still waiting a few seconds later (a model that is slow to let go), stop waiting here too
 function stop() {
   if (S.chatId == null) return;
@@ -170,6 +199,7 @@ function stop() {
     if (S.abort) { S.resume = false; S.abort.abort(); }    // the live reply: end it on this side (what was written stays)
   }, 6000);
 }
+// regenMenu: the small menu on the Regenerate button to write the answer again in a different way.
 function regenMenu(btn) {
   const wrap = btn.closest('.msg'), old = wrap.querySelector('.regen');
   if (old) { old.remove(); return; }

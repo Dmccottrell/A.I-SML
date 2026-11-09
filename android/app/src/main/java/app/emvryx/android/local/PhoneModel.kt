@@ -28,6 +28,7 @@ import java.security.MessageDigest
  * refreshed whenever the PC answers. The chats written here stay on the phone.
  */
 class PhoneModel(private val context: Context, private val api: ApiClient) {
+    // Status: the stages the model download can be in, shown on the settings screen (None, Downloading with progress, Checking, Ready, or Failed with a plain message).
     sealed interface Status {
         data object None : Status
         data class Downloading(val done: Long, val total: Long) : Status
@@ -36,20 +37,26 @@ class PhoneModel(private val context: Context, private val api: ApiClient) {
         data class Failed(val message: String) : Status
     }
 
+    // Settings for reading the PC's JSON answers: unknown fields are ignored and missing ones get defaults.
     private val json = Json { ignoreUnknownKeys = true; explicitNulls = false; coerceInputValues = true }
+    // A background worker for downloads and saving, so the screen stays responsive.
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+    // Everything for the phone model is kept in one private folder of the app: the model file, a half-downloaded copy (.part), the PC's description of it (kit.json) and the chats written on the phone.
     private val dir = File(context.filesDir, "phone-model").apply { mkdirs() }
     private val modelFile = File(dir, "model.gguf")
     private val partFile = File(dir, "model.gguf.part")
     private val kitFile = File(dir, "kit.json")
     private val chatsFile = File(dir, "chats.json")
+    // A small settings store for this feature (on/off answer, chosen model, when chats were last copied).
     private val prefs = context.getSharedPreferences("emvryx_phone_model", Context.MODE_PRIVATE)
 
     /** The android_offline_model switch as it was the last time the PC answered (offline, it cannot be asked) */
     var allowed by mutableStateOf(prefs.getBoolean("allowed", false))
         private set
+    // kit: what the PC said about the downloaded model (its id, size, checksum, instructions, memory and answer format).
     var kit by mutableStateOf(readKit())
         private set
+    // status: starts as Ready if the model file is already on the phone.
     var status by mutableStateOf<Status>(if (modelFile.exists() && kit != null) Status.Ready else Status.None)
         private set
     private var job: Job? = null
@@ -57,10 +64,12 @@ class PhoneModel(private val context: Context, private val api: ApiClient) {
     var newer by mutableStateOf<PhoneKit?>(null)
         private set
 
+    // The chats written on this phone; Compose watches this list so the screen updates when it changes.
     // ---- the chats written on this phone
     val chats = mutableStateListOf<LocalChat>().apply { addAll(readChats()) }
     var writing by mutableStateOf(false)
         private set
+    // loaded is the model currently in memory (it is loaded on the first answer and freed when another model needs the room).
     private var loaded: Llama.Model? = null
     private var loadedId = ""
 
@@ -69,9 +78,11 @@ class PhoneModel(private val context: Context, private val api: ApiClient) {
         prefs.edit().putBoolean("allowed", on).apply()
     }
 
+    // readKit: read the saved description of the model, or nothing if it is missing or unreadable.
     private fun readKit(): PhoneKit? = runCatching { json.decodeFromString<PhoneKit>(kitFile.readText()) }.getOrNull()
 
     /** The PC answered: keep the newest instructions, memory and format (the model file itself only changes with Download) */
+    // refresh: when the PC answers, keep the instructions and memory up to date; if the PC has a newer model, remember that so Settings can offer it.
     suspend fun refresh() {
         if (!allowed) return
         val k = runCatching { api.phoneKit(kit?.id ?: wanted) }.getOrNull() ?: return
@@ -88,6 +99,7 @@ class PhoneModel(private val context: Context, private val api: ApiClient) {
     }
 
 
+    // enoughRam: does the phone have at least this much memory (with a 10% allowance)?
     fun enoughRam(k: PhoneKit): Boolean = enoughRam(k.minRamGb)
 
     fun enoughRam(gb: Double): Boolean {
@@ -114,13 +126,17 @@ class PhoneModel(private val context: Context, private val api: ApiClient) {
         runCatching { api.phoneKit(kit?.id ?: wanted) }.getOrNull()?.let { choices = it.choices }
     }
 
+    // freeSpace: how many bytes are free on the phone's storage.
     fun freeSpace(): Long = StatFs(dir.path).availableBytes
 
+    // canRun: can the phone's processor run the model's native code?
     fun canRun(): Boolean = Llama.available(context.applicationInfo.nativeLibraryDir)
 
     /** Downloads the model from the PC, carrying on from what is already here, then checks it */
+    // download: get the model from the PC. Steps: ask for the model's description, wait for its checksum, check the phone (64-bit, memory, free space), carry on a half download if it is the same model, write the file, check the checksum, then swap it in.
     fun download() {
         if (job?.isActive == true) return
+        // The download service keeps going with the app closed and shows a notification.
         app.emvryx.android.DownloadService.start(context)                  // keeps going with the app closed, with a notification
         job = scope.launch {
             try {
@@ -139,10 +155,12 @@ class PhoneModel(private val context: Context, private val api: ApiClient) {
                     status = Status.Failed("Not enough free space: about ${(k.size + (1 shl 29)) / (1 shl 30)} GB is needed.")
                     return@launch
                 }
+                // If the half file belongs to another model (different checksum) or is too big, throw it away and start over.
                 if (have > k.size || prefs.getString("part_sha", "") != k.sha256) partFile.delete()     // a part of another model: start over
                 prefs.edit().putString("part_sha", k.sha256).apply()
                 var done = if (partFile.exists()) partFile.length() else 0L
                 status = Status.Downloading(done, k.size)
+                // Ask the PC to send the file from the byte where we stopped ("range" download).
                 if (done < k.size) api.downloadFrom(k.file, done).use { r ->
                     if (r.code == 200 && done > 0) { partFile.delete(); done = 0 }    // the PC sent it all again: start over
                     else if (!r.isSuccessful) throw IllegalStateException("The download was refused (${r.code}).")
@@ -151,6 +169,7 @@ class PhoneModel(private val context: Context, private val api: ApiClient) {
                         val buf = ByteArray(1 shl 16)
                         val input = body.byteStream()
                         var last = 0L
+                        // Copy the data in 64 KB pieces and update the progress every 4 MB.
                         while (isActive) {
                             val n = input.read(buf)
                             if (n < 0) break
@@ -161,13 +180,16 @@ class PhoneModel(private val context: Context, private val api: ApiClient) {
                     }
                 }
                 if (!isActive) return@launch
+                // The size must match exactly; otherwise the download stopped early and can be carried on later.
                 if (partFile.length() != k.size) throw IllegalStateException("The download stopped early. Try again: it carries on where it was.")
                 status = Status.Checking
+                // The SHA-256 checksum proves the file is whole and unchanged.
                 if (sha256(partFile) != k.sha256) {
                     partFile.delete()
                     status = Status.Failed("The download arrived damaged and was removed. Please download it again.")
                     return@launch
                 }
+                // Free the old model from memory and replace the old file with the new one.
                 close()
                 modelFile.delete()
                 partFile.renameTo(modelFile)
@@ -184,12 +206,14 @@ class PhoneModel(private val context: Context, private val api: ApiClient) {
         }
     }
 
+    // cancel: stop the download but keep the half file so it can carry on.
     fun cancel() {
         job?.cancel()
         status = if (modelFile.exists() && kit != null) Status.Ready else Status.None
     }
 
     /** Removes the model from the phone (the chats written here stay) */
+    // remove: delete the model and its description; the chats stay.
     fun remove() {
         cancel()
         close()
@@ -210,6 +234,7 @@ class PhoneModel(private val context: Context, private val api: ApiClient) {
     }
 
     /** Frees the chat model's memory (the picture model is about to be loaded); it loads again on the next answer */
+    // unload: free the chat model's memory.
     fun unload() = close()
 
     private fun close() {
@@ -218,6 +243,7 @@ class PhoneModel(private val context: Context, private val api: ApiClient) {
         loadedId = ""
     }
 
+    // sha256: work out a file's SHA-256 checksum, reading it in 1 MB pieces.
     private fun sha256(f: File): String {
         val md = MessageDigest.getInstance("SHA-256")
         f.inputStream().use { input ->
@@ -231,20 +257,25 @@ class PhoneModel(private val context: Context, private val api: ApiClient) {
         return md.digest().joinToString("") { "%02x".format(it) }
     }
 
+    // Answering and saving chats.
     // ---- answering
 
+    // readChats: read the chats file, or an empty list if there is none.
     private fun readChats(): List<LocalChat> = runCatching { json.decodeFromString<List<LocalChat>>(chatsFile.readText()) }.getOrDefault(emptyList())
 
+    // saveChats: write the chats (the newest few are kept) to the file.
     private fun saveChats() {
         val keep = LocalSync.keep(chats.toList(), MAX_CHATS)
         runCatching { chatsFile.writeText(json.encodeToString(keep)) }
     }
 
+    // newChat: make an empty chat on the phone and save it.
     fun newChat(): LocalChat = LocalChat(System.currentTimeMillis(), "New chat", emptyList(), updated = System.currentTimeMillis()).also { chats.add(it); saveChats() }
 
     // ---- the PC's chats kept on the phone, and the phone's chats sent to the PC (both only while the switch is on)
 
     /** Keeps a copy of one of the PC's chats; returns the phone's id for it */
+    // keepCopy: save a copy of one of the PC's chats on the phone (only user and assistant messages with text), merging with any copy already there.
     fun keepCopy(c: app.emvryx.android.data.Chat): Long {
         val turns = c.messages.filter { (it.role == "user" || it.role == "assistant") && it.content.isNotBlank() }.map { LocalTurn(it.role == "user", it.content) }
         val i = chats.indexOfFirst { it.serverId == c.id }
@@ -255,6 +286,7 @@ class PhoneModel(private val context: Context, private val api: ApiClient) {
     }
 
     /** The PC is there: copies of the most recent chats (at most every 10 minutes, unless [force]) */
+    // keepRecent: while the PC is reachable, copy its most recent chats, at most every 10 minutes.
     suspend fun keepRecent(list: List<app.emvryx.android.data.ChatSummary>, force: Boolean = false) {
         if (!allowed) return
         val now = System.currentTimeMillis()
@@ -267,6 +299,7 @@ class PhoneModel(private val context: Context, private val api: ApiClient) {
     }
 
     /** Sends what was written on the phone to the PC. Returns how many chats were sent. */
+    // syncUp: send the messages written on the phone to the PC, one chat at a time, and mark them as sent. Returns how many chats were sent.
     suspend fun syncUp(): Int {
         if (!allowed || writing) return 0
         var sent = 0
@@ -295,12 +328,14 @@ class PhoneModel(private val context: Context, private val api: ApiClient) {
     }
 
     /** The chat the phone's chat screen opens next, and a question to answer there at once (the PC dropped while it was being sent) */
+    // State the chat screen reads: which chat to open, text to put in the message box, and a question to answer straight away.
     var openChat by mutableStateOf<Long?>(null)
     /** Text to put in the phone chat's message box (selected in another app with the PC off: android_text_menu) */
     var draft by mutableStateOf<String?>(null)
     var ask by mutableStateOf<String?>(null)
 
     /** Carries a chat on here: the PC's chat [serverId] with the [turns] it has (or a new chat), then [question] is answered on the phone */
+    // carryOn: continue a PC chat on the phone (when the PC drops): copy its messages here, open it and answer the question with the phone's model.
     fun carryOn(serverId: Long?, title: String, turns: List<LocalTurn>, question: String) {
         val id = if (serverId != null && serverId >= 0) {
             val i = chats.indexOfFirst { it.serverId == serverId }
@@ -313,11 +348,13 @@ class PhoneModel(private val context: Context, private val api: ApiClient) {
         ask = question
     }
 
+    // deleteChat: remove a chat from the phone.
     fun deleteChat(id: Long) {
         chats.removeAll { it.id == id }
         saveChats()
     }
 
+    // stopping is set by stop() and read while the model is writing.
     @Volatile private var stopping = false
 
     fun stop() {
@@ -329,6 +366,7 @@ class PhoneModel(private val context: Context, private val api: ApiClient) {
      * Answers [question] in chat [chatId], calling [onText] with the answer so far. Returns null when it went well, else what went wrong.
      * Runs on a background thread (the model is loaded the first time, which takes a few seconds).
      */
+    // answer: write the answer to a question in a chat. It adds the question and an empty reply, streams the text into the reply as the model writes it, saves, and returns nothing on success or a plain message on a problem.
     suspend fun answer(chatId: Long, question: String, onText: (String) -> Unit): String? = withContext(Dispatchers.Default) {
         val k = kit ?: return@withContext "The model is not on this phone yet."
         val i = chats.indexOfFirst { it.id == chatId }
@@ -358,9 +396,11 @@ class PhoneModel(private val context: Context, private val api: ApiClient) {
         }
     }
 
+    // loadError remembers why the model could not be loaded, to show it.
     private var loadError = ""
 
     /** Loads the model if needed and writes the answer to [question] after [history]: (text, how it ended), or null (loadError says why) */
+    // generateWith: load the model if needed, build the prompt from the history and question, and stream the answer; it stops when the model's stop word appears or the person presses Stop.
     private fun generateWith(k: PhoneKit, history: List<LocalTurn>, question: String, maxTokens: Int, onText: (String) -> Unit): Pair<String, Llama.End>? {
         val model = loaded?.takeIf { loadedId == k.id } ?: run {
             close()
@@ -381,11 +421,13 @@ class PhoneModel(private val context: Context, private val api: ApiClient) {
         return LocalPrompt.shown(joiner.text, k.format.stop).first.trimEnd() to end
     }
 
+    // VryxCode drafts: code requests written on the phone with the PC off, which run on the PC when it is back.
     // ---- VryxCode drafts: written here with the PC off, run on the PC when it is back
 
     val drafts = mutableStateListOf<CodeDraft>().apply { addAll(readDrafts()) }
     private val draftsFile get() = File(dir, "drafts.json")
 
+    // readDrafts / saveDrafts: read and write the drafts file (the newest few are kept).
     private fun readDrafts(): List<CodeDraft> = runCatching { json.decodeFromString<List<CodeDraft>>(File(dir, "drafts.json").readText()) }.getOrDefault(emptyList())
 
     private fun saveDrafts() {

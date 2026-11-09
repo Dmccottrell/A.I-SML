@@ -26,7 +26,10 @@ def run_one(name):
     p = subprocess.run([sys.executable, "-m", "unittest", f"tests.{name}"], cwd=ROOT, capture_output=True, text=True, env=env)
     last = [l for l in (p.stderr or "").strip().splitlines() if l.startswith(("Ran ", "OK", "FAILED"))]
     ran = next((int(l.split()[1]) for l in last if l.startswith("Ran ")), 0)
-    return name, p.returncode, time.time() - t, ran, (p.stdout or "") + (p.stderr or "")
+    out = (p.stdout or "") + (p.stderr or "")
+    if p.returncode and not out.strip():                 # the process ended without a word (the system stopped it, for example for lack of memory): say so, with the number
+        out = f"{name}: the test process ended with exit code {p.returncode} and printed nothing (a negative number means the system stopped it, for example for lack of memory)"
+    return name, p.returncode, time.time() - t, ran, out
 
 
 # the slow files (seconds, roughly): dealt out first so each shard gets its share of them

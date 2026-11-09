@@ -10,6 +10,7 @@ from tests.test_browser_check import find_browser
 ROOT = os.path.join(os.path.dirname(os.path.abspath(__file__)), os.pardir)
 PAGE = os.path.join(ROOT, "site", "commercial.html")
 PAGE30 = os.path.join(ROOT, "site", "commercial30.html")
+PAGE48 = os.path.join(ROOT, "site", "commercial-features.html")
 BASE_FAMILY = re.compile(r"\b(qwen|llama|mistral|gemma|phi-?\d|deepseek)\b", re.I)
 
 
@@ -20,11 +21,11 @@ def read(path):
 
 class Words(unittest.TestCase):
     def test_the_base_model_family_is_never_named(self):
-        for path in (PAGE, PAGE30, os.path.join(ROOT, "docs", "COMMERCIAL.md"), os.path.join(ROOT, "tools", "render_commercial.py")):
+        for path in (PAGE, PAGE30, PAGE48, os.path.join(ROOT, "tools", "capture_app_screens.py"), os.path.join(ROOT, "docs", "COMMERCIAL.md"), os.path.join(ROOT, "tools", "render_commercial.py")):
             self.assertIsNone(BASE_FAMILY.search(read(path)), path)
 
     def test_it_is_not_listed_for_search_engines_until_the_owner_decides(self):
-        for page in (PAGE, PAGE30):
+        for page in (PAGE, PAGE30, PAGE48):
             self.assertIn('name="robots" content="noindex"', read(page))
 
     def test_the_voice_is_credited_and_its_licence_is_one_that_allows_an_advert(self):
@@ -56,6 +57,67 @@ class Words(unittest.TestCase):
         self.assertEqual((rows[0][0], rows[-1][1]), ("0", "30"))
         for (a, b), (c, d) in zip(rows, rows[1:]):
             self.assertEqual(b, c)                                              # every scene starts where the last one ended
+
+
+class FeatureAdWords(unittest.TestCase):
+    """The feature advert (site/commercial-features.html) is made of pictures of the real app, so what it says must be what the app does, and every picture must exist."""
+    def test_every_picture_it_shows_exists(self):
+        page = read(PAGE48)
+        names = set(re.findall(r'src="ad-screens/([\w-]+\.png)"', page))
+        self.assertGreaterEqual(len(names), 8)
+        for n in names:
+            self.assertTrue(os.path.exists(os.path.join(ROOT, "site", "ad-screens", n)), n)
+
+    def test_the_voice_lines_follow_each_other_without_overlapping(self):
+        page = read(PAGE48)
+        starts = [float(x) for x in re.findall(r"\{t: ([\d.]+),", page)]
+        lengths = [float(x) for x in re.search(r"VOICE_LENGTH = \[([^\]]+)\]", page).group(1).split(",")]
+        self.assertEqual(len(starts), len(lengths))
+        for (a, la), b in zip(zip(starts, lengths), starts[1:]):
+            self.assertLessEqual(a + la, b + .01, (a, la, b))
+        self.assertLess(starts[-1] + lengths[-1], 48.5)
+
+    def test_the_captions_are_the_spoken_words(self):
+        page = read(PAGE48)
+        said = re.findall(r"say: '([^']+)'", page)
+        caps = re.findall(r"cap: '([^']+)'", page)
+        self.assertEqual(len(said), len(caps))
+        for s, c in zip(said, caps):
+            self.assertEqual(s.replace("Em-vrix", "Emvryx"), c)
+
+    def test_it_only_claims_what_the_app_does(self):
+        page = read(PAGE48)
+        for claim in ("Never saved", "Numbered sources", "Live preview", "Android app", "Windows app", "Offline on your phone"):
+            self.assertIn(claim.lower(), page.lower(), claim)
+        self.assertNotRegex(page.lower(), r"\b(iphone app|app store|ios app)\b")            # the iPhone app does not exist yet: it must not be advertised
+
+
+@unittest.skipUnless(browser_check.available() and find_browser(), "needs the playwright package and a Chromium, Edge or Chrome")
+class FeatureAdPage(unittest.TestCase):
+    def test_each_feature_scene_shows_its_picture_at_its_moment(self):
+        from playwright.sync_api import sync_playwright
+        p = sync_playwright().start()
+        self.addCleanup(p.stop)
+        b = p.chromium.launch(executable_path=find_browser())
+        self.addCleanup(b.close)
+        page = b.new_page(viewport={"width": 1080, "height": 1920})
+        errors = []
+        page.on("pageerror", lambda e: errors.append(str(e)))
+        page.goto("file://" + os.path.abspath(PAGE48).replace("\\", "/") + "?clean")
+        page.wait_for_function("typeof window.__seek === 'function'")
+        page.evaluate("window.__ready()")
+        self.assertEqual(page.evaluate("window.__duration"), 48)
+        pic = lambda t, name: float(page.evaluate("([t, n]) => { window.__seek(t); return getComputedStyle(document.getElementById('im-' + n)).opacity; }", [t, name]))
+        for t, name in ((7.0, "chat-answer"), (11.6, "model-picker"), (16.5, "research"), (22.0, "private"), (26.0, "vryx-home"), (29.0, "vryx-session"), (32.0, "vryx-preview")):
+            self.assertGreater(pic(t, name), .9, name)
+        self.assertEqual(pic(7.0, "research"), 0)                                        # one picture at a time
+        title = lambda t: page.evaluate("([t]) => { window.__seek(t); return document.getElementById('ft').innerText; }", [t])
+        self.assertEqual(title(7.0), "Ask anything.")
+        self.assertEqual(title(16.5), "Research.")
+        self.assertEqual(title(29.0), "Build anything.")
+        cap = lambda t: page.evaluate("([t]) => { window.__seek(t); return document.getElementById('cap').innerText; }", [t])
+        self.assertIn("numbered sources", cap(16.0))
+        self.assertEqual(errors, [])
 
 
 @unittest.skipUnless(browser_check.available() and find_browser(), "needs the playwright package and a Chromium, Edge or Chrome")

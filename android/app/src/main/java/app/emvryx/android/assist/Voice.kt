@@ -19,24 +19,31 @@ import app.emvryx.android.local.Speech
  * typing turns the voice into words, the phone's own voice reads the answer. When Emvryx is the phone's assistant, Android also makes it the speech
  * typing service ([EmvryxRecognition] passes that on); here the phone's real one is always asked directly, never Emvryx's own.
  */
+// Voice: one object per screen that listens (speech to text) and speaks (text to speech).
 class Voice(private val ctx: Context, private val offline: Boolean = false) {
+    // main: a handler that runs things on the phone's main thread, which the speech services require.
     private val main = Handler(Looper.getMainLooper())
+    // rec: the current listener; replaced each time listening starts.
     private var rec: SpeechRecognizer? = null
     private var ttsReady = false
+    // tts: the phone's text-to-speech engine; ttsReady turns true when it has started.
     private val tts = TextToSpeech(ctx) { ttsReady = it == TextToSpeech.SUCCESS }
 
     /** Listen once: [partial] while the person speaks, [done] with what was said ("" for nothing), [failed] with a plain reason */
     fun listen(partial: (String) -> Unit, done: (String) -> Unit, failed: (String) -> Unit) =
         start(offline || !hasInternet(ctx), partial, done, failed)          // no internet: ask for the phone's offline speech first
 
+    // start: begin listening once. It makes a fresh recogniser (the phone's own, never Emvryx's), then reports partial words, the final words, or a plain failure.
     private fun start(preferOffline: Boolean, partial: (String) -> Unit, done: (String) -> Unit, failed: (String) -> Unit) {
         main.post {
             runCatching { rec?.destroy() }
             val r = Voice.recognizer(ctx)?.let { SpeechRecognizer.createSpeechRecognizer(ctx, it) } ?: SpeechRecognizer.createSpeechRecognizer(ctx)
             rec = r
             r.setRecognitionListener(object : RecognitionListener {
+                // Results: the first (best) guess is trimmed and passed to done.
                 override fun onResults(results: Bundle?) = done(results?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)?.firstOrNull().orEmpty().trim())
                 override fun onPartialResults(p: Bundle?) { p?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)?.firstOrNull()?.let(partial) }
+                // Errors: a network error retries once with the offline speech; "no match" and "timeout" just mean nothing was said; a missing microphone permission or no internet gets a plain message.
                 override fun onError(error: Int) = if (retryOffline(error, preferOffline)) start(true, partial, done, failed) else when (error) {
                     SpeechRecognizer.ERROR_NO_MATCH, SpeechRecognizer.ERROR_SPEECH_TIMEOUT -> done("")
                     SpeechRecognizer.ERROR_INSUFFICIENT_PERMISSIONS -> failed("Emvryx needs the microphone. Allow it in the phone's Settings > Apps > Emvryx > Permissions.")
@@ -44,6 +51,7 @@ class Voice(private val ctx: Context, private val offline: Boolean = false) {
                         failed("Speech typing needs the internet on this phone. Type instead, or download the phone's offline speech (Settings > Google > Voice).")
                     else -> failed("The phone's speech typing did not hear that. Try again, or type.")
                 }
+                // These listener methods must exist but need no action here.
                 override fun onReadyForSpeech(params: Bundle?) {}
                 override fun onBeginningOfSpeech() {}
                 override fun onRmsChanged(rmsdB: Float) {}
@@ -51,6 +59,7 @@ class Voice(private val ctx: Context, private val offline: Boolean = false) {
                 override fun onEndOfSpeech() {}
                 override fun onEvent(eventType: Int, params: Bundle?) {}
             })
+            // Ask the phone to recognise free speech, with partial results, preferring offline speech when asked.
             r.startListening(Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
                 putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
                 putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, true)
@@ -60,6 +69,7 @@ class Voice(private val ctx: Context, private val offline: Boolean = false) {
     }
 
     /** Read [text] out (without code, source numbers or marks); [done] when it has finished or could not */
+    // speak: read the text aloud (code and marks removed); done runs when it finishes or if it cannot speak.
     fun speak(text: String, done: () -> Unit = {}) {
         if (!ttsReady) { done(); return }
         tts.setOnUtteranceProgressListener(object : UtteranceProgressListener() {
@@ -71,19 +81,23 @@ class Voice(private val ctx: Context, private val offline: Boolean = false) {
         tts.speak(Speech.plain(text), TextToSpeech.QUEUE_FLUSH, null, "emvryx-voice")
     }
 
+    // quiet: stop listening and stop speaking.
     fun quiet() {
         runCatching { rec?.cancel() }
         runCatching { tts.stop() }
     }
 
+    // close: quiet everything and release the speech engine.
     fun close() {
         quiet()
         main.post { runCatching { rec?.destroy() }; rec = null }
         runCatching { tts.shutdown() }
     }
 
+    // companion object: helpers that are not tied to one Voice.
     companion object {
         /** The online speech failed on the connection (or the server): try once more asking for the phone's offline speech */
+        // retryOffline: should we try the offline speech after this error? Only once, and only for network or server errors.
         fun retryOffline(error: Int, alreadyOffline: Boolean): Boolean = !alreadyOffline &&
             (error == SpeechRecognizer.ERROR_NETWORK || error == SpeechRecognizer.ERROR_NETWORK_TIMEOUT || error == SpeechRecognizer.ERROR_SERVER)
 
@@ -91,6 +105,7 @@ class Voice(private val ctx: Context, private val offline: Boolean = false) {
          * Ask the phone to download its offline speech pack (Android 13 and later can be asked; if the phone's speech typing says no, or it is older,
          * [openSettings] opens the Settings page for it). Call from the main thread. Returns true when the phone took the request.
          */
+        // getOfflineSpeech: ask Android 13 or newer to download the offline speech pack; otherwise (or if refused) open the voice settings page.
         fun getOfflineSpeech(ctx: Context, openSettings: Boolean): Boolean {
             if (android.os.Build.VERSION.SDK_INT >= 33) {
                 val target = recognizer(ctx)
@@ -111,15 +126,18 @@ class Voice(private val ctx: Context, private val offline: Boolean = false) {
         }
 
         @Suppress("DEPRECATION")
+        // hasInternet: does the phone currently have an internet connection? (assume yes if it cannot tell)
         fun hasInternet(ctx: Context): Boolean = runCatching {
             val cm = ctx.getSystemService(android.net.ConnectivityManager::class.java)
             cm.getNetworkCapabilities(cm.activeNetwork)?.hasCapability(android.net.NetworkCapabilities.NET_CAPABILITY_INTERNET) == true
         }.getOrDefault(true)
 
         /** Does the phone have speech typing at all? */
+        // canListen: does the phone have speech typing at all?
         fun canListen(ctx: Context): Boolean = recognizer(ctx) != null || SpeechRecognizer.isRecognitionAvailable(ctx)
 
         /** The phone's own speech typing service, never Emvryx's: Google's first when it is there */
+        // recognizer: find the phone's own speech typing service, ignoring Emvryx's own.
         fun recognizer(ctx: Context): ComponentName? {
             val found = ctx.packageManager.queryIntentServices(Intent(RecognitionService.SERVICE_INTERFACE), 0)
                 .mapNotNull { it.serviceInfo }.filter { it.packageName != ctx.packageName }
@@ -128,6 +146,7 @@ class Voice(private val ctx: Context, private val offline: Boolean = false) {
         }
 
         /** Of the speech typing services on the phone ((package, class)), the one to use: never [own], Google's first */
+        // pickRecognizer: of the services found, prefer Google's app, then any other Google one, then any other; never Emvryx itself.
         fun pickRecognizer(found: List<Pair<String, String>>, own: String): Pair<String, String>? {
             val others = found.filter { it.first != own }
             return others.firstOrNull { it.first == "com.google.android.googlequicksearchbox" }

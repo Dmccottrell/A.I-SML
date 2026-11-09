@@ -93,6 +93,7 @@ from routes_chat import RoutesChat
 from app_runner import ModelRunner, discover_ggufs, find_llama_server, gpu_note  # noqa: F401  (the app server hands these on, and uses them below)
 
 
+# AppState is the one object that holds everything the running server knows: accounts, settings, connected apps, the PC, VryxCode and operations. Each of those parts lives in its own file and is mixed in here.
 class AppState(StateAccounts, StateSettings, StateApps, StatePC, StateCode, StateOps):
     def close_databases(self):
         """Close every SQLite file this state holds open (the stores, and the per-person ones in its caches). Windows cannot delete or move an
@@ -114,6 +115,7 @@ class AppState(StateAccounts, StateSettings, StateApps, StatePC, StateCode, Stat
                 for x in list(v.values()):
                     shut(x)
 
+    # __init__: set up the state. With no data folder (the tests) everything is kept in memory; otherwise the folder is created and locked so only this user can read it.
     def __init__(self, data_dir=None, llama_url=None, llama_key=None, tok=None, manifest=None, cfg=None, ram_gb=None,
                  backend_factory=None, clock=time.time, pace=True, runner=None, root=HERE):
         self.data_dir = data_dir                              # None = keep everything in memory (tests)
@@ -216,10 +218,12 @@ def log_crash(method, path):
     observability.capture()                                                   # only when the owner turned error reports on; carries no message, no variables, no request data
 
 
+# Handler answers one web request at a time. Its GET, POST and other methods are spread over the Routes... classes it inherits from, grouped by topic (account, admin, chat, code).
 class Handler(RoutesGet, RoutesPost, RoutesCode, RoutesAccount, RoutesAdmin, RoutesChat, http.server.BaseHTTPRequestHandler):
     server_version = "Emvryx"
     protocol_version = "HTTP/1.1"
 
+    # The server fills this in (make_server) with the shared state.
     state = None            # set by make_server
 
     # never log message text (or anything after the "?"): only the method and the path
@@ -228,6 +232,7 @@ class Handler(RoutesGet, RoutesPost, RoutesCode, RoutesAccount, RoutesAdmin, Rou
             return
         sys.stderr.write("%s %s\n" % (self.command, self.path.split("?")[0]))
 
+    # handle_one_request: runs for every request; it starts a fresh list of cookies to send back.
     def handle_one_request(self):
         self._cookies = []
         super().handle_one_request()
@@ -335,6 +340,7 @@ class Handler(RoutesGet, RoutesPost, RoutesCode, RoutesAccount, RoutesAdmin, Rou
         if self.command != "HEAD":
             self.wfile.write(body)
 
+    # PUT and PATCH are only ever used by an app that VryxCode is previewing; everything else is refused with "Not allowed".
     def do_PUT(self):
         if not self._preview_app("PUT"):
             self._send(405, {"code": "not_allowed", "message": "Not allowed."})
@@ -360,6 +366,7 @@ class Handler(RoutesGet, RoutesPost, RoutesCode, RoutesAccount, RoutesAdmin, Rou
         self.end_headers()
         self.wfile.write(body)
 
+    # _json: read the request body as JSON, refusing bodies over the size limit for that address (uploads may be bigger).
     def _json(self):
         n = int(self.headers.get("Content-Length") or 0)
         limit = {"/api/code/import": MAX_UPLOAD, "/api/documents": MAX_DOC_BODY}.get(self.path.split("?")[0], MAX_BODY)
@@ -383,11 +390,13 @@ class Handler(RoutesGet, RoutesPost, RoutesCode, RoutesAccount, RoutesAdmin, Rou
                 return ip[:64]
         return self.client_address[0] if self.client_address else ""
 
+    # _https: was this request made over HTTPS? Only believed if it came through a trusted proxy that says so.
     def _https(self):
         if not self._peer_trusted():
             return False
         return (self.headers.get("X-Forwarded-Proto") or "").lower() == "https" or '"https"' in (self.headers.get("CF-Visitor") or "")
 
+    # _cookie_dict: the browser's cookies as a simple name -> value dictionary.
     def _cookie_dict(self):
         out = {}
         for part in (self.headers.get("Cookie") or "").split(";"):
@@ -396,13 +405,16 @@ class Handler(RoutesGet, RoutesPost, RoutesCode, RoutesAccount, RoutesAdmin, Rou
                 out[k] = urllib.parse.unquote(v)
         return out
 
+    # _set_session_cookie: send the sign-in cookie. HttpOnly keeps scripts from reading it, SameSite=Strict stops other websites using it, and Secure is added on HTTPS.
     def _set_session_cookie(self, token):
         days = self.state.security["session_days"]
         self._cookies.append(f"emvryx_session={token}; Path=/; HttpOnly; SameSite=Strict; Max-Age={days * 86400}" + ("; Secure" if self._https() else ""))
 
+    # _expire_cookie: tell the browser to forget a cookie.
     def _expire_cookie(self, name):
         self._cookies.append(f"{name}=; Path=/; HttpOnly; SameSite=Strict; Max-Age=0" + ("; Secure" if self._https() else ""))
 
+    # _start_session: sign a person in: create the session, write it to the security log, alert if it is the owner, tidy old sessions now and then, and set the cookie.
     def _start_session(self, user, how):
         st = self.state
         sid, token = st.auth.new_session(user, self.headers.get("User-Agent", ""), self._ip(), st.security["session_days"])
@@ -414,6 +426,7 @@ class Handler(RoutesGet, RoutesPost, RoutesCode, RoutesAccount, RoutesAdmin, Rou
         self._set_session_cookie(token)
         return sid
 
+    # _locked: after too many wrong sign-in tries from one address, refuse with "Too many wrong tries" and wait; the first refusal is logged and alerted once.
     def _locked(self):
         """True (and a 429 is sent) when this address has had too many wrong tries lately."""
         st = self.state
@@ -428,6 +441,7 @@ class Handler(RoutesGet, RoutesPost, RoutesCode, RoutesAccount, RoutesAdmin, Rou
                              "retry_after": wait}, headers={"Retry-After": str(wait)})
         return bool(wait)
 
+    # _fail: count a wrong sign-in try against this address and log it.
     def _fail(self, what):
         st, ip = self.state, self._ip()
         st.rl.hit("fail:" + ip)
@@ -435,6 +449,7 @@ class Handler(RoutesGet, RoutesPost, RoutesCode, RoutesAccount, RoutesAdmin, Rou
             st.rl.trim(3600)
         st.auth.event("login_fail", "", ip, what)
 
+    # _credential_kind: what kind of sign-in the request carries: a key (Bearer header or key cookie), a session cookie, or nothing.
     def _credential_kind(self):
         if (self.headers.get("Authorization") or "").startswith("Bearer "):
             return "key"
@@ -486,6 +501,7 @@ class Handler(RoutesGet, RoutesPost, RoutesCode, RoutesAccount, RoutesAdmin, Rou
                 "font-src 'self' https://fonts.gstatic.com; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; "
                 "frame-ancestors 'none'; base-uri 'none'; form-action 'self'; object-src 'none'")
 
+    # _file: send a file from the web folder. The main page gets its strict content-security policy; the privacy and terms pages get the owner's name and contact filled in (escaped, so they cannot inject anything).
     def _file(self, name, ctype):
         path = os.path.join(WEB, name)
         if not os.path.exists(path):
@@ -540,6 +556,7 @@ class Handler(RoutesGet, RoutesPost, RoutesCode, RoutesAccount, RoutesAdmin, Rou
             log_crash(self.command, self.path)                 # what broke goes in server.log, so it can be found and fixed
             self._send(500, {"code": "error", "message": "Something went wrong. Please try again."})
 
+    # do_POST: handle a POST. Order: a preview app's form first, then refuse requests that came from another website (origin check), then a pairing link, then the normal routes.
     def do_POST(self):
         path = urllib.parse.urlparse(self.path).path
         if path.startswith("/preview-app/") and self._preview_app("POST"):     # a form in the previewed app: its frame has no origin, the token is the key
@@ -581,6 +598,7 @@ class Handler(RoutesGet, RoutesPost, RoutesCode, RoutesAccount, RoutesAdmin, Rou
             log_crash(self.command, self.path)                 # what broke goes in server.log, so it can be found and fixed
             self._send(500, {"code": "error", "message": "Something went wrong. Please try again."})
 
+    # do_DELETE: delete a document or a chat; only a signed-in person, and only their own.
     def do_DELETE(self):
         path = urllib.parse.urlparse(self.path).path
         if path.startswith("/preview-app/") and self._preview_app("DELETE"):
@@ -601,6 +619,7 @@ class Handler(RoutesGet, RoutesPost, RoutesCode, RoutesAccount, RoutesAdmin, Rou
         self._send(200, {"ok": True})
 
 
+# Server handles each request in its own thread, and can be restarted quickly on the same port.
 class Server(socketserver.ThreadingMixIn, http.server.HTTPServer):
     daemon_threads = True
     allow_reuse_address = True
@@ -628,6 +647,7 @@ def load_keys_file(path, environ=None):
     return loaded
 
 
+# make_server: build the server, giving the handler class the shared state.
 def make_server(state, host="127.0.0.1", port=8000, quiet=False):
     handler = type("BoundHandler", (Handler,), {"state": state})
     srv = Server((host, port), handler)
@@ -782,6 +802,7 @@ def main():
     srv = make_server(state, args.host, args.port)
     threading.Thread(target=documents.warm_ocr, daemon=True).start()          # loads the picture reader now, so the first screenshot is quick
     state.sync_gaming()
+    # _schedule_loop: every 30 seconds, run the scheduled tasks whose time has come; an error here is printed but never stops the app.
     def _schedule_loop():                                    # chat_schedule: the scheduled tasks whose time has come
         while True:
             time.sleep(30)
@@ -791,6 +812,7 @@ def main():
                 print(f"(scheduled tasks check failed: {e})", flush=True)
     threading.Thread(target=_schedule_loop, daemon=True).start()
     if state.runner:
+        # _idle_loop: every 15 seconds, free the graphics card if nobody has used the model for a while (and in gaming mode).
         def _idle_loop():                                    # frees the graphics card when nobody has used the model for a while, and in Gaming mode
             while True:
                 time.sleep(15)
@@ -805,6 +827,7 @@ def main():
             minutes = int(state.security.get("idle_unload_minutes") or 0)
             print(f"A model nobody has used for {minutes} minutes is unloaded to free the graphics card (Admin > PC)." if minutes else "Idle unload is off (Admin > PC).", flush=True)
     if args.preload:
+        # _preload: load the chosen model in the background so the first message is quick.
         def _preload():
             print("Preload: " + state.preload(args.preload), flush=True)
         threading.Thread(target=_preload, daemon=True).start()
@@ -816,6 +839,7 @@ def main():
         if runner and not runner.bin:
             print("llama-server was not found. Install llama.cpp and pass --llama-bin <path to llama-server.exe>.")
     if args.code_sandbox == "docker":
+        # say_docker: check in the background whether Docker works for VryxCode and say so in the console (Docker can take a minute to wake up).
         def say_docker():                                   # in the background: Docker Desktop can take a minute to wake, and the app must answer meanwhile
             ok, why = code_sandbox.available(args.code_image)
             print(("VryxCode runs in Docker containers (no network, hard limits)." if ok else f"VryxCode sandbox NOT ready, so VryxCode will refuse to run: {why}"), flush=True)

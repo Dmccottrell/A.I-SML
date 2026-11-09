@@ -31,6 +31,16 @@ class Send(Base):
         wait_for(lambda: page.evaluate("window.__clicks") == 1)                # Enter did
         self.assertEqual(self.errors, [])
 
+    def test_the_stopping_state_is_cleared_once_the_session_is_no_longer_working(self):
+        # After Stop, the page remembers "stopping" and greys the Stop button. When the session has ended that must be undone, or the next
+        # running session shows "Stopping" and a dead Stop button. (A line that did this sat inside a comment, so it never ran.)
+        page = self.session_page()
+        page.evaluate("C.stopping = true; document.getElementById('codeStop').disabled = true")
+        page.evaluate("poll()")
+        wait_for(lambda: page.evaluate("C.stopping") is False)
+        self.assertFalse(page.evaluate("document.getElementById('codeStop').disabled"))
+        self.assertEqual(self.errors, [])
+
     def test_enter_on_an_empty_box_does_nothing(self):
         page = self.session_page()
         page.locator("#codeTask").focus()

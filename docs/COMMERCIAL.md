@@ -24,6 +24,13 @@ Two cuts of one idea: **"Small models. Real help."** A 15 second silent animatio
 - If the voice says a word wrongly, change its spelling in the `VOICE` list (the brand name is spelt "Em-vrix" for the voice, "Emvryx" in the captions) and render again.
 - Scenes: the mark draws itself in the dark; Meet Emvryx on a phone; a question and a plain answer; VryxCode builds and checks; a padlock closes and the phone answers with no internet; the four models; the sign-off.
 
+## The 48 second feature advert (built): the real app, shown off
+- Made of pictures of the **real** Emvryx screens, not drawings: `python tools/capture_app_screens.py` starts the server the way the tests do (a stand-in model, no one's data), opens the real web app in a phone-sized browser with the 2027 look, puts example messages on the screen and saves `site/ad-screens/*.png`. The page `site/commercial-features.html` (unlisted, noindex) plays them inside a phone.
+- The video: `python tools/render_commercial.py --cut 48` makes `site/emvryx-ad-48s.mp4` (1,440 frames, about 20 minutes) with the same free voice (Alba, credit below) and the soft pad ducked under it.
+- What it shows, in order: Ask anything (tables and code), Pick your model (Flare, Equinox, Solstice, Apogee, and how hard it thinks), Research (a report with numbered sources), Private chat (never saved), VryxCode building a bill splitter and checking it in a browser with a live preview, Dark or light, Everywhere (Android app, Windows app, any browser, offline on your phone). Only things the app does: the iPhone app is not advertised because it does not exist yet (`tests/test_commercial.py` checks this).
+- The example messages are written for the picture (a sky question, an electric cars report, a bill splitter): they show what the screens look like, not real answers from a model.
+- To change it: edit the `VOICE` and `FEATURES` lists at the top of the page's script (words, timing, pictures), run the capture again if a screen changed, then render.
+
 ## The 30 second script (for a voiced ad)
 Tone: calm, warm, a little proud. Not shouting. Music: soft and rising, one gentle beat on each scene change. Voice: one person, natural, close to the microphone.
 

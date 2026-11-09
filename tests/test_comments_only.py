@@ -27,6 +27,13 @@ class CLike(unittest.TestCase):
         self.assertNotEqual(co.c_like_shape('val u = "http://x"'), co.c_like_shape('val u = "http://y"'))
         self.assertNotEqual(co.c_like_shape('fun f() = 1'), co.c_like_shape('fun f() = 2'))
 
+    def test_a_javascript_regex_with_a_quote_in_it_does_not_hide_the_code(self):
+        # /[`'"]/g looks like the start of a string to a naive reader; a comment added after it must still be "comments only"
+        a = "const r = /[`'\"]/g;\nlet x = 1;\n"
+        b = "const r = /[`'\"]/g; // strips quotes\n// next line sets x\nlet x = 1;\n"
+        self.assertEqual(co.c_like_shape(a, regex=True), co.c_like_shape(b, regex=True))
+        self.assertNotEqual(co.c_like_shape(a, regex=True), co.c_like_shape(a.replace("= 1", "= 2"), regex=True))
+
     def test_a_double_slash_inside_a_raw_string_is_not_a_comment(self):
         self.assertNotEqual(co.c_like_shape('val s = """a // b"""'), co.c_like_shape('val s = """a """'))
 

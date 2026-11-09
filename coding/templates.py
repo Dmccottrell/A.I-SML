@@ -11,6 +11,7 @@ Preview tab.
 """
 import os
 
+# _PAGE is the plain web page every starter uses; each starter fills in its title and adds its own style and script files.
 _PAGE = """<!doctype html>
 <html lang="en">
 <head>
@@ -138,10 +139,12 @@ frame();
 }
 
 
+# list_templates: the starters as the page shows them (id, name, icon, short description and a sample idea).
 def list_templates():
     return [{"id": k, "name": v["name"], "icon": v["icon"], "desc": v["desc"], "idea": v["idea"]} for k, v in TEMPLATES.items()]
 
 
+# apply: write a starter's files into the project folder. A file that already exists is never replaced, so work is never lost. Returns the names written.
 def apply(folder, template_id):
     """Write the starter's files into `folder` (made if needed). Files that already exist are left alone. Returns the names written."""
     t = TEMPLATES.get(str(template_id or ""))
@@ -159,6 +162,7 @@ def apply(folder, template_id):
     return written
 
 
+# task_for: the instruction the model receives for a starter: the files are already there and run, so change them into the person's idea instead of starting over.
 def task_for(template_id, idea=""):
     t = TEMPLATES.get(str(template_id or ""))
     idea = str(idea or "").strip()

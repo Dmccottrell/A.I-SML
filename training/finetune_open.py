@@ -33,6 +33,7 @@ import time
 import open_models
 
 DEFAULT_MODEL = "Qwen/Qwen2.5-1.5B-Instruct"
+# LORA_TARGETS: the parts of the model that the small add-on layers (LoRA adapters) are attached to; LoRA trains a small add-on instead of the whole model.
 LORA_TARGETS = ["q_proj", "k_proj", "v_proj", "o_proj", "gate_proj", "up_proj", "down_proj"]
 # A grown model (training/grow_qwen.py) is tuned harder: the fast layers' own projections too, on every language-model layer (not the picture side or MTP)
 GROWN_TARGETS = (r"^(?!.*(?:mtp|visual)).*\.layers\.\d+\.(?:self_attn\.(?:q_proj|k_proj|v_proj|o_proj)|mlp\.(?:gate_proj|up_proj|down_proj)"
@@ -40,6 +41,7 @@ GROWN_TARGETS = (r"^(?!.*(?:mtp|visual)).*\.layers\.\d+\.(?:self_attn\.(?:q_proj
 GROWN_FILE = "grown_layers.safetensors"        # --grow_full: the new layers' own weights (they are trained fully, not through LoRA)
 
 
+# grown_layer_re: a pattern that matches the names of the newly added layers of a grown model.
 def grown_layer_re(growth):
     return r"\.layers\.(?:" + "|".join(str(j) for j in growth["new_layers"]) + r")\."
 
@@ -104,11 +106,13 @@ def match_new_layer_dtypes(model, growth, dtype, torch):
     import re
     rx = re.compile(grown_layer_re(growth))
 
+    # Before a layer runs, change its input to the type its weights use (and remember the old type)...
     def to_weight_type(mod, args):                    # in: what comes in becomes the weight's type (remember what it was) ...
         first = next((a for a in args if torch.is_tensor(a) and a.is_floating_point()), None)
         mod._emvryx_in_dtype = first.dtype if first is not None else None
         return tuple(a.to(mod.weight.dtype) if torch.is_tensor(a) and a.is_floating_point() else a for a in args)
 
+    # ...and after it runs, change the result back, so the next layer gets the type it expects.
     def back_to_input_type(mod, args, out):          # ... out: the result goes back to that type, exactly as a 4-bit layer hands it on
         dt = getattr(mod, "_emvryx_in_dtype", None)
         return out.to(dt) if dt is not None and torch.is_tensor(out) and out.dtype != dt else out
@@ -138,12 +142,14 @@ def plain_name(name):
     return name.replace(".base_layer.", ".")
 
 
+# save_grown: save the weights of the new layers to a file, writing to a temporary name first so a stop in the middle never leaves a half file.
 def save_grown(model, growth, path):
     from safetensors.torch import save_file
     save_file({plain_name(n): p.detach().to("cpu").contiguous() for n, p in grown_params(model, growth)}, path + ".tmp")
     os.replace(path + ".tmp", path)
 
 
+# load_grown: put the saved new-layer weights back into a model and say how many were loaded.
 def load_grown(model, path, torch):
     """Put trained new-layer weights (grown_layers.safetensors) into a model, PEFT-wrapped or merged. Returns how many were loaded."""
     from safetensors.torch import load_file
@@ -158,10 +164,12 @@ def load_grown(model, path, torch):
     return n
 
 
+# short_name: the last part of a model's path or id, lowercase, used in folder names.
 def short_name(model):
     return os.path.basename(model.rstrip("/\\")).lower().replace("_", "-")
 
 
+# load_examples: read the training chats and turn each into numbers (ids) and a mask saying which tokens to learn from.
 def load_examples(path, tok, max_len, limit=None, identity=None):
     """[(ids, mask)] for every usable conversation. Conversations with no learnable token are dropped; long ones are cut.
 
@@ -241,6 +249,7 @@ def chunked_loss(hidden, lm_head, y, w, torch, chunk=2048):
     return loss / total
 
 
+# lr_at: the learning rate at a step: a slow warm-up at first, then a smooth fall towards a tenth of the starting value (a cosine curve).
 def lr_at(step, total, base, warmup):
     if step < warmup:
         return base * (step + 1) / warmup
@@ -248,6 +257,7 @@ def lr_at(step, total, base, warmup):
     return base * (0.1 + 0.9 * 0.5 * (1 + math.cos(math.pi * min(1.0, t))))
 
 
+# How big each piece is when the merged model is saved in several files.
 MERGE_SHARD_SIZE = "2GB"
 
 
@@ -325,6 +335,7 @@ def merge_and_export(base_model, adapter_dir, export_dir, torch, spread=False):
     return export_dir
 
 
+# main: the whole training run: read the options, load the model and data, train step by step, save along the way and at the end.
 def main(argv=None):
     p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     p.add_argument("--model", default=DEFAULT_MODEL,
@@ -485,14 +496,17 @@ def main(argv=None):
     if state and "opt" in state:
         opt.load_state_dict(state["opt"])
 
+    # stop catches Ctrl+C or a stop signal so the run saves first and can be resumed with the same command.
     stop = {"now": False}
 
+    # handler: remember that a stop was asked for.
     def handler(signum, frame):
         stop["now"] = True
         print("\nstopping after this step (saving)...")
     signal.signal(signal.SIGINT, handler)
     signal.signal(signal.SIGTERM, handler)
 
+    # save: write the adapter, the new layers (if trained fully) and the optimiser's state, using a temporary file so a crash never leaves a broken one.
     def save():
         model.save_pretrained(adapter_dir)
         if a.grow_full:
@@ -501,6 +515,7 @@ def main(argv=None):
         os.replace(state_path + ".tmp", state_path)
         print(f"saved at step {step:,}")
 
+    # The training loop: each step adds up the loss over several small batches (gradient accumulation), clips the gradient so it cannot explode, updates the weights and prints progress.
     model.train()
     order, t0 = [], time.time()
     while step < total and not stop["now"]:
@@ -508,6 +523,7 @@ def main(argv=None):
             g["lr"] = lr_at(step, total, a.lr, a.warmup)
         loss_sum = 0.0
         for _ in range(a.grad_accum):
+            # When all batches have been used, shuffle and start another pass.
             if not order:                                           # next pass over the data
                 order = list(batches)
                 rng.shuffle(order)
@@ -526,6 +542,7 @@ def main(argv=None):
         el = time.time() - t0
         print(f"step {step:,}/{total:,}  loss {loss_sum:.3f}  lr {opt.param_groups[0]['lr']:.2e}  "
               f"{el / max(1, step - (state['step'] if state else 0)):.1f} s/step")
+        # Save every so often; a pilot run (a short test of memory use) saves nothing.
         if not a.pilot and step % a.save_every == 0:
             save()
     if a.pilot:

@@ -1,9 +1,13 @@
 /* The Editor layout: files, editor, output panel, autocomplete. */
 // ---------------------------------------------------------------- Editor layout (wide screens): files | editor | VryxCode | preview
+// IDE is the one box that remembers the editor layout: want = you turned it on, on = it is showing now, tabs = the open files, active = the tab in front, ed = the editor itself.
 const IDE = {want: false, on: false, tabs: [], active: -1, ed: null, busy: false, project: null};
 try { IDE.want = localStorage.getItem('emvryx_ide') === '1'; } catch (e) {}
+// The editor layout only makes sense on wide screens (1100 pixels or more); on a phone VryxCode stays as a single column.
 const ideCan = () => matchMedia('(min-width: 1100px)').matches;
+// ideBase: just the file name from a path (src/app.py -> app.py).
 const ideBase = (p) => p.split('/').pop();
+// ideApply: switch the editor layout on or off to match the screen and the settings, and redraw the tabs when the project changes.
 function ideApply() {                       // idempotent: it is called after every file refresh, so it only redraws when something really changed
   const on = IDE.want && ideCan() && C.view === 'session', was = IDE.on;
   IDE.on = on; $('code').classList.toggle('ide', on); $('codeIdeBtn').classList.toggle('on', IDE.want); if (typeof vxSide === 'function') vxSide();
@@ -15,8 +19,11 @@ function ideApply() {                       // idempotent: it is called after ev
   }
   if (!was) { ideStash(); ideTree(); ideRenderTabs(); ideShow(); }
 }
+// The Editor button: flip the choice, remember it on this device and apply it.
 $('codeIdeBtn').onclick = () => { IDE.want = !IDE.want; try { localStorage.setItem('emvryx_ide', IDE.want ? '1' : '0'); } catch (e) {} ideApply(); };
+// Redraw the layout when the window is resized.
 addEventListener('resize', () => { if ($('code').hidden) return; ideApply(); });
+// ideTree: draw the list of folders and files on the left, sorted, with the open file highlighted.
 function ideTree() {
   const rows = [], seen = new Set(), cur = IDE.tabs[IDE.active];
   [...(C.files || [])].sort().forEach((f) => {
@@ -24,23 +31,29 @@ function ideTree() {
     parts.slice(0, -1).forEach((d, i) => { const p = parts.slice(0, i + 1).join('/'); if (!seen.has(p)) { seen.add(p); rows.push(el('div', {class: 'idir', style: 'padding-left:' + (8 + i * 12) + 'px'}, '\u25b8 ' + d)); } });
     rows.push(el('button', {class: 'ifile' + (cur && cur.path === f ? ' on' : ''), 'data-ext': (f.split('.').pop() || '').toLowerCase(), style: '--d:' + ((parts.length - 1) * 12) + 'px', title: f, onclick: () => ideOpen(f)}, ideBase(f)));
   });
+  // ideEditor: make the editor the first time it is needed (EmvryxEditor is the app's own small code editor), and tell it what to call when you type, save or ask for an edit.
   $('ideFiles').replaceChildren(...(rows.length ? rows : [el('div', {style: 'color:var(--muted);padding:6px 8px;font-size:14px'}, 'No files yet. Tap + New, or ask VryxCode.')]));
 }
 function ideEditor() {
   if (!IDE.ed) IDE.ed = EmvryxEditor.makeEditor($('ideBody'), {onChange: ideChanged, onSave: ideSave, onEdit: () => aiStart('edit'), onType: acTyped});
+  // ideShow: put the active tab's text into the editor, set its language and read-only state, and show the right buttons and status.
   return IDE.ed;
 }
 function ideStash() {                       // remember the text and cursor of the tab being left
   const t = IDE.tabs[IDE.active]; if (!t || !IDE.ed || t.readOnly) return;
   t.text = IDE.ed.getText(); t.state = IDE.ed.state();
+// ideStatus: the small message under the editor ("Saved", "Unsaved changes", errors).
 }
 function ideShow() {                        // draw the active tab in the editor (or the empty message)
   const body = $('ideBody'), t = IDE.tabs[IDE.active];
   if (!t) { if (IDE.ed) { body.replaceChildren(); IDE.ed = null; } body.replaceChildren(el('div', {class: 'iempty'}, el('div', {class: 'vx-mark'}, '</>'), el('b', {}, 'Pick a file to edit'), el('span', {}, 'VryxCode works in the chat on the right. When it changes a file you have open, it updates here.'))); ideStatus('', ''); $('ideLang').textContent = ''; $('ideSave').hidden = true; $('ideEditSel').hidden = true; $('ideExplain').hidden = true; ideConflict(); return; }
+  // ideRenderTabs: draw the row of open-file tabs; a dot means unsaved changes.
   if (!IDE.ed || !body.querySelector('.ed')) { body.replaceChildren(); IDE.ed = null; }
   const ed = ideEditor(); ed.setReadOnly(t.readOnly); ed.setLang(EmvryxEditor.langOf(t.path)); ed.setText(t.text); ed.restore(t.state);
   $('ideLang').textContent = EmvryxEditor.langOf(t.path); $('ideSave').hidden = !!t.readOnly; $('ideEditSel').hidden = !!t.readOnly; $('ideExplain').hidden = false;
+  // ideActivate: bring another tab to the front, keeping the text and cursor of the one being left.
   ideStatus(t.readOnly ? (t.note || 'Read-only') : t.dirty ? 'Unsaved changes' : '', t.readOnly ? '' : t.dirty ? '' : '');
+  // ideOpen: open a file in a tab (or just switch to it if it is already open) by asking the server for its text.
   ideConflict();
 }
 function ideStatus(text, cls) { const n = $('ideStatus'); n.textContent = text; n.className = cls || ''; }
@@ -56,14 +69,17 @@ async function ideOpen(path) {
   if (!r.ok) { ideStatus(j.message || 'Could not open that file.', 'bad'); return; }
   const binary = j.text === '(a binary file)';
   ideStash();
+  // A tab keeps: the text you see, orig (what was last saved), disk (what the server last had), dirty (unsaved changes) and readOnly.
   IDE.tabs.push({path, project: C.project, text: binary ? '' : j.text, orig: j.text, disk: j.text, dirty: false, readOnly: binary || !!j.truncated, note: binary ? 'A binary file: it cannot be edited here.' : j.truncated ? 'Too big to edit here (the editor shows the first 200 KB).' : '', state: null, conflict: null});
   IDE.active = IDE.tabs.length - 1; ideRenderTabs(); ideShow(); ideTree();
 }
+// ideChanged: called on every edit; marks the tab dirty when the text differs from the saved text.
 function ideChanged(text) {
   const t = IDE.tabs[IDE.active]; if (!t) return;
   const dirty = text !== t.orig; t.text = text;
   if (dirty !== t.dirty) { t.dirty = dirty; ideRenderTabs(); ideStatus(dirty ? 'Unsaved changes' : '', ''); }
 }
+// ideSave: send the active tab's text to the server; IDE.busy stops two saves at once.
 async function ideSave() {
   const t = IDE.tabs[IDE.active]; if (!t || t.readOnly || IDE.busy) return;
   ideStash(); IDE.busy = true; ideStatus('Saving\u2026', '');
@@ -74,6 +90,7 @@ async function ideSave() {
   } finally { IDE.busy = false; }
 }
 $('ideSave').onclick = ideSave;
+// ideClose: close a tab, asking first if it has unsaved changes, then pick a sensible neighbour to show.
 function ideClose(i) {
   const t = IDE.tabs[i]; if (t.dirty && !confirm('Close ' + ideBase(t.path) + ' without saving your changes?')) return;
   if (i === IDE.active) ideStash();
@@ -81,6 +98,7 @@ function ideClose(i) {
   IDE.active = IDE.tabs.length ? Math.min(i === IDE.active ? Math.max(0, i - 1) : (i < IDE.active ? IDE.active - 1 : IDE.active), IDE.tabs.length - 1) : -1;
   ideRenderTabs(); ideShow(); ideTree();
 }
+// The + New button: ask for a file name, create an empty file and open it.
 $('ideNew').onclick = async () => {
   const name = (prompt('Name of the new file, like notes.txt or src/app.py') || '').trim(); if (!name) return;
   const r = await post('/api/code/file', {project: C.project, path: name, text: ''}); const j = await r.json().catch(() => ({}));
@@ -89,6 +107,7 @@ $('ideNew').onclick = async () => {
 };
 $('ideChanges').onclick = () => showDrawer(true, 'changes'); $('ideRewind').onclick = () => showDrawer(true, 'rewind');
 // VryxCode changed files on disk: update the tabs that have no edits of yours; ask about the ones that do
+// ideConflict: if VryxCode changed the file on disk while you had unsaved edits, show a bar with two choices: use its version or keep yours.
 function ideConflict() {
   const t = IDE.tabs[IDE.active], box = $('ideConf');
   if (!t || !t.conflict) { box.hidden = true; box.replaceChildren(); return; }
@@ -97,6 +116,7 @@ function ideConflict() {
     t.conflict.gone ? '' : el('button', {class: 'chip', onclick: () => { t.text = t.orig = t.disk = t.conflict.text; t.dirty = false; t.conflict = null; t.state = null; ideRenderTabs(); ideShow(); }}, 'Use VryxCode\u2019s version'),
     el('button', {class: 'chip', onclick: () => { if (!t.conflict.gone) t.disk = t.conflict.text; t.conflict = null; ideConflict(); }}, 'Keep mine'));
 }
+// ideSync: after VryxCode works, re-read every open file; untouched tabs update by themselves, edited ones get the conflict bar.
 async function ideSync() {
   if (!IDE.on || !IDE.tabs.length) return;
   const run = IDE.syncRun = (IDE.syncRun || 0) + 1;          // only the newest check may change a tab: an older, slower answer would put a stale file back
@@ -113,10 +133,14 @@ async function ideSync() {
   }
 }
 
+// Edit this selection / Explain this: AI holds the state of the small assistant box under the editor.
 // ---- Edit this selection / Explain this: the model proposes, you see the before and after, you Accept or Reject (Accept only changes the editor; Save is separate)
 const AI = {open: false, mode: 'edit', sel: null, busy: false, token: 0};
+// aiStat: the status line of that box.
 function aiStat(text, bad) { const n = $('ideAiStat'); n.textContent = text; n.className = 'aistat' + (bad ? ' bad' : ''); }
+// aiClose: close the box and cancel any answer still on its way (the token number changes so a late answer is ignored).
 function aiClose() { AI.open = false; AI.token++; AI.busy = false; $('ideAi').hidden = true; $('ideAiRes').replaceChildren(); if (IDE.ed) IDE.ed.focus(); }
+// aiStart: open the box for "edit" (change the selected code as you describe) or "explain" (explain the selected code), after checking a file is open and a model is chosen.
 function aiStart(mode) {
   const t = IDE.tabs[IDE.active]; if (!t || !IDE.ed) return;
   if (mode === 'edit' && t.readOnly) { ideStatus('This file is read-only here.', 'bad'); return; }
@@ -128,6 +152,7 @@ function aiStart(mode) {
   aiStat(mode === 'explain' ? 'Asking ' + (cModel() ? cModel().label : 'the model') + '\u2026' : sel.text ? 'Editing ' + sel.text.split('\n').length + ' selected line(s)' : 'Nothing selected: the new code will go at the cursor');
   if (mode === 'explain') aiRun(); else { $('ideAiIn').value = ''; $('ideAiIn').focus(); }
 }
+// aiRun: send the selected text and your instruction to the model through the server and show what comes back.
 async function aiRun() {
   const t = IDE.tabs[IDE.active]; if (!t || AI.busy) return;
   const instruction = $('ideAiIn').value.trim();
@@ -136,6 +161,7 @@ async function aiRun() {
   const text = IDE.ed.getText(), sel = AI.sel;
   try {
     const r = await post('/api/code/edit', {project: t.project, path: t.path, model: C.model, text, start: sel.start, end: sel.end, instruction, mode: AI.mode}); const j = await r.json().catch(() => ({}));
+    // The token changed, so the box was closed or restarted: ignore this answer.
     if (token !== AI.token) return;                                            // closed or restarted meanwhile
     if (!r.ok) { aiStat((j.message || 'Could not do that.') + (j.action ? ' ' + j.action : ''), true); return; }
     if (AI.mode === 'explain' || !j.replacement) { aiStat(j.model ? 'Answer from ' + j.model : ''); $('ideAiRes').replaceChildren(el('div', {class: 'text'}, j.message || 'No answer.'), el('div', {class: 'acts'}, el('button', {class: 'chip', onclick: aiClose}, 'Close'))); return; }
@@ -143,6 +169,7 @@ async function aiRun() {
     aiShowDiff(sel, text, j);
   } finally { if (token === AI.token) AI.busy = false; }
 }
+// aiShowDiff: show the proposed change as lines: + added, - removed, with a few unchanged lines around them and ... for long unchanged stretches.
 function aiShowDiff(sel, fileText, j) {
   const rows = EmvryxEditor.diffLines(sel.text, j.replacement), out = []; let run = 0;
   rows.forEach((d, i) => {
@@ -154,17 +181,21 @@ function aiShowDiff(sel, fileText, j) {
     el('button', {class: 'chip ok', id: 'aiAccept', onclick: () => aiAccept(sel, j.replacement)}, 'Accept'), el('button', {class: 'chip', onclick: aiClose}, 'Reject'),
     el('button', {class: 'chip', onclick: () => { $('ideAiRes').replaceChildren(); aiStat('Describe the change again.'); $('ideAiIn').focus(); $('ideAiIn').select(); }}, 'Try again')));
 }
+// aiAccept: put the new text into the editor, but only if the selected text is still what it was when you asked (otherwise ask to try again). It is not saved until you press Save.
 function aiAccept(sel, replacement) {
   if (!IDE.ed || IDE.ed.getText().slice(sel.start, sel.end) !== sel.text) { aiStat('The text changed while the model was working. Select it again and try again.', true); $('ideAiRes').replaceChildren(); return; }
   IDE.ed.replaceRange(sel.start, sel.end, replacement);
   aiClose(); ideStatus('Edit applied. Press Save (Ctrl+S) to keep it, or Undo (Ctrl+Z).', 'good');
 }
+// Wire the assistant box's buttons and keys (Enter runs, Escape closes).
 $('ideEditSel').onclick = () => aiStart('edit'); $('ideExplain').onclick = () => aiStart('explain');
 $('ideAiGo').onclick = aiRun; $('ideAiX').onclick = aiClose;
 $('ideAiIn').addEventListener('keydown', (ev) => { if (ev.key === 'Enter') { ev.preventDefault(); aiRun(); } if (ev.key === 'Escape') aiClose(); });
 
+// The Output panel: OUT keeps the list of commands that ran (yours and VryxCode's) with their results, newest last, at most 60.
 // ---- Output panel: results of tests and commands (yours, and the ones VryxCode ran)
 const OUT = {open: false, items: [], busy: false, pending: null};
+// outRender: draw each command with who ran it, its exit result (ok or exit code) and its output; scroll to the bottom.
 function outRender() {
   const log = $('ideOutLog');
   log.replaceChildren(...(OUT.items.length ? OUT.items.map((i) => el('div', {class: 'oi'},
@@ -173,9 +204,12 @@ function outRender() {
     i.out ? el('pre', {}, i.out) : '')) : [el('div', {style: 'color:var(--muted)'}, 'Nothing run yet. Press Run tests or Run file, or type a command below. What VryxCode runs shows up here too.')]));
   log.scrollTop = log.scrollHeight;
 }
+// outAdd: add an item, drop the oldest if there are more than 60, and light up the Output button if the panel is closed.
 function outAdd(item) { OUT.items.push(item); if (OUT.items.length > 60) OUT.items.shift(); outRender(); if (!OUT.open) $('ideOutBtn').classList.add('new'); return item; }
+// outShow: open or close the panel.
 function outShow(on) { OUT.open = on; $('ideOut').hidden = !on; $('ideOutBtn').classList.remove('new'); if (on) { outRender(); } }
 $('ideOutBtn').onclick = () => outShow(!OUT.open); $('outX').onclick = () => outShow(false); $('outClear').onclick = () => { OUT.items = []; outRender(); };
+// ideSaveDirty: before running anything, save your unsaved files; if one cannot be saved, do not run.
 async function ideSaveDirty() {            // before running: keep what you typed (a failed save stops the run)
   for (const t of IDE.tabs.filter((x) => x.dirty && x.project === C.project && !x.readOnly)) {
     const at = IDE.tabs[IDE.active]; if (at !== t) { ideActivate(IDE.tabs.indexOf(t)); }
@@ -183,6 +217,7 @@ async function ideSaveDirty() {            // before running: keep what you type
   }
   return true;
 }
+// outRun: run a command in the project (on the chosen environment) and show the result in the panel.
 async function outRun(cmd) {
   if (!cmd || OUT.busy) return; if (!C.project) return;
   outShow(true); OUT.busy = true;
@@ -195,37 +230,47 @@ async function outRun(cmd) {
     outRender(); if (r.ok) refreshFiles();
   } finally { OUT.busy = false; }
 }
+// The command box at the bottom of the panel: Enter runs what you typed.
 $('outForm').onsubmit = (ev) => { ev.preventDefault(); const v = $('outCmd').value.trim(); if (v) { $('outCmd').value = ''; outRun(v); } };
+// Run tests: pytest if the project has a pytest setup file, otherwise Python's built-in unittest.
 $('outRunTests').onclick = () => outRun((C.files || []).some((f) => /(^|\/)(conftest\.py|pytest\.ini)$/.test(f)) ? 'python -m pytest -q' : 'python -m unittest');
+// Which program runs which kind of file for the Run file button.
 const RUN_WITH = {py: 'python', js: 'node', mjs: 'node', rb: 'ruby', php: 'php', go: 'go run'};
 $('outRunFile').onclick = () => {
   const t = IDE.tabs[IDE.active]; const run = t && RUN_WITH[EmvryxEditor.langOf(t.path) === 'py' ? 'py' : (t.path.split('.').pop() || '').toLowerCase()];
   if (!t || !run) { outShow(true); outAdd({src: 'you', cmd: '(run file)', exit: 1, out: 'Open a .py, .js, .go, .rb or .php file first, or type the command below.'}); return; }
   outRun(run + ' ' + t.path);
 };
+// outAgentStep / outAgentResult: show the commands VryxCode itself runs, as they start and finish.
 // what VryxCode runs (called from cEvent)
 function outAgentStep(e) {
+  // The step's preview contains the command as JSON text; the regular expression pulls it out.
   const m = /"command"\s*:\s*"((?:[^"\\]|\\.)*)"/.exec(String(e.preview || '')); if (!m) { OUT.pending = null; return; }
   let cmd = m[1]; try { cmd = JSON.parse('"' + m[1] + '"'); } catch (x) {}
   OUT.pending = outAdd({src: 'agent', cmd, running: true, out: ''});
 }
+// When the result arrives, its first line says "exit code N" (or starts with "error"), which becomes the ok/bad badge.
 function outAgentResult(e) {
   const i = OUT.pending; if (!i) return; OUT.pending = null;
   const t = String(e.text || ''), first = t.split('\n')[0], m = /^exit code (-?\d+)/.exec(first);
   i.running = false; i.exit = m ? +m[1] : (/^error/.test(first) ? 1 : 0); i.out = m ? t.split('\n').slice(1).join('\n') : t; outRender();
 }
 
+// Autocomplete: AC holds its on/off choice, a timer and a counter that ignores answers that arrive too late.
 // ---- Autocomplete: grey suggestions while you type (off by default; Tab accepts, Esc dismisses)
 const AC = {on: false, timer: 0, token: 0, busy: false};
 try { AC.on = localStorage.getItem('emvryx_ac') === '1'; } catch (e) {}
+// acPaint: the On/Off label on the Autocomplete button.
 function acPaint() { $('ideAc').textContent = 'Autocomplete: ' + (AC.on ? 'On' : 'Off'); $('ideAc').classList.toggle('on', AC.on); }
 $('ideAc').onclick = () => { AC.on = !AC.on; try { localStorage.setItem('emvryx_ac', AC.on ? '1' : '0'); } catch (e) {} AC.token++; clearTimeout(AC.timer); if (IDE.ed) IDE.ed.clearGhost(); $('acStat').textContent = ''; acPaint(); };
+// acTyped: called when you type; waits 650 ms after your last key, then asks for a suggestion (only if autocomplete is on and a model is chosen).
 function acTyped(text, cursor) {
   AC.token++; clearTimeout(AC.timer); $('acStat').textContent = '';
   const t = IDE.tabs[IDE.active];
   if (!AC.on || !t || t.readOnly || !C.model || AI.open || !text.trim()) return;
   AC.timer = setTimeout(() => acFetch(t), 650);
 }
+// acFetch: ask the server for a completion, one request at a time, and show it as grey text only if you have not typed or moved since.
 async function acFetch(t) {
   if (!IDE.ed || IDE.tabs[IDE.active] !== t) return;
   if (AC.busy) { AC.timer = setTimeout(() => acFetch(t), 400); return; }           // one request at a time: ask again when it is done
@@ -243,8 +288,10 @@ async function acFetch(t) {
   } finally { AC.busy = false; }
 }
 acPaint();
+// Warn before the browser tab is closed if any file has unsaved changes.
 addEventListener('beforeunload', (ev) => { if (IDE.tabs.some((t) => t.dirty)) { ev.preventDefault(); ev.returnValue = ''; } });
 // vryxcode_dbview: a SQLite file opens as its tables (read-only), with a search box
+// viewDb: show a SQLite database file as a read-only table with a search box and buttons for each table.
 async function viewDb(f, table, q) {
   const r = await api('/api/code/db?project=' + encodeURIComponent(C.project) + '&path=' + encodeURIComponent(f) + '&table=' + encodeURIComponent(table || '') + '&q=' + encodeURIComponent(q || ''));
   const j = await r.json().catch(() => ({})), v = $('codeView');
@@ -258,19 +305,25 @@ async function viewDb(f, table, q) {
       el('tbody', {}, ...j.rows.map((row) => el('tr', {}, ...row.map((x) => el('td', {class: x === null ? 'nul' : ''}, x === null ? 'NULL' : String(x)))))))) : '',
     el('small', {style: 'color:var(--muted)'}, j.rows.length >= j.limit ? 'Showing the first ' + j.limit + ' rows. Read-only: nothing here changes the database.' : 'Read-only: nothing here changes the database.')));
 }
+// viewFile: show a file's text in the viewer (databases get the table view instead).
 async function viewFile(f) {
   if (featureOn('vryxcode_dbview') && /\.(db|sqlite3?|db3)$/i.test(f)) { C.file = f; refreshFiles(); return viewDb(f, '', ''); }
   C.file = f; const r = await api('/api/code/file?project=' + encodeURIComponent(C.project) + '&path=' + encodeURIComponent(f)); const j = await r.json();
   $('codeView').textContent = r.ok ? j.text + (j.truncated ? '\n... (shortened)' : '') : j.message; refreshFiles();
 }
+// showUsage: the line that says what plan you are on and how much of the allowance is left.
 function showUsage(u) {
   if (!u) return;
   $('codeUsage').textContent = u.exempt ? 'Owner: no limits' : u.plan[0].toUpperCase() + u.plan.slice(1) + ' · ' + u.tank_pct + '% left · about ' + fmt(u.steps_left) + ' coding steps';
 }
+// note: put a small message card in the VryxCode feed and scroll to it.
 function note(cls, k, text) { const n = el('div', {class: cls}, el('b', {}, k), el('div', {}, text)); $('codeIn').append(n); scrollCode(); return n; }
+// scrollCode: scroll the feed to the bottom.
 function scrollCode() { const f = $('codeFeed'); f.scrollTop = f.scrollHeight; }
 // Past-tense words for finished actions (what the card says), and rotating present-tense words for the live line (what it is doing right now)
+// DONE_VERB: past-tense word for each tool, shown on finished steps.
 const DONE_VERB = {read_file: 'Read', write_file: 'Wrote', edit_file: 'Edited', run: 'Ran', list_files: 'Looked around', git: 'Git', diagnostics: 'Checked', github: 'GitHub'};
+// NOW_WORDS: lists of present-tense words for the live line; one is chosen by what VryxCode is doing and changes every 6 seconds.
 const NOW_WORDS = {
   thinking: ['Thinking', 'Pondering', 'Working it out', 'Mulling it over', 'Sketching a plan', 'Weighing it up', 'Figuring it out'],
   writing: ['Writing', 'Drafting', 'Composing', 'Putting it into words', 'Shaping a reply'],
@@ -280,26 +333,32 @@ const NOW_WORDS = {
   read: ['Reading', 'Studying', 'Looking through', 'Taking a look at'],
   look: ['Looking around', 'Scanning the project', 'Seeing what is here'],
   git: ['Working with git', 'Handling git'], github: ['Talking to GitHub', 'Syncing with GitHub'], check: ['Checking', 'Looking for problems']};
+// TOOL_KIND: which group of words each tool belongs to.
 const TOOL_KIND = {write_file: 'build', edit_file: 'build', run: 'run', read_file: 'read', list_files: 'look', git: 'git', github: 'github', diagnostics: 'check'};
+// nowKind: decide which group of words fits the current activity (thinking, writing, a tool, or running tests).
 function nowKind(l) {
   if (l.phase === 'thinking') return 'thinking';
   if (l.phase === 'writing') return 'writing';
   const k = TOOL_KIND[l.tool] || 'run';
   return k === 'run' && /unittest|pytest|\btest/i.test(l.target || '') ? 'test' : k;
 }
+// Is the "review" feature (Cursor-style feed) switched on?
 const vxReview = () => !!(S.state && S.state.features && S.state.features.vryxcode_review);
 // vryxcode_lines: the feed reads like Claude Code's: steps that only look or run fold into one quiet line that opens on a tap, the model's words
 // in between, file changes as chips, a plain box for what the person wrote, and a small "working" line with moving dots
 const vxLines = () => !!(S.state && S.state.features && S.state.features.vryxcode_lines);
+// VX_VERB: for the folded "Read 3 files, ran 2 commands" line: the verb, the singular and the plural for each tool.
 const VX_VERB = {read_file: ['read', 'file', 'files'], list_files: ['listed', 'folder', 'folders'], glob: ['listed', 'folder', 'folders'],
   grep: ['searched', 'time', 'times'], search_project: ['searched', 'time', 'times'], code_search: ['searched', 'time', 'times'], run: ['ran', 'command', 'commands'],
   check_page: ['checked', 'page', 'pages'], command_output: ['read', 'output', 'outputs'], lookup_docs: ['looked up', 'doc', 'docs']};
+// vxGroup: the folded line of quiet steps; reuse the one at the end of the feed or start a new one that opens when tapped.
 function vxGroup(feed) {
   if (C.group && feed.lastElementChild === C.group) return C.group;
   const head = el('div', {class: 'h', role: 'button', tabindex: '0'}), g = el('div', {class: 'vx-grp'}, head, el('div', {class: 'list'}));
   head.onclick = () => g.classList.toggle('open'); head.onkeydown = (ev) => { if (ev.key === 'Enter') g.classList.toggle('open'); };
   g._n = {}; feed.append(g); C.group = g; return g;
 }
+// vxCount: add one to the count for this tool and rewrite the folded line's text ("Read 3 files, ran 2 commands").
 function vxCount(g, tool) {
   const v = VX_VERB[tool] || ['used', 'tool', 'tools'], k = v[0] + '|' + v[1] + '|' + v[2];
   g._n[k] = (g._n[k] || 0) + 1;
@@ -307,11 +366,14 @@ function vxCount(g, tool) {
   const text = (g._thought ? ['thought ' + Math.round(g._thought) + 's'] : []).concat(parts).join(', ');
   g.querySelector('.h').textContent = text.charAt(0).toUpperCase() + text.slice(1);
 }
+// Tools that only look around; they show as quiet grey lines.
 const QUIET_TOOLS = ['read_file', 'list_files', 'glob', 'grep', 'diagnostics', 'command_output', 'project_map', 'search_project', 'code_search', 'lookup_docs', 'memory'];
+// fileChip: the small chip for a changed file with how many lines were added and removed.
 function fileChip(path, add, del) {   // "app/page.tsx  +52 -0", like Cursor's
   return el('div', {class: 'cc-file', role: 'button', tabindex: '0', title: 'Show the change'}, el('span', {class: 'ic'}, '\u{1F4C4}'), el('span', {class: 'nm'}, path || 'file'),
     el('span', {class: 'a'}, '+' + (add || 0)), el('span', {class: 'd'}, '\u2212' + (del || 0)));
 }
+// toolParts: split a step's preview into the three pieces shown: the verb, the file or command, and an extra such as "2 lines".
 function toolParts(preview, tool) {   // "Wrote" + "main.py" + "2 lines"
   const first = String(preview || '').split('\n')[0];
   const w = /^write (\S+)(?: \((\d+) lines?\))?/.exec(first); if (w) return [DONE_VERB.write_file, w[1], w[2] ? w[2] + ' lines' : ''];
@@ -320,10 +382,12 @@ function toolParts(preview, tool) {   // "Wrote" + "main.py" + "2 lines"
   if (m) { try { const a = JSON.parse(m[2]); const arg = a.path || a.command || a.args || a.action || ''; return [DONE_VERB[m[1]] || m[1], String(arg), '']; } catch (x) { /* fall through */ } }
   return [DONE_VERB[tool] || tool || '', first.length > 90 ? first.slice(0, 90) + '...' : first, ''];
 }
+// diffNode: the coloured +/- lines of an edit, if the step has any.
 function diffNode(preview) {
   const lines = String(preview || '').split('\n').slice(1); if (!lines.length) return null;
   return el('div', {class: 'cc-diff'}, ...lines.map((l) => el('div', {class: /^\s*\+ /.test(l) ? 'add' : /^\s*- /.test(l) ? 'del' : 'hdr'}, l.replace(/^(\s*)([+-]) /, '$2 '))));
 }
+// codeCtx: draw the memory meter, a percentage showing how full the model's memory is in this session.
 // the memory meter (feature flag context_meter): how full the model's memory is in this session, and when older steps get folded
 function codeCtx(c, folding) {
   const b = $('codeCtx'); if (c) C.ctx = c; c = C.ctx;
@@ -332,6 +396,7 @@ function codeCtx(c, folding) {
   b.textContent = Math.round(c.pct) + '%'; b.setAttribute('aria-label', 'Memory ' + Math.round(c.pct) + '% used, ' + kTok(c.used) + ' of ' + kTok(c.window) + ' tokens');
   if (folding) setTimeout(() => b.classList.remove('busy'), 2500);
 }
+// The memory meter button: opens a menu explaining folding, with a button to fold older steps now.
 $('codeCtx').onclick = () => {
   const m = $('codeCtxMenu'); if (!m.hidden || !C.ctx) { m.hidden = true; return; }
   m.replaceChildren(...ctxMenuNodes(C.ctx, ['Folds at', 'When the session gets near the limit, VryxCode folds its older steps into a short "Earlier steps" list so it can keep building. Your files and this log are unchanged.'], async () => {
@@ -344,8 +409,10 @@ $('codeCtx').onclick = () => {
   }));
   m.hidden = false;
 };
+// Clicking anywhere else closes the memory menu.
 document.addEventListener('click', (e) => { if (!e.target.closest('#codeCtx, #codeCtxMenu')) $('codeCtxMenu').hidden = true; });
 // vryxcode_restore: a Restore button on each of your messages puts the files back as they were just before it (the same as Rewind, one tap from the feed)
+// restoreBtn: the Restore button on your message (needs the feature on and a saved checkpoint for that message).
 function restoreBtn(e) {
   if (!featureOn('vryxcode_restore') || !e.turn) return '';
   return el('button', {class: 'chip vx-restore', type: 'button', title: 'Put the files back as they were before this message', onclick: async (ev) => {
@@ -360,6 +427,7 @@ function restoreBtn(e) {
 }
 // vryxcode_downloads: the programs a finished session built (a Windows .exe, an Android .apk ...) with a Download button each, and the website or
 // the whole project as a zip
+// vxDownloads: ask the server what the session built and list it with Download buttons; remove the box if there is nothing.
 async function vxDownloads(box) {
   if (!box.isConnected || !C.project) return;
   let j;
@@ -377,39 +445,48 @@ async function vxDownloads(box) {
 }
 // What to answer when VryxCode stops with "Not finished yet: it is waiting for your answer": a few replies one tap sends, the first also greyed in the message box.
 // A question gets "Yes, go ahead."; anything else is a push to really save the work, run it and explain what was wrong.
+// vxAsksYou: does the model's last message ask you something? (ends in a question mark or phrases like "would you like")
 function vxAsksYou(text) {
   const tail = String(text || '').trim().slice(-400);
   return /\?\s*$/.test(tail) || /\b(would you like|do you want|shall i|should i|let me know|which (one|option|file))\b/i.test(tail);
 }
+// vxWaitingReplies: the one-tap replies offered when VryxCode is waiting for you.
 function vxWaitingReplies(text) {
   return vxAsksYou(text) ? ['Yes, go ahead.', 'Explain your options first.', 'No, I want something different.']
                          : ['Please save the fix to the project files, run the tests, and tell me what was wrong.', 'Explain in plain words what was wrong.', 'Show me what you changed.'];
 }
 // After a plain answer (the person asked a question: why, what, explain, show me, ...?, and it explained): it is not "waiting", so no banner; a few follow-ups that were not just asked. "Show me what you changed" opens the changes itself.
+// vxLastAsked: the last thing you wrote in this session, lowercase.
 function vxLastAsked() {
   for (let i = C.events.length - 1; i >= 0; i--) { const e = C.events[i]; if (e.kind === 'user' || e.kind === 'start') return String(e.text || e.task || '').trim().toLowerCase(); }
   return '';
 }
+// vxIsQuestion: did you ask a question (rather than give a task)?
 function vxIsQuestion(text) {
   const t = String(text || '').trim().toLowerCase();
   return /\?\s*$/.test(t) || /^(why|what|how|when|where|who|which|explain|show me|tell me|describe|can you explain|could you explain|is it|does it|did it|are you)\b/.test(t);
 }
+// vxFollowUps: up to three follow-up questions that were not just asked.
 function vxFollowUps(text) {
   const last = vxLastAsked(), said = String(text || '').toLowerCase();
   const all = ['Show me what you changed.', 'Run the tests and tell me the result.', 'Explain it again in simpler words.', 'What should I do next?'];
   return all.filter((t) => t.toLowerCase() !== last && !(t.startsWith('Explain') && /plain words|simpler/.test(last)) && !(t.startsWith('Show') && /changed/.test(last) && said.includes('changed'))).slice(0, 3);
 }
+// vxSendReply: send a suggested reply; "Show me what you changed" just opens the Changes list.
 function vxSendReply(t) {
   if (/^show me what you changed/i.test(t)) { showDrawer(true, 'changes'); return; }          // no need to ask the model: the changes are on screen
   $('codeTask').value = t; $('codeGo').click();
 }
+// cEvent: the heart of the feed. The server sends a list of events (user message, step, result, end ...); each one is drawn here as the right kind of card.
 function cEvent(e) {
   if (e.kind === 'user' || e.kind === 'start') offerReply('');          // a new message: the last suggestion no longer fits
   const feed = $('codeIn'); C.events.push(e);
+  // Each kind is handled in its own block below; after a block draws its card it returns, so only one block runs per event.
   if (e.kind === 'context') { codeCtx(e); return; }
   if (e.kind === 'model') { feed.append(el('div', {class: 'note', style: 'align-self:center;margin:6px auto'}, 'Now using ' + modelName(e.model) + (e.previous ? ' (was ' + modelName(e.previous) + ')' : ''))); C.last = null; return; }
   if (e.kind === 'note' || (e.kind === 'user' && e.auto)) { if (e.kind === 'note') feed.append(el('div', {class: 'note', style: 'align-self:center;margin:6px auto;max-width:92%'}, '\u21bb ' + e.text)); C.last = null; return; }
   if (e.kind === 'user') { feed.querySelectorAll('.cc-user.pending').forEach((n) => n.remove()); feed.append(el('div', {class: 'cc-user'}, el('span', {class: 'ember'}), el('span', {}, (e.plan ? '[Plan] ' : '') + e.text), e.steer ? el('small', {style: 'color:var(--muted);margin-left:6px'}, '(while it worked)') : '', restoreBtn(e))); C.last = null; return; }
+  // "choose": VryxCode asks you to pick between options.
   if (e.kind === 'choose') {          // the full agent asks the person to pick: one tap answers, or they write their own
     const pick = (choice) => { if (!String(choice || '').trim()) return; post('/api/code/sessions/' + C.sid + '/answer', {id: e.id, choice}).then(() => poll()); };
     const other = el('input', {type: 'text', placeholder: 'Or write your own answer', 'aria-label': 'Your own answer',
@@ -422,6 +499,7 @@ function cEvent(e) {
   }
   if (e.kind === 'start' || e.kind === 'user') C.turnFiles = {};       // vryxcode_review: the files this message changed, for its Done line
   if (e.kind === 'start') { feed.replaceChildren(el('div', {class: 'cc-user'}, el('span', {class: 'ember'}), el('span', {}, (e.plan ? '[Plan] ' : '') + e.task), restoreBtn(e))); C.last = null; return; }
+  // "step": VryxCode is about to use a tool (read, write, run ...). Drawn as a running card, then turned ok or no when its "result" arrives.
   if (e.kind === 'step') {
     if (C.retry) { C.retry.classList.replace('run', 'ok'); const v = C.retry.querySelector('.cc-verb'); if (v) v.textContent = 'Fixed a step'; C.retry = null; }   // vryxcode_fixes: the step it retried went through
     const prose = String(e.raw || '').split(/<\|tool_call\|>|<tool_call>/)[0].trim();
@@ -451,6 +529,7 @@ function cEvent(e) {
     const d = (e.tool === 'write_file' || e.tool === 'edit_file') ? diffNode(e.preview) : null; if (d) node.append(d);
     feed.append(node); C.last = node; return;
   }
+  // "result": the outcome of the last step; marks it ok or failed and shows the first line of output (tap for all).
   if (e.kind === 'result') {
     outAgentResult(e);
     if (C.last && (C.last.classList.contains('cc-quiet') || C.last.classList.contains('cc-file'))) {     // vryxcode_review: no output line, only a mark when it went wrong
@@ -474,6 +553,7 @@ function cEvent(e) {
     }
     return;
   }
+  // "retry": the model's tool call could not be read, so it was asked again; shown as one line that counts the tries.
   if (e.kind === 'retry') {                     // the model's tool call could not be read: keep what it said and that it is trying again
     if (S.state && S.state.features && S.state.features.vryxcode_fixes) {      // one line that counts the tries, instead of a red line for each
       const why = e.limit ? 'The reply ran out of room, so VryxCode kept what it wrote and asked for the rest' : 'A step could not be read, so VryxCode asked for it again';
@@ -485,11 +565,13 @@ function cEvent(e) {
     feed.append(el('div', {class: 'cc-tool no'}, el('div', {class: 'cc-head'}, el('span', {class: 'cc-verb'}, 'Retrying'), el('span', {class: 'cc-arg'}, [e.limit ? 'The reply ran out of room while the model was writing, so VryxCode kept what it wrote and asked for the rest' : 'That step was garbled, so VryxCode asked the model to send it again', e.secs != null ? Math.round(e.secs) + 's' : ''].filter(Boolean).join('  \u00b7  ')))));
     C.last = null; return;
   }
+  // "compacted": the older steps were folded into a short list to save room.
   if (e.kind === 'compacted') { codeCtx(null, true); feed.append(el('div', {class: 'cc-say', style: 'color:var(--muted);font-size:13px'}, (e.manual ? 'As you asked, VryxCode folded' : 'The conversation was getting long, so VryxCode folded') + ' its older steps into a short "Earlier steps" list to save room. The files and this log are unchanged.' + (e.steps ? ' (' + e.steps + ' steps folded)' : ''))); C.last = null; return; }
   if (e.kind === 'queued') { feed.append(el('div', {class: 'cc-say', style: 'color:var(--muted);font-size:14px'}, 'Waiting in the queue' + (e.position ? ' (#' + e.position + ')' : '') + '. It starts by itself when your current session finishes.')); return; }
   if (e.kind === 'language') { feed.append(el('div', {class: 'cc-say', style: 'color:var(--muted);font-size:14px'}, e.text)); return; }
   if (e.kind === 'rewind') { feed.append(el('div', {class: 'cc-end stop'}, el('span', {class: 'mark'}, '\u21b6'), el('span', {}, 'Rewound the files to before: ' + (e.label || 'message ' + e.turn)))); C.last = null; return; }
   if (e.kind === 'answer') { const q = document.getElementById('ask' + e.id); if (q) q.remove(); return; }
+  // "ask": VryxCode asks permission before doing something; Yes, Yes and don't ask again, or No.
   if (e.kind === 'ask') {
     const reply = (allow, always) => post('/api/code/sessions/' + C.sid + '/answer', {id: e.id, allow, always}).then(() => poll());
     const node = el('div', {class: 'cc-ask', id: 'ask' + e.id}, el('div', {class: 'q'}, 'Allow this?'), el('pre', {}, e.preview),
@@ -497,6 +579,7 @@ function cEvent(e) {
         el('button', {class: 'chip', onclick: () => reply(false, false)}, 'No')));
     feed.append(node); return;
   }
+  // "end": the turn is over. Show its summary, the state (done or waiting), suggested replies, changed files, ship buttons, downloads, report and verdict.
   if (e.kind === 'end') {
     if (typeof vxSide === 'function') { clearTimeout(C.sideT); C.sideT = setTimeout(() => vxSide(true), 400); }     // vryxcode_projects: the sidebar shows it finished (once, after a whole history is drawn)
     if (C.retry) { C.retry.classList.replace('run', e.finished ? 'ok' : 'no'); C.retry = null; }
@@ -545,6 +628,7 @@ function cEvent(e) {
         el('button', {class: 'btn small', onclick: () => { $('codeTask').value = 'Carry on from where you stopped and finish the task.'; $('codeGo').click(); }}, 'Continue')));
       return;
     }
+    // Anything else that ended: stopped, paused or failed.
     const cls = e.error || e.limited ? 'bad' : 'stop';
     if (e.report) feed.append(reportCard(e.report));
     feed.append(el('div', {class: 'cc-end ' + cls}, el('span', {class: 'mark'}, e.error || e.limited ? '\u2717' : '\u25a0'),
@@ -552,11 +636,13 @@ function cEvent(e) {
   }
 }
 // a screenshot from the browser check: a small picture, tap to open it full size
+// shotCard: a small screenshot from the browser check; tap to open it big.
 function shotCard(name) {
   const url = '/api/code/shot?project=' + encodeURIComponent(C.project) + '&name=' + encodeURIComponent(name);
   return el('a', {class: 'cc-shot', href: url, target: '_blank', rel: 'noopener', title: 'Open the screenshot'}, el('img', {src: url, alt: 'Screenshot of the page the browser check opened', loading: 'lazy'}));
 }
 // the verification report at the end of a turn that did work: how it was checked and what to look at
+// reportCard: the check-up card at the end of work: files changed, tests that ran, and what to look at.
 function reportCard(e) {
   const mark = {verified: '\u2713', checked: '\u25d0', not_verified: '!', no_changes: '\u2013'}[e.verdict] || '';
   const card = el('div', {class: 'cc-report ' + e.verdict}, el('div', {class: 'rh'}, el('span', {class: 'mark'}, mark), el('span', {}, e.label)));
@@ -566,9 +652,11 @@ function reportCard(e) {
   section('Look at', (e.look_at || []).map((t) => el('div', {class: 'ri'}, '\u2022 ' + t)));
   return card;
 }
+// A message from the model: paragraphs, `inline code` and fenced code blocks with a Copy button.
 // a message from the model: paragraphs, `inline code`, and fenced blocks (commands to run) with a Copy button
 const vxFixes = () => !!(S.state && S.state.features && S.state.features.vryxcode_fixes);
 const vxSay = (t) => el('div', {class: 'cc-say'}, vxFixes() ? mdRender(t) : t);      // vryxcode_fixes: what VryxCode says, with real formatting (lists, bold, tables, code)
+// renderMessage: with formatting on, use the shared markdown drawer; otherwise split on ``` to separate text from code.
 function renderMessage(text, good) {
   if (vxFixes()) return el('div', {class: 'cc-msg' + (good ? ' good' : '')}, mdRender(text));
   const box = el('div', {class: 'cc-msg' + (good ? ' good' : '')});
@@ -588,6 +676,7 @@ function renderMessage(text, good) {
   });
   return box;
 }
+// renderLive: the "working" line at the bottom of the feed, kept as one element that is moved (not rebuilt) so its animation does not restart.
 // the live "working" line: our ember mark pulsing, a word for what it is doing (it changes every few seconds), the file or command, seconds, and the text as it is written
 function renderLive(live, state) {
   document.body.classList.toggle('vxl', vxLines());
@@ -607,6 +696,7 @@ function renderLive(live, state) {
   C.liveInfo = live;        // the line's details (C.live is only "is it working?": the two used to be one field, so the words flipped between two sets every poll)
   paintLive();
 }
+// paintLive: refresh the live line's words, seconds and token count; runs about six times a second.
 function paintLive() {
   const n = document.getElementById('codeLive'); if (!n || !C.liveInfo || C.liveAt == null) return;
   const l = C.liveInfo, secs = Math.max(0, Math.floor((performance.now() - C.liveAt) / 1000));
@@ -623,7 +713,9 @@ function paintLive() {
   n.querySelector('.prose').textContent = l.text || '';
   const f = $('codeFeed'); if (f.scrollTop + f.clientHeight > f.scrollHeight - 160) scrollCode();
 }
+// Repaint the live line's timer every 160 ms.
 setInterval(() => { if (C && C.liveAt != null) paintLive(); }, 160);
+// poll: ask the server for new events of the open session, draw them, update the buttons, and ask again soon while the session is still busy.
 async function poll() {
   clearTimeout(C.timer); if (!C.sid || !cOn()) return;
   const r = await api('/api/code/sessions/' + C.sid + '?after=' + C.seen);
@@ -641,9 +733,11 @@ async function poll() {
   showUsage(j.usage);
   const live = ['starting', 'working', 'asking', 'queued'].includes(j.state);
   C.full = !!j.full; C.live = live;
-  $('codeGo').hidden = live && !(C.full && j.state !== 'queued'); $('codeStop').hidden = !live;      // the full agent can be told something while it works if (!live) { C.stopping = false; $('codeStop').disabled = false; }
+  $('codeGo').hidden = live && !(C.full && j.state !== 'queued'); $('codeStop').hidden = !live;      // the full agent can be told something while it works
+  if (!live) { C.stopping = false; $('codeStop').disabled = false; }      // finished: nothing is stopping any more, and the Stop button works again next time
   if (live) C.timer = setTimeout(poll, j.state === 'asking' ? 1500 : 350);
 }
+// vxPending / vxUnsent: show your message at once in grey while it is being sent; if sending fails, take it away and put the words back in the box.
 // The moment you send, your message is on screen (grey until the server has it) and the box is empty: the page does not wait for the server to show it. If the send fails the words go back in the box.
 function vxPending(text) {
   if (!text) return null;
@@ -654,15 +748,18 @@ function vxPending(text) {
   return node;
 }
 function vxUnsent(node, text) { if (node) node.remove(); $('codeIn').querySelectorAll('.empty[data-hid]').forEach((n) => { n.style.display = ''; delete n.dataset.hid; }); $('codeTask').value = text; }
+// The send button (arrow): works out what to do with your message — steer a working agent, send the next message in a session, or start a new session.
 $('codeGo').onclick = async () => {
   const task = $('codeTask').value.trim(); if ((!task && !C.startTemplate) || !C.model) return;
   offerReply('');
+  // Case 1: it is working and can be told something: send it as a "steer" without stopping it.
   if (C.sid && C.live && C.full) {     // it is working: the message is read before its next step, without stopping it
     $('codeTask').value = ''; const sent = vxPending(task);
     const r = await post('/api/code/sessions/' + C.sid + '/steer', {text: task}); const j = await r.json().catch(() => ({}));
     if (r.ok) { poll(); return; }
     vxUnsent(sent, task); note('bad', 'Could not send', (j.message || '') + ' ' + (j.action || '')); return;
   }
+  // Case 2: a session is open: send the next message (with any pictures, documents, mode and model).
   if (C.sid) {         // a session is open: this is its next message, whatever the model (a different model takes over the same conversation; an old session comes back to life)
     $('codeTask').value = ''; const sent = vxPending(task);
     const r = await post('/api/code/sessions/' + C.sid + '/message', {text: task, plan: C.mode === 'plan', notify: vxNotifyOn(), model: C.model, effort: C.effort, auto_edits: C.mode === 'auto', images: C.pics.length ? C.pics : undefined, docs: (C.docs || []).length ? C.docs.map((d) => d.id) : undefined}); const j = await r.json().catch(() => ({}));
@@ -671,11 +768,13 @@ $('codeGo').onclick = async () => {
     if (r.status === 400 && /still working/i.test(j.message || '')) { note('bad', 'Still working', 'Press Stop first, or wait for it to finish.'); return; }
     note('bad', 'Could not send', (j.message || '') + ' ' + (j.action || '')); return;
   }
+  // Case 3: no session yet: start one (with the project, model, effort, environment and starter template).
   $('codeTask').value = ''; const sent = vxPending(task);
   const r = await post('/api/code/start', {project: C.project, task, model: C.model, effort: C.effort, images: C.pics.length ? C.pics : undefined, docs: (C.docs || []).length ? C.docs.map((d) => d.id) : undefined, auto_edits: C.mode === 'auto', plan: C.mode === 'plan', env: C.env, queue: true, notify: vxNotifyOn(), template: C.startTemplate || undefined}); const j = await r.json().catch(() => ({message: 'No answer from the server.'})); C.startTemplate = null;
   if (!r.ok) { vxUnsent(sent, task); note('bad', 'Could not start', j.message + ' ' + (j.action || '')); return; }
   C.pics = []; C.docs = []; renderPics(); C.sid = j.id; C.saved = false; C.checkpoints = []; C.pvAuto = false; C.chatKey = C.project + '|' + C.model; C.seen = 0; C.stopping = false; $('codeStop').disabled = false; $('codeTask').value = ''; $('codeIn').replaceChildren(); poll();
 };
+// livePreview: open or refresh the preview as VryxCode writes files; on a phone the Preview button pulses instead.
 // the preview follows the work: on a wide screen it opens beside the chat by itself and refreshes after each change; on a phone the Preview button lights up
 function livePreview(events) {
   if (events.some((e) => e.kind === 'result' && /^The app is running/.test(String(e.text || '')))) {

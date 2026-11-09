@@ -1,18 +1,25 @@
 /* The welcome tour and the what's new notice. */
 // ---------------------------------------------------------------- welcome tour (a feature flag: Admin > Previews)
+// Bump this number to show the welcome tour again to everyone; a person's saved number is compared with it.
 const TOUR_VERSION = 1;
+// tourDevice: which kind of device this is (the installed app, a phone's browser or a desktop browser); the tour's last tip depends on it.
 const tourDevice = () => {   // desktop browser, the installed app (home screen / dock), or a phone's browser
   let installed = false; try { installed = (window.matchMedia && matchMedia('(display-mode: standalone)').matches) || navigator.standalone === true; } catch (e) {}
   if (installed) return 'pwa';
   return /Mobi|Android|iPhone|iPad|iPod/i.test(navigator.userAgent) || (window.matchMedia && matchMedia('(pointer: coarse)').matches && innerWidth < 800) ? 'mobile' : 'desktop';
 };
+// featureOn: is a feature switched on for this person? (the server sends the list of switches in the app state)
 const featureOn = (id) => !!(S.state && S.state.features && S.state.features[id]);
+// One short line under each model's name in the tour.
 const TAGLINE = {Flare: 'Fast and light', Equinox: 'Everyday work', Solstice: 'Harder questions', Apogee: 'Toughest challenges'};
+// openTour: build the slides of the welcome tour (welcome, models, sources, make it yours, VryxCode, admin tools, install tip, all set) and run them.
 function openTour(replay) {
   if (document.querySelector('.tour')) return;
   const st = S.state, admin = !!st.admin;
   const names = [...new Set(allModels().filter((m) => m.state !== 'soon' && TAGLINE[m.name]).map((m) => m.name))];
+  // spark: n small twinkling dots placed at fixed, spread-out spots for decoration.
   const spark = (n) => Array.from({length: n}, (_, i) => el('i', {class: 'spark', style: 'left:' + (8 + (i * 83) % 84) + '%;top:' + (40 + (i * 37) % 50) + '%;animation-delay:' + (i * 0.45) + 's'}));
+  // Each slide is {art: a function that draws the picture, kicker: small heading, title, text}.
   const slides = [
     {art: () => el('div', {class: 'art'}, el('div', {class: 'rings'}, el('i'), el('i'), el('i')), el('div', {class: 'rise', style: 'position:relative'}, logo(96, true)), ...spark(8)),
      kicker: 'A small language model AI', title: 'Welcome to Emvryx', text: 'Designed by Darryl McCottrell, someone who loves technology. Emvryx learns, evolves, writes code and so much more.'},
@@ -26,19 +33,23 @@ function openTour(replay) {
     {art: () => el('div', {class: 'art'}, el('div', {class: 'term'}, el('div', {class: 'dim rise'}, '> Make a slug helper'), el('div', {class: 'rise', style: '--d:.4s'}, el('span', {class: 'ok'}, '✓'), ' Wrote slug.py'), el('div', {class: 'rise', style: '--d:.8s'}, el('span', {class: 'ok'}, '✓'), ' Added a test'), el('div', {class: 'rise', style: '--d:1.2s'}, el('span', {class: 'ok'}, '✓'), ' Ran the tests: all pass'))),
      title: 'Build with VryxCode', text: 'Describe what you want. VryxCode plans it, writes the files, runs them, fixes what breaks and shows you the result live.'},
   ];
+  // Only admins see the slide about the admin tools.
   if (admin) slides.push({art: () => el('div', {class: 'art'}, el('div', {class: 'chips'}, ...['People', 'Invite codes', 'Backups', 'Answer reports', 'Features and testing'].map((t, i) => el('span', {class: 'rise', style: '--d:' + (i * 0.1) + 's'}, t)))),
     title: 'You’re an admin', text: 'Admin has the tools to run Emvryx: add people, make invite codes, take backups, read reports, and test new features before everyone gets them.'});
+  // The "keep it one tap away" slide is skipped when the app is already installed.
   const dev = tourDevice(), ios = /iPhone|iPad|iPod/i.test(navigator.userAgent);
   if (dev !== 'pwa') slides.push({art: () => el('div', {class: 'art'}, el('div', {class: 'chips'}, ...(dev === 'desktop' ? ['Address bar', 'Install Emvryx', 'Opens in its own window'] : ios ? ['Tap Share', 'Add to Home Screen', 'Open it like an app'] : ['Tap the menu', 'Install app', 'Open it like an app']).map((t, i) => el('span', {class: 'rise', style: '--d:' + (i * 0.15) + 's'}, t)))),
     title: 'Keep it one tap away', text: dev === 'desktop' ? 'In Chrome or Edge, click the install icon in the address bar (in Safari: File, then Add to Dock). Emvryx then opens in its own window.' : ios ? 'In Safari, tap the Share button, then Add to Home Screen. Emvryx opens full screen, like an app.' : 'Open your browser menu and choose Install app (or Add to Home screen). Emvryx opens full screen, like an app.'});
   slides.push({art: () => el('div', {class: 'art'}, el('div', {class: 'rings'}, el('i'), el('i')), el('div', {class: 'rise', style: 'position:relative'}, logo(84, true)), ...spark(12)),
     title: 'You’re all set', text: 'Ask anything to start. You can replay this tour any time in Settings > About.'});
+  // When the tour closes: remember on the server that it was seen on this device, then maybe show What's new.
   runTour(slides, 'Welcome to Emvryx', 'Start chatting', async (skipped) => {
     S.tourSoon = false; setTimeout(checkWhatsNew, 900);
     try { await post('/api/settings', {tour_seen: TOUR_VERSION, device: tourDevice()}); if (S.state && S.state.settings) S.state.settings.tour_devices = Object.assign({}, S.state.settings.tour_devices, {[tourDevice()]: TOUR_VERSION}); } catch (e) { /* it will simply show once more */ }
     if (!skipped && !replay) { try { $('input').focus(); } catch (e) {} }
   });
 }
+// runTour: the slide player shared by every tour: dots, Back/Next, Skip, arrow keys and swipes. onFinish(skipped) runs when it closes.
 // The slides, dots, Back / Next, Skip, arrow keys and swipes, shared by the welcome tour and the model tours. onFinish(skipped) runs when it closes.
 function runTour(slides, label, lastText, onFinish, kind) {
   let i = 0, startX = null;
@@ -47,18 +58,22 @@ function runTour(slides, label, lastText, onFinish, kind) {
   const back = el('button', {type: 'button', hidden: true, onclick: () => go(i - 1)}, 'Back'), next = el('button', {type: 'button', class: 'go', onclick: () => (i === slides.length - 1 ? finish() : go(i + 1))}, 'Next');
   const root = el('div', {class: 'tour' + (kind ? ' ' + kind : ''), role: 'dialog', 'aria-modal': 'true', 'aria-label': label}, el('div', {class: 'glow'}),
     el('button', {class: 'skip', type: 'button', onclick: () => finish(true)}, 'Skip'), el('div', {class: 'stage'}, ...nodes), el('div', {class: 'foot'}, dots, el('div', {class: 'btns'}, back, next)));
+  // go: show slide n (kept between the first and last) and update the dots and buttons.
   function go(n) {
     i = Math.max(0, Math.min(slides.length - 1, n));
     nodes.forEach((s, k) => { s.classList.toggle('on', k === i); s.classList.toggle('past', k < i); });
     [...dots.children].forEach((d, k) => d.classList.toggle('on', k === i));
     back.hidden = i === 0; next.textContent = i === slides.length - 1 ? lastText : 'Next';
   }
+  // finish: remove the tour and the key listener, then call onFinish.
   function finish(skipped) {
     document.removeEventListener('keydown', onKey); root.remove();
     onFinish(!!skipped);
   }
+  // Keyboard: right and left arrows move, Escape skips.
   const onKey = (e) => { if (e.key === 'ArrowRight') go(i + 1); else if (e.key === 'ArrowLeft') go(i - 1); else if (e.key === 'Escape') finish(true); };
   document.addEventListener('keydown', onKey);
+  // Swipe: a finger move of more than 50 pixels left or right changes slide.
   root.addEventListener('touchstart', (e) => { startX = e.touches[0].clientX; }, {passive: true});
   root.addEventListener('touchend', (e) => { if (startX == null) return; const dx = e.changedTouches[0].clientX - startX; startX = null; if (Math.abs(dx) > 50) go(i + (dx < 0 ? 1 : -1)); }, {passive: true});
   document.body.append(root); go(0);
@@ -67,7 +82,9 @@ function runTour(slides, label, lastText, onFinish, kind) {
 // ---------------------------------------------------------------- model tours (feature flag model_tours): "WELCOME to Flare 3", what only that model brings, and VryxCode
 // The slides come from models.json "tour" (art: memory, eyes, fast, think, deeper, sense, code). A preview model's tour reaches only the owner and the admins
 // (the server drops it for everyone else until the model is published); each person sees each model's tour once, and can replay it from What's new.
+// tourSeen: has this person already seen this model's tour?
 const tourSeen = (id) => (((S.state || {}).settings || {}).model_tours_seen || []).includes(id);
+// tourArt: the picture for one kind of model-tour slide (memory size, eyes, fast, think, code, ...).
 function tourArt(kind, c) {
   const rings = () => el('div', {class: 'rings'}, el('i'), el('i'), el('i'));
   const big = (t) => el('div', {class: 'art'}, rings(), el('div', {class: 'tbig rise'}, t));
@@ -80,6 +97,7 @@ function tourArt(kind, c) {
   return el('div', {class: 'art'}, rings(), el('div', {class: 'rise', style: 'position:relative'}, logo(84, true)));
 }
 // VryxCode's part of the tour, for the models VryxCode can use: only what is switched on for this person
+// vryxSlides: the VryxCode part of a model's tour; only features that are switched on are shown.
 function vryxSlides(c) {
   const name = mname(c), out = [{art: () => tourArt('code', c), kicker: 'VryxCode', title: 'Build with VryxCode', text: 'Open VryxCode from the menu and describe what you want. ' + name + ' plans it, writes the files, runs them and fixes what breaks.'}];
   if (featureOn('vryxcode_effort')) out.push({art: () => el('div', {class: 'art'}, el('div', {class: 'chips'}, ...['Quick', 'Balanced', 'Deep'].map((t, k) => el('span', {class: 'rise', style: '--d:' + (k * 0.12) + 's'}, t)))), kicker: 'VryxCode', title: 'Just pick the effort', text: 'No models to choose: VryxCode picks the best one, and you choose how hard it works. Deep thinks before every step.'});
@@ -90,6 +108,7 @@ function vryxSlides(c) {
     kicker: 'VryxCode', title: 'Your next message, suggested', text: 'When it finishes, the message box suggests what to say next. Press Tab, or swipe right on a phone, to fill it in.'});
   return out;
 }
+// openModelTour: the "WELCOME to <model>" tour: what is new, a slide for each new thing, how much better it is than the last model (measured scores) and VryxCode slides.
 function openModelTour(c, replay) {
   if (!c || !c.tour || document.querySelector('.tour')) return;
   const name = mname(c);
@@ -107,6 +126,7 @@ function openModelTour(c, replay) {
     kicker: name + ' vs ' + prevName, title: 'How much better', text: 'Measured side by side with ' + prevName + '.'});
   if (c.vryxcode) slides.push(...vryxSlides(c));
   slides.push({art: () => tourArt('logo', c), title: 'Try ' + name, text: c.preview ? 'Only you and your admins can use it until it is published.' : 'Pick it under the message box any time.'});
+  // When it closes: remember that this model's tour was seen; if the person did not skip it, switch to that model.
   runTour(slides, 'Welcome to ' + name, 'Use ' + name, (skipped) => {
     if (!tourSeen(c.id)) { try { post('/api/settings', {model_tour_seen: c.id}); } catch (e) {} const st = S.state.settings || (S.state.settings = {}); st.model_tours_seen = [...(st.model_tours_seen || []), c.id]; }
     if (!skipped && !replay && c.state === 'ready' && S.model !== c.id) chooseModel(c);
@@ -114,7 +134,9 @@ function openModelTour(c, replay) {
 }
 // ---------------------------------------------------------------- the VryxCode tour (feature flag vryxcode_tour): the first time someone opens VryxCode, replay with /tour.
 // Only what is switched on for this person is shown (effort or models, the Claude Code-style agent, the suggested reply).
+// Bump to show the VryxCode tour again.
 const VRYX_TOUR_VERSION = 1;
+// vryxTourSlides: the slides of the VryxCode tour (chips and little terminal pictures); some depend on switched-on features.
 function vryxTourSlides() {
   const chips = (list) => () => el('div', {class: 'art'}, el('div', {class: 'chips'}, ...list.map((t, k) => el('span', {class: 'rise', style: '--d:' + (k * 0.12) + 's'}, t))));
   const term = (lines) => () => el('div', {class: 'art'}, el('div', {class: 'term'}, ...lines.map(([mark, t], k) => el('div', {class: 'rise' + (mark === '>' ? ' dim' : ''), style: '--d:' + (k * 0.3) + 's'}, mark === '>' ? '> ' + t : el('span', {class: 'ok'}, mark), mark === '>' ? '' : ' ' + t))));
@@ -140,6 +162,7 @@ function vryxTourSlides() {
   out.push({art: () => el('div', {class: 'art'}, el('div', {class: 'rings'}, el('i'), el('i')), el('div', {class: 'tbig rise'}, '\u2713')), title: 'Ready to build', text: 'Type /tour any time to see this again.'});
   return out;
 }
+// openVryxTour: run the VryxCode tour; first time it is remembered so it does not come back.
 function openVryxTour(replay) {
   if (document.querySelector('.tour')) return;
   runTour(vryxTourSlides(), 'Welcome to VryxCode', 'Start building', (skipped) => {
@@ -147,40 +170,50 @@ function openVryxTour(replay) {
     if (!skipped) { try { $(C.view === 'session' ? 'codeTask' : 'vxQuick').focus(); } catch (e) {} }
   }, 'mtour vxtour');
 }
+// maybeVryxTour: open the VryxCode tour the first time someone opens VryxCode.
 function maybeVryxTour() {
   if (featureOn('vryxcode_tour') && (((S.state || {}).settings || {}).vryx_tour_seen || 0) < VRYX_TOUR_VERSION) setTimeout(() => openVryxTour(false), 400);
 }
 
 // The first time someone picks a new model, or (once the app is open and nothing else is showing) the newest one they have not toured yet
+// maybeModelTour: after picking a new model, show its tour if not seen yet.
 function maybeModelTour(c) { if (featureOn('model_tours') && c && c.tour && !tourSeen(c.id)) setTimeout(() => openModelTour(c, false), 250); }
+// checkModelTour: when the app is quiet, show the tour of the newest ready model not yet toured.
 function checkModelTour() {
   if (!featureOn('model_tours') || S.tourSoon || document.querySelector('.tour') || document.querySelector('.dialog')) return;
   const c = (S.state.models.cards || []).filter((x) => x.tour && !tourSeen(x.id) && x.state === 'ready').sort((a, b) => b.version - a.version)[0];
   if (c) openModelTour(c, false);
 }
 
+// maybeTour: the first time someone signs in on a device, show the welcome tour.
 function maybeTour() {   // the first time someone signs in (and only while the feature is switched on for them)
   if (S.tourChecked || !S.state || !featureOn('welcome_tour')) return; S.tourChecked = true;
   if ((((S.state.settings || {}).tour_devices || {})[tourDevice()] || 0) < TOUR_VERSION) { S.tourSoon = true; setTimeout(() => openTour(false), 600); }      // the first time on each kind of device
 }
 
 // ---------------------------------------------------------------- what's new: published releases, shown once when someone opens the app after a release
+// Plain names for the kinds of releases in What's new.
 const REL_KIND = {features: 'New features', fixes: 'Bug fixes', major: 'Major', minor: 'Minor', patch: 'Patch', 'model-new': 'New model', 'model-update': 'Model update'};
+// relKind / relTitle: the label and title shown for one release.
 const relKind = (r) => REL_KIND[r.release || r.kind] || r.kind;      // a VryxCode push says whether it brought new features or fixes
 const relTitle = (r) => r.model ? r.model : 'v' + r.version;
+// whatsNewList: draw each release with its items and the fixes under "Fixed".
 function whatsNewList(releases) {
   return releases.length ? releases.map((r) => el('div', {class: 'adm-sub', style: 'margin:0 0 10px'}, el('div', {class: 'adm-row'}, el('span', {}, el('b', {}, relTitle(r)), ' ', el('span', {class: 'adm-tag'}, relKind(r))), el('small', {}, admDate(r.at))),
     ...(r.model && !r.product ? [] : (r.items || []).map((i) => el('div', {}, el('b', {style: 'font-size:15px'}, i.title), el('br'), el('small', {}, i.desc)))),
     ...((r.fixes || []).length ? [el('b', {style: 'font-size:15px'}, 'Fixed'), ...r.fixes.map((t) => el('small', {style: 'display:block'}, '\u2022 ' + t))] : []),
     r.notes ? el('small', {}, r.notes) : null)) : [el('p', {style: 'color:var(--muted)'}, 'Nothing has been released yet.')];
 }
+// openWhatsNew: show the releases not seen yet (or all of them) and mark them as seen.
 async function openWhatsNew(all) {
   let j; try { j = await (await api('/api/whats-new')).json(); } catch (e) { return; }
   const list = all ? j.releases : j.unseen;
   const m = dialog([el('h2', {}, all ? 'What’s new' : '✨ What’s new in Emvryx'), el('p', {style: 'color:var(--muted);margin-top:0'}, all ? 'Everything released so far. Current version: v' + j.version + '.' : 'New since you were last here.'), ...whatsNewList(list)], all ? 'Close' : 'Got it');
   if (!all) post('/api/settings', {whats_new_seq: j.seq});      // shown once: it counts as seen as soon as it is on the screen
 }
+// wnChecked: when What's new was last checked, so it asks the server at most once a minute.
 let wnChecked = 0;
+// checkWhatsNew: when the app opens or you come back, show What's new if nothing else is on screen.
 async function checkWhatsNew() {   // when the app opens, and again when the person comes back to it, at most once a minute
   if (!S.state || Date.now() - wnChecked < 60000 || S.tourSoon || document.querySelector('.tour') || document.querySelector('.dialog')) return; wnChecked = Date.now();
   try { const j = await (await api('/api/whats-new')).json(); if (j.unseen.length) openWhatsNew(false); } catch (e) {}
