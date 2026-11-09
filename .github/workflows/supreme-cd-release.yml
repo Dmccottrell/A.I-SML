@@ -43,10 +43,10 @@ jobs:
       android: ${{ github.event_name == 'workflow_dispatch' || steps.filter.outputs.android == 'true' }}
       windows: ${{ github.event_name == 'workflow_dispatch' || steps.filter.outputs.windows == 'true' }}
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - uses: dorny/paths-filter@0e4a8c6effa4802afeda77dc8d303f8176d7dfad # v3.0.4
+      - uses: dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d # v4.0.3
         id: filter
         if: github.event_name == 'push'
         with:
@@ -72,10 +72,10 @@ jobs:
       id-token: write                                      # only to get the identity token Sigstore signs with
       attestations: write                                  # only to store the build-provenance attestation
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961 # v5.7.0
+      - uses: actions/setup-java@b843ebf9b913146b38da2eaa7aeddf76074ae1ad # v6.1.0
         with:
           distribution: temurin
           java-version: "17"
@@ -141,12 +141,12 @@ jobs:
                      "run": f"https://github.com/{os.environ['REPO']}/actions/runs/{os.environ['RUN_ID']}"}, open("version.json", "w"))
           PY
           cat version.json
-      - uses: sigstore/cosign-installer@7e8b541eb2e61bf99390e1afd4be13a184e9ebc5 # v3.10.1
+      - uses: sigstore/cosign-installer@756fe2d284c7292c4e9b62c8a28f1e5629c59532 # v4.1.3
       - name: "Sign with Sigstore (keyless, with this workflow's own identity)"
         run: |
           cosign sign-blob --yes --bundle dist/emvryx.apk.sigstore.json dist/emvryx.apk
           cosign sign-blob --yes --bundle dist/version.json.sigstore.json dist/version.json
-      - uses: actions/attest-build-provenance@e8998f949152b193b063cb0ec769d69d929409be # v2.4.0
+      - uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
         with:
           subject-path: dist/emvryx.apk
       - name: Replace the android-latest download
@@ -189,7 +189,7 @@ jobs:
       id-token: write
       attestations: write
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
       - uses: ./.github/actions/build-windows
@@ -230,16 +230,16 @@ jobs:
                      "installer_sha256": exe, "run": f"https://github.com/{os.environ['REPO']}/actions/runs/{os.environ['RUN_ID']}"}, open("version.json", "w"))
           PY
           cat version.json
-      - uses: sigstore/cosign-installer@7e8b541eb2e61bf99390e1afd4be13a184e9ebc5 # v3.10.1
+      - uses: sigstore/cosign-installer@756fe2d284c7292c4e9b62c8a28f1e5629c59532 # v4.1.3
       - name: "Sign with Sigstore (keyless, with this workflow's own identity)"
         shell: bash
         run: |
           cosign sign-blob --yes --bundle dist/Emvryx-Setup.exe.sigstore.json dist/Emvryx-Setup.exe
           cosign sign-blob --yes --bundle dist/version.json.sigstore.json dist/version.json
-      - uses: actions/attest-build-provenance@e8998f949152b193b063cb0ec769d69d929409be # v2.4.0
+      - uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
         with:
           subject-path: dist/Emvryx-Setup.exe
-      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: emvryx-msix
           path: dist/Emvryx.msix
