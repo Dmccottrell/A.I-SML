@@ -133,6 +133,7 @@ class AppState(StateAccounts, StateSettings, StateApps, StatePC, StateCode, Stat
         self.clock, self.pace = clock, pace
         self.verbose = False                                   # print timings (set by the command line)
         self.libraries = {}                                    # person -> documents.Library (files they added)
+        self.decks = {}                                        # person -> study_cards.Decks (their flashcards)
         self.saved = {}                                        # person -> saved_notes.SavedNotes (approved notes, usable offline)
         self.memories = {}                                     # person -> user_memory.Memory (facts about them, shared by every model)
         self.previews = code_preview.Previews()               # short-lived tokens for the live preview of a project

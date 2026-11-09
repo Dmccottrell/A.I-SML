@@ -281,6 +281,13 @@ class RoutesGet:
         if path == "/api/memory":
             return self._send(200, {"facts": self.state.memory_for(who["user"]).list(), "on": self.state.get_settings(who["user"])["memory"]})
         # The person's saved notes.
+        # study_cards: the person's flashcard decks, and one deck with its cards.
+        if path == "/api/study/decks" and self.state.flags.on("study_cards", who):
+            return self._send(200, {"decks": self.state.decks_for(who["user"]).list()})
+        m = re.fullmatch(r"/api/study/decks/(\d+)", path)
+        if m and self.state.flags.on("study_cards", who):
+            deck = self.state.decks_for(who["user"]).get(int(m.group(1)))
+            return self._send(200, deck) if deck else self._send(404, {"code": "not_found", "message": "That deck is gone."})
         if path == "/api/saved-notes":
             return self._send(200, {"notes": self.state.saved_for(who["user"]).list(self.state.clock())})
         # Everything under /api/code is handled in routes_code.py.

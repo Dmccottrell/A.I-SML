@@ -157,7 +157,68 @@ async function openTeacher(side) {
     kids.push(el('div', {class: 'label', style: 'padding:4px 0 0'}, label));
     for (const t of list) kids.push(el('button', {class: 'opt', onclick: () => openTool(t)}, el('span', {class: 'grow'}, el('b', {}, t.name), el('small', {}, t.blurb))));
   }
+  // study_cards: the decks you saved, under the students' tools
+  if (side === 'student' && featureOn('study_cards')) kids.push(el('button', {class: 'opt', onclick: openDecks}, el('span', {class: 'grow'}, el('b', {}, 'My flashcards'), el('small', {}, 'Practise the decks you saved, and the cards you missed.'))));
   dialog(kids, 'Close');
+}
+
+// ---------------------------------------------------------------- study_cards: flashcards you can practise
+// studyHasCards: does this reply hold at least three "1. Term: meaning" lines (or table rows)? The server decides for real when the deck is saved.
+const STUDY_LINE = /^\s*(?:\d{1,3}[.)]|[-*•])\s+[^:\n]{1,200}?(?::|—| - )\s*\S/;
+function studyHasCards(text) {
+  let n = 0;
+  for (const l of String(text || '').split('\n')) { if (STUDY_LINE.test(l) || (l.split('|').length > 2 && !/^\s*\|?\s*:?-{2,}/.test(l))) n++; if (n >= 4) return true; }
+  return n >= 3;
+}
+// studySave: save the cards in a reply as a deck and start practising it.
+async function studySave(text, title) {
+  const r = await post('/api/study/decks', {title: title || (S.title && S.title !== 'New chat' ? S.title : 'Flashcards'), text}); const j = await r.json().catch(() => ({}));
+  if (!r.ok) return alert((j.message || 'Those could not be saved as flashcards.') + (j.action ? ' ' + j.action : ''));
+  studyPractise(j);
+}
+// studyFromChat: the Android app's Practise button: save the cards of one message of one chat and start practising.
+async function studyFromChat(chatId, messageId) {
+  const r = await api('/api/chats/' + chatId); if (!r.ok) return;
+  const c = await r.json(), m = (c.messages || []).find((x) => x.id === messageId); if (m) studySave(m.content, c.title);
+}
+// openDecks: the list of saved decks, each with how many cards you know and how many you missed last time.
+async function openDecks() {
+  closeModals();
+  const j = await (await api('/api/study/decks')).json().catch(() => ({decks: []}));
+  const open = async (d, missed) => { const deck = await (await api('/api/study/decks/' + d.id)).json(); closeModals(); studyPractise(deck, missed); };
+  const kids = [el('h2', {}, 'My flashcards'), el('div', {style: 'color:var(--muted);font-size:14px'}, 'Ask for flashcards in a chat (attach your own document first to make them from it), then tap Practise under the answer.')];
+  if (!j.decks.length) kids.push(el('div', {style: 'color:var(--muted)'}, 'No decks yet.'));
+  for (const d of j.decks) kids.push(el('div', {class: 'opt', style: 'cursor:default;flex-wrap:wrap'},
+    el('span', {class: 'grow'}, el('b', {style: 'overflow-wrap:anywhere'}, d.title), el('small', {}, d.count + ' cards · ' + d.known + ' known' + (d.missed ? ' · ' + d.missed + ' to practise again' : ''))),
+    el('button', {class: 'chip', onclick: () => open(d, false)}, 'Practise'),
+    d.missed ? el('button', {class: 'chip on', onclick: () => open(d, true)}, 'Missed ones') : null,
+    el('button', {class: 'chip', 'aria-label': 'Delete ' + d.title, onclick: async () => { if (confirm('Delete “' + d.title + '”?')) { await post('/api/study/decks/' + d.id + '/delete', {}); openDecks(); } }}, '×')));
+  dialog(kids, 'Close');
+}
+// studyPractise: one card at a time. Tap the card to turn it over, then say Got it or Not yet; at the end, practise the missed ones again.
+function studyPractise(deck, onlyMissed) {
+  closeModals();
+  let order = deck.cards.map((c, i) => i).filter((i) => !onlyMissed || deck.cards[i].last === false);
+  if (!order.length) order = deck.cards.map((c, i) => i);
+  let at = 0, shown = false; const missed = [];
+  const box = el('div', {style: 'display:flex;flex-direction:column;gap:14px'});
+  const draw = () => {
+    if (at >= order.length) {          // the end: how it went, and the missed ones again if there are any
+      const right = order.length - missed.length;
+      box.replaceChildren(el('h2', {}, right === order.length ? 'All ' + order.length + ' right!' : right + ' of ' + order.length + ' right'),
+        missed.length ? el('div', {style: 'color:var(--muted)'}, 'To practise again: ' + missed.map((i) => deck.cards[i].term).join(', ')) : el('div', {style: 'color:var(--muted)'}, 'Nothing to practise again.'),
+        missed.length ? el('button', {class: 'btn', id: 'studyAgain', onclick: () => { order = missed.splice(0); at = 0; shown = false; draw(); }}, 'Practise the ' + missed.length + ' I missed') : null,
+        el('button', {class: 'btn ghost', onclick: openDecks}, 'My flashcards'));
+      return;
+    }
+    const c = deck.cards[order[at]];
+    const mark = (ok) => { if (!ok) missed.push(order[at]); post('/api/study/decks/' + deck.id + '/mark', {card: order[at], right: ok}).catch(() => {}); at++; shown = false; draw(); };
+    box.replaceChildren(el('div', {style: 'color:var(--muted);font-size:14px'}, deck.title + ' · card ' + (at + 1) + ' of ' + order.length),
+      el('button', {class: 'study-card', id: 'studyCard', type: 'button', 'aria-live': 'polite', style: 'min-height:180px;border-radius:18px;border:1px solid var(--line);background:var(--surface2);color:var(--text);font:inherit;font-size:20px;padding:20px;cursor:pointer;overflow-wrap:anywhere',
+        onclick: () => { shown = !shown; draw(); }}, shown ? c.meaning : c.term, el('small', {style: 'display:block;margin-top:12px;color:var(--muted);font-size:13px'}, shown ? 'the meaning · tap to see the term' : 'tap to turn it over')),
+      shown ? el('div', {class: 'btnrow'}, el('button', {class: 'btn', id: 'studyRight', onclick: () => mark(true)}, 'Got it'), el('button', {class: 'btn ghost', id: 'studyWrong', onclick: () => mark(false)}, 'Not yet')) : null);
+  };
+  draw(); dialog([box], 'Stop');
 }
 // openTool: build a small form for one tool from its field list (choice, text area, number or text), with a Make it / Calculate button.
 function openTool(t) {

@@ -15,6 +15,7 @@ import app_skills
 import documents
 import lookup_auto
 import saved_notes
+import study_cards
 import user_memory
 
 
@@ -46,6 +47,14 @@ class StateSettings:
                 path = os.path.join(self.data_dir, f"saved-{user}.db") if self.data_dir else ":memory:"
                 self.saved[user] = saved_notes.SavedNotes(path)
             return self.saved[user]
+
+    def decks_for(self, user):
+        """This person's flashcard decks (study_cards.py)."""
+        with self.lock:
+            if user not in self.decks:
+                path = os.path.join(self.data_dir, f"study-{user}.db") if self.data_dir else ":memory:"
+                self.decks[user] = study_cards.Decks(path)
+            return self.decks[user]
 
     def memory_for(self, user):
         """This person's memory: facts the assistant remembers about them between chats."""

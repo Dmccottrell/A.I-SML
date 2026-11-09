@@ -31,6 +31,7 @@ settings.json       your settings
 chats.json          every saved chat with its messages (private chats are never saved)
 saved_notes.json    notes you asked to keep so answers work offline
 memory.json         what the app remembers about you (your name and so on), shared by every model
+flashcards.json     your flashcard decks and how each card went
 devices.json        the devices that are signed in
 github.json         the GitHub account you connected and a short activity log (never the token)
 connected_apps.json the other apps you connected and what was read (never the secrets)
@@ -75,6 +76,7 @@ def export_zip(state, user):
         z.writestr("documents.json", json.dumps([dict(d, text=state.docs_for(user).text(d["id"])) for d in state.docs_for(user).list()], indent=2))
         z.writestr("saved_notes.json", json.dumps(state.saved_for(user).list(now), indent=2))
         z.writestr("memory.json", json.dumps(state.memory_for(user).list(), indent=2))
+        z.writestr("flashcards.json", json.dumps([state.decks_for(user).get(d["id"]) for d in state.decks_for(user).list()], indent=2))
         z.writestr("devices.json", json.dumps(state.auth.sessions_for(user), indent=2))
         z.writestr("github.json", json.dumps(state.github.public(user), indent=2))
         z.writestr("connected_apps.json", json.dumps(state.links.store.public(user), indent=2))
@@ -116,9 +118,10 @@ def delete_account(state, user, by=""):
         store = state.stores.pop(user, None)
         saved = state.saved.pop(user, None)
         memory = state.memories.pop(user, None)
+        decks = state.decks.pop(user, None)
         state.settings.pop(user, None)
     # Close their databases first (Windows cannot delete an open file). A store may be None if it was never opened.
-    for db in (store, saved, memory):
+    for db in (store, saved, memory, decks):
         conn = getattr(db, "db", None)
         if conn is not None:
             try:
@@ -138,7 +141,7 @@ def delete_account(state, user, by=""):
     state.usage.delete_user(user)
     # Delete their database files from disk (there is no data_dir when the app runs only in memory, as in tests).
     if state.data_dir:
-        for name in (f"chats-{user}.db", f"saved-{user}.db", f"memory-{user}.db"):
+        for name in (f"chats-{user}.db", f"saved-{user}.db", f"memory-{user}.db", f"study-{user}.db"):
             try:
                 os.remove(os.path.join(state.data_dir, name))
             # The file may not exist: fine.

@@ -630,6 +630,10 @@ private fun AiMessage(vm: AppViewModel, b: Bubble, isLast: Boolean, onRegen: () 
             FlowRow(horizontalArrangement = Arrangement.spacedBy(if (Emvryx.d27) 2.dp else 8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 act(if (copied) "Copied" else "Copy") { clip.setText(AnnotatedString(b.text)); copied = true }
                 if (saved) act(b.liked ?: "👍 Right") { if (b.liked == null) vm.like(b) }
+                // study_cards: a reply that holds flashcards can be practised (the website's own flip-card screen, opened inside the app)
+                if (saved && vm.flag("study_cards") && StudyCards.hasCards(b.text)) act("🃏 Practise") {
+                    vm.chatId?.let { vm.open(Screen.Web("/", "Flashcards", StudyCards.practiseJs(it, b.id), panel = true)) }
+                }
                 if (isLast && !vm.streaming && b.cut) act("Continue →", vm::continueReply)
                 if (isLast && !vm.streaming) act("Regenerate ▾", onRegen)
                 Box {
@@ -1028,6 +1032,8 @@ private fun Sidebar(vm: AppViewModel, onDone: () -> Unit, onFolder: (ChatSummary
                         if (vm.flag("chat_schedule")) SideLink("clock", "Scheduled tasks", "Answered by itself at a set time") {
                             vm.open(vm.panel("schedules", Screen.Web("/", "Scheduled tasks", "openSchedules()", panel = true))); onDone()
                         }
+                        // study_cards: the decks you saved, and the cards you missed
+                        if (vm.flag("study_cards")) SideLink("doc", "My flashcards") { vm.open(Screen.Web("/", "My flashcards", "openDecks()", panel = true)); onDone() }
                     }
                 }
             }

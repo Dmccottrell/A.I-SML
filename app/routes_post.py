@@ -30,6 +30,7 @@ import code_sandbox
 import model_code_test
 import github_link
 import scheduled
+import study_cards
 import phone_model
 # APP_PREFIX: the name prefix that marks an account as an app (not a person). MAX_TEXT: the longest chat message allowed.
 # UNHANDLED: a marker value meaning 'not my address, try the next part'.
@@ -548,6 +549,21 @@ class RoutesPost:
         if path == "/api/memory/clear":
             self.state.memory_for(who["user"]).clear()
             return self._send(200, {"ok": True})
+        # study_cards: save the flashcards in a reply as a deck, record how a card went, delete a deck.
+        if path.startswith("/api/study/decks") and self.state.flags.on("study_cards", who):
+            decks = self.state.decks_for(who["user"])
+            if path == "/api/study/decks":
+                try:
+                    did = decks.add(body.get("title"), study_cards.parse_cards(str(body.get("text", ""))[:200_000]), self.state.clock())
+                except ValueError as e:
+                    return self._send(400, {"code": "no_cards", "message": str(e), "action": "Ask for flashcards as numbered lines like \u201cTerm: meaning\u201d."})
+                return self._send(200, decks.get(did))
+            m = re.fullmatch(r"/api/study/decks/(\d+)/(mark|delete)", path)
+            if m and m.group(2) == "mark":
+                deck = decks.mark(int(m.group(1)), body.get("card"), bool(body.get("right")), self.state.clock())
+                return self._send(200, deck) if deck else self._send(404, {"code": "not_found", "message": "That card is gone."})
+            if m:
+                return self._send(200, {"ok": decks.delete(int(m.group(1)))})
         # Saved notes (from likes): delete one or clear all.
         if path == "/api/saved-notes/delete":
             self.state.saved_for(who["user"]).delete(int(body.get("id", 0)))

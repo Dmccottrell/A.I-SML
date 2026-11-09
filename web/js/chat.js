@@ -89,6 +89,8 @@ function bubble(m, last) {
   // The less-used actions go behind one "More" button so the answer stays calm.
   const more = [];            // the less-used actions go behind one "More" button so the answer stays calm
   if (m.status === 'done' && (S.skill || m.content.length > 300)) more.push(['Save as\u2026', () => saveAs(m.content)]);
+  // study_cards: a reply that holds flashcards gets a Practise button (documents.js).
+  if (m.status === 'done' && featureOn('study_cards') && studyHasCards(m.content)) acts.append(el('button', {class: 'chip on', title: 'Flip through these flashcards and see which ones you know', onclick: () => studySave(m.content)}, '\ud83c\udccf Practise'));
   // If the last reply was cut off, offer to continue it.
   if (last && !S.busy && m.cut && S.chatId != null) acts.append(el('button', {class: 'chip on', title: 'The answer stopped at its length limit: carry on from there', onclick: () => { S.cont = true; $('input').value = 'Continue'; send(); }}, 'Continue \u2192'));
   // up: the next stronger model, if there is one that is ready.
