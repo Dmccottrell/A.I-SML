@@ -136,6 +136,7 @@ FIXES = [
     {"id": "vx_new_session_jump", "product": "vryxcode", "text": "A session you start while VryxCode is still opening no longer jumps back to the home screen."},
     {"id": "vx_deleted_returns", "product": "vryxcode", "text": "A session you delete just as it finishes no longer comes back in the list."},
     {"id": "vx_old_list", "product": "vryxcode", "text": "The sessions list no longer shows an older list for a moment."},
+    {"id": "vx_stop_clears", "product": "vryxcode", "text": "After you press Stop in VryxCode, the next session no longer says \u201cStopping\u201d with a Stop button that does nothing."},
 ]
 # A set of every fix id, so the tests (and callers) can check quickly that an id exists.
 FIX_IDS = {f["id"] for f in FIXES}

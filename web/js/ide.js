@@ -733,7 +733,8 @@ async function poll() {
   showUsage(j.usage);
   const live = ['starting', 'working', 'asking', 'queued'].includes(j.state);
   C.full = !!j.full; C.live = live;
-  $('codeGo').hidden = live && !(C.full && j.state !== 'queued'); $('codeStop').hidden = !live;      // the full agent can be told something while it works if (!live) { C.stopping = false; $('codeStop').disabled = false; }
+  $('codeGo').hidden = live && !(C.full && j.state !== 'queued'); $('codeStop').hidden = !live;      // the full agent can be told something while it works
+  if (!live) { C.stopping = false; $('codeStop').disabled = false; }      // finished: nothing is stopping any more, and the Stop button works again next time
   if (live) C.timer = setTimeout(poll, j.state === 'asking' ? 1500 : 350);
 }
 // vxPending / vxUnsent: show your message at once in grey while it is being sent; if sending fails, take it away and put the words back in the box.
