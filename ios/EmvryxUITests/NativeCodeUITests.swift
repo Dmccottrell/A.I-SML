@@ -1,0 +1,118 @@
+import XCTest
+
+/// With ios_native on: VryxCode as the app's own screens (android/.../ui/CodeScreen.kt). The demo test server has no model, so a session
+/// starts, writes its first events and ends saying so, which is enough to see the whole screen work.
+final class NativeCodeUITests: ServerUITestCase {
+    private func openVryxCode() {
+        XCTAssertTrue(box.waitForExistence(timeout: 30), "the native chat did not open signed in")
+        app.buttons["Chats"].tap()
+        let link = app.buttons["VryxCode"]
+        XCTAssertTrue(link.waitForExistence(timeout: 5))
+        link.tap()
+        XCTAssertTrue(app.buttons["Back to chat"].waitForExistence(timeout: 10), "VryxCode did not open")
+    }
+
+    private var taskBox: XCUIElement { app.textViews["Message VryxCode"].exists ? app.textViews["Message VryxCode"] : app.textFields["Message VryxCode"] }
+
+    func testStartASessionSeeItsFeedAndManageIt() throws {
+        try launch(native: true)
+        openVryxCode()
+        XCTAssertTrue(taskBox.waitForExistence(timeout: 15))
+        shot("code home")
+        taskBox.tap()
+        taskBox.typeText("Make a zebra game")
+        app.buttons["Send"].tap()
+        // The session opens: my message, VryxCode's first notes, and how it ended.
+        XCTAssertTrue(app.staticTexts.matching(NSPredicate(format: "label BEGINSWITH 'Make a zebra'")).firstMatch.waitForExistence(timeout: 15), "my task is not in the feed")
+        let note = app.staticTexts.matching(NSPredicate(format: "label CONTAINS 'Suggested language'")).firstMatch
+        if !note.waitForExistence(timeout: 20) { shot("no note") }
+        XCTAssertTrue(note.exists, "no first note in the feed")
+        XCTAssertTrue(app.staticTexts.matching(NSPredicate(format: "label CONTAINS 'could not finish'")).firstMatch.waitForExistence(timeout: 20), "no end card")
+        shot("code session")
+        // Back to the list: the session is there; hold it to archive, then put it back, then delete it.
+        app.buttons["Back to sessions"].tap()
+        let row = app.buttons.matching(identifier: "codesession").firstMatch
+        XCTAssertTrue(row.waitForExistence(timeout: 15), "the session is not listed")
+        shot("code list")
+        row.press(forDuration: 1.2)
+        app.buttons["Archive"].tap()
+        let gone = XCTNSPredicateExpectation(predicate: NSPredicate(format: "exists == false"), object: app.buttons.matching(identifier: "codesession").firstMatch)
+        let archivedAway = XCTWaiter().wait(for: [gone], timeout: 15)
+        if archivedAway != .completed { shot("after archive") }
+        XCTAssertEqual(archivedAway, .completed, "the archived session stayed in the list")
+        app.buttons["Archived"].tap()
+        XCTAssertTrue(app.buttons.matching(identifier: "codesession").firstMatch.waitForExistence(timeout: 15), "the archived session is not under Archived")
+        app.buttons.matching(identifier: "codesession").firstMatch.press(forDuration: 1.2)
+        app.buttons["Delete"].tap()
+        XCTAssertEqual(XCTWaiter().wait(for: [XCTNSPredicateExpectation(predicate: NSPredicate(format: "exists == false"), object: app.buttons.matching(identifier: "codesession").firstMatch)], timeout: 15), .completed)
+        app.buttons["Back to chat"].tap()
+        XCTAssertTrue(box.waitForExistence(timeout: 10))
+    }
+
+    func testAStarterFillsTheBox() throws {
+        try launch(native: true)
+        openVryxCode()
+        let starter = app.buttons.matching(NSPredicate(format: "label BEGINSWITH 'Starter '")).firstMatch
+        XCTAssertTrue(starter.waitForExistence(timeout: 15), "no starters on the VryxCode home")
+        starter.tap()
+        XCTAssertTrue(((taskBox.value as? String) ?? "").contains("to-do list"), "the starter's idea is not in the box: \(String(describing: taskBox.value))")
+        shot("starter")
+    }
+
+    /// The newer parts (flag ios_vryxcode, on for admins): the sessions list in groups, /commands with their suggestions, /memory and /permissions
+    /// (read and changed on the real server), the attach button, and Restore on the first message.
+    func testTheNewerParts() throws {
+        try launch(native: true)
+        openVryxCode()
+        XCTAssertTrue(taskBox.waitForExistence(timeout: 15))
+        taskBox.tap()
+        taskBox.typeText("Make a zebra game")
+        app.buttons["Send"].tap()
+        XCTAssertTrue(app.staticTexts.matching(NSPredicate(format: "label CONTAINS 'could not finish'")).firstMatch.waitForExistence(timeout: 30), "no end card")
+        shot("new parts session")
+        XCTAssertTrue(app.buttons["Attach to VryxCode"].exists, "no attach button")
+
+        // Typing a slash suggests the commands; one tap fills the box.
+        taskBox.tap()
+        taskBox.typeText("/")
+        XCTAssertTrue(app.buttons["Command /memory"].waitForExistence(timeout: 5), "no command suggestions")
+        XCTAssertTrue(app.buttons["Command /permissions"].exists)
+        shot("slash suggestions")
+        app.buttons["Command /permissions"].tap()
+        app.buttons["Send"].tap()
+        XCTAssertTrue(app.staticTexts.matching(NSPredicate(format: "label BEGINSWITH 'Permissions for'")).firstMatch.waitForExistence(timeout: 10), "the permissions sheet did not open")
+        let rule = app.textFields["A command or file pattern, like npm test"].exists ? app.textFields["A command or file pattern, like npm test"] : app.textViews["A command or file pattern, like npm test"]
+        XCTAssertTrue(rule.waitForExistence(timeout: 5))
+        rule.tap()
+        rule.typeText("echo zebra")
+        app.buttons["Allow it"].tap()
+        XCTAssertTrue(app.buttons["Remove echo zebra"].waitForExistence(timeout: 10), "the rule was not added on the server")
+        shot("rules")
+        app.buttons["Remove echo zebra"].tap()
+        let gone = XCTNSPredicateExpectation(predicate: NSPredicate(format: "exists == false"), object: app.buttons["Remove echo zebra"])
+        XCTAssertEqual(XCTWaiter().wait(for: [gone], timeout: 10), .completed, "the rule was not removed")
+        app.buttons["Close"].tap()
+
+        // /memory opens what VryxCode remembers.
+        taskBox.tap()
+        taskBox.typeText("/memory")
+        app.buttons["Send"].tap()
+        XCTAssertTrue(app.staticTexts["What VryxCode remembers"].waitForExistence(timeout: 10), "the memory sheet did not open")
+        shot("memory")
+        app.buttons["Close"].tap()
+
+        // /plan is answered by the app: the mode changes and nothing is sent as a message.
+        taskBox.tap()
+        taskBox.typeText("/plan")
+        app.buttons["Send"].tap()
+        XCTAssertTrue(app.buttons["Mode"].waitForExistence(timeout: 5))
+        XCTAssertEqual(app.buttons["Mode"].label, "Mode")
+        XCTAssertTrue(app.staticTexts["Plan"].waitForExistence(timeout: 5) || app.buttons.matching(NSPredicate(format: "label == 'Plan'")).count > 0 || app.staticTexts.matching(NSPredicate(format: "label == 'Plan'")).count > 0)
+
+        // Back on the list the session sits in a group.
+        app.buttons["Back to sessions"].tap()
+        XCTAssertTrue(app.buttons.matching(identifier: "codesession").firstMatch.waitForExistence(timeout: 15))
+        XCTAssertTrue(app.staticTexts.matching(NSPredicate(format: "identifier BEGINSWITH 'group '")).firstMatch.waitForExistence(timeout: 5), "the sessions are not in groups")
+        shot("grouped list")
+    }
+}

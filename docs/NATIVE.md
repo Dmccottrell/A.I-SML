@@ -1,6 +1,6 @@
 # Native apps (Android first, then iPhone): what is needed
 
-> **Status (Nov 2026):** the Android app is built (Kotlin + Compose) and published by GitHub as the `android-latest` download; see [ANDROID_EXTRAS.md](ANDROID_EXTRAS.md). The iPhone app, version 1 (the website inside a real app), is in [`ios/`](../ios/README.md); see [IOS.md](IOS.md). The rest of this page is the original plan.
+> **Status (Nov 2026):** the Android app is built (Kotlin + Compose) and published by GitHub as the `android-latest` download; see [ANDROID_EXTRAS.md](ANDROID_EXTRAS.md). The iPhone app, version 1 (the website inside a real app), is in [`ios/`](../ios/README.md); see [IOS.md](IOS.md). Version 2 (feature flag `ios_native`) has the app's own sign-in, chat, Memory, Documents, Skills, Settings and VryxCode, the Face ID lock, Share to Emvryx, the Siri Shortcut, the model on the phone ("On this phone"), local alerts, light mode and the rest of VryxCode's parts (task list, review feed, Restore, /commands, memory, permissions, pictures and documents); what is still missing is listed in [ios/README.md](../ios/README.md). The rest of this page is the original plan.
 
 Decision (Oct 2026): both apps are built natively, like the big AI apps: **Kotlin + Jetpack Compose** on Android, **Swift + SwiftUI** on iPhone. Capacitor was the cheaper road (see [ANDROID.md](ANDROID.md)); this is the polished one. Nothing here has to be built today.
 

@@ -13,7 +13,7 @@ You have a Mac, so the iPhone app can be built. This page is everything to do on
 2. **Terminal**: press Cmd+Space, type Terminal, press Enter. Everything below is typed there.
 3. **Apple's command line tools**: type `xcode-select --install` and press Enter. If it says they are already installed, good.
 4. **Homebrew** (installs the other tools): go to https://brew.sh, copy the one line shown there, paste it in Terminal, press Enter, follow what it says (it asks for your Mac password; that is normal and stays on your Mac).
-5. **The other tools**: type `brew install git gh xcodegen` and press Enter.
+5. **The other tools**: type `brew install git gh xcodegen cmake` and press Enter.
 6. **Claude Code on the Mac**: follow the install steps at https://claude.com/claude-code and sign in with your Claude account.
 
 ## Part 2: get the project
@@ -38,6 +38,9 @@ You have a Mac, so the iPhone app can be built. This page is everything to do on
 5. At the top, pick your iPhone instead of a simulator and press the Play button.
 6. The first time, the iPhone says "Untrusted developer": Settings > General > VPN & Device Management > your Apple ID > Trust.
 7. **A free Apple ID app stops working after 7 days.** Press Play again to refresh it. This limit goes away with the paid account.
+
+### Optional: the model on the phone
+Only if you want chats to work with the PC off: in Terminal, in the project folder, type `ios/scripts/get-llama.sh` (about 10 minutes), then `ios/scripts/generate.sh`, then build as usual. It is free (llama.cpp is MIT licensed). The app then offers "On this phone" in its menu and downloads the model (about 2 GB) when you press the button.
 
 ## Part 5: the paid step, later, only if you say yes
 Apple Developer Program, **$99 a year**. It gives TestFlight (friends and testers install from a link) and the App Store. Nothing is bought until you decide; Claude does not sign you up or pay.
