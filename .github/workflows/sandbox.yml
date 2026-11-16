@@ -31,9 +31,9 @@ jobs:
     # Steps run in order; a failed step stops the rest.
     steps:
       # Download this repository's code onto the machine.
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       # Install Python 3.11, which the smoke-test script (tools/sandbox_smoke.py) needs.
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v7
         with:
           python-version: "3.11"
       # Build the Docker image from the recipe in docker/code-sandbox and tag it emvryx/code-sandbox:1 (the name and version the sandbox code looks for).

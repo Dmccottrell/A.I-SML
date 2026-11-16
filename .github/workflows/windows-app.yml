@@ -38,7 +38,7 @@ jobs:
     # Steps run one after another; if one fails, the later ones are skipped.
     steps:
       # Download this repository's code onto the machine.
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       # CMake is a tool that prepares a C++ build. First command: set up the build in the folder build/ and pass in the commit id (EMVRYX_BUILT_FROM) so
       # the app knows which version it is. Second: compile the optimized "Release" version. Third: list the result, which fails the step if Emvryx.exe is missing.
       # "shell: bash" is used so these lines run the same as on Linux.
@@ -85,12 +85,12 @@ jobs:
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           Get-Item dist\Emvryx.msix
       # Save the Store package as a download on the run page (Artifacts > emvryx-msix); upload this file in Partner Center.
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: emvryx-msix
           path: dist/Emvryx.msix
       # Save the installer as a download on the run page (Artifacts > emvryx-windows).
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: emvryx-windows
           path: dist/Emvryx-Setup.exe
